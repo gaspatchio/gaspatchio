@@ -1,0 +1,39 @@
+[package]
+name = "gaspatchio_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "gaspatchio_core"
+# "cdylib" is necessary to produce a shared library for Python to import from.
+crate-type = ["cdylib", "lib"]
+
+[dependencies.pyo3]
+version = "0.22.0"
+# "abi3-py38" tells pyo3 (and maturin) to build using the stable ABI with minimum Python version 3.8
+#features = ["abi3-py38"]
+
+[features]
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]
+abi3-py38 = ["pyo3/abi3-py38"]
+
+[dependencies]
+# "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
+pyo3-polars = { version = "0.19", features = [
+    "derive",
+    "dtype-struct",
+    "dtype-decimal",
+    "dtype-array",
+] }
+serde = { version = "1", features = ["derive"] }
+polars = { version = "0.45.1", features = [
+    "lazy",
+    "dtype-categorical",
+    "dtype-struct",
+    "dtype-datetime",
+    "parquet",
+    "strings",
+] }
+log = "0.4"
+env_logger = "0.10"
