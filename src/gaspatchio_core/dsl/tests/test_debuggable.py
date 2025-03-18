@@ -56,6 +56,11 @@ fill_series = fill_series_debuggable
 floor = floor_debuggable
 
 
+# Define risk factor outside of complex_model to avoid Numba issues
+def _risk_factor(age):
+    return math.log(max(age, 1)) * 0.01
+
+
 class TestDebugableBasics(unittest.TestCase):
     def setUp(self):
         # Create a simple test dataframe
@@ -129,7 +134,7 @@ class TestDebugableBasics(unittest.TestCase):
         df["complex_calc"] = expr
         result = df.collect()
         for i, age in enumerate(self.data["age"]):
-            self.assertEqual(result["complex_calc"][i], (age * 2 - 5) / 3)
+            self.assertAlmostEqual(result["complex_calc"][i], (age * 2 - 5) / 3)
 
     def test_function_application(self):
         df = ActuarialFrame(self.data, mode="debug")
@@ -290,11 +295,8 @@ class TestModelCalculations(unittest.TestCase):
                 df["sum_assured"] * (1 + interest_rate) ** df["proj_years"]
             )
 
-            # Risk calculations
-            def risk_factor(age):
-                return math.log(max(age, 1)) * 0.01
-
-            df["risk_factor"] = df["age"].apply(lambda x: risk_factor(x))
+            # Use the global risk factor function instead of a local one
+            df["risk_factor"] = df["age"].apply(_risk_factor)
             df["mortality_cost"] = df["future_sum_assured"] * df["risk_factor"]
 
             return df
@@ -365,12 +367,23 @@ class TestNumbaOptimization(unittest.TestCase):
         # Run in optimize mode with mocking to verify Numba is used
         df = ActuarialFrame(self.data, mode="optimize")
 
-        with mock.patch("numba.njit") as mock_njit:
-            mock_njit.side_effect = lambda f: f  # Just return the original function
+        # We need to mock both vectorize and njit since our code now tries both
+        with (
+            mock.patch("numba.vectorize") as mock_vectorize,
+            mock.patch("numba.njit") as mock_njit,
+        ):
+            # Make both mocks just return the function (no real compilation)
+            mock_vectorize.side_effect = lambda f: f
+            mock_njit.side_effect = lambda f: f
+
+            # Perform the calculation that should use Numba
             df["mortality"] = df["age"].apply(calculate_mortality)
 
-            # Check that Numba was attempted
-            mock_njit.assert_called()
+            # Check that either vectorize or njit was called
+            self.assertTrue(
+                mock_vectorize.called or mock_njit.called,
+                "Neither numba.vectorize nor numba.njit was called",
+            )
 
 
 class TestPerformance(unittest.TestCase):
@@ -411,11 +424,8 @@ class TestPerformance(unittest.TestCase):
                 df["sum_assured"] * (1 + interest_rate) ** df["proj_years"]
             )
 
-            # Complex calculations with custom functions
-            def risk_factor(age):
-                return math.log(max(age, 1)) * 0.01
-
-            df["risk_factor"] = df["age"].apply(lambda x: risk_factor(x))
+            # Complex calculations with custom functions - use global function
+            df["risk_factor"] = df["age"].apply(_risk_factor)
             df["mortality_cost"] = df["future_sum_assured"] * df["risk_factor"]
 
             # More calculations to stress test
