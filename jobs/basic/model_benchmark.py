@@ -9,12 +9,12 @@ from typing_extensions import Annotated
 # Add the project root to the path so we can import from jobs
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from gaspatchio_core.core import read_model_points
 from jobs.basic.model import (
     run_model,
     run_model_with_dsl,
     run_model_with_pythonic_dsl,
 )
-from model_core_exp.core import read_model_points
 
 
 def benchmark(
