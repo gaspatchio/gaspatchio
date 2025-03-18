@@ -1,8 +1,8 @@
 """
-Example model using the debuggable DSL.
+Example model using the core DSL.
 
-This example demonstrates how to use the debuggable DSL to build
-actuarial models with excellent debugging capabilities.
+This example demonstrates how to use the core DSL to build
+actuarial models that are both debuggable and performant.
 """
 
 import math
@@ -12,10 +12,11 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import typer
-from gaspatchio_core.dsl.debuggable import ActuarialFrame, run_model
+from loguru import logger
+
+from gaspatchio_core.dsl.core import ActuarialFrame, run_model
 from gaspatchio_core.plugin import abs_i64, fill_series, floor
 from gaspatchio_core.utils import read_model_points
-from loguru import logger
 
 
 def debuggable_model_calculation(df):

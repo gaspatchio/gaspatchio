@@ -1,7 +1,7 @@
 import time
 
 import typer
-from gaspatchio_core.dsl.debuggable import ActuarialFrame, run_model
+from gaspatchio_core.dsl.core import ActuarialFrame, run_model
 from gaspatchio_core.plugin import fill_series, floor
 from gaspatchio_core.utils import read_model_points
 from loguru import logger
@@ -100,7 +100,7 @@ def compare_modes(
     records = len(result_debug)
 
     print(f"Debug mode completed in {debug_time:.4f} seconds")
-    print(f"Debug mode: {debug_time/records*1000:.4f} ms per record")
+    print(f"Debug mode: {debug_time / records * 1000:.4f} ms per record")
     print("Debug mode result:")
     print(result_debug)
 
@@ -114,7 +114,7 @@ def compare_modes(
     optimize_time = optimize_end - optimize_start
 
     print(f"Optimize mode completed in {optimize_time:.4f} seconds")
-    print(f"Optimize mode: {optimize_time/records*1000:.4f} ms per record")
+    print(f"Optimize mode: {optimize_time / records * 1000:.4f} ms per record")
     print("Optimize mode result:")
     print(result_optimize)
 

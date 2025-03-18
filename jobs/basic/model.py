@@ -2,30 +2,32 @@ import time
 
 import polars as pl
 import typer
-from gaspatchio_core.dsl.dsl import run_model_function
-from gaspatchio_core.plugin import fill_series, floor
-from gaspatchio_core.utils import read_model_points
 from loguru import logger
 from typing_extensions import Annotated
 
+from gaspatchio_core.dsl import ActuarialFrame, run_model
+from gaspatchio_core.plugin import fill_series, floor
+from gaspatchio_core.utils import read_model_points
 
-def pythonic_model_calculation(self):
+
+def model_calculation(df):
     """
-    Define the model calculation using the pythonic DSL.
-    This function is effectively Python code that gets translated to Polars operations.
+    Define the model calculation using the core DSL.
     """
     # Constants
     max_age = 100
 
-    # Calculations in simple Python syntax - just like regular Python!
-    num_proj_months = (max_age - self.age) * 12 + 1
-    proj_months = fill_series(num_proj_months, 0, 1)
-    proj_years = floor((proj_months - 1) / 12) + 1
+    # Calculations
+    df["num_proj_months"] = (max_age - df["age"]) * 12 + 1
+    df["proj_months"] = fill_series(df["num_proj_months"], 0, 1)
+    df["proj_years"] = floor((df["proj_months"] - 1) / 12) + 1
 
-    policy_duration = proj_months / 12
-    policy_duration_start_month = floor((proj_months - 1) / 12, 0)
-    policy_expiry_month = (max_age - self.age) * 12
-    age_last = self.age + proj_years - 1
+    df["policy_duration"] = df["proj_months"] / 12
+    df["policy_duration_start_month"] = floor((df["proj_months"] - 1) / 12, 0)
+    df["policy_expiry_month"] = (max_age - df["age"]) * 12
+    df["age_last"] = df["age"] + df["proj_years"] - 1
+
+    return df
 
 
 def main(
@@ -37,14 +39,24 @@ def main(
             help="Size of model run: 'smol' or 'milli'",
         ),
     ] = "smol",
+    mode: Annotated[
+        str,
+        typer.Option(
+            help="Execution mode: 'debug' or 'optimize'",
+            case_sensitive=False,
+        ),
+    ] = "debug",
 ):
     logger.info("Reading model points data...")
     file_path = f"jobs/basic/model-points-{size}.parquet"
 
     start = time.time()
-    logger.info("Starting model run with {} model points...", size)
-    df = read_model_points(file_path)
-    result = run_model_function(pythonic_model_calculation, df).collect()
+    logger.info("Starting model run with {} model points in {} mode...", size, mode)
+    data = read_model_points(file_path)
+
+    # Create ActuarialFrame with specified mode
+    df = ActuarialFrame(data, mode=mode)
+    result = run_model(model_calculation, df).collect()
 
     end = time.time()
     total_time = end - start

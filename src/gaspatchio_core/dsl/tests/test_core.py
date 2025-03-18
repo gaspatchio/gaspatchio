@@ -25,7 +25,7 @@ except ImportError:
             return func
 
 
-from gaspatchio_core.dsl.debuggable import (
+from gaspatchio_core.dsl.core import (
     ActuarialFrame,
     ColumnProxy,
     ExpressionProxy,

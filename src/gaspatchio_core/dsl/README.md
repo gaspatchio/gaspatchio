@@ -1,6 +1,6 @@
-# Debuggable DSL
+# Core DSL
 
-This module provides a debuggable version of the Gaspatchio DSL for actuarial modeling. It offers two modes of operation:
+This module provides the core DSL for Gaspatchio's actuarial modeling. It offers two modes of operation:
 
 1. **Debug Mode**: Prioritizes ease of debugging and traceability, allowing for step-by-step inspection of model execution.
 2. **Optimize Mode**: Prioritizes performance by leveraging Polars' lazy evaluation and optimizations.
@@ -19,7 +19,7 @@ This module provides a debuggable version of the Gaspatchio DSL for actuarial mo
 
 ```python
 import polars as pl
-from gaspatchio_core.dsl.debuggable import ActuarialFrame, run_model
+from gaspatchio_core.dsl import ActuarialFrame, run_model
 
 # Create a DataFrame
 data = pl.DataFrame({
@@ -49,7 +49,7 @@ result_optimize = run_model(simple_model, df_optimize).collect()
 You can set the default mode for all `ActuarialFrame` instances:
 
 ```python
-from gaspatchio_core.dsl.debuggable import set_default_mode
+from gaspatchio_core.dsl import set_default_mode
 
 # Set default mode to debug
 set_default_mode("debug")
@@ -60,20 +60,21 @@ df = ActuarialFrame(data)  # Uses debug mode
 
 ### Tracing
 
-The debuggable DSL provides a `trace` function to help debug complex models:
+The core DSL provides a `trace` function to help debug complex models:
 
 ```python
-from gaspatchio_core.dsl.debuggable import trace
-
-@trace
+# The trace function is available as a method on ActuarialFrame instances
 def complex_calculation(df):
     # Your complex calculation here
     return df
+
+df = ActuarialFrame(data)
+traced_function = df.trace(complex_calculation)
 ```
 
 ## Performance Benchmarks
 
-The debuggable DSL has been benchmarked against different types of models:
+The core DSL has been benchmarked against different types of models:
 
 ### Simple Model
 
@@ -97,7 +98,7 @@ The performance difference is less pronounced in complex models due to the overh
 
 - Function applications in optimize mode may fall back to Python execution, which can limit performance gains for complex models.
 - Some operations may behave slightly differently between debug and optimize modes due to differences in how Polars handles certain operations.
-- The debuggable DSL may have a small overhead compared to the original DSL, especially in debug mode.
+- The core DSL may have a small overhead in debug mode.
 
 ## Future Improvements
 

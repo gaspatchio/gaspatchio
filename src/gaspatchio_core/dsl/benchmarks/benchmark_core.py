@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """
-Benchmark for the debuggable DSL.
+Benchmark for the core DSL.
 
-This script compares the performance of the debug and optimize modes
-of the debuggable DSL.
+This script runs performance benchmarks to compare the different modes
+of the core DSL.
 """
 
 import time
@@ -12,7 +12,7 @@ import numpy as np
 import polars as pl
 from loguru import logger
 
-from gaspatchio_core.dsl.debuggable import (
+from gaspatchio_core.dsl.core import (
     ActuarialFrame,
     run_model,
     set_default_mode,
@@ -122,25 +122,25 @@ def run_benchmark(data, model_func, num_runs=5, name=""):
     # Run in debug mode
     debug_times = []
     for i in range(num_runs):
-        logger.info(f"Debug mode - Run {i+1}/{num_runs}")
+        logger.info(f"Debug mode - Run {i + 1}/{num_runs}")
         df_debug = ActuarialFrame(data, mode="debug")
         start_time = time.time()
         result_debug = run_model(model_func, df_debug).collect()
         debug_time = time.time() - start_time
         debug_times.append(debug_time)
-        logger.info(f"Debug mode - Run {i+1} completed in {debug_time:.4f} seconds")
+        logger.info(f"Debug mode - Run {i + 1} completed in {debug_time:.4f} seconds")
 
     # Run in optimize mode
     optimize_times = []
     for i in range(num_runs):
-        logger.info(f"Optimize mode - Run {i+1}/{num_runs}")
+        logger.info(f"Optimize mode - Run {i + 1}/{num_runs}")
         df_optimize = ActuarialFrame(data, mode="optimize")
         start_time = time.time()
         result_optimize = run_model(model_func, df_optimize).collect()
         optimize_time = time.time() - start_time
         optimize_times.append(optimize_time)
         logger.info(
-            f"Optimize mode - Run {i+1} completed in {optimize_time:.4f} seconds"
+            f"Optimize mode - Run {i + 1} completed in {optimize_time:.4f} seconds"
         )
 
     # Calculate average times
