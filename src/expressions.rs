@@ -70,7 +70,6 @@ fn fill_series(inputs: &[Series], kwargs: FillSeriesKwargs) -> PolarsResult<Seri
         }
         _ => Series::new("".into(), vec![None::<i64>]),
     }));
-
     // Finish building the ListChunked and convert it into a Series.
     Ok(builder.into_series())
 }
