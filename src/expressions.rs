@@ -274,7 +274,7 @@ mod tests {
     fn test_floor_implementation() -> PolarsResult<()> {
         // Create a Float64Chunked with test values
         let values = vec![
-            -3.14,
+            -std::f64::consts::PI,
             -2.1,
             2.04,
             5.01,
@@ -335,7 +335,8 @@ mod tests {
     #[test]
     fn test_floor_with_nulls() -> PolarsResult<()> {
         // Create a Float64Chunked with test values including nulls
-        let values: Vec<Option<f64>> = vec![Some(-3.14), None, Some(2.04), Some(5.01)];
+        let values: Vec<Option<f64>> =
+            vec![Some(-std::f64::consts::PI), None, Some(2.04), Some(5.01)];
         let float_chunked = Float64Chunked::from_iter(values.iter().cloned());
 
         // Apply the floor operation directly

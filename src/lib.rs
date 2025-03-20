@@ -1,4 +1,5 @@
 mod expressions;
+mod lookup;
 use env_logger;
 use log::{debug, info};
 use pyo3::prelude::*;
