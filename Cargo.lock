@@ -662,6 +662,7 @@ dependencies = [
 name = "gaspatchio_core"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "env_logger",
  "log",
  "polars",

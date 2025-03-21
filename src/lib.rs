@@ -1,12 +1,12 @@
 mod expressions;
-mod lookup;
+mod table_registry;
 
 use log::{debug, info};
 use pyo3::prelude::*;
 use pyo3_polars::PolarsAllocator;
 
 #[pymodule]
-fn _internal(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
     // Initialize pyo3-log to redirect Rust logs to Python logging
     pyo3_log::init();
 
@@ -20,6 +20,12 @@ fn _internal(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     info!("Initializing gaspatchio_core");
     debug!("Debug logging enabled");
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+
+    // Add TableRegistry module
+    let table_reg = PyModule::new_bound(m.py(), "table_registry")?;
+    table_registry::init_module(&table_reg)?;
+    m.add_submodule(&table_reg)?;
+
     Ok(())
 }
 
