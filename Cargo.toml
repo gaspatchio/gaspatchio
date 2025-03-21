@@ -35,5 +35,6 @@ polars = { version = "0.45.1", features = [
     "parquet",
     "strings",
 ] }
-log = "0.4"
-env_logger = "0.10"
+pyo3-log = "0.11.0"
+log = "0.4.26"
+env_logger = "0.11.1"

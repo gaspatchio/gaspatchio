@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,35 @@ if TYPE_CHECKING:
     from gaspatchio_core.typing import IntoExprColumn
 
 LIB = Path(__file__).parent
+
+
+def init_logging(level=logging.INFO, format_str=None):
+    """Initialize Python logging which will also capture Rust logs.
+
+    Parameters
+    ----------
+    level : int
+        The logging level to use (default: logging.INFO)
+    format_str : str, optional
+        Custom format string for logging. If None, a default format is used.
+    """
+    if format_str is None:
+        format_str = "%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s"
+
+    # Configure Python logging
+    logging.basicConfig(
+        level=level,
+        format=format_str,
+        force=True,  # Force reconfiguration if already configured
+    )
+
+    # Create a logger for the gaspatchio_core module
+    logger = logging.getLogger("gaspatchio_core")
+    logger.setLevel(level)
+
+    # Log that initialization is complete
+    logger.info("Logging initialized for gaspatchio_core")
+    logger.debug("Debug logging enabled for gaspatchio_core")
 
 
 def pig_latinnify(expr: IntoExprColumn) -> pl.Expr:
@@ -109,34 +139,33 @@ def lookup(
     pl.Expr
         Expression with looked up values
     """
-    print(f"Python wrapper - lookup_values type: {type(lookup_values)}")
-    print(f"Python wrapper - key_columns types: {[type(k) for k in key_columns]}")
+    logger = logging.getLogger("gaspatchio_core.lookup")
 
     # Handle ColumnProxy objects for lookup_values
     if hasattr(lookup_values, "name") and hasattr(lookup_values, "_parent"):
         lookup_values = pl.col(lookup_values.name)
-        print(f"Converted ColumnProxy to col expr: {lookup_values}")
     elif hasattr(lookup_values, "_expr") and hasattr(lookup_values, "_parent"):
         lookup_values = lookup_values._expr
-        print(f"Extracted _expr from ExpressionProxy: {lookup_values}")
-
-    print(f"After processing - lookup_values: {lookup_values}")
 
     # Process key columns
     processed_keys = []
     for i, key in enumerate(key_columns):
         if hasattr(key, "name") and hasattr(key, "_parent"):
             processed_keys.append(pl.col(key.name))
-            print(f"Converted key {i} ColumnProxy to col expr: {processed_keys[-1]}")
+            logger.debug(
+                f"Converted key {i} ColumnProxy to col expr: {processed_keys[-1]}"
+            )
         elif hasattr(key, "_expr") and hasattr(key, "_parent"):
             processed_keys.append(key._expr)
-            print(f"Extracted _expr from key {i} ExpressionProxy: {processed_keys[-1]}")
+            logger.debug(
+                f"Extracted _expr from key {i} ExpressionProxy: {processed_keys[-1]}"
+            )
         else:
             processed_keys.append(key)
-            print(f"Used key {i} as is: {processed_keys[-1]}")
+            logger.debug(f"Used key {i} as is: {processed_keys[-1]}")
 
     # Debug: print the current environment
-    print(f"Table name: {table_name}")
+    logger.debug(f"Table name: {table_name}")
 
     return register_plugin_function(
         args=[lookup_values, *processed_keys],

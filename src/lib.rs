@@ -1,13 +1,22 @@
 mod expressions;
 mod lookup;
-use env_logger;
+
 use log::{debug, info};
 use pyo3::prelude::*;
 use pyo3_polars::PolarsAllocator;
 
 #[pymodule]
-fn _internal(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
-    env_logger::init();
+fn _internal(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+    // Initialize pyo3-log to redirect Rust logs to Python logging
+    pyo3_log::init();
+
+    // Initialize env_logger to make sure Rust logs are emitted
+    // This is in addition to pyo3-log, as a fallback
+    match env_logger::try_init() {
+        Ok(_) => debug!("Initialized env_logger"),
+        Err(e) => debug!("env_logger already initialized or error: {}", e),
+    }
+
     info!("Initializing gaspatchio_core");
     debug!("Debug logging enabled");
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

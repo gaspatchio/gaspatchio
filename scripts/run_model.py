@@ -19,15 +19,73 @@ Usage:
 """
 
 import importlib.util
+import logging
 import os
+import sys
 import time
 from pathlib import Path
 
 import polars as pl
 import typer
+from loguru import logger
+
+# Set the RUST_LOG environment variable before importing any modules
+os.environ["RUST_LOG"] = "debug"  # or "info" if you only want info logs
+os.environ["GASPATCHIO_RUST_LOG"] = "debug"  # This is checked in the Rust code
+
+# Configure loguru to intercept standard logging messages
+# this is important for catching logs from the Rust code using pyo3-log
+logger.remove()  # Remove the default handler
+logger.add(sys.stderr, level="TRACE")  # Add a handler that outputs all levels
+
+
+# Configure loguru as an interceptor for the standard logging module
+class InterceptHandler(logging.Handler):
+    def emit(self, record):
+        # Get corresponding Loguru level if it exists
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        # Find caller from where originated the logged message
+        frame, depth = logging.currentframe(), 2
+        while frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(
+            level, record.getMessage()
+        )
+
+
+# Configure the standard logging to use our interceptor - set lowest possible level (0)
+logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+
+# Configure default root logger as a last resort catch-all
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+root_logger.handlers = [InterceptHandler()]
+
+# Also set all other loggers to DEBUG level just to be sure
+for name in logging.root.manager.loggerDict:
+    logging_logger = logging.getLogger(name)
+    logging_logger.setLevel(logging.DEBUG)
+    for handler in list(logging_logger.handlers):
+        logging_logger.removeHandler(handler)
+    logging_logger.addHandler(InterceptHandler())
+
+logger.info("Configured all loggers to DEBUG level")
+
+# Configure specific loggers for Rust code
+for logger_name in ["gaspatchio_core", "gaspatchio_core.lookup"]:
+    rust_logger = logging.getLogger(logger_name)
+    rust_logger.setLevel(logging.DEBUG)
+
+
+# Now import the modules that might use Rust logging
 from gaspatchio_core.dsl.core import ActuarialFrame, run_model
 from gaspatchio_core.utils import read_model_points
-from loguru import logger
 from typing_extensions import Annotated
 
 
