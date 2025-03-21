@@ -44,24 +44,6 @@ def init_logging(level=logging.INFO, format_str=None):
     logger.debug("Debug logging enabled for gaspatchio_core")
 
 
-def pig_latinnify(expr: IntoExprColumn) -> pl.Expr:
-    return register_plugin_function(
-        args=[expr],
-        plugin_path=LIB,
-        function_name="pig_latinnify",
-        is_elementwise=True,
-    )
-
-
-def noop(expr: IntoExprColumn) -> pl.Expr:
-    return register_plugin_function(
-        args=[expr],
-        plugin_path=LIB,
-        function_name="noop",
-        is_elementwise=True,
-    )
-
-
 def fill_series(expr: IntoExprColumn, start: int = 0, increment: int = 1) -> pl.Expr:
     # Handle ColumnProxy objects by extracting the column name
     if hasattr(expr, "name") and hasattr(expr, "_parent"):
@@ -97,23 +79,4 @@ def floor(expr: IntoExprColumn, divisor: int = 1, default: int = 0) -> pl.Expr:
         function_name="floor",
         is_elementwise=True,
         kwargs={"divisor": divisor, "default": default},
-    )
-
-
-def midpoint_2d(expr: IntoExprColumn, ref_point: tuple[float, float]) -> pl.Expr:
-    return register_plugin_function(
-        args=[expr],
-        plugin_path=LIB,
-        function_name="midpoint_2d",
-        is_elementwise=True,
-        kwargs={"ref_point": ref_point},
-    )
-
-
-def abs_i64(expr: IntoExprColumn) -> pl.Expr:
-    return register_plugin_function(
-        args=[expr],
-        plugin_path=LIB,
-        function_name="abs_i64",
-        is_elementwise=True,
     )

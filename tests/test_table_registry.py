@@ -2,7 +2,7 @@ import os
 
 import polars as pl
 import pytest
-from gaspatchio_core._internal import table_registry
+from gaspatchio_core.assumptions import table_registry
 
 
 def test_create_registry():
