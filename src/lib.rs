@@ -22,7 +22,7 @@ fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
     // Add TableRegistry module
-    let table_reg = PyModule::new_bound(m.py(), "table_registry")?;
+    let table_reg = PyModule::new(m.py(), "table_registry")?;
     table_registry::init_module(&table_reg)?;
     m.add_submodule(&table_reg)?;
 

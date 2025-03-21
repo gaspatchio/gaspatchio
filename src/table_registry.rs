@@ -42,6 +42,93 @@ pub fn register_table_global(table_name: &str, df: DataFrame, key_spec: KeySpec)
     });
 }
 
+/// Register a table in the global registry with optional transformation
+pub fn register_table_global_with_transform(
+    table_name: &str,
+    df: DataFrame,
+    key_spec: KeySpec,
+    transform_spec: Option<TransformSpec>,
+) -> PolarsResult<()> {
+    // If transform_spec is provided, transform the DataFrame before registering
+    let final_df = match transform_spec {
+        Some(spec) => transform_wide_to_long(&df, &spec)?,
+        None => df,
+    };
+
+    // Register the (potentially transformed) table
+    set_registry(|registry| {
+        registry.register_table(table_name, final_df, key_spec);
+    });
+
+    Ok(())
+}
+
+/// Python wrapper to register a table in the global registry with optional transformation
+#[pyfunction]
+#[pyo3(signature = (table_name, py_df, key_spec, transform_spec=None))]
+pub fn py_register_table_with_transform(
+    table_name: String,
+    py_df: PyDataFrame,
+    key_spec: KeySpec,
+    transform_spec: Option<TransformSpec>,
+) -> PyResult<()> {
+    // Convert PyDataFrame to DataFrame
+    let df = py_df.0;
+    match register_table_global_with_transform(&table_name, df, key_spec, transform_spec) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            e.to_string(),
+        )),
+    }
+}
+
+/// Transform a wide DataFrame to long format using unpivot
+pub fn transform_wide_to_long(
+    df: &DataFrame,
+    transform_spec: &TransformSpec,
+) -> PolarsResult<DataFrame> {
+    // Get the id columns that should be kept as is
+    let id_vars = &transform_spec.id_vars;
+
+    // Get the value columns that should be unpivoted
+    let value_vars = &transform_spec.value_vars;
+
+    // Column names for the new columns
+    let var_name = &transform_spec.var_name;
+    let value_name = &transform_spec.value_name;
+
+    // First build a LazyFrame for all id vars
+    let mut id_columns = Vec::new();
+    for id_var in id_vars {
+        id_columns.push(col(id_var));
+    }
+
+    // Create an empty result frame to stack results into
+    let mut result_frames = Vec::new();
+
+    // For each value column, create a subset with id columns and the single value column
+    for value_var in value_vars {
+        // Make a selection of just the ID columns and this value column
+        let mut expr_vec = id_columns.clone();
+        expr_vec.push(col(value_var).alias(value_name));
+
+        // Add a literal column for the variable name
+        expr_vec.push(lit(value_var.clone()).alias(var_name));
+
+        // Build a LazyFrame with the needed columns and collect it
+        let subset = df.clone().lazy().select(expr_vec).collect()?;
+        result_frames.push(subset);
+    }
+
+    // Combine all the individual frames
+    let mut result = result_frames.remove(0);
+    for frame in result_frames {
+        result = result.vstack(&frame)?;
+    }
+
+    Ok(result)
+}
+
 /// Lookup data from a registered table using the query DataFrame
 /// The lookup joins the query DataFrame with the registered table based on the key specification
 ///
@@ -131,6 +218,45 @@ pub fn py_register_table(
     Ok(())
 }
 
+/// Specification for transforming wide format DataFrames to long format
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct TransformSpec {
+    /// Columns to keep as identifier variables
+    #[pyo3(get, set)]
+    pub id_vars: Vec<String>,
+
+    /// Columns to unpivot (convert from wide to long)
+    #[pyo3(get, set)]
+    pub value_vars: Vec<String>,
+
+    /// Name for the new column that will contain the unpivoted column names
+    #[pyo3(get, set)]
+    pub var_name: String,
+
+    /// Name for the new column that will contain the values from the unpivoted columns
+    #[pyo3(get, set)]
+    pub value_name: String,
+}
+
+#[pymethods]
+impl TransformSpec {
+    #[new]
+    pub fn new(
+        id_vars: Vec<String>,
+        value_vars: Vec<String>,
+        var_name: String,
+        value_name: String,
+    ) -> Self {
+        TransformSpec {
+            id_vars,
+            value_vars,
+            var_name,
+            value_name,
+        }
+    }
+}
+
 /// KeySpec defines the column mappings for joining tables
 #[pyclass]
 #[derive(Debug, Clone)]
@@ -204,10 +330,12 @@ impl TableRegistry {
 /// Initializes the module
 pub fn init_module(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<KeySpec>()?;
+    m.add_class::<TransformSpec>()?;
     m.add_class::<TableRegistry>()?;
     m.add_function(wrap_pyfunction!(py_get_registry, m)?)?;
     m.add_function(wrap_pyfunction!(py_register_keyspec, m)?)?;
     m.add_function(wrap_pyfunction!(py_register_table, m)?)?;
+    m.add_function(wrap_pyfunction!(py_register_table_with_transform, m)?)?;
     m.add_function(wrap_pyfunction!(py_lookup, m)?)?;
     Ok(())
 }
@@ -330,6 +458,161 @@ mod tests {
         // Verify the DataFrame was stored correctly
         let stored_df = registry.get_tables().get("test_global_table").unwrap();
         assert_eq!(stored_df.shape(), (3, 2));
+    }
+
+    #[test]
+    fn test_transform_wide_to_long() {
+        // Create a wide DataFrame for testing
+        let df = df! {
+            "id" => [1, 2, 3, 4],
+            "name" => ["a", "b", "c", "d"],
+            "val_2020" => [10, 20, 30, 40],
+            "val_2021" => [11, 21, 31, 41],
+            "val_2022" => [12, 22, 32, 42]
+        }
+        .unwrap();
+
+        // Create a TransformSpec for wide-to-long transformation
+        let transform_spec = TransformSpec {
+            id_vars: vec!["id".to_string(), "name".to_string()],
+            value_vars: vec![
+                "val_2020".to_string(),
+                "val_2021".to_string(),
+                "val_2022".to_string(),
+            ],
+            var_name: "year".to_string(),
+            value_name: "value".to_string(),
+        };
+
+        // Apply the transformation
+        let result = transform_wide_to_long(&df, &transform_spec).unwrap();
+
+        // Verify the result shape
+        // Input: 4 rows x 5 columns
+        // Output: 4 rows x 3 value_vars = 12 rows x 4 columns (id, name, year, value)
+        assert_eq!(result.shape(), (12, 4));
+
+        // Check column names
+        let column_names: Vec<String> = result
+            .get_column_names()
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+
+        assert!(column_names.contains(&"id".to_string()));
+        assert!(column_names.contains(&"name".to_string()));
+        assert!(column_names.contains(&"year".to_string()));
+        assert!(column_names.contains(&"value".to_string()));
+
+        // Check specific values
+        // For id=1, year=val_2020, value should be 10
+        let row1_2020 = result
+            .clone()
+            .lazy()
+            .filter(col("id").eq(lit(1)).and(col("year").eq(lit("val_2020"))))
+            .select([col("value")])
+            .collect()
+            .unwrap();
+
+        assert_eq!(row1_2020.shape(), (1, 1));
+        let value = row1_2020.column("value").unwrap().get(0).unwrap();
+        assert_eq!(value.to_string(), "10"); // Compare the string representation
+
+        // For id=3, year=val_2022, value should be 32
+        let row3_2022 = result
+            .clone()
+            .lazy()
+            .filter(col("id").eq(lit(3)).and(col("year").eq(lit("val_2022"))))
+            .select([col("value")])
+            .collect()
+            .unwrap();
+
+        assert_eq!(row3_2022.shape(), (1, 1));
+        let value = row3_2022.column("value").unwrap().get(0).unwrap();
+        assert_eq!(value.to_string(), "32"); // Compare the string representation
+    }
+
+    #[test]
+    fn test_register_with_transform() {
+        // Reset registry to clean state for this test
+        set_registry(|registry| {
+            registry.tables_internal.clear();
+            registry.keyspecs.clear();
+        });
+
+        // Create a KeySpec
+        let key_spec = KeySpec {
+            source_cols: vec!["id".to_string()],
+            table_cols: vec!["id".to_string()],
+        };
+
+        // Create a wide DataFrame
+        let df = df! {
+            "id" => [1, 2, 3],
+            "value_x" => [10, 20, 30],
+            "value_y" => [100, 200, 300],
+            "value_z" => [1000, 2000, 3000]
+        }
+        .unwrap();
+
+        // Create a TransformSpec
+        let transform_spec = TransformSpec {
+            id_vars: vec!["id".to_string()],
+            value_vars: vec![
+                "value_x".to_string(),
+                "value_y".to_string(),
+                "value_z".to_string(),
+            ],
+            var_name: "variable".to_string(),
+            value_name: "value".to_string(),
+        };
+
+        // Register with transformation
+        register_table_global_with_transform(
+            "test_transform_table",
+            df,
+            key_spec,
+            Some(transform_spec),
+        )
+        .unwrap();
+
+        // Get the updated registry
+        let registry = get_registry();
+
+        // Verify the table was registered
+        assert!(registry.get_tables().contains_key("test_transform_table"));
+
+        // Get the transformed DataFrame
+        let stored_df = registry.get_tables().get("test_transform_table").unwrap();
+
+        // Verify it was transformed
+        // Original: 3 rows x 4 columns
+        // Transformed: 3 rows x 3 value columns = 9 rows x 3 columns (id, variable, value)
+        assert_eq!(stored_df.shape(), (9, 3));
+
+        // Check that the expected columns exist
+        let column_names: Vec<String> = stored_df
+            .get_column_names()
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+
+        assert!(column_names.contains(&"id".to_string()));
+        assert!(column_names.contains(&"variable".to_string()));
+        assert!(column_names.contains(&"value".to_string()));
+
+        // Lookup using transformed table
+        let query_df = df! {
+            "id" => [1, 2, 4],
+            "query_value" => ["a", "b", "d"]
+        }
+        .unwrap();
+
+        let result_df = lookup("test_transform_table", query_df).unwrap();
+
+        // Should return 3 rows from the query × 3 variables for each
+        // But the rows are expanded on the join key, so each id should appear 3 times
+        assert_eq!(result_df.shape().0, 3 * 3);
     }
 
     #[test]

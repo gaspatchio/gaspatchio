@@ -41,20 +41,24 @@ This checklist tracks implementation progress for the in-memory Polars Table Reg
 - [x] Add tests verifying joining works as expected
 - [x] Test with different column sets and data types
 
-## Phase 5: Wide-to-Long Transformation ⬜
+## Phase 5: Wide-to-Long Transformation ✅
 
-- [ ] Implement `transform_wide_to_long(df, id_vars, value_vars, var_name, value_name)` function using Polars "melt"
-- [ ] Enhance `register_table_global` to accept an optional `transform_spec` object
-- [ ] Add functionality to transform DataFrame before registering if transform_spec is provided
-- [ ] Add tests verifying wide→long transformation works properly
+- [x] Implement `transform_wide_to_long(df, id_vars, value_vars, var_name, value_name)` function using Polars unpivot
+- [x] Enhance `register_table_global` to accept an optional `transform_spec` object
+- [x] Add functionality to transform DataFrame before registering if transform_spec is provided
+- [x] Add tests verifying wide→long transformation works properly
+- [x] Create `TransformSpec` type for configuring transformations
+- [x] Add Python bindings for `TransformSpec`
+- [x] Add test with real mortality table transformation
 
-## Phase 6: Python Bindings (Partially Complete) ✅
+## Phase 6: Python Bindings ✅
 
 - [x] Create PyO3 bindings for `KeySpec` and `TableRegistry`
 - [x] Expose table registry classes to Python
 - [x] Add additional PyO3 wrappers for:
   - [x] `register_table` as `py_register_table`
   - [x] `lookup` as `py_lookup`
+  - [x] `register_table_with_transform` as `py_register_table_with_transform`
 - [x] Update Python tests for these new functions
 
 ## Phase 7: Testing & Final Integration ⬜
