@@ -257,8 +257,15 @@ def main(
     # Create ActuarialFrame with specified mode
     logger.info("Starting model run in {} mode...", mode)
     df = ActuarialFrame(data, mode=mode)
+    # traced_function = df.trace(model_func)
+
+    # result = run_model(traced_function, df).collect()
 
     result = run_model(model_func, df).collect()
+    # View the complete operation log
+    operation_log = df.get_operation_log()
+    for op in operation_log:
+        print(op)
 
     end = time.time()
     total_time = end - start
