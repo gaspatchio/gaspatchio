@@ -3,8 +3,10 @@ import unittest
 from unittest import mock
 
 import numpy as np
+import pandas as pd
 import polars as pl
 import pytest
+from gaspatchio_core.assumptions import table_registry
 
 # Try to import numba, but make it optional
 try:
@@ -388,17 +390,38 @@ class TestNumbaOptimization(unittest.TestCase):
 
 class TestPerformance(unittest.TestCase):
     def setUp(self):
-        # Create a larger dataset for performance testing
+        """Set up test data"""
+        # Create test data
         ages = np.random.randint(20, 70, 10000)
         premiums = np.random.uniform(100, 500, 10000)
         sum_assured = np.random.uniform(10000, 50000, 10000)
-
         self.data = pl.DataFrame(
             {
                 "age": ages,
                 "premium": premiums,
                 "sum_assured": sum_assured,
             }
+        )
+
+        # Create mortality rates table
+        ages = list(range(20, 100))
+        genders = ["M"] * len(ages) + ["F"] * len(ages)
+        ages = ages * 2  # Duplicate for both genders
+        rates = [0.001 * (1.05**i) for i in range(len(ages))]
+
+        mortality_rates = pl.DataFrame(
+            {
+                "age_last": ages,
+                "gender": genders,
+                "mortality_rate": rates,
+            }
+        )
+        table_registry.py_register_table(
+            "mortality_rates",
+            mortality_rates,
+            table_registry.KeySpec(
+                source_cols=["age_last", "gender"], table_cols=["age_last", "gender"]
+            ),
         )
 
     def test_performance_comparison(self):
@@ -458,6 +481,95 @@ class TestPerformance(unittest.TestCase):
         # in automated tests due to various factors. Just check they both ran.
         self.assertEqual(len(result_debug), len(self.data))
         self.assertEqual(len(result_optimize), len(self.data))
+
+    def test_lookup_table_with_nulls(self):
+        # Test with null values
+        df_with_nulls = pl.DataFrame(
+            {"policy_id": [1], "age_last": [None], "gender": ["M"]}
+        ).with_columns([pl.col("age_last").cast(pl.Int64)])
+        af_nulls = ActuarialFrame(df_with_nulls)
+        result = af_nulls.lookup_table("mortality_rates")
+        result_value = result.collect()["mortality_rate"][0]
+        print(f"Type of result: {type(result_value)}, Value: {result_value}")
+        self.assertTrue(pd.isna(result_value))  # Use pandas isna instead of numpy isnan
+
+    def test_lookup_table_vector(self):
+        """Test vector lookup functionality with mortality rates"""
+        # Create test data with vector columns
+        df = pl.DataFrame(
+            {
+                "policy_id": [1, 2],
+                "age_last": [
+                    [30, 31, 32],  # First policy age progression
+                    [30, 31, 32],  # Second policy age progression (same ages)
+                ],
+                "gender": ["M", "F"],
+            }
+        )
+
+        # Create ActuarialFrame and perform vector lookup
+        af = ActuarialFrame(df)
+        result = af.lookup_table_vector("mortality_rates")
+        result_df = result.collect()
+
+        # Verify the structure of the result
+        self.assertEqual(len(result_df), 2)  # Should have 2 policies
+        self.assertTrue("mortality_rate" in result_df.columns)
+
+        # Get the mortality rates
+        rates = result_df["mortality_rate"]
+
+        # Verify each policy has the correct number of rates
+        self.assertEqual(len(rates[0]), 3)  # First policy should have 3 rates
+        self.assertEqual(len(rates[1]), 3)  # Second policy should have 3 rates
+
+        # Verify rates are non-negative
+        for policy_rates in rates:
+            self.assertTrue(
+                all(rate >= 0 for rate in policy_rates),
+                "All mortality rates should be non-negative",
+            )
+
+        # Verify rates increase with age (mortality should increase as people get older)
+        self.assertTrue(
+            all(rates[0][i] <= rates[0][i + 1] for i in range(len(rates[0]) - 1)),
+            "Mortality rates should increase with age",
+        )
+        self.assertTrue(
+            all(rates[1][i] <= rates[1][i + 1] for i in range(len(rates[1]) - 1)),
+            "Mortality rates should increase with age",
+        )
+
+    def test_vector_lookup_edge_cases(self):
+        """Test vector lookup edge cases"""
+        # Test with empty DataFrame
+        empty_df = ActuarialFrame(
+            pl.DataFrame(
+                {
+                    "policy_id": pl.Series([], dtype=pl.Int64),
+                    "age_last": pl.Series([], dtype=pl.Int64),
+                    "gender": pl.Series([], dtype=pl.Utf8),
+                }
+            )
+        )
+        result = empty_df.lookup_table("mortality_rates")
+        self.assertEqual(len(result.collect()), 0)
+
+        # Test with non-existent table
+        af = ActuarialFrame(self.data)
+        with self.assertRaises(RuntimeError) as excinfo:
+            af.lookup_table("non_existent_table")
+        self.assertIn("not found in registry", str(excinfo.exception))
+
+        # Test with null values
+        df_with_nulls = pl.DataFrame(
+            {"policy_id": [1], "age_last": [None], "gender": ["M"]}
+        ).with_columns([pl.col("age_last").cast(pl.Int64)])
+        af_nulls = ActuarialFrame(df_with_nulls)
+        result = af_nulls.lookup_table("mortality_rates")
+        result_value = result.collect()["mortality_rate"][0]
+        print(f"Type of result: {type(result_value)}, Value: {result_value}")
+        self.assertTrue(pd.isna(result_value))  # Use pandas isna instead of numpy isnan
 
 
 if __name__ == "__main__":

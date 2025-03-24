@@ -763,6 +763,52 @@ class ActuarialFrame:
 
             return result_frame
 
+    def lookup_table_vector(
+        self, table_name: str, batch_size: Optional[int] = None
+    ) -> "ActuarialFrame":
+        """
+        Lookup values from a registered table with support for vector/list columns.
+        """
+        if self._tracing:
+            # When inside a traced function, register the operation
+            self._computation_graph.append(("table_lookup_vector", table_name))
+            if self._verbose:
+                self._operation_log.append(f"Vector lookup from table '{table_name}'")
+            return self
+
+        # Get materialized DataFrame
+        df_materialized = self._df.collect()
+
+        # Perform the lookup (using batching if enabled)
+        if batch_size:
+            result_df = self._batch_lookup_vector(
+                table_name, df_materialized, batch_size
+            )
+        else:
+            # Use the Rust implementation directly
+            result_df = table_registry.py_lookup_vector(table_name, df_materialized)
+
+        # Create new ActuarialFrame with the result
+        result_frame = ActuarialFrame(
+            result_df.lazy(),
+            mode=self._mode,
+            verbose=self._verbose,
+            threads=self._threads,
+        )
+
+        # Copy batch settings
+        result_frame._batch_enabled = self._batch_enabled
+        result_frame._batch_size = self._batch_size
+
+        # Copy operation log
+        result_frame._operation_log = self._operation_log.copy()
+        if self._verbose:
+            result_frame._operation_log.append(
+                f"Vector lookup from table '{table_name}'"
+            )
+
+        return result_frame
+
     def register_table(
         self, table_name: str, key_spec: table_registry.KeySpec
     ) -> "ActuarialFrame":
