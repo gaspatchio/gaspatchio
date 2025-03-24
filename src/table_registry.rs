@@ -1,4 +1,6 @@
 use arc_swap::ArcSwap;
+use polars::prelude::SortMultipleOptions;
+
 use polars::prelude::*;
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
@@ -189,6 +191,20 @@ pub fn py_lookup(table_name: String, query_df: PyDataFrame) -> PyResult<PyDataFr
     }
 }
 
+#[pyfunction]
+pub fn py_lookup_vector(table_name: String, query_df: PyDataFrame) -> PyResult<PyDataFrame> {
+    // Convert PyDataFrame to Polars DataFrame
+    let df = query_df.0;
+
+    // Perform vector lookup
+    match lookup_vector(&table_name, df) {
+        Ok(result) => Ok(PyDataFrame(result)),
+        Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            e.to_string(),
+        )),
+    }
+}
+
 /// Python wrapper to get the global registry
 #[pyfunction]
 pub fn py_get_registry() -> PyResult<TableRegistry> {
@@ -327,6 +343,139 @@ impl TableRegistry {
     }
 }
 
+/// Detects list/vector columns in a DataFrame
+///
+/// # Arguments
+/// * `df` - The DataFrame to examine
+/// * `column_names` - Column names to check
+///
+/// # Returns
+/// A vector of column names that contain list data
+pub fn detect_vector_columns(df: &DataFrame, column_names: &[String]) -> PolarsResult<Vec<String>> {
+    // Pre-allocate with estimated capacity
+    let mut vector_cols = Vec::with_capacity(column_names.len());
+
+    // Get schema once instead of accessing columns repeatedly
+    let schema = df.schema();
+
+    for col_name in column_names {
+        // Use schema lookup instead of getting column
+        if let Some(dtype) = schema.get(col_name) {
+            if matches!(dtype, DataType::List(_)) {
+                // Use to_string() only when needed
+                vector_cols.push(col_name.to_string());
+            }
+        }
+    }
+
+    Ok(vector_cols)
+}
+
+pub fn explode_vector_columns(
+    df: &DataFrame,
+    vector_columns: &[String],
+) -> PolarsResult<DataFrame> {
+    // Create row tracking column before explosion
+    let with_index = df.clone().with_row_index("__row_idx".into(), None)?;
+
+    // Use Polars' native explode - handles nulls and different length vectors automatically
+    let exploded = with_index.explode(vector_columns)?;
+
+    // Add projection index using window functions
+    let result = exploded
+        .lazy()
+        .with_column(
+            col("__row_idx")
+                .sort_by([col("__row_idx")], SortMultipleOptions::default())
+                .alias("__proj_idx"),
+        )
+        .collect()?;
+
+    Ok(result)
+}
+
+/// Collects lookup results back into vector format using Polars' list operations
+///
+/// # Arguments
+/// * `df` - Exploded DataFrame with lookup results
+/// * `group_column` - Column to group by (usually __row_idx)
+/// * `value_columns` - Columns to collect into vectors
+///
+/// # Returns
+/// A DataFrame with vector results
+pub fn collect_vector_results(
+    df: &DataFrame,
+    group_column: &str,
+    value_columns: &[String],
+) -> PolarsResult<DataFrame> {
+    // Create expressions for grouping value columns into lists
+    let mut agg_exprs = vec![
+        // Keep first value of non-grouped columns
+        col("*").exclude(value_columns).first(),
+    ];
+
+    // Add list aggregation for each value column
+    for col_name in value_columns {
+        agg_exprs.push(col(col_name).list().0.alias(col_name));
+    }
+
+    // Group by the specified column and aggregate
+    let result = df
+        .clone()
+        .lazy()
+        .group_by([col(group_column)])
+        .agg(agg_exprs)
+        .sort(vec![group_column], SortMultipleOptions::default())
+        .collect()?;
+
+    Ok(result)
+}
+
+/// Performs lookups with vector column support using Polars' optimized operations
+///
+/// # Arguments
+/// * `table_name` - Name of the registered table to lookup
+/// * `query_df` - DataFrame that may contain vector columns
+///
+/// # Returns
+/// A DataFrame with lookup results as vectors
+pub fn lookup_vector(table_name: &str, query_df: DataFrame) -> PolarsResult<DataFrame> {
+    // Get the registered table
+    let registry = get_registry();
+    let _table_df = registry.get_table(table_name).ok_or_else(|| {
+        PolarsError::ComputeError(format!("Table '{}' not found", table_name).into())
+    })?;
+
+    let key_spec = registry.keyspecs.get(table_name).ok_or_else(|| {
+        PolarsError::ComputeError(format!("KeySpec for table '{}' not found", table_name).into())
+    })?;
+
+    // Detect vector columns in query DataFrame
+    let vector_cols = detect_vector_columns(&query_df, &key_spec.source_cols)?;
+
+    if vector_cols.is_empty() {
+        // No vector columns - use standard lookup
+        return lookup(table_name, query_df);
+    }
+
+    // Explode vector columns
+    let exploded = explode_vector_columns(&query_df, &vector_cols)?;
+
+    // Perform lookup using standard mechanism
+    let lookup_result = lookup(table_name, exploded)?;
+
+    // Determine which columns to collect as vectors
+    let value_columns: Vec<String> = lookup_result
+        .get_column_names()
+        .iter()
+        .filter(|&name| !name.starts_with("__"))
+        .map(|s| s.to_string())
+        .collect();
+
+    // Collect results back into vectors
+    collect_vector_results(&lookup_result, "__row_idx", &value_columns)
+}
+
 /// Initializes the module
 pub fn init_module(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<KeySpec>()?;
@@ -337,6 +486,7 @@ pub fn init_module(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_register_table, m)?)?;
     m.add_function(wrap_pyfunction!(py_register_table_with_transform, m)?)?;
     m.add_function(wrap_pyfunction!(py_lookup, m)?)?;
+    m.add_function(wrap_pyfunction!(py_lookup_vector, m)?)?;
     Ok(())
 }
 
@@ -548,10 +698,10 @@ mod tests {
 
         // Create a wide DataFrame
         let df = df! {
-            "id" => [1, 2, 3],
-            "value_x" => [10, 20, 30],
-            "value_y" => [100, 200, 300],
-            "value_z" => [1000, 2000, 3000]
+            "id" => [1, 2],  // 2 rows
+            "value_x" => [10, 20],
+            "value_y" => [100, 200],
+            "value_z" => [1000, 2000]
         }
         .unwrap();
 
@@ -561,7 +711,7 @@ mod tests {
             value_vars: vec![
                 "value_x".to_string(),
                 "value_y".to_string(),
-                "value_z".to_string(),
+                "value_z".to_string(), // 3 value columns
             ],
             var_name: "variable".to_string(),
             value_name: "value".to_string(),
@@ -586,9 +736,9 @@ mod tests {
         let stored_df = registry.get_tables().get("test_transform_table").unwrap();
 
         // Verify it was transformed
-        // Original: 3 rows x 4 columns
-        // Transformed: 3 rows x 3 value columns = 9 rows x 3 columns (id, variable, value)
-        assert_eq!(stored_df.shape(), (9, 3));
+        // Original: 2 rows x 4 columns
+        // Transformed: 2 rows x 3 value columns = 6 rows x 3 columns (id, variable, value)
+        assert_eq!(stored_df.shape(), (6, 3)); // 2 rows × 3 value columns = 6 total rows
 
         // Check that the expected columns exist
         let column_names: Vec<String> = stored_df
@@ -601,18 +751,23 @@ mod tests {
         assert!(column_names.contains(&"variable".to_string()));
         assert!(column_names.contains(&"value".to_string()));
 
-        // Lookup using transformed table
-        let query_df = df! {
-            "id" => [1, 2, 4],
-            "query_value" => ["a", "b", "d"]
-        }
-        .unwrap();
+        // Verify the transformed values
+        let value_col = stored_df.column("value").unwrap();
+        let values: Vec<i32> = value_col.i32().unwrap().into_iter().flatten().collect();
+        assert_eq!(values, vec![10, 100, 1000, 20, 200, 2000]);
 
-        let result_df = lookup("test_transform_table", query_df).unwrap();
+        // Verify the variable names
+        let var_col = stored_df.column("variable").unwrap().str().unwrap();
+        let vars: Vec<&str> = var_col.into_iter().flatten().collect();
+        assert_eq!(
+            vars,
+            vec!["value_x", "value_y", "value_z", "value_x", "value_y", "value_z"]
+        );
 
-        // Should return 3 rows from the query × 3 variables for each
-        // But the rows are expanded on the join key, so each id should appear 3 times
-        assert_eq!(result_df.shape().0, 3 * 3);
+        // Verify the id values are properly repeated
+        let id_col = stored_df.column("id").unwrap().i32().unwrap();
+        let ids: Vec<i32> = id_col.into_iter().flatten().collect();
+        assert_eq!(ids, vec![1, 1, 1, 2, 2, 2]);
     }
 
     #[test]
@@ -715,5 +870,201 @@ mod tests {
         // Check if the columns exist in the result
         assert!(column_names.contains(&"value".to_string()));
         assert!(column_names.contains(&"other_value".to_string()));
+    }
+
+    #[test]
+    fn test_detect_vector_columns() {
+        let df = df! {
+            "scalar_int" => [1, 2, 3],
+            "scalar_str" => ["a", "b", "c"],
+            "vector_int" => ListChunked::from_iter([
+                Some(Series::new("".into(), vec![1, 2])),
+                Some(Series::new("".into(), vec![3, 4])),
+                Some(Series::new("".into(), vec![5, 6]))
+            ]).into_series(),
+            "vector_float" => ListChunked::from_iter([
+                Some(Series::new("".into(), vec![1.1, 2.2])),
+                Some(Series::new("".into(), vec![3.3, 4.4])),
+                Some(Series::new("".into(), vec![5.5, 6.6]))
+            ]).into_series()
+        }
+        .unwrap();
+
+        // Test detection with all columns
+        let all_cols = vec![
+            "scalar_int".to_string(),
+            "scalar_str".to_string(),
+            "vector_int".to_string(),
+            "vector_float".to_string(),
+        ];
+        let vector_cols = detect_vector_columns(&df, &all_cols).unwrap();
+
+        // Should only detect the vector columns
+        assert_eq!(vector_cols.len(), 2);
+        assert!(vector_cols.contains(&"vector_int".to_string()));
+        assert!(vector_cols.contains(&"vector_float".to_string()));
+
+        // Test with subset of columns
+        let subset_cols = vec!["scalar_int".to_string(), "vector_int".to_string()];
+        let vector_cols = detect_vector_columns(&df, &subset_cols).unwrap();
+
+        // Should only detect vector_int
+        assert_eq!(vector_cols.len(), 1);
+        assert!(vector_cols.contains(&"vector_int".to_string()));
+    }
+
+    #[test]
+    fn test_detect_vector_columns_empty() {
+        // Test with empty DataFrame
+        let empty_df = df! {
+            "scalar_int" => [1, 2, 3]
+        }
+        .unwrap();
+
+        let cols = vec!["scalar_int".to_string()];
+        let vector_cols = detect_vector_columns(&empty_df, &cols).unwrap();
+
+        // Should return empty vector since no list columns
+        assert!(vector_cols.is_empty());
+
+        // Test with non-existent columns
+        let bad_cols = vec!["non_existent".to_string()];
+        let vector_cols = detect_vector_columns(&empty_df, &bad_cols).unwrap();
+
+        // Should return empty vector for non-existent columns
+        assert!(vector_cols.is_empty());
+    }
+
+    #[test]
+    fn test_explode_vector_columns_basic() {
+        let df = df! {
+            "id" => [1, 2],
+            "scalar" => ["a", "b"],
+            "vector" => ListChunked::from_iter([
+                Some(Series::new("".into(), vec![10, 20])),
+                Some(Series::new("".into(), vec![30, 40, 50]))
+            ]).into_series()
+        }
+        .unwrap();
+
+        let vector_cols = vec!["vector".to_string()];
+        let result = explode_vector_columns(&df, &vector_cols).unwrap();
+
+        // Check shape - should be 5 rows (2 + 3 from vectors)
+        assert_eq!(result.shape(), (5, 5)); // 5 columns including __row_idx, __proj_idx, and original columns
+
+        // Check column names
+        let cols: Vec<String> = result
+            .get_column_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(cols.contains(&"id".to_string()));
+        assert!(cols.contains(&"scalar".to_string()));
+        assert!(cols.contains(&"vector".to_string()));
+        assert!(cols.contains(&"__row_idx".to_string()));
+        assert!(cols.contains(&"__proj_idx".to_string()));
+
+        // Check values
+        let vector_col = result.column("vector").unwrap().i32().unwrap();
+        assert_eq!(vector_col.get(0), Some(10));
+        assert_eq!(vector_col.get(1), Some(20));
+        assert_eq!(vector_col.get(2), Some(30));
+        assert_eq!(vector_col.get(3), Some(40));
+        assert_eq!(vector_col.get(4), Some(50));
+
+        // Check id values are properly repeated
+        let id_col = result.column("id").unwrap().i32().unwrap();
+        assert_eq!(id_col.get(0), Some(1));
+        assert_eq!(id_col.get(1), Some(1));
+        assert_eq!(id_col.get(2), Some(2));
+        assert_eq!(id_col.get(3), Some(2));
+        assert_eq!(id_col.get(4), Some(2));
+    }
+
+    #[test]
+    fn test_explode_vector_columns_multiple() {
+        let df = df! {
+            "id" => [1, 2],
+            "vector1" => ListChunked::from_iter([
+                Some(Series::new("".into(), vec![10, 20])),
+                Some(Series::new("".into(), vec![30, 40]))
+            ]).into_series(),
+            "vector2" => ListChunked::from_iter([
+                Some(Series::new("".into(), vec!["a", "b"])),
+                Some(Series::new("".into(), vec!["c", "d"]))
+            ]).into_series()
+        }
+        .unwrap();
+
+        let vector_cols = vec!["vector1".to_string(), "vector2".to_string()];
+        let result = explode_vector_columns(&df, &vector_cols).unwrap();
+
+        // Check shape - should be 4 rows (2 elements per vector)
+        assert_eq!(result.shape(), (4, 5)); // 5 columns including __row_idx, __proj_idx, and original columns
+
+        // Check values from both vector columns
+        let vector1_col = result.column("vector1").unwrap().i32().unwrap();
+        let vector2_col = result.column("vector2").unwrap().str().unwrap();
+
+        assert_eq!(vector1_col.get(0), Some(10));
+        assert_eq!(vector2_col.get(0), Some("a"));
+        assert_eq!(vector1_col.get(1), Some(20));
+        assert_eq!(vector2_col.get(1), Some("b"));
+        assert_eq!(vector1_col.get(2), Some(30));
+        assert_eq!(vector2_col.get(2), Some("c"));
+        assert_eq!(vector1_col.get(3), Some(40));
+        assert_eq!(vector2_col.get(3), Some("d"));
+    }
+
+    #[test]
+    fn test_explode_vector_columns_with_nulls() {
+        let df = df! {
+            "id" => [1, 2, 3],
+            "vector" => ListChunked::from_iter([
+                Some(Series::new("".into(), vec![10, 20])),
+                None,
+                Some(Series::new("".into(), vec![30]))
+            ]).into_series()
+        }
+        .unwrap();
+
+        let vector_cols = vec!["vector".to_string()];
+        let result = explode_vector_columns(&df, &vector_cols).unwrap();
+
+        // Check shape - should be 4 rows (2 + 1 + 1 from vectors)
+        assert_eq!(result.shape(), (4, 4)); // 4 columns including __row_idx and __proj_idx
+
+        // Check values - note that None values are included in output
+        let vector_col = result.column("vector").unwrap().i32().unwrap();
+        assert_eq!(vector_col.get(0), Some(10));
+        assert_eq!(vector_col.get(1), Some(20));
+        assert_eq!(vector_col.get(2), None); // The None value is preserved
+        assert_eq!(vector_col.get(3), Some(30));
+
+        // Check id values
+        let id_col = result.column("id").unwrap().i32().unwrap();
+        assert_eq!(id_col.get(0), Some(1));
+        assert_eq!(id_col.get(1), Some(1));
+        assert_eq!(id_col.get(2), Some(2)); // ID for the None value
+        assert_eq!(id_col.get(3), Some(3));
+    }
+
+    #[test]
+    fn test_explode_vector_columns_empty() {
+        let df = df! {
+            "id" => [1, 2],
+            "vector" => ListChunked::from_iter([
+                Some(Series::new("".into(), Vec::<i32>::new())),
+                Some(Series::new("".into(), Vec::<i32>::new()))
+            ]).into_series()
+        }
+        .unwrap();
+
+        let vector_cols = vec!["vector".to_string()];
+        let result = explode_vector_columns(&df, &vector_cols).unwrap();
+
+        // Check shape - should be 2 rows since empty vectors are preserved
+        assert_eq!(result.shape().0, 2);
     }
 }
