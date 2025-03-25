@@ -426,6 +426,8 @@ pub fn collect_vector_results(
         .group_by([col(group_column)])
         .agg(agg_exprs)
         .sort(vec![group_column], SortMultipleOptions::default())
+        // Drop both internal tracking columns
+        .drop(["__row_idx", "__proj_idx"])
         .collect()?;
 
     Ok(result)
@@ -458,22 +460,51 @@ pub fn lookup_vector(table_name: &str, query_df: DataFrame) -> PolarsResult<Data
         return lookup(table_name, query_df);
     }
 
-    // Explode vector columns
-    let exploded = explode_vector_columns(&query_df, &vector_cols)?;
+    // Create a unique identifier for joining later
+    let query_with_id = query_df.with_row_index("__temp_id".into(), None)?;
 
-    // Perform lookup using standard mechanism
+    // Get all columns needed for the lookup
+    let mut lookup_cols: Vec<String> = key_spec.source_cols.to_vec();
+    lookup_cols.push("__temp_id".to_string());
+
+    // Split into vector and scalar parts
+    let vector_part = query_with_id.select(&lookup_cols)?;
+
+    // Explode and process only the vector part
+    let exploded = explode_vector_columns(&vector_part, &vector_cols)?;
     let lookup_result = lookup(table_name, exploded)?;
 
-    // Determine which columns to collect as vectors
+    // Only collect the lookup result column and __row_idx into vectors
     let value_columns: Vec<String> = lookup_result
         .get_column_names()
         .iter()
-        .filter(|&name| !name.starts_with("__"))
+        .filter(|&name| {
+            !key_spec.source_cols.contains(&name.to_string()) && !name.starts_with("__")
+        })
         .map(|s| s.to_string())
         .collect();
 
-    // Collect results back into vectors
-    collect_vector_results(&lookup_result, "__row_idx", &value_columns)
+    let collected = collect_vector_results(&lookup_result, "__row_idx", &value_columns)?;
+
+    // Get a list of columns to drop (duplicates with _right suffix)
+    let drop_cols: Vec<String> = key_spec
+        .source_cols
+        .iter()
+        .map(|col| format!("{}_right", col))
+        .chain(std::iter::once("__temp_id".to_string()))
+        .collect();
+
+    // Join the results back to the original DataFrame
+    query_with_id
+        .lazy()
+        .join(
+            collected.lazy(),
+            [col("__temp_id")],
+            [col("__temp_id")],
+            JoinArgs::new(JoinType::Left),
+        )
+        .drop(drop_cols.iter().map(String::as_str))
+        .collect()
 }
 
 /// Initializes the module

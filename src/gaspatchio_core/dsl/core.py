@@ -62,6 +62,7 @@ def set_default_mode(mode: str) -> None:
     if mode not in ("debug", "optimize"):
         raise ValueError(f"Invalid mode: {mode}. Must be 'debug' or 'optimize'")
     _DEFAULT_MODE = mode
+    os.environ["GASPATCHIO_MODE"] = mode
 
 
 def get_default_verbose() -> bool:
@@ -548,6 +549,23 @@ class ActuarialFrame:
 
                     # Convert back to lazy DataFrame to preserve laziness in further operations
                     df = result_df.lazy()
+                elif op_type == "table_lookup_vector":
+                    table_name = op_args[0]
+                    # For table lookups, we need to materialize the DataFrame
+                    df_materialized = df.collect()
+
+                    # Perform the lookup (using batching if enabled)
+                    if self._batch_enabled:
+                        result_df = self._batch_lookup_vector(
+                            table_name, df_materialized
+                        )
+                    else:
+                        result_df = table_registry.py_lookup_vector(
+                            table_name, df_materialized
+                        )
+
+                    # Convert back to lazy DataFrame to preserve laziness in further operations
+                    df = result_df.lazy()
                 elif op_type == "register_table":
                     table_name, key_spec = op_args
                     # Materialize the DataFrame for registration
@@ -909,6 +927,21 @@ class ActuarialFrame:
                 self._operation_log.append("Add columns with expression")
 
         return self
+
+    def pipe(self, func, *args, **kwargs) -> "ActuarialFrame":
+        """
+        Apply a function to the DataFrame that returns an ActuarialFrame.
+
+        Args:
+            func: Function that takes an ActuarialFrame as first argument
+            *args: Additional positional arguments to pass to func
+            **kwargs: Additional keyword arguments to pass to func
+
+        Returns:
+            ActuarialFrame: Result of applying func
+        """
+        result = func(self, *args, **kwargs)
+        return result if result is not None else self
 
 
 def run_model(model_func: Callable, df: ActuarialFrame) -> ActuarialFrame:
