@@ -1,4 +1,5 @@
 use arc_swap::ArcSwap;
+use log::info;
 use polars::prelude::SortMultipleOptions;
 
 use polars::prelude::*;
@@ -443,6 +444,8 @@ pub fn collect_vector_results(
 /// A DataFrame with lookup results as vectors
 pub fn lookup_vector(table_name: &str, query_df: DataFrame) -> PolarsResult<DataFrame> {
     // Get the registered table
+    info!("lookup_vector called with table_name: {}", table_name);
+
     let registry = get_registry();
     let _table_df = registry.get_table(table_name).ok_or_else(|| {
         PolarsError::ComputeError(format!("Table '{}' not found", table_name).into())
@@ -452,6 +455,7 @@ pub fn lookup_vector(table_name: &str, query_df: DataFrame) -> PolarsResult<Data
         PolarsError::ComputeError(format!("KeySpec for table '{}' not found", table_name).into())
     })?;
 
+    info!("detecting vector columns");
     // Detect vector columns in query DataFrame
     let vector_cols = detect_vector_columns(&query_df, &key_spec.source_cols)?;
 
@@ -467,13 +471,17 @@ pub fn lookup_vector(table_name: &str, query_df: DataFrame) -> PolarsResult<Data
     let mut lookup_cols: Vec<String> = key_spec.source_cols.to_vec();
     lookup_cols.push("__temp_id".to_string());
 
+    info!("selecting lookup columns");
     // Split into vector and scalar parts
     let vector_part = query_with_id.select(&lookup_cols)?;
 
+    info!("exploding vector columns");
     // Explode and process only the vector part
     let exploded = explode_vector_columns(&vector_part, &vector_cols)?;
     let lookup_result = lookup(table_name, exploded)?;
+    info!("lookup result: {:?}", lookup_result);
 
+    info!("get value columns");
     // Only collect the lookup result column and __row_idx into vectors
     let value_columns: Vec<String> = lookup_result
         .get_column_names()
@@ -484,6 +492,7 @@ pub fn lookup_vector(table_name: &str, query_df: DataFrame) -> PolarsResult<Data
         .map(|s| s.to_string())
         .collect();
 
+    info!("collecting vector results - calling");
     let collected = collect_vector_results(&lookup_result, "__row_idx", &value_columns)?;
 
     // Get a list of columns to drop (duplicates with _right suffix)
@@ -494,6 +503,7 @@ pub fn lookup_vector(table_name: &str, query_df: DataFrame) -> PolarsResult<Data
         .chain(std::iter::once("__temp_id".to_string()))
         .collect();
 
+    info!("joining results back to original dataframe");
     // Join the results back to the original DataFrame
     query_with_id
         .lazy()

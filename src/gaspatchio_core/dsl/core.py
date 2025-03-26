@@ -305,6 +305,7 @@ class ActuarialFrame:
         self._operation_log: List[str] = []
         self._batch_enabled = False
         self._batch_size = 10000
+        self._show_query_plan = False  # Flag to control query plan logging
 
         # Use global defaults if not specified
         self._mode = mode if mode is not None else get_default_mode()
@@ -496,6 +497,43 @@ class ActuarialFrame:
             except Exception as e:
                 raise RuntimeError(f"Error applying function in optimize mode: {e}")
 
+    def _log_query_plan(self, operations):
+        """Log the query plan before execution"""
+        log.info("===== QUERY PLAN =====")
+        for i, (op_type, *op_args) in enumerate(operations):
+            if op_type == "column":
+                col_name, expr = op_args
+                log.info(f"  {i + 1}. SET COLUMN: '{col_name}' = {expr}")
+            elif op_type == "table_lookup":
+                table_name = op_args[0]
+                log.info(f"  {i + 1}. TABLE LOOKUP: '{table_name}'")
+            elif op_type == "table_lookup_vector":
+                table_name = op_args[0]
+                log.info(f"  {i + 1}. VECTOR LOOKUP: '{table_name}'")
+            elif op_type == "register_table":
+                table_name, key_spec = op_args
+                log.info(
+                    f"  {i + 1}. REGISTER TABLE: '{table_name}' with keys {key_spec.source_cols}"
+                )
+            elif op_type == "register_table_transform":
+                table_name, key_spec, transform_spec = op_args
+                log.info(f"  {i + 1}. REGISTER TRANSFORMED TABLE: '{table_name}'")
+
+        # Include Polars execution plan if available
+        try:
+            polars_plan = self._df.explain()
+            log.info("POLARS EXECUTION PLAN:")
+            log.info(polars_plan)
+        except Exception as e:
+            log.info(f"Could not retrieve Polars execution plan: {e}")
+
+        log.info("=======================")
+
+    def show_query_plan(self, enabled=True):
+        """Enable or disable query plan logging before execution"""
+        self._show_query_plan = enabled
+        return self
+
     def trace(self, func):
         """Decorator to trace a function's dataframe operations"""
 
@@ -527,6 +565,10 @@ class ActuarialFrame:
             operations = self._computation_graph
             self._computation_graph = old_graph
             self._tracing = original_tracing
+
+            # NEW: Output the query plan before execution
+            if self._verbose or self._show_query_plan:
+                self._log_query_plan(operations)
 
             # Apply captured operations
             df = self._df
@@ -600,6 +642,12 @@ class ActuarialFrame:
             # Set thread count if specified
             return self._df.collect(n_threads=self._threads)
         return self._df.collect()
+
+    def profile(self):
+        """Execute and materialize the dataframe with profiling"""
+        if self._threads > 0:
+            return self._df.profile(n_threads=self._threads)
+        return self._df.profile()
 
     def optimize(self):
         """Apply Polars optimizations to the computation graph"""

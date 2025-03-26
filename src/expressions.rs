@@ -71,6 +71,7 @@ fn fill_series(inputs: &[Series], kwargs: FillSeriesKwargs) -> PolarsResult<Seri
         _ => Series::new("".into(), vec![None::<i64>]),
     }));
     // Finish building the ListChunked and convert it into a Series.
+    info!("fill_series completed");
     Ok(builder.into_series())
 }
 
@@ -129,6 +130,8 @@ fn floor(inputs: &[Series], kwargs: FloorKwargs) -> PolarsResult<Series> {
     let input_series = &inputs[0];
     let divisor = kwargs.divisor;
     let default = kwargs.default;
+
+    info!("floor called with inputs: {:?}", inputs);
 
     // Handle different numeric types
     match input_series.dtype() {
@@ -253,7 +256,7 @@ fn floor(inputs: &[Series], kwargs: FloorKwargs) -> PolarsResult<Series> {
                     }
                 }
             });
-
+            info!("floor completed");
             Ok(out.into_series())
         }
         _ => Err(PolarsError::ComputeError(

@@ -256,16 +256,15 @@ def main(
 
     # Create ActuarialFrame with specified mode
     logger.info("Starting model run in {} mode...", mode)
+    logger.info(f"polars thread size: {pl.thread_pool_size()}")
+
     df = ActuarialFrame(data, mode=mode)
-    # traced_function = df.trace(model_func)
 
-    # result = run_model(traced_function, df).collect()
+    df.show_query_plan(True)
 
-    result = run_model(model_func, df).collect()
-    # View the complete operation log
-    operation_log = df.get_operation_log()
-    for op in operation_log:
-        print(op)
+    result, profile = run_model(model_func, df).profile()
+
+    print(profile)
 
     end = time.time()
     total_time = end - start
