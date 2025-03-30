@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio-core"
-version = "0.0.3"
+version = "0.0.4"
 description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@sudden.co.nz" }]
@@ -31,7 +31,7 @@ excel = ["polars-u64-idx>=1.23.0"]
 [tool.maturin]
 module-name = "gaspatchio_core._internal"
 python-packages = ["gaspatchio_core"]
-python-source = "src"
+python-source = ""
 
 [build-system]
 requires = ["maturin>=1.0,<2.0"]

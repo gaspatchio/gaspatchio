@@ -1,9 +1,7 @@
-mod expressions;
-mod table_registry;
+mod vector;
 
 use log::{debug, info};
 use pyo3::prelude::*;
-use pyo3_polars::PolarsAllocator;
 
 #[pymodule]
 fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
@@ -21,13 +19,5 @@ fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
     debug!("Debug logging enabled");
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
-    // Add TableRegistry module
-    let table_reg = PyModule::new(m.py(), "table_registry")?;
-    table_registry::init_module(&table_reg)?;
-    m.add_submodule(&table_reg)?;
-
     Ok(())
 }
-
-#[global_allocator]
-static ALLOC: PolarsAllocator = PolarsAllocator::new();

@@ -5,7 +5,6 @@ from unittest import mock
 import numpy as np
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions import table_registry
 
 # Try to import numba, but make it optional
 try:
@@ -414,13 +413,6 @@ class TestPerformance(unittest.TestCase):
                 "gender": genders,
                 "mortality_rate": rates,
             }
-        )
-        table_registry.py_register_table(
-            "mortality_rates",
-            mortality_rates,
-            table_registry.KeySpec(
-                source_cols=["age_last", "gender"], table_cols=["age_last", "gender"]
-            ),
         )
 
     def test_performance_comparison(self):

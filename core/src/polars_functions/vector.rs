@@ -1,57 +1,9 @@
 #![allow(clippy::unused_unit)]
 use log::info;
 use polars::prelude::*;
-use polars_core::utils::CustomIterTools;
-use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
-use std::fmt::Write;
 
-#[polars_expr(output_type=String)]
-fn pig_latinnify(inputs: &[Series]) -> PolarsResult<Series> {
-    let ca: &StringChunked = inputs[0].str()?;
-    let out: StringChunked = ca.apply_into_string_amortized(|value: &str, output: &mut String| {
-        if let Some(first_char) = value.chars().next() {
-            let _ = write!(output, "{}{}ay", &value[1..], first_char);
-        }
-    });
-    Ok(out.into_series())
-}
-
-fn same_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = &input_fields[0];
-    Ok(field.clone())
-}
-
-pub fn point_2d_output(_: &[Field]) -> PolarsResult<Field> {
-    Ok(Field::new(
-        PlSmallStr::from_static("point_2d"),
-        DataType::Array(Box::new(DataType::Float64), 2),
-    ))
-}
-
-#[polars_expr(output_type_func=same_output_type)]
-fn noop(inputs: &[Series]) -> PolarsResult<Series> {
-    let s = &inputs[0];
-    match s.dtype() {
-        DataType::Int32 => Ok(s.i32()?.clone().into_series()),
-        DataType::Int64 => Ok(s.i64()?.clone().into_series()),
-        DataType::Float32 => Ok(s.f32()?.clone().into_series()),
-        DataType::Float64 => Ok(s.f64()?.clone().into_series()),
-        _ => Err(PolarsError::ComputeError(
-            "Operation only supported for numeric types".into(),
-        )),
-    }
-}
-
-fn list_int64_output(_: &[Field]) -> PolarsResult<Field> {
-    Ok(Field::new(
-        PlSmallStr::from_static("list_int64"),
-        DataType::List(Box::new(DataType::Int64)),
-    ))
-}
-
-#[polars_expr(output_type_func = list_int64_output)]
-fn fill_series(inputs: &[Series], kwargs: FillSeriesKwargs) -> PolarsResult<Series> {
+pub fn fill_series(inputs: &[Series], kwargs: FillSeriesKwargs) -> PolarsResult<Series> {
     // Log the inputs for debugging.
     info!("fill_series called with inputs: {:?}", inputs);
     let length = &inputs[0];
@@ -75,57 +27,19 @@ fn fill_series(inputs: &[Series], kwargs: FillSeriesKwargs) -> PolarsResult<Seri
     Ok(builder.into_series())
 }
 
-#[polars_expr(output_type_func=list_int64_output)]
-fn abs_i64(inputs: &[Series]) -> PolarsResult<Series> {
-    let s = &inputs[0];
-    let ca: &Int64Chunked = s.i64()?;
-    // NOTE: there's a faster way of implementing `abs_i64`, which we'll
-    // cover in section 7.
-    let out: Int64Chunked = ca.apply(|opt_v: Option<i64>| opt_v.map(|v: i64| v.abs()));
-    Ok(out.into_series())
+#[derive(Deserialize)]
+pub struct FillSeriesKwargs {
+    pub start: i64,
+    pub increment: i64,
 }
 
 #[derive(Deserialize)]
-struct FillSeriesKwargs {
-    start: i64,
-    increment: i64,
+pub struct FloorKwargs {
+    pub divisor: i64,
+    pub default: i64,
 }
 
-#[derive(Deserialize)]
-struct FloorKwargs {
-    divisor: i64,
-    default: i64,
-}
-
-#[derive(Deserialize)]
-struct MidPoint2DKwargs {
-    ref_point: [f64; 2],
-}
-
-#[polars_expr(output_type_func=point_2d_output)]
-fn midpoint_2d(inputs: &[Series], kwargs: MidPoint2DKwargs) -> PolarsResult<Series> {
-    let ca: &ArrayChunked = inputs[0].array()?;
-    let ref_point = kwargs.ref_point;
-
-    let out: ArrayChunked = unsafe {
-        ca.try_apply_amortized_same_type(|row| {
-            let s = row.as_ref();
-            let ca = s.f64()?;
-            let out_inner: Float64Chunked = ca
-                .iter()
-                .enumerate()
-                .map(|(idx, opt_val)| opt_val.map(|val| (val + ref_point[idx]) / 2.0f64))
-                .collect_trusted();
-            Ok(out_inner.into_series())
-        })
-    }?;
-
-    Ok(out.into_series())
-}
-
-/// Floor division with a default value
-#[polars_expr(output_type_func = same_output_type)]
-fn floor(inputs: &[Series], kwargs: FloorKwargs) -> PolarsResult<Series> {
+pub fn floor(inputs: &[Series], kwargs: FloorKwargs) -> PolarsResult<Series> {
     // Get the first input series
     let input_series = &inputs[0];
     let divisor = kwargs.divisor;

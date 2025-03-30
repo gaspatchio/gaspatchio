@@ -27,7 +27,13 @@ from pathlib import Path
 
 import polars as pl
 import typer
+from gaspatchio_core.dsl.core import (
+    ActuarialFrame,
+    run_model,
+)
+from gaspatchio_core.utils import read_model_points
 from loguru import logger
+from typing_extensions import Annotated
 
 # Set the RUST_LOG environment variable before importing any modules
 os.environ["RUST_LOG"] = "debug"  # or "info" if you only want info logs
@@ -84,9 +90,6 @@ for logger_name in ["gaspatchio_core", "gaspatchio_core.lookup"]:
 
 
 # Now import the modules that might use Rust logging
-from gaspatchio_core.dsl.core import ActuarialFrame, run_model
-from gaspatchio_core.utils import read_model_points
-from typing_extensions import Annotated
 
 
 def load_model_from_path(model_path):
