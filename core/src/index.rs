@@ -323,6 +323,13 @@ pub enum RegistryError {
     KeyLengthMismatch(String, usize, usize),
 }
 
+// Implement From<RegistryError> for PolarsError to allow using ? in functions returning PolarsResult
+impl From<RegistryError> for PolarsError {
+    fn from(err: RegistryError) -> Self {
+        PolarsError::ComputeError(err.to_string().into())
+    }
+}
+
 /// A registry to store original DataFrames and their corresponding lookup indices.
 #[derive(Debug, Clone, Default)]
 pub struct TableRegistry {
@@ -536,46 +543,13 @@ fn validate_lookup_inputs<'a>(
     Ok((any_vectors, first_vector_len, vector_indices))
 }
 
-/// Performs the lookup when all input keys are scalar Series.
-fn execute_scalar_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> PolarsResult<Series> {
-    let mut key_values = Vec::with_capacity(keys.len());
-    for series in keys {
-        // Validation ensures series.len() == 1 here
-        if series.is_empty() {
-            // Handle case where input DF might be empty
-            return create_series_from_values(
-                &[Value::Null], // Return null if any key is from an empty series
-                lookup_index.value_column.as_str().into(),
-                &lookup_index.value_dtype,
-            );
-        }
-        key_values.push(extract_value_from_series(*series, 0)?);
-    }
-    let result_value = lookup_index
-        .lookup(&key_values)
-        .cloned()
-        .unwrap_or(Value::Null);
-    create_series_from_values(
-        &[result_value],
-        lookup_index.value_column.as_str().into(),
-        &lookup_index.value_dtype,
-    )
-}
-
-/// Internal function to perform the actual vector or scalar lookup.
-fn perform_vector_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> PolarsResult<Series> {
-    // 1. Validate inputs
-    let (any_vectors, first_vector_len, vector_indices) =
-        validate_lookup_inputs(lookup_index, keys)?;
-
-    // --- Case 1: All inputs are scalar ---
-    if !any_vectors {
-        return execute_scalar_lookup(lookup_index, keys);
-    }
-
-    // --- Case 2: At least one vector input ---
-    let output_len =
-        first_vector_len.expect("first_vector_len should be Some if any_vectors is true");
+/// Executes the vector lookup logic when at least one key is a List Series.
+fn execute_vector_lookup(
+    lookup_index: &LookupIndex,
+    keys: &[&Series],
+    output_len: usize,
+    vector_indices: &[usize], // Pass vector_indices explicitly
+) -> PolarsResult<Series> {
     if output_len == 0 {
         // Handle empty vector input case
         let list_dtype = DataType::List(Box::new(lookup_index.value_dtype.clone()));
@@ -605,7 +579,7 @@ fn perform_vector_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> Polars
         output_len,
         output_len, // capacity estimate
         lookup_index.value_column.as_str().into(),
-    ); // Removed ? for potential error from get_list_builder
+    );
 
     for i in 0..output_len {
         let mut current_key = Vec::with_capacity(keys.len());
@@ -614,7 +588,7 @@ fn perform_vector_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> Polars
         for (key_idx, series) in keys.iter().enumerate() {
             let value_result = if vector_indices.contains(&key_idx) {
                 // Extract from the list series for this row
-                // Assuming element_idx 0 for now, needs clarification if lists can have multiple elements per row relevant to the key
+                // Assuming element_idx 0 for now, based on original logic.
                 extract_value_from_list_series(series, i, 0)
             } else {
                 // Use the pre-extracted scalar value
@@ -668,6 +642,50 @@ fn perform_vector_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> Polars
     }
 
     Ok(list_builder.finish().into_series())
+}
+
+/// Internal function to perform the actual vector or scalar lookup.
+fn perform_vector_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> PolarsResult<Series> {
+    // 1. Validate inputs
+    let (any_vectors, first_vector_len_opt, vector_indices) =
+        validate_lookup_inputs(lookup_index, keys)?;
+
+    // --- Case 1: All inputs are scalar ---
+    if !any_vectors {
+        return execute_scalar_lookup(lookup_index, keys);
+    }
+
+    // --- Case 2: At least one vector input ---
+    let output_len =
+        first_vector_len_opt.expect("first_vector_len should be Some if any_vectors is true");
+
+    execute_vector_lookup(lookup_index, keys, output_len, &vector_indices)
+}
+
+/// Performs the lookup when all input keys are scalar Series.
+fn execute_scalar_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> PolarsResult<Series> {
+    let mut key_values = Vec::with_capacity(keys.len());
+    for series in keys {
+        // Validation ensures series.len() == 1 here
+        if series.is_empty() {
+            // Handle case where input DF might be empty
+            return create_series_from_values(
+                &[Value::Null], // Return null if any key is from an empty series
+                lookup_index.value_column.as_str().into(),
+                &lookup_index.value_dtype,
+            );
+        }
+        key_values.push(extract_value_from_series(*series, 0)?);
+    }
+    let result_value = lookup_index
+        .lookup(&key_values)
+        .cloned()
+        .unwrap_or(Value::Null);
+    create_series_from_values(
+        &[result_value],
+        lookup_index.value_column.as_str().into(),
+        &lookup_index.value_dtype,
+    )
 }
 
 // --- Global Registry Definition ---
@@ -947,7 +965,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lookup_vector_with_nulls_in_key_vector() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_lookup_vector_with_nulls_in_key_vector() -> PolarsResult<()> {
         setup_mortality_registry()?;
         let registry = get_registry();
         let age_list_values = vec![
@@ -1040,5 +1058,365 @@ mod tests {
         Ok(())
     }
 
-    // ... test_lookup_vector_with_nulls_in_key_value ...
+    #[test]
+    fn test_validate_lookup_inputs_scalar() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key = Series::new("age-last".into(), &[31i64]);
+        let gs_key = Series::new("gender_smoking".into(), &["MNS"]);
+
+        let (any_vectors, first_vector_len, vector_indices) =
+            validate_lookup_inputs(lookup_index, &[&age_key, &gs_key])?;
+
+        assert!(!any_vectors);
+        assert_eq!(first_vector_len, None);
+        assert!(vector_indices.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_lookup_inputs_vector() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key = Series::new("age-last".into(), &[31i64, 33]); // Scalar
+        let gs_key = ListChunked::from_iter([
+            Some(Series::new("".into(), vec!["MNS"])),
+            Some(Series::new("".into(), vec!["FNS"])),
+        ])
+        .into_series()
+        .with_name("gender_smoking".into()); // Vector
+
+        // Need to adjust scalar length to 1 for validation when vectors are present
+        let age_key_scalar = Series::new("age-last".into(), &[31i64]);
+
+        let (any_vectors, first_vector_len, vector_indices) =
+            validate_lookup_inputs(lookup_index, &[&age_key_scalar, &gs_key])?;
+
+        assert!(any_vectors);
+        assert_eq!(first_vector_len, Some(2));
+        assert_eq!(vector_indices, vec![1]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_lookup_inputs_mismatch_vector_len() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry
+            .get_lookup_index("mortality_rates")
+            .ok_or_else(|| {
+                PolarsError::ComputeError("Lookup index 'mortality_rates' not found".into())
+            })?;
+        let age_key = ListChunked::from_iter([
+            Some(Series::new("".into(), vec![31i64])),
+            Some(Series::new("".into(), vec![33i64])),
+        ])
+        .into_series()
+        .with_name("age-last".into()); // Len 2
+        let gs_key = ListChunked::from_iter([Some(Series::new("".into(), vec!["MNS"]))])
+            .into_series()
+            .with_name("gender_smoking".into()); // Len 1
+
+        let result = validate_lookup_inputs(lookup_index, &[&age_key, &gs_key]);
+
+        assert!(result.is_err());
+        match result {
+            Err(PolarsError::ShapeMismatch(msg)) => {
+                assert!(msg.contains("Input vector lengths mismatch"));
+            }
+            _ => panic!("Expected ShapeMismatch error"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_lookup_inputs_mismatch_scalar_len() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key = Series::new("age-last".into(), &[31i64, 33]); // Len 2 but scalar type
+        let gs_key = ListChunked::from_iter([
+            Some(Series::new("".into(), vec!["MNS"])),
+            Some(Series::new("".into(), vec!["FNS"])),
+        ])
+        .into_series()
+        .with_name("gender_smoking".into()); // Vector
+
+        let result = validate_lookup_inputs(lookup_index, &[&age_key, &gs_key]);
+
+        assert!(result.is_err());
+        match result {
+            Err(PolarsError::ShapeMismatch(msg)) => {
+                assert!(msg.contains("Scalar key 'age-last' (index 0) has length 2 but expected 1"));
+            }
+            _ => panic!("Expected ShapeMismatch error"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_lookup_inputs_key_count_mismatch() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key = Series::new("age-last".into(), &[31i64]);
+
+        let result = validate_lookup_inputs(lookup_index, &[&age_key]); // Only one key provided
+
+        assert!(result.is_err());
+        match result {
+            Err(PolarsError::ComputeError(msg)) => {
+                assert!(msg.contains("Lookup key length mismatch"));
+            }
+            _ => panic!("Expected ComputeError for key length mismatch"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_scalar_lookup_found() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key = Series::new("age-last".into(), &[31i64]);
+        let gs_key = Series::new("gender_smoking".into(), &["MNS"]);
+
+        let result_series = execute_scalar_lookup(lookup_index, &[&age_key, &gs_key])?;
+        let expected_series = Series::new("mortality_rate".into(), &[Some(0.0012f64)]);
+
+        // Use equals_missing for robust comparison
+        assert!(result_series.equals_missing(&expected_series));
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_scalar_lookup_not_found() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key = Series::new("age-last".into(), &[99i64]); // Age not in index
+        let gs_key = Series::new("gender_smoking".into(), &["MNS"]);
+
+        let result_series = execute_scalar_lookup(lookup_index, &[&age_key, &gs_key])?;
+        let expected_series = create_series_from_values(
+            &[Value::Null],
+            lookup_index.value_column.as_str().into(),
+            &lookup_index.value_dtype,
+        )?;
+
+        // Use equals_missing for robust comparison
+        assert!(result_series.equals_missing(&expected_series));
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_scalar_lookup_null_key() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key: Series = Series::new("age-last".into(), &[None::<i64>]); // Null age
+        let gs_key = Series::new("gender_smoking".into(), &["MNS"]);
+
+        let result_series = execute_scalar_lookup(lookup_index, &[&age_key, &gs_key])?;
+        let expected_series = create_series_from_values(
+            &[Value::Null],
+            lookup_index.value_column.as_str().into(),
+            &lookup_index.value_dtype,
+        )?;
+
+        // Use equals_missing for robust comparison
+        assert!(result_series.equals_missing(&expected_series));
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_scalar_lookup_empty_input() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key = Series::new_empty("age-last".into(), &DataType::Int64); // Empty series
+        let gs_key = Series::new("gender_smoking".into(), &["MNS"]); // Non-empty needed for structure
+
+        // Note: validate_lookup_inputs would reject this case if vectors were present.
+        // execute_scalar_lookup handles it specifically.
+        let result_series = execute_scalar_lookup(lookup_index, &[&age_key, &gs_key])?;
+        let expected_series = create_series_from_values(
+            &[Value::Null],
+            lookup_index.value_column.as_str().into(),
+            &lookup_index.value_dtype,
+        )?;
+
+        // Use equals_missing for robust comparison
+        assert!(result_series.equals_missing(&expected_series));
+        Ok(())
+    }
+
+    // --- Tests for execute_vector_lookup ---
+
+    #[test]
+    fn test_execute_vector_lookup_mixed() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key_scalar = Series::new("age-last".into(), &[31i64]); // Scalar
+        let gs_key_vector = ListChunked::from_iter([
+            Some(Series::new("".into(), vec!["MNS"])),
+            Some(Series::new("".into(), vec!["FS"])),
+            Some(Series::new("".into(), vec!["MS"])), // Add another case
+        ])
+        .into_series()
+        .with_name("gender_smoking".into()); // Vector
+
+        let output_len = gs_key_vector.len();
+        let vector_indices = vec![1];
+
+        let result_series = execute_vector_lookup(
+            lookup_index,
+            &[&age_key_scalar, &gs_key_vector],
+            output_len,
+            &vector_indices,
+        )?;
+
+        // Construct expected result manually
+        let mut expected_builder = get_list_builder(
+            &lookup_index.value_dtype,
+            output_len,
+            output_len,
+            lookup_index.value_column.as_str().into(),
+        );
+        expected_builder.append_series(&Series::new("".into(), &[Some(0.0012f64)]))?; // 31, MNS
+        expected_builder.append_series(&Series::new("".into(), &[Some(0.0020f64)]))?; // 31, FS
+        expected_builder.append_series(&Series::new("".into(), &[Some(0.0022f64)]))?; // 31, MS
+        let expected_series = expected_builder.finish().into_series();
+
+        assert!(result_series.equals_missing(&expected_series));
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_vector_lookup_all_vectors() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key_vector = ListChunked::from_iter([
+            Some(Series::new("".into(), vec![31i64])),
+            Some(Series::new("".into(), vec![33i64])),
+        ])
+        .into_series()
+        .with_name("age-last".into());
+        let gs_key_vector = ListChunked::from_iter([
+            Some(Series::new("".into(), vec!["MNS"])),
+            Some(Series::new("".into(), vec!["MS"])),
+        ])
+        .into_series()
+        .with_name("gender_smoking".into());
+
+        let output_len = age_key_vector.len();
+        let vector_indices = vec![0, 1];
+
+        let result_series = execute_vector_lookup(
+            lookup_index,
+            &[&age_key_vector, &gs_key_vector],
+            output_len,
+            &vector_indices,
+        )?;
+
+        let mut expected_builder = get_list_builder(
+            &lookup_index.value_dtype,
+            output_len,
+            output_len,
+            lookup_index.value_column.as_str().into(),
+        );
+        expected_builder.append_series(&Series::new("".into(), &[Some(0.0012f64)]))?; // 31, MNS
+        expected_builder.append_series(&Series::new("".into(), &[Some(0.0023f64)]))?; // 33, MS
+        let expected_series = expected_builder.finish().into_series();
+
+        assert!(result_series.equals_missing(&expected_series));
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_vector_lookup_null_in_vector_key() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key_scalar = Series::new("age-last".into(), &[31i64]);
+        let gs_key_vector = ListChunked::from_iter([
+            Some(Series::new("".into(), vec!["MNS"])),
+            None, // Null in the list itself
+            Some(Series::new("".into(), vec!["FS"])),
+        ])
+        .into_series()
+        .with_name("gender_smoking".into());
+
+        let output_len = gs_key_vector.len();
+        let vector_indices = vec![1];
+
+        let result_series = execute_vector_lookup(
+            lookup_index,
+            &[&age_key_scalar, &gs_key_vector],
+            output_len,
+            &vector_indices,
+        )?;
+
+        let mut expected_builder = get_list_builder(
+            &lookup_index.value_dtype,
+            output_len,
+            output_len,
+            lookup_index.value_column.as_str().into(),
+        );
+        expected_builder.append_series(&Series::new("".into(), &[Some(0.0012f64)]))?;
+        expected_builder.append_null(); // Expect null because key was null
+        expected_builder.append_series(&Series::new("".into(), &[Some(0.0020f64)]))?;
+        let expected_series = expected_builder.finish().into_series();
+
+        // Need careful comparison due to potential NaN/Float issues & nulls
+        assert_eq!(result_series.len(), expected_series.len());
+        let result_ca = result_series.list()?;
+        let expected_ca = expected_series.list()?;
+        for i in 0..result_ca.len() {
+            let res_val = result_ca.get_any_value(i)?;
+            let exp_val = expected_ca.get_any_value(i)?;
+            assert!(
+                res_val.eq_missing(&exp_val, true),
+                "Mismatch at index {}: {:?} vs {:?}",
+                i,
+                res_val,
+                exp_val
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_vector_lookup_empty_vector() -> PolarsResult<()> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
+        let age_key_scalar = Series::new("age-last".into(), &[31i64]);
+        // Correctly create an empty Series with a List dtype
+        let list_dtype = DataType::List(Box::new(DataType::String));
+        let gs_key_vector = Series::new_empty("gender_smoking".into(), &list_dtype);
+
+        let output_len = gs_key_vector.len();
+        let vector_indices = vec![1];
+
+        let result_series = execute_vector_lookup(
+            lookup_index,
+            &[&age_key_scalar, &gs_key_vector],
+            output_len,
+            &vector_indices,
+        )?;
+
+        let expected_series = Series::new_empty(
+            lookup_index.value_column.as_str().into(),
+            &DataType::List(Box::new(lookup_index.value_dtype.clone())),
+        );
+
+        assert!(result_series.equals_missing(&expected_series));
+        Ok(())
+    }
 }
