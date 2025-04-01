@@ -298,7 +298,9 @@ def main(
         pl.Config.set_tbl_cols(-1)  # Show all columns (-1 means no limit)
         pl.Config.set_tbl_rows(15)  # Show more rows for better visibility
 
-    print(result)
+    # Ensure all columns are displayed
+    with pl.Config(tbl_cols=-1):
+        print(result)
 
 
 def compare_modes(
