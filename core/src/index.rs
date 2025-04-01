@@ -11,6 +11,27 @@ use once_cell::sync::Lazy;
 use polars::chunked_array::builder::{get_list_builder, ListBuilderTrait};
 use polars::datatypes::PlSmallStr;
 use polars::series::Series;
+use polars_core::utils::concat_df;
+use std::sync::Mutex;
+
+/// Represents the type of transformation to apply during table registration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TransformType {
+    WideToLong,
+    // Add future transform types here
+}
+
+/// Specification for transforming a table before indexing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransformSpec {
+    pub transform_type: TransformType,
+    // Common fields (used by WideToLong)
+    pub id_vars: Vec<String>,
+    pub value_vars: Vec<String>,
+    pub var_name: String,
+    pub value_name: String,
+    // Add other fields for future transform types
+}
 
 /// Represents a value that can be used as a key or value in the lookup table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,8 +302,11 @@ fn build_lookup_index(
     value_column: &str,
 ) -> PolarsResult<(HashMap<Vec<Value>, Value>, DataType)> {
     let mut index = HashMap::new();
-    let value_series_col = df.column(value_column)?;
-    let value_dtype = value_series_col.dtype().clone();
+    // Fetch value Column
+    let value_col = df.column(value_column)?;
+    let value_dtype = value_col.dtype().clone();
+
+    // Fetch key Columns
     let key_cols_vec: Vec<&Column> = key_columns
         .iter()
         .map(|name| df.column(name))
@@ -291,21 +315,66 @@ fn build_lookup_index(
     for row_idx in 0..df.height() {
         let mut key_vec = Vec::with_capacity(key_columns.len());
         for col in &key_cols_vec {
-            key_vec.push(extract_value_from_series(
-                col.as_series()
-                    .expect("Key column could not be represented as Series"),
-                row_idx,
-            )?);
+            // Use col.get() directly, returns AnyValue
+            let any_value = col.get(row_idx)?;
+            key_vec.push(any_value_to_value(any_value)?);
         }
-        let value = extract_value_from_series(
-            value_series_col
-                .as_series()
-                .expect("Value column could not be represented as Series"),
-            row_idx,
-        )?;
+
+        // Use value_col.get() directly
+        let value_any = value_col.get(row_idx)?;
+        let value = any_value_to_value(value_any)?;
         index.insert(key_vec, value);
     }
     Ok((index, value_dtype))
+}
+
+/// Custom melt implementation inspired by user suggestion.
+fn custom_melt(
+    df: &DataFrame,
+    id_vars: &[&str], // Use &[&str] as in the inspiration code
+    value_vars: &[&str],
+    variable_name: &str,
+    value_name: &str,
+) -> PolarsResult<DataFrame> {
+    // Extract the identifier columns
+    let id_df = df.select(id_vars.iter().map(|s| s.to_string()))?;
+
+    // For each column to melt, create a DataFrame with the id_vars, a "variable" column and a "value" column.
+    let mut melted_frames = Vec::with_capacity(value_vars.len());
+    for &col in value_vars {
+        // Create a Series filled with the current column name
+        let var_series = Series::new(variable_name.into(), vec![col; df.height()]);
+        // Get the value Series (and optionally rename it)
+        let value_series = df.column(col)?.clone().with_name(value_name.into());
+        // Build a temporary DataFrame with the id columns
+        let mut temp_df = id_df.clone();
+        temp_df.with_column(var_series)?;
+        temp_df.with_column(value_series)?;
+        melted_frames.push(temp_df);
+    }
+
+    // Concatenate all the melted DataFrames vertically
+    // Use concat_df which is the recommended way now
+    concat_df(&melted_frames)
+}
+
+/// Transforms a DataFrame from wide to long format using a custom melt function.
+fn transform_wide_to_long(
+    df: &DataFrame,
+    id_vars: &[String],
+    value_vars: &[String],
+    var_name: &str,
+    value_name: &str,
+) -> PolarsResult<DataFrame> {
+    debug!(
+        "Transforming wide to long (custom melt). id_vars: {:?}, value_vars: {:?}, var_name: '{}', value_name: '{}'",
+        id_vars, value_vars, var_name, value_name
+    );
+    // Convert Vec<String> to Vec<&str> for custom_melt
+    let id_vars_str: Vec<&str> = id_vars.iter().map(AsRef::as_ref).collect();
+    let value_vars_str: Vec<&str> = value_vars.iter().map(AsRef::as_ref).collect();
+
+    custom_melt(df, &id_vars_str, &value_vars_str, var_name, value_name)
 }
 
 /// Errors that can occur during registry operations.
@@ -346,23 +415,25 @@ impl TableRegistry {
     }
 
     /// Registers a DataFrame under a given name, building a lookup index for it.
-    pub fn register_table(
+    /// This method is intended for internal use within the registry update logic.
+    /// Use the global `register_table` function for external registration.
+    fn register_table_internal(
         &mut self,
         name: &str,
-        df: DataFrame,
+        df: DataFrame, // Takes ownership
         keys: Vec<String>,
         value_column: &str,
     ) -> Result<(), RegistryError> {
-        if self.tables.contains_key(name) {
+        if self.lookup_indices.contains_key(name) {
+            // Check lookup_indices as it's the derived artifact
             return Err(RegistryError::TableAlreadyExists(name.to_string()));
         }
 
         debug!(
-            "Registering table '{}' with keys {:?} and value column '{}'",
+            "Registering table '{}' internally with keys {:?} and value column '{}'",
             name, keys, value_column
         );
 
-        // build_lookup_index now returns a tuple
         let (index_map, value_dtype) = build_lookup_index(&df, &keys, value_column)
             .map_err(|e| RegistryError::IndexBuildFailed(name.to_string(), e))?;
 
@@ -376,10 +447,11 @@ impl TableRegistry {
         let lookup_index = LookupIndex {
             keys,
             value_column: value_column.to_string(),
-            value_dtype, // Use the returned dtype
+            value_dtype,
             index: index_map,
         };
 
+        // Store the DataFrame used for building the index (might be transformed)
         self.tables.insert(name.to_string(), df);
         self.lookup_indices.insert(name.to_string(), lookup_index);
 
@@ -690,6 +762,9 @@ static REGISTRY: Lazy<ArcSwap<TableRegistry>> = Lazy::new(|| {
     ArcSwap::from_pointee(TableRegistry::default())
 });
 
+// Add a Mutex to serialize registration attempts
+static REGISTRATION_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
 /// Gets a thread-safe snapshot (Arc) of the current global TableRegistry.
 /// Clients should hold onto this snapshot for the duration of their operation
 /// rather than calling get_registry() repeatedly.
@@ -703,49 +778,96 @@ pub(crate) fn reset_global_registry() {
     REGISTRY.store(Arc::new(TableRegistry::default()));
 }
 
-/// Registers a table in the global, thread-safe registry using Read-Copy-Update.
-///
-/// This function first builds the lookup index. If successful, it then
-/// atomically updates the global registry using `ArcSwap::rcu`.
-/// If the registry was modified concurrently during the update attempt,
-/// `rcu` will automatically retry the update based on the newest state.
+/// Registers a table in the global, thread-safe registry using Read-Copy-Update,
+/// guarded by a Mutex to ensure atomic check-then-update semantics.
 ///
 /// # Arguments
 ///
 /// * `name` - The name to register the table under.
 /// * `df` - The DataFrame containing the table data.
-/// * `keys` - A vector of column names to use as lookup keys.
-/// * `value_column` - The name of the column containing the values.
+/// * `keys` - A vector of column names to use as lookup keys *after* transformation.
+/// * `value_column` - The name of the column containing the values *after* transformation.
+/// * `transform_spec` - An optional specification for transforming the table.
 ///
 /// # Returns
 ///
-/// `Ok(())` on success, or a `RegistryError` if index building fails.
+/// `Ok(())` on success, or a `RegistryError` if transformation or index building fails.
 pub fn register_table(
     name: &str,
     df: DataFrame,
     keys: Vec<String>,
     value_column: &str,
+    transform_spec: Option<TransformSpec>,
 ) -> Result<(), RegistryError> {
-    let (index_map, value_dtype) = build_lookup_index(&df, &keys, value_column)
-        .map_err(|e| RegistryError::IndexBuildFailed(name.to_string(), e))?;
+    // Acquire the lock to serialize registration attempts
+    let _guard = REGISTRATION_LOCK.lock().map_err(|_| {
+        // Handle potential Mutex poisoning
+        RegistryError::IndexBuildFailed(
+            name.to_string(),
+            PolarsError::ComputeError("Registration lock poisoned".into()),
+        )
+    })?;
 
-    let lookup_index = LookupIndex {
-        keys,
-        value_column: value_column.to_string(),
-        value_dtype,
-        index: index_map,
+    // --- Check for existing table *inside the lock* ---
+    let current_registry = get_registry(); // Get snapshot *after* acquiring lock
+    if current_registry.get_lookup_index(name).is_some() {
+        return Err(RegistryError::TableAlreadyExists(name.to_string()));
+    }
+    drop(current_registry); // Drop Arc before RCU
+
+    // --- Apply Transformation (if specified) ---
+    let transformed_df_result = if let Some(spec) = transform_spec {
+        debug!("Applying transform spec: {:?}", spec);
+        match spec.transform_type {
+            TransformType::WideToLong => transform_wide_to_long(
+                &df, // Borrow df here
+                &spec.id_vars,
+                &spec.value_vars,
+                &spec.var_name,
+                &spec.value_name,
+            )
+            .map_err(|e| {
+                RegistryError::IndexBuildFailed(
+                    name.to_string(), // Use IndexBuildFailed for transform errors too
+                    PolarsError::ComputeError(
+                        format!("Transformation failed for table '{}': {}", name, e).into(),
+                    ),
+                )
+            }),
+        }
+    } else {
+        debug!("No transform spec provided for table '{}'", name);
+        Ok(df) // If no spec, "transformed" df is the original df
     };
 
-    REGISTRY.rcu(move |current_registry_arc| {
-        let mut new_registry = (**current_registry_arc).clone();
-        new_registry.tables.insert(name.to_string(), df.clone());
-        new_registry
-            .lookup_indices
-            .insert(name.to_string(), lookup_index.clone());
-        Arc::new(new_registry)
-    });
+    let transformed_df = transformed_df_result?;
 
-    Ok(())
+    // --- Atomically Update Registry ---
+    // We use store for synchronous update under the lock
+    let current_arc = REGISTRY.load_full(); // Get current state again (could reuse from check?)
+    let mut new_registry = (*current_arc).clone();
+
+    // Register the table internally within the cloned state
+    match new_registry.register_table_internal(
+        name,           // Use the original &str name
+        transformed_df, // Pass ownership
+        keys,           // Pass ownership
+        value_column,
+    ) {
+        Ok(()) => {
+            // If internal registration succeeded, store the new state
+            REGISTRY.store(Arc::new(new_registry));
+            debug!("Successfully registered and stored table '{}'", name);
+            Ok(())
+        }
+        Err(e) => {
+            // This should not happen due to the upfront check under lock
+            log::error!("Internal registration failed unexpectedly under lock for '{}': {}. Aborting update.", name, e);
+            // Do not store, return the error
+            Err(e)
+        }
+    }
+    // Lock guard is dropped here
 }
 
 #[cfg(test)]
@@ -940,476 +1062,230 @@ mod tests {
         Ok(())
     }
 
-    // ... Vector Lookup Tests ...
-
-    fn setup_mortality_registry() -> Result<(), RegistryError> {
-        reset_global_registry();
-        let df_mortality = df!(
-            "age-last" => &[31i64, 31, 31, 31, 33, 33, 33, 33, 34, 34, 34, 34],
-            "gender_smoking" => &["MNS", "FNS", "MS", "FS", "MNS", "FNS", "MS", "FS", "MNS", "FNS", "MS", "FS"],
-            "mortality_rate" => &[0.0012f64, 0.0011, 0.0022, 0.0020, 0.0013, 0.0012, 0.0023, 0.0021, 0.0014, 0.0013, 0.0024, 0.0022]
-        ).expect("Failed to create mortality DataFrame");
-        register_table(
-            "mortality_rates",
-            df_mortality,
-            vec!["age-last".to_string(), "gender_smoking".to_string()],
-            "mortality_rate",
-        )
-    }
+    // --- Tests for Transformation ---
 
     #[test]
-    fn test_lookup_vector_with_nulls_in_key_vector() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let age_list_values = vec![
-            Some(Series::new("".into(), &[31i64])),
-            None,
-            Some(Series::new("".into(), &[34i64])),
-        ];
-        let age_key_list_with_null = ListChunked::from_iter(age_list_values.into_iter())
-            .into_series()
-            .with_name("age-last".into());
-        let gs_key_scalar = Series::new("gender_smoking".into(), &["MNS"]);
-        let result_series = registry.lookup_vector(
-            "mortality_rates",
-            &[&age_key_list_with_null, &gs_key_scalar],
+    fn test_transform_wide_to_long() -> PolarsResult<()> {
+        let df_wide = df!(
+            "age" => &[30, 31],
+            "MNS" => &[0.1, 0.2],
+            "FNS" => &[0.15, 0.25]
         )?;
 
-        // Construct expected value correctly using append_null for None case
-        let expected_values: Vec<Option<f64>> = vec![Some(0.0012), None, Some(0.0014)];
-        let mut expected_builder = get_list_builder(
-            &DataType::Float64,
-            expected_values.len(),
-            expected_values.len(),
-            "mortality_rate".into(),
-        );
-        for val_opt in &expected_values {
-            // Iterate over reference
-            match val_opt {
-                Some(val) => {
-                    expected_builder.append_series(&Series::new("".into(), &[Some(*val)]))?
-                }
-                None => expected_builder.append_null(),
-            }
-        }
-        let expected_series = expected_builder.finish().into_series();
+        // Note: We pass Vec<&str> to custom_melt now
+        let transformed_df = transform_wide_to_long(
+            &df_wide,
+            &["age".to_string()],
+            &["MNS".to_string(), "FNS".to_string()],
+            "gender_smoking",
+            "rate",
+        )?;
 
-        // Detailed comparison instead of just .equals()
-        assert_eq!(
-            result_series.len(),
-            expected_series.len(),
-            "Series length mismatch"
-        );
-        assert_eq!(
-            result_series.dtype(),
-            expected_series.dtype(),
-            "Series dtype mismatch"
-        );
+        let expected_df = df!(
+            "age" => &[30, 31, 30, 31],
+            "gender_smoking" => &["MNS", "MNS", "FNS", "FNS"],
+            "rate" => &[0.1, 0.2, 0.15, 0.25]
+        )?;
 
-        let result_ca = result_series.list()?;
-        let expected_ca = expected_series.list()?;
-
-        for i in 0..result_ca.len() {
-            // get returns Option<Box<dyn Array>>
-            let res_opt_arr: Option<Box<dyn polars_arrow::array::Array>> = result_ca.get(i);
-            let exp_opt_arr: Option<Box<dyn polars_arrow::array::Array>> = expected_ca.get(i);
-
-            // Match on references to avoid moving the values
-            match (&res_opt_arr, &exp_opt_arr) {
-                (Some(res_arr), Some(exp_arr)) => {
-                    // Convert Array to Series, providing explicit type for .into()
-                    // Pass the owned Box directly to try_from
-                    let res_inner_series =
-                        Series::try_from((<&str as Into<PlSmallStr>>::into(""), res_arr.clone()))?;
-                    let exp_inner_series =
-                        Series::try_from((<&str as Into<PlSmallStr>>::into(""), exp_arr.clone()))?;
-
-                    // Now get Float64Chunked from the Series
-                    let res_f64 = res_inner_series.f64()?;
-                    let exp_f64 = exp_inner_series.f64()?;
-
-                    // Compare the single float value inside
-                    let res_val = res_f64.get(0); // Option<f64>
-                    let exp_val = exp_f64.get(0); // Option<f64>
-                    assert_eq!(
-                        res_val, exp_val,
-                        "Mismatch at index {} - Inner values: {:?} vs {:?}",
-                        i, res_val, exp_val
-                    );
-                }
-                (None, None) => { /* Both are null, which is expected */ }
-                _ => {
-                    // Now borrowing works fine here
-                    panic!(
-                        "Mismatch at index {} - Null/Some mismatch: {:?} vs {:?}",
-                        i, res_opt_arr, exp_opt_arr
-                    );
-                }
-            }
-        }
-
+        // Use DataFrame equality check
+        assert!(transformed_df.equals_missing(&expected_df));
         Ok(())
     }
 
     #[test]
-    fn test_validate_lookup_inputs_scalar() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key = Series::new("age-last".into(), &[31i64]);
-        let gs_key = Series::new("gender_smoking".into(), &["MNS"]);
+    fn test_register_table_with_transform() -> Result<(), RegistryError> {
+        reset_global_registry(); // Use renamed function
+        let df_wide = df!(
+            "age" => &[30, 31],
+            "MNS" => &[0.1, 0.2],
+            "FNS" => &[0.15, 0.25]
+        )
+        .expect("Failed to create wide DataFrame");
 
-        let (any_vectors, first_vector_len, vector_indices) =
-            validate_lookup_inputs(lookup_index, &[&age_key, &gs_key])?;
+        let transform_spec = TransformSpec {
+            transform_type: TransformType::WideToLong,
+            id_vars: vec!["age".to_string()],
+            value_vars: vec!["MNS".to_string(), "FNS".to_string()],
+            var_name: "gender_smoking".to_string(),
+            value_name: "rate".to_string(),
+        };
 
-        assert!(!any_vectors);
-        assert_eq!(first_vector_len, None);
-        assert!(vector_indices.is_empty());
-        Ok(())
-    }
+        register_table(
+            "transformed_rates",
+            df_wide,
+            vec!["age".to_string(), "gender_smoking".to_string()], // Keys after transform
+            "rate",                                                // Value column after transform
+            Some(transform_spec),
+        )?;
 
-    #[test]
-    fn test_validate_lookup_inputs_vector() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key = Series::new("age-last".into(), &[31i64, 33]); // Scalar
-        let gs_key = ListChunked::from_iter([
-            Some(Series::new("".into(), vec!["MNS"])),
-            Some(Series::new("".into(), vec!["FNS"])),
-        ])
-        .into_series()
-        .with_name("gender_smoking".into()); // Vector
-
-        // Need to adjust scalar length to 1 for validation when vectors are present
-        let age_key_scalar = Series::new("age-last".into(), &[31i64]);
-
-        let (any_vectors, first_vector_len, vector_indices) =
-            validate_lookup_inputs(lookup_index, &[&age_key_scalar, &gs_key])?;
-
-        assert!(any_vectors);
-        assert_eq!(first_vector_len, Some(2));
-        assert_eq!(vector_indices, vec![1]);
-        Ok(())
-    }
-
-    #[test]
-    fn test_validate_lookup_inputs_mismatch_vector_len() -> PolarsResult<()> {
-        setup_mortality_registry()?;
         let registry = get_registry();
         let lookup_index = registry
-            .get_lookup_index("mortality_rates")
-            .ok_or_else(|| {
-                PolarsError::ComputeError("Lookup index 'mortality_rates' not found".into())
-            })?;
-        let age_key = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![31i64])),
-            Some(Series::new("".into(), vec![33i64])),
-        ])
-        .into_series()
-        .with_name("age-last".into()); // Len 2
-        let gs_key = ListChunked::from_iter([Some(Series::new("".into(), vec!["MNS"]))])
-            .into_series()
-            .with_name("gender_smoking".into()); // Len 1
+            .get_lookup_index("transformed_rates")
+            .expect("Index not found");
 
-        let result = validate_lookup_inputs(lookup_index, &[&age_key, &gs_key]);
+        // Check index details reflect transformation
+        assert_eq!(lookup_index.keys, vec!["age", "gender_smoking"]);
+        assert_eq!(lookup_index.value_column, "rate");
+        assert_eq!(lookup_index.value_dtype, DataType::Float64); // Assuming Float64 from df!
+        assert_eq!(lookup_index.len(), 4); // 2 ages * 2 gender_smoking categories
 
-        assert!(result.is_err());
-        match result {
-            Err(PolarsError::ShapeMismatch(msg)) => {
-                assert!(msg.contains("Input vector lengths mismatch"));
-            }
-            _ => panic!("Expected ShapeMismatch error"),
-        }
+        // Perform lookups based on transformed keys
+        let val1 = registry.lookup_scalar(
+            "transformed_rates",
+            &[Value::Int(30), Value::String("MNS".into())],
+        )?;
+        assert_eq!(val1, Value::Float(0.1));
+
+        let val2 = registry.lookup_scalar(
+            "transformed_rates",
+            &[Value::Int(31), Value::String("FNS".into())],
+        )?;
+        assert_eq!(val2, Value::Float(0.25));
+
+        // Test lookup failure for non-existent key
+        let val3 = registry.lookup_scalar(
+            "transformed_rates",
+            &[Value::Int(30), Value::String("FS".into())],
+        )?; // FS doesn't exist
+        assert_eq!(val3, Value::Null);
+
         Ok(())
     }
 
     #[test]
-    fn test_validate_lookup_inputs_mismatch_scalar_len() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key = Series::new("age-last".into(), &[31i64, 33]); // Len 2 but scalar type
-        let gs_key = ListChunked::from_iter([
-            Some(Series::new("".into(), vec!["MNS"])),
-            Some(Series::new("".into(), vec!["FNS"])),
-        ])
-        .into_series()
-        .with_name("gender_smoking".into()); // Vector
+    fn test_register_table_no_transform() -> Result<(), RegistryError> {
+        reset_global_registry(); // Use renamed function
+        let df_simple = df!(
+            "key" => &["a", "b"],
+            "value" => &[1, 2]
+        )
+        .expect("Failed to create simple DataFrame");
 
-        let result = validate_lookup_inputs(lookup_index, &[&age_key, &gs_key]);
-
-        assert!(result.is_err());
-        match result {
-            Err(PolarsError::ShapeMismatch(msg)) => {
-                assert!(msg.contains("Scalar key 'age-last' (index 0) has length 2 but expected 1"));
-            }
-            _ => panic!("Expected ShapeMismatch error"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_validate_lookup_inputs_key_count_mismatch() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key = Series::new("age-last".into(), &[31i64]);
-
-        let result = validate_lookup_inputs(lookup_index, &[&age_key]); // Only one key provided
-
-        assert!(result.is_err());
-        match result {
-            Err(PolarsError::ComputeError(msg)) => {
-                assert!(msg.contains("Lookup key length mismatch"));
-            }
-            _ => panic!("Expected ComputeError for key length mismatch"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_execute_scalar_lookup_found() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key = Series::new("age-last".into(), &[31i64]);
-        let gs_key = Series::new("gender_smoking".into(), &["MNS"]);
-
-        let result_series = execute_scalar_lookup(lookup_index, &[&age_key, &gs_key])?;
-        let expected_series = Series::new("mortality_rate".into(), &[Some(0.0012f64)]);
-
-        // Use equals_missing for robust comparison
-        assert!(result_series.equals_missing(&expected_series));
-        Ok(())
-    }
-
-    #[test]
-    fn test_execute_scalar_lookup_not_found() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key = Series::new("age-last".into(), &[99i64]); // Age not in index
-        let gs_key = Series::new("gender_smoking".into(), &["MNS"]);
-
-        let result_series = execute_scalar_lookup(lookup_index, &[&age_key, &gs_key])?;
-        let expected_series = create_series_from_values(
-            &[Value::Null],
-            lookup_index.value_column.as_str().into(),
-            &lookup_index.value_dtype,
+        register_table(
+            "simple_table",
+            df_simple,
+            vec!["key".to_string()],
+            "value",
+            None, // No transform spec
         )?;
 
-        // Use equals_missing for robust comparison
-        assert!(result_series.equals_missing(&expected_series));
-        Ok(())
-    }
-
-    #[test]
-    fn test_execute_scalar_lookup_null_key() -> PolarsResult<()> {
-        setup_mortality_registry()?;
         let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key: Series = Series::new("age-last".into(), &[None::<i64>]); // Null age
-        let gs_key = Series::new("gender_smoking".into(), &["MNS"]);
+        let lookup_index = registry
+            .get_lookup_index("simple_table")
+            .expect("Index not found");
+        assert_eq!(lookup_index.keys, vec!["key"]);
+        assert_eq!(lookup_index.value_column, "value");
+        // NOTE: df! macro infers Int32, build_lookup_index converts to Value::Int(i64),
+        // but the stored value_dtype remains Int32. This seems correct.
+        assert_eq!(lookup_index.value_dtype, DataType::Int32);
+        assert_eq!(lookup_index.len(), 2);
 
-        let result_series = execute_scalar_lookup(lookup_index, &[&age_key, &gs_key])?;
-        let expected_series = create_series_from_values(
-            &[Value::Null],
-            lookup_index.value_column.as_str().into(),
-            &lookup_index.value_dtype,
-        )?;
-
-        // Use equals_missing for robust comparison
-        assert!(result_series.equals_missing(&expected_series));
-        Ok(())
-    }
-
-    #[test]
-    fn test_execute_scalar_lookup_empty_input() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key = Series::new_empty("age-last".into(), &DataType::Int64); // Empty series
-        let gs_key = Series::new("gender_smoking".into(), &["MNS"]); // Non-empty needed for structure
-
-        // Note: validate_lookup_inputs would reject this case if vectors were present.
-        // execute_scalar_lookup handles it specifically.
-        let result_series = execute_scalar_lookup(lookup_index, &[&age_key, &gs_key])?;
-        let expected_series = create_series_from_values(
-            &[Value::Null],
-            lookup_index.value_column.as_str().into(),
-            &lookup_index.value_dtype,
-        )?;
-
-        // Use equals_missing for robust comparison
-        assert!(result_series.equals_missing(&expected_series));
-        Ok(())
-    }
-
-    // --- Tests for execute_vector_lookup ---
-
-    #[test]
-    fn test_execute_vector_lookup_mixed() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key_scalar = Series::new("age-last".into(), &[31i64]); // Scalar
-        let gs_key_vector = ListChunked::from_iter([
-            Some(Series::new("".into(), vec!["MNS"])),
-            Some(Series::new("".into(), vec!["FS"])),
-            Some(Series::new("".into(), vec!["MS"])), // Add another case
-        ])
-        .into_series()
-        .with_name("gender_smoking".into()); // Vector
-
-        let output_len = gs_key_vector.len();
-        let vector_indices = vec![1];
-
-        let result_series = execute_vector_lookup(
-            lookup_index,
-            &[&age_key_scalar, &gs_key_vector],
-            output_len,
-            &vector_indices,
-        )?;
-
-        // Construct expected result manually
-        let mut expected_builder = get_list_builder(
-            &lookup_index.value_dtype,
-            output_len,
-            output_len,
-            lookup_index.value_column.as_str().into(),
-        );
-        expected_builder.append_series(&Series::new("".into(), &[Some(0.0012f64)]))?; // 31, MNS
-        expected_builder.append_series(&Series::new("".into(), &[Some(0.0020f64)]))?; // 31, FS
-        expected_builder.append_series(&Series::new("".into(), &[Some(0.0022f64)]))?; // 31, MS
-        let expected_series = expected_builder.finish().into_series();
-
-        assert!(result_series.equals_missing(&expected_series));
-        Ok(())
-    }
-
-    #[test]
-    fn test_execute_vector_lookup_all_vectors() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key_vector = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![31i64])),
-            Some(Series::new("".into(), vec![33i64])),
-        ])
-        .into_series()
-        .with_name("age-last".into());
-        let gs_key_vector = ListChunked::from_iter([
-            Some(Series::new("".into(), vec!["MNS"])),
-            Some(Series::new("".into(), vec!["MS"])),
-        ])
-        .into_series()
-        .with_name("gender_smoking".into());
-
-        let output_len = age_key_vector.len();
-        let vector_indices = vec![0, 1];
-
-        let result_series = execute_vector_lookup(
-            lookup_index,
-            &[&age_key_vector, &gs_key_vector],
-            output_len,
-            &vector_indices,
-        )?;
-
-        let mut expected_builder = get_list_builder(
-            &lookup_index.value_dtype,
-            output_len,
-            output_len,
-            lookup_index.value_column.as_str().into(),
-        );
-        expected_builder.append_series(&Series::new("".into(), &[Some(0.0012f64)]))?; // 31, MNS
-        expected_builder.append_series(&Series::new("".into(), &[Some(0.0023f64)]))?; // 33, MS
-        let expected_series = expected_builder.finish().into_series();
-
-        assert!(result_series.equals_missing(&expected_series));
-        Ok(())
-    }
-
-    #[test]
-    fn test_execute_vector_lookup_null_in_vector_key() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key_scalar = Series::new("age-last".into(), &[31i64]);
-        let gs_key_vector = ListChunked::from_iter([
-            Some(Series::new("".into(), vec!["MNS"])),
-            None, // Null in the list itself
-            Some(Series::new("".into(), vec!["FS"])),
-        ])
-        .into_series()
-        .with_name("gender_smoking".into());
-
-        let output_len = gs_key_vector.len();
-        let vector_indices = vec![1];
-
-        let result_series = execute_vector_lookup(
-            lookup_index,
-            &[&age_key_scalar, &gs_key_vector],
-            output_len,
-            &vector_indices,
-        )?;
-
-        let mut expected_builder = get_list_builder(
-            &lookup_index.value_dtype,
-            output_len,
-            output_len,
-            lookup_index.value_column.as_str().into(),
-        );
-        expected_builder.append_series(&Series::new("".into(), &[Some(0.0012f64)]))?;
-        expected_builder.append_null(); // Expect null because key was null
-        expected_builder.append_series(&Series::new("".into(), &[Some(0.0020f64)]))?;
-        let expected_series = expected_builder.finish().into_series();
-
-        // Need careful comparison due to potential NaN/Float issues & nulls
-        assert_eq!(result_series.len(), expected_series.len());
-        let result_ca = result_series.list()?;
-        let expected_ca = expected_series.list()?;
-        for i in 0..result_ca.len() {
-            let res_val = result_ca.get_any_value(i)?;
-            let exp_val = expected_ca.get_any_value(i)?;
-            assert!(
-                res_val.eq_missing(&exp_val, true),
-                "Mismatch at index {}: {:?} vs {:?}",
-                i,
-                res_val,
-                exp_val
-            );
-        }
+        let val = registry.lookup_scalar("simple_table", &[Value::String("a".into())])?;
+        assert_eq!(val, Value::Int(1)); // Note: build_lookup_index converts Int32 to Value::Int(i64)
 
         Ok(())
     }
 
     #[test]
-    fn test_execute_vector_lookup_empty_vector() -> PolarsResult<()> {
-        setup_mortality_registry()?;
-        let registry = get_registry();
-        let lookup_index = registry.get_lookup_index("mortality_rates").unwrap();
-        let age_key_scalar = Series::new("age-last".into(), &[31i64]);
-        // Correctly create an empty Series with a List dtype
-        let list_dtype = DataType::List(Box::new(DataType::String));
-        let gs_key_vector = Series::new_empty("gender_smoking".into(), &list_dtype);
+    fn test_register_duplicate_table() -> Result<(), RegistryError> {
+        reset_global_registry(); // Use renamed function
+        let df_simple = df!( "key" => &["a"], "value" => &[1] )
+            .map_err(|e| RegistryError::IndexBuildFailed("duplicate_test_setup".to_string(), e))?;
 
-        let output_len = gs_key_vector.len();
-        let vector_indices = vec![1];
-
-        let result_series = execute_vector_lookup(
-            lookup_index,
-            &[&age_key_scalar, &gs_key_vector],
-            output_len,
-            &vector_indices,
+        register_table(
+            "duplicate",
+            df_simple.clone(),
+            vec!["key".to_string()],
+            "value",
+            None,
         )?;
 
-        let expected_series = Series::new_empty(
-            lookup_index.value_column.as_str().into(),
-            &DataType::List(Box::new(lookup_index.value_dtype.clone())),
+        // Try registering again with the same name
+        let result = register_table(
+            "duplicate",
+            df_simple,
+            vec!["key".to_string()],
+            "value",
+            None,
         );
 
-        assert!(result_series.equals_missing(&expected_series));
+        assert!(
+            matches!(result, Err(RegistryError::TableAlreadyExists(name)) if name == "duplicate")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_register_mortality_table_with_transform() -> Result<(), RegistryError> {
+        reset_global_registry(); // Use renamed function
+                                 // Simplified wide mortality table
+        let df_mortality_wide = df!(
+            "age-last" => &[31i64, 33, 34],
+            "MNS" => &[0.0012, 0.0013, 0.0014],
+            "FNS" => &[0.0011, 0.0012, 0.0013],
+            "MS" => &[0.0022, 0.0023, 0.0024],
+            "FS" => &[0.0020, 0.0021, 0.0022]
+        )
+        .expect("Failed to create wide mortality DataFrame");
+
+        let transform_spec = TransformSpec {
+            transform_type: TransformType::WideToLong,
+            id_vars: vec!["age-last".to_string()],
+            value_vars: vec![
+                "MNS".to_string(),
+                "FNS".to_string(),
+                "MS".to_string(),
+                "FS".to_string(),
+            ],
+            var_name: "gender_smoking".to_string(),
+            value_name: "mortality_rate".to_string(),
+        };
+
+        register_table(
+            "mortality_rates_example",
+            df_mortality_wide,
+            vec!["age-last".to_string(), "gender_smoking".to_string()],
+            "mortality_rate",
+            Some(transform_spec),
+        )?;
+
+        let registry = get_registry();
+        let lookup_index = registry
+            .get_lookup_index("mortality_rates_example")
+            .expect("Index not found");
+
+        // Verify index structure
+        assert_eq!(lookup_index.keys, vec!["age-last", "gender_smoking"]);
+        assert_eq!(lookup_index.value_column, "mortality_rate");
+        assert_eq!(lookup_index.value_dtype, DataType::Float64);
+        assert_eq!(lookup_index.len(), 12); // 3 ages * 4 categories
+
+        // Test some lookups
+        let rate1 = registry.lookup_scalar(
+            "mortality_rates_example",
+            &[Value::Int(31), Value::String("MNS".into())],
+        )?;
+        assert_eq!(rate1, Value::Float(0.0012));
+
+        let rate2 = registry.lookup_scalar(
+            "mortality_rates_example",
+            &[Value::Int(33), Value::String("FS".into())],
+        )?;
+        assert_eq!(rate2, Value::Float(0.0021));
+
+        let rate3 = registry.lookup_scalar(
+            "mortality_rates_example",
+            &[Value::Int(34), Value::String("MS".into())],
+        )?;
+        assert_eq!(rate3, Value::Float(0.0024));
+
+        // Test non-existent key
+        let rate_missing = registry.lookup_scalar(
+            "mortality_rates_example",
+            &[Value::Int(32), Value::String("MNS".into())],
+        )?;
+        assert_eq!(rate_missing, Value::Null);
+
         Ok(())
     }
 }

@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use gaspatchio_core_lib::index::{get_registry, register_table};
+use gaspatchio_core_lib::index::{get_registry, register_table, TransformSpec, TransformType};
 use polars::prelude::*;
 use std::fs::File;
 use std::path::Path;
@@ -42,122 +42,51 @@ fn load_fixture_csv(filename: &str) -> PolarsResult<DataFrame> {
 
 // Helper function to set up the registry with test data
 fn setup_registry() -> PolarsResult<()> {
-    // --- Mortality Table --- (Use fixed df! macro data)
-    let df_mortality = df!(
-        "age-last" => &[31i64, 31, 31, 31, 33, 33, 33, 33, 34, 34, 34, 34],
-        "gender_smoking" => &["MNS", "FNS", "MS", "FS", "MNS", "FNS", "MS", "FS", "MNS", "FNS", "MS", "FS"],
-        "mortality_rate" => &[0.0012f64, 0.0011, 0.0022, 0.0020, 0.0013, 0.0012, 0.0023, 0.0021, 0.0014, 0.0013, 0.0024, 0.0022]
+    // --- Mortality Table --- (Define wide, register with transform)
+    let df_mortality_wide = df!(
+        "age-last" => &[31i64, 33, 34],
+        "MNS" => &[0.0012, 0.0013, 0.0014],
+        "FNS" => &[0.0011, 0.0012, 0.0013],
+        "MS" => &[0.0022, 0.0023, 0.0024],
+        "FS" => &[0.0020, 0.0021, 0.0022]
     )?;
+
+    let mortality_transform_spec = TransformSpec {
+        transform_type: TransformType::WideToLong,
+        id_vars: vec!["age-last".to_string()],
+        value_vars: vec![
+            "MNS".to_string(),
+            "FNS".to_string(),
+            "MS".to_string(),
+            "FS".to_string(),
+        ],
+        var_name: "gender_smoking".to_string(),
+        value_name: "mortality_rate".to_string(),
+    };
+
     register_table(
-        "mortality",
-        df_mortality,
-        vec!["age-last".to_string(), "gender_smoking".to_string()],
-        "mortality_rate",
+        "mortality", // Keep original name for benchmark consistency
+        df_mortality_wide,
+        vec!["age-last".to_string(), "gender_smoking".to_string()], // Keys *after* transform
+        "mortality_rate", // Value column *after* transform
+        Some(mortality_transform_spec),
     )
     .map_err(|e| {
-        PolarsError::ComputeError(format!("Failed to register fixed mortality: {}", e).into())
+        PolarsError::ComputeError(format!("Failed to register transformed mortality: {}", e).into())
     })?;
 
-    // --- Lapse Table --- (Load from CSV)
+    // --- Lapse Table --- (Load from CSV - remains the same)
     let df_lapse = load_fixture_csv("lapse.csv")?;
     register_table(
         "lapse",
         df_lapse,
-        vec!["policy duration".to_string()],
-        "lapse rate",
+        vec!["policy_duration".to_string()], // Corrected key name based on previous benchmark code
+        "lapse_rate", // Corrected value name based on previous benchmark code
+        None,         // No transform spec needed for lapse
     )
     .map_err(|e| PolarsError::ComputeError(format!("Failed to register lapse: {}", e).into()))?;
 
     Ok(())
-}
-
-fn benchmark_vector_lookups(c: &mut Criterion) {
-    // Setup: Load data and register tables (outside the benchmark loop)
-    if let Err(e) = setup_registry() {
-        eprintln!("Failed to set up benchmark registry: {}", e); // Updated error message context
-        return;
-    }
-    let df_model_points = match load_model_points() {
-        // Now loads parquet
-        Ok(df) => df,
-        Err(e) => {
-            eprintln!("Failed to load key source parquet for benchmark: {}", e);
-            return;
-        }
-    };
-
-    // Extract key Columns needed for lookups (Assuming names exist in parquet)
-    let age_key_col = match df_model_points.column("age-last") {
-        // Keep name for now
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Failed to get 'age-last' column from parquet: {}", e);
-            return;
-        }
-    };
-    let gender_smoking_key_col = match df_model_points.column("gender_smoking") {
-        // Keep name for now
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Failed to get 'gender_smoking' column from parquet: {}", e);
-            return;
-        }
-    };
-    let duration_key_col = match df_model_points.column("policy_duration") {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Failed to get 'policy_duration' column from parquet: {}", e);
-            return;
-        }
-    };
-
-    // --- Columns are already List<f64> in the Parquet file ---
-    // No transformation needed to force vector mode.
-    // Use the columns directly.
-
-    // Create key slices containing &Series
-    let mortality_keys: Vec<&Series> = vec![
-        age_key_col
-            .as_series()
-            .expect("Failed to convert age_key_col (&Column) to &Series"), // Unwrap Option
-        gender_smoking_key_col // This one was already converted
-            .as_series()
-            .expect("gender_smoking column should be convertible to Series"),
-    ];
-    let lapse_keys: Vec<&Series> = vec![duration_key_col
-        .as_series()
-        .expect("Failed to convert duration_key_col (&Column) to &Series")]; // Unwrap Option
-
-    // Get a snapshot of the registry
-    let registry = get_registry();
-
-    let mut group = c.benchmark_group("vector_lookups_parquet_keys"); // Updated group name
-
-    // Benchmark mortality lookup
-    group.bench_function("mortality_lookup_parquet_keys", |b| {
-        // Updated bench name
-        b.iter(|| {
-            let result = registry.lookup_vector("mortality", black_box(&mortality_keys));
-            if let Err(e) = &result {
-                eprintln!("Mortality lookup failed during benchmark: {:?}", e);
-            }
-            black_box(result)
-        })
-    });
-
-    // Benchmark lapse lookup
-    group.bench_function("lapse_lookup_parquet_keys", |b| {
-        // Updated bench name
-        b.iter(|| {
-            let result = registry.lookup_vector("lapse", black_box(&lapse_keys));
-            if let Err(e) = &result {
-                eprintln!("Lapse lookup failed during benchmark: {:?}", e);
-            }
-            black_box(result)
-        })
-    });
-
-    group.finish();
 }
 
 // Benchmark function using the standard ~100 row parquet file

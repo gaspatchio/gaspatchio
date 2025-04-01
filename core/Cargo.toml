@@ -19,8 +19,10 @@ polars = { version = "0.46.0", features = [
     "dtype-datetime",
     "parquet",
     "strings",
+    "diagonal_concat",
 ] }
 polars-arrow = "0.46.0"
+polars-core = { version = "0.46.0", default-features = false }
 log = "0.4.26"
 env_logger = "0.11.1"
 arc-swap = "1.6.0"
@@ -32,4 +34,8 @@ criterion = "0.5"
 
 [[bench]]
 name = "index_lookups_benchmark"
+harness = false
+
+[[bench]]
+name = "vector_plugin_benchmark"
 harness = false
