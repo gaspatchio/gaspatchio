@@ -518,25 +518,18 @@ fn validate_lookup_inputs<'a>(
                 first_vector_len = Some(current_len);
             }
         } else {
-            // Check scalar length only if vectors are present
-            if first_vector_len.is_some() && series.len() != 1 && !series.is_empty() {
-                // Allow empty scalar only if no vectors
-                return Err(PolarsError::ShapeMismatch(
-                    format!(
-                        "Scalar key '{}' (index {}) has length {} but expected 1 when vector keys are present.",
-                        series.name(), i, series.len()
-                    ).into()
-                 ));
-            } else if first_vector_len.is_none() && series.len() != 1 && keys.len() > 0 {
-                // If only scalars, they must all have length 1
-                return Err(PolarsError::ShapeMismatch(
-                    format!(
-                        "Scalar key '{}' (index {}) has length {} but expected 1 for scalar lookup.",
-                        series.name(), i, series.len()
-                    ).into()
-                 ));
+            let scalar_len = series.len();
+            // Check if NOT (length 1 or length max_len)
+            if !(scalar_len == 1
+                || scalar_len
+                    == first_vector_len
+                        .expect("first_vector_len should be Some if any_vectors is true"))
+            {
+                return Err(PolarsError::ShapeMismatch(format!(
+                    "Scalar key '{}' (index {}) has length {} but expected 1 or {} (max vector length) when vector keys are present.",
+                    series.name(), i, scalar_len, first_vector_len.expect("first_vector_len should be Some if any_vectors is true")
+                ).into()));
             }
-            // Empty dataframe check is handled later or by specific lookup cases
         }
     }
 

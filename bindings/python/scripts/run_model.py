@@ -212,6 +212,14 @@ def main(
             help="Run model for a single policy with the specified ID",
         ),
     ] = None,
+    output_file: Annotated[
+        str,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Output Parquet file path (optional)",
+        ),
+    ] = None,
 ):
     # Calculate absolute paths
     directory_path = Path(directory)
@@ -269,12 +277,15 @@ def main(
 
     print(profile)
 
+    # Collect the result
+
     end = time.time()
     total_time = end - start
     records = len(result)
-    time_per_record_s = total_time / records
-    time_per_record_ms = (total_time * 1e3) / records
-    time_per_record_ns = (total_time * 1e9) / records
+    # Handle division by zero if records is 0
+    time_per_record_s = total_time / records if records > 0 else 0
+    time_per_record_ms = (total_time * 1e3) / records if records > 0 else 0
+    time_per_record_ns = (total_time * 1e9) / records if records > 0 else 0
     logger.info(
         "Model run completed in {:.2f} seconds ({:.3f} s | {:.3f} ms | {:.3f} ns per record)",
         total_time,
@@ -283,24 +294,30 @@ def main(
         time_per_record_ns,
     )
 
-    # Transpose the result if a single policy was requested
-    if policy_id and len(result) == 1:
-        logger.info("Transposing single policy result for better visualization")
-        result = transpose_single_policy_result(result)
-        logger.info("Transposed result has {} rows", len(result))
+    if output_file:
+        output_path = Path(output_file)
+        logger.info("Writing results to Parquet file: {}", output_path)
+        result.write_parquet(output_path)
+        logger.info("Results saved successfully.")
+    else:
+        # Transpose the result if a single policy was requested and not saving to file
+        if policy_id and len(result) == 1:
+            logger.info("Transposing single policy result for better visualization")
+            result = transpose_single_policy_result(result)
+            logger.info("Transposed result has {} rows", len(result))
 
-        # Make sure all columns are displayed with good formatting
-        # Using Polars' built-in configuration to show all columns
-        pl.Config.set_tbl_width_chars(
-            1500
-        )  # Wide enough for all columns but not excessive
-        pl.Config.set_fmt_str_lengths(30)  # Reasonable string display length
-        pl.Config.set_tbl_cols(-1)  # Show all columns (-1 means no limit)
-        pl.Config.set_tbl_rows(15)  # Show more rows for better visibility
+            # Make sure all columns are displayed with good formatting
+            # Using Polars' built-in configuration to show all columns
+            pl.Config.set_tbl_width_chars(
+                1500
+            )  # Wide enough for all columns but not excessive
+            pl.Config.set_fmt_str_lengths(30)  # Reasonable string display length
+            pl.Config.set_tbl_cols(-1)  # Show all columns (-1 means no limit)
+            pl.Config.set_tbl_rows(15)  # Show more rows for better visibility
 
-    # Ensure all columns are displayed
-    with pl.Config(tbl_cols=-1):
-        print(result)
+        # Ensure all columns are displayed when printing to console
+        with pl.Config(tbl_cols=-1):
+            print(result)
 
 
 def compare_modes(
