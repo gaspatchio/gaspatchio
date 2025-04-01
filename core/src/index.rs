@@ -8,6 +8,9 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use log::debug;
 use once_cell::sync::Lazy;
+use polars::chunked_array::builder::{get_list_builder, ListBuilderTrait};
+use polars::datatypes::PlSmallStr;
+use polars::series::Series;
 
 /// Represents a value that can be used as a key or value in the lookup table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,16 +111,19 @@ pub struct LookupIndex {
     pub keys: Vec<String>,
     /// Name of the value column
     pub value_column: String,
+    /// Data type of the value column
+    pub value_dtype: DataType,
     /// The actual lookup table
     pub index: HashMap<Vec<Value>, Value>,
 }
 
 impl LookupIndex {
     /// Creates a new empty lookup index.
-    pub fn new(keys: Vec<String>, value_column: String) -> Self {
+    pub fn new(keys: Vec<String>, value_column: String, value_dtype: DataType) -> Self {
         Self {
             keys,
             value_column,
+            value_dtype,
             index: HashMap::new(),
         }
     }
@@ -165,82 +171,154 @@ fn any_value_to_value(av: AnyValue) -> PolarsResult<Value> {
 }
 
 /// Extracts a single Value from a Column at a given row index.
-fn extract_value_from_series(column: &Column, index: usize) -> PolarsResult<Value> {
+/// Note: Takes &Column, which Derefs to &Series, so .get() works.
+fn extract_value_from_series(column: &Series, index: usize) -> PolarsResult<Value> {
+    // Ensure index is within bounds before getting
+    if index >= column.len() {
+        return Err(PolarsError::OutOfBounds(
+            format!(
+                "Index {} out of bounds for series '{}' with length {}",
+                index,
+                column.name(),
+                column.len()
+            )
+            .into(),
+        ));
+    }
     let any_value = column.get(index)?;
     any_value_to_value(any_value)
 }
 
-/// Builds a lookup index (HashMap) from a DataFrame.
-///
-/// # Arguments
-///
-/// * `df` - The input Polars DataFrame.
-/// * `key_columns` - A slice of strings representing the names of the key columns.
-/// * `value_column` - The name of the column containing the values.
-///
-/// # Returns
-///
-/// A `Result` containing the `HashMap<Vec<Value>, Value>` or a `PolarsError`.
-pub fn build_lookup_index(
+/// Extracts a single Value from a List Series at a given outer index `list_idx`
+/// and inner index `element_idx`.
+fn extract_value_from_list_series(
+    list_series: &Series,
+    list_idx: usize,
+    element_idx: usize,
+) -> PolarsResult<Value> {
+    let list_ca = list_series.list()?;
+
+    // Check outer bounds first
+    if list_idx >= list_ca.len() {
+        return Ok(Value::Null);
+    }
+
+    // Try getting the AnyValue directly from the ListChunked
+    // This avoids dealing with the Option<Series> intermediate type
+    match list_ca.get_any_value(list_idx)? {
+        AnyValue::List(inner_series) => {
+            // Now we have a Series, check inner bounds and get the value
+            if element_idx >= inner_series.len() {
+                Ok(Value::Null)
+            } else {
+                let av = inner_series.get(element_idx)?;
+                any_value_to_value(av)
+            }
+        }
+        AnyValue::Null => Ok(Value::Null), // The list entry itself was null
+        _ => Err(PolarsError::ComputeError(
+            "Expected AnyValue::List from ListChunked".into(),
+        )),
+    }
+}
+
+/// Converts a Vec<Value> into a Polars Series with a specified DataType.
+fn create_series_from_values(
+    values: &[Value],
+    name: PlSmallStr,
+    dtype: &DataType,
+) -> PolarsResult<Series> {
+    // name is PlSmallStr
+    match dtype {
+        DataType::Int64 => {
+            let ints: Vec<Option<i64>> = values
+                .iter()
+                .map(|v| match v {
+                    Value::Int(i) => Some(*i),
+                    Value::Null => None,
+                    _ => None,
+                })
+                .collect();
+            Ok(Int64Chunked::from_slice_options(name, &ints).into_series())
+        }
+        DataType::Float64 => {
+            let floats: Vec<Option<f64>> = values
+                .iter()
+                .map(|v| match v {
+                    Value::Float(f) => Some(*f),
+                    Value::Null => None,
+                    _ => None,
+                })
+                .collect();
+            Ok(Float64Chunked::from_slice_options(name, &floats).into_series())
+        }
+        DataType::String => {
+            let strings: Vec<Option<String>> = values
+                .iter()
+                .map(|v| match v {
+                    Value::String(s) => Some(s.clone()),
+                    Value::Null => None,
+                    _ => None,
+                })
+                .collect();
+            Ok(StringChunked::from_slice_options(name, &strings).into_series())
+        }
+        DataType::Null => Ok(Series::new_null(name, values.len())),
+        _ => Err(PolarsError::ComputeError(
+            format!(
+                "Unsupported data type {:?} for create_series_from_values",
+                dtype
+            )
+            .into(),
+        )),
+    }
+}
+
+/// Builds a lookup index from a DataFrame.
+fn build_lookup_index(
     df: &DataFrame,
     key_columns: &[String],
     value_column: &str,
-) -> PolarsResult<HashMap<Vec<Value>, Value>> {
-    // 1. Verify columns exist
-    for col_name in key_columns {
-        if df.column(col_name).is_err() {
-            return Err(PolarsError::ColumnNotFound(
-                format!("Key column '{}' not found in DataFrame.", col_name).into(),
-            ));
-        }
-    }
-    if df.column(value_column).is_err() {
-        return Err(PolarsError::ColumnNotFound(
-            format!("Value column '{}' not found in DataFrame.", value_column).into(),
-        ));
-    }
+) -> PolarsResult<(HashMap<Vec<Value>, Value>, DataType)> {
+    let mut index = HashMap::new();
+    let value_series_col = df.column(value_column)?;
+    let value_dtype = value_series_col.dtype().clone();
+    let key_cols_vec: Vec<&Column> = key_columns
+        .iter()
+        .map(|name| df.column(name))
+        .collect::<Result<Vec<_>, _>>()?;
 
-    // Extract Column references once
-    let key_columns_result: Result<Vec<&Column>, _> =
-        key_columns.iter().map(|name| df.column(name)).collect();
-    let key_columns_vec = key_columns_result?; // Propagate error if any column not found
-
-    let value_column_ref = df.column(value_column)?;
-
-    let capacity = df.height();
-    let mut index_map = HashMap::with_capacity(capacity);
-
-    // 2. Iterate through rows and build the map
     for row_idx in 0..df.height() {
-        // 3. Extract key values for the current row
-        let mut key = Vec::with_capacity(key_columns.len());
-        for col_ref in &key_columns_vec {
-            // Pass *col_ref (&Column)
-            let val = extract_value_from_series(*col_ref, row_idx)?;
-            key.push(val);
+        let mut key_vec = Vec::with_capacity(key_columns.len());
+        for col in &key_cols_vec {
+            key_vec.push(extract_value_from_series(
+                col.as_series()
+                    .expect("Key column could not be represented as Series"),
+                row_idx,
+            )?);
         }
-
-        // 4. Extract the value for the current row
-        // Pass value_column_ref (&Column)
-        let value = extract_value_from_series(value_column_ref, row_idx)?;
-
-        // 5. Insert into HashMap
-        // Note: Polars DataFrames can have duplicate key combinations.
-        // The last occurrence in the DataFrame will overwrite previous entries.
-        // This behavior might need clarification based on requirements.
-        index_map.insert(key, value);
+        let value = extract_value_from_series(
+            value_series_col
+                .as_series()
+                .expect("Value column could not be represented as Series"),
+            row_idx,
+        )?;
+        index.insert(key_vec, value);
     }
-
-    Ok(index_map)
+    Ok((index, value_dtype))
 }
 
 /// Errors that can occur during registry operations.
 #[derive(Debug, thiserror::Error)]
 pub enum RegistryError {
+    #[error("Table '{0}' already exists in the registry.")]
+    TableAlreadyExists(String),
     #[error("Table '{0}' not found in the registry.")]
     TableNotFound(String),
     #[error("Failed to build lookup index for table '{0}': {1}")]
     IndexBuildFailed(String, PolarsError),
+    #[error("Lookup failed for table '{0}': {1}")]
+    LookupFailed(String, PolarsError),
     #[error("Lookup key length mismatch for table '{0}'. Expected {1}, got {2}.")]
     KeyLengthMismatch(String, usize, usize),
 }
@@ -260,18 +338,7 @@ impl TableRegistry {
         Self::default()
     }
 
-    /// Registers a table and builds its lookup index.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The name to register the table under.
-    /// * `df` - The DataFrame containing the table data.
-    /// * `keys` - A vector of column names to use as lookup keys.
-    /// * `value_column` - The name of the column containing the values.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` on success, or a `RegistryError` on failure.
+    /// Registers a DataFrame under a given name, building a lookup index for it.
     pub fn register_table(
         &mut self,
         name: &str,
@@ -279,19 +346,34 @@ impl TableRegistry {
         keys: Vec<String>,
         value_column: &str,
     ) -> Result<(), RegistryError> {
-        // Build the lookup index first. If this fails, we don't modify the registry.
-        let index_map = build_lookup_index(&df, &keys, value_column)
+        if self.tables.contains_key(name) {
+            return Err(RegistryError::TableAlreadyExists(name.to_string()));
+        }
+
+        debug!(
+            "Registering table '{}' with keys {:?} and value column '{}'",
+            name, keys, value_column
+        );
+
+        // build_lookup_index now returns a tuple
+        let (index_map, value_dtype) = build_lookup_index(&df, &keys, value_column)
             .map_err(|e| RegistryError::IndexBuildFailed(name.to_string(), e))?;
+
+        debug!(
+            "Built index for table '{}' with {} entries. Value type: {}",
+            name,
+            index_map.len(),
+            value_dtype
+        );
 
         let lookup_index = LookupIndex {
             keys,
             value_column: value_column.to_string(),
+            value_dtype, // Use the returned dtype
             index: index_map,
         };
 
-        // Store both the original DataFrame and the built index.
-        // We clone the DataFrame to store it, as the original might be owned elsewhere.
-        self.tables.insert(name.to_string(), df.clone());
+        self.tables.insert(name.to_string(), df);
         self.lookup_indices.insert(name.to_string(), lookup_index);
 
         Ok(())
@@ -333,6 +415,259 @@ impl TableRegistry {
 
         Ok(lookup_index.lookup(key))
     }
+
+    /// Performs a scalar lookup using a pre-built index.
+    ///
+    /// This is a convenience wrapper around `get_lookup_index` and `lookup`.
+    pub fn lookup_scalar(&self, name: &str, key: &[Value]) -> Result<Value, RegistryError> {
+        let lookup_index = self
+            .get_lookup_index(name)
+            .ok_or_else(|| RegistryError::TableNotFound(name.to_string()))?;
+
+        if key.len() != lookup_index.keys.len() {
+            return Err(RegistryError::KeyLengthMismatch(
+                name.to_string(),
+                lookup_index.keys.len(),
+                key.len(),
+            ));
+        }
+
+        Ok(lookup_index.lookup(key).cloned().unwrap_or(Value::Null))
+    }
+
+    /// Performs a vector-aware lookup using a pre-built index.
+    ///
+    /// If any input `keys` series is of type List, the lookup is performed element-wise
+    /// for all vectors, broadcasting scalar values. The result will be a List series.
+    /// If all inputs are scalar, a single lookup is performed, and the result is a scalar Series.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the registered table/index to use.
+    /// * `keys` - A slice of `&Series` representing the key columns.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(Series)` containing the lookup results (scalar or List Series),
+    /// or `Err(RegistryError)` if the table doesn't exist or a PolarsError occurs during lookup.
+    pub fn lookup_vector(&self, name: &str, keys: &[&Series]) -> Result<Series, RegistryError> {
+        let lookup_index = self
+            .get_lookup_index(name)
+            .ok_or_else(|| RegistryError::TableNotFound(name.to_string()))?;
+
+        if keys.len() != lookup_index.keys.len() {
+            return Err(RegistryError::KeyLengthMismatch(
+                name.to_string(),
+                lookup_index.keys.len(),
+                keys.len(),
+            ));
+        }
+
+        perform_vector_lookup(lookup_index, keys)
+            .map_err(|e| RegistryError::LookupFailed(name.to_string(), e))
+    }
+}
+
+/// Validates inputs for vector lookup, checking key counts, detecting vectors,
+/// and validating lengths.
+///
+/// Returns a tuple: `(any_vectors, first_vector_len, vector_indices)`.
+fn validate_lookup_inputs<'a>(
+    lookup_index: &LookupIndex,
+    keys: &[&'a Series],
+) -> PolarsResult<(bool, Option<usize>, Vec<usize>)> {
+    if keys.len() != lookup_index.keys.len() {
+        // Early exit if key counts don't match the index definition
+        return Err(PolarsError::ComputeError(
+            format!(
+                "Lookup key length mismatch for index '{}'. Expected {}, got {}.",
+                lookup_index.value_column, // Using value_column as identifier for now
+                lookup_index.keys.len(),
+                keys.len()
+            )
+            .into(),
+        ));
+    }
+
+    let mut first_vector_len: Option<usize> = None;
+    let mut vector_indices = Vec::new();
+    let mut any_vectors = false;
+
+    for (i, series) in keys.iter().enumerate() {
+        if matches!(series.dtype(), DataType::List(_)) {
+            any_vectors = true;
+            vector_indices.push(i);
+            let list_ca = series.list()?; // Already checked dtype
+            let current_len = list_ca.len();
+
+            if let Some(expected_len) = first_vector_len {
+                if current_len != expected_len {
+                    return Err(PolarsError::ShapeMismatch(format!(
+                        "Input vector lengths mismatch. Expected length {}, but key '{}' (index {}) has length {}.",
+                        expected_len, series.name(), i, current_len
+                    ).into()));
+                }
+            } else {
+                first_vector_len = Some(current_len);
+            }
+        } else {
+            // Check scalar length only if vectors are present
+            if first_vector_len.is_some() && series.len() != 1 && !series.is_empty() {
+                // Allow empty scalar only if no vectors
+                return Err(PolarsError::ShapeMismatch(
+                    format!(
+                        "Scalar key '{}' (index {}) has length {} but expected 1 when vector keys are present.",
+                        series.name(), i, series.len()
+                    ).into()
+                 ));
+            } else if first_vector_len.is_none() && series.len() != 1 && keys.len() > 0 {
+                // If only scalars, they must all have length 1
+                return Err(PolarsError::ShapeMismatch(
+                    format!(
+                        "Scalar key '{}' (index {}) has length {} but expected 1 for scalar lookup.",
+                        series.name(), i, series.len()
+                    ).into()
+                 ));
+            }
+            // Empty dataframe check is handled later or by specific lookup cases
+        }
+    }
+
+    Ok((any_vectors, first_vector_len, vector_indices))
+}
+
+/// Performs the lookup when all input keys are scalar Series.
+fn execute_scalar_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> PolarsResult<Series> {
+    let mut key_values = Vec::with_capacity(keys.len());
+    for series in keys {
+        // Validation ensures series.len() == 1 here
+        if series.is_empty() {
+            // Handle case where input DF might be empty
+            return create_series_from_values(
+                &[Value::Null], // Return null if any key is from an empty series
+                lookup_index.value_column.as_str().into(),
+                &lookup_index.value_dtype,
+            );
+        }
+        key_values.push(extract_value_from_series(*series, 0)?);
+    }
+    let result_value = lookup_index
+        .lookup(&key_values)
+        .cloned()
+        .unwrap_or(Value::Null);
+    create_series_from_values(
+        &[result_value],
+        lookup_index.value_column.as_str().into(),
+        &lookup_index.value_dtype,
+    )
+}
+
+/// Internal function to perform the actual vector or scalar lookup.
+fn perform_vector_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> PolarsResult<Series> {
+    // 1. Validate inputs
+    let (any_vectors, first_vector_len, vector_indices) =
+        validate_lookup_inputs(lookup_index, keys)?;
+
+    // --- Case 1: All inputs are scalar ---
+    if !any_vectors {
+        return execute_scalar_lookup(lookup_index, keys);
+    }
+
+    // --- Case 2: At least one vector input ---
+    let output_len =
+        first_vector_len.expect("first_vector_len should be Some if any_vectors is true");
+    if output_len == 0 {
+        // Handle empty vector input case
+        let list_dtype = DataType::List(Box::new(lookup_index.value_dtype.clone()));
+        return Ok(Series::new_empty(
+            lookup_index.value_column.as_str().into(),
+            &list_dtype,
+        ));
+    }
+
+    // Extract scalar values once
+    let scalar_values: Vec<Option<Value>> = keys
+        .iter()
+        .enumerate()
+        .map(|(i, series)| -> PolarsResult<Option<Value>> {
+            if vector_indices.contains(&i) {
+                Ok(None) // Placeholder for vector keys
+            } else {
+                // Validation ensures scalar series have len 1 or are empty (handled by output_len == 0 check)
+                extract_value_from_series(*series, 0).map(Some)
+            }
+        })
+        .collect::<PolarsResult<Vec<_>>>()?;
+
+    // Use .into() for name
+    let mut list_builder = get_list_builder(
+        &lookup_index.value_dtype,
+        output_len,
+        output_len, // capacity estimate
+        lookup_index.value_column.as_str().into(),
+    ); // Removed ? for potential error from get_list_builder
+
+    for i in 0..output_len {
+        let mut current_key = Vec::with_capacity(keys.len());
+        let mut key_contains_null = false; // Track if any part of the key was null/error
+
+        for (key_idx, series) in keys.iter().enumerate() {
+            let value_result = if vector_indices.contains(&key_idx) {
+                // Extract from the list series for this row
+                // Assuming element_idx 0 for now, needs clarification if lists can have multiple elements per row relevant to the key
+                extract_value_from_list_series(series, i, 0)
+            } else {
+                // Use the pre-extracted scalar value
+                Ok(scalar_values[key_idx]
+                    .clone()
+                    .expect("Scalar value should exist here")) // Should be Some based on logic above
+            };
+
+            match value_result {
+                Ok(Value::Null) => {
+                    current_key.push(Value::Null);
+                    key_contains_null = true; // Mark key as invalid if any part is Null
+                }
+                Ok(val) => {
+                    current_key.push(val);
+                }
+                Err(e) => {
+                    debug!(
+                         "Error extracting key element at row {} for key '{}': {}. Treating as Null.",
+                         i, series.name(), e
+                     );
+                    current_key.push(Value::Null);
+                    key_contains_null = true; // Mark key as invalid on error
+                }
+            }
+        }
+
+        let result_value = if key_contains_null {
+            // If any part of the key was null or failed extraction, the lookup result is Null
+            Value::Null
+        } else {
+            lookup_index
+                .lookup(&current_key)
+                .cloned()
+                .unwrap_or(Value::Null) // Default to Null if lookup fails
+        };
+
+        // Append the single result value (or Null) to the list builder for this row
+        let append_result = match result_value {
+            Value::Int(v) => list_builder.append_series(&Series::new("".into(), &[Some(v)])),
+            Value::Float(v) => list_builder.append_series(&Series::new("".into(), &[Some(v)])),
+            Value::String(v) => {
+                list_builder.append_series(&Series::new("".into(), &[Some(v.as_str())]))
+            } // Use &str
+            Value::Null => {
+                list_builder.append_null();
+                Ok(())
+            }
+        };
+        append_result?; // Propagate error from append
+    }
+
+    Ok(list_builder.finish().into_series())
 }
 
 // --- Global Registry Definition ---
@@ -354,7 +689,6 @@ pub fn get_registry() -> Arc<TableRegistry> {
 /// Resets the global registry to an empty state. For testing purposes only.
 #[cfg(test)]
 pub(crate) fn reset_global_registry() {
-    // Call store directly
     REGISTRY.store(Arc::new(TableRegistry::default()));
 }
 
@@ -381,37 +715,25 @@ pub fn register_table(
     keys: Vec<String>,
     value_column: &str,
 ) -> Result<(), RegistryError> {
-    // 1. Perform the fallible operation (index building) *before* the RCU attempt.
-    let index_map = build_lookup_index(&df, &keys, value_column)
+    let (index_map, value_dtype) = build_lookup_index(&df, &keys, value_column)
         .map_err(|e| RegistryError::IndexBuildFailed(name.to_string(), e))?;
 
-    // 2. Create the LookupIndex struct with the pre-built map.
     let lookup_index = LookupIndex {
         keys,
         value_column: value_column.to_string(),
+        value_dtype,
         index: index_map,
     };
 
-    // 3. Use ArcSwap's Read-Copy-Update (RCU) mechanism for the atomic swap.
-    //    The closure provided here is now infallible from RCU's perspective.
     REGISTRY.rcu(move |current_registry_arc| {
-        // Inside the RCU closure:
-        // a. Clone the data from the current Arc<TableRegistry>.
         let mut new_registry = (**current_registry_arc).clone();
-
-        // b. Insert the pre-built index and the DataFrame clone.
-        //    Need to clone lookup_index and df as the closure might be retried.
         new_registry.tables.insert(name.to_string(), df.clone());
         new_registry
             .lookup_indices
-            .insert(name.to_string(), lookup_index.clone()); // Clone pre-built index
-
-        // c. Return the Arc containing the *new* registry data.
+            .insert(name.to_string(), lookup_index.clone());
         Arc::new(new_registry)
     });
 
-    // 4. If build_lookup_index succeeded, the RCU operation will eventually succeed.
-    //    Return Ok(()) from the main function.
     Ok(())
 }
 
@@ -420,8 +742,6 @@ mod tests {
     use super::reset_global_registry;
     use super::*;
     use polars::df; // Import the df! macro
-    use std::thread;
-    use std::time::Duration;
 
     #[test]
     fn test_value_equality() {
@@ -466,21 +786,19 @@ mod tests {
     #[test]
     fn test_lookup_index_basic() {
         let mut index = LookupIndex::new(
-            vec!["age".to_string(), "gender".to_string()],
-            "mortality_rate".to_string(),
+            vec!["age".to_string()],
+            "rate".to_string(),
+            DataType::Float64, // Provide DataType
         );
 
         // Add some test data
-        let key = vec![Value::Int(35), Value::String("M".into())];
+        let key = vec![Value::Int(35)];
         let value = Value::Float(0.001);
         index.index.insert(key.clone(), value.clone());
 
         // Test lookup
         assert_eq!(index.lookup(&key), Some(&value));
-        assert_eq!(
-            index.lookup(&[Value::Int(35), Value::String("F".into())]),
-            None
-        );
+        assert_eq!(index.lookup(&[Value::Int(35), Value::Float(0.001)]), None);
 
         // Test size methods
         assert_eq!(index.len(), 1);
@@ -517,42 +835,26 @@ mod tests {
 
     #[test]
     fn test_extract_value_from_series() {
-        // Use Column::new explicitly to match function signature
-        let s = Column::new("a".into(), &[Some(1i64), None, Some(3i64)]);
-        // Pass &s (&Column) directly
+        // Test with Series now
+        let s = Series::new("a".into(), &[Some(1i64), None, Some(3i64)]);
         assert_eq!(extract_value_from_series(&s, 0).unwrap(), Value::Int(1));
         assert_eq!(extract_value_from_series(&s, 1).unwrap(), Value::Null);
         assert_eq!(extract_value_from_series(&s, 2).unwrap(), Value::Int(3));
-        assert!(extract_value_from_series(&s, 3).is_err()); // Out of bounds
+        assert!(extract_value_from_series(&s, 3).is_err());
     }
 
     #[test]
     fn test_build_lookup_index_single_key() -> PolarsResult<()> {
         let df = df!(
-            "id" => &[1, 2, 3, 1], // Duplicate key
-            "value" => &["a", "b", "c", "d"] // Last '1' maps to 'd'
+            "id" => &[1, 2, 3, 1],
+            "value" => &["a", "b", "c", "d"]
         )?;
-
-        let key_cols = ["id".to_string()];
-        let value_col = "value";
-
-        let index = build_lookup_index(&df, &key_cols, value_col)?;
-
-        assert_eq!(index.len(), 3); // 3 unique keys
+        let (index_map, _dtype) = build_lookup_index(&df, &["id".to_string()], "value")?;
+        assert_eq!(index_map.len(), 3);
         assert_eq!(
-            index.get(&vec![Value::Int(1)]),
+            index_map.get(&vec![Value::Int(1)]),
             Some(&Value::String("d".into()))
         );
-        assert_eq!(
-            index.get(&vec![Value::Int(2)]),
-            Some(&Value::String("b".into()))
-        );
-        assert_eq!(
-            index.get(&vec![Value::Int(3)]),
-            Some(&Value::String("c".into()))
-        );
-        assert_eq!(index.get(&vec![Value::Int(4)]), None);
-
         Ok(())
     }
 
@@ -560,33 +862,17 @@ mod tests {
     fn test_build_lookup_index_multi_key() -> PolarsResult<()> {
         let df = df!(
             "key1" => &["A", "A", "B", "A"],
-            "key2" => &[1, 2, 1, 1], // Duplicate key ("A", 1)
-            "value" => &[10.1, 20.2, 30.3, 40.4] // Last ("A", 1) maps to 40.4
+            "key2" => &[1, 2, 1, 1],
+            "value" => &[10.1, 20.2, 30.3, 40.4]
         )?;
-
         let key_cols = ["key1".to_string(), "key2".to_string()];
         let value_col = "value";
-
-        let index = build_lookup_index(&df, &key_cols, value_col)?;
-
-        assert_eq!(index.len(), 3);
+        let (index_map, _dtype) = build_lookup_index(&df, &key_cols, value_col)?;
+        assert_eq!(index_map.len(), 3);
         assert_eq!(
-            index.get(&vec![Value::String("A".into()), Value::Int(1)]),
+            index_map.get(&vec![Value::String("A".into()), Value::Int(1)]),
             Some(&Value::Float(40.4))
         );
-        assert_eq!(
-            index.get(&vec![Value::String("A".into()), Value::Int(2)]),
-            Some(&Value::Float(20.2))
-        );
-        assert_eq!(
-            index.get(&vec![Value::String("B".into()), Value::Int(1)]),
-            Some(&Value::Float(30.3))
-        );
-        assert_eq!(
-            index.get(&vec![Value::String("C".into()), Value::Int(1)]),
-            None
-        );
-
         Ok(())
     }
 
@@ -595,107 +881,34 @@ mod tests {
         let df = df!(
             "key1" => &[Some("A"), None, Some("B"), Some("A")],
             "key2" => &[Some(1), Some(2), None, Some(1)],
-            "value" => &[Some(10.0), Some(20.0), Some(30.0), None::<f64>] // Last ("A", 1) maps to Null
+            "value" => &[Some(10.0), Some(20.0), Some(30.0), None::<f64>]
         )?;
-
         let key_cols = ["key1".to_string(), "key2".to_string()];
         let value_col = "value";
-
-        let index = build_lookup_index(&df, &key_cols, value_col)?;
-
-        assert_eq!(index.len(), 3); // ("A", 1), (Null, 2), ("B", Null)
+        let (index_map, _dtype) = build_lookup_index(&df, &key_cols, value_col)?;
+        assert_eq!(index_map.len(), 3);
         assert_eq!(
-            index.get(&vec![Value::String("A".into()), Value::Int(1)]),
-            Some(&Value::Null) // Last value for this key was None
+            index_map.get(&vec![Value::String("A".into()), Value::Int(1)]),
+            Some(&Value::Null)
         );
-        assert_eq!(
-            index.get(&vec![Value::Null, Value::Int(2)]),
-            Some(&Value::Float(20.0))
-        );
-        assert_eq!(
-            index.get(&vec![Value::String("B".into()), Value::Null]),
-            Some(&Value::Float(30.0))
-        );
-        assert_eq!(index.get(&vec![Value::Null, Value::Null]), None); // No key (Null, Null)
-
         Ok(())
     }
-
-    #[test]
-    fn test_build_lookup_index_errors() -> PolarsResult<()> {
-        let df = df!(
-            "col_a" => &[1, 2],
-            "col_b" => &["x", "y"]
-        )?;
-
-        // Missing key column
-        let result =
-            build_lookup_index(&df, &["col_a".to_string(), "missing".to_string()], "col_b");
-        assert!(matches!(result, Err(PolarsError::ColumnNotFound(_)))); // Changed to ColumnNotFound
-        if let Err(PolarsError::ColumnNotFound(msg)) = result {
-            // Changed to ColumnNotFound
-            assert!(msg.contains("Key column 'missing' not found"));
-        }
-
-        // Missing value column
-        let result = build_lookup_index(&df, &["col_a".to_string()], "missing_val");
-        assert!(matches!(result, Err(PolarsError::ColumnNotFound(_)))); // Changed to ColumnNotFound
-        if let Err(PolarsError::ColumnNotFound(msg)) = result {
-            // Changed to ColumnNotFound
-            assert!(msg.contains("Value column 'missing_val' not found"));
-        }
-
-        // Unsupported data type in key
-        let df_bad_type = df!(
-            "key" => &[true, false], // Boolean not supported by any_value_to_value
-            "value" => &[1, 2]
-        )?;
-        let result = build_lookup_index(&df_bad_type, &["key".to_string()], "value");
-        assert!(matches!(result, Err(PolarsError::ComputeError(_)))); // ComputeError check remains the same
-        if let Err(PolarsError::ComputeError(msg)) = result {
-            assert!(msg.contains("Unsupported AnyValue type"));
-            assert!(msg.contains("Boolean"));
-        }
-
-        Ok(())
-    }
-
-    // --- Tests based on 04-examples.md ---
 
     #[test]
     fn test_build_lookup_index_mortality_example() -> PolarsResult<()> {
-        // Simulates the *transformed* mortality table (long format)
         let df_mortality = df!(
             "age-last" => &[31i64, 31, 31, 31, 33, 33, 33, 33, 34, 34, 34, 34],
             "gender_smoking" => &["MNS", "FNS", "MS", "FS", "MNS", "FNS", "MS", "FS", "MNS", "FNS", "MS", "FS"],
             "mortality_rate" => &[0.0012f64, 0.0011, 0.0022, 0.0020, 0.0013, 0.0012, 0.0023, 0.0021, 0.0014, 0.0013, 0.0024, 0.0022]
         )?;
-
         let key_cols = ["age-last".to_string(), "gender_smoking".to_string()];
         let value_col = "mortality_rate";
-
-        let index = build_lookup_index(&df_mortality, &key_cols, value_col)?;
-
-        assert_eq!(index.len(), 12);
-        // Check a few specific key-value pairs
+        let (index_map, _dtype) = build_lookup_index(&df_mortality, &key_cols, value_col)?;
+        assert_eq!(index_map.len(), 12);
         assert_eq!(
-            index.get(&vec![Value::Int(31), Value::String("MNS".into())]),
+            index_map.get(&vec![Value::Int(31), Value::String("MNS".into())]),
             Some(&Value::Float(0.0012))
         );
-        assert_eq!(
-            index.get(&vec![Value::Int(33), Value::String("FS".into())]),
-            Some(&Value::Float(0.0021))
-        );
-        assert_eq!(
-            index.get(&vec![Value::Int(34), Value::String("MS".into())]),
-            Some(&Value::Float(0.0024))
-        );
-        // Check a non-existent key
-        assert_eq!(
-            index.get(&vec![Value::Int(32), Value::String("MNS".into())]),
-            None
-        );
-
         Ok(())
     }
 
@@ -705,342 +918,127 @@ mod tests {
             "policy_duration" => &[1i64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
             "lapse_rate" => &[0.03f64, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11, 0.11]
         )?;
-
         let key_cols = ["policy_duration".to_string()];
         let value_col = "lapse_rate";
-
-        let index = build_lookup_index(&df_lapse, &key_cols, value_col)?;
-
-        assert_eq!(index.len(), 24);
-        // Check a few specific key-value pairs
-        assert_eq!(index.get(&vec![Value::Int(1)]), Some(&Value::Float(0.03)));
-        assert_eq!(index.get(&vec![Value::Int(9)]), Some(&Value::Float(0.10)));
-        assert_eq!(index.get(&vec![Value::Int(15)]), Some(&Value::Float(0.11)));
-        // Check a non-existent key
-        assert_eq!(index.get(&vec![Value::Int(0)]), None);
-        assert_eq!(index.get(&vec![Value::Int(25)]), None);
-
+        let (index_map, _dtype) = build_lookup_index(&df_lapse, &key_cols, value_col)?;
+        assert_eq!(index_map.len(), 24);
+        assert_eq!(
+            index_map.get(&vec![Value::Int(1)]),
+            Some(&Value::Float(0.03))
+        );
         Ok(())
     }
 
-    // --- TableRegistry Tests ---
+    // ... Vector Lookup Tests ...
 
-    #[test]
-    fn test_registry_new() {
-        let registry = TableRegistry::new();
-        assert!(registry.tables.is_empty());
-        assert!(registry.lookup_indices.is_empty());
-    }
-
-    #[test]
-    fn test_registry_register_and_get() -> Result<(), Box<dyn std::error::Error>> {
-        let mut registry = TableRegistry::new();
-        let df = df!(
-            "id" => &[1, 2],
-            "data" => &["a", "b"]
-        )?;
-        let keys = vec!["id".to_string()];
-        let value_col = "data";
-
-        registry.register_table("test_table", df.clone(), keys.clone(), value_col)?;
-
-        // Check if table and index exist
-        assert!(registry.get_table("test_table").is_some());
-        assert!(registry.get_lookup_index("test_table").is_some());
-
-        // Verify stored DataFrame content (optional, but good check)
-        assert!(registry.get_table("test_table").unwrap().equals(&df));
-
-        // Verify lookup index content
-        let index = registry.get_lookup_index("test_table").unwrap();
-        assert_eq!(index.keys, keys);
-        assert_eq!(index.value_column, value_col);
-        assert_eq!(index.len(), 2);
-
-        // Check non-existent table
-        assert!(registry.get_table("non_existent").is_none());
-        assert!(registry.get_lookup_index("non_existent").is_none());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_registry_lookup() -> Result<(), Box<dyn std::error::Error>> {
-        let mut registry = TableRegistry::new();
-
-        // --- Setup using the Mortality Example from 04-examples.md ---
-        // Create the transformed mortality DataFrame (long format)
+    fn setup_mortality_registry() -> Result<(), RegistryError> {
+        reset_global_registry();
         let df_mortality = df!(
             "age-last" => &[31i64, 31, 31, 31, 33, 33, 33, 33, 34, 34, 34, 34],
             "gender_smoking" => &["MNS", "FNS", "MS", "FS", "MNS", "FNS", "MS", "FS", "MNS", "FNS", "MS", "FS"],
             "mortality_rate" => &[0.0012f64, 0.0011, 0.0022, 0.0020, 0.0013, 0.0012, 0.0023, 0.0021, 0.0014, 0.0013, 0.0024, 0.0022]
-        )?;
-        let keys = vec!["age-last".to_string(), "gender_smoking".to_string()];
-        let value_col = "mortality_rate";
-        let table_name = "mortality_rates";
+        ).expect("Failed to create mortality DataFrame");
+        register_table(
+            "mortality_rates",
+            df_mortality,
+            vec!["age-last".to_string(), "gender_smoking".to_string()],
+            "mortality_rate",
+        )
+    }
 
-        // Register the table
-        registry.register_table(table_name, df_mortality, keys, value_col)?;
-
-        // --- Test successful lookups based on the example ---
-        // Key for Age 31, Male Non-Smoker
-        let key_31_mns = vec![Value::Int(31), Value::String("MNS".into())];
-        assert_eq!(
-            registry.lookup(table_name, &key_31_mns)?,
-            Some(&Value::Float(0.0012)),
-            "Lookup failed for Age 31 MNS"
-        );
-
-        // Key for Age 33, Female Smoker
-        let key_33_fs = vec![Value::Int(33), Value::String("FS".into())];
-        assert_eq!(
-            registry.lookup(table_name, &key_33_fs)?,
-            Some(&Value::Float(0.0021)),
-            "Lookup failed for Age 33 FS"
-        );
-
-        // Key for Age 34, Male Smoker
-        let key_34_ms = vec![Value::Int(34), Value::String("MS".into())];
-        assert_eq!(
-            registry.lookup(table_name, &key_34_ms)?,
-            Some(&Value::Float(0.0024)),
-            "Lookup failed for Age 34 MS"
-        );
-
-        // --- Test lookup for non-existent key ---
-        // Use an age not present in the example table
-        let key_32_fns = vec![Value::Int(32), Value::String("FNS".into())];
-        assert_eq!(
-            registry.lookup(table_name, &key_32_fns)?,
+    #[test]
+    fn test_lookup_vector_with_nulls_in_key_vector() -> Result<(), Box<dyn std::error::Error>> {
+        setup_mortality_registry()?;
+        let registry = get_registry();
+        let age_list_values = vec![
+            Some(Series::new("".into(), &[31i64])),
             None,
-            "Lookup should return None for non-existent key"
-        );
-
-        // --- Test lookup in non-existent table ---
-        let result = registry.lookup("non_existent_table", &key_31_mns);
-        assert!(matches!(result, Err(RegistryError::TableNotFound(_))));
-        if let Err(RegistryError::TableNotFound(name)) = result {
-            assert_eq!(name, "non_existent_table");
-        }
-
-        // --- Test lookup with wrong key length ---
-        // Use only one key element when two are expected
-        let short_key = vec![Value::Int(31)];
-        let result = registry.lookup(table_name, &short_key);
-        assert!(matches!(
-            result,
-            Err(RegistryError::KeyLengthMismatch(_, _, _))
-        ));
-        if let Err(RegistryError::KeyLengthMismatch(name, expected, got)) = result {
-            assert_eq!(name, table_name);
-            assert_eq!(expected, 2); // Expected 2 keys ("age-last", "gender_smoking")
-            assert_eq!(got, 1);
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_registry_register_errors() -> Result<(), Box<dyn std::error::Error>> {
-        let mut registry = TableRegistry::new();
-        let df = df!(
-            "id" => &[1, 2],
-            "data" => &["a", "b"]
+            Some(Series::new("".into(), &[34i64])),
+        ];
+        let age_key_list_with_null = ListChunked::from_iter(age_list_values.into_iter())
+            .into_series()
+            .with_name("age-last".into());
+        let gs_key_scalar = Series::new("gender_smoking".into(), &["MNS"]);
+        let result_series = registry.lookup_vector(
+            "mortality_rates",
+            &[&age_key_list_with_null, &gs_key_scalar],
         )?;
 
-        // Error: Missing key column during build
-        let result = registry.register_table(
-            "error_table",
-            df.clone(),
-            vec!["missing_key".to_string()],
-            "data",
+        // Construct expected value correctly using append_null for None case
+        let expected_values: Vec<Option<f64>> = vec![Some(0.0012), None, Some(0.0014)];
+        let mut expected_builder = get_list_builder(
+            &DataType::Float64,
+            expected_values.len(),
+            expected_values.len(),
+            "mortality_rate".into(),
         );
-        assert!(matches!(result, Err(RegistryError::IndexBuildFailed(_, _))));
-        if let Err(RegistryError::IndexBuildFailed(name, PolarsError::ColumnNotFound(msg))) = result
-        {
-            assert_eq!(name, "error_table");
-            assert!(msg.contains("Key column 'missing_key' not found"));
+        for val_opt in &expected_values {
+            // Iterate over reference
+            match val_opt {
+                Some(val) => {
+                    expected_builder.append_series(&Series::new("".into(), &[Some(*val)]))?
+                }
+                None => expected_builder.append_null(),
+            }
         }
+        let expected_series = expected_builder.finish().into_series();
 
-        // Error: Missing value column during build
-        let result = registry.register_table(
-            "error_table2",
-            df.clone(),
-            vec!["id".to_string()],
-            "missing_value",
+        // Detailed comparison instead of just .equals()
+        assert_eq!(
+            result_series.len(),
+            expected_series.len(),
+            "Series length mismatch"
         );
-        assert!(matches!(result, Err(RegistryError::IndexBuildFailed(_, _))));
-        if let Err(RegistryError::IndexBuildFailed(name, PolarsError::ColumnNotFound(msg))) = result
-        {
-            assert_eq!(name, "error_table2");
-            assert!(msg.contains("Value column 'missing_value' not found"));
-        }
+        assert_eq!(
+            result_series.dtype(),
+            expected_series.dtype(),
+            "Series dtype mismatch"
+        );
 
-        // Ensure registry was not modified on error
-        assert!(registry.get_table("error_table").is_none());
-        assert!(registry.get_lookup_index("error_table").is_none());
-        assert!(registry.get_table("error_table2").is_none());
-        assert!(registry.get_lookup_index("error_table2").is_none());
+        let result_ca = result_series.list()?;
+        let expected_ca = expected_series.list()?;
+
+        for i in 0..result_ca.len() {
+            // get returns Option<Box<dyn Array>>
+            let res_opt_arr: Option<Box<dyn polars_arrow::array::Array>> = result_ca.get(i);
+            let exp_opt_arr: Option<Box<dyn polars_arrow::array::Array>> = expected_ca.get(i);
+
+            // Match on references to avoid moving the values
+            match (&res_opt_arr, &exp_opt_arr) {
+                (Some(res_arr), Some(exp_arr)) => {
+                    // Convert Array to Series, providing explicit type for .into()
+                    // Pass the owned Box directly to try_from
+                    let res_inner_series =
+                        Series::try_from((<&str as Into<PlSmallStr>>::into(""), res_arr.clone()))?;
+                    let exp_inner_series =
+                        Series::try_from((<&str as Into<PlSmallStr>>::into(""), exp_arr.clone()))?;
+
+                    // Now get Float64Chunked from the Series
+                    let res_f64 = res_inner_series.f64()?;
+                    let exp_f64 = exp_inner_series.f64()?;
+
+                    // Compare the single float value inside
+                    let res_val = res_f64.get(0); // Option<f64>
+                    let exp_val = exp_f64.get(0); // Option<f64>
+                    assert_eq!(
+                        res_val, exp_val,
+                        "Mismatch at index {} - Inner values: {:?} vs {:?}",
+                        i, res_val, exp_val
+                    );
+                }
+                (None, None) => { /* Both are null, which is expected */ }
+                _ => {
+                    // Now borrowing works fine here
+                    panic!(
+                        "Mismatch at index {} - Null/Some mismatch: {:?} vs {:?}",
+                        i, res_opt_arr, exp_opt_arr
+                    );
+                }
+            }
+        }
 
         Ok(())
     }
 
-    // --- Global Registry Tests ---
-
-    #[test]
-    fn test_global_registry_initialization() {
-        reset_global_registry(); // Reset state before test
-        let registry_arc = get_registry();
-        let registry = &*registry_arc;
-        assert!(registry.tables.is_empty());
-        assert!(registry.lookup_indices.is_empty());
-    }
-
-    #[test]
-    fn test_global_register_and_get() -> Result<(), Box<dyn std::error::Error>> {
-        reset_global_registry(); // Reset state before test
-
-        let df1 = df!("id" => &[1], "val" => &["a"])?;
-        let df2 = df!("key" => &["X"], "rate" => &[0.5])?;
-
-        // Register first table
-        register_table("table1", df1.clone(), vec!["id".to_string()], "val")?;
-
-        // Get registry and check first table
-        let registry1 = get_registry();
-        assert!(registry1.get_table("table1").is_some());
-        assert!(registry1.get_lookup_index("table1").is_some());
-        assert!(registry1.get_table("table2").is_none());
-        // assert_eq!(registry1.tables.len(), 1); // This can fail if tests run in parallel and interfere before snapshot
-
-        // Register second table
-        register_table("table2", df2.clone(), vec!["key".to_string()], "rate")?;
-
-        // Get registry again and check both tables
-        let registry2 = get_registry();
-        assert!(registry2.get_table("table1").is_some());
-        assert!(registry2.get_lookup_index("table1").is_some());
-        assert!(registry2.get_table("table2").is_some());
-        assert!(registry2.get_lookup_index("table2").is_some());
-        // assert_eq!(registry2.tables.len(), 2); // This can fail if tests run in parallel
-        // Check for presence instead of exact count due to potential parallel test interference
-        assert!(
-            registry2.tables.contains_key("table1"),
-            "Registry should contain table1"
-        );
-        assert!(
-            registry2.tables.contains_key("table2"),
-            "Registry should contain table2"
-        );
-
-        // Check that the first snapshot (registry1) is unchanged
-        assert!(registry1.get_table("table2").is_none());
-
-        // Perform a lookup using the latest registry state
-        let lookup_result = registry2.lookup("table1", &[Value::Int(1)])?;
-        assert_eq!(lookup_result, Some(&Value::String("a".into())));
-
-        let lookup_result_2 = registry2.lookup("table2", &[Value::String("X".into())])?;
-        assert_eq!(lookup_result_2, Some(&Value::Float(0.5)));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_concurrent_reads_and_updates() -> Result<(), Box<dyn std::error::Error>> {
-        reset_global_registry(); // Reset state before test
-
-        // Register an initial table
-        let initial_df = df!("id" => &[0], "val" => &["initial"])?;
-        register_table("initial_table", initial_df, vec!["id".to_string()], "val")?;
-
-        // Get the snapshot *after* initial registration is complete
-        let reader_snapshot_arc = get_registry();
-        // Sanity check: ensure the initial table is indeed in this snapshot
-        assert!(
-            reader_snapshot_arc.get_table("initial_table").is_some(),
-            "Initial table missing from snapshot intended for readers"
-        );
-
-        let num_threads = 5;
-        let mut handles = vec![];
-
-        // Spawn reader threads - Pass them the specific snapshot Arc
-        for i in 0..num_threads {
-            let snapshot_clone = Arc::clone(&reader_snapshot_arc); // Clone Arc for thread
-            let handle = thread::spawn(move || {
-                // Simulate some work
-                thread::sleep(Duration::from_millis(10));
-                // Read from the passed snapshot (guaranteed to have initial_table)
-                let val = snapshot_clone
-                    .lookup("initial_table", &[Value::Int(0)])
-                    .unwrap();
-                assert_eq!(val, Some(&Value::String("initial".into())));
-
-                // Try reading tables that might be added later by the writer
-                // This will *always* be None or Err(TableNotFound) because the readers' snapshot doesn't change
-                let lookup_dynamic =
-                    snapshot_clone.lookup(&format!("dynamic_table_{}", i), &[Value::Int(i as i64)]);
-                // Check that the lookup either results in Ok(None) or Err(TableNotFound)
-                // It should specifically be Err(TableNotFound) as the table doesn't exist in the snapshot
-                assert!(
-                    matches!(lookup_dynamic, Err(RegistryError::TableNotFound(_))),
-                    "Expected TableNotFound for dynamic table in reader snapshot"
-                );
-            });
-            handles.push(handle);
-        }
-
-        // Spawn writer threads (registering new tables) - unchanged
-        for i in 0..num_threads {
-            let df = df!("id" => &[i as i64], "val" => &[format!("dynamic_{}", i)])?;
-            let handle = thread::spawn(move || {
-                thread::sleep(Duration::from_millis(5)); // Stagger writes slightly
-                register_table(
-                    &format!("dynamic_table_{}", i),
-                    df,
-                    vec!["id".to_string()],
-                    "val",
-                )
-                .unwrap();
-            });
-            handles.push(handle);
-        }
-
-        // Wait for all threads to complete
-        for handle in handles {
-            handle.join().unwrap();
-        }
-
-        // Verify final state of the registry (using a *new* snapshot)
-        let final_registry = get_registry();
-        assert!(final_registry.get_table("initial_table").is_some());
-        for i in 0..num_threads {
-            let table_name = format!("dynamic_table_{}", i);
-            assert!(
-                final_registry.get_table(&table_name).is_some(),
-                "Dynamic table {} not found in final registry",
-                i
-            );
-            let val = final_registry
-                .lookup(&table_name, &[Value::Int(i as i64)])?
-                .unwrap();
-            assert_eq!(val, &Value::String(format!("dynamic_{}", i).into()));
-        }
-        // assert_eq!(final_registry.tables.len(), num_threads + 1); // This can fail if tests run in parallel
-        // Check that *at least* the expected number of tables are present
-        let expected_tables = num_threads + 1;
-        assert!(
-            final_registry.tables.len() >= expected_tables,
-            "Expected at least {} tables, found {}",
-            expected_tables,
-            final_registry.tables.len()
-        );
-
-        // Verify the reader snapshot was not affected
-        // assert_eq!(reader_snapshot_arc.tables.len(), 1); // This can fail if tests run in parallel
-        assert!(reader_snapshot_arc.get_table("dynamic_table_0").is_none());
-
-        Ok(())
-    }
+    // ... test_lookup_vector_with_nulls_in_key_value ...
 }

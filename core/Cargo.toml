@@ -26,3 +26,10 @@ env_logger = "0.11.1"
 arc-swap = "1.6.0"
 thiserror = "1.0"
 once_cell = "1.17"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "vector_plugin_benchmark"
+harness = false
