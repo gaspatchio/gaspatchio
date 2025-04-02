@@ -4,7 +4,7 @@ version = "0.0.4"
 description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@sudden.co.nz" }]
-requires-python = ">=3.13.0"
+requires-python = ">=3.12"
 dependencies = [
     "logfire>=3.4.0",
     "loguru>=0.7.3",

@@ -15,20 +15,16 @@ fn same_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
 }
 
 #[polars_expr(output_type_func = list_int64_output)]
-fn fill_series(
+pub fn fill_series(
     inputs: &[Series],
-    kwargs: gaspatchio_core_lib::vector::FillSeriesKwargs,
+    kwargs: gaspatchio_core_lib::FillSeriesKwargs,
 ) -> PolarsResult<Series> {
-    // Call the implementation from vector.rs
     gaspatchio_core_lib::polars_functions::vector::fill_series(inputs, kwargs)
 }
 
 /// Floor division with a default value
 #[polars_expr(output_type_func = same_output_type)]
-fn floor(
-    inputs: &[Series],
-    kwargs: gaspatchio_core_lib::vector::FloorKwargs,
-) -> PolarsResult<Series> {
+fn floor(inputs: &[Series], kwargs: gaspatchio_core_lib::FloorKwargs) -> PolarsResult<Series> {
     // Call the implementation from vector.rs
     gaspatchio_core_lib::polars_functions::vector::floor(inputs, kwargs)
 }
