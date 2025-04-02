@@ -1,3 +1,4 @@
+mod assumptions;
 mod table_registry;
 mod vector;
 
@@ -22,6 +23,7 @@ fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
 
     // Register our submodules
     table_registry::register_registry_module(m.py(), m)?;
+    // assumptions::register_assumptions_functions(m.py(), m)?; // Removed, registration via Python polars plugin API
 
     Ok(())
 }

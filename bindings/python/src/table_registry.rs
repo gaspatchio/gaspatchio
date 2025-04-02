@@ -1,16 +1,14 @@
 use gaspatchio_core_lib::index::{self as core_index, RegistryError, TransformSpec, TransformType}; // Use alias
-use once_cell::sync::Lazy;
-use polars::prelude::{DataFrame, PolarsError}; // Removed unused Polars types
+use polars::prelude::DataFrame; // Removed unused Polars types
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame; // Removed PyExpr import
-use std::sync::Mutex;
-// Removed HashMap import as core_index::TableRegistry is used
+                              // Removed unused import: Mutex
+                              // Removed HashMap import as core_index::TableRegistry is used
 
-// Global static registry instance, protected by a Mutex
-// Use the actual core TableRegistry now.
-static REGISTRY: Lazy<Mutex<core_index::TableRegistry>> =
-    Lazy::new(|| Mutex::new(core_index::TableRegistry::new()));
+// Removed unused global static registry instance
+// static REGISTRY: Lazy<Mutex<core_index::TableRegistry>> =
+//     Lazy::new(|| Mutex::new(core_index::TableRegistry::new()));
 
 // Enum to represent transform type from Python
 #[derive(Debug, Clone)]
@@ -117,11 +115,6 @@ impl PyTableRegistry {
 // Helper function to convert RegistryError to PyErr
 fn registry_error_to_py_err(e: RegistryError) -> PyErr {
     PyValueError::new_err(e.to_string())
-}
-
-// Helper function to convert PyO3 error to PolarsError
-fn py_err_to_polars(e: PyErr) -> PolarsError {
-    PolarsError::ComputeError(e.to_string().into())
 }
 
 // Make sure this module is added to lib.rs

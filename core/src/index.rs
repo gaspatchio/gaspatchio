@@ -891,6 +891,12 @@ pub fn perform_lookup(table_name: &str, keys: &[&Series]) -> PolarsResult<Series
     })
 }
 
+// Kwargs struct for the assumption lookup plugin
+#[derive(Deserialize, Debug, Clone)]
+pub struct AssumptionLookupKwargs {
+    pub table_name: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::reset_global_registry;
