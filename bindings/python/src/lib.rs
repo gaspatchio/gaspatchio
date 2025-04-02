@@ -2,8 +2,15 @@ mod assumptions;
 mod table_registry;
 mod vector;
 
+use gaspatchio_core_lib::index::reset_global_registry as rust_reset_global_registry;
 use log::{debug, info};
 use pyo3::prelude::*;
+
+#[pyfunction]
+fn reset_global_registry() -> PyResult<()> {
+    rust_reset_global_registry();
+    Ok(())
+}
 
 #[pymodule]
 fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
@@ -21,8 +28,14 @@ fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
     debug!("Debug logging enabled");
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
-    // Register our submodules
-    table_registry::register_registry_module(m.py(), m)?;
+    // Add the PyTableRegistry class directly to the internal module
+    m.add_class::<table_registry::PyTableRegistry>()?;
+
+    // Add the reset function
+    m.add_function(wrap_pyfunction!(reset_global_registry, m)?)?;
+
+    // Register our submodules (which might now be less necessary if classes are added directly)
+    // table_registry::register_registry_module(m.py(), m)?;
     // assumptions::register_assumptions_functions(m.py(), m)?; // Removed, registration via Python polars plugin API
 
     Ok(())

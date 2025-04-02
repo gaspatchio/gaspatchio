@@ -8,7 +8,7 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use log::debug;
 use once_cell::sync::Lazy;
-use polars::chunked_array::builder::{get_list_builder, ListBuilderTrait};
+use polars::chunked_array::builder::ListPrimitiveChunkedBuilder;
 use polars::datatypes::PlSmallStr;
 use polars::series::Series;
 use polars_core::utils::concat_df;
@@ -172,11 +172,11 @@ impl LookupIndex {
 /// Handles common types (Int32, Int64, Float64, Utf8/String) and Null.
 /// Returns PolarsError for unsupported types.
 fn any_value_to_value(av: AnyValue) -> PolarsResult<Value> {
-    debug!("Received AnyValue: {:?}, dtype: {:?}", av, av.dtype());
+    //debug!("Received AnyValue: {:?}, dtype: {:?}", av, av.dtype());
 
     match av {
-        AnyValue::Int32(i) => Ok(Value::Int(i.into())),
-        AnyValue::Int64(i) => Ok(Value::Int(i)),
+        AnyValue::Int32(i) => Ok(Value::Float(i as f64)),
+        AnyValue::Int64(i) => Ok(Value::Float(i as f64)),
         AnyValue::Float64(f) => Ok(Value::Float(f)),
         AnyValue::String(s) => Ok(Value::String(s.to_string())), // s is &str
         AnyValue::StringOwned(s) => Ok(Value::String(s.to_string())),
@@ -589,17 +589,16 @@ fn validate_lookup_inputs<'a>(
             } else {
                 first_vector_len = Some(current_len);
             }
-        } else {
+        } else if any_vectors {
+            // This is a scalar series, but we've already seen a vector
             let scalar_len = series.len();
-            // Check if NOT (length 1 or length max_len)
-            if !(scalar_len == 1
-                || scalar_len
-                    == first_vector_len
-                        .expect("first_vector_len should be Some if any_vectors is true"))
-            {
+
+            // Check if scalar length is valid (either 1 for broadcasting or equal to vector length)
+            let vector_len = first_vector_len.unwrap(); // Safe because any_vectors is true
+            if !(scalar_len == 1 || scalar_len == vector_len) {
                 return Err(PolarsError::ShapeMismatch(format!(
                     "Scalar key '{}' (index {}) has length {} but expected 1 or {} (max vector length) when vector keys are present.",
-                    series.name(), i, scalar_len, first_vector_len.expect("first_vector_len should be Some if any_vectors is true")
+                    series.name(), i, scalar_len, vector_len
                 ).into()));
             }
         }
@@ -608,15 +607,30 @@ fn validate_lookup_inputs<'a>(
     Ok((any_vectors, first_vector_len, vector_indices))
 }
 
+/// Extracts the length of the inner list at a given row index from a List Series.
+fn get_inner_list_len(list_series: &Series, row_idx: usize) -> PolarsResult<usize> {
+    let list_ca = list_series.list()?;
+    if row_idx >= list_ca.len() {
+        // If outer index is out of bounds, treat inner length as 0
+        return Ok(0);
+    }
+    match list_ca.get_any_value(row_idx)? {
+        AnyValue::List(inner_series) => Ok(inner_series.len()),
+        AnyValue::Null => Ok(0), // Null list has effective length 0 for lookup
+        _ => Err(PolarsError::ComputeError(
+            "Expected AnyValue::List in get_inner_list_len".into(),
+        )),
+    }
+}
+
 /// Executes the vector lookup logic when at least one key is a List Series.
 fn execute_vector_lookup(
     lookup_index: &LookupIndex,
     keys: &[&Series],
     output_len: usize,
-    vector_indices: &[usize], // Pass vector_indices explicitly
+    vector_indices: &[usize],
 ) -> PolarsResult<Series> {
     if output_len == 0 {
-        // Handle empty vector input case
         let list_dtype = DataType::List(Box::new(lookup_index.value_dtype.clone()));
         return Ok(Series::new_empty(
             lookup_index.value_column.as_str().into(),
@@ -624,89 +638,69 @@ fn execute_vector_lookup(
         ));
     }
 
-    // Extract scalar values once
-    let scalar_values: Vec<Option<Value>> = keys
-        .iter()
-        .enumerate()
-        .map(|(i, series)| -> PolarsResult<Option<Value>> {
-            if vector_indices.contains(&i) {
-                Ok(None) // Placeholder for vector keys
-            } else {
-                // Validation ensures scalar series have len 1 or are empty (handled by output_len == 0 check)
-                extract_value_from_series(*series, 0).map(Some)
-            }
-        })
-        .collect::<PolarsResult<Vec<_>>>()?;
-
-    // Use .into() for name
-    let mut list_builder = get_list_builder(
-        &lookup_index.value_dtype,
-        output_len,
-        output_len, // capacity estimate
-        lookup_index.value_column.as_str().into(),
-    );
+    let first_vector_series = keys[*vector_indices.first().unwrap()];
+    let mut series_list: Vec<Series> = Vec::with_capacity(output_len); // Vec to hold inner series
 
     for i in 0..output_len {
-        let mut current_key = Vec::with_capacity(keys.len());
-        let mut key_contains_null = false; // Track if any part of the key was null/error
-
-        for (key_idx, series) in keys.iter().enumerate() {
-            let value_result = if vector_indices.contains(&key_idx) {
-                // Extract from the list series for this row
-                // Assuming element_idx 0 for now, based on original logic.
-                extract_value_from_list_series(series, i, 0)
-            } else {
-                // Use the pre-extracted scalar value
-                Ok(scalar_values[key_idx]
-                    .clone()
-                    .expect("Scalar value should exist here")) // Should be Some based on logic above
-            };
-
-            match value_result {
-                Ok(Value::Null) => {
-                    current_key.push(Value::Null);
-                    key_contains_null = true; // Mark key as invalid if any part is Null
-                }
-                Ok(val) => {
-                    current_key.push(val);
-                }
-                Err(e) => {
-                    debug!(
-                         "Error extracting key element at row {} for key '{}': {}. Treating as Null.",
-                         i, series.name(), e
-                     );
-                    current_key.push(Value::Null);
-                    key_contains_null = true; // Mark key as invalid on error
-                }
-            }
-        }
-
-        let result_value = if key_contains_null {
-            // If any part of the key was null or failed extraction, the lookup result is Null
-            Value::Null
+        // Outer loop (rows)
+        let inner_len = get_inner_list_len(first_vector_series, i)?;
+        let inner_series = if inner_len == 0 {
+            // Create an empty Series if the inner list is empty
+            Series::new_empty("inner".into(), &lookup_index.value_dtype)
         } else {
-            lookup_index
-                .lookup(&current_key)
-                .cloned()
-                .unwrap_or(Value::Null) // Default to Null if lookup fails
-        };
+            let mut inner_results: Vec<Value> = Vec::with_capacity(inner_len);
+            for element_idx in 0..inner_len {
+                // Inner loop (elements)
+                let mut current_key = Vec::with_capacity(keys.len());
+                let mut key_contains_null_or_error = false;
 
-        // Append the single result value (or Null) to the list builder for this row
-        let append_result = match result_value {
-            Value::Int(v) => list_builder.append_series(&Series::new("".into(), &[Some(v)])),
-            Value::Float(v) => list_builder.append_series(&Series::new("".into(), &[Some(v)])),
-            Value::String(v) => {
-                list_builder.append_series(&Series::new("".into(), &[Some(v.as_str())]))
-            } // Use &str
-            Value::Null => {
-                list_builder.append_null();
-                Ok(())
+                // Construct key
+                for (key_idx, series) in keys.iter().enumerate() {
+                    let value_result = if vector_indices.contains(&key_idx) {
+                        // Vector key: use row `i` and element `element_idx`
+                        extract_value_from_list_series(series, i, element_idx)
+                    } else {
+                        // FIXED: For scalar keys, get the appropriate row value based on length
+                        // If series.len() == 1, use row 0 (broadcasting)
+                        // Otherwise, use row `i`
+                        let scalar_idx = if series.len() == 1 { 0 } else { i };
+                        extract_value_from_series(series, scalar_idx)
+                    };
+                    match value_result {
+                        Ok(Value::Null) => {
+                            current_key.push(Value::Null);
+                            key_contains_null_or_error = true;
+                        }
+                        Ok(val) => current_key.push(val),
+                        Err(_) => {
+                            current_key.push(Value::Null);
+                            key_contains_null_or_error = true;
+                        }
+                    }
+                }
+
+                // Perform lookup
+                let result_value = if key_contains_null_or_error {
+                    Value::Null
+                } else {
+                    lookup_index
+                        .lookup(&current_key)
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                };
+                inner_results.push(result_value);
             }
+            // Create Series from results for this inner list
+            create_series_from_values(&inner_results, "inner".into(), &lookup_index.value_dtype)?
         };
-        append_result?; // Propagate error from append
+        series_list.push(inner_series); // Add the inner series to our Vec
     }
 
-    Ok(list_builder.finish().into_series())
+    // Build ListChunked from the Vec<Series>
+    let list_chunked = ListChunked::from_iter(series_list.into_iter().map(Some))
+        .with_name(lookup_index.value_column.as_str().into());
+
+    Ok(list_chunked.into_series())
 }
 
 /// Internal function to perform the actual vector or scalar lookup.
@@ -773,9 +767,14 @@ pub fn get_registry() -> Arc<TableRegistry> {
 }
 
 /// Resets the global registry to an empty state. For testing purposes only.
-#[cfg(test)]
-pub(crate) fn reset_global_registry() {
+pub fn reset_global_registry() {
+    debug!("Attempting to reset global registry...");
     REGISTRY.store(Arc::new(TableRegistry::default()));
+    let registry = get_registry(); // Get snapshot after reset
+    debug!(
+        "Global registry reset. Current table count: {}",
+        registry.lookup_indices.len()
+    );
 }
 
 /// Registers a table in the global, thread-safe registry using Read-Copy-Update,
@@ -886,6 +885,12 @@ pub fn register_table(
 /// or `Err(PolarsError)` if the lookup fails.
 pub fn perform_lookup(table_name: &str, keys: &[&Series]) -> PolarsResult<Series> {
     let registry = get_registry(); // Get a thread-safe snapshot
+    debug!(
+        "Performing lookup for table '{}'. Registry table count: {}. Keys: {:?}",
+        table_name,
+        registry.lookup_indices.len(),
+        registry.lookup_indices.keys().collect::<Vec<_>>()
+    );
     registry.lookup_vector(table_name, keys).map_err(|e| {
         PolarsError::ComputeError(format!("Lookup failed for table '{}': {}", table_name, e).into())
     })
@@ -901,7 +906,10 @@ pub struct AssumptionLookupKwargs {
 mod tests {
     use super::reset_global_registry;
     use super::*;
+    use polars::chunked_array::builder::ListPrimitiveChunkedBuilder;
+    use polars::datatypes::{Float64Type, Int64Type};
     use polars::df; // Import the df! macro
+    use polars::prelude::NamedFrom; // For Series::new
 
     #[test]
     fn test_value_equality() {
@@ -1312,6 +1320,93 @@ mod tests {
             &[Value::Int(32), Value::String("MNS".into())],
         )?;
         assert_eq!(rate_missing, Value::Null);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mixed_vector_scalar_lookup() -> PolarsResult<()> {
+        reset_global_registry();
+        // Create a test assumption table
+        let df = df!(
+            "category" => &["A", "A", "A", "B", "B", "B"],
+            "duration" => &[1i64, 2, 5, 1, 2, 10],
+            "rate" => &[0.1, 0.2, 0.3, 1.1, 1.2, 1.3]
+        )?;
+
+        register_table(
+            "mixed_test_rates",
+            df,
+            vec!["category".to_string(), "duration".to_string()],
+            "rate",
+            None,
+        )?;
+
+        // Test 1: Multi-row scalar key with vector key - should take row-wise matching values
+        let scalar_key = Series::new("category".into(), &["A", "B", "A"]); // 3 rows scalar
+
+        // Build vector key
+        let mut list_builder =
+            ListPrimitiveChunkedBuilder::<Int64Type>::new("duration".into(), 3, 5, DataType::Int64);
+        list_builder.append_slice(&[1i64, 5]); // Row 0: [1, 5] - category A
+        list_builder.append_slice(&[2i64, 10]); // Row 1: [2, 10] - category B
+        list_builder.append_slice(&[2i64]); // Row 2: [2] - category A
+        let vector_key = list_builder.finish().into_series();
+
+        // Run the lookup
+        let registry = get_registry();
+        let result = registry
+            .lookup_vector("mixed_test_rates", &[&scalar_key, &vector_key])
+            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
+        // Build expected result
+        let mut expected_builder =
+            ListPrimitiveChunkedBuilder::<Float64Type>::new("rate".into(), 3, 5, DataType::Float64);
+
+        // Row 0: A + [1, 5] should give [0.1, 0.3]
+        expected_builder.append_slice(&[0.1, 0.3]);
+
+        // Row 1: B + [2, 10] should give [1.2, 1.3]
+        expected_builder.append_slice(&[1.2, 1.3]);
+
+        // Row 2: A + [2] should give [0.2]
+        expected_builder.append_slice(&[0.2]);
+
+        let expected = expected_builder.finish().into_series();
+
+        // Compare results
+        println!("Mixed lookup result: {}", result);
+        println!("Expected: {}", expected);
+        assert!(result.equals_missing(&expected));
+
+        // Test 2: Length-1 scalar key (broadcasting) with vector key
+        let broadcasting_key = Series::new("category".into(), &["A"]); // Length 1 for broadcasting
+
+        let result_broadcast = registry
+            .lookup_vector("mixed_test_rates", &[&broadcasting_key, &vector_key])
+            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
+        // Build expected result for broadcasting (all lookups use category "A")
+        let mut expected_broadcast_builder =
+            ListPrimitiveChunkedBuilder::<Float64Type>::new("rate".into(), 3, 5, DataType::Float64);
+
+        // Row 0: A + [1, 5] should give [0.1, 0.3]
+        expected_broadcast_builder.append_slice(&[0.1, 0.3]);
+
+        // Row 1: A + [2, 10] should give [0.2, None] (10 not found for category A)
+        // Use Vec::new() and push for null handling
+        let row1 = Series::new("inner1".into(), &[Some(0.2), None::<f64>]);
+        expected_broadcast_builder.append_series(&row1)?;
+
+        // Row 2: A + [2] should give [0.2]
+        expected_broadcast_builder.append_slice(&[0.2]);
+
+        let expected_broadcast = expected_broadcast_builder.finish().into_series();
+
+        // Compare results
+        println!("Broadcast lookup result: {}", result_broadcast);
+        println!("Expected broadcast: {}", expected_broadcast);
+        assert!(result_broadcast.equals_missing(&expected_broadcast));
 
         Ok(())
     }

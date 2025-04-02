@@ -5,6 +5,7 @@ use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame; // Removed PyExpr import
                               // Removed unused import: Mutex
                               // Removed HashMap import as core_index::TableRegistry is used
+use pyo3::{types::PyDict, FromPyObject, PyAny, PyObject, PyResult, Python};
 
 // Removed unused global static registry instance
 // static REGISTRY: Lazy<Mutex<core_index::TableRegistry>> =
@@ -40,13 +41,55 @@ impl<'py> FromPyObject<'py> for PyTransformType {
 }
 
 // Struct to receive transform specification from Python
-#[derive(FromPyObject, Debug, Clone)]
+#[derive(Debug, Clone)]
 struct PyTransformSpec {
     transform_type: PyTransformType,
     id_vars: Vec<String>,
     value_vars: Vec<String>,
     var_name: String,
     value_name: String,
+}
+
+// Manual implementation of FromPyObject for PyTransformSpec
+impl<'source> FromPyObject<'source> for PyTransformSpec {
+    fn extract_bound(ob: &Bound<'source, PyAny>) -> PyResult<Self> {
+        // Try to cast the PyAny to a PyDict
+        let dict: &Bound<'source, PyDict> = ob.downcast()?;
+
+        // Extract fields, providing clear errors if keys are missing or types are wrong
+        let transform_type: PyTransformType = dict
+            .get_item("transform_type")?
+            .ok_or_else(|| PyValueError::new_err("'transform_type' key missing in transform_spec"))?
+            .extract()?;
+
+        let id_vars: Vec<String> = dict
+            .get_item("id_vars")?
+            .ok_or_else(|| PyValueError::new_err("'id_vars' key missing in transform_spec"))?
+            .extract()?;
+
+        let value_vars: Vec<String> = dict
+            .get_item("value_vars")?
+            .ok_or_else(|| PyValueError::new_err("'value_vars' key missing in transform_spec"))?
+            .extract()?;
+
+        let var_name: String = dict
+            .get_item("var_name")?
+            .ok_or_else(|| PyValueError::new_err("'var_name' key missing in transform_spec"))?
+            .extract()?;
+
+        let value_name: String = dict
+            .get_item("value_name")?
+            .ok_or_else(|| PyValueError::new_err("'value_name' key missing in transform_spec"))?
+            .extract()?;
+
+        Ok(PyTransformSpec {
+            transform_type,
+            id_vars,
+            value_vars,
+            var_name,
+            value_name,
+        })
+    }
 }
 
 // Conversion from PyO3 struct to core Rust struct
@@ -82,21 +125,37 @@ impl PyTableRegistry {
     ///     transform_spec (dict | None): Optional dictionary specifying how to transform the input `df`
     ///         before creating the lookup index. Required keys depend on `transform_type`.
     ///         For `WideToLong`: `transform_type`, `id_vars`, `value_vars`, `var_name`, `value_name`.
-    #[pyo3(signature = (name, df, keys, value_column, transform_spec=None))]
+    #[pyo3(signature = (name, df, keys, value_column, transform_spec_py=None))]
     fn register_table(
         &self,
+        py: Python, // Add Python GIL token
         name: String,
         df: PyDataFrame,
         keys: Vec<String>,
         value_column: String,
-        transform_spec: Option<PyTransformSpec>, // Use the PyO3 struct
+        transform_spec_py: Option<PyObject>, // Accept PyObject (representing the dict or None)
     ) -> PyResult<()> {
         // Convert PyDataFrame to Rust DataFrame
         let rust_df: DataFrame = df.into();
 
-        // Convert the Python transform spec to the core Rust transform spec
-        let core_transform_spec: Option<TransformSpec> =
-            transform_spec.map(|py_spec| py_spec.into());
+        // Attempt to extract PyTransformSpec if the PyObject is provided
+        let core_transform_spec: Option<TransformSpec> = match transform_spec_py {
+            Some(py_obj) => {
+                // Bind the PyObject to the GIL
+                let bound_obj = py_obj.bind_borrowed(py);
+                // Attempt to extract the PyTransformSpec struct from the Python object
+                match bound_obj.extract::<PyTransformSpec>() {
+                    Ok(py_spec) => Some(py_spec.into()), // Convert to core TransformSpec
+                    Err(e) => {
+                        return Err(PyValueError::new_err(format!(
+                            "Invalid transform_spec structure: {}",
+                            e
+                        )))
+                    }
+                }
+            }
+            None => None, // No transform spec provided
+        };
 
         // Call the core registration function
         core_index::register_table(
