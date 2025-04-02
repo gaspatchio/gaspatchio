@@ -677,6 +677,7 @@ dependencies = [
  "env_logger",
  "gaspatchio_core_lib",
  "log",
+ "once_cell",
  "polars",
  "polars-arrow",
  "pyo3",

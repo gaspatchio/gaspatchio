@@ -870,6 +870,27 @@ pub fn register_table(
     // Lock guard is dropped here
 }
 
+/// Performs a vector lookup using the global registry.
+///
+/// This is the core logic function called by the Polars plugin binding.
+/// It accesses the globally shared `TableRegistry` and performs the lookup.
+///
+/// # Arguments
+///
+/// * `table_name` - The name of the registered table/index to use.
+/// * `keys` - A slice of `&Series` representing the key columns.
+///
+/// # Returns
+///
+/// `Ok(Series)` containing the lookup results (scalar or List Series),
+/// or `Err(PolarsError)` if the lookup fails.
+pub fn perform_lookup(table_name: &str, keys: &[&Series]) -> PolarsResult<Series> {
+    let registry = get_registry(); // Get a thread-safe snapshot
+    registry.lookup_vector(table_name, keys).map_err(|e| {
+        PolarsError::ComputeError(format!("Lookup failed for table '{}': {}", table_name, e).into())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::reset_global_registry;

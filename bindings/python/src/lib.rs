@@ -1,3 +1,4 @@
+mod table_registry;
 mod vector;
 
 use log::{debug, info};
@@ -18,6 +19,9 @@ fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
     info!("Initializing gaspatchio_core");
     debug!("Debug logging enabled");
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+
+    // Register our submodules
+    table_registry::register_registry_module(m.py(), m)?;
 
     Ok(())
 }
