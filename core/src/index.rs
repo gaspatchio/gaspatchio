@@ -6,12 +6,12 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use log::debug;
 use once_cell::sync::Lazy;
 use polars::datatypes::PlSmallStr;
 use polars::series::Series;
 use polars_core::utils::concat_df;
 use std::sync::Mutex;
+use tracing::{debug, error, instrument, span, trace, warn, Level};
 
 /// Represents the type of transformation to apply during table registration.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -170,15 +170,28 @@ impl LookupIndex {
 /// Converts a Polars AnyValue to our internal Value enum.
 /// Handles common types (Int32, Int64, Float64, Utf8/String) and Null.
 /// Returns PolarsError for unsupported types.
+#[instrument(level = "trace", skip(av), fields(dtype = ?av.dtype()))]
 fn any_value_to_value(av: AnyValue) -> PolarsResult<Value> {
     //debug!("Received AnyValue: {:?}, dtype: {:?}", av, av.dtype());
 
     match av {
-        AnyValue::Int32(i) => Ok(Value::Float(i as f64)),
-        AnyValue::Int64(i) => Ok(Value::Float(i as f64)),
+        AnyValue::Int32(i) => Ok(Value::Int(i as i64)),
+        AnyValue::Int64(i) => Ok(Value::Int(i)),
         AnyValue::Float64(f) => Ok(Value::Float(f)),
-        AnyValue::String(s) => Ok(Value::String(s.to_string())), // s is &str
-        AnyValue::StringOwned(s) => Ok(Value::String(s.to_string())),
+        AnyValue::String(s) => {
+            trace!(
+                input_str_len = s.len(),
+                "Converting AnyValue::String to Value::String"
+            );
+            Ok(Value::String(s.to_string()))
+        }
+        AnyValue::StringOwned(s) => {
+            trace!(
+                input_str_len = s.len(),
+                "Converting AnyValue::StringOwned to Value::String"
+            );
+            Ok(Value::String(s.to_string()))
+        }
         AnyValue::Null => Ok(Value::Null),
         other => Err(PolarsError::ComputeError(
             format!(
@@ -192,6 +205,7 @@ fn any_value_to_value(av: AnyValue) -> PolarsResult<Value> {
 
 /// Extracts a single Value from a Column at a given row index.
 /// Note: Takes &Column, which Derefs to &Series, so .get() works.
+#[instrument(level = "trace", skip(column), fields(col = %column.name(), index))]
 fn extract_value_from_series(column: &Series, index: usize) -> PolarsResult<Value> {
     // Ensure index is within bounds before getting
     if index >= column.len() {
@@ -211,6 +225,7 @@ fn extract_value_from_series(column: &Series, index: usize) -> PolarsResult<Valu
 
 /// Extracts a single Value from a List Series at a given outer index `list_idx`
 /// and inner index `element_idx`.
+#[instrument(level = "trace", skip(list_series), fields(list_col = %list_series.name(), list_idx, element_idx))]
 fn extract_value_from_list_series(
     list_series: &Series,
     list_idx: usize,
@@ -295,6 +310,7 @@ fn create_series_from_values(
 }
 
 /// Builds a lookup index from a DataFrame.
+#[instrument(level = "debug", skip(df), fields(rows = df.height(), key_count = key_columns.len(), value_col = %value_column))]
 fn build_lookup_index(
     df: &DataFrame,
     key_columns: &[String],
@@ -319,9 +335,13 @@ fn build_lookup_index(
             key_vec.push(any_value_to_value(any_value)?);
         }
 
+        trace!(row_idx, ?key_vec, "Extracted key vector for row");
+
         // Use value_col.get() directly
         let value_any = value_col.get(row_idx)?;
         let value = any_value_to_value(value_any)?;
+
+        trace!(row_idx, ?value, "Extracted value for row");
         index.insert(key_vec, value);
     }
     Ok((index, value_dtype))
@@ -637,6 +657,16 @@ fn get_inner_list_len(list_series: &Series, row_idx: usize) -> PolarsResult<usiz
 }
 
 /// Executes the vector lookup logic when at least one key is a List Series.
+#[instrument(
+    level = "debug",
+    skip(lookup_index, keys, vector_indices),
+    fields(
+        value_col = %lookup_index.value_column,
+        output_len,
+        key_count = keys.len(),
+        vector_key_indices = ?vector_indices
+    )
+)]
 fn execute_vector_lookup(
     lookup_index: &LookupIndex,
     keys: &[&Series],
@@ -655,14 +685,22 @@ fn execute_vector_lookup(
     let mut series_list: Vec<Series> = Vec::with_capacity(output_len); // Vec to hold inner series
 
     for i in 0..output_len {
+        let row_span = span!(Level::DEBUG, "vector_lookup_row", row = i);
+        let _enter = row_span.enter();
         // Outer loop (rows)
         let inner_len = get_inner_list_len(first_vector_series, i)?;
+        debug!("Processing row with inner_len: {}", inner_len);
+
         let inner_series = if inner_len == 0 {
             // Create an empty Series if the inner list is empty
+            trace!("Inner list is empty, creating empty series");
             Series::new_empty("inner".into(), &lookup_index.value_dtype)
         } else {
             let mut inner_results: Vec<Value> = Vec::with_capacity(inner_len);
             for element_idx in 0..inner_len {
+                let element_span =
+                    span!(Level::TRACE, "vector_lookup_element", element = element_idx);
+                let _enter_elem = element_span.enter();
                 // Inner loop (elements)
                 let mut current_key = Vec::with_capacity(keys.len());
                 let mut key_contains_null_or_error = false;
@@ -692,8 +730,15 @@ fn execute_vector_lookup(
                     }
                 }
 
+                trace!(
+                    ?current_key,
+                    key_contains_null = key_contains_null_or_error,
+                    "Constructed key for element"
+                );
+
                 // Perform lookup
                 let result_value = if key_contains_null_or_error {
+                    trace!("Key contains null or error, defaulting result to Null");
                     Value::Null
                 } else {
                     lookup_index
@@ -701,9 +746,14 @@ fn execute_vector_lookup(
                         .cloned()
                         .unwrap_or(Value::Null)
                 };
+                trace!(?result_value, "Lookup result for element");
                 inner_results.push(result_value);
             }
             // Create Series from results for this inner list
+            trace!(
+                result_count = inner_results.len(),
+                "Creating inner series from results"
+            );
             create_series_from_values(&inner_results, "inner".into(), &lookup_index.value_dtype)?
         };
         series_list.push(inner_series); // Add the inner series to our Vec
@@ -717,6 +767,14 @@ fn execute_vector_lookup(
 }
 
 /// Internal function to perform the actual vector or scalar lookup.
+#[instrument(
+    level = "debug",
+    skip(lookup_index, keys),
+    fields(
+        value_col = %lookup_index.value_column,
+        key_count = keys.len()
+    )
+)]
 fn perform_vector_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> PolarsResult<Series> {
     // 1. Validate inputs
     let (any_vectors, first_vector_len_opt, vector_indices) =
@@ -735,6 +793,7 @@ fn perform_vector_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> Polars
 }
 
 /// Performs the lookup when all input keys are scalar Series.
+#[instrument(level="debug", skip(lookup_index, keys), fields(value_col=%lookup_index.value_column, key_count = keys.len()))]
 fn execute_scalar_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> PolarsResult<Series> {
     let mut key_values = Vec::with_capacity(keys.len());
     for series in keys {
@@ -748,7 +807,9 @@ fn execute_scalar_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> Polars
             );
         }
         key_values.push(extract_value_from_series(*series, 0)?);
+        trace!(key_part = ?key_values.last().unwrap(), "Added scalar key part");
     }
+    debug!("Constructed scalar key: {:?}", key_values);
     let result_value = lookup_index
         .lookup(&key_values)
         .cloned()
@@ -944,7 +1005,10 @@ mod tests {
     #[test]
     fn test_value_equality() {
         assert_eq!(Value::Int(42), Value::Int(42));
-        assert_eq!(Value::Float(3.14), Value::Float(3.14));
+        assert_eq!(
+            Value::Float(std::f64::consts::PI),
+            Value::Float(std::f64::consts::PI)
+        );
         assert_eq!(Value::String("hello".into()), Value::String("hello".into()));
         assert_eq!(Value::Null, Value::Null);
 
@@ -965,7 +1029,10 @@ mod tests {
 
         // Same values should have same hashes
         assert_eq!(get_hash(&Value::Int(42)), get_hash(&Value::Int(42)));
-        assert_eq!(get_hash(&Value::Float(3.14)), get_hash(&Value::Float(3.14)));
+        assert_eq!(
+            get_hash(&Value::Float(std::f64::consts::PI)),
+            get_hash(&Value::Float(std::f64::consts::PI))
+        );
         assert_eq!(
             get_hash(&Value::String("hello".into())),
             get_hash(&Value::String("hello".into()))
@@ -974,7 +1041,10 @@ mod tests {
 
         // Different values should have different hashes
         assert_ne!(get_hash(&Value::Int(42)), get_hash(&Value::Int(43)));
-        assert_ne!(get_hash(&Value::Float(3.14)), get_hash(&Value::Float(3.15)));
+        assert_ne!(
+            get_hash(&Value::Float(std::f64::consts::PI)),
+            get_hash(&Value::Float(3.15))
+        );
         assert_ne!(
             get_hash(&Value::String("hello".into())),
             get_hash(&Value::String("world".into()))
@@ -1006,7 +1076,7 @@ mod tests {
     #[test]
     fn test_value_display() {
         assert_eq!(Value::Int(42).to_string(), "42");
-        assert_eq!(Value::Float(3.14).to_string(), "3.14");
+        assert_eq!(Value::Float(2.5).to_string(), "2.5");
         assert_eq!(Value::String("hello".into()).to_string(), "hello");
         assert_eq!(Value::Null.to_string(), "null");
     }

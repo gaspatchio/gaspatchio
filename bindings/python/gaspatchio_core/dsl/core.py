@@ -10,6 +10,11 @@ from typing import Any, Callable, Dict, List, Tuple
 import numpy as np
 import polars as pl
 
+# ADDED: Import custom functions
+from gaspatchio_core.functions import fill_series as core_fill_series
+from gaspatchio_core.functions import floor as core_floor
+from gaspatchio_core.typing import IntoExprColumn
+
 
 # Define custom warning class
 class PerformanceWarning(Warning):
@@ -676,6 +681,23 @@ class ActuarialFrame:
         """
         result = func(self, *args, **kwargs)
         return result if result is not None else self
+
+    # ADDED: Wrapper methods for custom functions
+    def fill_series(
+        self, expr: IntoExprColumn, start: int = 0, increment: int = 1
+    ) -> ExpressionProxy:
+        """Applies the fill_series function to an expression."""
+        polars_expr = self._convert_to_expr(expr)
+        result_expr = core_fill_series(polars_expr, start=start, increment=increment)
+        return ExpressionProxy(result_expr, self)
+
+    def floor(
+        self, expr: IntoExprColumn, divisor: int = 1, default: int = 0
+    ) -> ExpressionProxy:
+        """Applies the floor function to an expression."""
+        polars_expr = self._convert_to_expr(expr)
+        result_expr = core_floor(polars_expr, divisor=divisor, default=default)
+        return ExpressionProxy(result_expr, self)
 
 
 def run_model(model_func: Callable, df: ActuarialFrame) -> ActuarialFrame:
