@@ -8,7 +8,6 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use log::debug;
 use once_cell::sync::Lazy;
-use polars::chunked_array::builder::ListPrimitiveChunkedBuilder;
 use polars::datatypes::PlSmallStr;
 use polars::series::Series;
 use polars_core::utils::concat_df;
@@ -382,8 +381,13 @@ fn transform_wide_to_long(
 pub enum RegistryError {
     #[error("Table '{0}' already exists in the registry.")]
     TableAlreadyExists(String),
-    #[error("Table '{0}' not found in the registry.")]
-    TableNotFound(String),
+    #[error(
+        "Table '{table_name}' not found in the registry. Available tables: {available_tables:?}"
+    )]
+    TableNotFound {
+        table_name: String,
+        available_tables: Vec<String>,
+    },
     #[error("Failed to build lookup index for table '{0}': {1}")]
     IndexBuildFailed(String, PolarsError),
     #[error("Lookup failed for table '{0}': {1}")]
@@ -480,9 +484,12 @@ impl TableRegistry {
     /// `Ok(Some(Value))` if the key is found, `Ok(None)` if the key is not found,
     /// or `Err(RegistryError)` if the table doesn't exist or the key length is incorrect.
     pub fn lookup(&self, name: &str, key: &[Value]) -> Result<Option<&Value>, RegistryError> {
-        let lookup_index = self
-            .get_lookup_index(name)
-            .ok_or_else(|| RegistryError::TableNotFound(name.to_string()))?;
+        let lookup_index =
+            self.get_lookup_index(name)
+                .ok_or_else(|| RegistryError::TableNotFound {
+                    table_name: name.to_string(),
+                    available_tables: self.lookup_indices.keys().cloned().collect(),
+                })?;
 
         if key.len() != lookup_index.keys.len() {
             return Err(RegistryError::KeyLengthMismatch(
@@ -499,9 +506,12 @@ impl TableRegistry {
     ///
     /// This is a convenience wrapper around `get_lookup_index` and `lookup`.
     pub fn lookup_scalar(&self, name: &str, key: &[Value]) -> Result<Value, RegistryError> {
-        let lookup_index = self
-            .get_lookup_index(name)
-            .ok_or_else(|| RegistryError::TableNotFound(name.to_string()))?;
+        let lookup_index =
+            self.get_lookup_index(name)
+                .ok_or_else(|| RegistryError::TableNotFound {
+                    table_name: name.to_string(),
+                    available_tables: self.lookup_indices.keys().cloned().collect(),
+                })?;
 
         if key.len() != lookup_index.keys.len() {
             return Err(RegistryError::KeyLengthMismatch(
@@ -530,9 +540,12 @@ impl TableRegistry {
     /// `Ok(Series)` containing the lookup results (scalar or List Series),
     /// or `Err(RegistryError)` if the table doesn't exist or a PolarsError occurs during lookup.
     pub fn lookup_vector(&self, name: &str, keys: &[&Series]) -> Result<Series, RegistryError> {
-        let lookup_index = self
-            .get_lookup_index(name)
-            .ok_or_else(|| RegistryError::TableNotFound(name.to_string()))?;
+        let lookup_index =
+            self.get_lookup_index(name)
+                .ok_or_else(|| RegistryError::TableNotFound {
+                    table_name: name.to_string(),
+                    available_tables: self.lookup_indices.keys().cloned().collect(),
+                })?;
 
         if keys.len() != lookup_index.keys.len() {
             return Err(RegistryError::KeyLengthMismatch(
@@ -891,9 +904,26 @@ pub fn perform_lookup(table_name: &str, keys: &[&Series]) -> PolarsResult<Series
         registry.lookup_indices.len(),
         registry.lookup_indices.keys().collect::<Vec<_>>()
     );
-    registry.lookup_vector(table_name, keys).map_err(|e| {
-        PolarsError::ComputeError(format!("Lookup failed for table '{}': {}", table_name, e).into())
-    })
+    let result = registry.lookup_vector(table_name, keys).map_err(|e| {
+        // Convert RegistryError to PolarsError, preserving the detailed message
+        match e {
+            RegistryError::TableNotFound {
+                table_name,
+                available_tables,
+            } => PolarsError::ComputeError(
+                format!(
+                    "Lookup failed: Table '{}' not found in the registry. Available tables: {:?}",
+                    table_name, available_tables
+                )
+                .into(),
+            ),
+            other_err => PolarsError::ComputeError(
+                format!("Lookup failed for table '{}': {}", table_name, other_err).into(),
+            ),
+        }
+    });
+    debug!("Lookup completed for table '{}'.", table_name);
+    result
 }
 
 // Kwargs struct for the assumption lookup plugin

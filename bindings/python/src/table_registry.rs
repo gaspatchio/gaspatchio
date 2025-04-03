@@ -175,14 +175,3 @@ impl PyTableRegistry {
 fn registry_error_to_py_err(e: RegistryError) -> PyErr {
     PyValueError::new_err(e.to_string())
 }
-
-// Make sure this module is added to lib.rs
-pub fn register_registry_module(
-    py: Python<'_>,
-    parent_module: &Bound<'_, PyModule>,
-) -> PyResult<()> {
-    let registry_module = PyModule::new(py, "registry")?;
-    registry_module.add_class::<PyTableRegistry>()?;
-    parent_module.add_submodule(&registry_module)?;
-    Ok(())
-}

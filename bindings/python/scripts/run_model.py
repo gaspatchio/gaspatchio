@@ -92,7 +92,7 @@ for logger_name in ["gaspatchio_core", "gaspatchio_core.lookup"]:
 # Now import the modules that might use Rust logging
 
 
-def load_model_from_path(model_path):
+def load_model_from_path(model_path, function_name="life_model"):
     """Dynamically load a model function from a Python file"""
     model_path = Path(model_path)
     if not model_path.exists():
@@ -102,24 +102,19 @@ def load_model_from_path(model_path):
     model_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(model_module)
 
-    # Try to find a model function in the module
-    model_functions = []
-    for attr_name in dir(model_module):
-        if attr_name.startswith("__"):
-            continue
-        attr = getattr(model_module, attr_name)
-        if (
-            callable(attr)
-            and hasattr(attr, "__code__")
-            and attr.__code__.co_argcount in [1, 2]
-        ):
-            model_functions.append(attr)
-
-    if not model_functions:
-        raise ValueError(f"No suitable model function found in {model_path}")
-
-    # Use the first model function found
-    return model_functions[0]
+    # Look specifically for the specified function name
+    if hasattr(model_module, function_name) and callable(
+        getattr(model_module, function_name)
+    ):
+        model_func = getattr(model_module, function_name)
+        # Optional: Add a check for argument count if needed
+        # if hasattr(model_func, '__code__') and model_func.__code__.co_argcount in [1, 2]:
+        #     return model_func
+        # else:
+        #     raise ValueError(f"Function '{function_name}' found but has incorrect signature.")
+        return model_func
+    else:
+        raise ValueError(f"No function named '{function_name}' found in {model_path}")
 
 
 def transpose_single_policy_result(result_df):
@@ -220,6 +215,13 @@ def main(
             help="Output Parquet file path (optional)",
         ),
     ] = None,
+    model_function_name: Annotated[
+        str,
+        typer.Option(
+            "--model-function-name",
+            help="Name of the model function to run within the model file",
+        ),
+    ] = "life_model",
 ):
     # Calculate absolute paths
     directory_path = Path(directory)
@@ -227,7 +229,7 @@ def main(
     model_points_path = directory_path / model_points_file
 
     logger.info("Loading model from {}", model_path)
-    model_func = load_model_from_path(model_path)
+    model_func = load_model_from_path(model_path, model_function_name)
 
     logger.info("Reading model points data from {}", model_points_path)
     start = time.time()
@@ -343,6 +345,13 @@ def compare_modes(
             help="Model points file (if not 'model-points.parquet')",
         ),
     ] = "model-points.parquet",
+    model_function_name: Annotated[
+        str,
+        typer.Option(
+            "--model-function-name",
+            help="Name of the model function to run within the model file",
+        ),
+    ] = "life_model",
 ):
     """Compare debug and optimize modes using a dataset from specified directory"""
     # Calculate absolute paths
@@ -351,7 +360,7 @@ def compare_modes(
     model_points_path = directory_path / model_points_file
 
     logger.info("Loading model from {}", model_path)
-    model_func = load_model_from_path(model_path)
+    model_func = load_model_from_path(model_path, model_function_name)
 
     # Read data from parquet file
     print(f"Reading model points from {model_points_path}...")
@@ -414,11 +423,15 @@ if __name__ == "__main__":
             if os.path.exists(sys.argv[1]):
                 # Call main directly
                 policy_id_arg = None
+                model_func_name_arg = "life_model"
                 # Check if policy-id was provided in command line
                 for i, arg in enumerate(sys.argv):
                     if arg in ["--policy-id", "-i"] and i + 1 < len(sys.argv):
                         policy_id_arg = sys.argv[i + 1]
-                        break
+                    # Check if model-function-name was provided
+                    if arg == "--model-function-name" and i + 1 < len(sys.argv):
+                        model_func_name_arg = sys.argv[i + 1]
+                # No need to break, continue checking other args
 
                 main(
                     directory=sys.argv[1],
@@ -426,6 +439,7 @@ if __name__ == "__main__":
                     model_points_file="model-points.parquet",
                     mode="debug",
                     policy_id=policy_id_arg,
+                    model_function_name=model_func_name_arg,
                 )
                 sys.exit(0)
     except Exception as e:

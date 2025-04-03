@@ -1,5 +1,8 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use gaspatchio_core_lib::index::{get_registry, register_table, TransformSpec, TransformType};
+use gaspatchio_core_lib::index::{
+    get_registry, perform_lookup, register_table, reset_global_registry, TransformSpec,
+    TransformType,
+};
 use polars::prelude::*;
 use std::fs::File;
 use std::path::Path;
@@ -80,8 +83,8 @@ fn setup_registry() -> PolarsResult<()> {
     register_table(
         "lapse",
         df_lapse,
-        vec!["policy_duration".to_string()], // Corrected key name based on previous benchmark code
-        "lapse_rate", // Corrected value name based on previous benchmark code
+        vec!["policy duration".to_string()], // Corrected key name based on previous benchmark code
+        "lapse rate", // Corrected value name based on previous benchmark code
         None,         // No transform spec needed for lapse
     )
     .map_err(|e| PolarsError::ComputeError(format!("Failed to register lapse: {}", e).into()))?;
@@ -91,7 +94,8 @@ fn setup_registry() -> PolarsResult<()> {
 
 // Benchmark function using the standard ~100 row parquet file
 fn benchmark_vector_lookups_100(c: &mut Criterion) {
-    // Setup: Load data and register tables (outside the benchmark loop)
+    reset_global_registry(); // Reset registry before setup
+                             // Setup: Load data and register tables (outside the benchmark loop)
     if let Err(e) = setup_registry() {
         eprintln!("Failed to set up benchmark registry: {}", e);
         return;
@@ -119,13 +123,6 @@ fn benchmark_vector_lookups_100(c: &mut Criterion) {
             return;
         }
     };
-    let duration_key_col = match df_model_points.column("policy_duration") {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Failed to get 'policy_duration' column from parquet: {}", e);
-            return;
-        }
-    };
 
     // Use the columns directly (assuming List<f64> and String from parquet)
     let mortality_keys: Vec<&Series> = vec![
@@ -136,9 +133,6 @@ fn benchmark_vector_lookups_100(c: &mut Criterion) {
             .as_series()
             .expect("Failed to convert gender_smoking_key_col (&Column) to &Series"),
     ];
-    let lapse_keys: Vec<&Series> = vec![duration_key_col
-        .as_series()
-        .expect("Failed to convert duration_key_col (&Column) to &Series")];
 
     // Get a snapshot of the registry
     let registry = get_registry();
@@ -156,24 +150,14 @@ fn benchmark_vector_lookups_100(c: &mut Criterion) {
         })
     });
 
-    // Benchmark lapse lookup
-    group.bench_function("lapse_lookup_parquet_keys_100", |b| {
-        b.iter(|| {
-            let result = registry.lookup_vector("lapse", black_box(&lapse_keys));
-            if let Err(e) = &result {
-                eprintln!("100 Lapse lookup failed during benchmark: {:?}", e);
-            }
-            black_box(result)
-        })
-    });
-
     group.finish();
 }
 
 // Benchmark function using the 100k row parquet file
 fn benchmark_vector_lookups_100k(c: &mut Criterion) {
-    // Setup: Load data and register tables (outside the benchmark loop)
-    // Note: We still register the same small assumption tables
+    reset_global_registry(); // Reset registry before setup
+                             // Setup: Load data and register tables (outside the benchmark loop)
+                             // Note: We still register the same small assumption tables
     if let Err(e) = setup_registry() {
         eprintln!("Failed to set up benchmark registry for 100k: {}", e);
         return;
@@ -208,16 +192,6 @@ fn benchmark_vector_lookups_100k(c: &mut Criterion) {
             return;
         }
     };
-    let duration_key_col = match df_model_points.column("policy_duration") {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!(
-                "Failed to get 'policy_duration' column from 100k parquet: {}",
-                e
-            );
-            return;
-        }
-    };
 
     // Use the columns directly (assuming List<f64> and String from parquet)
     let mortality_keys: Vec<&Series> = vec![
@@ -228,9 +202,6 @@ fn benchmark_vector_lookups_100k(c: &mut Criterion) {
             .as_series()
             .expect("Failed to convert 100k gender_smoking_key_col (&Column) to &Series"),
     ];
-    let lapse_keys: Vec<&Series> = vec![duration_key_col
-        .as_series()
-        .expect("Failed to convert 100k duration_key_col (&Column) to &Series")];
 
     // Get a snapshot of the registry
     let registry = get_registry();
@@ -248,12 +219,74 @@ fn benchmark_vector_lookups_100k(c: &mut Criterion) {
         })
     });
 
-    // Benchmark lapse lookup
-    group.bench_function("lapse_lookup_parquet_keys_100k", |b| {
+    group.finish();
+}
+
+// Benchmark function using perform_lookup with the standard ~100 row parquet file
+fn benchmark_perform_lookup_100(c: &mut Criterion) {
+    reset_global_registry(); // Reset registry before setup
+                             // Setup: Load data and register tables (outside the benchmark loop)
+    if let Err(e) = setup_registry() {
+        eprintln!(
+            "Failed to set up benchmark registry for perform_lookup 100: {}",
+            e
+        );
+        return;
+    }
+    let df_model_points = match load_model_points() {
+        Ok(df) => df,
+        Err(e) => {
+            eprintln!(
+                "Failed to load key source parquet for perform_lookup benchmark: {}",
+                e
+            );
+            return;
+        }
+    };
+
+    // Extract key Columns needed for lookups (Assuming names exist in parquet)
+    let age_key_col = match df_model_points.column("age-last") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "Failed to get 'age-last' column from parquet (perform_lookup): {}",
+                e
+            );
+            return;
+        }
+    };
+    let gender_smoking_key_col = match df_model_points.column("gender_smoking") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "Failed to get 'gender_smoking' column from parquet (perform_lookup): {}",
+                e
+            );
+            return;
+        }
+    };
+
+    // Use the columns directly (assuming correct types from parquet)
+    let mortality_keys: Vec<&Series> = vec![
+        age_key_col
+            .as_series()
+            .expect("Failed to convert age_key_col (&Column) to &Series (perform_lookup)"),
+        gender_smoking_key_col.as_series().expect(
+            "Failed to convert gender_smoking_key_col (&Column) to &Series (perform_lookup)",
+        ),
+    ];
+
+    // Note: perform_lookup accesses the global registry internally via get_registry()
+
+    let mut group = c.benchmark_group("perform_lookup_100");
+
+    // Benchmark mortality lookup using perform_lookup
+    group.bench_function("mortality_perform_lookup_100", |b| {
         b.iter(|| {
-            let result = registry.lookup_vector("lapse", black_box(&lapse_keys));
+            // Call the core perform_lookup function
+            let result = perform_lookup("mortality", black_box(&mortality_keys));
             if let Err(e) = &result {
-                eprintln!("100k Lapse lookup failed during benchmark: {:?}", e);
+                eprintln!("Mortality perform_lookup failed during benchmark: {:?}", e);
             }
             black_box(result)
         })
@@ -265,6 +298,7 @@ fn benchmark_vector_lookups_100k(c: &mut Criterion) {
 criterion_group!(
     benches,
     benchmark_vector_lookups_100,
-    benchmark_vector_lookups_100k
+    //benchmark_vector_lookups_100k,
+    benchmark_perform_lookup_100
 );
 criterion_main!(benches);
