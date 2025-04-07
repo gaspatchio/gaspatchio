@@ -13,6 +13,8 @@ import polars as pl
 # ADDED: Import custom functions
 from gaspatchio_core.functions import fill_series as core_fill_series
 from gaspatchio_core.functions import floor as core_floor
+from gaspatchio_core.functions import round as core_round
+from gaspatchio_core.functions import round_to_int as core_round_to_int
 from gaspatchio_core.typing import IntoExprColumn
 
 
@@ -697,6 +699,18 @@ class ActuarialFrame:
         """Applies the floor function to an expression."""
         polars_expr = self._convert_to_expr(expr)
         result_expr = core_floor(polars_expr, divisor=divisor, default=default)
+        return ExpressionProxy(result_expr, self)
+
+    def round(self, expr: IntoExprColumn, decimal_places: int = 0) -> ExpressionProxy:
+        """Applies the round function to an expression."""
+        polars_expr = self._convert_to_expr(expr)
+        result_expr = core_round(polars_expr, decimal_places=decimal_places)
+        return ExpressionProxy(result_expr, self)
+
+    def round_to_int(self, expr: IntoExprColumn) -> ExpressionProxy:
+        """Applies the round_to_int function to an expression."""
+        polars_expr = self._convert_to_expr(expr)
+        result_expr = core_round_to_int(polars_expr)
         return ExpressionProxy(result_expr, self)
 
 

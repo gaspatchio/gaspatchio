@@ -1,3 +1,4 @@
+use dashmap::DashMap;
 use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -10,6 +11,7 @@ use once_cell::sync::Lazy;
 use polars::datatypes::PlSmallStr;
 use polars::series::Series;
 use polars_core::utils::concat_df;
+use rayon::prelude::*;
 use std::sync::Mutex;
 use tracing::{debug, error, instrument, span, trace, warn, Level};
 
@@ -133,8 +135,8 @@ pub struct LookupIndex {
     pub value_column: String,
     /// Data type of the value column
     pub value_dtype: DataType,
-    /// The actual lookup table
-    pub index: HashMap<Vec<Value>, Value>,
+    /// The actual lookup table using DashMap for concurrency
+    pub index: DashMap<Vec<Value>, Value>,
 }
 
 impl LookupIndex {
@@ -144,16 +146,17 @@ impl LookupIndex {
             keys,
             value_column,
             value_dtype,
-            index: HashMap::new(),
+            index: DashMap::new(),
         }
     }
 
     /// Looks up a value using the given key combination.
-    pub fn lookup(&self, key: &[Value]) -> Option<&Value> {
+    /// Returns an owned Option<Value> due to DashMap's access patterns.
+    pub fn lookup(&self, key: &[Value]) -> Option<Value> {
         if key.len() != self.keys.len() {
             return None;
         }
-        self.index.get(key)
+        self.index.get(key).map(|guard| guard.value().clone())
     }
 
     /// Returns the number of entries in the index.
@@ -315,8 +318,8 @@ fn build_lookup_index(
     df: &DataFrame,
     key_columns: &[String],
     value_column: &str,
-) -> PolarsResult<(HashMap<Vec<Value>, Value>, DataType)> {
-    let mut index = HashMap::new();
+) -> PolarsResult<(DashMap<Vec<Value>, Value>, DataType)> {
+    let index = DashMap::new();
     // Fetch value Column
     let value_col = df.column(value_column)?;
     let value_dtype = value_col.dtype().clone();
@@ -503,7 +506,7 @@ impl TableRegistry {
     ///
     /// `Ok(Some(Value))` if the key is found, `Ok(None)` if the key is not found,
     /// or `Err(RegistryError)` if the table doesn't exist or the key length is incorrect.
-    pub fn lookup(&self, name: &str, key: &[Value]) -> Result<Option<&Value>, RegistryError> {
+    pub fn lookup(&self, name: &str, key: &[Value]) -> Result<Option<Value>, RegistryError> {
         let lookup_index =
             self.get_lookup_index(name)
                 .ok_or_else(|| RegistryError::TableNotFound {
@@ -541,7 +544,7 @@ impl TableRegistry {
             ));
         }
 
-        Ok(lookup_index.lookup(key).cloned().unwrap_or(Value::Null))
+        Ok(lookup_index.lookup(key).unwrap_or(Value::Null))
     }
 
     /// Performs a vector-aware lookup using a pre-built index.
@@ -681,85 +684,105 @@ fn execute_vector_lookup(
         ));
     }
 
-    let first_vector_series = keys[*vector_indices.first().unwrap()];
-    let mut series_list: Vec<Series> = Vec::with_capacity(output_len); // Vec to hold inner series
+    let first_vector_series = keys[*vector_indices.first().unwrap()]; // Reference outside the parallel loop
 
-    for i in 0..output_len {
-        let row_span = span!(Level::DEBUG, "vector_lookup_row", row = i);
-        let _enter = row_span.enter();
-        // Outer loop (rows)
-        let inner_len = get_inner_list_len(first_vector_series, i)?;
-        debug!("Processing row with inner_len: {}", inner_len);
+    // ---- START: Parallelized loop ----
+    // Convert the range into a parallel iterator and map over it.
+    // Each iteration (for a given 'i') will produce a PolarsResult<Series>.
+    let series_list_results: PolarsResult<Vec<Series>> = (0..output_len)
+        .into_par_iter() // Use Rayon's parallel iterator
+        .map(|i| {
+            // Process each row 'i' in parallel
+            // --- Start of closure: Contains the logic from the original loop body ---
+            // Note: Error handling inside the closure uses '?' which will bubble up
+            // to the collect step.
 
-        let inner_series = if inner_len == 0 {
-            // Create an empty Series if the inner list is empty
-            trace!("Inner list is empty, creating empty series");
-            Series::new_empty("inner".into(), &lookup_index.value_dtype)
-        } else {
-            let mut inner_results: Vec<Value> = Vec::with_capacity(inner_len);
-            for element_idx in 0..inner_len {
-                let element_span =
-                    span!(Level::TRACE, "vector_lookup_element", element = element_idx);
-                let _enter_elem = element_span.enter();
-                // Inner loop (elements)
-                let mut current_key = Vec::with_capacity(keys.len());
-                let mut key_contains_null_or_error = false;
+            // It's often better to avoid complex logging spans inside tight parallel loops
+            // due to potential overhead/contention, but let's keep it for now.
+            let row_span = span!(Level::DEBUG, "vector_lookup_row", row = i);
+            let _enter = row_span.enter();
 
-                // Construct key
-                for (key_idx, series) in keys.iter().enumerate() {
-                    let value_result = if vector_indices.contains(&key_idx) {
-                        // Vector key: use row `i` and element `element_idx`
-                        extract_value_from_list_series(series, i, element_idx)
-                    } else {
-                        // FIXED: For scalar keys, get the appropriate row value based on length
-                        // If series.len() == 1, use row 0 (broadcasting)
-                        // Otherwise, use row `i`
-                        let scalar_idx = if series.len() == 1 { 0 } else { i };
-                        extract_value_from_series(series, scalar_idx)
-                    };
-                    match value_result {
-                        Ok(Value::Null) => {
-                            current_key.push(Value::Null);
-                            key_contains_null_or_error = true;
-                        }
-                        Ok(val) => current_key.push(val),
-                        Err(_) => {
-                            current_key.push(Value::Null);
-                            key_contains_null_or_error = true;
+            let inner_len = get_inner_list_len(first_vector_series, i)?;
+            // Optional: Add a trace/debug log here if needed, outside the inner loop
+            // trace!("Processing row {} with inner_len: {}", i, inner_len);
+
+            let inner_series = if inner_len == 0 {
+                trace!("Inner list is empty for row {}, creating empty series", i);
+                Series::new_empty("inner".into(), &lookup_index.value_dtype)
+            } else {
+                let mut inner_results: Vec<Value> = Vec::with_capacity(inner_len);
+                for element_idx in 0..inner_len {
+                    // Spans inside the inner loop might add significant overhead in parallel execution
+                    // Consider removing or sampling if performance is critical.
+                    // let element_span = span!(Level::TRACE, "vector_lookup_element", element = element_idx);
+                    // let _enter_elem = element_span.enter();
+
+                    let mut current_key = Vec::with_capacity(keys.len());
+                    let mut key_contains_null_or_error = false;
+
+                    // Construct key
+                    for (key_idx, series) in keys.iter().enumerate() {
+                        let value_result = if vector_indices.contains(&key_idx) {
+                            extract_value_from_list_series(series, i, element_idx)
+                        } else {
+                            let scalar_idx = if series.len() == 1 { 0 } else { i };
+                            extract_value_from_series(series, scalar_idx)
+                        };
+                        match value_result {
+                            Ok(Value::Null) => {
+                                current_key.push(Value::Null);
+                                key_contains_null_or_error = true;
+                            }
+                            Ok(val) => current_key.push(val),
+                            Err(_) => {
+                                current_key.push(Value::Null);
+                                key_contains_null_or_error = true;
+                                // Optionally log the error here if needed, but be mindful of performance
+                            }
                         }
                     }
+
+                    // trace!(?current_key, key_contains_null = key_contains_null_or_error, "Constructed key for element");
+
+                    // Perform lookup
+                    let result_value = if key_contains_null_or_error {
+                        // trace!("Key contains null or error for row {}, element {}, defaulting result to Null", i, element_idx);
+                        Value::Null
+                    } else {
+                        lookup_index.lookup(&current_key).unwrap_or(Value::Null)
+                    };
+                    // trace!(?result_value, "Lookup result for element");
+                    inner_results.push(result_value);
                 }
-
+                // Create Series from results for this inner list
                 trace!(
-                    ?current_key,
-                    key_contains_null = key_contains_null_or_error,
-                    "Constructed key for element"
+                    result_count = inner_results.len(),
+                    "Creating inner series for row {}",
+                    i
                 );
+                create_series_from_values(
+                    &inner_results,
+                    "inner".into(),
+                    &lookup_index.value_dtype,
+                )?
+            };
+            Ok(inner_series) // Return Ok(inner_series) from the closure
+                             // --- End of closure ---
+        })
+        .collect(); // Collect the results. This handles the Results from the map.
+                    // If any map operation returned Err, `collect()` will return that Err.
+                    // Otherwise, it returns Ok(Vec<Series>).
 
-                // Perform lookup
-                let result_value = if key_contains_null_or_error {
-                    trace!("Key contains null or error, defaulting result to Null");
-                    Value::Null
-                } else {
-                    lookup_index
-                        .lookup(&current_key)
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                };
-                trace!(?result_value, "Lookup result for element");
-                inner_results.push(result_value);
-            }
-            // Create Series from results for this inner list
-            trace!(
-                result_count = inner_results.len(),
-                "Creating inner series from results"
-            );
-            create_series_from_values(&inner_results, "inner".into(), &lookup_index.value_dtype)?
-        };
-        series_list.push(inner_series); // Add the inner series to our Vec
-    }
+    // ---- END: Parallelized loop ----
 
-    // Build ListChunked from the Vec<Series>
+    // Check the result of the parallel collection
+    let series_list = series_list_results?; // Propagate error if collection failed
+
+    // Build ListChunked from the Vec<Series> (collected in parallel)
+    debug!(
+        "Building final ListChunked from {} inner series",
+        series_list.len()
+    );
     let list_chunked = ListChunked::from_iter(series_list.into_iter().map(Some))
         .with_name(lookup_index.value_column.as_str().into());
 
@@ -810,10 +833,7 @@ fn execute_scalar_lookup(lookup_index: &LookupIndex, keys: &[&Series]) -> Polars
         trace!(key_part = ?key_values.last().unwrap(), "Added scalar key part");
     }
     debug!("Constructed scalar key: {:?}", key_values);
-    let result_value = lookup_index
-        .lookup(&key_values)
-        .cloned()
-        .unwrap_or(Value::Null);
+    let result_value = lookup_index.lookup(&key_values).unwrap_or(Value::Null);
     create_series_from_values(
         &[result_value],
         lookup_index.value_column.as_str().into(),
@@ -1064,8 +1084,9 @@ mod tests {
         let value = Value::Float(0.001);
         index.index.insert(key.clone(), value.clone());
 
-        // Test lookup
-        assert_eq!(index.lookup(&key), Some(&value));
+        // Test lookup - Assert equality with the owned value, not a reference
+        assert_eq!(index.lookup(&key), Some(value)); // Removed the '&' before value
+                                                     // Test lookup for a key with wrong length (should still be None)
         assert_eq!(index.lookup(&[Value::Int(35), Value::Float(0.001)]), None);
 
         // Test size methods
@@ -1119,10 +1140,15 @@ mod tests {
         )?;
         let (index_map, _dtype) = build_lookup_index(&df, &["id".to_string()], "value")?;
         assert_eq!(index_map.len(), 3);
-        assert_eq!(
-            index_map.get(&vec![Value::Int(1)]),
-            Some(&Value::String("d".into()))
+        let key = vec![Value::Int(1)];
+        let expected_value = Value::String("d".into());
+        let result_guard = index_map.get(&key);
+        assert!(
+            result_guard.is_some(),
+            "Key {:?} not found in index_map",
+            key
         );
+        assert_eq!(result_guard.unwrap().value().clone(), expected_value);
         Ok(())
     }
 
@@ -1137,10 +1163,15 @@ mod tests {
         let value_col = "value";
         let (index_map, _dtype) = build_lookup_index(&df, &key_cols, value_col)?;
         assert_eq!(index_map.len(), 3);
-        assert_eq!(
-            index_map.get(&vec![Value::String("A".into()), Value::Int(1)]),
-            Some(&Value::Float(40.4))
+        let key = vec![Value::String("A".into()), Value::Int(1)];
+        let expected_value = Value::Float(40.4);
+        let result_guard = index_map.get(&key);
+        assert!(
+            result_guard.is_some(),
+            "Key {:?} not found in index_map",
+            key
         );
+        assert_eq!(result_guard.unwrap().value().clone(), expected_value);
         Ok(())
     }
 
@@ -1155,10 +1186,15 @@ mod tests {
         let value_col = "value";
         let (index_map, _dtype) = build_lookup_index(&df, &key_cols, value_col)?;
         assert_eq!(index_map.len(), 3);
-        assert_eq!(
-            index_map.get(&vec![Value::String("A".into()), Value::Int(1)]),
-            Some(&Value::Null)
+        let key = vec![Value::String("A".into()), Value::Int(1)];
+        let expected_value = Value::Null;
+        let result_guard = index_map.get(&key);
+        assert!(
+            result_guard.is_some(),
+            "Key {:?} not found in index_map",
+            key
         );
+        assert_eq!(result_guard.unwrap().value().clone(), expected_value);
         Ok(())
     }
 
@@ -1173,10 +1209,15 @@ mod tests {
         let value_col = "mortality_rate";
         let (index_map, _dtype) = build_lookup_index(&df_mortality, &key_cols, value_col)?;
         assert_eq!(index_map.len(), 12);
-        assert_eq!(
-            index_map.get(&vec![Value::Int(31), Value::String("MNS".into())]),
-            Some(&Value::Float(0.0012))
+        let key = vec![Value::Int(31), Value::String("MNS".into())];
+        let expected_value = Value::Float(0.0012);
+        let result_guard = index_map.get(&key);
+        assert!(
+            result_guard.is_some(),
+            "Key {:?} not found in index_map",
+            key
         );
+        assert_eq!(result_guard.unwrap().value().clone(), expected_value);
         Ok(())
     }
 
@@ -1190,10 +1231,15 @@ mod tests {
         let value_col = "lapse_rate";
         let (index_map, _dtype) = build_lookup_index(&df_lapse, &key_cols, value_col)?;
         assert_eq!(index_map.len(), 24);
-        assert_eq!(
-            index_map.get(&vec![Value::Int(1)]),
-            Some(&Value::Float(0.03))
+        let key = vec![Value::Int(1)];
+        let expected_value = Value::Float(0.03);
+        let result_guard = index_map.get(&key);
+        assert!(
+            result_guard.is_some(),
+            "Key {:?} not found in index_map",
+            key
         );
+        assert_eq!(result_guard.unwrap().value().clone(), expected_value);
         Ok(())
     }
 

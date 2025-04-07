@@ -31,6 +31,18 @@ fn load_model_points_100k() -> PolarsResult<DataFrame> {
     ParquetReader::new(file).finish()
 }
 
+// Helper function to load the 1k model points DataFrame from Parquet
+fn load_model_points_1k() -> PolarsResult<DataFrame> {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("benches/fixtures/age-last-smoking-1k.parquet"); // Assume this file exists
+    let file = File::open(&path).map_err(|e| {
+        PolarsError::ComputeError(
+            format!("Failed to open 1k key source parquet {:?}: {}", path, e).into(),
+        )
+    })?;
+    ParquetReader::new(file).finish()
+}
+
 // Helper function to load a DataFrame from a fixture CSV
 fn load_fixture_csv(filename: &str) -> PolarsResult<DataFrame> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -145,6 +157,72 @@ fn benchmark_vector_lookups_100(c: &mut Criterion) {
             let result = registry.lookup_vector("mortality", black_box(&mortality_keys));
             if let Err(e) = &result {
                 eprintln!("100 Mortality lookup failed during benchmark: {:?}", e);
+            }
+            black_box(result)
+        })
+    });
+
+    group.finish();
+}
+
+// Benchmark function using the 1k row parquet file
+fn benchmark_vector_lookups_1k(c: &mut Criterion) {
+    reset_global_registry(); // Reset registry before setup
+                             // Setup: Load data and register tables (outside the benchmark loop)
+                             // Note: We still register the same small assumption tables
+    if let Err(e) = setup_registry() {
+        eprintln!("Failed to set up benchmark registry for 1k: {}", e);
+        return;
+    }
+    let df_model_points = match load_model_points_1k() {
+        // Load 1k file
+        Ok(df) => df,
+        Err(e) => {
+            eprintln!("Failed to load 1k key source parquet for benchmark: {}", e);
+            return;
+        }
+    };
+
+    // Extract key Columns needed for lookups (Assuming names exist in parquet)
+    let age_key_col = match df_model_points.column("age-last") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Failed to get 'age-last' column from 1k parquet: {}", e);
+            return;
+        }
+    };
+    let gender_smoking_key_col = match df_model_points.column("gender_smoking") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "Failed to get 'gender_smoking' column from 1k parquet: {}",
+                e
+            );
+            return;
+        }
+    };
+
+    // Use the columns directly (assuming correct types from parquet)
+    let mortality_keys: Vec<&Series> = vec![
+        age_key_col
+            .as_series()
+            .expect("Failed to convert 1k age_key_col (&Column) to &Series"),
+        gender_smoking_key_col
+            .as_series()
+            .expect("Failed to convert 1k gender_smoking_key_col (&Column) to &Series"),
+    ];
+
+    // Get a snapshot of the registry
+    let registry = get_registry();
+
+    let mut group = c.benchmark_group("vector_lookups_parquet_keys_1k"); // New group name
+
+    // Benchmark mortality lookup
+    group.bench_function("mortality_lookup_parquet_keys_1k", |b| {
+        b.iter(|| {
+            let result = registry.lookup_vector("mortality", black_box(&mortality_keys));
+            if let Err(e) = &result {
+                eprintln!("1k Mortality lookup failed during benchmark: {:?}", e);
             }
             black_box(result)
         })
@@ -297,8 +375,9 @@ fn benchmark_perform_lookup_100(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    benchmark_vector_lookups_100,
+    //benchmark_vector_lookups_100,
+    benchmark_vector_lookups_1k,
     //benchmark_vector_lookups_100k,
-    benchmark_perform_lookup_100
+    //benchmark_perform_lookup_100
 );
 criterion_main!(benches);

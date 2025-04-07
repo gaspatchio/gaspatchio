@@ -80,3 +80,34 @@ def floor(expr: IntoExprColumn, divisor: int = 1, default: int = 0) -> pl.Expr:
         is_elementwise=True,
         kwargs={"divisor": divisor, "default": default},
     )
+
+
+def round(expr: IntoExprColumn, decimal_places: int = 0) -> pl.Expr:
+    # Handle ColumnProxy and ExpressionProxy
+    if hasattr(expr, "name") and hasattr(expr, "_parent"):
+        expr = pl.col(expr.name)
+    elif hasattr(expr, "_expr") and hasattr(expr, "_parent"):
+        expr = expr._expr
+
+    return register_plugin_function(
+        args=[expr],
+        plugin_path=LIB,
+        function_name="round",
+        is_elementwise=True,
+        kwargs={"decimal_places": decimal_places},
+    )
+
+
+def round_to_int(expr: IntoExprColumn) -> pl.Expr:
+    # Handle ColumnProxy and ExpressionProxy
+    if hasattr(expr, "name") and hasattr(expr, "_parent"):
+        expr = pl.col(expr.name)
+    elif hasattr(expr, "_expr") and hasattr(expr, "_parent"):
+        expr = expr._expr
+
+    return register_plugin_function(
+        args=[expr],
+        plugin_path=LIB,
+        function_name="round_to_int",
+        is_elementwise=True,
+    )
