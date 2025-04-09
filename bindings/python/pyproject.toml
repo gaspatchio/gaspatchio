@@ -1,0 +1,51 @@
+[project]
+name = "gaspatchio-core"
+version = "0.0.4"
+description = "Add your description here"
+readme = "README.md"
+authors = [{ name = "mrmattwright", email = "matt@sudden.co.nz" }]
+requires-python = ">=3.12"
+dependencies = [
+    "logfire>=3.4.0",
+    "loguru>=0.7.3",
+    "numpy>=1.24.0,<2.2",
+    "polars>=1.23.0",
+    "polars-u64-idx>=1.23.0",
+    "rich>=13.9.4",
+    "typer>=0.15.1",
+    "pyarrow>=15.0.0",
+    "pytest>=8.3.4",
+    "boto3>=1.37.2",
+    "numba>=0.59.0",
+    "datacompy>=0.16.0",
+]
+
+[project.scripts]
+gaspatchio-core = "gaspatchio_core:main"
+
+[project.optional-dependencies]
+pandas = ["polars-u64-idx>=1.23.0"]
+numpy = ["polars-u64-idx>=1.23.0"]
+pyarrow = ["polars-u64-idx>=1.23.0"]
+excel = ["polars-u64-idx>=1.23.0"]
+
+[tool.maturin]
+module-name = "gaspatchio_core._internal"
+python-packages = ["gaspatchio_core"]
+python-source = ""
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[dependency-groups]
+dev = ["ai-code-tracker>=0.1.1"]
+
+[tool.uv]
+# Rebuild package when any rust files change
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "cargo.toml" },
+    { file = "**/*.rs" },
+]
+config-settings = { "build-args" = "--profile=dev" }
