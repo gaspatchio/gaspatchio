@@ -16,6 +16,9 @@ Usage:
 
     # Run model for a single policy
     python -m gaspatchio-core.scripts.run_model <directory> --policy-id POLICY123
+
+    # Run model for a single policy and save transposed result to CSV
+    python -m gaspatchio-core.scripts.run_model <directory> --policy-id POLICY123 --output-csv result.csv
 """
 
 import importlib.util
@@ -27,6 +30,7 @@ from pathlib import Path
 
 import polars as pl
 import typer
+from datacompy import PolarsCompare
 from gaspatchio_core.dsl.core import (
     ActuarialFrame,
     run_model,
@@ -215,6 +219,14 @@ def main(
             help="Output Parquet file path (optional)",
         ),
     ] = None,
+    output_csv: Annotated[
+        str | None,  # Allow None
+        typer.Option(
+            "--output-csv",
+            "-c",
+            help="Output *directory* for single policy CSV (transposed). Saves as '{policy_id}_gs_output.csv' inside this directory. If --policy-id is used and this is not set, defaults to current directory. Mutually exclusive with --output-file when using --policy-id.",
+        ),
+    ] = None,
     model_function_name: Annotated[
         str,
         typer.Option(
@@ -222,6 +234,30 @@ def main(
             help="Name of the model function to run within the model file",
         ),
     ] = "life_model",
+    first_n: Annotated[
+        int,
+        typer.Option(
+            "--first-n",
+            "-f",
+            help="Number of first columns to display",
+        ),
+    ] = 5,
+    last_n: Annotated[
+        int,
+        typer.Option(
+            "--last-n",
+            "-l",
+            help="Number of last columns to display",
+        ),
+    ] = 1,
+    rows: Annotated[
+        int,
+        typer.Option(
+            "--rows",
+            "-r",
+            help="Number of rows to display",
+        ),
+    ] = 15,
 ):
     # Calculate absolute paths
     directory_path = Path(directory)
@@ -246,7 +282,7 @@ def main(
             raise ValueError(f"Policy ID must be an integer, got: {policy_id}")
 
         # Use policyholder_nr as the ID column
-        id_col = "policyholder_nr"
+        id_col = "policyholder nr"
         filtered_data = data.filter(pl.col(id_col) == policy_id_int)
 
         # Collect the LazyFrame to get its actual length
@@ -302,24 +338,121 @@ def main(
         result.write_parquet(output_path)
         logger.info("Results saved successfully.")
     else:
-        # Transpose the result if a single policy was requested and not saving to file
+        # Transpose the result if a single policy was requested
+        saved_to_file = False  # Track if we saved to any file (CSV or Parquet)
         if policy_id and len(result) == 1:
-            logger.info("Transposing single policy result for better visualization")
+            logger.info("Transposing single policy result")
             result = transpose_single_policy_result(result)
             logger.info("Transposed result has {} rows", len(result))
 
-            # Make sure all columns are displayed with good formatting
-            # Using Polars' built-in configuration to show all columns
-            pl.Config.set_tbl_width_chars(
-                1500
-            )  # Wide enough for all columns but not excessive
-            pl.Config.set_fmt_str_lengths(30)  # Reasonable string display length
-            pl.Config.set_tbl_cols(-1)  # Show all columns (-1 means no limit)
-            pl.Config.set_tbl_rows(15)  # Show more rows for better visibility
+            # Determine output path and save if needed
+            if output_csv:
+                # User specified an output directory for the CSV
+                if output_file:
+                    logger.error(
+                        "--output-file and --output-csv are mutually exclusive when using --policy-id"
+                    )
+                    raise typer.Exit(code=1)
+                output_dir = Path(output_csv)
+                output_filename = f"{policy_id}_gs_output.csv"
+                output_path = output_dir / output_filename
 
-        # Ensure all columns are displayed when printing to console
-        with pl.Config(tbl_cols=-1):
-            print(result)
+                # Ensure the directory exists
+                output_dir.mkdir(parents=True, exist_ok=True)
+
+                logger.info(
+                    "Writing transposed single policy result to specified directory as {}: {}",
+                    output_filename,
+                    output_path,
+                )
+                result.write_csv(output_path)
+                logger.info("Transposed result saved successfully to CSV.")
+                saved_to_file = True
+
+                # --- Reconciliation Step ---
+                try:
+                    source_data_filename = f"{policy_id}_data.csv"
+                    source_data_path = output_dir / source_data_filename
+                    logger.info(
+                        "Attempting to read source data for reconciliation: {}",
+                        source_data_path,
+                    )
+
+                    if not source_data_path.exists():
+                        logger.warning(
+                            "Source data file for reconciliation not found: {}. Skipping reconciliation.",
+                            source_data_path,
+                        )
+                    else:
+                        ss_df = pl.read_csv(
+                            source_data_path
+                        )  # Assuming source has a 'month' column
+                        model_df = result  # This is the transposed result, assuming it also has 'month'
+
+                        # Ensure 'month' column exists in both dataframes
+                        join_column = (
+                            "month"  # <-- Make sure this is the correct column name
+                        )
+                        if (
+                            join_column not in ss_df.columns
+                            or join_column not in model_df.columns
+                        ):
+                            logger.warning(
+                                f"Join column '{join_column}' not found in both source and model data. Skipping reconciliation."
+                            )
+                        else:
+                            logger.info("Running reconciliation comparison...")
+                            compare = PolarsCompare(
+                                ss_df,
+                                model_df,
+                                join_columns=join_column,
+                                abs_tol=0.0001,
+                                rel_tol=0,
+                                df1_name="source_data",
+                                df2_name="model_output",
+                            )
+
+                            recon_report = compare.report()
+
+                            recon_dir = output_dir
+                            recon_dir.mkdir(parents=True, exist_ok=True)
+                            recon_filename = f"{policy_id}_recon.md"
+                            recon_path = recon_dir / recon_filename
+
+                            logger.info(
+                                "Saving reconciliation report to: {}", recon_path
+                            )
+                            with open(recon_path, "w") as f:
+                                f.write(recon_report)
+                            logger.info("Reconciliation report saved successfully.")
+
+                except Exception as e:
+                    logger.error(
+                        "Error during reconciliation: {}. Reconciliation skipped.", e
+                    )
+                # --- End Reconciliation Step ---
+
+            # Print to console if we didn't save to a file
+            if not saved_to_file:
+                # Make sure all columns are displayed with good formatting
+                pl.Config.set_tbl_width_chars(1500)
+                pl.Config.set_fmt_str_lengths(30)
+                pl.Config.set_tbl_cols(-1)
+                pl.Config.set_tbl_rows(rows)
+                with pl.Config(tbl_cols=-1):
+                    print("Transposed Result:")
+                    first_cols = result.columns[:first_n]
+                    last_cols = result.columns[-last_n:]
+                    print(result.select(first_cols + last_cols))
+        elif (
+            not output_file
+        ):  # Only print original result if not single policy and not saving to Parquet
+            # Ensure all columns are displayed when printing to console
+            with pl.Config(tbl_cols=-1, tbl_rows=rows):
+                print("Result:")
+                first_cols = result.columns[:first_n]
+                last_cols = result.columns[-last_n:]
+                print(result.select(first_cols + last_cols))
 
 
 def compare_modes(

@@ -17,6 +17,7 @@ dependencies = [
     "pytest>=8.3.4",
     "boto3>=1.37.2",
     "numba>=0.59.0",
+    "datacompy>=0.16.0",
 ]
 
 [project.scripts]
