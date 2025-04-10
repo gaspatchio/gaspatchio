@@ -43,7 +43,6 @@ jobs:
       - name: Build maturin binary
         uses: PyO3/maturin-action@v1
         with:
-          args: develop --uv
           working-directory: bindings/python
       - name: Install Python dependencies
         run: uv sync
