@@ -1,7 +1,7 @@
 [project]
 name = "gaspatchio-core"
-version = "0.0.6"
-description = "Add your description here"
+version = "0.0.7"
+description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@sudden.co.nz" }]
 requires-python = ">=3.12"
