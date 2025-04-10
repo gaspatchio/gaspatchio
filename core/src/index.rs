@@ -1073,7 +1073,7 @@ mod tests {
 
     #[test]
     fn test_lookup_index_basic() {
-        let mut index = LookupIndex::new(
+        let index = LookupIndex::new(
             vec!["age".to_string()],
             "rate".to_string(),
             DataType::Float64, // Provide DataType
