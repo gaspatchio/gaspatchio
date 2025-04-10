@@ -54,14 +54,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build with Docker
         run: docker run --rm -v $(pwd):/io ghcr.io/pyo3/maturin build --release
+        working-directory: bindings/python
       - name: List build artifacts
         run: find . -name "*.whl" -o -name "*.tar.gz"
+        working-directory: bindings/python
       - name: Create dist directory
         run: mkdir -p dist
+        working-directory: bindings/python
       - name: Copy built wheels
         run: |
           cp $(find . -name "*.whl") dist/ || echo "No wheels found"
           cp $(find . -name "*.tar.gz") dist/ || echo "No source distributions found"
+        working-directory: bindings/python
       - name: Upload manylinux build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -86,6 +90,7 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
+          working-directory: bindings/python
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -111,6 +116,7 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
+          working-directory: bindings/python
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -126,6 +132,7 @@ jobs:
         with:
           command: sdist
           args: --out dist
+          working-directory: bindings/python
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
