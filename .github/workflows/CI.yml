@@ -27,7 +27,8 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Run cargo tests
-        run: cargo test --no-default-features
+        run: cargo test
+        working-directory: core
 
   python-tests:
     name: Python Tests
@@ -39,8 +40,12 @@ jobs:
           python-version: 3.x
       - name: Install uv
         run: pip install uv
+      - name: Install Python dependencies
+        run: uv sync
+        working-directory: bindings/python
       - name: Run Python tests
         run: uv run pytest
+        working-directory: bindings/python
 
   manylinux:
     name: Manylinux Build

@@ -358,7 +358,32 @@ class ActuarialFrame:
     """A DataFrame wrapper that captures operations while allowing direct Python execution"""
 
     def __init__(self, data=None, mode=None, verbose=None, threads=None):
-        self._df = data.lazy() if hasattr(data, "lazy") else (data or pl.LazyFrame())
+        # Initialize _df correctly based on whether data is Lazy or Eager
+        if data is None:
+            self._df = pl.LazyFrame()
+            initial_columns = []
+        elif isinstance(data, pl.LazyFrame):
+            self._df = data
+            # Need to collect schema to get initial columns for LazyFrame
+            try:
+                initial_columns = list(data.schema.keys())
+            except (
+                Exception
+            ):  # Handle cases where schema might not be immediately available
+                initial_columns = []  # Or collect a small sample: data.limit(1).columns
+        elif isinstance(data, pl.DataFrame):
+            self._df = data.lazy()
+            initial_columns = list(data.columns)
+        else:
+            # Attempt to convert other types, e.g., dictionaries
+            try:
+                self._df = pl.LazyFrame(data)
+                initial_columns = list(self._df.schema.keys())
+            except Exception as e:
+                raise TypeError(
+                    f"Unsupported data type for ActuarialFrame: {type(data)}. Error: {e}"
+                )
+
         self._computation_graph: List[Tuple[str, ...]] = []
         self._tracing = False
         self._context: Dict[str, Any] = {}  # Store local variables
@@ -366,6 +391,7 @@ class ActuarialFrame:
         self._batch_enabled = False
         self._batch_size = 10000
         self._show_query_plan = False  # Flag to control query plan logging
+        self._column_order: List[str] = initial_columns  # Track column addition order
 
         # Use global defaults if not specified
         self._mode = mode if mode is not None else get_default_mode()
@@ -375,11 +401,21 @@ class ActuarialFrame:
     def __getitem__(self, key):
         """Allow df['column'] access"""
         if isinstance(key, str):
+            # Ensure the column exists in the internal order if accessed
+            # This helps catch typos early if the column wasn't added yet.
+            # Note: This check might be too strict depending on usage patterns.
+            # if key not in self._column_order and key not in self._df.columns:
+            #     raise KeyError(f"Column '{key}' not found in ActuarialFrame.")
             return ColumnProxy(key, self)
+        # Allow slicing or other indexing on the underlying frame if needed?
+        # For now, return self to avoid breaking expected behavior elsewhere.
         return self
 
     def __setitem__(self, key, value):
         """Capture df['column'] = value operations"""
+        # Track the order of column assignment *before* the operation
+        if key not in self._column_order:
+            self._column_order.append(key)
         try:
             expr = self._convert_to_expr(value)
 
@@ -388,14 +424,14 @@ class ActuarialFrame:
                 self._computation_graph.append(("column", key, expr))
                 if self._verbose:
                     self._operation_log.append(
-                        f"Set column '{key}' = {self._expr_to_str(value)}"
+                        f"Set column '{key}' = {self._expr_to_str(value)} (traced)"
                     )
             else:
                 # Direct execution when not tracing
                 self._df = self._df.with_columns(expr.alias(key))
                 if self._verbose:
                     self._operation_log.append(
-                        f"Set column '{key}' = {self._expr_to_str(value)}"
+                        f"Set column '{key}' = {self._expr_to_str(value)} (executed)"
                     )
         except Exception as e:
             # Enhance the error with context
@@ -767,6 +803,10 @@ class ActuarialFrame:
         polars_expr = self._convert_to_expr(expr)
         result_expr = core_round_to_int(polars_expr)
         return ExpressionProxy(result_expr, self)
+
+    def get_column_order(self) -> List[str]:
+        """Return the tracked order of column additions/assignments."""
+        return self._column_order
 
 
 def run_model(model_func: Callable, df: ActuarialFrame) -> ActuarialFrame:
