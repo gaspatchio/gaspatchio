@@ -44,3 +44,6 @@ docs/_build/
 /src/gaspatchio_core/__pycache__/utils.cpython-313.pyc
 /src/gaspatchio_core/_internal.cpython-313-darwin.so
 /bindings/python/jobs/example/reconcillation
+/bindings/python/.pypirc
+/bindings/python/gaspatchio_core/_internal.cpython-312-darwin.so
+/bindings/python/gaspatchio_core/_internal.cpython-313-darwin.so

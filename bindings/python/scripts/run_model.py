@@ -249,7 +249,7 @@ def main(
             "-l",
             help="Number of last columns to display",
         ),
-    ] = 1,
+    ] = 10,
     rows: Annotated[
         int,
         typer.Option(
@@ -269,53 +269,50 @@ def main(
 
     logger.info("Reading model points data from {}", model_points_path)
     start = time.time()
-    data = read_model_points(model_points_path)
+    data_lazy = read_model_points(model_points_path)  # Keep it lazy initially
 
-    # Filter for specific policy if requested
+    # Filter for specific policy if requested (still lazy)
     if policy_id:
         logger.info("Filtering for single policy with ID: {}", policy_id)
-        # Convert policy_id to integer for comparison
         try:
             policy_id_int = int(policy_id)
         except ValueError:
             logger.error("Policy ID must be an integer, got: {}", policy_id)
             raise ValueError(f"Policy ID must be an integer, got: {policy_id}")
 
-        # Use policyholder_nr as the ID column
         id_col = "policyholder nr"
-        filtered_data = data.filter(pl.col(id_col) == policy_id_int)
-
-        # Collect the LazyFrame to get its actual length
-        filtered_data_collected = filtered_data.collect()
-
-        if len(filtered_data_collected) == 0:
-            available_ids = data.select(id_col).unique().collect()
+        # Check if policy exists before filtering
+        # Collect only the necessary column to check existence efficiently
+        existing_ids = data_lazy.select(id_col).unique().collect().get_column(id_col)
+        if policy_id_int not in existing_ids:
             logger.error(
-                "Policy ID '{}' not found. Available IDs: {}", policy_id, available_ids
+                "Policy ID '{}' not found. Available IDs preview: {}",
+                policy_id,
+                existing_ids[:10].to_list(),
             )
             raise ValueError(f"Policy ID '{policy_id}' not found")
 
-        if len(filtered_data_collected) > 1:
-            logger.warning(
-                "Multiple policies match ID '{}', using the first one", policy_id
-            )
-            filtered_data = filtered_data.slice(0, 1)
+        # Now filter the LazyFrame
+        data_lazy = data_lazy.filter(pl.col(id_col) == policy_id_int)
 
-        data = filtered_data
+        # No need to check for multiple policies here, ActuarialFrame handles it
 
     # Create ActuarialFrame with specified mode
     logger.info("Starting model run in {} mode...", mode)
     logger.info(f"polars thread size: {pl.thread_pool_size()}")
 
-    df = ActuarialFrame(data, mode=mode)
+    # Pass the lazy data to ActuarialFrame
+    df = ActuarialFrame(data_lazy, mode=mode)
 
     df.show_query_plan(True)
 
-    result, profile = run_model(model_func, df).profile()
+    # Run the model - this modifies df in place or returns the modified df
+    run_model(model_func, df)
+
+    # Collect the result *after* the model run logic is defined in df
+    result, profile = df.profile()  # Get the collected DataFrame and profile info
 
     print(profile)
-
-    # Collect the result
 
     end = time.time()
     total_time = end - start
@@ -332,18 +329,29 @@ def main(
         time_per_record_ns,
     )
 
+    # Get the tracked column order *from the ActuarialFrame instance*
+    tracked_column_order = df.get_column_order()
+    # Get columns actually present in the final materialized DataFrame
+    final_result_columns = result.columns
+    # Filter the tracked order to only include columns that exist in the result
+    # This handles cases where columns were defined but not ultimately selected/output
+    available_ordered_columns = [
+        col for col in tracked_column_order if col in final_result_columns
+    ]
+
     if output_file:
         output_path = Path(output_file)
         logger.info("Writing results to Parquet file: {}", output_path)
-        result.write_parquet(output_path)
+        # Select columns in the desired order before writing (optional but good practice)
+        result.select(available_ordered_columns).write_parquet(output_path)
         logger.info("Results saved successfully.")
     else:
-        # Transpose the result if a single policy was requested
-        saved_to_file = False  # Track if we saved to any file (CSV or Parquet)
+        saved_to_file = False
         if policy_id and len(result) == 1:
             logger.info("Transposing single policy result")
-            result = transpose_single_policy_result(result)
-            logger.info("Transposed result has {} rows", len(result))
+            # Transpose still operates on the collected 'result' DataFrame
+            transposed_result = transpose_single_policy_result(result)
+            logger.info("Transposed result has {} rows", len(transposed_result))
 
             # Determine output path and save if needed
             if output_csv:
@@ -365,7 +373,8 @@ def main(
                     output_filename,
                     output_path,
                 )
-                result.write_csv(output_path)
+                # Use transposed_result for writing
+                transposed_result.write_csv(output_path)
                 logger.info("Transposed result saved successfully to CSV.")
                 saved_to_file = True
 
@@ -387,7 +396,8 @@ def main(
                         ss_df = pl.read_csv(
                             source_data_path
                         )  # Assuming source has a 'month' column
-                        model_df = result  # This is the transposed result, assuming it also has 'month'
+                        # Use transposed_result for reconciliation
+                        model_df = transposed_result
 
                         # Ensure 'month' column exists in both dataframes
                         join_column = (
@@ -432,26 +442,37 @@ def main(
                     )
                 # --- End Reconciliation Step ---
 
-            # Print to console if we didn't save to a file
+            # Print transposed result to console if not saved
             if not saved_to_file:
                 # Make sure all columns are displayed with good formatting
                 pl.Config.set_tbl_width_chars(1500)
-                pl.Config.set_fmt_str_lengths(30)
-                pl.Config.set_tbl_cols(-1)
-                pl.Config.set_tbl_rows(rows)
-                with pl.Config(tbl_cols=-1):
-                    print("Transposed Result:")
-                    first_cols = result.columns[:first_n]
-                    last_cols = result.columns[-last_n:]
-                    print(result.select(first_cols + last_cols))
+                pl.Config.set_fmt_str_lengths(30)  # Increased from 10
+                pl.Config.set_tbl_cols(-1)  # Ensure all selected cols can be shown
+                pl.Config.set_tbl_rows(rows)  # Use the rows parameter
+                with pl.Config(
+                    tbl_cols=-1, tbl_rows=rows
+                ):  # Reiterate config for clarity/safety
+                    print("Transposed Result (Selected Columns):")
+                    # Apply first_n and last_n to the *columns* of the transposed result,
+                    # using the original assignment order.
+                    first_cols = available_ordered_columns[:first_n]
+                    last_cols = available_ordered_columns[-last_n:]
+                    # Select the columns from the transposed result
+                    print(transposed_result.select(first_cols + last_cols))
+
         elif (
             not output_file
         ):  # Only print original result if not single policy and not saving to Parquet
             # Ensure all columns are displayed when printing to console
-            with pl.Config(tbl_cols=-1, tbl_rows=rows):
-                print("Result:")
-                first_cols = result.columns[:first_n]
-                last_cols = result.columns[-last_n:]
+            # Print original (non-transposed) result using tracked order
+            with pl.Config(
+                tbl_cols=-1, tbl_rows=rows, tbl_width_chars=1500, fmt_str_lengths=30
+            ):
+                print("Result (Columns ordered by assignment):")
+                # Use the available_ordered_columns for selection
+                first_cols = available_ordered_columns[:first_n]
+                last_cols = available_ordered_columns[-last_n:]
+                # Select from the original 'result' DataFrame using the ordered subset
                 print(result.select(first_cols + last_cols))
 
 

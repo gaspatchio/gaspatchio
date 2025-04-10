@@ -1,6 +1,6 @@
 [package]
 name = "gaspatchio_core_lib"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 
 [lib]
