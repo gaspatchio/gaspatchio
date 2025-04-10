@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio-core"
-version = "0.0.9"
+version = "0.0.10"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@sudden.co.nz" }]
