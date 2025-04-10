@@ -40,6 +40,11 @@ jobs:
           python-version: 3.x
       - name: Install uv
         run: pip install uv
+      - name: Build maturin binary
+        uses: PyO3/maturin-action@v1
+        with:
+          args: develop --uv
+          working-directory: bindings/python
       - name: Install Python dependencies
         run: uv sync
         working-directory: bindings/python
@@ -53,19 +58,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build with Docker
-        run: docker run --rm -v $(pwd):/io ghcr.io/pyo3/maturin build --release
-        working-directory: bindings/python
+        run: docker run --rm -v $(pwd):/io -w /io/bindings/python ghcr.io/pyo3/maturin build --release
       - name: List build artifacts
         run: find . -name "*.whl" -o -name "*.tar.gz"
-        working-directory: bindings/python
       - name: Create dist directory
         run: mkdir -p dist
-        working-directory: bindings/python
       - name: Copy built wheels
         run: |
           cp $(find . -name "*.whl") dist/ || echo "No wheels found"
           cp $(find . -name "*.tar.gz") dist/ || echo "No source distributions found"
-        working-directory: bindings/python
       - name: Upload manylinux build artifacts
         uses: actions/upload-artifact@v4
         with:
