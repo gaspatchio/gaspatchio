@@ -474,5 +474,183 @@ class TestPerformance(unittest.TestCase):
         self.assertEqual(len(result_optimize), len(self.data))
 
 
+class TestErrorHandling(unittest.TestCase):
+    def setUp(self):
+        # Create a test dataframe with some columns
+        self.data = pl.DataFrame(
+            {
+                "age": [35, 40, 45],
+                "sex": ["M", "F", "M"],
+                "premium": [100.0, 150.0, 200.0],
+                "policy_duration": [1, 2, 3],
+                "policy_start_date": ["2020-01-01", "2019-05-15", "2021-03-30"],
+            }
+        )
+        self.df = ActuarialFrame(self.data)  # Create instance for tests
+
+    def test_missing_column_extraction(self):
+        """Test extraction of missing column names from different error formats using _extract_missing_column"""
+
+        # Test direct format
+        error_msg_direct = "ColumnNotFoundError: policy_duration_as_int"
+        self.assertEqual(
+            self.df._extract_missing_column(error_msg_direct), "policy_duration_as_int"
+        )
+
+        # Test quoted format
+        error_msg_quoted = "Column 'policy_duration_as_int' not found"
+        self.assertEqual(
+            self.df._extract_missing_column(error_msg_quoted), "policy_duration_as_int"
+        )
+
+        # Test complex Polars format
+        error_msg_complex = (
+            "policy_duration_as_int\n\n"
+            "Resolved plan until failure:\n\n"
+            "\t---> FAILED HERE RESOLVING 'with_columns' <---\n"
+            "... rest of plan ..."
+        )
+        self.assertEqual(
+            self.df._extract_missing_column(error_msg_complex), "policy_duration_as_int"
+        )
+
+        # Test fallback format
+        self.df._column_order.append("missing_but_assigned")  # Add to tracked columns
+        error_msg_fallback = "Some other error FAILED HERE RESOLVING involving missing_but_assigned maybe"
+        self.assertEqual(
+            self.df._extract_missing_column(error_msg_fallback), "missing_but_assigned"
+        )
+        # Clean up for other tests
+        if "missing_but_assigned" in self.df._column_order:
+            self.df._column_order.remove("missing_but_assigned")
+
+    def test_levenshtein_distance(self):
+        """Test the fuzzy matching fallback (_find_similar_columns with Levenshtein)"""
+        # Temporarily disable thefuzz import to test fallback
+        original_import = __builtins__["__import__"]
+
+        def import_mock(name, *args):
+            if name == "thefuzz":
+                raise ImportError("Mock ImportError for thefuzz")
+            return original_import(name, *args)
+
+        __builtins__["__import__"] = import_mock
+
+        try:
+            # Test close match using Levenshtein fallback
+            similar_cols = self.df._find_similar_columns(
+                "police_duration", ["policy_duration", "age", "sex"]
+            )
+            self.assertIn("policy_duration", similar_cols)
+
+            # Test substring match fallback
+            similar = self.df._find_similar_columns(
+                "premium_rate", ["premium", "rate", "age"]
+            )
+            self.assertIn(
+                "premium", similar
+            )  # Substring should still be preferred if calculated
+
+        finally:
+            # Restore the original import function
+            __builtins__["__import__"] = original_import
+
+    def test_collect_error_handling(self):
+        """Test that _handle_execution_error formats column errors from collect() correctly"""
+        # Use a real Polars error this time if possible, otherwise mock
+        try:
+            # Create a scenario that will likely cause a ColumnNotFoundError
+            lazy_df = self.df._df.with_columns(pl.col("non_existent_col") * 2)
+            # Manually trigger the error collection part
+            lazy_df.collect()
+        except Exception as e:
+            # Check if the error is the type we expect
+            if "ColumnNotFoundError" in str(type(e)) or "not found" in str(e):
+                # Now test our handler with this real error
+                with self.assertRaises(Exception) as context:
+                    self.df._handle_execution_error(e)
+
+                formatted_error_message = str(context.exception)
+                self.assertIn(
+                    "Column 'non_existent_col' not found", formatted_error_message
+                )
+                self.assertIn("Available columns are:", formatted_error_message)
+                self.assertIn("age", formatted_error_message)
+            else:
+                # If the setup didn't raise the expected error, we can't test the handler directly
+                # Fallback to mocking if necessary, but prefer testing with real errors
+                self.skipTest(
+                    "Could not trigger a real ColumnNotFoundError for testing _handle_execution_error"
+                )
+
+    def test_profile_error_handling(self):
+        """Test that _handle_execution_error formats column errors from profile() correctly"""
+        try:
+            lazy_df = self.df._df.with_columns(pl.col("another_missing_col") + 1)
+            lazy_df.profile()
+        except Exception as e:
+            if "ColumnNotFoundError" in str(type(e)) or "not found" in str(e):
+                with self.assertRaises(Exception) as context:
+                    self.df._handle_execution_error(e)
+
+                formatted_error_message = str(context.exception)
+                self.assertIn(
+                    "Column 'another_missing_col' not found", formatted_error_message
+                )
+                self.assertIn("Available columns are:", formatted_error_message)
+            else:
+                self.skipTest(
+                    "Could not trigger a real ColumnNotFoundError for testing _handle_execution_error in profile"
+                )
+
+    def test_thefuzz_integration(self):
+        """Test that _find_similar_columns uses thefuzz correctly"""
+        try:
+            from thefuzz import process  # Check if available
+
+            # Test fuzzy matches using the refactored method
+            similar_cols = self.df._find_similar_columns(
+                "police_duration", ["policy_duration", "age", "sex"]
+            )
+            self.assertIn("policy_duration", similar_cols)
+
+            similar_cols = self.df._find_similar_columns(
+                "policyy_duration", ["policy_duration", "premium", "age"]
+            )
+            self.assertIn("policy_duration", similar_cols)
+
+            similar_cols = self.df._find_similar_columns(
+                "duration_policy", ["policy_duration", "premium", "age"]
+            )
+            self.assertIn("policy_duration", similar_cols)
+
+        except ImportError:
+            self.skipTest("thefuzz is not installed, skipping test_thefuzz_integration")
+
+    def test_polars_complex_error_extraction(self):
+        """Test _extract_missing_column for complex Polars error message with plan"""
+        error_message = (
+            "policy_duration_as_int\n\n"
+            "Resolved plan until failure:\n\n"
+            "\t---> FAILED HERE RESOLVING 'with_columns' <---\n"
+            "... some plan details ..."
+        )
+        # Test extraction directly using the helper method
+        missing_col = self.df._extract_missing_column(error_message)
+        self.assertEqual(missing_col, "policy_duration_as_int")
+
+    def test_fallback_extraction_logic(self):
+        """Test the _extract_missing_column fallback logic"""
+        self.df._column_order.append("missing_but_assigned")  # Simulate assigned column
+        error_message = "Some other error FAILED HERE RESOLVING involving missing_but_assigned maybe"
+
+        # Test extraction directly using the helper method
+        missing_col = self.df._extract_missing_column(error_message)
+        self.assertEqual(missing_col, "missing_but_assigned")
+        # Clean up
+        if "missing_but_assigned" in self.df._column_order:
+            self.df._column_order.remove("missing_but_assigned")
+
+
 if __name__ == "__main__":
     unittest.main()
