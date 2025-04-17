@@ -258,6 +258,14 @@ def main(
             help="Number of rows to display",
         ),
     ] = 15,
+    id_column_name: Annotated[
+        str,
+        typer.Option(
+            "--id-column-name",
+            "--id-col",
+            help="Name of the column used for policy identification",
+        ),
+    ] = "Policy number",
 ):
     # Calculate absolute paths
     directory_path = Path(directory)
@@ -280,20 +288,26 @@ def main(
             logger.error("Policy ID must be an integer, got: {}", policy_id)
             raise ValueError(f"Policy ID must be an integer, got: {policy_id}")
 
-        id_col = "policyholder nr"
+        # Use the provided ID column name
         # Check if policy exists before filtering
         # Collect only the necessary column to check existence efficiently
-        existing_ids = data_lazy.select(id_col).unique().collect().get_column(id_col)
+        existing_ids = (
+            data_lazy.select(id_column_name)
+            .unique()
+            .collect()
+            .get_column(id_column_name)
+        )
         if policy_id_int not in existing_ids:
             logger.error(
-                "Policy ID '{}' not found. Available IDs preview: {}",
+                "Policy ID '{}' not found in column '{}'. Available IDs preview: {}",
                 policy_id,
+                id_column_name,
                 existing_ids[:10].to_list(),
             )
-            raise ValueError(f"Policy ID '{policy_id}' not found")
+            raise ValueError(f"Policy ID '{policy_id}' not found in '{id_column_name}'")
 
         # Now filter the LazyFrame
-        data_lazy = data_lazy.filter(pl.col(id_col) == policy_id_int)
+        data_lazy = data_lazy.filter(pl.col(id_column_name) == policy_id_int)
 
         # No need to check for multiple policies here, ActuarialFrame handles it
 
@@ -416,7 +430,7 @@ def main(
                                 ss_df,
                                 model_df,
                                 join_columns=join_column,
-                                abs_tol=0.0001,
+                                abs_tol=0.00001,
                                 rel_tol=0,
                                 df1_name="source_data",
                                 df2_name="model_output",
@@ -457,8 +471,12 @@ def main(
                     # using the original assignment order.
                     first_cols = available_ordered_columns[:first_n]
                     last_cols = available_ordered_columns[-last_n:]
+                    # Combine first and last, ensuring uniqueness while preserving order
+                    combined_unique_cols = first_cols + [
+                        col for col in last_cols if col not in first_cols
+                    ]
                     # Select the columns from the transposed result
-                    print(transposed_result.select(first_cols + last_cols))
+                    print(transposed_result.select(combined_unique_cols))
 
         elif (
             not output_file
@@ -472,8 +490,12 @@ def main(
                 # Use the available_ordered_columns for selection
                 first_cols = available_ordered_columns[:first_n]
                 last_cols = available_ordered_columns[-last_n:]
+                # Combine first and last, ensuring uniqueness while preserving order
+                combined_unique_cols = first_cols + [
+                    col for col in last_cols if col not in first_cols
+                ]
                 # Select from the original 'result' DataFrame using the ordered subset
-                print(result.select(first_cols + last_cols))
+                print(result.select(combined_unique_cols))
 
 
 def compare_modes(

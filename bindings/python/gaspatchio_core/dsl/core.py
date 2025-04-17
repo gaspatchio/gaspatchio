@@ -18,6 +18,9 @@ from gaspatchio_core.functions import fill_series as core_fill_series
 from gaspatchio_core.functions import floor as core_floor
 from gaspatchio_core.functions import round as core_round
 from gaspatchio_core.functions import round_to_int as core_round_to_int
+
+# ADDED: Import telemetry module
+from gaspatchio_core.telemetry import configure_telemetry
 from gaspatchio_core.typing import IntoExprColumn
 
 
@@ -26,6 +29,10 @@ class PerformanceWarning(Warning):
     """Warning for potential performance issues."""
 
     pass
+
+
+# Enable performance monitoring via telemetry
+configure_telemetry(enable=True)
 
 
 # Try to import numba, but make it optional
@@ -684,52 +691,88 @@ class ActuarialFrame:
     def _extract_missing_column(self, error_str: str) -> str | None:
         """Attempts to extract the missing column name from various error formats."""
         missing_col = None
-        # Prioritize specific formats
+        # Check specific formats first
         if "ColumnNotFoundError:" in error_str:
-            missing_col = error_str.split("ColumnNotFoundError:")[-1].strip()
-        elif "'" in error_str and "' not found" in error_str:
-            missing_col = error_str.split("'")[1]
+            # Example: "... raised ColumnNotFoundError: 'my_col'"
+            parts = error_str.split("ColumnNotFoundError:")
+            if len(parts) > 1:
+                # Extract text after the error name, often enclosed in quotes
+                potential_col = parts[1].strip().strip("'\"")
+                # Simple heuristic: if it doesn't contain obvious error text, assume it's the column
+                if (
+                    potential_col
+                    and "Resolved plan" not in potential_col
+                    and "\n" not in potential_col
+                ):
+                    return potential_col
+
+        elif "' not found" in error_str:
+            # Example: "column 'my_col' not found"
+            parts = error_str.split("'")
+            if len(parts) >= 2:
+                return parts[1]
+
         elif "\n\nResolved plan until failure:" in error_str:
-            possible_missing = error_str.split("\n\nResolved plan until failure:")[0].strip()
-            if possible_missing and not any(c.isspace() for c in possible_missing):
-                missing_col = possible_missing
-        
+            # Example: "my col name\n\nResolved plan..."
+            possible_missing = error_str.split("\n\nResolved plan until failure:")[
+                0
+            ].strip()
+            # Removed the 'no spaces' check here
+            if possible_missing:
+                return possible_missing
+
         # Fallback: Search known columns in the error string (less reliable)
         if not missing_col and "FAILED HERE RESOLVING" in error_str:
             try:
                 current_cols = self._df.collect_schema().names()
                 # Prioritize columns that were assigned but aren't in the final schema
-                assigned_but_missing = [col for col in self._column_order if col not in current_cols and col in error_str]
+                assigned_but_missing = [
+                    col
+                    for col in self._column_order
+                    if col not in current_cols and col in error_str
+                ]
                 if assigned_but_missing:
-                    missing_col = assigned_but_missing[0] # Take the first likely candidate
+                    missing_col = assigned_but_missing[
+                        0
+                    ]  # Take the first likely candidate
                 else:
                     # Last resort: look for unknown words that look like identifiers
                     for word in error_str.split():
                         potential_col = word.strip("'\"[]():.,")
-                        if potential_col and potential_col not in current_cols and len(potential_col) > 3 and potential_col.lower() not in ["some", "other", "error", "involving", "maybe"]:
-                             missing_col = potential_col
-                             break
+                        if (
+                            potential_col
+                            and potential_col not in current_cols
+                            and len(potential_col) > 3
+                            and potential_col.lower()
+                            not in ["some", "other", "error", "involving", "maybe"]
+                        ):
+                            missing_col = potential_col
+                            break
             except Exception:
-                 pass # Ignore schema collection errors during fallback
+                pass  # Ignore schema collection errors during fallback
 
         return missing_col
 
-    def _format_column_error(self, original_exception: Exception, missing_col: str) -> Exception:
+    def _format_column_error(
+        self, original_exception: Exception, missing_col: str
+    ) -> Exception:
         """Formats a helpful error message for a missing column."""
         try:
             available_cols = self._df.collect_schema().names()
         except Exception:
             available_cols = self._column_order
-        
+
         similar_cols = self._find_similar_columns(missing_col, available_cols)
-        
+
         error_msg = f"Column '{missing_col}' not found in the DataFrame.\n\n"
-        
+
         if similar_cols:
-            error_msg += "Did you mean one of these?\n - " + "\n - ".join(similar_cols) + "\n\n"
-        
+            error_msg += (
+                "Did you mean one of these?\n - " + "\n - ".join(similar_cols) + "\n\n"
+            )
+
         error_msg += "Available columns are:\n - " + "\n - ".join(available_cols)
-        
+
         # Return a new exception of the original type with the formatted message
         return type(original_exception)(error_msg)
 
@@ -738,17 +781,18 @@ class ActuarialFrame:
         error_str = str(e)
         # Check if it looks like a column error
         is_column_error = (
-            "ColumnNotFoundError" in str(type(e)) or 
-            "column" in error_str.lower() and "not found" in error_str.lower() or
-            "FAILED HERE RESOLVING" in error_str
+            "ColumnNotFoundError" in str(type(e))
+            or "column" in error_str.lower()
+            and "not found" in error_str.lower()
+            or "FAILED HERE RESOLVING" in error_str
         )
-        
+
         if is_column_error:
             missing_col = self._extract_missing_column(error_str)
             if missing_col:
                 # Format and raise the specific column error
                 raise self._format_column_error(e, missing_col) from None
-        
+
         # If it wasn't a column error we could identify, or extraction failed,
         # re-raise the original exception.
         raise e
@@ -771,33 +815,31 @@ class ActuarialFrame:
         except Exception as e:
             self._handle_execution_error(e)
 
-    def _find_similar_columns(self, missing_col, available_cols, max_distance=3, max_suggestions=5):
+    def _find_similar_columns(
+        self, missing_col, available_cols, max_distance=3, max_suggestions=5
+    ):
         """
         Find column names similar to the missing column using thefuzz library.
-        
+
         Args:
             missing_col: The missing column name
             available_cols: List of available column names
             max_distance: Maximum edit distance to consider a match (as a ratio threshold)
             max_suggestions: Maximum number of suggestions to return
-            
+
         Returns:
             List of column names similar to the missing one
         """
         if not missing_col or not available_cols:
             return []
-            
+
         # Use thefuzz for finding similar columns
 
         # Convert the max_distance parameter to a ratio threshold (0-100)
         ratio_threshold = max(0, 100 - (max_distance * 20))
 
         # Use process.extract to find the most similar columns
-        matches = process.extract(
-            missing_col, 
-            available_cols, 
-            limit=max_suggestions
-        )
+        matches = process.extract(missing_col, available_cols, limit=max_suggestions)
 
         # Filter by score threshold
         matches = [(col, score) for col, score in matches if score >= ratio_threshold]
