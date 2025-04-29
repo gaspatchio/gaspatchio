@@ -24,6 +24,7 @@ from gaspatchio_core.telemetry import configure_telemetry
 from gaspatchio_core.typing import IntoExprColumn
 
 
+# RESTORED MISSING BLOCK
 # Define custom warning class
 class PerformanceWarning(Warning):
     """Warning for potential performance issues."""
@@ -52,7 +53,7 @@ except ImportError:
         @staticmethod
         def njit(func):
             return func
-
+# END RESTORED BLOCK
 
 # Global settings
 _DEFAULT_MODE = os.environ.get("GASPATCHIO_MODE", "debug")
@@ -196,58 +197,8 @@ class ExpressionProxy:
         return ExpressionProxy(self._expr.alias(name), self._parent)
 
     def cast(self, dtype):
-        """Cast the expression to a specific data type, handling lists."""
-        # Define common scalar Polars types
-        scalar_types = (
-            pl.Int8,
-            pl.Int16,
-            pl.Int32,
-            pl.Int64,
-            pl.UInt8,
-            pl.UInt16,
-            pl.UInt32,
-            pl.UInt64,
-            pl.Float32,
-            pl.Float64,
-            pl.Boolean,
-            pl.Utf8,  # Add other scalar types like Date, Datetime, Duration etc. if needed
-        )
-
-        # Check if the target dtype is a scalar type instance or class
-        is_scalar_target = False
-        if isinstance(dtype, pl.DataType):  # e.g., pl.Int64()
-            # Check if the base type is in our tuple of scalar types
-            try:  # Use try-except as base_type might not exist for all types
-                if dtype.base_type() in scalar_types:
-                    is_scalar_target = True
-            except AttributeError:
-                pass
-        elif isinstance(dtype, type) and issubclass(
-            dtype, pl.DataType
-        ):  # e.g., pl.Int64
-            if dtype in scalar_types:
-                is_scalar_target = True
-
-        if is_scalar_target:
-            # If casting to a scalar type, assume the operation might be on list elements.
-            # Use list.eval to apply the cast element-wise.
-            # This assumes Polars handles the case where self._expr is *not* a list gracefully,
-            # or that the context implies it's likely a list.
-            casted_expr = self._expr.list.eval(pl.element().cast(dtype))
-
-            # Preserve the original expression name if list.eval changes it
-            try:
-                original_name = self._expr.meta.output_name()
-                casted_expr = casted_expr.alias(original_name)
-            except (
-                Exception
-            ):  # Handle cases where meta or output_name might not be available
-                pass
-
-        else:
-            # If casting to a non-scalar type (e.g., List, Struct), use the direct cast.
-            casted_expr = self._expr.cast(dtype)
-
+        """Cast the expression to a specific data type."""
+        casted_expr = self._expr.cast(dtype)
         return ExpressionProxy(casted_expr, self._parent)
 
 
@@ -977,3 +928,10 @@ def run_model(model_func: Callable, df: ActuarialFrame) -> ActuarialFrame:
     traced_func = df.trace(model_func)
     traced_func(df)
     return df
+
+
+# Ensure autopatch calls are at the very end
+from ._delegation import _autopatch
+
+_autopatch(ColumnProxy)
+_autopatch(ExpressionProxy)
