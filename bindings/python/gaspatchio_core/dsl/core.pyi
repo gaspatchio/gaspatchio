@@ -11,6 +11,11 @@ if TYPE_CHECKING:
     _ActuarialFrame = TypeVar("_ActuarialFrame", bound="ActuarialFrame")
     _BaseProxy = TypeVar("_BaseProxy", bound="BaseProxy")
     _ExpressionProxy = TypeVar("_ExpressionProxy", bound="ExpressionProxy")
+    # Import accessors only for type checking
+    # Import common type hints used in signatures
+    from ...typing import IntoExprColumn
+    from ..accessors.date import DateColumnAccessor, DateFrameAccessor
+    from ..accessors.finance import FinanceColumnAccessor, FinanceFrameAccessor
 
 # --- Helper Stubs for Chaining/Namespaces ---
 class WhenThen:
@@ -446,6 +451,12 @@ class ExpressionProxy(BaseProxy):
     # Add other namespaces like meta if needed
     # @property
     # def meta(self) -> Any: ... # Simple type for meta
+    # --- Date Accessor ---
+    @property
+    def date(self) -> "DateColumnAccessor": ...
+    # --- Finance Accessor ---
+    @property
+    def finance(self) -> "FinanceColumnAccessor": ...
     # --- Aggregations ---
     def std(self, ddof: int = ...) -> "ExpressionProxy": ...
     def var(self, ddof: int = ...) -> "ExpressionProxy": ...
@@ -660,6 +671,12 @@ class ColumnProxy(ExpressionProxy):
     name: str
     def __init__(self, name: str, parent: "_ActuarialFrame | None" = ...) -> None: ...
     # Inherits methods from ExpressionProxy, specific overrides can go here
+    # --- Date Accessor ---
+    @property
+    def date(self) -> "DateColumnAccessor": ...
+    # --- Finance Accessor ---
+    @property
+    def finance(self) -> "FinanceColumnAccessor": ...
 
 # --- ActuarialFrame Stub ---
 # Provide a basic definition for context
@@ -671,3 +688,70 @@ class ActuarialFrame:
     def __setitem__(self, key: str, value: Any) -> None: ...
     def collect(self, **kwargs: Any) -> pl.DataFrame: ...
     # Add other frequently used ActuarialFrame methods
+    # --- Date Accessor ---
+    @property
+    def date(self) -> "DateFrameAccessor": ...
+    # --- Finance Accessor ---
+    @property
+    def finance(self) -> "FinanceFrameAccessor": ...
+
+# --- Accessor Stubs ---
+# These are added manually to provide hints for the accessor pattern
+
+class DateFrameAccessor:
+    _parent: "ActuarialFrame"
+    def __init__(self, parent: "ActuarialFrame") -> None: ...
+    def create_timeline(
+        self,
+        start_date_col: str | pl.Expr | "ExpressionProxy",
+        end_date_col: str | pl.Expr | "ExpressionProxy",
+        freq: str = ...,
+        closed: str = ...,
+        date_unit: str = ...,
+        time_unit: str | None = ...,
+        time_zone: str | None = ...,
+        new_col_name: str = ...,
+    ) -> "ActuarialFrame": ...
+    def add_duration(
+        self,
+        date_col: "IntoExprColumn",
+        duration_str: str,
+        new_col_name: str | None = ...,
+    ) -> "ActuarialFrame": ...
+    # Add other DateFrameAccessor methods here if needed
+
+class DateColumnAccessor:
+    _expr: pl.Expr
+    _parent: "_ActuarialFrame | None"  # Can be None if expr is standalone
+    def __init__(
+        self, expr: pl.Expr, parent: "_ActuarialFrame | None" = ...
+    ) -> None: ...
+    def from_excel_serial(self, origin: str = ...) -> "ExpressionProxy": ...
+    def yearfrac(
+        self, end_date_expr: "IntoExprColumn", basis: str = ...
+    ) -> "ExpressionProxy": ...
+    def to_period(self, freq: str = ...) -> "ExpressionProxy": ...
+    # Add other DateColumnAccessor methods here if needed
+
+# --- Finance Accessors ---
+class FinanceFrameAccessor:
+    _parent: "ActuarialFrame"
+    def __init__(self, parent: "ActuarialFrame") -> None: ...
+    # Add other FinanceFrameAccessor methods here
+    def present_value(
+        self,
+        cashflow_col: "IntoExprColumn",
+        rate_col: "IntoExprColumn",
+        period_col: "IntoExprColumn",
+    ) -> "ExpressionProxy": ...
+
+class FinanceColumnAccessor:
+    _expr: pl.Expr
+    _parent: "_ActuarialFrame | None"
+    def __init__(
+        self, expr: pl.Expr, parent: "_ActuarialFrame | None" = ...
+    ) -> None: ...
+    def discount(
+        self, rate_expr: "IntoExprColumn", n_periods_expr: "IntoExprColumn"
+    ) -> "ExpressionProxy": ...
+    # Add other FinanceColumnAccessor methods here

@@ -1,0 +1,329 @@
+"""Accessors for date-related operations on ActuarialFrame columns/expressions."""
+
+import datetime
+from typing import TYPE_CHECKING
+
+import polars as pl
+
+from .base import BaseColumnAccessor, BaseFrameAccessor
+
+# Use TYPE_CHECKING for core components to avoid circular imports
+if TYPE_CHECKING:
+    from gaspatchio_core.dsl.core import (
+        ActuarialFrame,  # Need parent frame to create ExpressionProxy
+        ColumnProxy,
+        ExpressionProxy,
+        IntoExprColumn,  # Added for type hints
+    )
+
+
+class DateFrameAccessor(BaseFrameAccessor):
+    """Provides date-related methods applicable to the entire ActuarialFrame.
+
+    Accessed via `.date` on an ActuarialFrame instance,
+    e.g., `af.date`.
+    """
+
+    def __init__(self, frame: "ActuarialFrame"):
+        """Initializes the accessor with the parent ActuarialFrame."""
+        super().__init__(frame)
+
+    def create_timeline(
+        self,
+        start_col: "IntoExprColumn",
+        end_col: "IntoExprColumn",
+        freq: str = "1d",
+        new_col_name: str = "timeline_date",
+        closed: str = "left",
+    ) -> "ActuarialFrame":  # Return type is ActuarialFrame
+        """Creates timeline columns based on start and end dates.
+
+        Generates a list of dates for each row based on its start and end date,
+        using the specified frequency. The result is exploded to create
+        a longer DataFrame where each original row is repeated for each date
+        in its timeline.
+
+        Args:
+            start_col: Column or expression for the start date of the interval.
+            end_col: Column or expression for the end date of the interval.
+            freq: The frequency of the timeline (e.g., "1M", "1Y", "1d").
+                  Passed to `pl.date_ranges`.
+            new_col_name: Name for the new column containing the generated timeline dates.
+                          Defaults to "timeline_date".
+            closed: Which side of the interval is closed ("left", "right", "both", "none").
+                    Passed to `pl.date_ranges`.
+
+        Returns:
+            A new ActuarialFrame instance with the original data expanded
+            by the generated timeline dates.
+
+        Raises:
+            pl.ColumnNotFoundError: If start_col or end_col cannot be resolved.
+            pl.ComputeError: If date range generation fails (e.g., invalid freq,
+                             incompatible date types).
+        """
+        # --- Input Validation and Expression Conversion --- #
+        try:
+            start_expr = self._frame._convert_to_expr(start_col)
+            end_expr = self._frame._convert_to_expr(end_col)
+        except Exception as e:
+            # Re-raise potential errors from _convert_to_expr (e.g., invalid input)
+            raise ValueError(f"Invalid start_col or end_col provided: {e}") from e
+
+        # --- Core Logic: Generate and Explode Date Ranges --- #
+        # 1. Create the date ranges as a list column
+        date_ranges_expr = pl.date_ranges(
+            start=start_expr,
+            end=end_expr,
+            interval=freq,
+            closed=closed,
+            eager=False,  # Important for LazyFrame
+        ).alias(new_col_name)
+
+        # 2. Add the list column to the DataFrame
+        # Use a temporary name to avoid conflicts if new_col_name exists
+        temp_col_name = f"__{new_col_name}_ranges__"
+        df_with_ranges = self._frame._df.with_columns(
+            date_ranges_expr.alias(temp_col_name)
+        )
+
+        # 3. Explode the list column
+        # Keep other columns, replace the list col with the exploded dates
+        df_exploded = df_with_ranges.explode(temp_col_name).rename(
+            {temp_col_name: new_col_name}
+        )
+
+        # --- Return New ActuarialFrame --- #
+        # We need to import ActuarialFrame locally to avoid circular dependency
+        from gaspatchio_core.dsl.core import ActuarialFrame
+
+        # Create a new ActuarialFrame instance wrapping the modified LazyFrame
+        return ActuarialFrame(df_exploded)
+
+    def add_duration(
+        self,
+        date_col: "IntoExprColumn",
+        duration_str: str,
+        new_col_name: str | None = None,
+    ) -> "ActuarialFrame":
+        """Adds a duration string (e.g., '1Y', '3M', '-7d') to a date column.
+
+        Args:
+            date_col: The column containing the dates to add the duration to.
+            duration_str: The duration string in Polars format (e.g., "1Y6M", "-3d12h").
+            new_col_name: The name for the new column containing the resulting dates.
+                          If None, modifies the original column (if it's a string name).
+
+        Returns:
+            A new ActuarialFrame with the added/modified column.
+
+        Raises:
+            ValueError: If date_col is not a valid column/expression or if modification
+                      is attempted without providing a string name for date_col.
+            pl.ComputeError: If the duration addition fails (e.g., invalid duration string,
+                             incompatible date types).
+        """
+        from gaspatchio_core.dsl.core import ActuarialFrame  # Local import
+
+        try:
+            date_expr = self._frame._convert_to_expr(date_col)
+        except Exception as e:
+            raise ValueError(f"Invalid date_col provided: {e}") from e
+
+        result_expr = date_expr.dt.offset_by(duration_str)
+
+        # Determine the target column name
+        target_col_name: str
+        if new_col_name:
+            target_col_name = new_col_name
+        elif isinstance(date_col, str):
+            target_col_name = date_col  # Modify in-place (by replacing)
+        else:
+            raise ValueError(
+                "new_col_name must be provided if date_col is not a string"
+            )
+
+        df_updated = self._frame._df.with_columns(result_expr.alias(target_col_name))
+        return ActuarialFrame(df_updated)
+
+
+class DateColumnAccessor(BaseColumnAccessor):
+    """Provides date-related methods applicable to columns or expressions.
+
+    Accessed via `.date` on an ActuarialFrame column or expression proxy,
+    e.g., `af["my_date_col"].date`.
+    """
+
+    def __init__(self, proxy: "ColumnProxy | ExpressionProxy"):
+        """Initializes the accessor with the parent proxy."""
+        super().__init__(proxy)
+        # Refine type hint now that we expect specific proxy types
+        self._proxy: "ColumnProxy | ExpressionProxy" = proxy
+
+    def _get_polars_expr(self) -> pl.Expr:
+        """Helper to get the underlying Polars expression from the proxy."""
+        # Similar logic to ActuarialFrame._convert_to_expr
+        if hasattr(self._proxy, "_expr") and isinstance(self._proxy._expr, pl.Expr):
+            # It's an ExpressionProxy
+            return self._proxy._expr
+        elif hasattr(self._proxy, "name") and isinstance(self._proxy.name, str):
+            # It's a ColumnProxy
+            return pl.col(self._proxy.name)
+        else:
+            # Should not happen with correct type hints, but raise defensively
+            raise TypeError(
+                f"DateColumnAccessor expected ColumnProxy or ExpressionProxy, got {type(self._proxy).__name__}"
+            )
+
+    def _get_parent_frame(self) -> "ActuarialFrame":
+        """Helper to get the parent ActuarialFrame, raising error if absent."""
+        if not hasattr(self._proxy, "_parent") or self._proxy._parent is None:
+            raise RuntimeError(
+                "Operation requires the expression/column to be part of an ActuarialFrame context."
+            )
+        # We assume _parent is ActuarialFrame based on how proxies are created
+        return self._proxy._parent
+
+    def from_excel_serial(self, epoch: str = "1900") -> "ExpressionProxy":
+        """Converts Excel serial numbers (integers or floats) to Polars Date.
+
+        Handles both the 1900 (Windows) and 1904 (Mac) epoch systems.
+        Note: Excel incorrectly treats 1900 as a leap year.
+
+        Args:
+            epoch: The epoch system used by Excel ('1900' or '1904').
+                   Defaults to '1900'.
+
+        Returns:
+            An ExpressionProxy representing the converted date column.
+
+        Raises:
+            ValueError: If an invalid epoch is provided.
+            Polars exceptions on execution if input is not numeric.
+        """
+        base_expr = self._get_polars_expr()
+        # Cast to float *before* comparisons or calculations, handle non-numerics
+        numeric_expr = base_expr.cast(pl.Float64, strict=False)
+
+        if epoch == "1900":
+            epoch_base_lt_60 = datetime.date(1899, 12, 31)
+            epoch_base_gte_61 = datetime.date(1899, 12, 30)
+            # Use floor to handle float inputs correctly in conditions
+            int_expr = numeric_expr.floor()
+
+            # Calculate date based on different epochs depending on integer part
+            date_expr = (
+                pl.when(int_expr == 60)
+                .then(pl.lit(datetime.date(1900, 3, 1)))  # Handle Excel bug explicitly
+                .when(int_expr < 60)
+                .then(pl.lit(epoch_base_lt_60) + pl.duration(days=numeric_expr))
+                .when(int_expr >= 61)
+                .then(pl.lit(epoch_base_gte_61) + pl.duration(days=numeric_expr))
+                .otherwise(pl.lit(None))
+                .cast(pl.Date)
+            )
+
+        elif epoch == "1904":
+            # Base date is 1904-01-01. Serial 0 corresponds to 1904-01-01.
+            # Add numeric_expr days directly to 1904-01-01.
+            epoch_date = datetime.date(1904, 1, 1)
+            # Formula: date(1904, 1, 1) + duration(days = serial_number)
+            # Ensure numeric_expr handles nulls correctly before adding duration
+            date_expr = (pl.lit(epoch_date) + pl.duration(days=numeric_expr)).cast(
+                pl.Date
+            )
+
+        else:
+            raise ValueError(f"Invalid epoch '{epoch}'. Must be '1900' or '1904'.")
+
+        # Use helper to get parent frame
+        parent_frame = self._get_parent_frame()
+        from gaspatchio_core.dsl.core import ExpressionProxy  # Local import
+
+        return ExpressionProxy(date_expr, parent_frame)
+
+    def yearfrac(
+        self, end_date_expr: "IntoExprColumn", basis: str = "act/act"
+    ) -> "ExpressionProxy":
+        """Calculates the fraction of a year between the date in this column/expression
+        and another date expression, based on a day count convention.
+
+        Note: This requires a custom implementation as Polars doesn't have built-in yearfrac.
+              The current implementation is a simplified placeholder using 'act/act'.
+
+        Args:
+            end_date_expr: The end date for the period (column name, expression, or literal).
+            basis: The day count basis (e.g., "act/act", "30/360").
+                   Currently, only a simplified "act/act" is implemented.
+
+        Returns:
+            An ExpressionProxy representing the year fraction (float).
+
+        Raises:
+            NotImplementedError: If a basis other than the simplified "act/act" is requested.
+            ValueError: If end_date_expr is invalid.
+            RuntimeError: If the proxy is not part of an ActuarialFrame context.
+            pl.ComputeError: On date difference calculation errors.
+        """
+        from gaspatchio_core.dsl.core import ExpressionProxy  # Local import
+
+        parent_frame = self._get_parent_frame()
+        start_expr = self._get_polars_expr()
+        try:
+            end_expr = parent_frame._convert_to_expr(end_date_expr)
+        except Exception as e:
+            raise ValueError(f"Invalid end_date_expr provided: {e}") from e
+
+        if basis.lower() == "act/act":
+            # Simplified Act/Act: difference in days / 365.25 (average days in year)
+            # Ensure both are dates before subtracting
+            start_date = start_expr.cast(pl.Date)
+            end_date = end_expr.cast(pl.Date)
+            days_diff = (end_date - start_date).dt.total_days()
+            # Handle division by zero if days_in_year is zero (shouldn't happen)
+            # Use 365.25 for a simple approximation
+            year_frac_expr = days_diff / 365.25
+        # Add other basis calculations here later (e.g., 30/360)
+        # elif basis.lower() == "30/360":
+        #     raise NotImplementedError("Day count basis '30/360' not yet implemented.")
+        else:
+            raise NotImplementedError(f"Day count basis '{basis}' not yet implemented.")
+
+        return ExpressionProxy(year_frac_expr.cast(pl.Float64), parent_frame)
+
+    def to_period(self, freq: str = "M") -> "ExpressionProxy":
+        """Converts a date/datetime column to a period representation (e.g., year-month).
+
+        Currently truncates the date to the beginning of the specified frequency.
+
+        Args:
+            freq: The frequency to truncate to ('Y', 'M', 'W', 'D').
+                  More complex Polars frequencies might work but are less standard for periods.
+
+        Returns:
+            An ExpressionProxy representing the truncated date (start of the period).
+
+        Raises:
+            RuntimeError: If the proxy is not part of an ActuarialFrame context.
+            pl.ComputeError: On truncation errors.
+        """
+        from gaspatchio_core.dsl.core import ExpressionProxy  # Local import
+
+        parent_frame = self._get_parent_frame()
+        base_expr = self._get_polars_expr()
+
+        # Polars interval string mapping (simplified)
+        polars_freq_map = {
+            "Y": "1y",
+            "M": "1mo",  # Use 'mo' for month end
+            "W": "1w",
+            "D": "1d",
+        }
+        polars_freq = polars_freq_map.get(
+            freq.upper(), freq
+        )  # Default to input if not found
+
+        # Use dt.truncate for period start
+        period_expr = base_expr.dt.truncate(polars_freq)
+
+        return ExpressionProxy(period_expr.cast(pl.Date), parent_frame)

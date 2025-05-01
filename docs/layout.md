@@ -13,13 +13,11 @@ This project follows a modular architecture with clear separation of concerns:
 
 ```
 gaspatchio-core/core/
-├── src/
-│   ├── registry/           # TableRegistry implementation
-│   ├── plugin/             # Polars plugin expressions
-│   ├── transform/          # Data transformation utilities
-│   └── index/              # Lookup index and HashMap builders
-├── benches/                # Performance benchmarks
-├── tests/                  # Integration tests
+├── benches/
+│   └── fixtures/           # Benchmark data fixtures
+└── src/
+    └── polars_functions/   # Core Polars function implementations
+├── tests/                  # Integration tests (Note: Need to confirm if this still exists or moved)
 └── Cargo.toml              # Core dependencies only
 ```
 
@@ -32,10 +30,10 @@ gaspatchio-core/core/
 
 ```
 gaspatchio-core/bindings/python/
-├── src/
-│   ├── lib.rs              # PyO3 module definition
-│   ├── registry.rs         # Python bindings for TableRegistry
-│   └── plugin.rs           # Export plugin functions to Python
+├── src/                    # PyO3 module definition and binding code
+├── jobs/                   # Example job scripts (if applicable)
+├── scripts/                # Utility scripts
+├── tests/                  # Python binding tests
 └── Cargo.toml              # PyO3 and core dependencies
 ```
 
@@ -49,9 +47,9 @@ gaspatchio-core/bindings/python/
 ```
 gaspatchio-core/bindings/python/gaspatchio_core/
 ├── __init__.py             # Package exports
-├── functions.py            # Plugin function wrappers
-├── registry.py             # TableRegistry Python interface
-└── typing.py               # Type definitions
+├── functions.py            # Plugin function wrappers (if still used)
+├── registry.py             # TableRegistry Python interface (if still used)
+└── typing.py               # Type definitions (if still used)
 ```
 
 ### Motivation for This Architecture

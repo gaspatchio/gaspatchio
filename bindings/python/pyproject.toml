@@ -16,7 +16,6 @@ dependencies = [
     "pyarrow>=15.0.0",
     "pytest>=8.3.4",
     "boto3>=1.37.2",
-    "numba>=0.59.0",
     "datacompy>=0.16.0",
     "thefuzz[speedup]>=0.22.1",
     "python-dateutil>=2.9.0.post0",

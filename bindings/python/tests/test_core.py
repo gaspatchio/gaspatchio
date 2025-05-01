@@ -149,7 +149,7 @@ class TestDebugableBasics(unittest.TestCase):
             self.assertAlmostEqual(result["age_squared"][i], age * age)
 
         # Test with numpy functions
-        df["age_sqrt"] = np.sqrt(df["age"])
+        df["age_sqrt"] = df["age"].apply(lambda x: np.sqrt(x), return_dtype=pl.Float64)
         result = df.collect()
         for i, age in enumerate(self.data["age"]):
             self.assertAlmostEqual(result["age_sqrt"][i], np.sqrt(age))
@@ -489,18 +489,20 @@ class TestErrorHandling(unittest.TestCase):
         self.df = ActuarialFrame(self.data)  # Create instance for tests
 
     def test_missing_column_extraction(self):
-        """Test extraction of missing column names from different error formats using _extract_missing_column"""
+        """Test extraction of missing column names from different error formats using _extract_missing_column_robust"""
 
         # Test direct format
         error_msg_direct = "ColumnNotFoundError: policy_duration_as_int"
         self.assertEqual(
-            self.df._extract_missing_column(error_msg_direct), "policy_duration_as_int"
+            self.df._extract_missing_column_robust(error_msg_direct),
+            "policy_duration_as_int",
         )
 
         # Test quoted format
         error_msg_quoted = "Column 'policy_duration_as_int' not found"
         self.assertEqual(
-            self.df._extract_missing_column(error_msg_quoted), "policy_duration_as_int"
+            self.df._extract_missing_column_robust(error_msg_quoted),
+            "policy_duration_as_int",
         )
 
         # Test complex Polars format
@@ -511,14 +513,16 @@ class TestErrorHandling(unittest.TestCase):
             "... rest of plan ..."
         )
         self.assertEqual(
-            self.df._extract_missing_column(error_msg_complex), "policy_duration_as_int"
+            self.df._extract_missing_column_robust(error_msg_complex),
+            "policy_duration_as_int",
         )
 
         # Test fallback format
         self.df._column_order.append("missing_but_assigned")  # Add to tracked columns
         error_msg_fallback = "Some other error FAILED HERE RESOLVING involving missing_but_assigned maybe"
         self.assertEqual(
-            self.df._extract_missing_column(error_msg_fallback), "missing_but_assigned"
+            self.df._extract_missing_column_robust(error_msg_fallback),
+            "missing_but_assigned",
         )
         # Clean up for other tests
         if "missing_but_assigned" in self.df._column_order:
@@ -628,7 +632,7 @@ class TestErrorHandling(unittest.TestCase):
             self.skipTest("thefuzz is not installed, skipping test_thefuzz_integration")
 
     def test_polars_complex_error_extraction(self):
-        """Test _extract_missing_column for complex Polars error message with plan"""
+        """Test _extract_missing_column_robust for complex Polars error message with plan"""
         error_message = (
             "policy_duration_as_int\n\n"
             "Resolved plan until failure:\n\n"
@@ -636,16 +640,16 @@ class TestErrorHandling(unittest.TestCase):
             "... some plan details ..."
         )
         # Test extraction directly using the helper method
-        missing_col = self.df._extract_missing_column(error_message)
+        missing_col = self.df._extract_missing_column_robust(error_message)
         self.assertEqual(missing_col, "policy_duration_as_int")
 
     def test_fallback_extraction_logic(self):
-        """Test the _extract_missing_column fallback logic"""
+        """Test the _extract_missing_column_robust fallback logic"""
         self.df._column_order.append("missing_but_assigned")  # Simulate assigned column
         error_message = "Some other error FAILED HERE RESOLVING involving missing_but_assigned maybe"
 
         # Test extraction directly using the helper method
-        missing_col = self.df._extract_missing_column(error_message)
+        missing_col = self.df._extract_missing_column_robust(error_message)
         self.assertEqual(missing_col, "missing_but_assigned")
         # Clean up
         if "missing_but_assigned" in self.df._column_order:

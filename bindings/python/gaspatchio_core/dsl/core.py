@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging as log
 import os
-import warnings
+import re  # Added for robust extraction
 from contextlib import contextmanager
 from functools import wraps
-from typing import Any, Callable, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 import numpy as np
 import polars as pl
@@ -23,6 +23,13 @@ from gaspatchio_core.functions import round_to_int as core_round_to_int
 from gaspatchio_core.telemetry import configure_telemetry
 from gaspatchio_core.typing import IntoExprColumn
 
+# ADD TYPE_CHECKING import for DateColumnAccessor
+if TYPE_CHECKING:
+    from .accessors.date import DateColumnAccessor, DateFrameAccessor
+
+    # ADD TYPE_CHECKING import for Finance accessors
+    from .accessors.finance import FinanceColumnAccessor, FinanceFrameAccessor
+
 
 # RESTORED MISSING BLOCK
 # Define custom warning class
@@ -35,25 +42,6 @@ class PerformanceWarning(Warning):
 # Enable performance monitoring via telemetry
 configure_telemetry(enable=True)
 
-
-# Try to import numba, but make it optional
-try:
-    import numba
-
-    HAS_NUMBA = True
-except ImportError:
-    HAS_NUMBA = False
-
-    # Define empty functions as placeholders
-    class numba:
-        @staticmethod
-        def vectorize(func):
-            return func
-
-        @staticmethod
-        def njit(func):
-            return func
-# END RESTORED BLOCK
 
 # Global settings
 _DEFAULT_MODE = os.environ.get("GASPATCHIO_MODE", "debug")
@@ -109,6 +97,24 @@ class ExpressionProxy:
     def __init__(self, expr, parent):
         self._expr = expr
         self._parent = parent
+
+    # Add the .date property
+    @property
+    def date(self) -> "DateColumnAccessor":
+        """Access date-specific methods for this expression."""
+        # Import locally to prevent runtime circular dependency
+        from .accessors.date import DateColumnAccessor
+
+        return DateColumnAccessor(self)
+
+    # ADD the .finance property
+    @property
+    def finance(self) -> "FinanceColumnAccessor":
+        """Access finance-specific methods for this expression."""
+        # Import locally to prevent runtime circular dependency
+        from .accessors.finance import FinanceColumnAccessor
+
+        return FinanceColumnAccessor(self)
 
     # Arithmetic operations
     def __add__(self, other):
@@ -201,6 +207,21 @@ class ExpressionProxy:
         casted_expr = self._expr.cast(dtype)
         return ExpressionProxy(casted_expr, self._parent)
 
+    # ADDED: __dir__ method
+    def __dir__(self):
+        """Provide a list of attributes for introspection, including registered accessors."""
+        # Start with standard attributes
+        standard_attrs = set(object.__dir__(self))
+        standard_attrs.update(dir(type(self)))
+
+        # Add registered column accessors
+        # Import locally to prevent runtime circular dependency during registration
+        from .plugins import get_registered_accessors
+
+        column_accessors = set(get_registered_accessors("column").keys())
+
+        return sorted(list(standard_attrs | column_accessors))
+
 
 class ColumnProxy:
     """Proxy for DataFrame columns that captures operations."""
@@ -209,9 +230,23 @@ class ColumnProxy:
         self.name = name
         self._parent = parent
 
-    def apply(self, func):
-        """Apply a function to this column."""
-        return self._parent.apply_function(func, self)
+    # Add the .date property
+    @property
+    def date(self) -> "DateColumnAccessor":
+        """Access date-specific methods for this column."""
+        # Import locally to prevent runtime circular dependency
+        from .accessors.date import DateColumnAccessor
+
+        return DateColumnAccessor(self)
+
+    # ADD the .finance property
+    @property
+    def finance(self) -> "FinanceColumnAccessor":
+        """Access finance-specific methods for this column."""
+        # Import locally to prevent runtime circular dependency
+        from .accessors.finance import FinanceColumnAccessor
+
+        return FinanceColumnAccessor(self)
 
     def collect(self):
         """Collect the column as a Series."""
@@ -222,15 +257,6 @@ class ColumnProxy:
         # This allows NumPy functions to work with ColumnProxy objects
         # by converting to a NumPy array when needed
         return self.collect().to_numpy()
-
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        """Support for NumPy universal functions."""
-        # Handle NumPy ufuncs like np.sqrt, np.exp, etc.
-        if method == "__call__":
-            # Convert the ufunc to a lambda function
-            func = lambda x: ufunc(x)
-            return self._parent.apply_function(func, self)
-        return NotImplemented
 
     # Arithmetic operations
     def __add__(self, other):
@@ -314,6 +340,40 @@ class ColumnProxy:
         expr = pl.col(self.name) >= self._parent._convert_to_expr(other)
         return ExpressionProxy(expr, self._parent)
 
+    # ADDED: apply method for compatibility
+    def apply(
+        self, func: Callable[[Any], Any], return_dtype: pl.PolarsDataType | None = None
+    ) -> ExpressionProxy:
+        """Apply a Python function element-wise to the column.
+
+        This is a convenience method that maps to Polars' `map_elements`.
+
+        Args:
+            func: The function to apply to each element.
+            return_dtype: Optional Polars dtype for the returned expression.
+                It's often recommended to provide this for performance.
+
+        Returns:
+            An ExpressionProxy representing the operation.
+        """
+        expr = pl.col(self.name).map_elements(func, return_dtype=return_dtype)
+        return ExpressionProxy(expr, self._parent)
+
+    # ADDED: __dir__ method
+    def __dir__(self):
+        """Provide a list of attributes for introspection, including registered accessors."""
+        # Start with standard attributes
+        standard_attrs = set(object.__dir__(self))
+        standard_attrs.update(dir(type(self)))
+
+        # Add registered column accessors
+        # Import locally to prevent runtime circular dependency during registration
+        from .plugins import get_registered_accessors
+
+        column_accessors = set(get_registered_accessors("column").keys())
+
+        return sorted(list(standard_attrs | column_accessors))
+
 
 class ActuarialFrame:
     """A DataFrame wrapper that captures operations while allowing direct Python execution"""
@@ -327,7 +387,7 @@ class ActuarialFrame:
             self._df = data
             # Need to collect schema to get initial columns for LazyFrame
             try:
-                initial_columns = list(data.schema.keys())
+                initial_columns = list(data.collect_schema().keys())
             except (
                 Exception
             ):  # Handle cases where schema might not be immediately available
@@ -349,8 +409,6 @@ class ActuarialFrame:
         self._tracing = False
         self._context: Dict[str, Any] = {}  # Store local variables
         self._operation_log: List[str] = []
-        self._batch_enabled = False
-        self._batch_size = 10000
         self._show_query_plan = False  # Flag to control query plan logging
         self._column_order: List[str] = initial_columns  # Track column addition order
 
@@ -358,6 +416,24 @@ class ActuarialFrame:
         self._mode = mode if mode is not None else get_default_mode()
         self._verbose = verbose if verbose is not None else get_default_verbose()
         self._threads = threads if threads is not None else _DEFAULT_THREADS
+
+    # ADDED: .date property for frame-level date operations
+    @property
+    def date(self) -> "DateFrameAccessor":
+        """Access date-specific methods for this ActuarialFrame."""
+        # Import locally to prevent runtime circular dependency
+        from .accessors.date import DateFrameAccessor
+
+        return DateFrameAccessor(self)
+
+    # ADDED: .finance property for frame-level finance operations
+    @property
+    def finance(self) -> "FinanceFrameAccessor":
+        """Access finance-specific methods for this ActuarialFrame."""
+        # Import locally to prevent runtime circular dependency
+        from .accessors.finance import FinanceFrameAccessor
+
+        return FinanceFrameAccessor(self)
 
     def __getitem__(self, key):
         """Allow df['column'] access"""
@@ -402,6 +478,27 @@ class ActuarialFrame:
             ) from e
         return self
 
+    # ADDED: __dir__ method for enhanced introspection
+    def __dir__(self):
+        """Provide a comprehensive list of attributes for introspection.
+
+        Includes standard methods, column names, and custom accessors.
+        """
+        # Start with standard attributes of the class and instance
+        standard_attrs = set(object.__dir__(self))
+        standard_attrs.update(dir(type(self)))
+
+        # Add column names (if available)
+        try:
+            column_attrs = set(self._df.columns)
+        except Exception:
+            # Handle cases where schema might not be available yet
+            column_attrs = set(self._column_order)  # Use tracked order as fallback
+
+        # Combine and sort
+        # Note: Explicit accessors like .date are already included via dir(type(self))
+        return sorted(list(standard_attrs | column_attrs))
+
     def _expr_to_str(self, value):
         """Convert an expression to a readable string for logging"""
         if isinstance(value, ColumnProxy):
@@ -424,135 +521,15 @@ class ActuarialFrame:
         elif isinstance(value, pl.Expr):
             # For direct Polars expressions, return as is
             return value
-        elif callable(value):
-            # For callable functions, vectorize them
-            return self._vectorize_function(value)
+        elif isinstance(value, str):
+            # ADDED: Treat strings as column names
+            return pl.col(value)
         elif isinstance(value, np.ndarray):
             # For numpy arrays, convert to literal
             return pl.lit(value)
         else:
             # For all other types, convert to literal
             return pl.lit(value)
-
-    def _vectorize_function(self, func):
-        """Convert a Python function to a vectorized Polars expression"""
-        # Implementation varies by mode (debug vs optimize)
-        if self._mode == "optimize" and HAS_NUMBA:
-            try:
-                # Try to use Numba in optimize mode
-                try:
-                    # Always attempt vectorize first
-                    jit_func = numba.vectorize(func)
-                    return lambda s: s.map_elements(
-                        lambda x: jit_func(x), return_dtype=pl.Float64
-                    )
-                except Exception:
-                    # If vectorize fails, always try njit
-                    jit_func = numba.njit(func)
-                    return lambda s: s.map_elements(
-                        lambda x: jit_func(x), return_dtype=pl.Float64
-                    )
-            except Exception as e2:
-                if self._verbose:
-                    log.warning(
-                        f"Function {func.__name__} couldn't be compiled with Numba. "
-                        f"Falling back to Python execution. Reason: {str(e2)}"
-                    )
-                # Fall back to Python UDF
-                return lambda s: s.map_elements(func, return_dtype=pl.Float64)
-        else:
-            # In debug mode or when Numba is not available, use the original Python function
-            return lambda s: s.map_elements(func, return_dtype=pl.Float64)
-
-    def apply_function(self, func, *args):
-        """Apply a function to one or more columns."""
-        # Convert all arguments to expressions
-        expr_args = [self._convert_to_expr(arg) for arg in args]
-
-        # Default to Float64 for return_dtype to avoid warnings
-        return_dtype = pl.Float64
-
-        if self._mode == "debug":
-            try:
-                if len(expr_args) == 1:
-                    # Single column case - use map_elements with return_dtype
-                    return ExpressionProxy(
-                        expr_args[0].map_elements(
-                            lambda x: func(x),
-                            return_dtype=return_dtype,
-                            skip_nulls=False,
-                        ),
-                        self,
-                    )
-                else:
-                    # Multiple columns case - use struct and map_elements
-                    return ExpressionProxy(
-                        pl.struct(expr_args).map_elements(
-                            lambda row: func(*[row[i] for i in range(len(expr_args))]),
-                            return_dtype=return_dtype,
-                            skip_nulls=False,
-                        ),
-                        self,
-                    )
-            except Exception as e:
-                raise RuntimeError(f"Error applying function in debug mode: {e}")
-        else:  # optimize mode
-            try:
-                # Try to use Polars' optimized functions if possible
-                if hasattr(func, "__polars_func__"):
-                    # Function has a Polars-optimized version
-                    return ExpressionProxy(func.__polars_func__(*expr_args), self)
-                elif HAS_NUMBA:
-                    # Use Numba if available
-                    vectorized_func = self._vectorize_function(func)
-                    if len(expr_args) == 1:
-                        # Now vectorized_func returns a lambda function
-                        return ExpressionProxy(
-                            vectorized_func(expr_args[0]),
-                            self,
-                        )
-                    else:
-                        # For multiple arguments, pass the struct to the vectorized function
-                        return ExpressionProxy(
-                            pl.struct(expr_args).map_elements(
-                                lambda row: func(
-                                    *[row[i] for i in range(len(expr_args))]
-                                ),
-                                return_dtype=return_dtype,
-                                skip_nulls=False,
-                            ),
-                            self,
-                        )
-                else:
-                    # Fall back to Python execution with a warning
-                    warnings.warn(
-                        "Function execution falling back to Python mode. "
-                        "This may impact performance. Consider using Numba or "
-                        "providing a Polars-optimized version.",
-                        PerformanceWarning,
-                    )
-                    if len(expr_args) == 1:
-                        return ExpressionProxy(
-                            expr_args[0].map_elements(
-                                lambda x: func(x),
-                                return_dtype=return_dtype,
-                                skip_nulls=False,
-                            ),
-                            self,
-                        )
-                    else:
-                        return ExpressionProxy(
-                            pl.struct(expr_args).map_elements(
-                                lambda row: func(
-                                    *[row[i] for i in range(len(expr_args))]
-                                ),
-                                return_dtype=return_dtype,
-                                skip_nulls=False,
-                            ),
-                            self,
-                        )
-            except Exception as e:
-                raise RuntimeError(f"Error applying function in optimize mode: {e}")
 
     def _log_query_plan(self, operations):
         """Log the query plan before execution"""
@@ -639,79 +616,49 @@ class ActuarialFrame:
 
         return wrapper
 
-    def _extract_missing_column(self, error_str: str) -> str | None:
-        """Attempts to extract the missing column name from various error formats."""
-        missing_col = None
-        # Check specific formats first
-        if "ColumnNotFoundError:" in error_str:
-            # Example: "... raised ColumnNotFoundError: 'my_col'"
-            parts = error_str.split("ColumnNotFoundError:")
-            if len(parts) > 1:
-                # Extract text after the error name, often enclosed in quotes
-                potential_col = parts[1].strip().strip("'\"")
-                # Simple heuristic: if it doesn't contain obvious error text, assume it's the column
-                if (
-                    potential_col
-                    and "Resolved plan" not in potential_col
-                    and "\n" not in potential_col
-                ):
-                    return potential_col
+    def _extract_missing_column_robust(self, error_str: str) -> str | None:
+        """Attempts to extract the missing column name from specific error patterns.
+        Assumes error_str is derived from `str(ColumnNotFoundError)`.
+        """
+        # Pattern 1: Starts with column name, followed by newline
+        # Example: 'invalid_start\n\nResolved plan...'
+        match = re.match(r"^([^\s'\"]+)\n", error_str)
+        if match:
+            return match.group(1)
 
-        elif "' not found" in error_str:
-            # Example: "column 'my_col' not found"
-            parts = error_str.split("'")
-            if len(parts) >= 2:
-                return parts[1]
+        # Pattern 2: contains "column 'col_name' not found" (less common from str(e)?)
+        match = re.search(r"column\s*'([^']*)'\s*not found", error_str, re.IGNORECASE)
+        if match:
+            return match.group(1)
 
-        elif "\n\nResolved plan until failure:" in error_str:
-            # Example: "my col name\n\nResolved plan..."
-            possible_missing = error_str.split("\n\nResolved plan until failure:")[
-                0
-            ].strip()
-            # Removed the 'no spaces' check here
-            if possible_missing:
-                return possible_missing
+        # Pattern 3: contains "unable to find column \"col_name\""
+        match = re.search(r"unable to find column \\\"([^\\\"]*)\\\"", error_str)
+        if match:
+            return match.group(1)
 
-        # Fallback: Search known columns in the error string (less reliable)
-        if not missing_col and "FAILED HERE RESOLVING" in error_str:
-            try:
-                current_cols = self._df.collect_schema().names()
-                # Prioritize columns that were assigned but aren't in the final schema
-                assigned_but_missing = [
-                    col
-                    for col in self._column_order
-                    if col not in current_cols and col in error_str
-                ]
-                if assigned_but_missing:
-                    missing_col = assigned_but_missing[
-                        0
-                    ]  # Take the first likely candidate
-                else:
-                    # Last resort: look for unknown words that look like identifiers
-                    for word in error_str.split():
-                        potential_col = word.strip("'\"[]():.,")
-                        if (
-                            potential_col
-                            and potential_col not in current_cols
-                            and len(potential_col) > 3
-                            and potential_col.lower()
-                            not in ["some", "other", "error", "involving", "maybe"]
-                        ):
-                            missing_col = potential_col
-                            break
-            except Exception:
-                pass  # Ignore schema collection errors during fallback
+        # Pattern 4: Format like "ColumnNotFoundError: policy_duration_as_int"
+        match = re.search(r"ColumnNotFoundError:\s*([^\s'\"]+)", error_str)
+        if match:
+            return match.group(1)
 
-        return missing_col
+        # Pattern 5: Fallback for missing columns that were assigned but not in the dataframe
+        # Look for any column name that we've tracked but isn't in the final dataframe
+        for col in self._column_order:
+            if col in error_str:
+                return col
+
+        # If no patterns match, return None
+        return None
 
     def _format_column_error(
-        self, original_exception: Exception, missing_col: str
+        self, original_exception: Exception, missing_col: str, original_msg: str
     ) -> Exception:
-        """Formats a helpful error message for a missing column."""
+        """Formats a helpful error message for a missing column, including original error."""
         try:
-            available_cols = self._df.collect_schema().names()
+            # Use columns property which works for both Lazy and Eager frames
+            available_cols = self._df.columns
         except Exception:
-            available_cols = self._column_order
+            available_cols = self._column_order  # Fallback
 
         similar_cols = self._find_similar_columns(missing_col, available_cols)
 
@@ -723,30 +670,64 @@ class ActuarialFrame:
             )
 
         error_msg += "Available columns are:\n - " + "\n - ".join(available_cols)
+        error_msg += (
+            f"\n\nOriginal Polars Error: {original_msg}"  # Include original message
+        )
 
         # Return a new exception of the original type with the formatted message
         return type(original_exception)(error_msg)
 
     def _handle_execution_error(self, e: Exception):
-        """Handles potential ColumnNotFoundErrors during collect/profile, re-raising others."""
-        error_str = str(e)
-        # Check if it looks like a column error
-        is_column_error = (
-            "ColumnNotFoundError" in str(type(e))
-            or "column" in error_str.lower()
-            and "not found" in error_str.lower()
-            or "FAILED HERE RESOLVING" in error_str
+        """Handles potential Polars errors during collect/profile, improving context."""
+        original_error_msg = str(e)
+        log.debug(
+            f"Handling execution error. Original Polars Error: {original_error_msg}"
         )
+        log.debug(f"Raw error message repr for extraction: {repr(original_error_msg)}")
 
-        if is_column_error:
-            missing_col = self._extract_missing_column(error_str)
+        # Prioritize specific Polars error types
+        if isinstance(e, pl.ColumnNotFoundError):
+            missing_col = self._extract_missing_column_robust(original_error_msg)
             if missing_col:
                 # Format and raise the specific column error
-                raise self._format_column_error(e, missing_col) from None
+                raise self._format_column_error(
+                    e, missing_col, original_error_msg
+                ) from None
+            else:
+                # If extraction fails, raise with original message but add available columns hint
+                log.warning("Column extraction failed for ColumnNotFoundError.")
+                try:
+                    available_cols = self._df.columns
+                except Exception:
+                    available_cols = self._column_order  # Fallback
+                raise type(e)(
+                    f"{original_error_msg}\n\nAvailable columns: {available_cols}"
+                ) from None
 
-        # If it wasn't a column error we could identify, or extraction failed,
-        # re-raise the original exception.
-        raise e
+        # Handle Type/Operation errors specifically - original message is usually best
+        elif isinstance(
+            e, (pl.InvalidOperationError, TypeError, pl.SchemaError, pl.ComputeError)
+        ):
+            # Add available columns info if it seems like a column issue based on keywords
+            if (
+                "column" in original_error_msg.lower()
+                or "field" in original_error_msg.lower()
+            ):
+                try:
+                    available_cols = self._df.columns
+                except Exception:
+                    available_cols = self._column_order  # Fallback
+                raise type(e)(
+                    f"Polars operation/schema error: {original_error_msg}\n\nAvailable columns might be: {available_cols}"
+                ) from None
+            else:
+                raise type(e)(
+                    f"Polars operation/schema error: {original_error_msg}"
+                ) from None
+
+        # Fallback for other/unexpected errors
+        log.warning(f"Unhandled exception type during execution: {type(e).__name__}")
+        raise e  # Re-raise the original exception
 
     def collect(self):
         """Execute and materialize the dataframe"""
@@ -822,24 +803,6 @@ class ActuarialFrame:
                 ),
             }
         return None
-
-    def batch_operations(self, batch_size: int = 10000) -> "ActuarialFrame":
-        """
-        Enable batch processing for large datasets.
-        For operations like table lookups that require materialization,
-        this will process the data in smaller chunks to reduce memory usage.
-
-        Args:
-            batch_size: Number of rows to process in each batch
-
-        Returns:
-            Self for method chaining
-        """
-        self._batch_enabled = True
-        self._batch_size = batch_size
-        if self._verbose:
-            log.info(f"Batch processing enabled with batch size {batch_size}")
-        return self
 
     def with_columns(self, *exprs) -> "ActuarialFrame":
         """
@@ -935,3 +898,6 @@ from ._delegation import _autopatch
 
 _autopatch(ColumnProxy)
 _autopatch(ExpressionProxy)
+
+# Import plugins module at the end to trigger registration AFTER core classes are defined
+from . import plugins  # noqa: F401 - Ensures registration happens
