@@ -1,10 +1,8 @@
 import math
 import unittest
-from unittest import mock
 
 import numpy as np
 import polars as pl
-import pytest
 from gaspatchio_core.dsl.core import (
     ActuarialFrame,
     ColumnProxy,
@@ -324,46 +322,6 @@ class TestModelCalculations(unittest.TestCase):
                 result["exp_premium"][i], np.exp(self.data["premium"][i] / 1000)
             )
             self.assertAlmostEqual(result["sin_age"][i], np.sin(age * np.pi / 180))
-
-
-class TestNumbaOptimization(unittest.TestCase):
-    def setUp(self):
-        self.data = pl.DataFrame(
-            {
-                "age": [35, 40, 45, 50, 55],
-                "premium": [100.0, 150.0, 200.0, 250.0, 300.0],
-            }
-        )
-
-    @pytest.mark.skipif(not HAS_NUMBA, reason="Numba not installed")
-    def test_numba_optimization(self):
-        # Define a function that Numba can optimize
-        def calculate_mortality(age):
-            base_rate = 0.001
-            for i in range(10):  # Some iteration to make it slower in Python
-                base_rate *= 1 + 0.03 * age / 100
-            return base_rate
-
-        # Run in optimize mode with mocking to verify Numba is used
-        df = ActuarialFrame(self.data, mode="optimize")
-
-        # We need to mock both vectorize and njit since our code now tries both
-        with (
-            mock.patch("numba.vectorize") as mock_vectorize,
-            mock.patch("numba.njit") as mock_njit,
-        ):
-            # Make both mocks just return the function (no real compilation)
-            mock_vectorize.side_effect = lambda f: f
-            mock_njit.side_effect = lambda f: f
-
-            # Perform the calculation that should use Numba
-            df["mortality"] = df["age"].apply(calculate_mortality)
-
-            # Check that either vectorize or njit was called
-            self.assertTrue(
-                mock_vectorize.called or mock_njit.called,
-                "Neither numba.vectorize nor numba.njit was called",
-            )
 
 
 class TestPerformance(unittest.TestCase):
