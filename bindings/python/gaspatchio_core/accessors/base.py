@@ -3,13 +3,11 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-# Use TYPE_CHECKING to avoid circular imports with core.py
+# Use TYPE_CHECKING to avoid circular imports
 if TYPE_CHECKING:
-    from gaspatchio_core.dsl.core import (  # type: ignore[attr-defined]
-        ActuarialFrame,
-        ColumnProxy,
-        ExpressionProxy,
-    )
+    # Updated imports to point to new locations
+    from ..column.proxy import ColumnProxy, ExpressionProxy  # Adjusted path
+    from ..frame.base import ActuarialFrame  # Adjusted path
 
 
 class BaseFrameAccessor(ABC):

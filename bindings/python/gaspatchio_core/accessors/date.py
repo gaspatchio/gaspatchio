@@ -5,18 +5,22 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+# Import registry decorator
+from ..frame.registry import register_accessor
+
+# Use the new base location
 from .base import BaseColumnAccessor, BaseFrameAccessor
 
 # Use TYPE_CHECKING for core components to avoid circular imports
 if TYPE_CHECKING:
-    from gaspatchio_core.dsl.core import (
-        ActuarialFrame,  # Need parent frame to create ExpressionProxy
-        ColumnProxy,
-        ExpressionProxy,
-        IntoExprColumn,  # Added for type hints
-    )
+    # Update imports to new locations
+    from ..column.proxy import ColumnProxy, ExpressionProxy
+    from ..frame.base import ActuarialFrame
+    from ..typing import IntoExprColumn
 
 
+# Add registration decorator
+@register_accessor("date", kind="frame")
 class DateFrameAccessor(BaseFrameAccessor):
     """Provides date-related methods applicable to the entire ActuarialFrame.
 
@@ -94,8 +98,8 @@ class DateFrameAccessor(BaseFrameAccessor):
         )
 
         # --- Return New ActuarialFrame --- #
-        # We need to import ActuarialFrame locally to avoid circular dependency
-        from gaspatchio_core.dsl.core import ActuarialFrame
+        # Import from new location
+        from ..frame.base import ActuarialFrame
 
         # Create a new ActuarialFrame instance wrapping the modified LazyFrame
         return ActuarialFrame(df_exploded)
@@ -123,7 +127,8 @@ class DateFrameAccessor(BaseFrameAccessor):
             pl.ComputeError: If the duration addition fails (e.g., invalid duration string,
                              incompatible date types).
         """
-        from gaspatchio_core.dsl.core import ActuarialFrame  # Local import
+        # Import from new location
+        from ..frame.base import ActuarialFrame
 
         try:
             date_expr = self._frame._convert_to_expr(date_col)
@@ -147,6 +152,8 @@ class DateFrameAccessor(BaseFrameAccessor):
         return ActuarialFrame(df_updated)
 
 
+# Add registration decorator
+@register_accessor("date", kind="column")
 class DateColumnAccessor(BaseColumnAccessor):
     """Provides date-related methods applicable to columns or expressions.
 
@@ -238,7 +245,8 @@ class DateColumnAccessor(BaseColumnAccessor):
 
         # Use helper to get parent frame
         parent_frame = self._get_parent_frame()
-        from gaspatchio_core.dsl.core import ExpressionProxy  # Local import
+        # Import from new location
+        from ..column.proxy import ExpressionProxy
 
         return ExpressionProxy(date_expr, parent_frame)
 
@@ -265,7 +273,8 @@ class DateColumnAccessor(BaseColumnAccessor):
             RuntimeError: If the proxy is not part of an ActuarialFrame context.
             pl.ComputeError: On date difference calculation errors.
         """
-        from gaspatchio_core.dsl.core import ExpressionProxy  # Local import
+        # Import from new location
+        from ..column.proxy import ExpressionProxy
 
         parent_frame = self._get_parent_frame()
         start_expr = self._get_polars_expr()
@@ -307,7 +316,8 @@ class DateColumnAccessor(BaseColumnAccessor):
             RuntimeError: If the proxy is not part of an ActuarialFrame context.
             pl.ComputeError: On truncation errors.
         """
-        from gaspatchio_core.dsl.core import ExpressionProxy  # Local import
+        # Import from new location
+        from ..column.proxy import ExpressionProxy
 
         parent_frame = self._get_parent_frame()
         base_expr = self._get_polars_expr()

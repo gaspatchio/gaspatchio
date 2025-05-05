@@ -4,18 +4,25 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+# Import the registry decorator
+from ..frame.registry import register_accessor
+
+# Updated import for base accessors
 from .base import BaseColumnAccessor, BaseFrameAccessor
 
 # Use TYPE_CHECKING for core components to avoid circular imports
 if TYPE_CHECKING:
-    from gaspatchio_core.dsl.core import (
-        ActuarialFrame,
+    # Updated imports to point to new locations
+    from ..column.proxy import (  # Adjusted path
         ColumnProxy,
         ExpressionProxy,
         IntoExprColumn,
     )
+    from ..frame.base import ActuarialFrame  # Adjusted path
 
 
+# Register this accessor for frame objects
+@register_accessor("finance", kind="frame")
 class FinanceFrameAccessor(BaseFrameAccessor):
     """Provides finance-related methods applicable to the entire ActuarialFrame.
 
@@ -48,8 +55,8 @@ class FinanceFrameAccessor(BaseFrameAccessor):
         Returns:
             An ExpressionProxy representing the present value for each cash flow.
         """
-        # Defer import
-        from gaspatchio_core.dsl.core import ExpressionProxy
+        # Defer import - updated path
+        from ..column.proxy import ExpressionProxy
 
         cf_expr = self._frame._convert_to_expr(cashflow_col)
         rate_expr = self._frame._convert_to_expr(rate_col)
@@ -66,6 +73,8 @@ class FinanceFrameAccessor(BaseFrameAccessor):
         return ExpressionProxy(pv_expr, self._frame)
 
 
+# Register this accessor for column/expression objects
+@register_accessor("finance", kind="column")
 class FinanceColumnAccessor(BaseColumnAccessor):
     """Provides finance-related methods applicable to columns or expressions.
 
@@ -81,8 +90,8 @@ class FinanceColumnAccessor(BaseColumnAccessor):
 
     def _get_polars_expr(self) -> pl.Expr:
         """Helper to get the underlying Polars expression from the proxy."""
-        # Defer import to avoid circularity at runtime
-        from gaspatchio_core.dsl.core import ColumnProxy, ExpressionProxy
+        # Defer import to avoid circularity at runtime - updated path
+        from ..column.proxy import ColumnProxy, ExpressionProxy
 
         if isinstance(self._proxy, ExpressionProxy):
             return self._proxy._expr
@@ -111,8 +120,8 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         Returns:
             An ExpressionProxy representing the discounted value.
         """
-        # Defer import
-        from gaspatchio_core.dsl.core import ExpressionProxy
+        # Defer import - updated path
+        from ..column.proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
         parent_frame = self._proxy._parent  # Need the parent to convert other exprs
