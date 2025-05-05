@@ -5,26 +5,6 @@ from unittest import mock
 import numpy as np
 import polars as pl
 import pytest
-
-# Try to import numba, but make it optional
-try:
-    import numba
-
-    HAS_NUMBA = True
-except ImportError:
-    HAS_NUMBA = False
-
-    # Define empty functions as placeholders
-    class numba:
-        @staticmethod
-        def vectorize(func):
-            return func
-
-        @staticmethod
-        def njit(func):
-            return func
-
-
 from gaspatchio_core.dsl.core import (
     ActuarialFrame,
     ColumnProxy,
