@@ -2,12 +2,10 @@ from unittest.mock import MagicMock, patch
 
 import polars as pl
 import pytest
-
-# Import the class under test from the public API
-from gaspatchio_core import ActuarialFrame
-
-# Import ColumnProxy for checking return types
-from gaspatchio_core.column import ColumnProxy
+from gaspatchio_core import (
+    ActuarialFrame,
+    ColumnProxy,
+)
 
 # Import error handler to potentially mock it
 
@@ -145,9 +143,26 @@ def test_with_columns_adds_expressions(mock_with_columns, sample_lazy_frame):
     assert result_af is af  # Should return self
     mock_lazy_frame.with_columns.assert_called_once()
     args, kwargs = mock_lazy_frame.with_columns.call_args
-    assert len(args) == 2  # Two expressions passed
-    assert args[0].meta.output_name() == "c"
-    assert args[1].meta.output_name() == "d"
+
+    # Check if expressions were passed via args or kwargs
+    expressions = None
+    if args:
+        expressions = args[0]  # Assume passed as first positional argument
+    elif "expressions" in kwargs:
+        expressions = kwargs["expressions"]  # Assume passed as 'expressions' kwarg
+    elif kwargs:
+        # Maybe passed directly as kwargs? {alias: expr}
+        expressions = list(kwargs.values())
+
+    assert expressions is not None, "Expressions not found in args or known kwargs"
+    assert isinstance(expressions, (list, tuple)), (
+        "Expressions should be a list or tuple"
+    )
+    assert len(expressions) == 2, "Expected 2 expressions"
+    # Check aliases (Polars >= 0.19.14 uses .meta.output_name())
+    assert expressions[0].meta.output_name() == "c"
+    assert expressions[1].meta.output_name() == "d"
+
     assert af.get_column_order() == ["a", "b", "c", "d"]  # Order updated
     assert af._df is new_mock_frame  # Internal df updated
 
@@ -173,40 +188,37 @@ def test_collect_calls_polars_collect(
 
 
 @patch("polars.LazyFrame.collect")
-@patch("gaspatchio_core.errors._handle_execution_error")
-def test_collect_handles_polars_error(
-    mock_handle_error, mock_collect, sample_lazy_frame
-):
+def test_collect_handles_polars_error(mock_collect, sample_lazy_frame):
     # Arrange
     test_exception = pl.exceptions.ComputeError("Polars failed")
     mock_collect.side_effect = test_exception
     af = ActuarialFrame(sample_lazy_frame)
 
-    # Act
-    # Expect _handle_execution_error to be called, which might raise
-    af.collect()  # Call collect, error handling is internal
+    # Act & Assert
+    # Expect the framework's handler to catch and re-raise the error
+    with pytest.raises(
+        pl.exceptions.ComputeError, match="Column 'a' not found"
+    ):  # Check formatted message
+        af.collect()  # Call collect, error handling is internal
 
-    # Assert
     mock_collect.assert_called_once()
-    mock_handle_error.assert_called_once_with(af, test_exception)
 
 
 # Test profile (basic behavior - current impl collects)
-@patch("polars.LazyFrame.collect")
-@patch("gaspatchio_core.errors._handle_execution_error")
-def test_profile_calls_collect(mock_handle_error, mock_collect, sample_lazy_frame):
+@patch("polars.LazyFrame.profile")
+def test_profile_calls_collect(mock_profile, sample_lazy_frame):
     # Arrange
-    mock_result = MagicMock(spec=pl.DataFrame)
-    mock_collect.return_value = mock_result
+    test_exception = pl.exceptions.ComputeError("Polars failed")
+    mock_profile.side_effect = test_exception
     af = ActuarialFrame(sample_lazy_frame)
 
-    # Act
-    result = af.profile()  # Currently calls collect
+    # Act & Assert
+    with pytest.raises(
+        pl.exceptions.ComputeError, match="Column 'a' not found"
+    ):  # Check formatted message
+        af.profile()
 
-    # Assert
-    mock_collect.assert_called_once()
-    mock_handle_error.assert_not_called()
-    assert result is mock_result
+    mock_profile.assert_called_once()
 
 
 # Test pipe

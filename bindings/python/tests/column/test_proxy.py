@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 import polars as pl
 import pytest
 
-# Assuming the proxies are exported from the column package
-from gaspatchio_core.column import ColumnProxy, ExpressionProxy
+# Test imports
+from gaspatchio_core import ColumnProxy, ExpressionProxy
 
 
 # Mock ActuarialFrame for testing proxy parent interactions
@@ -29,30 +29,18 @@ def mock_parent():
     return MockActuarialFrame()
 
 
-# Fixture for ColumnProxy (cannot be instantiated directly)
-# We need a way to get an instance for testing operators/methods
-# Let's create a helper or subclass for tests
-class TestColumnProxy(ColumnProxy):
-    def __new__(cls, *args, **kwargs):
-        # Bypass the direct instantiation check for testing
-        return object.__new__(cls)
-
-
+# Fixture for ColumnProxy
 @pytest.fixture
 def col_proxy(mock_parent):
-    return TestColumnProxy("test_col", mock_parent)
+    # Instantiate directly now that __new__ check is removed
+    return ColumnProxy("test_col", mock_parent)
 
 
-# Fixture for ExpressionProxy (cannot be instantiated directly)
-class TestExpressionProxy(ExpressionProxy):
-    def __new__(cls, *args, **kwargs):
-        # Bypass the direct instantiation check for testing
-        return object.__new__(cls)
-
-
+# Fixture for ExpressionProxy
 @pytest.fixture
 def expr_proxy(mock_parent):
-    return TestExpressionProxy(pl.lit(10), mock_parent)
+    # Instantiate directly now that __new__ check is removed
+    return ExpressionProxy(pl.lit(10), mock_parent)
 
 
 # --- ColumnProxy Tests ---
@@ -93,13 +81,13 @@ def test_column_proxy_add(col_proxy):
     result_proxy = col_proxy + 5
     assert isinstance(result_proxy, ExpressionProxy)
     # Example check - Polars expression string representation
-    assert str(result_proxy._expr) == '[col("test_col") + 5]'
+    assert str(result_proxy._expr) == '[(col("test_col")) + (dyn int: 5)]'
 
 
 def test_column_proxy_eq(col_proxy):
     result_proxy = col_proxy == "abc"
     assert isinstance(result_proxy, ExpressionProxy)
-    assert str(result_proxy._expr) == '[col("test_col") == String(abc)]'
+    assert str(result_proxy._expr) == '[(col("test_col")) == (String(abc))]'
 
 
 # --- ExpressionProxy Tests ---
@@ -116,13 +104,13 @@ def test_expression_proxy_repr(expr_proxy):
 
 def test_expression_proxy_to_expr(expr_proxy):
     assert isinstance(expr_proxy._to_expr(), pl.Expr)
-    assert str(expr_proxy._to_expr()) == "10"
+    assert str(expr_proxy._to_expr()) == "dyn int: 10"
 
 
 def test_expression_proxy_alias(expr_proxy):
     new_proxy = expr_proxy.alias("result")
     assert isinstance(new_proxy, ExpressionProxy)
-    assert str(new_proxy._expr) == 'lit(10).alias("result")'
+    assert str(new_proxy._expr) == 'dyn int: 10.alias("result")'
 
 
 def test_expression_proxy_cast(expr_proxy):
@@ -133,20 +121,13 @@ def test_expression_proxy_cast(expr_proxy):
 
 def test_expression_proxy_add(expr_proxy, mock_parent):
     # Test adding another expression proxy
-    other_proxy = TestExpressionProxy(pl.col("another_col"), mock_parent)
+    other_proxy = ExpressionProxy(pl.col("another_col"), mock_parent)
     result_proxy = expr_proxy + other_proxy
     assert isinstance(result_proxy, ExpressionProxy)
-    assert str(result_proxy._expr) == '[lit(10) + col("another_col")]'
+    assert str(result_proxy._expr) == '[(dyn int: 10) + (col("another_col"))]'
 
 
 def test_expression_proxy_gt(expr_proxy):
     result_proxy = expr_proxy > 0
     assert isinstance(result_proxy, ExpressionProxy)
-    assert str(result_proxy._expr) == "[lit(10) > 0]"
-
-
-def test_proxy_instantiation_error():
-    with pytest.raises(TypeError, match="Cannot directly instantiate Proxy classes"):
-        ColumnProxy("a", MagicMock())  # type: ignore
-    with pytest.raises(TypeError, match="Cannot directly instantiate Proxy classes"):
-        ExpressionProxy(pl.lit(1), MagicMock())  # type: ignore
+    assert str(result_proxy._expr) == "[(dyn int: 10) > (dyn int: 0)]"

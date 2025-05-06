@@ -7,6 +7,8 @@ from typing import Any
 
 import polars as pl
 
+from .utils import read_model_points, read_model_points_from_s3
+
 # Global settings moved from dsl/core.py
 _DEFAULT_MODE = os.environ.get("GASPATCHIO_MODE", "debug")
 _DEFAULT_VERBOSE = os.environ.get("GASPATCHIO_VERBOSE", "True").lower() in (
@@ -96,4 +98,6 @@ __all__ = [
     "get_default_threads",
     "execution_mode",
     "_expr_to_str",  # Keep internal for now?
+    "read_model_points",
+    "read_model_points_from_s3",
 ]

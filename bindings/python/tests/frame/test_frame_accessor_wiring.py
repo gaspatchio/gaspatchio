@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 
 # Import the core components and the registry directly for patching
-from gaspatchio_core.frame.base import ActuarialFrame
+from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.frame.registry import _ACCESSOR_REGISTRY
 
 
@@ -30,12 +30,9 @@ class DummyColumnAccessor:
 
 # Define the registry entries for the dummy accessors
 DUMMY_REGISTRY = {
-    "dummy_frame": (DummyFrameAccessor, "frame"),
-    "another_frame": (AnotherFrameAccessor, "frame"),
-    "dummy_column": (
-        DummyColumnAccessor,
-        "column",
-    ),  # Should be ignored by ActuarialFrame
+    "dummy_frame": {"frame": DummyFrameAccessor},
+    "another_frame": {"frame": AnotherFrameAccessor},
+    "dummy_column": {"column": DummyColumnAccessor},
 }
 
 

@@ -6,9 +6,9 @@ T = TypeVar("T")
 
 # Define a type alias for clarity
 AccessorClass = Type
+# REVERT: Use nested Dict[name, Dict[kind, class]] structure
 AccessorRegistryDict: TypeAlias = Dict[str, Dict[str, AccessorClass]]
 
-# Change the structure to Dict[name, Dict[kind, class]]
 _ACCESSOR_REGISTRY: AccessorRegistryDict = {}
 
 
@@ -35,7 +35,8 @@ def register_accessor(
         raise ValueError("Accessor kind must be 'frame' or 'column'")
 
     def decorator(cls: Type[T]) -> Type[T]:
-        # Ensure the name entry exists
+        # REVERT: Logic for nested dict
+        # Ensure the name entry exists as a dictionary
         if name not in _ACCESSOR_REGISTRY:
             _ACCESSOR_REGISTRY[name] = {}
 
@@ -52,7 +53,8 @@ def register_accessor(
     return decorator
 
 
-# Helper function to retrieve an accessor class (optional but potentially useful)
+# Helper function to retrieve an accessor class
+# REVERT: Update helper to use nested dict structure
 def get_accessor(name: str, kind: str) -> AccessorClass | None:
     """Retrieve an accessor class from the registry."""
     return _ACCESSOR_REGISTRY.get(name, {}).get(kind)

@@ -42,9 +42,9 @@ def test_register_frame_accessor():
         pass
 
     assert "dummy_frame" in _ACCESSOR_REGISTRY
-    registered_class, registered_kind = _ACCESSOR_REGISTRY["dummy_frame"]
-    assert registered_class is TestFrameAcc
-    assert registered_kind == "frame"
+    # Access nested dict
+    assert "frame" in _ACCESSOR_REGISTRY["dummy_frame"]
+    assert _ACCESSOR_REGISTRY["dummy_frame"]["frame"] is TestFrameAcc
 
 
 def test_register_column_accessor():
@@ -55,9 +55,9 @@ def test_register_column_accessor():
         pass
 
     assert "dummy_col" in _ACCESSOR_REGISTRY
-    registered_class, registered_kind = _ACCESSOR_REGISTRY["dummy_col"]
-    assert registered_class is TestColAcc
-    assert registered_kind == "column"
+    # Access nested dict
+    assert "column" in _ACCESSOR_REGISTRY["dummy_col"]
+    assert _ACCESSOR_REGISTRY["dummy_col"]["column"] is TestColAcc
 
 
 def test_register_column_accessor_explicit():
@@ -68,38 +68,39 @@ def test_register_column_accessor_explicit():
         pass
 
     assert "dummy_col_explicit" in _ACCESSOR_REGISTRY
-    registered_class, registered_kind = _ACCESSOR_REGISTRY["dummy_col_explicit"]
-    assert registered_class is TestColAccExplicit
-    assert registered_kind == "column"
+    # Access nested dict
+    assert "column" in _ACCESSOR_REGISTRY["dummy_col_explicit"]
+    assert _ACCESSOR_REGISTRY["dummy_col_explicit"]["column"] is TestColAccExplicit
 
 
 def test_register_duplicate_name():
-    """Test that registering a duplicate name raises ValueError."""
+    """Test that registering a duplicate name and kind raises ValueError."""
 
     @register_accessor("duplicate_name", kind="frame")
     class FirstAcc:
         pass
 
+    # Attempt to register the SAME name and SAME kind again
     with pytest.raises(
-        ValueError, match="Accessor with name 'duplicate_name' already registered."
+        ValueError,
+        match=r"Accessor with name 'duplicate_name' and kind 'frame' already registered.",
     ):
 
-        @register_accessor("duplicate_name", kind="column")
-        class SecondAcc:
+        @register_accessor("duplicate_name", kind="frame")
+        class SecondAcc:  # Same name, same kind
             pass
 
-    # Ensure only the first one is actually registered
+    # Ensure only the first one is actually registered and kind is correct
     assert len(_ACCESSOR_REGISTRY) == 1
-    registered_class, registered_kind = _ACCESSOR_REGISTRY["duplicate_name"]
-    assert registered_class is FirstAcc
-    assert registered_kind == "frame"
+    assert "duplicate_name" in _ACCESSOR_REGISTRY
+    assert len(_ACCESSOR_REGISTRY["duplicate_name"]) == 1
+    assert "frame" in _ACCESSOR_REGISTRY["duplicate_name"]
+    assert _ACCESSOR_REGISTRY["duplicate_name"]["frame"] is FirstAcc
 
 
 def test_register_invalid_kind():
     """Test that registering with an invalid kind raises ValueError."""
-    with pytest.raises(
-        ValueError, match="Accessor kind must be either 'frame' or 'column'"
-    ):
+    with pytest.raises(ValueError, match="Accessor kind must be 'frame' or 'column'"):
 
         @register_accessor("invalid_kind_acc", kind="invalid")
         class InvalidKindAcc:

@@ -7,9 +7,9 @@ import polars as pl
 from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
-from gaspatchio_core.dsl.core import ActuarialFrame
-from gaspatchio_core.dsl.core import run_model as dsl_run_model
-from gaspatchio_core.utils import read_model_points
+from gaspatchio_core import ActuarialFrame
+from gaspatchio_core import run_model as dsl_run_model
+from gaspatchio_core.util import read_model_points
 
 
 class ModelRunConfig(BaseModel):

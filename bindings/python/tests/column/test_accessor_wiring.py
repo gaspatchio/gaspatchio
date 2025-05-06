@@ -98,7 +98,8 @@ def test_colproxy_accessor_attribute_error(
     """Test AttributeError for unregistered names on ColumnProxy."""
     col_proxy, _ = sample_proxies
     with pytest.raises(
-        AttributeError, match="No 'non_existent' column accessor registered"
+        AttributeError,
+        match=r"'ColumnProxy' object has no attribute 'non_existent' and no matching column accessor was found.",
     ):
         _ = col_proxy.non_existent
 
@@ -160,7 +161,8 @@ def test_exprproxy_accessor_attribute_error(
     """Test AttributeError for unregistered names on ExpressionProxy."""
     _, expr_proxy = sample_proxies
     with pytest.raises(
-        AttributeError, match="No 'non_existent' column accessor registered"
+        AttributeError,
+        match=r"'ExpressionProxy' object has no attribute 'non_existent' and no matching column accessor was found.",
     ):
         _ = expr_proxy.non_existent
 

@@ -12,11 +12,10 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import typer
-from loguru import logger
-
-from gaspatchio_core.dsl.core import ActuarialFrame, run_model
-from gaspatchio_core.plugin import fill_series, floor
+from gaspatchio_core import ActuarialFrame, floor, run_model
+from gaspatchio_core.functions import fill_series
 from gaspatchio_core.utils import read_model_points
+from loguru import logger
 
 
 def debuggable_model_calculation(df):

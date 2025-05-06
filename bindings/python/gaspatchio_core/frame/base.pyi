@@ -126,3 +126,10 @@ class ActuarialFrame:
     ) -> ExpressionProxy:
         """Apply round_to_int using the core function."""
         ...
+
+    def apply_function(
+        self,
+        func: Callable[..., Any],
+        *args: IntoExprColumn,
+        return_dtype: pl.DataType = pl.Float64,
+    ) -> ExpressionProxy: ...

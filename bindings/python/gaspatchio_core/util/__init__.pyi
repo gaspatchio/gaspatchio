@@ -1,6 +1,10 @@
 # gaspatchio_core/util/__init__.pyi
 from contextlib import _GeneratorContextManager
-from typing import Any
+
+# Added from utils.py
+from pathlib import Path
+
+import polars as pl
 
 # Declare the functions moved from dsl/core.py
 
@@ -32,9 +36,17 @@ def execution_mode(mode: str) -> _GeneratorContextManager[None]:
     """Context manager for temporarily changing the execution mode."""
     ...
 
-def _expr_to_str(value: Any) -> str:
+def _expr_to_str(expr: pl.Expr | str) -> str:
     """Convert a Polars expression or literal to a string representation.
 
     Note: This is intended for internal use.
     """
     ...
+
+# Added from utils.py
+def read_model_points(path: Path | str) -> pl.LazyFrame: ...
+def read_model_points_from_s3(
+    s3_uri: str, region: str = "us-east-1"
+) -> pl.LazyFrame: ...
+
+__all__: list[str]

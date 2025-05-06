@@ -18,6 +18,11 @@ if TYPE_CHECKING:
     from ..frame.base import ActuarialFrame
     from ..typing import IntoExprColumn
 
+# ADDED: More imports for moved logic
+from typing import Literal, Union
+
+from dateutil.relativedelta import relativedelta
+
 
 # Add registration decorator
 @register_accessor("date", kind="frame")
@@ -31,6 +36,46 @@ class DateFrameAccessor(BaseFrameAccessor):
     def __init__(self, frame: "ActuarialFrame"):
         """Initializes the accessor with the parent ActuarialFrame."""
         super().__init__(frame)
+
+    # MOVED & MADE STATIC: Helper function from dates.py
+    @staticmethod
+    def _generate_projection_dates(
+        row,
+        projection_frequency: Literal[
+            "monthly", "quarterly", "semi-annual", "annual"
+        ] = "monthly",
+    ):
+        """Generates a list of dates between start and end based on frequency."""
+        start = row["projection_start_date"]
+        end = row["projection_end_date"]
+
+        # Determine the increment using relativedelta
+        if projection_frequency == "monthly":
+            delta = relativedelta(months=1)
+        elif projection_frequency == "quarterly":
+            delta = relativedelta(months=3)
+        elif projection_frequency == "semi-annual":
+            delta = relativedelta(months=6)
+        elif projection_frequency == "annual":
+            delta = relativedelta(years=1)
+        else:
+            # Should be validated before calling, but handle defensively
+            raise ValueError(f"Invalid projection frequency: {projection_frequency}")
+
+        # Calculate the number of intervals based on original logic from dates.py
+        if projection_frequency == "monthly":
+            intervals = (end.year - start.year) * 12 + end.month - start.month
+        elif projection_frequency == "quarterly":
+            intervals = ((end.year - start.year) * 12 + end.month - start.month) // 3
+        elif projection_frequency == "semi-annual":
+            intervals = ((end.year - start.year) * 12 + end.month - start.month) // 6
+        elif projection_frequency == "annual":
+            intervals = end.year - start.year
+        else:
+            intervals = 0
+
+        # Generate list using the calculated number of intervals and relativedelta
+        return [start + delta * i for i in range(intervals + 1)]
 
     def create_timeline(
         self,
@@ -150,6 +195,173 @@ class DateFrameAccessor(BaseFrameAccessor):
 
         df_updated = self._frame._df.with_columns(result_expr.alias(target_col_name))
         return ActuarialFrame(df_updated)
+
+    # MOVED & ADAPTED: create_projection_timeline from dates.py
+    def create_projection_timeline(
+        self,
+        valuation_date: datetime.date,
+        projection_end_type: Literal[
+            "maximum_age", "term_years", "term_months", "fixed_date"
+        ] = "maximum_age",
+        projection_end_value: Union[int, datetime.date] = 100,
+        issue_age_column: str = "issue_age",
+        projection_frequency: Literal[
+            "monthly", "quarterly", "semi-annual", "annual"
+        ] = "monthly",
+        projection_start_offset_months: int = 0,
+        store_start_date: bool = True,
+        store_end_date: bool = True,
+        output_column: str = "proj_dates",
+    ) -> "ActuarialFrame":
+        """
+        Creates a projection timeline for actuarial calculations within the frame.
+
+        Args:
+            valuation_date: The valuation date from which to project
+            projection_end_type: How to determine the end of the projection:
+                - "maximum_age": Project until the policyholder reaches the maximum age
+                - "term_years": Project for a fixed number of years
+                - "term_months": Project for a fixed number of months
+                - "fixed_date": Project until a specific calendar date
+            projection_end_value: The value corresponding to the projection_end_type:
+                - For "maximum_age": The maximum age (e.g., 100)
+                - For "term_years": The number of years to project
+                - For "term_months": The number of months to project
+                - For "fixed_date": A datetime.date object
+            issue_age_column: The column containing the issue age (needed for "maximum_age")
+            projection_frequency: The frequency of projection points
+            projection_start_offset_months: Months to offset the start date from valuation
+            store_start_date: Whether to store the projection start date
+            store_end_date: Whether to store the projection end date
+            output_column: The name of the column to store the projection dates
+
+        Returns:
+            The updated ActuarialFrame instance (`self._frame`).
+        """
+        # Eagerly validate projection_frequency
+        valid_frequencies = ("monthly", "quarterly", "semi-annual", "annual")
+        if projection_frequency not in valid_frequencies:
+            raise ValueError(
+                f"Invalid projection frequency: {projection_frequency}. "
+                f"Must be one of {valid_frequencies}"
+            )
+
+        # Convert valuation_date to a Polars expression
+        valuation_date_expr = pl.lit(valuation_date)
+
+        # Calculate the projection start date based on offset
+        start_date_expr = valuation_date_expr
+        if projection_start_offset_months != 0:
+            start_date_expr = valuation_date_expr.dt.offset_by(
+                f"{projection_start_offset_months}mo"
+            )
+
+        # Calculate the projection end date based on the end type
+        if projection_end_type == "maximum_age":
+            if not isinstance(projection_end_value, int):
+                raise TypeError(
+                    "projection_end_value must be an integer for 'maximum_age'"
+                )
+            max_age = projection_end_value
+            # Ensure issue_age_column exists or handle error
+            if issue_age_column not in self._frame._df.columns:
+                raise pl.ColumnNotFoundError(
+                    f"Required column '{issue_age_column}' not found for 'maximum_age' projection."
+                )
+            years_to_project_expr = (pl.lit(max_age) - pl.col(issue_age_column)).cast(
+                pl.Int64
+            )
+            end_date_expr = start_date_expr.dt.offset_by(
+                pl.concat_str(years_to_project_expr.cast(pl.Utf8), pl.lit("y"))
+            )
+        elif projection_end_type == "term_years":
+            if not isinstance(projection_end_value, int):
+                raise TypeError(
+                    "projection_end_value must be an integer for 'term_years'"
+                )
+            end_date_expr = start_date_expr.dt.offset_by(f"{projection_end_value}y")
+        elif projection_end_type == "term_months":
+            if not isinstance(projection_end_value, int):
+                raise TypeError(
+                    "projection_end_value must be an integer for 'term_months'"
+                )
+            end_date_expr = start_date_expr.dt.offset_by(f"{projection_end_value}mo")
+        elif projection_end_type == "fixed_date":
+            if not isinstance(projection_end_value, datetime.date):
+                raise TypeError(
+                    "projection_end_value must be a datetime.date for 'fixed_date'"
+                )
+            end_date_expr = pl.lit(projection_end_value)
+        else:
+            raise ValueError(f"Invalid projection end type: {projection_end_type}")
+
+        # --- Apply to frame ---
+        updates = {}
+        if store_start_date:
+            updates["projection_start_date"] = start_date_expr
+        if store_end_date:
+            updates["projection_end_date"] = end_date_expr
+
+        # Temporarily store start/end if needed for the map_elements call
+        temp_start_col = (
+            "_temp_proj_start"
+            if "projection_start_date" not in updates
+            else "projection_start_date"
+        )
+        temp_end_col = (
+            "_temp_proj_end"
+            if "projection_end_date" not in updates
+            else "projection_end_date"
+        )
+        updates[temp_start_col] = start_date_expr
+        updates[temp_end_col] = end_date_expr
+
+        # Generate the projection dates using the calculated expressions
+        # Apply the updates first to ensure columns exist for struct
+        self._frame._df = self._frame._df.with_columns(**updates)
+
+        # Now create the struct and map
+        struct_expr = pl.struct(
+            [
+                pl.col(temp_start_col).alias("projection_start_date"),
+                pl.col(temp_end_col).alias("projection_end_date"),
+            ]
+        )
+
+        timeline_expr = struct_expr.map_elements(
+            lambda row: self._generate_projection_dates(
+                row, projection_frequency=projection_frequency
+            ),
+            return_dtype=pl.List(pl.Date),
+        )
+
+        # Add the final timeline column and remove temps if necessary
+        cols_to_add = {output_column: timeline_expr}
+        self._frame._df = self._frame._df.with_columns(**cols_to_add)
+
+        cols_to_drop = []
+        if temp_start_col != "projection_start_date":
+            cols_to_drop.append(temp_start_col)
+        if temp_end_col != "projection_end_date":
+            cols_to_drop.append(temp_end_col)
+        if cols_to_drop:
+            self._frame._df = self._frame._df.drop(cols_to_drop)
+
+        # Update frame's internal state (schema, column order might need refresh)
+        self._frame._schema = self._frame._df.schema
+        # Be careful modifying column order directly, might be better to recalculate
+        # For now, just add new columns if they weren't already tracked
+        if (
+            store_start_date
+            and "projection_start_date" not in self._frame._column_order
+        ):
+            self._frame._column_order.append("projection_start_date")
+        if store_end_date and "projection_end_date" not in self._frame._column_order:
+            self._frame._column_order.append("projection_end_date")
+        if output_column not in self._frame._column_order:
+            self._frame._column_order.append(output_column)
+
+        return self._frame  # Return the modified frame
 
 
 # Add registration decorator

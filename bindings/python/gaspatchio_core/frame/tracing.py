@@ -59,22 +59,20 @@ def build_trace_decorator(frame_instance: ActuarialFrame) -> Callable:
                     # result = func(frame_instance, *args, **kwargs)
                     result = func(*args, **kwargs)  # Assuming implicit operation
 
-                    # Apply captured operations
+                    # Operations are captured, but not applied immediately by the decorator.
+                    # Application should happen later (e.g., during collect/profile).
                     captured_operations = frame_instance._computation_graph
                     if captured_operations:
                         logger.debug(
-                            f"Applying {len(captured_operations)} captured operations."
+                            f"{len(captured_operations)} operations captured for later application."
                         )
-                        # Create a dictionary of expressions for with_columns
-                        exprs_dict = {name: expr for name, expr in captured_operations}
-                        frame_instance._df = frame_instance._df.with_columns(
-                            **exprs_dict
-                        )
-                        log_query_plan(captured_operations, frame_instance._df)
+                        # Log the plan if verbose, but don't apply yet
+                        if get_default_verbose():
+                            log_query_plan(captured_operations, frame_instance._df)
                     else:
                         logger.debug("No operations captured during trace.")
 
-                    # Return the frame instance (potentially modified)
+                    # Return the frame instance (state is unchanged wrt _df in optimize mode)
                     # If the original function returned something else, we might lose it here.
                     # The original implementation assumed the function modifies the frame inplace
                     # or returns None. Let's stick to that for now.

@@ -1,7 +1,7 @@
 import datetime
 
 import polars as pl
-from gaspatchio_core.dsl.core import ActuarialFrame
+from gaspatchio_core import ActuarialFrame
 from polars.testing import assert_frame_equal
 
 

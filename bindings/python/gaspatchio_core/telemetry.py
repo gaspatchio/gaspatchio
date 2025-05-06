@@ -37,7 +37,7 @@ def _get_mode() -> str:
         Current execution mode ("debug" or "optimize")
     """
     # Use dynamic import to avoid circular imports
-    from gaspatchio_core.dsl.core import get_default_mode
+    from gaspatchio_core import get_default_mode
 
     return get_default_mode()
 

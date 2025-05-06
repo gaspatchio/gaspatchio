@@ -2,13 +2,15 @@ import os
 
 import polars as pl
 import pytest
-from gaspatchio_core.util import (
-    _expr_to_str,
+from gaspatchio_core import (
     execution_mode,
     get_default_mode,
+    set_default_mode,
+)
+from gaspatchio_core.util import (
+    _expr_to_str,
     get_default_threads,
     get_default_verbose,
-    set_default_mode,
     set_default_verbose,
 )
 

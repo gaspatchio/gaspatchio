@@ -2,12 +2,10 @@ import time
 
 import polars as pl
 import typer
+from gaspatchio_core import ActuarialFrame, fill_series, floor, run_model
+from gaspatchio_core.utils import read_model_points
 from loguru import logger
 from typing_extensions import Annotated
-
-from gaspatchio_core.dsl import ActuarialFrame, run_model
-from gaspatchio_core.plugin import fill_series, floor
-from gaspatchio_core.utils import read_model_points
 
 
 def model_calculation(df):

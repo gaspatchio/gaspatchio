@@ -8,9 +8,6 @@ import polars as pl
 # Import types
 from gaspatchio_core.typing import IntoExprColumn
 
-# ADDED: Import function wrappers
-from .. import functions as gp_funcs
-
 # Import proxies
 from ..column import ColumnProxy, ExpressionProxy
 
@@ -19,6 +16,9 @@ from ..errors import _handle_execution_error
 
 # ADDED: Import registry
 from ..frame.registry import _ACCESSOR_REGISTRY
+
+# ADDED: Import function wrappers from the correct module
+from ..functions import vector as gp_funcs
 
 # Import utilities
 from ..util import get_default_mode, get_default_verbose
@@ -111,18 +111,6 @@ class ActuarialFrame:
                 f"Value type: {type(value).__name__}"
             ) from e
         # No return self needed for __setitem__
-
-    # ADDED: __dir__ method for basic introspection (can be enhanced later)
-    def __dir__(self):
-        """Provide basic list of attributes."""
-        standard_attrs = set(object.__dir__(self))
-        standard_attrs.update(dir(type(self)))
-        try:
-            column_attrs = set(self._df.columns)
-        except Exception:
-            column_attrs = set(self._column_order)
-        # Exclude dynamic accessors for now
-        return sorted(list(standard_attrs | column_attrs))
 
     def _expr_to_str(self, value):
         """Convert an expression to a readable string (simplified)."""
@@ -277,32 +265,42 @@ class ActuarialFrame:
     def fill_series(
         self,
         column: IntoExprColumn,
-        limit: int,
+        start: int = 0,
+        increment: int = 1,
     ) -> ExpressionProxy:
         """Apply fill_series using the core function."""
         expr = self._convert_to_expr(column)
-        # Assuming gp_funcs.fill_series returns a Polars Expression
-        result_expr = gp_funcs.fill_series(expr, limit=limit)
+        result_expr = gp_funcs.fill_series(expr, start=start, increment=increment)
         return ExpressionProxy(result_expr, self)
 
-    def floor(self, column: IntoExprColumn, divisor: float = 1.0) -> ExpressionProxy:
+    def floor(
+        self,
+        column: IntoExprColumn,
+        divisor: int = 1,
+        default: int = 0,
+    ) -> ExpressionProxy:
         """Apply floor using the core function."""
         expr = self._convert_to_expr(column)
-        result_expr = gp_funcs.floor(expr, divisor=divisor)
+        result_expr = gp_funcs.floor(expr, divisor=divisor, default=default)
         return ExpressionProxy(result_expr, self)
 
-    def round(self, column: IntoExprColumn, decimals: int = 0) -> ExpressionProxy:
+    def round(
+        self,
+        column: IntoExprColumn,
+        decimal_places: int = 0,
+    ) -> ExpressionProxy:
         """Apply round using the core function."""
         expr = self._convert_to_expr(column)
-        result_expr = gp_funcs.round(expr, decimals=decimals)
+        result_expr = gp_funcs.round(expr, decimal_places=decimal_places)
         return ExpressionProxy(result_expr, self)
 
     def round_to_int(
-        self, column: IntoExprColumn, strategy: str = "nearest"
+        self,
+        column: IntoExprColumn,
     ) -> ExpressionProxy:
         """Apply round_to_int using the core function."""
         expr = self._convert_to_expr(column)
-        result_expr = gp_funcs.round_to_int(expr, strategy=strategy)
+        result_expr = gp_funcs.round_to_int(expr)
         return ExpressionProxy(result_expr, self)
 
     def get_column_order(self) -> List[str]:
@@ -348,21 +346,91 @@ class ActuarialFrame:
             self._finance_accessor_instance = AccessorClass(self)
         return self._finance_accessor_instance
 
+    def __getattr__(self, name: str) -> Any:
+        """Dynamically instantiate and return registered frame accessors."""
+        # REVERT: Check registry for nested dict entry
+        kind_dict = _ACCESSOR_REGISTRY.get(name)
+
+        if kind_dict:
+            AccessorClass = kind_dict.get("frame")
+            if AccessorClass:
+                # Instantiate the accessor, passing the frame instance
+                accessor_instance = AccessorClass(self)
+                # Cache the instance on the object itself
+                setattr(self, name, accessor_instance)
+                return accessor_instance
+            else:
+                # Found name, but not 'frame' kind
+                raise AttributeError(f"Accessor '{name}' is not a frame accessor.")
+        else:
+            # Did not find name in registry
+            # Fallback to standard attribute error
+            raise AttributeError(
+                f"No '{name}' frame accessor registered or attribute found."
+            )
+
     # --- Dunder Methods ---
+
+    # ADDED: Apply function method
+    def apply_function(
+        self, func: Callable, *args, return_dtype=pl.Float64
+    ) -> ExpressionProxy:
+        """Apply a Python function element-wise to one or more columns/expressions.
+
+        Args:
+            func: The Python function to apply.
+            *args: One or more column names, ColumnProxy, or ExpressionProxy objects.
+            return_dtype: The expected Polars dtype of the function's return value.
+                          Defaults to pl.Float64.
+
+        Returns:
+            An ExpressionProxy representing the result of the function application.
+        """
+        if not args:
+            raise ValueError(
+                "apply_function requires at least one column/expression argument."
+            )
+
+        expr_args = [self._convert_to_expr(arg) for arg in args]
+
+        try:
+            if len(expr_args) == 1:
+                # Single column case - use map_elements
+                result_expr = expr_args[0].map_elements(
+                    lambda x: func(x),
+                    return_dtype=return_dtype,
+                    skip_nulls=False,  # Keep original behavior
+                )
+            else:
+                # Multiple columns case - use struct and map_elements
+                result_expr = pl.struct(expr_args).map_elements(
+                    lambda row: func(*[row[i] for i in range(len(expr_args))]),
+                    return_dtype=return_dtype,
+                    skip_nulls=False,  # Keep original behavior
+                )
+            return ExpressionProxy(result_expr, self)
+        except Exception as e:
+            func_name = getattr(func, "__name__", "anonymous function")
+            raise RuntimeError(f"Error applying function '{func_name}': {e}") from e
 
     def __dir__(self) -> List[str]:
         """Enhance dir() output to include standard methods, df methods, and accessors."""
-        standard_attrs = list(super().__dir__())
+        standard_attrs = list(
+            super().__dir__()
+        )  # Use object.__dir__(self) or similar if needed
         # Add methods from the underlying LazyFrame if available
         df_methods = []
         if hasattr(self, "_df") and self._df is not None:
-            df_methods = [
-                attr
-                for attr in dir(self._df)
-                if not attr.startswith("_") and callable(getattr(self._df, attr))
-            ]
+            try:
+                df_methods = [
+                    attr
+                    for attr in dir(self._df)
+                    if not attr.startswith("_")  # and callable(getattr(self._df, attr))
+                ]
+            except Exception:
+                df_methods = []  # Ignore errors if _df is weird
 
-        # Include registered frame accessors by checking the nested dict
+        # REVERT: Include registered frame accessors based on nested dict structure
         accessor_names = [
             name for name, kinds in _ACCESSOR_REGISTRY.items() if "frame" in kinds
         ]
