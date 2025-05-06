@@ -193,6 +193,28 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
         - af["policy_date"].dt.year()  # Namespace method
         - af["policy_id"].str.contains("XYZ") # String namespace methods
         - af["benefit_amounts"].list.sum() # List column aggregation
+
+    Vector Operation Example:
+        When working with columns containing vectors (lists), special handling ensures
+        operations apply to each element, not the whole list:
+
+        # Column structure: "projected_cashflows" contains lists of values
+        # [
+        #   [100.2, -50.5, 75.8],    # First policy's cashflows
+        #   [-25.3, 60.4, -10.9],    # Second policy's cashflows
+        #   [45.6, -80.7, 30.2]      # Third policy's cashflows
+        # ]
+
+        # When applying abs() to this column:
+        af["projected_cashflows"].abs()
+
+        # Without list shimming, this would try to take abs() of each list as a whole
+        # With list shimming, it correctly applies abs() to each element:
+        # [
+        #   [100.2, 50.5, 75.8],     # First policy's absolute cashflows
+        #   [25.3, 60.4, 10.9],      # Second policy's absolute cashflows
+        #   [45.6, 80.7, 30.2]       # Third policy's absolute cashflows
+        # ]
     """
 
     def wrapper(self_proxy: "ProxyType", *args: Any, **kwargs: Any) -> Any:
@@ -233,14 +255,46 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
                     - af["premium"].round(2)  # Rounds premiums to 2 decimal places
                     - af["claim_amounts"].abs() # Gets absolute value of claims
                     - af["surrender_values"].sqrt() # Takes square root of surrender values
+
+                Vector Column Example:
+                    When af["profit_vectors"] contains lists of values like:
+                    [
+                      [10.1, -5.2, 8.3],     # Policy 1's profit by year
+                      [-3.4, 7.5, -2.6],     # Policy 2's profit by year
+                      [4.7, -6.8, 9.9]       # Policy 3's profit by year
+                    ]
+
+                    And you call: af["profit_vectors"].abs()
+
+                    The result will be:
+                    [
+                      [10.1, 5.2, 8.3],      # Absolute values within each list
+                      [3.4, 7.5, 2.6],
+                      [4.7, 6.8, 9.9]
+                    ]
+
+                    Without special list handling, this operation would fail or give
+                    incorrect results, as standard Polars operations aren't designed
+                    to work element-wise on nested lists.
                 """
-                # --- Handle list-type shimming optimization ---
-                # Determine if we should use list shimming (for unary operations on lists)
+                # ===== LIST TYPE SHIMMING SECTION =====
+                # Why do we need list shimming?
+                #   For operations like abs(), round(), sqrt() on columns containing LISTS,
+                #   we need to apply the operation to EACH ELEMENT in EACH LIST,
+                #   not to the list as a whole.
+                #
+                #   Example without shimming:
+                #     af["cashflow_vectors"].sqrt() would fail because sqrt() can't operate on lists
+                #
+                #   Example with shimming:
+                #     Each number inside each list gets sqrt() applied to it
+
+                # Only applies to unary operations (no arguments) listed in _NUMERIC_UNARY
+                is_unary_numeric_op = name in _NUMERIC_UNARY and not a and not kw
                 should_use_list_shim = False
 
-                # Only check for list shimming if it's a unary numeric operation with no args
-                # Example: af["claim_vectors"].abs() - applies abs() to each value in the list
-                if name in _NUMERIC_UNARY and not a and not kw:
+                # Check if we're working with a list column
+                if is_unary_numeric_op:
                     # Try to determine if column is a list type
                     if isinstance(self_proxy, ColumnProxy) and parent_af:
                         try:
@@ -251,23 +305,30 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
                     elif isinstance(self_proxy, ExpressionProxy):
                         should_use_list_shim = True  # Try shimming for expressions
 
-                # --- Execute the operation ---
+                # ===== EXECUTION SECTION =====
                 try:
+                    # === LIST COLUMN HANDLING PATH ===
                     if should_use_list_shim:
                         try:
-                            # For list columns, use element-wise operation via list.eval
-                            # Example: af["projected_cash_flows"].floor()
-                            # Applies floor to each value in the list, not the whole list
+                            # The magic: instead of applying the operation directly,
+                            # we use list.eval() with pl.element() to apply it to each
+                            # element inside each list.
+                            #
+                            # Example for af["reserve_vectors"].abs():
+                            #   1. We get the abs() method via pl.element().abs()
+                            #   2. We apply it using list.eval() which executes it on each element
                             element_method = getattr(pl.element(), name)
                             result = base_expr.list.eval(element_method())
                         except Exception:
-                            # Fall back to standard execution if shim fails
+                            # Fall back to standard execution if list shimming fails
                             unwrapped_args = [_unwrap(arg) for arg in a]
                             unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
                             result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
+
+                    # === STANDARD COLUMN HANDLING PATH ===
                     else:
-                        # Standard method execution
-                        # Example: af["lapse_rate"].round(4) - standard scalar operation
+                        # Standard method execution for scalar columns
+                        # Example: af["lapse_rate"].round(4) - normal scalar operation
                         unwrapped_args = [_unwrap(arg) for arg in a]
                         unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
                         result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
