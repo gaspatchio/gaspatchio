@@ -181,157 +181,106 @@ class DelegatorDescriptor:
 
 # Wrapper Factory
 def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
-    """Factory to create the core logic function used by DelegatorDescriptor."""
+    """Factory to create the core logic function used by DelegatorDescriptor.
 
-    # This outer function determines if the attribute is callable and returns either
-    # the actual method_caller or the direct (wrapped) property/namespace.
+    This is the heart of the proxy delegation system. It creates wrapper functions
+    that handle attribute access and method calls on proxy objects, implementing both
+    standard Polars behavior and special optimizations like list column handling.
+
+    Examples where this is used:
+        - af["mortality_rate"].abs()   # Unary operation
+        - af["interest_rate"].round(2) # Method with args
+        - af["policy_date"].dt.year()  # Namespace method
+        - af["policy_id"].str.contains("XYZ") # String namespace methods
+        - af["benefit_amounts"].list.sum() # List column aggregation
+    """
+
     def wrapper(self_proxy: "ProxyType", *args: Any, **kwargs: Any) -> Any:
-        # Import proxy types here for isinstance check
+        """Handle attribute access on proxy objects, either method calls or properties."""
+        # Import proxy types for isinstance checks
         from .column_proxy import ColumnProxy
         from .expression_proxy import ExpressionProxy
 
-        # Determine the base Polars expression and parent frame context
-        base_expr: pl.Expr
-        parent_af: Optional["ActuarialFrame"] = getattr(self_proxy, "_parent", None)
+        # === STEP 1: Setup - get parent context and base expression ===
+        parent_af = getattr(self_proxy, "_parent", None)
 
         try:
+            # Create the base polars expression based on proxy type
             if isinstance(self_proxy, ColumnProxy):
                 base_expr = pl.col(self_proxy.name)
             elif isinstance(self_proxy, ExpressionProxy):
                 base_expr = self_proxy._expr
             else:
-                # This case should ideally not be reached if used correctly
-                raise TypeError(
-                    f"Delegation wrapper called on unsupported type: {type(self_proxy).__name__}"
-                )
-        except AttributeError as e:
-            raise TypeError(
-                f"Failed to get base expression from proxy object: {e}"
-            ) from e
+                raise TypeError(f"Unsupported proxy type: {type(self_proxy).__name__}")
 
-        # Get the corresponding attribute from the Polars expression object
-        try:
+            # Get the attribute from the Polars expression
             polars_attr = getattr(base_expr, name)
-        except AttributeError:
+        except AttributeError as e:
             proxy_type_name = type(self_proxy).__name__
-            base_expr_type_name = type(base_expr).__name__
             raise AttributeError(
-                f"Polars object '{base_expr_type_name}' (accessed via '{proxy_type_name}') has no attribute '{name}'"
+                f"Polars object accessed via '{proxy_type_name}' has no attribute '{name}': {e}"
             )
 
-        # If the Polars attribute is callable (a method or namespace accessor)
+        # === STEP 2: Handle based on attribute type (method vs property) ===
+
+        # If attribute is a method, create a method caller
         if callable(polars_attr):
-            # We return a dedicated function `method_caller` that will handle
-            # the actual execution, including list shimming and wrapping.
-            @functools.wraps(polars_attr)
+
             def method_caller(*a: Any, **kw: Any) -> Any:
-                # Re-resolve base_expr and parent inside the actual call
-                # self_proxy is available via closure
-                inner_base_expr: pl.Expr
-                inner_parent_af: Optional["ActuarialFrame"] = getattr(
-                    self_proxy, "_parent", None
-                )
+                """Execute the delegated method with proper list-type handling.
 
-                # Check parent type *before* creating base expr, if possible
-                is_list_type: Optional[bool] = (
-                    None  # None means unknown/ExpressionProxy
-                )
-                if isinstance(self_proxy, ColumnProxy) and inner_parent_af:
-                    try:
-                        schema = inner_parent_af._df.schema
-                        dtype = schema.get(self_proxy.name)
-                        if dtype:
-                            is_list_type = isinstance(dtype, pl.List)
-                        else:
-                            is_list_type = (
-                                True  # Assume might become list, rely on except
-                            )
-                    except Exception:
-                        is_list_type = True  # Assume might become list on error
-                elif isinstance(self_proxy, ExpressionProxy):
-                    is_list_type = (
-                        True  # Assume ExpressionProxy could be list, rely on except
-                    )
+                Examples:
+                    - af["premium"].round(2)  # Rounds premiums to 2 decimal places
+                    - af["claim_amounts"].abs() # Gets absolute value of claims
+                    - af["surrender_values"].sqrt() # Takes square root of surrender values
+                """
+                # --- Handle list-type shimming optimization ---
+                # Determine if we should use list shimming (for unary operations on lists)
+                should_use_list_shim = False
 
-                try:
-                    if isinstance(self_proxy, ColumnProxy):
-                        inner_base_expr = pl.col(self_proxy.name)
+                # Only check for list shimming if it's a unary numeric operation with no args
+                # Example: af["claim_vectors"].abs() - applies abs() to each value in the list
+                if name in _NUMERIC_UNARY and not a and not kw:
+                    # Try to determine if column is a list type
+                    if isinstance(self_proxy, ColumnProxy) and parent_af:
+                        try:
+                            dtype = parent_af._df.schema.get(self_proxy.name)
+                            should_use_list_shim = isinstance(dtype, pl.List)
+                        except Exception:
+                            pass  # If schema lookup fails, don't use shim
                     elif isinstance(self_proxy, ExpressionProxy):
-                        inner_base_expr = self_proxy._expr
+                        should_use_list_shim = True  # Try shimming for expressions
+
+                # --- Execute the operation ---
+                try:
+                    if should_use_list_shim:
+                        try:
+                            # For list columns, use element-wise operation via list.eval
+                            # Example: af["projected_cash_flows"].floor()
+                            # Applies floor to each value in the list, not the whole list
+                            element_method = getattr(pl.element(), name)
+                            result = base_expr.list.eval(element_method())
+                        except Exception:
+                            # Fall back to standard execution if shim fails
+                            unwrapped_args = [_unwrap(arg) for arg in a]
+                            unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
+                            result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
                     else:
-                        raise TypeError(
-                            f"method_caller on unsupported type: {type(self_proxy).__name__}"
-                        )
-                except AttributeError as e:
-                    raise TypeError(
-                        f"method_caller failed to get base expression: {e}"
+                        # Standard method execution
+                        # Example: af["lapse_rate"].round(4) - standard scalar operation
+                        unwrapped_args = [_unwrap(arg) for arg in a]
+                        unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
+                        result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
+                except Exception as e:
+                    # Provide better error context
+                    raise type(e)(
+                        f"Error calling proxied Polars method '{name}': {e}"
                     ) from e
 
-                # --- Shim logic with try/except --- START ---
-                vectorized = False
-                result_intermediate: Any = None
-                if is_list_type is True and name in _NUMERIC_UNARY and not a and not kw:
-                    try:
-                        # Attempt to get the method on pl.element()
-                        element_method = getattr(pl.element(), name)
-                        if callable(element_method):
-                            # Try applying the list.eval shim
-                            shimmed_expr = inner_base_expr.list.eval(element_method())
-                            result_intermediate = shimmed_expr
-                            vectorized = True  # Mark as handled by shim
-                    except (
-                        AttributeError,  # If .list or pl.element().name fails
-                        TypeError,  # If element_method not callable
-                        pl.ComputeError,  # Potential eval errors
-                        polars.exceptions.InvalidOperationError,  # If .list.eval called on non-list
-                    ):
-                        vectorized = False
-                        result_intermediate = None  # Ensure intermediate is cleared
-                # --- Shim logic with try/except --- END ---
+                # Wrap the result back into our proxy system
+                return _wrap(parent_af, result)
 
-                # --- Standard Polars Call --- START ---
-                # Only run standard call if not handled by shimming
-                if not vectorized:
-                    # Get the standard Polars attribute
-                    try:
-                        polars_attr = getattr(inner_base_expr, name)
-                    except AttributeError:
-                        # This re-raises the original error if the attribute truly doesn't exist
-                        proxy_type_name = type(self_proxy).__name__
-                        base_expr_type_name = type(inner_base_expr).__name__
-                        raise AttributeError(
-                            f"Polars object '{base_expr_type_name}' (accessed via '{proxy_type_name}') has no attribute '{name}'"
-                        )
-
-                    # Check again if it's callable *after* potentially shimming
-                    if not callable(polars_attr):
-                        raise TypeError(
-                            f"Attribute '{name}' on Polars object is not callable after potential shimming."
-                        )
-
-                    # Unwrap arguments before passing to Polars
-                    unwrapped_args = [_unwrap(arg) for arg in a]
-                    unwrapped_kwargs = {key: _unwrap(val) for key, val in kw.items()}
-
-                    try:
-                        # Call the original Polars method/attribute
-                        result_intermediate = polars_attr(
-                            *unwrapped_args, **unwrapped_kwargs
-                        )
-                    except Exception as e:
-                        # Improve error context
-                        raise type(e)(
-                            f"Error calling proxied Polars method '{name}': {e}"
-                        ) from e
-                # --- Standard Polars Call --- END ---
-
-                # --- Wrap Result --- START ---
-                # Wrap the result (either shimmeed or standard) if it's a Polars expression
-                wrapped_result = _wrap(inner_parent_af, result_intermediate)
-                # --- Wrap Result --- END ---
-                return wrapped_result
-
-            # Attempt to add docstring to the caller
+            # Add docstring to help with introspection
             try:
                 method_caller.__doc__ = getattr(
                     polars_attr, "__doc__", f"Proxied Polars method: {name}"
@@ -341,69 +290,105 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
                     f"Proxied Polars method: {name} (docstring unavailable)"
                 )
 
-            # Return the method_caller closure, ready to be called with user arguments
             return method_caller
 
-        # If the Polars attribute is NOT callable (e.g., a property)
-        else:
-            # Properties shouldn't be called with arguments
-            if args or kwargs:
-                raise TypeError(
-                    f"Attribute '{name}' is not callable and cannot accept arguments."
-                )
-            # --- MODIFIED: Check for namespace ---
-            if name in _NAMESPACES:
-                # Return a NamespaceProxy instead of the raw namespace object
-                return NamespaceProxy(self_proxy, name)
-            else:
-                # Wrap other non-callable properties directly (if they return Expr)
-                return _wrap(parent_af, polars_attr)
-            # --- END MODIFIED ---
+        # === STEP 3: Handle non-callable attributes (properties and namespaces) ===
+        # Properties shouldn't be called with arguments
+        if args or kwargs:
+            raise TypeError(
+                f"Attribute '{name}' is not callable and cannot accept arguments."
+            )
 
-    # Set name for the function returned by the factory (for introspection)
+        # Special handling for namespaces vs regular properties
+        # Examples of namespaces:
+        #   - af["policy_date"].dt        # Date/time namespace
+        #   - af["coverage_code"].str     # String namespace
+        #   - af["benefit_amounts"].list  # List namespace
+        if name in _NAMESPACES:
+            return NamespaceProxy(self_proxy, name)  # Return a namespace proxy
+        else:
+            return _wrap(parent_af, polars_attr)  # Wrap property value
+
+    # Set name for the wrapper function (helps with debugging)
     wrapper.__name__ = f"proxied_{name}"
     return wrapper
 
 
 # Autopatching Function
 def _autopatch(proxy_cls: Type["ProxyType"]) -> None:
-    """Dynamically add proxied Polars Expr methods/properties/namespaces via descriptors."""
+    """Dynamically add proxied Polars Expr methods/properties/namespaces via descriptors.
+
+    This function is the "magic" that makes the proxy classes behave like Polars expressions.
+    It works by:
+    1. Finding all methods/properties available on Polars expressions
+    2. Adding them to the proxy class using descriptors
+    3. Respecting any existing methods already defined on the proxy class
+    4. Adding a specialized __dir__ method for proper introspection
+
+    Method Override Mechanism:
+    -------------------------
+    When there's a name conflict between a custom method in your proxy class and
+    a Polars method, your implementation ALWAYS takes precedence. The check
+    `hasattr(proxy_cls, attr_name)` ensures that any methods you've defined on your
+    proxy class won't be overwritten by the Polars equivalent.
+
+    Example: If you define your own custom `map_elements` method on ColumnProxy,
+    and Polars also has a `map_elements` method, your implementation will be used
+    when calling `af["column"].map_elements(...)`.
+
+    Args:
+        proxy_cls: The proxy class to enhance with Polars methods
+    """
+    # === STEP 1: Prepare for patching ===
     processed_attrs: Set[str] = set()
 
-    # Combine attributes from pl.Expr and defined namespaces
+    # Get all available attributes from Polars expressions and our defined namespaces
     attrs_to_process = dir(pl.Expr) + list(_NAMESPACES)
 
+    # === STEP 2: Patch each attribute onto the proxy class ===
     for attr_name in set(attrs_to_process):  # Use set to avoid duplicates
+        # Determine if attribute is internal (starts with _ but isn't a dunder method)
         is_internal = attr_name.startswith("_") and not (
             attr_name.startswith("__") and attr_name.endswith("__")
         )
 
-        # Skip internal attributes (like _expr, _parent), already processed, or already defined on the proxy
+        # Skip attributes that:
+        # 1. Are internal Polars details (like _expr)
+        # 2. Have already been processed
+        # 3. Already exist on the proxy class (this is where method overriding happens!)
+        #    This is crucial: your custom implementations take precedence over Polars methods
         if is_internal or attr_name in processed_attrs or hasattr(proxy_cls, attr_name):
             processed_attrs.add(attr_name)  # Mark as processed even if skipped
             continue
 
-        # Use the DelegatorDescriptor to handle the delegation logic
+        # Add the attribute to the proxy class using the descriptor
         try:
+            # This creates the dynamic delegation mechanism for each Polars method
+            # When users call this attribute, the descriptor will handle the delegation
             setattr(proxy_cls, attr_name, DelegatorDescriptor(attr_name))
-            processed_attrs.add(attr_name)
+            processed_attrs.add(attr_name)  # Track successfully added attributes
         except Exception as e:
-            # Should be rare with descriptors, but good practice
+            # Rare, but good practice to handle exceptions
             print(
                 f"Warning: Skipping autopatch for '{attr_name}' on {proxy_cls.__name__}: {e}"
             )
 
-    # --- Add __dir__ method --- START ---
-    # Get the original __dir__ if it exists, otherwise default to object.__dir__
+    # === STEP 3: Enhance __dir__ for proper introspection ===
+    # This ensures that when users call dir() on a proxy object,
+    # they see both the original methods and the dynamically added Polars methods
+
+    # Preserve any existing __dir__ implementation, or use object.__dir__ as fallback
     original_dir = getattr(proxy_cls, "__dir__", object.__dir__)
 
-    # Define the new __dir__ method
+    # Define our enhanced __dir__ method
     def __dir__(self):
-        # Combine original attributes with the dynamically added Polars attributes
-        # Filter processed_attrs to only include those successfully set (might be overly cautious)
+        """Return all attributes available on this proxy, including dynamic Polars attributes."""
+        # Combine:
+        # 1. Original attributes from the class
+        # 2. Dynamically added Polars attributes
+        # Only include successfully patched attributes (might be overly cautious)
         dynamic_attrs = {attr for attr in processed_attrs if hasattr(proxy_cls, attr)}
         return sorted(list(set(original_dir(self)) | dynamic_attrs))
 
-    # Assign the new __dir__ method to the proxy class
+    # Replace the proxy class's __dir__ method with our enhanced version
     proxy_cls.__dir__ = __dir__
-    # --- Add __dir__ method --- END ---
