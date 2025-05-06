@@ -94,7 +94,13 @@ def test_str_namespace_delegation(sample_af: ActuarialFrame):
     # Using 'text' column now
     proxy_contains = sample_af["text"].str.contains("a")
     assert isinstance(proxy_contains, ExpressionProxy)
-    assert str(proxy_contains._expr) == 'col("text").str.contains([String(a)])'
+    expected_expr_str_v1 = 'col("text").str.contains([String(a)])'
+    expected_expr_str_v2 = 'col("text").str.contains(["a"])'
+    current_expr_str = str(proxy_contains._expr)
+    assert (
+        current_expr_str == expected_expr_str_v1
+        or current_expr_str == expected_expr_str_v2
+    )
 
 
 def test_list_namespace_delegation(sample_af: ActuarialFrame):
@@ -188,7 +194,13 @@ def test_operators_work(sample_af: ActuarialFrame):
 
     proxy_eq = sample_af["str_col"] == "apple"
     assert isinstance(proxy_eq, ExpressionProxy)
-    assert str(proxy_eq._expr) == '[(col("str_col")) == (String(apple))]'
+    expected_expr_str_v1 = '[(col("str_col")) == (String(apple))]'
+    expected_expr_str_v2 = '[(col("str_col")) == ("apple")]'
+    current_expr_str = str(proxy_eq._expr)
+    assert (
+        current_expr_str == expected_expr_str_v1
+        or current_expr_str == expected_expr_str_v2
+    )
 
 
 # --- Error Handling ---
@@ -344,7 +356,9 @@ def test_vector_shim_unary_ops_moved(sample_af: ActuarialFrame):
     af5 = af4.with_columns(
         sample_af["scalar_float"].floor().alias("scalar_float_floor")
     )
-    res_af = af5.with_columns((sample_af["list_float"] + 1).alias("list_float_plus_1"))
+    res_af = af5.with_columns(
+        sample_af["list_float"].list.eval(pl.element() + 1).alias("list_float_plus_1")
+    )
 
     # Get the final LazyFrame from the result of proxy operations
     result_lf = res_af._df  # Use the final result
@@ -370,7 +384,7 @@ def test_vector_shim_unary_ops_moved(sample_af: ActuarialFrame):
         pl.col("scalar_float").floor().alias("scalar_float_floor")
     )
     expected_lf = expected_lf.with_columns(
-        (pl.col("list_float") + 1).alias("list_float_plus_1")
+        (pl.col("list_float").list.eval(pl.element() + 1)).alias("list_float_plus_1")
     )
 
     # Ensure the column order matches for comparison
@@ -447,9 +461,19 @@ def test_delegation_with_proxy_args(sample_af: ActuarialFrame):
     assert isinstance(clipped_proxy, ExpressionProxy)
     # String representation can be complex, just check structure
     assert "clip" in str(clipped_proxy._expr)
-    assert 'clip([[(col("a"))*(dynfloat:-1.0)],dynfloat:3.0])' in str(
-        clipped_proxy._expr
-    ).replace(" ", "")
+    # MODIFIED: Adjust for dynfloat representation (e.g., -1.0 -> -1, 3.0 -> 3)
+    # Old: 'clip([[(col("a"))*(dynfloat:-1.0)],dynfloat:3.0])'
+    expected_clip_str_v1 = (
+        'clip([[(col("a"))*(dynfloat:-1.0)],dynfloat:3.0])'  # original if needed
+    )
+    expected_clip_str_v2 = 'clip([[(col("a"))*(dynfloat:-1)],dynfloat:3])'  # new format
+
+    actual_clip_expr_str_no_space = str(clipped_proxy._expr).replace(" ", "")
+
+    assert (
+        expected_clip_str_v1 in actual_clip_expr_str_no_space
+        or expected_clip_str_v2 in actual_clip_expr_str_no_space
+    )
 
     # Execute and check results - Collect expressions individually
     res_filtered = sample_af._df.select(

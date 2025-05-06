@@ -66,15 +66,15 @@ class ActuarialFrame:
 
         if isinstance(data, pl.LazyFrame):
             self._df = data
-            self._schema = self._df.schema
+            self._schema = self._df.collect_schema()
             self._column_order = list(self._schema.keys())
         elif isinstance(data, pl.DataFrame):
             self._df = data.lazy()
-            self._schema = self._df.schema
+            self._schema = self._df.collect_schema()
             self._column_order = list(self._schema.keys())
         elif isinstance(data, dict):
             self._df = pl.LazyFrame(data)
-            self._schema = self._df.schema
+            self._schema = self._df.collect_schema()
             self._column_order = list(self._schema.keys())
         elif data is not None:
             raise TypeError("Data must be a Polars DataFrame, LazyFrame, or dictionary")
@@ -86,7 +86,6 @@ class ActuarialFrame:
         if isinstance(key, str):
             # Basic proxy creation, no strict checking here for now
             return ColumnProxy(key, self)
-        raise TypeError(f"Indexing with {type(key)} is not supported, use strings.")
 
     def __setitem__(self, key: str, value: Any):
         """Handle column assignment using df['column'] = value."""
@@ -241,7 +240,7 @@ class ActuarialFrame:
             else:
                 # Execute directly
                 self._df = self._df.with_columns(**converted_exprs_dict)
-                self._schema = self._df.schema  # Update schema after execution
+                self._schema = self._df.collect_schema()
                 self._column_order.extend(new_cols_order)
 
         except Exception as e:
@@ -290,7 +289,7 @@ class ActuarialFrame:
 
             # Update schema and column order AFTER execution
             # This might be expensive; consider lazy update or collect_schema()
-            self._schema = self._df.schema
+            self._schema = self._df.collect_schema()
             # Reconstruct column order based on the *new* schema from select
             self._column_order = list(self._schema.keys())
 
@@ -545,7 +544,7 @@ class ActuarialFrame:
     def get_operation_log(self) -> List[Dict[str, Any]]:
         raise NotImplementedError("Operation log is now part of the trace graph.")
 
-    # REVISED: Use map_batches instead of map_elements_with_warning
+    # REVISED: Use map_batches directly instead of map_elements
     def _apply_map_elements(
         self,
         proxy: ColumnProxy | ExpressionProxy,
@@ -553,23 +552,25 @@ class ActuarialFrame:
         return_dtype: pl.DataType | None = None,
     ) -> ExpressionProxy:
         """Internal helper to apply a Python function using map_batches for better performance."""
+        # Get the expression from the proxy
         expr = proxy._to_expr()
+
+        from ..column.expression_proxy import ExpressionProxy
 
         # Define the batch function that applies the element-wise function
         def batch_func(batch_series: pl.Series) -> pl.Series:
-            # Apply the user's element-wise function to the batch Series
+            # Apply the user's element-wise function to each element in the batch
             return batch_series.map_elements(
-                func, return_dtype=return_dtype, skip_nulls=False
+                function=func, return_dtype=return_dtype, skip_nulls=False
             )
 
-        # Apply the batch function using expr.map_batches
+        # Apply the batch function using map_batches
         if return_dtype:
             mapped_expr = expr.map_batches(batch_func, return_dtype=return_dtype)
         else:
-            # If return_dtype is None, map_batches has to infer it, potentially slower.
+            # If return_dtype is None, let polars infer it
             mapped_expr = expr.map_batches(batch_func)
 
-        # Return a new ExpressionProxy wrapping the mapped expression
         return ExpressionProxy(mapped_expr, self)
 
 

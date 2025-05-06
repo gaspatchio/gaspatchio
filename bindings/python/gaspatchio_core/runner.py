@@ -127,45 +127,34 @@ def _execute_model_run(
         f"Single policy run (ID: {policy_id})" if policy_id else "Full model run"
     )
 
-    try:
-        # Check if data_lazy is empty *after* potential filtering
-        if data_lazy.fetch(1).is_empty():
-            error_suffix = f" for Policy ID '{policy_id}'" if policy_id else ""
-            err_msg = f"No data found{error_suffix} after filtering."
-            logger.error(err_msg)
-            errors.append(err_msg)
-            # Skip actual model execution if no data
-            raise ValueError(err_msg)
+    # Check if data_lazy is empty *after* potential filtering
+    if data_lazy.fetch(1).is_empty():
+        error_suffix = f" for Policy ID '{policy_id}'" if policy_id else ""
+        err_msg = f"No data found{error_suffix} after filtering."
+        logger.error(err_msg)
+        errors.append(err_msg)
+        # Skip actual model execution if no data
+        raise ValueError(err_msg)
 
-        # 5. Run the model using ActuarialFrame and dsl_run_model
-        logger.info("Setting up ActuarialFrame in {} mode...", config.mode)
-        df = ActuarialFrame(data_lazy, mode=config.mode)
-        # df.show_query_plan(True)
+    # 5. Run the model using ActuarialFrame and dsl_run_model
+    logger.info("Setting up ActuarialFrame in {} mode...", config.mode)
+    df = ActuarialFrame(data_lazy, mode=config.mode)
+    # df.show_query_plan(True)
 
-        logger.info("Running model function...")
-        dsl_run_model(model_func, df)
+    logger.info("Running model function...")
+    dsl_run_model(model_func, df)
 
-        # 6. Collect the result and profile
-        logger.info("Collecting results...")
-        result_df, profile_info = df.profile()
+    # 6. Collect the result and profile
+    logger.info("Collecting results...")
+    result_df, profile_info = df.profile()
 
-    except Exception as e:
-        error_suffix = f" (ID: {policy_id})" if policy_id else ""
-        logger.error(f"Error during model execution{error_suffix}: {e}")
-        # Avoid adding duplicate error messages if ValueError was raised earlier
-        if not errors:
-            errors.append(f"Execution Error{error_suffix}: {str(e)}")
-        # Keep default/empty result_df and profile_info if execution fails
+    end_time = time.time()
+    total_time = end_time - start_time
+    record_count = len(result_df) if not result_df.is_empty() else 0
+    logger.success(
+        f"{run_description} finished in {total_time:.2f} seconds producing {record_count} result records."
+    )
 
-    finally:
-        end_time = time.time()
-        total_time = end_time - start_time
-        record_count = len(result_df) if not result_df.is_empty() else 0
-        logger.success(
-            f"{run_description} finished in {total_time:.2f} seconds producing {record_count} result records."
-        )
-
-    # 7. Return the ModelRunResult object
     metrics = RunMetrics(total_time_s=total_time, profile_info=profile_info)
     return ModelRunResult(
         result=result_df, metrics=metrics, errors=errors if errors else None
@@ -196,7 +185,7 @@ def run_model(config: ModelRunConfig) -> ModelRunResult:
         return _execute_model_run(config, data_lazy, model_func)
 
     except Exception as e:
-        logger.error(f"Error during model setup: {e}")
+        logger.opt(exception=True).error("Error during model setup")
         # Return an error result if setup fails
         metrics = RunMetrics(total_time_s=0.0, profile_info=None)
         return ModelRunResult(

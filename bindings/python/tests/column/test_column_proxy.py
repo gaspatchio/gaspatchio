@@ -117,8 +117,12 @@ def test_column_proxy_comparison_operators(col_proxy, op, op_symbol):
     other = "abc"
     result_proxy = op(col_proxy, other)
     assert isinstance(result_proxy, ExpressionProxy)
-    expected_expr_str = f'[(col("test_col")) {op_symbol} (String({other}))]'
-    assert str(result_proxy._expr) == expected_expr_str
+    expected_expr_str_v1 = f'[(col("test_col")) {op_symbol} (String({other}))]'
+    expected_expr_str_v2 = f'[(col("test_col")) {op_symbol} ("{other}")]'
+    assert (
+        str(result_proxy._expr) == expected_expr_str_v1
+        or str(result_proxy._expr) == expected_expr_str_v2
+    )
 
 
 @pytest.mark.parametrize(

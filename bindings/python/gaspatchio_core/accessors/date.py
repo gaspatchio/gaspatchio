@@ -14,7 +14,8 @@ from .base import BaseColumnAccessor, BaseFrameAccessor
 # Use TYPE_CHECKING for core components to avoid circular imports
 if TYPE_CHECKING:
     # Update imports to new locations
-    from ..column.proxy import ColumnProxy, ExpressionProxy
+    from ..column.column_proxy import ColumnProxy
+    from ..column.expression_proxy import ExpressionProxy
     from ..frame.base import ActuarialFrame
     from ..typing import IntoExprColumn
 
@@ -407,7 +408,7 @@ class DateColumnAccessor(BaseColumnAccessor):
         # Use helper to get parent frame
         parent_frame = self._get_parent_frame()
         # Import from new location
-        from ..column.proxy import ExpressionProxy
+        from ..column.expression_proxy import ExpressionProxy
 
         return ExpressionProxy(date_expr, parent_frame)
 
@@ -435,7 +436,6 @@ class DateColumnAccessor(BaseColumnAccessor):
             pl.ComputeError: On date difference calculation errors.
         """
         # Import from new location
-        from ..column.proxy import ExpressionProxy
 
         parent_frame = self._get_parent_frame()
         start_expr = self._get_polars_expr()
@@ -478,7 +478,7 @@ class DateColumnAccessor(BaseColumnAccessor):
             pl.ComputeError: On truncation errors.
         """
         # Import from new location
-        from ..column.proxy import ExpressionProxy
+        from ..column.expression_proxy import ExpressionProxy
 
         parent_frame = self._get_parent_frame()
         base_expr = self._get_polars_expr()
