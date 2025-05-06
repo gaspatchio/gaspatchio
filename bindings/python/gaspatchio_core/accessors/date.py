@@ -21,8 +21,6 @@ if TYPE_CHECKING:
 # ADDED: More imports for moved logic
 from typing import Literal, Union
 
-from dateutil.relativedelta import relativedelta
-
 
 # Add registration decorator
 @register_accessor("date", kind="frame")
@@ -36,46 +34,6 @@ class DateFrameAccessor(BaseFrameAccessor):
     def __init__(self, frame: "ActuarialFrame"):
         """Initializes the accessor with the parent ActuarialFrame."""
         super().__init__(frame)
-
-    # MOVED & MADE STATIC: Helper function from dates.py
-    @staticmethod
-    def _generate_projection_dates(
-        row,
-        projection_frequency: Literal[
-            "monthly", "quarterly", "semi-annual", "annual"
-        ] = "monthly",
-    ):
-        """Generates a list of dates between start and end based on frequency."""
-        start = row["projection_start_date"]
-        end = row["projection_end_date"]
-
-        # Determine the increment using relativedelta
-        if projection_frequency == "monthly":
-            delta = relativedelta(months=1)
-        elif projection_frequency == "quarterly":
-            delta = relativedelta(months=3)
-        elif projection_frequency == "semi-annual":
-            delta = relativedelta(months=6)
-        elif projection_frequency == "annual":
-            delta = relativedelta(years=1)
-        else:
-            # Should be validated before calling, but handle defensively
-            raise ValueError(f"Invalid projection frequency: {projection_frequency}")
-
-        # Calculate the number of intervals based on original logic from dates.py
-        if projection_frequency == "monthly":
-            intervals = (end.year - start.year) * 12 + end.month - start.month
-        elif projection_frequency == "quarterly":
-            intervals = ((end.year - start.year) * 12 + end.month - start.month) // 3
-        elif projection_frequency == "semi-annual":
-            intervals = ((end.year - start.year) * 12 + end.month - start.month) // 6
-        elif projection_frequency == "annual":
-            intervals = end.year - start.year
-        else:
-            intervals = 0
-
-        # Generate list using the calculated number of intervals and relativedelta
-        return [start + delta * i for i in range(intervals + 1)]
 
     def create_timeline(
         self,
@@ -302,50 +260,41 @@ class DateFrameAccessor(BaseFrameAccessor):
         if store_end_date:
             updates["projection_end_date"] = end_date_expr
 
-        # Temporarily store start/end if needed for the map_elements call
-        temp_start_col = (
-            "_temp_proj_start"
-            if "projection_start_date" not in updates
-            else "projection_start_date"
+        # Apply the updates first to ensure columns exist for timeline generation
+        # Use the calculated expressions directly
+        df_with_dates = self._frame._df.with_columns(**updates)
+
+        # Map frequency string to Polars interval string
+        freq_map = {
+            "monthly": "1mo",
+            "quarterly": "3mo",
+            "semi-annual": "6mo",
+            "annual": "1y",
+        }
+        polars_interval = freq_map[projection_frequency]  # Already validated
+
+        # Use the correct start/end expressions for date_ranges
+        # If dates were stored, use those columns. Otherwise, use the expressions.
+        start_col_ref = (
+            pl.col("projection_start_date") if store_start_date else start_date_expr
         )
-        temp_end_col = (
-            "_temp_proj_end"
-            if "projection_end_date" not in updates
-            else "projection_end_date"
-        )
-        updates[temp_start_col] = start_date_expr
-        updates[temp_end_col] = end_date_expr
+        end_col_ref = pl.col("projection_end_date") if store_end_date else end_date_expr
 
-        # Generate the projection dates using the calculated expressions
-        # Apply the updates first to ensure columns exist for struct
-        self._frame._df = self._frame._df.with_columns(**updates)
+        # Generate the projection dates using pl.date_ranges
+        # Use closed='both' to include start and end dates, matching the old logic.
+        timeline_expr = pl.date_ranges(
+            start=start_col_ref,
+            end=end_col_ref,
+            interval=polars_interval,
+            closed="both",  # Include both start and end if they align with frequency
+            eager=False,  # Keep it lazy
+        ).alias(output_column)
 
-        # Now create the struct and map
-        struct_expr = pl.struct(
-            [
-                pl.col(temp_start_col).alias("projection_start_date"),
-                pl.col(temp_end_col).alias("projection_end_date"),
-            ]
-        )
+        # Add the final timeline column
+        # Operate on the DataFrame that already has start/end dates added
+        self._frame._df = df_with_dates.with_columns(timeline_expr)
 
-        timeline_expr = struct_expr.map_elements(
-            lambda row: self._generate_projection_dates(
-                row, projection_frequency=projection_frequency
-            ),
-            return_dtype=pl.List(pl.Date),
-        )
-
-        # Add the final timeline column and remove temps if necessary
-        cols_to_add = {output_column: timeline_expr}
-        self._frame._df = self._frame._df.with_columns(**cols_to_add)
-
-        cols_to_drop = []
-        if temp_start_col != "projection_start_date":
-            cols_to_drop.append(temp_start_col)
-        if temp_end_col != "projection_end_date":
-            cols_to_drop.append(temp_end_col)
-        if cols_to_drop:
-            self._frame._df = self._frame._df.drop(cols_to_drop)
+        # No temporary columns were created in this approach, so no dropping needed
 
         # Update frame's internal state (schema, column order might need refresh)
         self._frame._schema = self._frame._df.schema

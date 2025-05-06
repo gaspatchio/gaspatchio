@@ -6,16 +6,20 @@ from typing import TYPE_CHECKING
 import polars as pl
 from polars.plugins import register_plugin_function
 
+# Import the internal module to get its path
+try:
+    from gaspatchio_core import _internal
+except ImportError as e:
+    raise ImportError(
+        "Failed to import the gaspatchio_core native extension (_internal). "
+        "Ensure the project is built and installed correctly (e.g., using 'maturin develop -uv')."
+    ) from e
+
 if TYPE_CHECKING:
     from gaspatchio_core.typing import IntoExprColumn
 
-# Correct path to the compiled library relative to *this* file
-# It should point to the directory containing the compiled dynamic library (e.g., .so, .dylib, .dll)
-# Adjust this based on your actual build output location.
-# Assuming a standard maturin build places it in the root of the bindings/python directory
-LIB = (
-    Path(__file__).parent.parent / "gaspatchio_core.so"
-)  # Adjust extension as needed (.dylib, .dll)
+# Get the path to the compiled extension from the imported module
+LIB = Path(_internal.__file__)
 
 
 def fill_series(expr: IntoExprColumn, start: int = 0, increment: int = 1) -> pl.Expr:

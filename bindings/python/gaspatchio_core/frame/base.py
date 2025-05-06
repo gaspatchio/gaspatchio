@@ -20,6 +20,7 @@ from ..frame.registry import _ACCESSOR_REGISTRY
 # ADDED: Import function wrappers from the correct module
 from ..functions import vector as gp_funcs
 
+# Import telemetry for apply/map warnings
 # Import utilities
 from ..util import get_default_mode, get_default_verbose
 
@@ -138,13 +139,13 @@ class ActuarialFrame:
         elif isinstance(value, pl.Expr):
             return value
         elif isinstance(value, str):
-            # Treat strings as column names by default in this context
-            return pl.col(value)
+            # Treat strings as literals in this general conversion context
+            return pl.lit(value)
         # Keep handling for numpy arrays if needed, otherwise remove
         elif isinstance(value, np.ndarray):
             return pl.lit(value)
         else:
-            # Convert other types to literal
+            # Default to literal for unsupported types
             return pl.lit(value)
 
     # Excluded: _log_query_plan (now in tracing.py)
@@ -204,7 +205,7 @@ class ActuarialFrame:
         except Exception as e:
             _handle_execution_error(self, e)  # Will re-raise or format
 
-    # Excluded: optimize, get_operation_log, get_execution_stats
+    # Excluded: optimize, get_execution_stats
 
     def with_columns(self, *exprs: IntoExprColumn) -> ActuarialFrame:
         """Add columns to the DataFrame."""
@@ -245,6 +246,56 @@ class ActuarialFrame:
 
         except Exception as e:
             raise type(e)(f"Error adding columns: {e}") from e
+        return self
+
+    def select(
+        self, *exprs: IntoExprColumn, **named_exprs: IntoExprColumn
+    ) -> ActuarialFrame:
+        """Select columns from the DataFrame.
+
+        Accepts positional expressions (column names, proxies, or expressions) and
+        keyword arguments for renamed/new expressions.
+
+        Args:
+            *exprs: Columns or expressions to select.
+            **named_exprs: Expressions to select with specific output names.
+
+        Returns:
+            The modified ActuarialFrame.
+        """
+        if self._df is None:
+            raise ValueError(
+                "Cannot select columns from an uninitialized ActuarialFrame."
+            )
+
+        try:
+            # Convert positional and keyword arguments to Polars expressions
+            converted_positional = [self._convert_to_expr(e) for e in exprs]
+            converted_named = {
+                name: self._convert_to_expr(e) for name, e in named_exprs.items()
+            }
+
+            # Combine positional and named arguments for the underlying select
+            all_exprs_to_select = converted_positional + [
+                expr.alias(name) for name, expr in converted_named.items()
+            ]
+
+            # TODO: Add tracing logic here if needed for select operation
+            # if self._tracing:
+            #     ... Record selection ...
+            # else:
+
+            # Call underlying Polars select
+            self._df = self._df.select(all_exprs_to_select)
+
+            # Update schema and column order AFTER execution
+            # This might be expensive; consider lazy update or collect_schema()
+            self._schema = self._df.schema
+            # Reconstruct column order based on the *new* schema from select
+            self._column_order = list(self._schema.keys())
+
+        except Exception as e:
+            raise type(e)(f"Error selecting columns: {e}") from e
         return self
 
     def pipe(
@@ -371,6 +422,20 @@ class ActuarialFrame:
 
     # --- Dunder Methods ---
 
+    # ADDED: columns property
+    @property
+    def columns(self) -> List[str]:
+        """Return the names of the columns in the current order."""
+        # Use the explicitly tracked order, as the underlying LazyFrame schema
+        # might not reflect changes made via assign/with_columns until collect.
+        # if self._df is not None:
+        #     try:
+        #         # Note: .columns on LazyFrame is okay, schema resolution is the expensive part
+        #         return self._df.columns
+        #     except Exception:
+        #         pass # Fallback to tracked order if error
+        return self._column_order
+
     # ADDED: Apply function method
     def apply_function(
         self, func: Callable, *args, return_dtype=pl.Float64
@@ -441,6 +506,71 @@ class ActuarialFrame:
         """Return a string representation of the ActuarialFrame."""
         # TODO: Implement this method
         pass
+
+    def _apply_lambda(
+        self,
+        expr: pl.Expr,
+        func: Callable[[Any], Any],
+        return_dtype: pl.DataType | None = None,
+    ) -> "ExpressionProxy":
+        """Internal helper to apply a Python lambda function to an expression.
+
+        Args:
+            expr: The Polars expression to apply the function to.
+            func: The Python function to apply element-wise.
+            return_dtype: The expected Polars dtype of the result.
+                          If None, Polars will try to infer it.
+
+        Returns:
+            An ExpressionProxy representing the result.
+        """
+
+        # Use map_batches for potentially better performance
+        def batch_func(batch_series: pl.Series) -> pl.Series:
+            # Apply the user's element-wise function to the batch Series
+            # Note: If return_dtype is None, this internal map_elements might be slow.
+            return batch_series.map_elements(
+                func, return_dtype=return_dtype, skip_nulls=False
+            )
+
+        # Apply the batch function using expr.map_batches
+        if return_dtype:
+            mapped_expr = expr.map_batches(batch_func, return_dtype=return_dtype)
+        else:
+            # If return_dtype is None, map_batches has to infer it, potentially slower.
+            mapped_expr = expr.map_batches(batch_func)
+
+        return ExpressionProxy(mapped_expr, self)
+
+    def get_operation_log(self) -> List[Dict[str, Any]]:
+        raise NotImplementedError("Operation log is now part of the trace graph.")
+
+    # REVISED: Use map_batches instead of map_elements_with_warning
+    def _apply_map_elements(
+        self,
+        proxy: ColumnProxy | ExpressionProxy,
+        func: Callable[[Any], Any],  # User provides element-wise function
+        return_dtype: pl.DataType | None = None,
+    ) -> ExpressionProxy:
+        """Internal helper to apply a Python function using map_batches for better performance."""
+        expr = proxy._to_expr()
+
+        # Define the batch function that applies the element-wise function
+        def batch_func(batch_series: pl.Series) -> pl.Series:
+            # Apply the user's element-wise function to the batch Series
+            return batch_series.map_elements(
+                func, return_dtype=return_dtype, skip_nulls=False
+            )
+
+        # Apply the batch function using expr.map_batches
+        if return_dtype:
+            mapped_expr = expr.map_batches(batch_func, return_dtype=return_dtype)
+        else:
+            # If return_dtype is None, map_batches has to infer it, potentially slower.
+            mapped_expr = expr.map_batches(batch_func)
+
+        # Return a new ExpressionProxy wrapping the mapped expression
+        return ExpressionProxy(mapped_expr, self)
 
 
 # Any helper classes previously nested in ActuarialFrame should be moved too if they existed

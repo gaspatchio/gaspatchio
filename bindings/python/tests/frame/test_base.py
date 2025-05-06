@@ -197,7 +197,7 @@ def test_collect_handles_polars_error(mock_collect, sample_lazy_frame):
     # Act & Assert
     # Expect the framework's handler to catch and re-raise the error
     with pytest.raises(
-        pl.exceptions.ComputeError, match="Column 'a' not found"
+        pl.exceptions.ComputeError, match="Polars failed"
     ):  # Check formatted message
         af.collect()  # Call collect, error handling is internal
 
@@ -214,7 +214,7 @@ def test_profile_calls_collect(mock_profile, sample_lazy_frame):
 
     # Act & Assert
     with pytest.raises(
-        pl.exceptions.ComputeError, match="Column 'a' not found"
+        pl.exceptions.ComputeError, match="Polars failed"
     ):  # Check formatted message
         af.profile()
 
