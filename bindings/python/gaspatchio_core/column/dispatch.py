@@ -406,6 +406,18 @@ def _autopatch(proxy_cls: Type["ProxyType"]) -> None:
     # Get all available attributes from Polars expressions and our defined namespaces
     attrs_to_process = dir(pl.Expr) + list(_NAMESPACES)
 
+    # Add debug prints to see what's being patched
+    print(f"DEBUG: Autopatching {proxy_cls.__name__}")
+    print(f"DEBUG: Existing apply method on proxy: {hasattr(proxy_cls, 'apply')}")
+
+    if hasattr(proxy_cls, "apply"):
+        print(f"DEBUG: Existing apply method: {getattr(proxy_cls, 'apply')}")
+
+    # Check if map_elements exists on pl.Expr
+    print(f"DEBUG: map_elements exists on pl.Expr: {'map_elements' in dir(pl.Expr)}")
+    if "map_elements" in dir(pl.Expr):
+        print(f"DEBUG: pl.Expr.map_elements type: {type(pl.Expr.map_elements)}")
+
     # === STEP 2: Patch each attribute onto the proxy class ===
     for attr_name in set(attrs_to_process):  # Use set to avoid duplicates
         # Determine if attribute is internal (starts with _ but isn't a dunder method)
@@ -419,6 +431,18 @@ def _autopatch(proxy_cls: Type["ProxyType"]) -> None:
         # 3. Already exist on the proxy class (this is where method overriding happens!)
         #    This is crucial: your custom implementations take precedence over Polars methods
         if is_internal or attr_name in processed_attrs or hasattr(proxy_cls, attr_name):
+            # Debug info for apply and map_elements
+            if attr_name in ["apply", "map_elements", "map_batches"]:
+                print(
+                    f"DEBUG: Skipping {attr_name} because: "
+                    + (
+                        "internal"
+                        if is_internal
+                        else "already processed"
+                        if attr_name in processed_attrs
+                        else "exists on proxy class"
+                    )
+                )
             processed_attrs.add(attr_name)  # Mark as processed even if skipped
             continue
 
@@ -428,6 +452,10 @@ def _autopatch(proxy_cls: Type["ProxyType"]) -> None:
             # When users call this attribute, the descriptor will handle the delegation
             setattr(proxy_cls, attr_name, DelegatorDescriptor(attr_name))
             processed_attrs.add(attr_name)  # Track successfully added attributes
+
+            # Debug for interesting methods
+            if attr_name in ["map_elements", "map_batches"]:
+                print(f"DEBUG: Successfully added {attr_name} to {proxy_cls.__name__}")
         except Exception as e:
             # Rare, but good practice to handle exceptions
             print(

@@ -86,6 +86,10 @@ class ActuarialFrame:
         if isinstance(key, str):
             # Basic proxy creation, no strict checking here for now
             return ColumnProxy(key, self)
+        else:
+            raise TypeError(
+                f"ActuarialFrame indices must be strings, not {type(key).__name__}"
+            )
 
     def __setitem__(self, key: str, value: Any):
         """Handle column assignment using df['column'] = value."""
@@ -461,5 +465,24 @@ class ActuarialFrame:
 
     def __repr__(self) -> str:
         """Return a string representation of the ActuarialFrame."""
-        # TODO: Implement this method
-        pass
+        if self._df is None:
+            return "ActuarialFrame(uninitialized)"
+
+        try:
+            schema = self._df.collect_schema()
+            num_cols = len(schema)
+            shape_info = f"shape: ({num_cols} columns)"
+
+            # For better representation, show a sample of columns
+            cols_preview = ", ".join(self._column_order[:5])
+            if len(self._column_order) > 5:
+                cols_preview += ", ..."
+
+            mode_info = f"mode: {self._mode}"
+
+            return f"ActuarialFrame({shape_info}, cols: [{cols_preview}], {mode_info})"
+        except Exception:
+            # Fallback if we can't calculate schema
+            return (
+                f"ActuarialFrame(cols: {len(self._column_order)}, mode: {self._mode})"
+            )

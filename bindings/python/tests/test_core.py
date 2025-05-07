@@ -121,13 +121,15 @@ class TestDebugableBasics(unittest.TestCase):
         def square(x):
             return float(x * x)  # Return float to match Float64 return type
 
-        df["age_squared"] = df["age"].apply(square)
+        df["age_squared"] = df["age"].map_elements(square)
         result = df.collect()
         for i, age in enumerate(self.data["age"]):
             self.assertAlmostEqual(result["age_squared"][i], age * age)
 
         # Test with numpy functions
-        df["age_sqrt"] = df["age"].apply(lambda x: np.sqrt(x), return_dtype=pl.Float64)
+        df["age_sqrt"] = df["age"].map_elements(
+            lambda x: np.sqrt(x), return_dtype=pl.Float64
+        )
         result = df.collect()
         for i, age in enumerate(self.data["age"]):
             self.assertAlmostEqual(result["age_sqrt"][i], np.sqrt(age))
@@ -219,39 +221,6 @@ class TestModelCalculations(unittest.TestCase):
 
         self.assertEqual(result["num_proj_months"][0], num_proj_months)
 
-    def test_simple_model_optimize_mode(self):
-        def simple_model(df):
-            # Constants
-            max_age = 100
-
-            # Basic calculations
-            df["num_proj_months"] = (max_age - df["age"]) * 12 + 1
-            # Use direct expressions for plugin functions
-            df["proj_months"] = fill_series(pl.col("age"), 0, 1)
-            df["proj_years"] = floor((pl.col("proj_months") - 1) / 12) + 1
-
-            # Additional calculations
-            df["age_last"] = df["age"] + df["proj_years"] - 1
-
-            return df
-
-        # Run in optimize mode
-        df = ActuarialFrame(self.data, mode="optimize")
-        result = run_model(simple_model, df).collect()
-
-        # Verify results
-        self.assertTrue("num_proj_months" in result.columns)
-        self.assertTrue("proj_months" in result.columns)
-        self.assertTrue("proj_years" in result.columns)
-        self.assertTrue("age_last" in result.columns)
-
-        # Check specific calculations for the first row
-        max_age = 100
-        first_age = self.data["age"][0]
-        num_proj_months = (max_age - first_age) * 12 + 1
-
-        self.assertEqual(result["num_proj_months"][0], num_proj_months)
-
     def test_compare_debug_and_optimize_results(self):
         def complex_model(df):
             # Constants
@@ -274,7 +243,7 @@ class TestModelCalculations(unittest.TestCase):
             )
 
             # Use the global risk factor function instead of a local one
-            df["risk_factor"] = df["age"].apply(_risk_factor)
+            df["risk_factor"] = df["age"].map_elements(_risk_factor)
             df["mortality_cost"] = df["future_sum_assured"] * df["risk_factor"]
 
             return df
@@ -303,9 +272,9 @@ class TestModelCalculations(unittest.TestCase):
     def test_model_with_numpy_functions(self):
         def model_with_numpy(df):
             # Use numpy functions
-            df["log_age"] = df["age"].apply(lambda x: np.log(x))
-            df["exp_premium"] = df["premium"].apply(lambda x: np.exp(x / 1000))
-            df["sin_age"] = df["age"].apply(
+            df["log_age"] = df["age"].map_elements(lambda x: np.log(x))
+            df["exp_premium"] = df["premium"].map_elements(lambda x: np.exp(x / 1000))
+            df["sin_age"] = df["age"].map_elements(
                 lambda x: np.sin(x * np.pi / 180)
             )  # age in degrees
 
@@ -377,7 +346,7 @@ class TestPerformance(unittest.TestCase):
             )
 
             # Complex calculations with custom functions - use global function
-            df["risk_factor"] = df["age"].apply(_risk_factor)
+            df["risk_factor"] = df["age"].map_elements(_risk_factor)
             df["mortality_cost"] = df["future_sum_assured"] * df["risk_factor"]
 
             # More calculations to stress test

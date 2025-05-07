@@ -156,28 +156,39 @@ class ColumnProxy:
     # These are methods we define directly, not relying on autopatching initially.
     # Common ones like alias and cast could be here or handled by autopatch.
 
-    # Example: Apply method remains explicitly defined
-    def apply(self, func: Callable, return_dtype=pl.Float64) -> "ExpressionProxy":
-        """Apply a Python function element-wise to this column.
+    def map_elements(self, func: Callable, return_dtype=None) -> ExpressionProxy:
+        """Apply a Python function to each element of the column.
 
         Args:
-            func: The Python function to apply.
-            return_dtype: The expected Polars dtype of the function's return value.
-                          Defaults to pl.Float64.
+            func: Function to apply to each element
+            return_dtype: Optional polars DataType for the result
 
         Returns:
-            An ExpressionProxy representing the result of the function application.
+            ExpressionProxy: Result of applying the function
         """
-        # Delegate to the parent frame's apply_function method
-        if not hasattr(self._parent, "_apply_map_elements"):
-            # Changed check to the new internal method name
-            raise NotImplementedError(
-                "Parent ActuarialFrame does not have _apply_map_elements method"
-            )
-        # Call _apply_map_elements with self (the proxy) as the first arg
-        return self._parent._apply_map_elements(
-            self, func=func, return_dtype=return_dtype
-        )
+        # Directly call the (potentially monkey-patched) Polars method.
+        # The telemetry wrapper should handle this transparently.
+        base_expr = self._to_expr()
+        result_expr = base_expr.map_elements(func, return_dtype=return_dtype)
+        return ExpressionProxy(result_expr, self._parent)
+
+    def map_batches(self, func: Callable, return_dtype=None) -> ExpressionProxy:
+        """Apply a Python function to the entire column as a Series.
+
+        This is more efficient than apply for operations that can process
+        multiple values at once, especially for NumPy or vector operations.
+
+        Args:
+            func: Function that receives a Series and returns a Series or array
+            return_dtype: Optional polars DataType for the result
+
+        Returns:
+            ExpressionProxy: Result of applying the function
+        """
+        # Directly call the (potentially monkey-patched) Polars method.
+        base_expr = self._to_expr()
+        result_expr = base_expr.map_batches(func, return_dtype=return_dtype)
+        return ExpressionProxy(result_expr, self._parent)
 
     # --- Accessor Properties ---
     # These properties provide access to specialized namespaces (e.g., date, finance).

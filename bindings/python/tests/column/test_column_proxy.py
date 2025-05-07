@@ -152,16 +152,16 @@ def test_column_proxy_reverse_pow_operator(col_proxy):
     assert str(result_proxy._expr) == 'dyn int: 2.pow([col("test_col")])'
 
 
-# --- ColumnProxy Explicit Method Tests (Example: apply) ---
+# --- ColumnProxy Explicit Method Tests (Example: _map_elements) ---
 
 
-def test_column_proxy_apply(col_proxy):
+def test_column_proxy_map_elements(col_proxy):
     def my_func(x):
         return x * 2
 
-    result_proxy = col_proxy.apply(my_func, return_dtype=pl.Int64)
+    result_proxy = col_proxy.map_elements(my_func, return_dtype=pl.Int64)
     assert isinstance(result_proxy, ExpressionProxy)
-    # Check if the parent\'s apply_function was called correctly (indirectly)
+    # Check if the parent\'s _map_elements was called correctly (indirectly)
     # The exact expr string for map_elements/map_list is complex and version-dependent.
     # Focus on checking if the mock function added the expected alias.
     # assert "map_elements" in str(result_proxy._expr) # REMOVED assertion

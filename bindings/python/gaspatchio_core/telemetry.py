@@ -8,7 +8,7 @@ providing insights to help optimize code.
 import inspect
 import os
 import sys
-from functools import partial, wraps
+from functools import wraps
 
 import polars as pl
 from loguru import logger
@@ -44,26 +44,23 @@ def _get_mode() -> str:
     return get_default_mode()
 
 
-# RENAMED and MODIFIED function
-@wraps(original_map_elements)
-def _map_with_warning(
-    self, function, return_dtype=None, *, mapping_method: str, **kwargs
+# This is the core logic, wrapped to look like the original
+@wraps(original_map_elements)  # This wraps _map_with_warning_impl
+def _map_with_warning_impl(
+    expr_instance,  # This will be the 'self' for the original method
+    function,
+    return_dtype=None,
+    *,
+    mapping_method: str,  # This comes from the wrapper that calls this
+    **kwargs,
 ):
     """
-    Wrapper for map_elements and map_batches that logs performance warnings or raises errors.
-
-    Args:
-        self: The pl.Expr instance.
-        function: The function to apply.
-        return_dtype: The expected return data type.
-        mapping_method: 'map_elements' or 'map_batches'.
-        **kwargs: Additional arguments for the original map function.
+    Core implementation for map_elements and map_batches warnings.
+    This function is NOT directly assigned; it's called by wrappers.
     """
-    # Get call stack info
-    frame = inspect.currentframe().f_back
-    # Go back one more frame if called via functools.partial wrapper
-    if frame.f_code.co_name == "partial_wrapper":
-        frame = frame.f_back
+    frame = (
+        inspect.currentframe().f_back.f_back
+    )  # Go back two frames to get caller of the wrapper
     info = inspect.getframeinfo(frame)
     filename = os.path.basename(info.filename)
     func_name = getattr(function, "__name__", "<lambda>")
@@ -76,7 +73,6 @@ def _map_with_warning(
 
     current_mode = _get_mode()
 
-    # --- map_elements specific logic ---
     if mapping_method == "map_elements":
         suggestion = "Consider using native Polars expressions for better performance."
         if return_dtype:
@@ -126,15 +122,12 @@ def _map_with_warning(
                 snippet=code_snippet,
                 suggestion=suggestion,
             )
-        # Call the original map_elements
         return original_map_elements(
-            self, function, return_dtype=return_dtype, **kwargs
+            expr_instance, function, return_dtype=return_dtype, **kwargs
         )
 
-    # --- map_batches specific logic ---
     elif mapping_method == "map_batches":
         if return_dtype is None:
-            # Warning for missing return_dtype (in both modes, as it's always relevant for map_batches)
             logger.warning(
                 "MAP_BATCHES_PERFORMANCE_ISSUE | {issue_type} | {file}:{line} | {func} | ID:{call_id}",
                 issue_type="MISSING_RETURN_DTYPE",
@@ -150,35 +143,36 @@ def _map_with_warning(
                 snippet=code_snippet,
                 suggestion="Providing 'return_dtype' to map_batches significantly improves performance by avoiding schema inference.",
             )
-        # Call the original map_batches
-        # Note: We pass return_dtype even if it's None, letting original map_batches handle inference.
-        return original_map_batches(self, function, return_dtype=return_dtype, **kwargs)
-
+        return original_map_batches(
+            expr_instance, function, return_dtype=return_dtype, **kwargs
+        )
     else:
-        # Should not happen
         raise ValueError(f"Invalid mapping_method: {mapping_method}")
 
 
 def install_performance_monitors():
     """
     Install performance monitoring hooks
-
-    This function applies monkey patches to various library functions to
-    add performance monitoring and telemetry.
     """
-    # Apply the map_elements monkey patch using partial
-    map_elements_wrapper = partial(_map_with_warning, mapping_method="map_elements")
-    # Preserve original function metadata if possible
-    wraps(map_elements_wrapper)(map_elements_wrapper)
+
+    # Define the wrapper methods that will replace the originals on pl.Expr
+    def map_elements_wrapper(self, function, return_dtype=None, **kwargs):
+        return _map_with_warning_impl(
+            self, function, return_dtype, mapping_method="map_elements", **kwargs
+        )
+
+    def map_batches_wrapper(self, function, return_dtype=None, **kwargs):
+        return _map_with_warning_impl(
+            self, function, return_dtype, mapping_method="map_batches", **kwargs
+        )
+
+    # Ensure the wrappers have the correct metadata by copying from originals
+    # (though @wraps on _map_with_warning_impl already does much of this for _map_with_warning_impl itself)
+    map_elements_wrapper = wraps(original_map_elements)(map_elements_wrapper)
+    map_batches_wrapper = wraps(original_map_batches)(map_batches_wrapper)
+
     pl.Expr.map_elements = map_elements_wrapper
-
-    # Apply the map_batches monkey patch using partial
-    map_batches_wrapper = partial(_map_with_warning, mapping_method="map_batches")
-    wraps(map_batches_wrapper)(map_batches_wrapper)
     pl.Expr.map_batches = map_batches_wrapper
-
-    # Additional performance monitors can be added here in the future
-    # For example, monitoring other slow operations
 
     logger.debug("Performance monitoring enabled for map_elements and map_batches")
 
