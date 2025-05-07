@@ -170,15 +170,34 @@ class ActuarialFrame:
 
     def collect(self) -> pl.DataFrame:
         """Execute and materialize the dataframe."""
-        # Query plan logging is now handled by the trace decorator/log_query_plan
-        # if self._show_query_plan and self._df is not None:
-        #     ...
-
         try:
             if self._df is None:
-                return pl.DataFrame()  # Return empty if no data
-            # Simplified thread handling
-            return self._df.collect()
+                # Ensure an empty schema matching Polars behavior for empty LazyFrame.collect()
+                return pl.DataFrame(schema={})
+
+            final_df = self._df
+            # Apply computation graph if it exists (typically built in optimize mode via tracing)
+            if self._computation_graph:
+                # The trace decorator might have already logged the plan if verbose
+                # but repeating here or having a more structured way to log before collect is fine.
+                if self._show_query_plan:
+                    from .tracing import (
+                        log_query_plan,  # Local import to avoid circularity at module level
+                    )
+
+                    log_query_plan(
+                        self._computation_graph, final_df
+                    )  # Log before applying
+
+                for name, expr_val in self._computation_graph:
+                    # Ensure expr_val is a polars expression. _convert_to_expr should handle this
+                    # during __setitem__ or with_columns before it gets into the graph.
+                    final_df = final_df.with_columns(expr_val.alias(name))
+
+                # Optionally clear the graph after applying, though the tracer resets it per call.
+                # self._computation_graph = []
+
+            return final_df.collect()
         except Exception as e:
             _handle_execution_error(self, e)  # Will re-raise or format
 

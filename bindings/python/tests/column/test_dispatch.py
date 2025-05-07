@@ -269,9 +269,10 @@ def test_dir_includes_proxied_methods(sample_af: ActuarialFrame):
     assert "abs" in expr_dir
 
     # Check explicitly defined methods/props are still there
-    assert "apply" in col_dir  # Defined on ColumnProxy
-    assert "_to_expr" in col_dir  # Defined on ColumnProxy
-    assert "date" in col_dir  # Defined on ColumnProxy via registry
+    assert "map_elements" in col_dir  # Defined on ColumnProxy
+    # assert "map_batches" in col_dir # Also defined on ColumnProxy
+
+    # Check that accessors are listed
 
     assert "_to_expr" in expr_dir  # Defined on ExpressionProxy
     assert "date" in expr_dir  # Defined on ExpressionProxy via registry

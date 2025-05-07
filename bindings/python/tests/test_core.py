@@ -121,15 +121,17 @@ class TestDebugableBasics(unittest.TestCase):
         def square(x):
             return float(x * x)  # Return float to match Float64 return type
 
-        df["age_squared"] = df["age"].map_elements(square)
+        with execution_mode("debug"):  # Ensure telemetry sees debug mode
+            df["age_squared"] = df["age"].map_elements(square)
         result = df.collect()
         for i, age in enumerate(self.data["age"]):
             self.assertAlmostEqual(result["age_squared"][i], age * age)
 
         # Test with numpy functions
-        df["age_sqrt"] = df["age"].map_elements(
-            lambda x: np.sqrt(x), return_dtype=pl.Float64
-        )
+        with execution_mode("debug"):  # Ensure telemetry sees debug mode
+            df["age_sqrt"] = df["age"].map_elements(
+                lambda x: np.sqrt(x), return_dtype=pl.Float64
+            )
         result = df.collect()
         for i, age in enumerate(self.data["age"]):
             self.assertAlmostEqual(result["age_sqrt"][i], np.sqrt(age))
@@ -242,8 +244,12 @@ class TestModelCalculations(unittest.TestCase):
                 df["sum_assured"] * (1 + interest_rate) ** df["proj_years"]
             )
 
-            # Use the global risk factor function instead of a local one
-            df["risk_factor"] = df["age"].map_elements(_risk_factor)
+            # Complex calculations with custom functions - use global function
+            if df._mode == "debug":
+                with execution_mode("debug"):
+                    df["risk_factor"] = df["age"].map_elements(_risk_factor)
+            else:  # optimize mode
+                df["risk_factor"] = (pl.col("age").clip(lower_bound=1).log()) * 0.01
             df["mortality_cost"] = df["future_sum_assured"] * df["risk_factor"]
 
             return df
@@ -272,25 +278,49 @@ class TestModelCalculations(unittest.TestCase):
     def test_model_with_numpy_functions(self):
         def model_with_numpy(df):
             # Use numpy functions
-            df["log_age"] = df["age"].map_elements(lambda x: np.log(x))
-            df["exp_premium"] = df["premium"].map_elements(lambda x: np.exp(x / 1000))
-            df["sin_age"] = df["age"].map_elements(
-                lambda x: np.sin(x * np.pi / 180)
-            )  # age in degrees
-
+            if df._mode == "debug":
+                with execution_mode("debug"):  # Ensure telemetry sees debug mode
+                    df["log_age"] = df["age"].map_elements(lambda x: np.log(x))
+                    df["exp_premium"] = df["premium"].map_elements(
+                        lambda x: np.exp(x / 1000)
+                    )
+                    df["sin_age"] = df["age"].map_elements(
+                        lambda x: np.sin(x * np.pi / 180)
+                    )  # age in degrees
+            else:  # optimize mode - should use native polars if map_elements is forbidden
+                df["log_age"] = pl.col("age").log()
+                df["exp_premium"] = (pl.col("premium") / 1000).exp()
+                df["sin_age"] = (pl.col("age") * np.pi / 180).sin()
             return df
 
         # Run in debug mode
-        df = ActuarialFrame(self.data, mode="debug")
-        result = run_model(model_with_numpy, df).collect()
+        df_debug_mode = ActuarialFrame(self.data.clone(), mode="debug")
+        result_debug = run_model(model_with_numpy, df_debug_mode).collect()
 
-        # Check results
+        # Check results for debug mode
         for i, age in enumerate(self.data["age"]):
-            self.assertAlmostEqual(result["log_age"][i], np.log(age))
+            self.assertAlmostEqual(result_debug["log_age"][i], np.log(age))
             self.assertAlmostEqual(
-                result["exp_premium"][i], np.exp(self.data["premium"][i] / 1000)
+                result_debug["exp_premium"][i], np.exp(self.data["premium"][i] / 1000)
             )
-            self.assertAlmostEqual(result["sin_age"][i], np.sin(age * np.pi / 180))
+            self.assertAlmostEqual(
+                result_debug["sin_age"][i], np.sin(age * np.pi / 180)
+            )
+
+        # Run in optimize mode
+        df_optimize_mode = ActuarialFrame(self.data.clone(), mode="optimize")
+        result_optimize = run_model(model_with_numpy, df_optimize_mode).collect()
+
+        # Check results for optimize mode
+        for i, age in enumerate(self.data["age"]):
+            self.assertAlmostEqual(result_optimize["log_age"][i], np.log(age))
+            self.assertAlmostEqual(
+                result_optimize["exp_premium"][i],
+                np.exp(self.data["premium"][i] / 1000),
+            )
+            self.assertAlmostEqual(
+                result_optimize["sin_age"][i], np.sin(age * np.pi / 180)
+            )
 
 
 class TestPerformance(unittest.TestCase):
@@ -346,7 +376,11 @@ class TestPerformance(unittest.TestCase):
             )
 
             # Complex calculations with custom functions - use global function
-            df["risk_factor"] = df["age"].map_elements(_risk_factor)
+            if df._mode == "debug":
+                with execution_mode("debug"):
+                    df["risk_factor"] = df["age"].map_elements(_risk_factor)
+            else:  # optimize mode
+                df["risk_factor"] = (pl.col("age").clip(lower_bound=1).log()) * 0.01
             df["mortality_cost"] = df["future_sum_assured"] * df["risk_factor"]
 
             # More calculations to stress test
