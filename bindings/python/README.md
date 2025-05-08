@@ -128,40 +128,6 @@ df = ActuarialFrame(data)
 traced_function = df.trace(complex_calculation)
 ```
 
-### Performance Benchmarks
-
-The core DSL has been benchmarked against different types of models:
-
-#### Simple Model
-
-A simple model with basic arithmetic operations shows a significant speedup in optimize mode:
-
-- Average debug mode time: 0.0341 seconds
-- Average optimize mode time: 0.0010 seconds
-- **Speedup: 34.72x**
-
-#### Complex Model
-
-A complex model with many operations, including function applications, shows a more modest speedup:
-
-- Average debug mode time: 0.0411 seconds
-- Average optimize mode time: 0.0237 seconds
-- **Speedup: 1.73x**
-
-The performance difference is less pronounced in complex models due to the overhead of function applications, which currently fall back to Python mode in the optimize mode. Future improvements may include better support for Numba-accelerated functions.
-
-### Limitations
-
-- Function applications in optimize mode may fall back to Python execution, which can limit performance gains for complex models.
-- Some operations may behave slightly differently between debug and optimize modes due to differences in how Polars handles certain operations.
-- The core DSL may have a small overhead in debug mode.
-
-### Future Improvements
-
-- Better support for Numba-accelerated functions in optimize mode.
-- More comprehensive tracing and debugging tools.
-- Performance optimizations for complex models.
-
 ### Setting Up Pre-commit Hooks
 
 The project uses pre-commit hooks to ensure code quality. To set them up:

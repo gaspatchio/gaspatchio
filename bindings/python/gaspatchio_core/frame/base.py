@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
     # Add forward references for accessors used in type hints
     from ..accessors.date import DateFrameAccessor
+    from ..accessors.excel import ExcelFrameAccessor
     from ..accessors.finance import FinanceFrameAccessor
 
 
@@ -45,6 +46,7 @@ class ActuarialFrame:
 
     # ADDED: Accessor instance caches
     _date_accessor_instance: Optional["DateFrameAccessor"] = None
+    _excel_accessor_instance: Optional["ExcelFrameAccessor"] = None
     _finance_accessor_instance: Optional["FinanceFrameAccessor"] = None
 
     def __init__(self, data=None, mode=None, verbose=None, threads=None):
@@ -418,6 +420,18 @@ class ActuarialFrame:
             # Use the class retrieved from the registry
             self._finance_accessor_instance = AccessorClass(self)
         return self._finance_accessor_instance
+
+    @property
+    def excel(self) -> "ExcelFrameAccessor":
+        """Access excel-related frame operations."""
+        if self._excel_accessor_instance is None:
+            AccessorClass = _ACCESSOR_REGISTRY.get("excel", {}).get("frame")
+            if not AccessorClass:
+                raise AttributeError(
+                    "No 'excel' frame accessor registered or kind mismatch."
+                )
+            self._excel_accessor_instance = AccessorClass(self)
+        return self._excel_accessor_instance
 
     def __getattr__(self, name: str) -> Any:
         """Dynamically instantiate and return registered frame accessors."""

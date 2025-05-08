@@ -11,6 +11,7 @@ from .expression_proxy import ExpressionProxy  # Runtime import
 # Use TYPE_CHECKING for imports that would cause circular dependencies at runtime
 if TYPE_CHECKING:
     from ..accessors.date import DateColumnAccessor
+    from ..accessors.excel import ExcelColumnAccessor
     from ..accessors.finance import FinanceColumnAccessor
     from ..frame.base import ActuarialFrame
 
@@ -23,6 +24,7 @@ class ColumnProxy:
 
     # Cache for accessor instances
     _date_accessor_instance: Optional["DateColumnAccessor"] = None
+    _excel_accessor_instance: Optional["ExcelColumnAccessor"] = None
     _finance_accessor_instance: Optional["FinanceColumnAccessor"] = None
 
     def __init__(self, name: str, parent: "ActuarialFrame"):
@@ -221,6 +223,18 @@ class ColumnProxy:
             # Instantiate the accessor, passing this ColumnProxy instance
             self._finance_accessor_instance = AccessorClass(self)
         return self._finance_accessor_instance
+
+    @property
+    def excel(self) -> "ExcelColumnAccessor":
+        """Access excel-related column operations."""
+        if self._excel_accessor_instance is None:
+            AccessorClass = _ACCESSOR_REGISTRY.get("excel", {}).get("column")
+            if not AccessorClass:
+                raise AttributeError(
+                    "No 'excel' column accessor registered or kind mismatch."
+                )
+            self._excel_accessor_instance = AccessorClass(self)
+        return self._excel_accessor_instance
 
     # --- Dynamic Accessor Handling --- ADDED BACK
     def __getattr__(self, name: str) -> Any:

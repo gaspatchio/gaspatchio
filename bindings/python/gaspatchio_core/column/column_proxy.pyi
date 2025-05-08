@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     # No longer need Polars namespace types here, inherited from _BaseProxy
     # Keep local types
     from ..accessors.date import DateColumnAccessor
+    from ..accessors.excel import ExcelColumnAccessor
     from ..accessors.finance import FinanceColumnAccessor
     from ..frame.base import ActuarialFrame
     from .expression_proxy import ExpressionProxy
@@ -27,6 +28,7 @@ class ColumnProxy(_BaseProxy):
     name: str
     _parent: Optional[ActuarialFrame]
     _date_accessor_instance_col: Optional[DateColumnAccessor]
+    _excel_accessor_instance_col: Optional[ExcelColumnAccessor]
     _finance_accessor_instance_col: Optional[FinanceColumnAccessor]
     _dynamic_accessor_cache: Dict[str, Any]
 
@@ -43,6 +45,8 @@ class ColumnProxy(_BaseProxy):
     def date(self) -> "DateColumnAccessor": ...
     @property
     def finance(self) -> "FinanceColumnAccessor": ...
+    @property
+    def excel(self) -> "ExcelColumnAccessor": ...
 
     # REMOVED: Operator Overloads (inherited)
     # REMOVED: Common Autopatched Methods/Namespaces (inherited)

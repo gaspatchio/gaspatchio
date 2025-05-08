@@ -8,6 +8,7 @@ from gaspatchio_core.typing import IntoExprColumn
 
 # ADDED: Import accessor types (use forward references if needed initially)
 from ..accessors.date import DateFrameAccessor
+from ..accessors.excel import ExcelFrameAccessor
 from ..accessors.finance import FinanceFrameAccessor
 
 # ADDED: Import ExpressionProxy for method return types
@@ -37,6 +38,7 @@ class ActuarialFrame:
     # ADDED: Accessor instance cache stubs
     _date_accessor_instance: Optional[DateFrameAccessor]
     _finance_accessor_instance: Optional[FinanceFrameAccessor]
+    _excel_accessor_instance: Optional[ExcelFrameAccessor]
 
     def __init__(
         self,
@@ -103,6 +105,8 @@ class ActuarialFrame:
     def date(self) -> DateFrameAccessor: ...
     @property
     def finance(self) -> FinanceFrameAccessor: ...
+    @property
+    def excel(self) -> ExcelFrameAccessor: ...
 
     # ADDED: Core function wrapper method signatures
     def fill_series(

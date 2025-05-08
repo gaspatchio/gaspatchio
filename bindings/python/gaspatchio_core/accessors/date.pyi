@@ -3,8 +3,6 @@
 import datetime
 from typing import TYPE_CHECKING, Literal, Union
 
-import polars as pl
-
 from .base import BaseColumnAccessor, BaseFrameAccessor
 
 if TYPE_CHECKING:
@@ -49,16 +47,5 @@ class DateColumnAccessor(BaseColumnAccessor):
     _proxy: "ColumnProxy | ExpressionProxy"
 
     def __init__(self, proxy: "ColumnProxy | ExpressionProxy") -> None: ...
-    def _get_polars_expr(self) -> pl.Expr: ...
-    def _get_parent_frame(self) -> "ActuarialFrame": ...
-    def from_excel_serial(
-        self, epoch: str = ...
-    ) -> "ExpressionProxy":  # Ellipsis for default
-        ...
-    def yearfrac(
-        self,
-        end_date_expr: "IntoExprColumn",
-        basis: str = ...,  # Ellipsis for default
-    ) -> "ExpressionProxy": ...
     def to_period(self, freq: str = ...) -> "ExpressionProxy":  # Ellipsis for default
         ...
