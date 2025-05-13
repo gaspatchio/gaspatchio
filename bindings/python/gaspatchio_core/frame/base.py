@@ -42,7 +42,90 @@ _DEFAULT_THREADS = 0
 
 
 class ActuarialFrame:
-    """A DataFrame wrapper focusing on core DSL operations."""
+    """A lazy, chainable, and traceable DataFrame for actuarial modeling.
+
+    The ActuarialFrame provides a high-level API for common actuarial
+    calculations and data manipulations, leveraging Polars LazyFrames for
+    performance. It supports tracing of operations for optimization and
+    introspection, and provides convenient accessors for specialized
+    functionality (e.g., date, finance, excel operations).
+
+    Args:
+        data (dict | polars.DataFrame | polars.LazyFrame | None, optional): Initial data to populate the frame.
+            Can be a Python dictionary, a Polars DataFrame, or a Polars LazyFrame.
+            If None, an empty frame is initialized. Defaults to None.
+        mode (str | None, optional): The operational mode: "run", "optimize", or "debug".
+            - "run": Executes operations eagerly.
+            - "optimize": Defers execution and builds a computation graph.
+            - "debug": Provides more verbose output.
+            Defaults to the global default mode (`get_default_mode`).
+        verbose (bool | None, optional): Enables or disables verbose logging.
+            Defaults to the global default verbosity (`get_default_verbose`).
+        threads (int | None, optional): Number of threads for parallel operations.
+            Defaults to a system-dependent value or `_DEFAULT_THREADS`.
+
+    Attributes:
+        date (DateFrameAccessor): Accessor for date-related operations.
+        excel (ExcelFrameAccessor): Accessor for Excel-like operations.
+        finance (FinanceFrameAccessor): Accessor for financial calculations.
+        columns (list[str]): A list of column names in their current order.
+
+    Examples:
+        **Initialization and Basic Operations**
+
+        >>> from gaspatchio_core import ActuarialFrame
+        >>> data = {
+        ...     "policy_id": [1, 1, 2, 2, 3],
+        ...     "inception_date": ["2020-01-01", "2020-01-01", "2021-05-10", "2021-05-10", "2022-02-20"],
+        ...     "premium": [100, 150, 200, 50, 300],
+        ...     "claims": [0, 50, 10, 0, 120]
+        ... }
+        >>> af = ActuarialFrame(data)
+        >>> af["loss_ratio"] = af["claims"] / af["premium"]
+        >>> result = af.collect()
+        >>> print(result.head(3))
+        shape: (3, 5)
+        ┌───────────┬────────────────┬─────────┬────────┬────────────┐
+        │ policy_id ┆ inception_date ┆ premium ┆ claims ┆ loss_ratio │
+        │ ---       ┆ ---            ┆ ---     ┆ ---    ┆ ---        │
+        │ i64       ┆ str            ┆ i64     ┆ i64    ┆ f64        │
+        ╞═══════════╪════════════════╪═════════╪════════╪════════════╡
+        │ 1         ┆ 2020-01-01     ┆ 100     ┆ 0      ┆ 0.0        │
+        │ 1         ┆ 2020-01-01     ┆ 150     ┆ 50     ┆ 0.333333   │
+        │ 2         ┆ 2021-05-10     ┆ 200     ┆ 10     ┆ 0.05       │
+        └───────────┴────────────────┴─────────┴────────┴────────────┘
+
+        **Using `sum` over a group**
+
+        >>> af = ActuarialFrame(data)
+        >>> af["total_premium_per_policy"] = af["premium"].sum().over("policy_id")
+        >>> result_with_sum = af.collect()
+        >>> print(result_with_sum)
+        shape: (5, 5)
+        ┌───────────┬────────────────┬─────────┬────────┬──────────────────────────┐
+        │ policy_id ┆ inception_date ┆ premium ┆ claims ┆ total_premium_per_policy │
+        │ ---       ┆ ---            ┆ ---     ┆ ---    ┆ ---                      │
+        │ i64       ┆ str            ┆ i64     ┆ i64    ┆ i64                      │
+        ╞═══════════╪════════════════╪═════════╪════════╪══════════════════════════╡
+        │ 1         ┆ 2020-01-01     ┆ 100     ┆ 0      ┆ 250                      │
+        │ 1         ┆ 2020-01-01     ┆ 150     ┆ 50     ┆ 250                      │
+        │ 2         ┆ 2021-05-10     ┆ 200     ┆ 10     ┆ 250                      │
+        │ 2         ┆ 2021-05-10     ┆ 50      ┆ 0      ┆ 250                      │
+        │ 3         ┆ 2022-02-20     ┆ 300     ┆ 120    ┆ 300                      │
+        └───────────┴────────────────┴─────────┴────────┴──────────────────────────┘
+
+        **Using an accessor (e.g., date accessor)**
+
+        Assume 'inception_date' needs to be parsed to a date type first.
+        For simplicity, let's imagine it's already a date type for this example.
+        (Actual parsing would use `af["inception_date"].str.to_date("%Y-%m-%d")` or similar)
+
+        >>> # If 'inception_date' was a date type:
+        >>> # af["inception_year"] = af.date.year("inception_date")
+        >>> # af_with_year = af.collect()
+        >>> # print(af_with_year.select(["policy_id", "inception_year"]))
+
+    """
 
     # ADDED: Accessor instance caches
     _date_accessor_instance: Optional["DateFrameAccessor"] = None
@@ -346,36 +429,6 @@ class ActuarialFrame:
         """Apply fill_series using the core function."""
         expr = self._convert_to_expr(column)
         result_expr = gp_funcs.fill_series(expr, start=start, increment=increment)
-        return ExpressionProxy(result_expr, self)
-
-    def floor(
-        self,
-        column: IntoExprColumn,
-        divisor: int = 1,
-        default: int = 0,
-    ) -> ExpressionProxy:
-        """Apply floor using the core function."""
-        expr = self._convert_to_expr(column)
-        result_expr = gp_funcs.floor(expr, divisor=divisor, default=default)
-        return ExpressionProxy(result_expr, self)
-
-    def round(
-        self,
-        column: IntoExprColumn,
-        decimal_places: int = 0,
-    ) -> ExpressionProxy:
-        """Apply round using the core function."""
-        expr = self._convert_to_expr(column)
-        result_expr = gp_funcs.round(expr, decimal_places=decimal_places)
-        return ExpressionProxy(result_expr, self)
-
-    def round_to_int(
-        self,
-        column: IntoExprColumn,
-    ) -> ExpressionProxy:
-        """Apply round_to_int using the core function."""
-        expr = self._convert_to_expr(column)
-        result_expr = gp_funcs.round_to_int(expr)
         return ExpressionProxy(result_expr, self)
 
     def get_column_order(self) -> List[str]:

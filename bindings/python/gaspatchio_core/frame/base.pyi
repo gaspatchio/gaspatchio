@@ -117,20 +117,6 @@ class ActuarialFrame:
         """Apply fill_series using the core function."""
         ...
 
-    def floor(self, column: IntoExprColumn, divisor: float = 1.0) -> ExpressionProxy:
-        """Apply floor using the core function."""
-        ...
-
-    def round(self, column: IntoExprColumn, decimals: int = 0) -> ExpressionProxy:
-        """Apply round using the core function."""
-        ...
-
-    def round_to_int(
-        self, column: IntoExprColumn, strategy: str = "nearest"
-    ) -> ExpressionProxy:
-        """Apply round_to_int using the core function."""
-        ...
-
     def apply_function(
         self,
         func: Callable[..., Any],

@@ -52,7 +52,66 @@ class _BaseProxy:
     def cast(
         self, dtype: PolarsDataType, *, strict: bool = True
     ) -> "ExpressionProxy": ...
-    def sum(self) -> "ExpressionProxy": ...
+    def sum(self) -> "ExpressionProxy":
+        """Compute the sum of the elements in this expression or column.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression representing the sum. If used in a `select` or
+            `with_columns` context without a `group_by` or `over`, this will
+            result in a single value. If used within a `group_by` or `over`
+            context, it computes the sum per group or window.
+
+        Examples
+        --------
+        **Scalar Sum: Total Claims**
+
+        >>> from gaspatchio_core import ActuarialFrame
+        >>> data = {
+        ...     "policy_id": [1, 1, 2, 2, 3],
+        ...     "year": [2020, 2021, 2020, 2021, 2021],
+        ...     "claim_amount": [100, 150, 0, 200, 50],
+        ... }
+        >>> af = ActuarialFrame(data)
+        >>> total_claims_expr = af["claim_amount"].sum()
+        >>> result = af.select(total_claims=total_claims_expr).collect()
+        >>> print(result)
+        shape: (1, 1)
+        ┌──────────────┐
+        │ total_claims │
+        │ ---          │
+        │ i64          │
+        ╞══════════════╡
+        │ 500          │
+        └──────────────┘
+
+        **Vector Sum: Cumulative Claims per Policy**
+        >>> from gaspatchio_core import ActuarialFrame
+        >>> data = {
+        ...     "policy_id": [1, 1, 2, 2, 3],
+        ...     "year": [2020, 2021, 2020, 2021, 2021],
+        ...     "claim_amount": [100, 150, 0, 200, 50],
+        ... }
+        >>> af = ActuarialFrame(data)
+        >>> af["cumulative_claims"] = af["claim_amount"].sum().over("policy_id")
+        >>> result = af.collect()
+        >>> print(result)
+        shape: (5, 4)
+        ┌───────────┬──────┬──────────────┬───────────────────┐
+        │ policy_id ┆ year ┆ claim_amount ┆ cumulative_claims │
+        │ ---       ┆ ---  ┆ ---          ┆ ---               │
+        │ i64       ┆ i64  ┆ i64          ┆ i64               │
+        ╞═══════════╪══════╪══════════════╪═══════════════════╡
+        │ 1         ┆ 2020 ┆ 100          ┆ 250               │
+        │ 1         ┆ 2021 ┆ 150          ┆ 250               │
+        │ 2         ┆ 2020 ┆ 0            ┆ 200               │
+        │ 2         ┆ 2021 ┆ 200          ┆ 200               │
+        │ 3         ┆ 2021 ┆ 50           ┆ 50                │
+        └───────────┴──────┴──────────────┴───────────────────┘
+
+        """
+        ...
     def mean(self) -> "ExpressionProxy": ...
     def min(self) -> "ExpressionProxy": ...
     def max(self) -> "ExpressionProxy": ...

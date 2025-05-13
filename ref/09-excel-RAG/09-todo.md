@@ -1,11 +1,12 @@
 # High level plan 08
 
 - [x] Refactor namespaces and main .pyi file into seperate files
-- [ ] Intro Excel namespace / accessors
-- [ ] Add Hypoesis and pull in some excel libs to confirm functionality.
+- [x] Intro Excel namespace / accessors
+- [x] Add Hypoesis and pull in some excel libs to confirm functionality.
 - [ ] for some sample functions (yearfrac) use pydantics pytest-examples to generate great tests and docs.
 - [ ] Expand out a few key polars functions too.
 - [ ] Use llmai + pg-vector / supabase to build a Chunking/RAG pipeline for those docs, inc name, description and sperate code examples.
+- [ ] Build MCP server for gaspatchio documentation / functions. 
 - [ ] Use gaspatchio mix to test model building.
 
 ## Next steps

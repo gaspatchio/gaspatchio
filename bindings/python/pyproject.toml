@@ -43,6 +43,7 @@ build-backend = "maturin"
 dev = [
     "ai-code-tracker>=0.1.1",
     "hypothesis>=6.131.15",
+    "pytest-accept>=0.1.12",
 ]
 
 [tool.uv]

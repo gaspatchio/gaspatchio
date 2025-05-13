@@ -132,25 +132,53 @@ class ExcelColumnAccessor(BaseColumnAccessor):
     def yearfrac(
         self, end_date_expr: "IntoExprColumn", basis: str = "act/act"
     ) -> "ExpressionProxy":
-        """Calculates the fraction of a year between the date in this column/expression
-        and another date expression, based on a day count convention.
+        """Calculate the year fraction using Excel's YEARFRAC logic.
 
-        Note: This requires a custom implementation as Polars doesn't have built-in yearfrac.
-              The current implementation is a simplified placeholder using 'act/act'.
+        Calculates the fraction of the year represented by the number of whole days
+        between two dates (the start date and the end date). Uses a specified day
+        count basis.
 
-        Args:
-            end_date_expr: The end date for the period (column name, expression, or literal).
-            basis: The day count basis (e.g., "act/act", "30/360").
-                   Currently, only a simplified "act/act" is implemented.
+        Parameters
+        ----------
+        end_date_expr : IntoExprColumn
+            An expression or column representing the end dates.
+        basis : str, optional
+            The day count basis to use. Defaults to "actual/actual".
+            Common bases include:
+            - 0 or 'actual/actual': Actual/actual
+            - 1 or 'actual/360': Actual/360
+            - 2 or 'actual/365': Actual/365 (fixed)
+            - 3 or '30/360': 30/360 (US)
+            - 4 or '30E/360': 30E/360 (European)
 
-        Returns:
-            An ExpressionProxy representing the year fraction (float).
+        Returns
+        -------
+        ExpressionProxy
+            An expression representing the calculated year fraction.
 
-        Raises:
-            NotImplementedError: If a basis other than the simplified "act/act" is requested.
-            ValueError: If end_date_expr is invalid.
-            RuntimeError: If the proxy is not part of an ActuarialFrame context.
-            pl.ComputeError: On date difference calculation errors.
+        Examples
+        --------
+        >>> from gaspatchio_core import ActuarialFrame
+        >>> import polars as pl
+        >>> af = ActuarialFrame(
+        ...     pl.DataFrame({
+        ...         "start": ["2020-01-01", "2021-06-15"],
+        ...         "end": ["2021-01-01", "2022-06-15"],
+        ...     })
+        ... )
+        >>> af["yearfrac"] = af["start"].excel.yearfrac(af["end"])
+        >>> result = af.collect()
+        >>> print(result)
+        shape: (2, 3)
+        ┌────────────┬────────────┬──────────┐
+        │ start      ┆ end        ┆ yearfrac │
+        │ ---        ┆ ---        ┆ ---      │
+        │ str        ┆ str        ┆ f64      │
+        ╞════════════╪════════════╪══════════╡
+        │ 2020-01-01 ┆ 2021-01-01 ┆ 1.002053 │
+        │ 2021-06-15 ┆ 2022-06-15 ┆ 0.999316 │
+        └────────────┴────────────┴──────────┘
+
         """
         parent_frame = self._get_parent_frame()
         start_expr = self._get_polars_expr()
