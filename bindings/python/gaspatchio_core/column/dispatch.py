@@ -219,160 +219,97 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
 
     def wrapper(self_proxy: "ProxyType", *args: Any, **kwargs: Any) -> Any:
         """Handle attribute access on proxy objects, either method calls or properties."""
-        # Import proxy types for isinstance checks
         from .column_proxy import ColumnProxy
         from .expression_proxy import ExpressionProxy
 
-        # === STEP 1: Setup - get parent context and base expression ===
         parent_af = getattr(self_proxy, "_parent", None)
-
         try:
-            # Create the base polars expression based on proxy type
             if isinstance(self_proxy, ColumnProxy):
                 base_expr = pl.col(self_proxy.name)
             elif isinstance(self_proxy, ExpressionProxy):
                 base_expr = self_proxy._expr
             else:
                 raise TypeError(f"Unsupported proxy type: {type(self_proxy).__name__}")
-
-            # Get the attribute from the Polars expression
             polars_attr = getattr(base_expr, name)
         except AttributeError as e:
             proxy_type_name = type(self_proxy).__name__
             raise AttributeError(
                 f"Polars object accessed via '{proxy_type_name}' has no attribute '{name}': {e}"
             )
-
-        # === STEP 2: Handle based on attribute type (method vs property) ===
-
-        # If attribute is a method, create a method caller
         if callable(polars_attr):
 
-            def method_caller(*a: Any, **kw: Any) -> Any:
-                """Execute the delegated method with proper list-type handling.
+            def _mc(*a: Any, **kw: Any) -> Any:
+                return _method_caller(
+                    name=name,
+                    polars_attr=polars_attr,
+                    self_proxy=self_proxy,
+                    parent_af=parent_af,
+                    base_expr=base_expr,
+                    a=a,
+                    kw=kw,
+                )
 
-                Examples:
-                    - af["premium"].round(2)  # Rounds premiums to 2 decimal places
-                    - af["claim_amounts"].abs() # Gets absolute value of claims
-                    - af["surrender_values"].sqrt() # Takes square root of surrender values
-
-                Vector Column Example:
-                    When af["profit_vectors"] contains lists of values like:
-                    [
-                      [10.1, -5.2, 8.3],     # Policy 1's profit by year
-                      [-3.4, 7.5, -2.6],     # Policy 2's profit by year
-                      [4.7, -6.8, 9.9]       # Policy 3's profit by year
-                    ]
-
-                    And you call: af["profit_vectors"].abs()
-
-                    The result will be:
-                    [
-                      [10.1, 5.2, 8.3],      # Absolute values within each list
-                      [3.4, 7.5, 2.6],
-                      [4.7, 6.8, 9.9]
-                    ]
-
-                    Without special list handling, this operation would fail or give
-                    incorrect results, as standard Polars operations aren't designed
-                    to work element-wise on nested lists.
-                """
-                # ===== LIST TYPE SHIMMING SECTION =====
-                # Why do we need list shimming?
-                #   For operations like abs(), round(), sqrt() on columns containing LISTS,
-                #   we need to apply the operation to EACH ELEMENT in EACH LIST,
-                #   not to the list as a whole.
-                #
-                #   Example without shimming:
-                #     af["cashflow_vectors"].sqrt() would fail because sqrt() can't operate on lists
-                #
-                #   Example with shimming:
-                #     Each number inside each list gets sqrt() applied to it
-
-                # Only applies to unary operations (no arguments) listed in _NUMERIC_UNARY
-                is_unary_numeric_op = name in _NUMERIC_UNARY and not a and not kw
-                should_use_list_shim = False
-
-                # Check if we're working with a list column
-                if is_unary_numeric_op:
-                    # Try to determine if column is a list type
-                    if isinstance(self_proxy, ColumnProxy) and parent_af:
-                        try:
-                            dtype = parent_af._df.schema.get(self_proxy.name)
-                            should_use_list_shim = isinstance(dtype, pl.List)
-                        except Exception:
-                            pass  # If schema lookup fails, don't use shim
-                    elif isinstance(self_proxy, ExpressionProxy):
-                        should_use_list_shim = True  # Try shimming for expressions
-
-                # ===== EXECUTION SECTION =====
-                try:
-                    # === LIST COLUMN HANDLING PATH ===
-                    if should_use_list_shim:
-                        try:
-                            # The magic: instead of applying the operation directly,
-                            # we use list.eval() with pl.element() to apply it to each
-                            # element inside each list.
-                            #
-                            # Example for af["reserve_vectors"].abs():
-                            #   1. We get the abs() method via pl.element().abs()
-                            #   2. We apply it using list.eval() which executes it on each element
-                            element_method = getattr(pl.element(), name)
-                            result = base_expr.list.eval(element_method())
-                        except Exception:
-                            # Fall back to standard execution if list shimming fails
-                            unwrapped_args = [_unwrap(arg) for arg in a]
-                            unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
-                            result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
-
-                    # === STANDARD COLUMN HANDLING PATH ===
-                    else:
-                        # Standard method execution for scalar columns
-                        # Example: af["lapse_rate"].round(4) - normal scalar operation
-                        unwrapped_args = [_unwrap(arg) for arg in a]
-                        unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
-                        result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
-                except Exception as e:
-                    # Provide better error context
-                    raise type(e)(
-                        f"Error calling proxied Polars method '{name}': {e}"
-                    ) from e
-
-                # Wrap the result back into our proxy system
-                return _wrap(parent_af, result)
-
-            # Add docstring to help with introspection
             try:
-                method_caller.__doc__ = getattr(
+                _mc.__doc__ = getattr(
                     polars_attr, "__doc__", f"Proxied Polars method: {name}"
                 )
             except Exception:
-                method_caller.__doc__ = (
-                    f"Proxied Polars method: {name} (docstring unavailable)"
-                )
-
-            return method_caller
-
-        # === STEP 3: Handle non-callable attributes (properties and namespaces) ===
-        # Properties shouldn't be called with arguments
+                _mc.__doc__ = f"Proxied Polars method: {name} (docstring unavailable)"
+            return _mc
         if args or kwargs:
             raise TypeError(
                 f"Attribute '{name}' is not callable and cannot accept arguments."
             )
-
-        # Special handling for namespaces vs regular properties
-        # Examples of namespaces:
-        #   - af["policy_date"].dt        # Date/time namespace
-        #   - af["coverage_code"].str     # String namespace
-        #   - af["benefit_amounts"].list  # List namespace
         if name in _NAMESPACES:
-            return NamespaceProxy(self_proxy, name)  # Return a namespace proxy
+            return NamespaceProxy(self_proxy, name)
         else:
-            return _wrap(parent_af, polars_attr)  # Wrap property value
+            return _wrap(parent_af, polars_attr)
 
-    # Set name for the wrapper function (helps with debugging)
     wrapper.__name__ = f"proxied_{name}"
     return wrapper
+
+
+def _method_caller(
+    *,
+    name: str,
+    polars_attr: Callable,
+    self_proxy: "ProxyType",
+    parent_af: Optional["ActuarialFrame"],
+    base_expr: Any,
+    a: tuple,
+    kw: dict,
+) -> Any:
+    """Execute the delegated method with proper list-type handling. (Moved out of wrapper)"""
+    from .column_proxy import ColumnProxy
+    from .expression_proxy import ExpressionProxy
+
+    is_unary_numeric_op = name in _NUMERIC_UNARY and not a and not kw
+    should_use_list_shim = False
+    if is_unary_numeric_op:
+        if isinstance(self_proxy, ColumnProxy) and parent_af:
+            try:
+                dtype = parent_af._df.schema.get(self_proxy.name)
+                should_use_list_shim = isinstance(dtype, pl.List)
+            except Exception:
+                pass
+        elif isinstance(self_proxy, ExpressionProxy):
+            should_use_list_shim = True
+    try:
+        if should_use_list_shim:
+            try:
+                element_method = getattr(pl.element(), name)
+                result = base_expr.list.eval(element_method())
+            except Exception:
+                unwrapped_args = [_unwrap(arg) for arg in a]
+                unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
+                result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
+        else:
+            unwrapped_args = [_unwrap(arg) for arg in a]
+            unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
+            result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
+    except Exception as e:
+        raise type(e)(f"Error calling proxied Polars method '{name}': {e}") from e
+    return _wrap(parent_af, result)
 
 
 # Autopatching Function

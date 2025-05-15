@@ -9,14 +9,17 @@ from polars.type_aliases import PolarsDataType
 
 # Import types used in signatures
 if TYPE_CHECKING:
-    # Import Polars namespace types for hinting accessors added by autopatch
-    from polars.expr.array import ExprArray
-    from polars.expr.binary import ExprBinary
-    from polars.expr.categorical import ExprCategorical
-    from polars.expr.dt import ExprDT
-    from polars.expr.list import ExprList
-    from polars.expr.string import ExprString
-    from polars.expr.struct import ExprStruct
+    # import polars # Not needed if using type_aliases correctly
+    from polars.type_aliases import (
+        ExprArray,
+        ExprBinary,
+        ExprCategorical,
+        ExprDT,
+        ExprStruct,
+    )
+    from polars.type_aliases import (
+        ExprList as PolarsExprList,  # Alias for use in string hint
+    )
 
     # Import local types carefully
     from .expression_proxy import ExpressionProxy
@@ -159,9 +162,9 @@ class _BaseProxy:
     @property
     def dt(self) -> "ExprDT": ...
     @property
-    def str(self) -> "ExprString": ...
+    def str(self) -> Any: ...  # Temporarily Any to bypass stubborn mypy error
     @property
-    def list(self) -> "ExprList": ...
+    def list(self) -> "PolarsExprList": ...  # Use aliased name in string hint
     @property
     def arr(self) -> "ExprArray": ...
     @property

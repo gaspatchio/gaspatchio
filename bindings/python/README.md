@@ -8,29 +8,34 @@ A high-performance actuarial modeling framework built with Python, Polars, and R
 uv sync
 ```
 
+## Running Tests
 
-### Running Tests
-
-Python tests
 ```bash
 uv run pytest
 ```
 
-### Setting Up Pre-commit Hooks
-
-The project uses pre-commit hooks to ensure code quality. To set them up:
+## Stubs and types
 
 ```bash
-# Install pre-commit hooks in your git repository
-pre-commit install
-
-# Install commit-msg hook for commit message validation
-pre-commit install --hook-type commit-msg
-
-# Test if the hooks are working
-pre-commit run --all-files
+uv run -- python -m mypy.stubtest gaspatchio_core
 ```
 
-## License
+## Documentation
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+We use standard doctest to generate great docs and tests for the python bindings.
+
+you can run these (and they also run as a part of the test suite) with:
+
+```bash
+uv run pytest --doctest-modules --doctest-glob="*.pyi" 
+```
+
+we're also using pytest-accept to generate outputs once we have the right tests in place. 
+
+> The "test" here actually means we're checking that the output matches◊ the expected output.
+there's no 'assert' as such, that should be in the regular pytest tests. 
+
+If you want to force the examples to have the output you expect, you can use:
+```bash
+uv run pytest gaspatchio_core/accessors/excel.py --doctest-modules --doctest-glob="*.pyi" --accept
+```
