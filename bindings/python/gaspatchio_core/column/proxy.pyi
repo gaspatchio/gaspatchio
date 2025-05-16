@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any, Callable, List
 
 import polars as pl
 from polars.type_aliases import PolarsDataType
@@ -14,15 +14,23 @@ if TYPE_CHECKING:
         ExprArray,
         ExprBinary,
         ExprCategorical,
-        ExprDT,
         ExprStruct,
     )
     from polars.type_aliases import (
         ExprList as PolarsExprList,  # Alias for use in string hint
     )
 
+    from ..frame.base import ActuarialFrame  # For DtNamespaceProxy.__init__
+    from .column_proxy import ColumnProxy  # For DtNamespaceProxy.__init__ parent type
+
     # Import local types carefully
     from .expression_proxy import ExpressionProxy
+    from .namespaces.dt_proxy import (
+        DtNamespaceProxy as _DtNamespaceProxy,  # MODIFIED: For type hint
+    )
+
+    # Type alias for DtNamespaceProxy parent, consistent with dt_proxy.py
+    ParentProxyType = ColumnProxy | ExpressionProxy
 
 # Base class for shared proxy methods/properties
 class _BaseProxy:
@@ -160,7 +168,7 @@ class _BaseProxy:
 
     # --- Namespaces (Accessors returning Namespace Proxies) ---
     @property
-    def dt(self) -> "ExprDT": ...
+    def dt(self) -> "_DtNamespaceProxy": ...  # MODIFIED: Changed to DtNamespaceProxy
     @property
     def str(self) -> Any: ...  # Temporarily Any to bypass stubborn mypy error
     @property
@@ -176,3 +184,29 @@ class _BaseProxy:
 
     # Although __dir__ is added dynamically, including it helps tools
     def __dir__(self) -> List[str]: ...
+
+# --- Stub for DtNamespaceProxy --- ADDED ---
+class DtNamespaceProxy:
+    """Stub for DtNamespaceProxy for type hinting."""
+
+    _parent_proxy: "ParentProxyType"
+    _parent_af: "ActuarialFrame | None"
+
+    def __init__(
+        self, parent_proxy: "ParentProxyType", parent_af: "ActuarialFrame | None"
+    ) -> None: ...
+    def year(self) -> "ExpressionProxy":
+        """Return an ExpressionProxy with the calendar year (i32)."""
+        ...
+
+    # Add other common dt methods as they are implemented or needed for type hints
+    # For now, __getattr__ will handle them dynamically at runtime, but stubs improve DX.
+    def month(self) -> "ExpressionProxy":
+        """Return an ExpressionProxy with the calendar month (i8)."""
+        ...
+    def day(self) -> "ExpressionProxy":
+        """Return an ExpressionProxy with the day of month (i8)."""
+        ...
+    def __getattr__(
+        self, name: str
+    ) -> Callable[..., "ExpressionProxy"]: ...  # MODIFIED: More precise return type

@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Set, Type
 import polars as pl
 import polars.exceptions
 
+from .namespaces.dt_proxy import DtNamespaceProxy
+
 # Avoid circular imports at runtime but allow type checking
 if TYPE_CHECKING:
     # Import proxy types for type hinting within functions/methods
@@ -173,10 +175,16 @@ class DelegatorDescriptor:
             # Accessed on the class itself (e.g., ColumnProxy.alias). Return the unbound logic.
             # This might be useful for introspection but typically accessed via instance.
             return self.wrapper_logic
-        else:
-            # Accessed on an instance (e.g., col_proxy.alias). Pass the instance.
-            # The wrapper_logic will then decide whether to return a method caller or a property value.
-            return self.wrapper_logic(instance)
+
+        # MODIFIED: Handle 'dt' namespace specifically for instances
+        if self.name == "dt":
+            parent_af = getattr(instance, "_parent", None)
+            return DtNamespaceProxy(parent_proxy=instance, parent_af=parent_af)
+
+        # Original logic for other attributes on an instance
+        # Accessed on an instance (e.g., col_proxy.alias). Pass the instance.
+        # The wrapper_logic will then decide whether to return a method caller or a property value.
+        return self.wrapper_logic(instance)
 
 
 # Wrapper Factory
@@ -260,9 +268,14 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
             raise TypeError(
                 f"Attribute '{name}' is not callable and cannot accept arguments."
             )
-        if name in _NAMESPACES:
+
+        # MODIFIED: Ensure generic NamespaceProxy is not used for "dt".
+        # "dt" is now handled by DtNamespaceProxy via DelegatorDescriptor.__get__ for instances.
+        if name in _NAMESPACES and name != "dt":
             return NamespaceProxy(self_proxy, name)
         else:
+            # This handles actual properties (non-callable, non-namespace)
+            # or "dt" if accessed at class level via wrapper_logic (returns the raw polars .dt object).
             return _wrap(parent_af, polars_attr)
 
     wrapper.__name__ = f"proxied_{name}"
