@@ -196,14 +196,14 @@ class DtNamespaceProxy:
             >>> year_expr = af["dates"].dt.year()
             >>> print(af.select(year_expr.alias("year")).collect())
             shape: (2, 1)
-            ┌─────┐
-            │ year│
-            │ --- │
-            │ i32 │
-            ╞═════╡
-            │ 2020│
-            │ 2021│
-            └─────┘
+            ┌──────┐
+            │ year │
+            │ ---  │
+            │ i32  │
+            ╞══════╡
+            │ 2020 │
+            │ 2021 │
+            └──────┘
 
         Vector example (list-of-dates per policy)::
 
@@ -221,14 +221,14 @@ class DtNamespaceProxy:
             >>> years_expr = af_vec["policy_event_dates"].dt.year()
             >>> print(af_vec.select(pl.col("policy_id"), years_expr.alias("event_years")).collect())
             shape: (2, 2)
-            ┌───────────┬───────────────────────┐
-            │ policy_id ┆ event_years           │
-            │ ---       ┆ ---                   │
-            │ str       ┆ list[i32]             │
-            ╞═══════════╪═══════════════════════╡
-            │ A001      ┆ [2019, 2020]          │
-            │ B002      ┆ [2021, 2021, 2022]    │
-            └───────────┴───────────────────────┘
+            ┌───────────┬────────────────────┐
+            │ policy_id ┆ event_years        │
+            │ ---       ┆ ---                │
+            │ str       ┆ list[i32]          │
+            ╞═══════════╪════════════════════╡
+            │ A001      ┆ [2019, 2020]       │
+            │ B002      ┆ [2021, 2021, 2022] │
+            └───────────┴────────────────────┘
         """
         return self._call_dt_method("year")
 
@@ -271,14 +271,14 @@ class DtNamespaceProxy:
             >>> months_expr = af["claim_lodgement_dates"].dt.month()
             >>> print(af.select("policy_id", months_expr.alias("lodgement_months")).collect())
             shape: (2, 2)
-            ┌───────────┬───────────────────┐
-            │ policy_id ┆ lodgement_months │
-            │ ---       ┆ ---             │
-            │ str       ┆ list[i8]        │
-            ╞═══════════╪═════════════════╡
-            │ C003      ┆ [3, 4]          │
-            │ D004      ┆ [1, 11]         │
-            └───────────┴───────────────────┘
+            ┌───────────┬──────────────────┐
+            │ literal   ┆ lodgement_months │
+            │ ---       ┆ ---              │
+            │ str       ┆ list[i8]         │
+            ╞═══════════╪══════════════════╡
+            │ policy_id ┆ [3, 4]           │
+            │ policy_id ┆ [1, 11]          │
+            └───────────┴──────────────────┘
         """
         return self._call_dt_method("month")
 
@@ -320,14 +320,14 @@ class DtNamespaceProxy:
             >>> days_expr = af["loss_event_dates"].dt.day()
             >>> print(af.select("policy_id", days_expr.alias("event_days")).collect())
             shape: (2, 2)
-            ┌───────────┬──────────────┐
-            │ policy_id ┆ event_days   │
-            │ ---       ┆ ---          │
-            │ str       ┆ list[i8]     │
-            ╞═══════════╪══════════════╡
-            │ E005      ┆ [5, 15]      │
-            │ F006      ┆ [1, 29]      │
-            └───────────┴──────────────┘
+            ┌───────────┬────────────┐
+            │ literal   ┆ event_days │
+            │ ---       ┆ ---        │
+            │ str       ┆ list[i8]   │
+            ╞═══════════╪════════════╡
+            │ policy_id ┆ [5, 15]    │
+            │ policy_id ┆ [1, 29]    │
+            └───────────┴────────────┘
         """
         return self._call_dt_method("day")
 

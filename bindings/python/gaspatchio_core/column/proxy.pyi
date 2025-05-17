@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, List
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 import polars as pl
 from polars.type_aliases import PolarsDataType
@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from .expression_proxy import ExpressionProxy
     from .namespaces.dt_proxy import (
         DtNamespaceProxy as _DtNamespaceProxy,  # MODIFIED: For type hint
+    )
+    from .namespaces.string_proxy import (
+        StringNamespaceProxy as _StringNamespaceProxy,  # ADDED
     )
 
     # Type alias for DtNamespaceProxy parent, consistent with dt_proxy.py
@@ -170,7 +173,9 @@ class _BaseProxy:
     @property
     def dt(self) -> "_DtNamespaceProxy": ...  # MODIFIED: Changed to DtNamespaceProxy
     @property
-    def str(self) -> Any: ...  # Temporarily Any to bypass stubborn mypy error
+    def str(
+        self,
+    ) -> "_StringNamespaceProxy": ...  # MODIFIED: Changed to StringNamespaceProxy
     @property
     def list(self) -> "PolarsExprList": ...  # Use aliased name in string hint
     @property
@@ -210,3 +215,59 @@ class DtNamespaceProxy:
     def __getattr__(
         self, name: str
     ) -> Callable[..., "ExpressionProxy"]: ...  # MODIFIED: More precise return type
+
+# --- Stub for StringNamespaceProxy --- ADDED ---
+class StringNamespaceProxy:
+    """Stub for StringNamespaceProxy for type hinting."""
+
+    _parent_proxy: (
+        "ParentProxyType"  # Assuming ParentProxyType is ColumnProxy | ExpressionProxy
+    )
+    _parent_af: "ActuarialFrame | None"
+
+    def __init__(
+        self, parent_proxy: "ParentProxyType", parent_af: "ActuarialFrame | None"
+    ) -> None: ...
+
+    # --- Explicitly defined methods from string_proxy.py ---
+    def contains(
+        self, pattern: str | pl.Expr, literal: bool = False, strict: bool = False
+    ) -> "ExpressionProxy": ...
+    def to_uppercase(self) -> "ExpressionProxy": ...
+    def to_lowercase(self) -> "ExpressionProxy": ...
+    def n_chars(self) -> "ExpressionProxy": ...
+    def len_chars(self) -> "ExpressionProxy": ...
+    def len_bytes(self) -> "ExpressionProxy": ...
+    def strip_chars(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def strip_chars_start(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def lstrip(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def strip_chars_end(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def rstrip(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def strip_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
+    def remove_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
+    def strip_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
+    def remove_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
+    def zfill(self, alignment: int) -> "ExpressionProxy": ...
+    def ljust(self, width: int, fill_char: str = " ") -> "ExpressionProxy": ...
+    def pad_start(
+        self, width: int, fill_char: str = " "
+    ) -> "ExpressionProxy": ...  # Alias for rjust
+    def rjust(self, width: int, fill_char: str = " ") -> "ExpressionProxy": ...
+    def pad_end(
+        self, width: int, fill_char: str = " "
+    ) -> "ExpressionProxy": ...  # Alias for ljust
+    def starts_with(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
+    def ends_with(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
+
+    # Add __getattr__ for dynamic methods if we want to hint them generally
+    def __getattr__(self, name: str) -> Callable[..., "ExpressionProxy"]: ...

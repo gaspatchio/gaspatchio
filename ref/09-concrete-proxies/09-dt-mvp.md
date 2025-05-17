@@ -125,18 +125,21 @@ This document outlines a step-by-step plan for implementing a `{NamespaceName}Na
 
 **Objective:** Ensure documentation is robust, examples are verifiable, and polish the `{NamespaceName}NamespaceProxy` in `namespaces/{namespace_name}_proxy.py`.
 
-*   **Step 5.1: Add Doctests to `proxy.pyi` (or `namespaces/{namespace_name}_proxy.pyi`) for `{NamespaceName}NamespaceProxy` Methods**
+*   **Step 5.1: Add Doctests and Docstrings to `{NamespaceName}NamespaceProxy` Methods in `namespaces/{namespace_name}_proxy.py`**
     *   **Action:**
-        *   Write doctests in `proxy.pyi` (or a dedicated `namespaces/{namespace_name}_proxy.pyi` if created) for `{NamespaceName}NamespaceProxy` methods.
+        *   Write comprehensive docstrings for the `{NamespaceName}NamespaceProxy` class itself and for all its explicitly defined methods within `gaspatchio_core/column/namespaces/{namespace_name}_proxy.py`.
+        *   Embed doctests directly within these docstrings in the `.py` file to serve as examples and ensure they are verifiable.
+        *   Ensure that `__init__`, `_get_base_expr`, `_call_{namespace_name}_method`, `__getattr__` (if applicable to the namespace), and any shimming helper methods (e.g., `_is_list_of_relevant_type`) also have clear docstrings explaining their purpose, arguments, and behavior, even if they don't have doctests.
     *   **Testing:**
-        *   Run `uv run pytest --doctest-modules --doctest-glob="*.pyi"`.
+        *   Run `uv run pytest --doctest-modules gaspatchio_core/column/namespaces/{namespace_name}_proxy.py`.
+        *   Manually review generated documentation if a documentation builder is used.
 
-*   **Step 5.2: Review and Refine Error Messages, Docstrings, and Code in `namespaces/{namespace_name}_proxy.py`**
+*   **Step 5.2: Review and Refine Error Messages and Overall Code in `namespaces/{namespace_name}_proxy.py`**
     *   **Action:**
-        *   Review error messages, docstrings for `{NamespaceName}NamespaceProxy` class and its methods in `namespaces/{namespace_name}_proxy.py`.
-        *   Review overall code in `namespaces/{namespace_name}_proxy.py`.
+        *   Review all error messages raised by `{NamespaceName}NamespaceProxy` in `namespaces/{namespace_name}_proxy.py` for clarity, accuracy, and helpfulness.
+        *   Perform a final review of the overall code structure, comments, and logic in `namespaces/{namespace_name}_proxy.py` for adherence to best practices and project conventions.
     *   **Testing:**
-        *   Manual error checks. Docstring review.
+        *   Manually trigger error conditions to check messages. Code review.
 
 ---
 

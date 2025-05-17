@@ -7,6 +7,7 @@ import polars as pl
 import polars.exceptions
 
 from .namespaces.dt_proxy import DtNamespaceProxy
+from .namespaces.string_proxy import StringNamespaceProxy
 
 # Avoid circular imports at runtime but allow type checking
 if TYPE_CHECKING:
@@ -84,6 +85,22 @@ def _wrap(parent: Optional["ActuarialFrame"], result: Any) -> Any:
         return ExpressionProxy(result, parent)
     # Potentially wrap other types like Series or namespace objects later if needed
     return result
+
+
+def _ensure_polars_expr_or_literal(arg: Any) -> Any:
+    """Ensure an argument is a Polars expression or a Polars literal if it's a basic type."""
+    from .column_proxy import ColumnProxy  # Defer import
+    from .expression_proxy import ExpressionProxy  # Defer import
+
+    if isinstance(arg, (ColumnProxy, ExpressionProxy)):
+        return _unwrap(arg)
+    if isinstance(arg, pl.Expr):
+        return arg
+    # For basic Python types that Polars might expect as literals (e.g., in `when().then().otherwise()`)
+    # or for arguments like `ambiguous` in strptime.
+    if isinstance(arg, (str, int, float, bool)):
+        return pl.lit(arg)
+    return arg  # Return as-is if it's some other type (e.g., a Polars DataType like pl.Date)
 
 
 # --- ADD NamespaceProxy --- START ---
@@ -180,6 +197,12 @@ class DelegatorDescriptor:
         if self.name == "dt":
             parent_af = getattr(instance, "_parent", None)
             return DtNamespaceProxy(parent_proxy=instance, parent_af=parent_af)
+        # ADDED: Handle 'str' namespace specifically for instances
+        if (
+            self.name == "str"
+        ):  # Ensure this is checked after 'dt' or handled mutually exclusively if logic demands
+            parent_af = getattr(instance, "_parent", None)
+            return StringNamespaceProxy(parent_proxy=instance, parent_af=parent_af)
 
         # Original logic for other attributes on an instance
         # Accessed on an instance (e.g., col_proxy.alias). Pass the instance.
@@ -269,13 +292,25 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
                 f"Attribute '{name}' is not callable and cannot accept arguments."
             )
 
-        # MODIFIED: Ensure generic NamespaceProxy is not used for "dt".
-        # "dt" is now handled by DtNamespaceProxy via DelegatorDescriptor.__get__ for instances.
-        if name in _NAMESPACES and name != "dt":
+        # MODIFIED: Ensure generic NamespaceProxy is not used for "dt" or "str".
+        # These are now handled by their specific proxies via DelegatorDescriptor.__get__ for instances.
+        if name in _NAMESPACES and name not in ["dt", "str"]:
             return NamespaceProxy(self_proxy, name)
+        # MODIFICATION: Explicitly check for dt and str to prevent them from falling into the 'else' block
+        # if they were accessed at the class level (where instance specific proxies aren't made)
+        # However, DelegatorDescriptor already handles instance-specific proxies for dt and str.
+        # This 'else' handles non-callable attributes and cases where 'name' is 'dt' or 'str'
+        # but accessed at class level (instance is None in __get__), or if it's a non-proxied namespace.
+        # The DelegatorDescriptor's __get__ should return the wrapper_logic for class-level access,
+        # which then comes here. If 'name' is 'dt' or 'str' here, it means it's likely class-level.
+        # For class-level access, returning the raw Polars namespace object might be intended.
+        elif name in ["dt", "str"]:
+            # This case is primarily for class-level access like ColumnProxy.dt or ColumnProxy.str
+            # It returns the raw Polars namespace object (e.g., polars.expr.datetime_functions.ExprDTFunctions)
+            # This is consistent with how non-proxied namespaces would be handled if they were properties.
+            return polars_attr  # Return the raw polars attribute (namespace object)
         else:
             # This handles actual properties (non-callable, non-namespace)
-            # or "dt" if accessed at class level via wrapper_logic (returns the raw polars .dt object).
             return _wrap(parent_af, polars_attr)
 
     wrapper.__name__ = f"proxied_{name}"
