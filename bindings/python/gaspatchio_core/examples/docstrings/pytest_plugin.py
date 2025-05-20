@@ -9,6 +9,7 @@ import pytest
 from .formatting import format_suggestion_for_report, get_linting_suggestion
 from .models import (
     DocstringCodeExample,  # , GaspatchioDocstring # GaspatchioDocstring might not be needed directly here
+    GaspatchioDocstring,  # Ensure GaspatchioDocstring is imported
 )
 from .parse import GaspatchioDocstringParser
 from .validate import GaspatchioEvalExample
@@ -74,6 +75,10 @@ def pytest_configure(config):
         "markers",
         "gaspatchio_docstring_example: mark test as a Gaspatchio docstring example",
     )
+    config.addinivalue_line(
+        "markers",
+        "gaspatchio_docstring_structure_check: mark test as a Gaspatchio docstring structure check",
+    )
     # Removed cache clearing related to old find_examples
     # global _EXAMPLE_CACHE, _SOURCE_DIR_CACHE
     # _EXAMPLE_CACHE = None
@@ -112,6 +117,13 @@ class DocstringExampleFile(pytest.File):
         )  # Assuming self.path is a Path object
         item_count = 0
         for doc in docstrings:
+            # Create a test item for the overall docstring structure
+            structure_item_name = f"{doc.object_path}-structure"
+            yield DocstringStructureItem.from_parent(
+                self, name=structure_item_name, docstring_obj=doc
+            )
+            item_count += 1  # Count this as an item
+
             for ex_idx, ex in enumerate(doc.examples):
                 # Apply the marker to each item if needed for -m filtering
                 # However, pytest -m usually filters at collection time based on markers on test functions/classes
@@ -122,7 +134,7 @@ class DocstringExampleFile(pytest.File):
                 yield DocstringExampleItem.from_parent(self, name=item_name, example=ex)
                 item_count += 1
         if item_count == 0 and self.session.config.option.verbose > 0:
-            print(f"No docstring examples found in {self.path}")
+            print(f"No docstring examples or structure checks found in {self.path}")
 
 
 class DocstringExampleItem(pytest.Item):
@@ -248,9 +260,11 @@ class DocstringExampleItem(pytest.Item):
                 )
 
             suggestion = get_linting_suggestion(
-                final_primary_code_for_suggestion, combined_issues_text_for_suggestion
+                final_primary_code_for_suggestion,
+                first_issue_detail,  # Pass the full first issue detail as the error message
             )
-            report.extend(format_suggestion_for_report(suggestion))
+            if suggestion:
+                report.extend(format_suggestion_for_report(suggestion))
 
             return DocstringFailureTerminalRepr(report)
         return super().repr_failure(excinfo, style)
@@ -263,6 +277,55 @@ class DocstringExampleItem(pytest.Item):
             # Pytest might still truncate this or use its own formatting for the short summary
             return (self.path, None, f"{base_message} - {self.failure_reason}")
         return (self.path, None, base_message)
+
+
+class DocstringStructureItem(pytest.Item):
+    def __init__(self, *, name, parent, docstring_obj: "GaspatchioDocstring", **kwargs):
+        super().__init__(name, parent, **kwargs)
+        self.docstring_obj: "GaspatchioDocstring" = docstring_obj
+        self.add_marker("gaspatchio_docstring_structure_check")  # New marker
+
+    def runtest(self):
+        issues = self.docstring_obj.validate_structure()
+        if issues:
+            # Combine issues into a single message for the error report
+            # failure_message = "\n".join(issues)
+            raise DocstringStructureError(
+                item_name=self.name,
+                file_path=str(self.docstring_obj.file_path),
+                object_path=self.docstring_obj.object_path,
+                issues=issues,
+                raw_docstring=self.docstring_obj.raw_docstring,
+            )
+
+    def repr_failure(self, excinfo, style=None):
+        if isinstance(excinfo.value, DocstringStructureError):
+            exc = cast(DocstringStructureError, excinfo.value)
+            report = [
+                "DOCSTRING STRUCTURE ERROR",
+                f"  File:        {exc.file_path}",
+                f"  Object:      {exc.object_path}",
+                f"  Line:        {self.docstring_obj.start_line}",  # start_line of the docstring object
+                "  ----------------------------------------------------------------------",
+                "  Issues Found:",
+            ]
+            for issue_line in exc.issues:
+                report.append(f"    - {issue_line}")
+            report.append(
+                "  ----------------------------------------------------------------------"
+            )
+            # Optionally, include part of the raw docstring for context
+            # report.append("  Problematic Raw Docstring (first 15 lines):")
+            # report.extend([f"    {line}" for line in exc.raw_docstring.splitlines()[:15]]
+            # report.append("  ----------------------------------------------------------------------")
+
+            return DocstringFailureTerminalRepr(
+                report
+            )  # Reuse existing for basic formatting
+        return super().repr_failure(excinfo, style)
+
+    def reportinfo(self):
+        return (self.path, self.docstring_obj.start_line, f"[STRUCT CHECK] {self.name}")
 
 
 class DocstringLintError(Exception):
@@ -305,12 +368,31 @@ class DocstringFailureTerminalRepr:
                 tw.line(str(item))
 
     def __str__(self):  # Fallback for contexts not using toterminal
-        processed_lines = []
-        for item in self.lines:
-            if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str):
-                processed_lines.append(
-                    item[0]
-                )  # Just take the text part for string conversion
-            else:
-                processed_lines.append(str(item))
-        return "\\n".join(processed_lines)
+        # Simple string representation, ignoring color for non-terminal contexts
+        return "\n".join(
+            str(line[0] if isinstance(line, tuple) else line) for line in self.lines
+        )
+
+
+# Custom exception for docstring structural errors - moved definition up with Item for clarity
+class DocstringStructureError(Exception):
+    """Custom exception for docstring structural validation errors."""
+
+    def __init__(
+        self,
+        item_name: str,
+        file_path: str,
+        object_path: str,
+        issues: list[str],
+        raw_docstring: str,
+    ):
+        self.item_name = item_name
+        self.file_path = file_path
+        self.object_path = object_path
+        self.issues = issues
+        self.raw_docstring = raw_docstring
+        message = (
+            f"Docstring structural errors in {object_path} ({file_path}):\\n"
+            + "\n".join(issues)
+        )
+        super().__init__(message)

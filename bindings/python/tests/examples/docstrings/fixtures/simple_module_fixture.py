@@ -1,70 +1,68 @@
-"""A simple module fixture for testing docstring parsing."""
-
-from typing import Any, Optional
+"""A simple module fixture for testing docstring parsing and validation."""
 
 
 class SimpleDateTimeProcessor:
-    """
-    A simple class with methods that have docstrings for testing.
-    """
+    """A simple class that processes date strings."""
 
-    def __init__(self, data_source: Any, context: Optional[str] = None):
-        """
-        Initialize the SimpleDateTimeProcessor.
-
-        Args:
-            data_source (Any): The source of data to be processed.
-            context (Optional[str]): Optional context information.
-        """
+    def __init__(self, data_source: str):
         self.data_source = data_source
-        self.context = context
 
-    def get_year(self, date_input: Any) -> int:
+    def get_year(self, date_input: str) -> str:
         """Extract the year from a given date input.
 
-        This method simulates extracting a year.
-
-        Args:
-            date_input (Any): The input from which to extract the year.
-                       Can be a string, datetime object, etc.
-
-        Returns:
-            int: The extracted year as an integer.
-
         Examples:
-            >>> processor = SimpleDateTimeProcessor("dummy_data")
-            >>> processor.get_year("2023-01-01")
-            2023
+        ---------
+        ```python
+        processor = SimpleDateTimeProcessor(\"dummy_data\")
+        processor.get_year(\"2023-01-01\")
+        ```
+        ```text
+        2023
+        ```
         """
-        if isinstance(date_input, str) and len(date_input) >= 4:
-            try:
-                return int(date_input[:4])
-            except ValueError:
-                return 1900  # Default fallback
-        return 1900  # Default fallback
+        if not isinstance(date_input, str) or len(date_input) < 4:
+            raise ValueError("Invalid date string format")
+        return date_input[:4]
 
-    def get_month(self, date_input: Any) -> int:
+    def get_month(self, date_input: str) -> str:
         """Extract the month from a given date input.
 
-        Args:
-            date_input (Any): The input from which to extract the month.
-
-        Returns:
-            int: The extracted month as an integer (1-12).
-
         Examples:
-        Scalar example::
-
-            >>> processor = SimpleDateTimeProcessor("dummy_data")
-            >>> processor.get_month("2023-07-15")
-            7
+        ---------
+        ```python
+        processor = SimpleDateTimeProcessor(\"dummy_data\")
+        processor.get_month(\"2023-07-15\")
+        ```
+        ```text
+        7
+        ```
         """
-        if isinstance(date_input, str) and len(date_input) >= 7:
+        if (
+            not isinstance(date_input, str)
+            or len(date_input) < 7
+            or date_input[4] != "-"
+            or date_input[7] != "-"
+        ):
+            # Simplified check for yyyy-mm-dd like structure for month extraction
+            # In a real scenario, proper date parsing (e.g., datetime.strptime) would be used.
             try:
-                return int(date_input[5:7])
+                # Attempt to parse to validate structure for month extraction
+                # Not a full validation, just enough for this example method
+                _ = int(date_input[5:7])
             except ValueError:
-                return 1  # Default fallback
-        return 1  # Default fallback
+                raise ValueError("Invalid date string format for month extraction")
+            month_part = date_input[5:7]
+            return str(int(month_part))  # Return as integer string e.g. "07" -> "7"
+        month_part = date_input[5:7]
+        return str(int(month_part))
+
+    def get_day(self, date_input: str) -> str:
+        """Extract the day from a given date input.
+        (No examples for this one)
+        """
+        if not isinstance(date_input, str) or len(date_input) < 10:
+            raise ValueError("Invalid date string format")
+        return date_input[8:10]
 
 
 def utility_function(name: str, value: int = 0) -> str:
@@ -79,3 +77,8 @@ def utility_function(name: str, value: int = 0) -> str:
         str: A greeting string.
     """
     return f"Hello, {name}! Value is {value}."
+
+
+def module_level_function_simple():
+    """A simple module level function with no examples."""
+    return "module_level_output"

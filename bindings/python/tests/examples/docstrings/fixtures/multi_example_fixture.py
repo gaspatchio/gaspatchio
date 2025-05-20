@@ -40,11 +40,15 @@ class PremiumCalculator:
         Examples:
 
             Example 1: Standard Risk Profile as DataFrame Output
-            >>> import polars as pl
-            >>> calc = PremiumCalculator(base_rate=100.0)
-            >>> premium_val = calc.calculate_adjusted_premium(age=30, risk_factor=1.0, coverage_amount=100000, term_years=20)
-            >>> df_ex1 = pl.DataFrame({"description": ["Standard Risk"], "age": [30], "risk_factor": [1.0], "coverage": [100000], "term_years": [20], "calculated_premium": [premium_val]})
-            >>> print(df_ex1)
+
+            ```python
+            import polars as pl
+            calc = PremiumCalculator(base_rate=100.0)
+            premium_val = calc.calculate_adjusted_premium(age=30, risk_factor=1.0, coverage_amount=100000, term_years=20)
+            df_ex1 = pl.DataFrame({"description": ["Standard Risk"], "age": [30], "risk_factor": [1.0], "coverage": [100000], "term_years": [20], "calculated_premium": [premium_val]})
+            print(df_ex1)
+            ```
+            ```text
             shape: (1, 6)
             ┌───────────────┬─────┬─────────────┬──────────┬────────────┬────────────────────┐
             │ description   ┆ age ┆ risk_factor ┆ coverage ┆ term_years ┆ calculated_premium │
@@ -53,24 +57,29 @@ class PremiumCalculator:
             ╞═══════════════╪═════╪═════════════╪══════════╪════════════╪════════════════════╡
             │ Standard Risk ┆ 30  ┆ 1.0         ┆ 100000   ┆ 20         ┆ 1820.0             │
             └───────────────┴─────┴─────────────┴──────────┴────────────┴────────────────────┘
+            ```
 
             Example 2: Higher Risk Profile with Vector Coverage as DataFrame Output
-            >>> import polars as pl
-            >>> calc = PremiumCalculator(base_rate=100.0)
-            >>> coverages = [200000, 250000, 300000]
-            >>> premiums_hr_list = [
-            ...     calc.calculate_adjusted_premium(age=45, risk_factor=1.5, coverage_amount=cov, term_years=5)
-            ...     for cov in coverages
-            ... ]
-            >>> df_ex2 = pl.DataFrame({
-            ...     "description": ["Higher Risk"],
-            ...     "age": [45],
-            ...     "risk_factor": [1.5],
-            ...     "coverages_list": [coverages],
-            ...     "term_years": [5],
-            ...     "calculated_premiums_list": [premiums_hr_list]
-            ... })
-            >>> print(df_ex2)
+
+            ```python
+            import polars as pl
+            calc = PremiumCalculator(base_rate=100.0)
+            coverages = [200000, 250000, 300000]
+            premiums_hr_list = [
+                calc.calculate_adjusted_premium(age=45, risk_factor=1.5, coverage_amount=cov, term_years=5)
+                for cov in coverages
+            ]
+            df_ex2 = pl.DataFrame({
+                "description": ["Higher Risk"],
+                "age": [45],
+                "risk_factor": [1.5],
+                "coverages_list": [coverages],
+                "term_years": [5],
+                "calculated_premiums_list": [premiums_hr_list]
+            })
+            print(df_ex2)
+            ```
+            ```text
             shape: (1, 6)
             ┌─────────────┬─────┬─────────────┬──────────────────────────┬────────────┬───────────────────────────┐
             │ description ┆ age ┆ risk_factor ┆ coverages_list           ┆ term_years ┆ calculated_premiums_list  │
@@ -79,6 +88,7 @@ class PremiumCalculator:
             ╞═════════════╪═════╪═════════════╪══════════════════════════╪════════════╪═══════════════════════════╡
             │ Higher Risk ┆ 45  ┆ 1.5         ┆ [200000, 250000, 300000] ┆ 5          ┆ [4785.0, 5981.25, 7177.5] │
             └─────────────┴─────┴─────────────┴──────────────────────────┴────────────┴───────────────────────────┘
+            ```
         """
         # Illustrative calculation
         age_adjustment = 1 + (age / 100)  # Simple age factor

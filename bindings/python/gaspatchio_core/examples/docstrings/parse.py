@@ -1,13 +1,14 @@
 import ast
-import doctest
 import inspect
+import logging
 from pathlib import Path
 from typing import List, Optional
 
 import polars as pl
 from docstring_parser import parse as docstring_parse_lib
 from docstring_parser.common import Docstring  # For type hinting parsed_doc_lib
-from loguru import logger
+from loguru import logger  # Ensure this is the logger we use
+from markdown_it import MarkdownIt
 
 from .models import (
     DocstringCodeExample,
@@ -15,6 +16,8 @@ from .models import (
     DocstringReturn,
     GaspatchioDocstring,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class GaspatchioDocstringParser:
@@ -59,59 +62,136 @@ class GaspatchioDocstringParser:
 
     def _extract_examples(
         self,
-        docstring_text: str,  # Original full docstring for doctest
-        object_path: str,  # For context and doctest naming
-        file_path_str: str,  # For DocstringCodeExample model
+        docstring_text: str,
+        object_path: str,
+        file_path_str: str,
     ) -> List[DocstringCodeExample]:
         examples_list: List[DocstringCodeExample] = []
-        try:
-            cleaned_docstring_for_doctest = inspect.cleandoc(docstring_text)
-            parsed_by_doctest: List[doctest.Example | str] = (
-                doctest.DocTestParser().parse(
-                    cleaned_docstring_for_doctest, name=object_path
+        if not docstring_text:
+            return examples_list
+
+        # Always run cleandoc on the input docstring text first.
+        docstring_to_parse = inspect.cleandoc(docstring_text)
+
+        md = MarkdownIt().disable("code")  # Disable indented code blocks
+        tokens = md.parse(docstring_to_parse)
+        logger.debug(
+            f"Object Path: {object_path}\nCleaned Docstring for MD (len {len(docstring_to_parse)}):\n'''{docstring_to_parse[:500]}...'''"
+        )
+        logger.debug(
+            f"MD Tokens ({len(tokens)} total). First 10: {[str(t) for t in tokens[:10]]}"
+        )
+
+        i = 0
+        example_idx_counter = 0
+        while i < len(tokens):
+            token = tokens[i]
+            content_preview = (
+                token.content.replace("\n", "\\n")[:70] if token.content else "N/A"
+            )
+            logger.debug(
+                f"Token [{i}/{len(tokens) - 1}]: type='{token.type}', info='{token.info}', map={token.map}, hidden={token.hidden}, level={token.level}, content_preview='{content_preview}'"
+            )
+
+            if token.type == "fence" and token.info.startswith("python"):
+                logger.debug(
+                    f"---> Found python code fence: info='{token.info}', map={token.map}"
                 )
-            )
+                code_snippet = token.content
+                line_start_in_cleaned_docstring = token.map[0] if token.map else 0
 
-            current_block_snippets: List[str] = []
-            current_block_first_line_no: Optional[int] = None
+                info_parts = token.info.split()
+                parsed_prefix_tags = [part for part in info_parts[1:] if part]
 
-            doctest_example_objects = [
-                ex for ex in parsed_by_doctest if isinstance(ex, doctest.Example)
-            ]
+                extracted_output: Optional[str] = None
+                consumed_for_output_block = (
+                    0  # How many extra tokens the output block consumed
+                )
 
-            for i, example_obj in enumerate(doctest_example_objects):
-                if not current_block_snippets:  # Start of a new block
-                    current_block_first_line_no = example_obj.lineno
-
-                # example_obj.source is already clean (no >>> prefixes)
-                current_block_snippets.append(example_obj.source)
-
-                if example_obj.want or i == len(doctest_example_objects) - 1:
-                    full_snippet = "".join(current_block_snippets)
-                    output = example_obj.want.rstrip("\n") if example_obj.want else None
-
-                    line_in_docstring = (
-                        current_block_first_line_no
-                        if current_block_first_line_no is not None
-                        else 0
+                # Check for an immediately following output block
+                if i + 1 < len(tokens):
+                    potential_output_token_1 = tokens[i + 1]
+                    logger.debug(
+                        f"    Checking next token [{i + 1}] for output: type='{potential_output_token_1.type}', info='{potential_output_token_1.info}'"
                     )
 
-                    example_model = DocstringCodeExample(
-                        snippet=full_snippet.rstrip("\n"),  # This is the clean snippet
-                        output=output,
-                        object_context=object_path,
-                        example_index=len(examples_list),
-                        raw_source_location=(file_path_str, line_in_docstring),
+                    # If the next token is another Python code block, current one has no output
+                    if (
+                        potential_output_token_1.type == "fence"
+                        and potential_output_token_1.info.startswith("python")
+                    ):
+                        logger.debug(
+                            "    Next token is another Python code fence. Current example has no output."
+                        )
+                        pass  # extracted_output remains None, consumed_for_output_block remains 0
+                    # Else, if it's any other kind of fence, consider it output
+                    elif potential_output_token_1.type == "fence":
+                        logger.debug(
+                            f"    SUCCESS: Output found in fence (info: '{potential_output_token_1.info}')."
+                        )
+                        extracted_output = potential_output_token_1.content.strip()
+                        consumed_for_output_block = 1  # Consumed this output fence
+                    # Else, check for paragraph structure for output
+                    elif potential_output_token_1.type == "paragraph_open":
+                        logger.debug(
+                            "    Next token is paragraph_open. Checking structure for output..."
+                        )
+                        if (
+                            i + 3
+                            < len(
+                                tokens
+                            )  # Need paragraph_open, inline, paragraph_close
+                            and tokens[i + 2].type == "inline"
+                            and tokens[i + 3].type == "paragraph_close"
+                        ):
+                            inline_content_preview = tokens[i + 2].content.replace(
+                                "\n", "\\n"
+                            )[:70]
+                            logger.debug(
+                                f"    SUCCESS: Output found in paragraph (inline content: '{inline_content_preview}')."
+                            )
+                            extracted_output = tokens[i + 2].content.strip()
+                            consumed_for_output_block = (
+                                3  # Consumed paragraph_open, inline, paragraph_close
+                            )
+                        else:
+                            logger.debug(
+                                f"    Paragraph structure for output not matched. Tokens: {tokens[i + 1 : i + 4]}"
+                            )
+                    else:
+                        logger.debug(
+                            f"    No specific output block (fence or paragraph) found immediately after code fence (next token type: {potential_output_token_1.type})"
+                        )
+                else:
+                    logger.debug(
+                        "    No more tokens after code fence to check for output."
                     )
-                    examples_list.append(example_model)
 
-                    current_block_snippets = []
-                    current_block_first_line_no = None
-
-        except Exception as e:
-            logger.error(
-                f"Error during doctest parsing or grouping for {object_path}: {e}"
-            )
+                example_model = DocstringCodeExample(
+                    snippet=code_snippet.rstrip("\n"),
+                    output=extracted_output,
+                    object_context=object_path,
+                    example_index=example_idx_counter,
+                    raw_source_location=(
+                        file_path_str,
+                        line_start_in_cleaned_docstring,
+                    ),
+                    prefix_tags=parsed_prefix_tags,
+                    # parent_docstring will be set when GaspatchioDocstring is created if needed
+                )
+                logger.debug(
+                    f"---> Added example #{example_idx_counter}: tags={parsed_prefix_tags}, snippet_len={len(code_snippet)}, output_exists={extracted_output is not None}"
+                )
+                examples_list.append(example_model)
+                example_idx_counter += 1
+                i += (
+                    1 + consumed_for_output_block
+                )  # Advance past code block and any consumed output block
+            else:
+                i += 1  # Not a python code fence, just advance to the next token
+        logger.debug(
+            f"===> Finished extracting examples for '{object_path}'. Total found: {len(examples_list)}"
+        )
         return examples_list
 
     def parse_docstring_from_text(
@@ -137,7 +217,6 @@ class GaspatchioDocstringParser:
             return None
 
         try:
-            # parsed_doc_lib is of type docstring_parser.common.Docstring
             parsed_doc_lib: Docstring = docstring_parse_lib(docstring_text)
         except Exception:
             return GaspatchioDocstring(

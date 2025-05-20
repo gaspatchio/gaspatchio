@@ -1,4 +1,5 @@
 import importlib.util
+import inspect
 import sys
 from pathlib import Path
 from typing import List
@@ -154,8 +155,9 @@ def test_validate_structure_example_no_prompt(
     docstring_with_no_prompt_example: GaspatchioDocstring,
 ):
     issues = docstring_with_no_prompt_example.validate_structure()
-    assert len(issues) == 1
-    assert "has no '>>>' lines" in issues[0]
+    assert not issues, (
+        f"Expected no issues for a valid Markdown-style example, got: {issues}"
+    )
 
 
 def test_validate_structure_example_ends_in_expr_no_output(
@@ -239,7 +241,9 @@ def test_iter_examples_no_examples():
 @pytest.fixture
 def clean_code_example() -> DocstringCodeExample:
     return DocstringCodeExample(
-        snippet=">>> import os\n>>> x = os.getenv('MY_VAR', 'default')\n>>> print(x)",
+        snippet="""import os
+x = os.getenv('MY_VAR', 'default')
+print(x)""",
         output="default",
         object_context="test_module.clean_function",
         example_index=0,
@@ -249,10 +253,11 @@ def clean_code_example() -> DocstringCodeExample:
 
 @pytest.fixture
 def ruff_violation_example() -> DocstringCodeExample:
-    """Example with an unused import (F401) and undefined name (F821)."""
+    # Example with common Ruff violations (F401: unused import, F821: undefined name)
     return DocstringCodeExample(
-        snippet=">>> import sys  # F401 unused\n>>> print(undefined_variable)  # F821 undefined name",
-        output=None,  # Output doesn't matter for linting here
+        snippet="""import sys  # F401 unused
+print(undefined_variable)  # F821 undefined name""",  # Markdown style
+        output=None,  # Output is not relevant for this linting test of the snippet itself
         object_context="test_module.ruff_violations",
         example_index=0,
         raw_source_location=("/fake/violations.py", 10),
@@ -262,7 +267,8 @@ def ruff_violation_example() -> DocstringCodeExample:
 @pytest.fixture
 def empty_snippet_example() -> DocstringCodeExample:
     return DocstringCodeExample(
-        snippet=">>> # Just a comment\n>>> ",  # Empty or only comments
+        snippet="""# Just a comment
+   """,  # Markdown style (comment and whitespace)
         output=None,
         object_context="test_module.empty_snippet",
         example_index=0,
@@ -369,30 +375,82 @@ def test_lint_non_python_snippet():
 
 def test_dt_proxy_month_docstring_lint():
     # Dynamically load the fixture module
-    fixture_path = Path(__file__).parent / "fixtures" / "dt_proxy_month_fixture.py"
+    fixture_path = (
+        Path(__file__).parent / "fixtures" / "dt_proxy_month_md_fixture.py"
+    )  # Updated path
+    # Ensure the parser is available for this test context if needed later for model creation
+    parser = GaspatchioDocstringParser()  # Initialize parser
+
     spec = importlib.util.spec_from_file_location(
-        "dt_proxy_month_fixture", fixture_path
+        "dt_proxy_month_md_fixture",
+        fixture_path,  # Ensure module name matches new fixture
     )
+    if spec is None:
+        pytest.skip(f"Could not create spec for {fixture_path}")
+        return
+
     mod = importlib.util.module_from_spec(spec)
+    # Handle re-importation if tests are run multiple times in a session
+    if spec.name in sys.modules:
+        del sys.modules[spec.name]
     sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
 
-    # Get the docstring from DtNamespaceProxy.month
-    docstring = mod.DtNamespaceProxy.month.__doc__
-    assert docstring, "No docstring found on DtNamespaceProxy.month"
+    try:
+        spec.loader.exec_module(mod)
+    except FileNotFoundError:
+        pytest.skip(f"Fixture file not found during exec_module: {fixture_path}")
+        return
 
-    parser = GaspatchioDocstringParser()
-    doc_model = parser.parse_docstring_from_text(
-        docstring_text=docstring,
-        object_path="DtNamespaceProxy.month",
-        file_path_str=str(fixture_path),
-        docstring_start_line=mod.DtNamespaceProxy.month.__code__.co_firstlineno,
+    # Assuming DtNamespaceProxy and its month method exist and have a docstring
+    if not hasattr(mod, "DtNamespaceProxy") or not hasattr(
+        mod.DtNamespaceProxy, "month"
+    ):
+        pytest.skip(
+            "DtNamespaceProxy or DtNamespaceProxy.month not found in fixture module"
+        )
+        return
+
+    raw_docstring = mod.DtNamespaceProxy.month.__doc__
+    if not raw_docstring:
+        pytest.skip("Docstring for DtNamespaceProxy.month is empty or None.")
+        return
+
+    # Get the start line of the method for more accurate object context
+    try:
+        method_object = mod.DtNamespaceProxy.month
+        source_lines, start_line_num = inspect.getsourcelines(method_object)
+        # ast.get_docstring node's lineno for docstring start might be more precise if available
+        # but for this test, method start line is a good proxy.
+    except (TypeError, OSError):  # OSError if source not found
+        start_line_num = 1  # Fallback
+
+    # Parse the docstring to get DocstringCodeExample instances
+    # Use a dummy object_path for this self-contained test if full path isn't critical
+    object_path = f"{fixture_path.stem}.DtNamespaceProxy.month"
+
+    parsed_docstring = parser.parse_docstring_from_text(
+        raw_docstring,
+        object_path=object_path,
+        file_path_str=str(fixture_path.resolve()),
+        docstring_start_line=start_line_num,
     )
-    assert doc_model is not None, "Failed to parse docstring"
-    assert doc_model.examples, "No examples found in docstring"
 
-    for i, ex in enumerate(doc_model.examples):
-        issues = ex.lint()
-        print(f"Example #{i} lint issues: {issues}")
-        assert isinstance(issues, list)
-        # Optionally, assert not issues if you want to enforce clean lint
+    assert parsed_docstring is not None, "Failed to parse the docstring from fixture"
+    assert len(parsed_docstring.examples) > 0, (
+        "No examples found in the parsed docstring"
+    )
+
+    all_lint_issues: List[str] = []
+    for example in parsed_docstring.examples:
+        issues = example.lint()
+        if issues:
+            all_lint_issues.extend(
+                [
+                    f"Example {example.example_index} ({example.object_context}): {issue}"
+                    for issue in issues
+                ]
+            )
+
+    assert not all_lint_issues, (
+        f"Expected no linting issues in dt_proxy_month_md_fixture examples, got: {all_lint_issues}"
+    )

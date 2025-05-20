@@ -20,48 +20,16 @@ class DocstringCodeExample(BaseModel):
     parent_docstring: Optional["GaspatchioDocstring"] = Field(
         default=None, exclude=True
     )
+    prefix_tags: List[str] = Field(default_factory=list)
 
     def _extract_code_from_snippet(self) -> str:
         """Extracts executable Python code from a doctest-style snippet.
         If the snippet does not appear to be a doctest (i.e., no lines start with >>> or ...),
         it is returned as is.
         """
-        lines = self.snippet.splitlines()
-        if not lines:
-            return ""
-
-        # Check if any line looks like a doctest prompt
-        is_doctest_formatted = any(
-            line.lstrip().startswith(">>> ") or line.lstrip().startswith("... ")
-            for line in lines
-        )
-
-        if not is_doctest_formatted:
-            # If no doctest prompts are found, assume it's already clean code
-            return self.snippet
-
-        code_lines = []
-        for line in lines:
-            stripped_line = (
-                line.lstrip()
-            )  # Use lstrip to handle potential leading whitespace before >>>
-            if stripped_line.startswith(">>> "):
-                code_lines.append(stripped_line[4:])
-            elif stripped_line.startswith("... "):
-                code_lines.append(stripped_line[4:])
-            # If it's a doctest formatted block, non-prompt lines after prompts are part of output, not code.
-            # The original `elif code_lines: break` was too aggressive if a clean line appeared mid-block.
-            # However, for extracting *only code*, if we started collecting and then hit a non-prompt line,
-            # that line is not part of the *code* of that specific doctest example snippet.
-            # This method is about extracting the *executable code* from what might be a raw doctest snippet.
-            # Given that `parse.py` now provides clean snippets, this part is less critical for that path,
-            # but kept for robustness if this method is called with raw doctest strings.
-            elif (
-                code_lines and not stripped_line.startswith("#") and stripped_line
-            ):  # if we have started and this line is not a continuation or comment
-                pass  # In a raw doctest, this would be an error or unexpected content. Here, we only collect prompted lines.
-
-        return "\n".join(code_lines)
+        # Simplified as per 10-markdown-fencing.md:
+        # The snippet from Markdown fenced blocks is already clean Python.
+        return self.snippet
 
     def lint(self) -> List[str]:
         """Lints the code snippet using Ruff CLI via subprocess."""
@@ -82,7 +50,9 @@ class DocstringCodeExample(BaseModel):
             )
             return issues
 
-        code_to_lint = self._extract_code_from_snippet()
+        # Use inspect.cleandoc to handle multi-line string literals correctly for linting
+        raw_code_to_lint = self._extract_code_from_snippet()
+        code_to_lint = inspect.cleandoc(raw_code_to_lint)
 
         if not code_to_lint.strip():
             return issues  # No code to lint
@@ -276,48 +246,67 @@ class GaspatchioDocstring(BaseModel):
         Checks:
         - short_description exists
         - parameter count + names match inspect.signature() (TODO)
-        - each Example has at least one '>>>' line
         - examples[#].output is non-empty **if** snippet ends with a pure expression
         - returns section present when fn actually returns non-None (TODO)
+        - Presence of legacy '>>>' doctest examples.
         """
         issues: List[str] = []
         if not self.short_description:
             issues.append("Missing short_description.")
 
+        # Check for legacy doctest markers (>>> or ...)
+        # The current parser in parse.py only extracts examples from Markdown fenced code blocks.
+        # If these markers are present in the raw_docstring, they likely represent
+        # unparsed/old-style examples that need conversion.
+        has_legacy_doctest_markers = any(
+            line.lstrip().startswith(">>> ") or line.lstrip().startswith("... ")
+            for line in self.raw_docstring.splitlines()
+        )
+        if has_legacy_doctest_markers:
+            # We add an issue if legacy markers are found, because the expectation is
+            # that all runnable examples should be in Markdown fenced blocks.
+            # This doesn't prevent markdown examples from also existing, but flags that
+            # there's potentially unconverted old-style content.
+            issues.append(
+                "[Structure Error] Legacy '>>>' or '...' doctest markers found in the raw docstring. "
+                "Please convert all examples to Markdown fenced code blocks. For example, wrap your Python code like this:\n"
+                "```python\n"
+                "# your code here\n"
+                "print('example')\n"
+                "```\n"
+                "And place its expected output (if any) in a separate subsequent block, like:\n"
+                "```text\n"
+                "example_output\n"
+                "```"
+            )
+
         # TODO: Parameter count + names match inspect.signature()
 
         for i, example in enumerate(self.examples):
-            if not any(
-                line.strip().startswith(">>>") for line in example.snippet.splitlines()
-            ):
-                issues.append(
-                    f"[Structure Error] Example #{i} (context: {example.object_context}, file: {self.file_path}, line: {example.raw_source_location[1]}) has no '>>>' lines. Snippet:\n{example.snippet}"
-                )
+            # Removed check for '>>>' lines as examples are now Markdown fenced code blocks
 
             # Heuristic for checking if snippet ends with a pure expression
             # This is a simplified check. A more robust check might involve ast.parse.
             # It considers the last non-empty, non-comment line of the snippet.
-            # It strips '>>> ' or '... ' prefixes.
+            # The snippet is now clean Python code.
+            cleaned_snippet_for_check = inspect.cleandoc(example.snippet)
+            snippet_lines = cleaned_snippet_for_check.strip().splitlines()
             last_code_line = ""
-            for line in reversed(example.snippet.strip().splitlines()):
+            for line in reversed(snippet_lines):
                 stripped_line = line.strip()
-                if stripped_line.startswith(">>> "):
-                    last_code_line = stripped_line[4:].strip()
-                    break
-                elif stripped_line.startswith("... "):
-                    last_code_line = stripped_line[4:].strip()
-                    break
-                elif (
-                    stripped_line
-                ):  # A non-empty line that is not a prompt continuation
+                if stripped_line and not stripped_line.startswith("#"):
                     last_code_line = stripped_line
                     break
 
             if last_code_line:
-                # Simple heuristic: if not an assignment, def, class, import, or print,
-                # and no explicit output is provided, it's an issue.
+                # Simple heuristic: if not an assignment, def, class, import, print, raise, return, etc.
+                # and no explicit output is provided, and no 'no_output_check' or 'expect_failure' tag is present, it's an issue.
                 is_assignment = (
-                    "=" in last_code_line and not last_code_line.strip().endswith("==")
+                    "=" in last_code_line
+                    and not last_code_line.strip().endswith("==")
+                    and not last_code_line.strip().endswith("!=")
+                    and not last_code_line.strip().endswith("<=")
+                    and not last_code_line.strip().endswith(">=")
                 )
                 is_statement_keyword = any(
                     last_code_line.startswith(k)
@@ -333,19 +322,33 @@ class GaspatchioDocstring(BaseModel):
                         "del ",
                         "global ",
                         "nonlocal ",
+                        "assert ",
+                        "with ",
+                        "try:",
+                        "except",
+                        "finally:",
+                        "for ",
+                        "while ",
                     ]
                 )
+                is_control_flow_ending = any(last_code_line.endswith(k) for k in [":"])
                 is_print = last_code_line.startswith("print(")
+
+                has_no_output_check_tag = "no_output_check" in example.prefix_tags
+                has_expect_failure_tag = "expect_failure" in example.prefix_tags
 
                 if (
                     not is_assignment
                     and not is_statement_keyword
+                    and not is_control_flow_ending  # e.g. if x: (might not produce output)
                     and not is_print
                     and not example.output
+                    and not has_no_output_check_tag
+                    and not has_expect_failure_tag
                 ):
                     issues.append(
                         f"[Structure Error] Example #{i} (context: {example.object_context}, file: {self.file_path}, line: {example.raw_source_location[1]}) "
-                        f"snippet seems to end with an expression ('{last_code_line}') but has no output. Snippet:\n{example.snippet}"
+                        f"snippet seems to end with an expression (last line: '{last_code_line}') but has no output, and no relevant tags (no_output_check, expect_failure). Snippet:\n{example.snippet}"
                     )
 
         # TODO: returns section present when fn actually returns non-None

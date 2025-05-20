@@ -282,7 +282,11 @@ def lint(
     if target_method:
         typer.echo(f"Focusing on method/context: '*{target_method}*'")
 
-    pytest_args = ["-m", "gaspatchio_docstring_example", path_to_lint]
+    pytest_args = [
+        "-m",
+        "gaspatchio_docstring_example or gaspatchio_docstring_structure_check",
+        path_to_lint,
+    ]
     if target_method:
         pytest_args.extend(["-k", target_method])
     if strict:

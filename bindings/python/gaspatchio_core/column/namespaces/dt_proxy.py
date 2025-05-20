@@ -187,48 +187,57 @@ class DtNamespaceProxy:
         --------
         Scalar example (single-date column)::
 
-            >>> import polars as pl
-            >>> from gaspatchio_core import ActuarialFrame
-            >>> data = {
-            ...     "dates": pl.Series(["2020-01-15", "2021-07-20"]).str.to_date(format="%Y-%m-%d")
-            ... }
-            >>> af = ActuarialFrame(data)
-            >>> year_expr = af["dates"].dt.year()
-            >>> print(af.select(year_expr.alias("year")).collect())
-            shape: (2, 1)
-            ┌──────┐
-            │ year │
-            │ ---  │
-            │ i32  │
-            ╞══════╡
-            │ 2020 │
-            │ 2021 │
-            └──────┘
+        ```python
+        import polars as pl
+        from gaspatchio_core import ActuarialFrame
+        data = {
+            "dates": pl.Series(["2020-01-15", "2021-07-20"]).str.to_date(format="%Y-%m-%d")
+        }
+        af = ActuarialFrame(data)
+        year_expr = af["dates"].dt.year()
+        print(af.select(year_expr.alias("year")).collect())
+        ```
+        ```text
+        shape: (2, 1)
+        ┌──────┐
+        │ year │
+        │ ---  │
+        │ i32  │
+        ╞══════╡
+        │ 2020 │
+        │ 2021 │
+        └──────┘
+        ```
 
         Vector example (list-of-dates per policy)::
 
-            >>> import datetime, polars as pl
-            >>> from gaspatchio_core import ActuarialFrame
-            >>> data_vec = {
-            ...     "policy_id": ["A001", "B002"],
-            ...     "policy_event_dates": [
-            ...         [datetime.date(2019, 12, 1), datetime.date(2020, 1, 20)],
-            ...         [datetime.date(2021, 5, 10), datetime.date(2021, 8, 15), datetime.date(2022, 2, 25)],
-            ...     ],
-            ... }
-            >>> af_vec = ActuarialFrame(data_vec)
-            >>> af_vec = af_vec.with_columns(pl.col("policy_event_dates").cast(pl.List(pl.Date)))
-            >>> years_expr = af_vec["policy_event_dates"].dt.year()
-            >>> print(af_vec.select(pl.col("policy_id"), years_expr.alias("event_years")).collect())
-            shape: (2, 2)
-            ┌───────────┬────────────────────┐
-            │ policy_id ┆ event_years        │
-            │ ---       ┆ ---                │
-            │ str       ┆ list[i32]          │
-            ╞═══════════╪════════════════════╡
-            │ A001      ┆ [2019, 2020]       │
-            │ B002      ┆ [2021, 2021, 2022] │
-            └───────────┴────────────────────┘
+        ```python
+        import datetime
+        import polars as pl
+        from gaspatchio_core import ActuarialFrame
+        data_vec = {
+            "policy_id": ["A001", "B002"],
+            "policy_event_dates": [
+                [datetime.date(2019, 12, 1), datetime.date(2020, 1, 20)],
+                [datetime.date(2021, 5, 10), datetime.date(2021, 8, 15), datetime.date(2022, 2, 25)],
+            ],
+        }
+        af_vec = ActuarialFrame(data_vec)
+        af_vec = af_vec.with_columns(pl.col("policy_event_dates").cast(pl.List(pl.Date)))
+        years_expr = af_vec["policy_event_dates"].dt.year()
+        print(af_vec.select(pl.col("policy_id"), years_expr.alias("event_years")).collect())
+        ```
+        ```text
+        shape: (2, 2)
+        ┌───────────┬────────────────────┐
+        │ policy_id ┆ event_years        │
+        │ ---       ┆ ---                │
+        │ str       ┆ list[i32]          │
+        ╞═══════════╪════════════════════╡
+        │ A001      ┆ [2019, 2020]       │
+        │ B002      ┆ [2021, 2021, 2022] │
+        └───────────┴────────────────────┘
+        ```
         """
         return self._call_dt_method("year")
 
@@ -239,49 +248,56 @@ class DtNamespaceProxy:
         --------
         Scalar example::
 
-            >>> import polars as pl
-            >>> from gaspatchio_core import ActuarialFrame
-            >>> # Create series by explicitly listing dates and converting
-            >>> s = pl.Series("d", ["2022-01-01", "2022-02-01", "2022-03-01"]).str.to_date(format="%Y-%m-%d")
-            >>> af = ActuarialFrame({"d": s})
-            >>> print(af.select(af["d"].dt.month().alias("m")).collect())
-            shape: (3, 1)
-            ┌─────┐
-            │ m   │
-            │ --- │
-            │ i8  │
-            ╞═════╡
-            │ 1   │
-            │ 2   │
-            │ 3   │
-            └─────┘
+        ```python
+        import polars as pl
+        from gaspatchio_core import ActuarialFrame
+        af = ActuarialFrame({"d": pl.Series(["2022-01-01", "2022-02-01", "2022-03-01"]).str.to_date("%Y-%m-%d")})
+        print(af.select(af["d"].dt.month().alias("m")).collect())
+        ```
+        ```text
+        shape: (3, 1)
+        ┌─────┐
+        │ m   │
+        │ --- │
+        │ i8  │
+        ╞═════╡
+        │ 1   │
+        │ 2   │
+        │ 3   │
+        └─────┘
+        ```
 
         Vector (list) example – claim-lodgement months::
 
-            >>> import datetime
-            >>> import polars as pl
-            >>> from gaspatchio_core import ActuarialFrame
-            >>> data = {
-            ...     "policy_id": ["C003", "D004"],
-            ...     "claim_lodgement_dates": [
-            ...         [datetime.date(2022, 3, 10), datetime.date(2022, 4, 5)],
-            ...         [datetime.date(2023, 1, 20), datetime.date(2023, 11, 30)],
-            ...     ],
-            ... }
-            >>> af = ActuarialFrame(data).with_columns(
-            ...     pl.col("claim_lodgement_dates").cast(pl.List(pl.Date))
-            ... )
-            >>> months_expr = af["claim_lodgement_dates"].dt.month()
-            >>> print(af.select(pl.col("policy_id"), months_expr.alias("lodgement_months")).collect())
-            shape: (2, 2)
-            ┌───────────┬──────────────────┐
-            │ policy_id ┆ lodgement_months │
-            │ ---       ┆ ---              │
-            │ str       ┆ list[i8]         │
-            ╞═══════════╪══════════════════╡
-            │ C003      ┆ [3, 4]           │
-            │ D004      ┆ [1, 11]          │
-            └───────────┴──────────────────┘
+        ```python
+        import datetime
+        import polars as pl
+        from gaspatchio_core import ActuarialFrame
+        data = {
+            "policy_id": ["C003", "D004"],
+            "claim_lodgement_dates": [
+                [datetime.date(2022, 3, 10), datetime.date(2022, 4, 5)],
+                [datetime.date(2023, 1, 20), datetime.date(2023, 11, 30)],
+            ],
+        }
+        af = ActuarialFrame(data).with_columns(
+            pl.col("claim_lodgement_dates").cast(pl.List(pl.Date))
+        )
+        months_expr = af["claim_lodgement_dates"].dt.month()
+        print(af.select(pl.col("policy_id"), months_expr.alias("lodgement_months")).collect())
+        ```
+
+        ```text
+        shape: (2, 2)
+        ┌───────────┬──────────────────┐
+        │ policy_id ┆ lodgement_months │
+        │ ---       ┆ ---              │
+        │ str       ┆ list[i8]         │
+        ╞═══════════╪══════════════════╡
+        │ C003      ┆ [3, 4]           │
+        │ D004      ┆ [1, 11]          │
+        └───────────┴──────────────────┘
+        ```
         """
         return self._call_dt_method("month")
 
@@ -292,45 +308,54 @@ class DtNamespaceProxy:
         --------
         Scalar example::
 
-            >>> import polars as pl
-            >>> from gaspatchio_core import ActuarialFrame
-            >>> af = ActuarialFrame({"d": pl.Series(["2023-06-05", "2023-06-15"]).str.to_date()})
-            >>> print(af.select(af["d"].dt.day().alias("day")).collect())
-            shape: (2, 1)
-            ┌─────┐
-            │ day │
-            │ --- │
-            │ i8  │
-            ╞═════╡
-            │ 5   │
-            │ 15  │
-            └─────┘
+        ```python
+        import polars as pl
+        from gaspatchio_core import ActuarialFrame
+        af = ActuarialFrame({"d": pl.Series(["2023-06-05", "2023-06-15"]).str.to_date()})
+        print(af.select(af["d"].dt.day().alias("day")).collect())
+        ```
+        ```text
+        shape: (2, 1)
+        ┌─────┐
+        │ day │
+        │ --- │
+        │ i8  │
+        ╞═════╡
+        │ 5   │
+        │ 15  │
+        └─────┘
+        ```
 
         Vector (list) example – loss-event days::
 
-            >>> import datetime, polars as pl
-            >>> from gaspatchio_core import ActuarialFrame
-            >>> data = {
-            ...     "policy_id": ["E005", "F006"],
-            ...     "loss_event_dates": [
-            ...         [datetime.date(2023, 6, 5), datetime.date(2023, 6, 15)],
-            ...         [datetime.date(2024, 2, 1), datetime.date(2024, 2, 29)],
-            ...     ],
-            ... }
-            >>> af = ActuarialFrame(data).with_columns(
-            ...     pl.col("loss_event_dates").cast(pl.List(pl.Date))
-            ... )
-            >>> days_expr = af["loss_event_dates"].dt.day()
-            >>> print(af.select("policy_id", days_expr.alias("event_days")).collect())
-            shape: (2, 2)
-            ┌───────────┬────────────┐
-            │ literal   ┆ event_days │
-            │ ---       ┆ ---        │
-            │ str       ┆ list[i8]   │
-            ╞═══════════╪════════════╡
-            │ policy_id ┆ [5, 15]    │
-            │ policy_id ┆ [1, 29]    │
-            └───────────┴────────────┘
+        ```python
+        import datetime
+        import polars as pl
+        from gaspatchio_core import ActuarialFrame
+        data = {
+            "policy_id": ["E005", "F006"],
+            "loss_event_dates": [
+                [datetime.date(2023, 6, 5), datetime.date(2023, 6, 15)],
+                [datetime.date(2024, 2, 1), datetime.date(2024, 2, 29)],
+            ],
+        }
+        af = ActuarialFrame(data).with_columns(
+            pl.col("loss_event_dates").cast(pl.List(pl.Date))
+        )
+        days_expr = af["loss_event_dates"].dt.day()
+        print(af.select("policy_id", days_expr.alias("event_days")).collect())
+        ```
+        ```text
+        shape: (2, 2)
+        ┌───────────┬────────────┐
+        │ literal   ┆ event_days │
+        │ ---       ┆ ---        │
+        │ str       ┆ list[i8]   │
+        ╞═══════════╪════════════╡
+        │ policy_id ┆ [5, 15]    │
+        │ policy_id ┆ [1, 29]    │
+        └───────────┴────────────┘
+        ```
         """
         return self._call_dt_method("day")
 
