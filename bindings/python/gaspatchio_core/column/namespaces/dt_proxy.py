@@ -241,7 +241,9 @@ class DtNamespaceProxy:
 
             >>> import polars as pl
             >>> from gaspatchio_core import ActuarialFrame
-            >>> af = ActuarialFrame({"d": pl.date_range("2022-01-01", "2022-03-01", interval="1mo")})
+            >>> # Create series by explicitly listing dates and converting
+            >>> s = pl.Series("d", ["2022-01-01", "2022-02-01", "2022-03-01"]).str.to_date(format="%Y-%m-%d")
+            >>> af = ActuarialFrame({"d": s})
             >>> print(af.select(af["d"].dt.month().alias("m")).collect())
             shape: (3, 1)
             ┌─────┐
@@ -256,7 +258,8 @@ class DtNamespaceProxy:
 
         Vector (list) example – claim-lodgement months::
 
-            >>> import datetime, polars as pl
+            >>> import datetime
+            >>> import polars as pl
             >>> from gaspatchio_core import ActuarialFrame
             >>> data = {
             ...     "policy_id": ["C003", "D004"],
@@ -269,15 +272,15 @@ class DtNamespaceProxy:
             ...     pl.col("claim_lodgement_dates").cast(pl.List(pl.Date))
             ... )
             >>> months_expr = af["claim_lodgement_dates"].dt.month()
-            >>> print(af.select("policy_id", months_expr.alias("lodgement_months")).collect())
+            >>> print(af.select(pl.col("policy_id"), months_expr.alias("lodgement_months")).collect())
             shape: (2, 2)
             ┌───────────┬──────────────────┐
-            │ literal   ┆ lodgement_months │
+            │ policy_id ┆ lodgement_months │
             │ ---       ┆ ---              │
             │ str       ┆ list[i8]         │
             ╞═══════════╪══════════════════╡
-            │ policy_id ┆ [3, 4]           │
-            │ policy_id ┆ [1, 11]          │
+            │ C003      ┆ [3, 4]           │
+            │ D004      ┆ [1, 11]          │
             └───────────┴──────────────────┘
         """
         return self._call_dt_method("month")

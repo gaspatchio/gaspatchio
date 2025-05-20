@@ -262,8 +262,7 @@ class StringNamespaceProxy:
             >>> af_anytown = af.select(
             ...     af["address"].str.contains("Anytown").alias("is_anytown_address")
             ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-            ...     print(af_anytown.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(af_anytown.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (3, 1)
             ┌────────────────────┐
             │ is_anytown_address │
@@ -290,8 +289,7 @@ class StringNamespaceProxy:
             >>> af_claim_mentioned = af_list.select(
             ...     af_list["comm_log"].str.contains("Claim", literal=True).alias("claim_mentioned_log")
             ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_claim_mentioned.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(af_claim_mentioned.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (2, 1)
             ┌──────────────────────┐
             │ claim_mentioned_log  │
@@ -327,8 +325,7 @@ class StringNamespaceProxy:
             >>> af_upper_status = af.select(
             ...     af["status"].str.to_uppercase().alias("upper_status")
             ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_upper_status.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(af_upper_status.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (3, 1)
             ┌──────────────┐
             │ upper_status │
@@ -352,8 +349,7 @@ class StringNamespaceProxy:
             >>> af_upper_riders = af_list.select(
             ...     af_list["rider_codes"].str.to_uppercase().alias("upper_rider_codes")
             ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_upper_riders.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(af_upper_riders.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (2, 1)
             ┌─────────────────────┐
             │ upper_rider_codes   │
@@ -387,8 +383,7 @@ class StringNamespaceProxy:
             >>> af_lower_domain = af.select(
             ...     af["email_domain"].str.to_lowercase().alias("lower_domain")
             ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_lower_domain.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(af_lower_domain.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (3, 1)
             ┌──────────────┐
             │ lower_domain │
@@ -411,8 +406,7 @@ class StringNamespaceProxy:
             >>> af_lower_tags = af_list.select(
             ...     af_list["feature_tags"].str.to_lowercase().alias("lower_feature_tags")
             ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_lower_tags.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(af_lower_tags.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (2, 1)
             ┌─────────────────────────────────────────┐
             │ lower_feature_tags                      │
@@ -447,8 +441,7 @@ class StringNamespaceProxy:
             >>> af_len = af.select(
             ...     af["product_name"].str.n_chars().alias("name_length")
             ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_len.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(af_len.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (3, 1)
             ┌─────────────┐
             │ name_length │
@@ -472,8 +465,7 @@ class StringNamespaceProxy:
             >>> af_bene_len = af_list.select(
             ...     af_list["beneficiaries"].str.n_chars().alias("beneficiary_name_lengths")
             ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_bene_len.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(af_bene_len.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (2, 1)
             ┌──────────────────────────┐
             │ beneficiary_name_lengths │
@@ -500,8 +492,7 @@ class StringNamespaceProxy:
             >>> from gaspatchio_core.frame.base import ActuarialFrame
             >>> af = ActuarialFrame({"city_names": ["New York", "Los Angeles", None, "Chicago"]})
             >>> result = af.select(af["city_names"].str.len_chars().alias("char_count"))
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(result.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(result.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (4, 1)
             ┌────────────┐
             │ char_count │
@@ -538,8 +529,7 @@ class StringNamespaceProxy:
             >>> af_len = af.select(
             ...     af["client_name"].str.len_bytes().alias("name_byte_length")
             ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_len.collect()) # doctest: +NORMALIZE_WHITESPACE
+            >>> print(af_len.collect()) # doctest: +NORMALIZE_WHITESPACE
             shape: (3, 1)
             ┌──────────────────┐
             │ name_byte_length │

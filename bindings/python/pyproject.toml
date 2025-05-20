@@ -19,10 +19,12 @@ dependencies = [
     "datacompy>=0.16.0",
     "thefuzz[speedup]>=0.22.1",
     "python-dateutil>=2.9.0.post0",
+    "ruff>=0.11.10",
 ]
 
 [project.scripts]
 gaspatchio-core = "gaspatchio_core:main"
+gp-docstrings = "gaspatchio_core.examples.docstrings.cli:app"
 
 [project.optional-dependencies]
 pandas = ["polars-u64-idx>=1.27.0"]
