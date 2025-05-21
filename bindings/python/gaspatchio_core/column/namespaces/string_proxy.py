@@ -1607,96 +1607,83 @@ class StringNamespaceProxy:
     def strip_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy":
         """Remove a suffix from each string.
 
-        Mirrors Polars' `Expr.str.strip_suffix`.
-        If the string does not end with the suffix, it is returned unchanged.
-        For `List[String]` columns, applies element-wise.
+        If a string does not end with the given suffix, it is returned unchanged.
+        For ``List[String]`` columns, the operation is applied element-wise.
+
+        !!! note "When to use"
+            Actuaries use `strip_suffix` when:
+
+            *   **Normalizing coverage names** that include trailing version codes such as "-OLD".
+            *   **Preparing ledger accounts** by removing year suffixes like "-2024" before comparing periods.
+            *   **Cleaning temporary identifiers** imported from external systems (for example, removing a trailing "-TMP").
 
         Args:
-            suffix: The suffix to remove. Can be a literal string or a Polars expression
-                    that evaluates to a string.
+            suffix: The suffix to remove. Either a string literal or an expression resolving to a string.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` with the suffix removed.
+            ExpressionProxy: The expression with the suffix removed.
 
-        Examples:
-            **Scalar Example: Cleaning up trailing codes from product descriptions**
+        Examples
+        --------
+        Scalar example – normalize plan names::
 
-            ```
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
-            data_strip_end = {
-                "description_raw": ["Term Life Plan - Basic", "Whole Life - OptA  ", "Annuity - TypeB*", None],
-                "codes_to_strip": ["- Basic", " OptA  ", "*", "XXX"]
+
+            data = {
+                "plan_name_raw": ["Term Basic-OLD", "Income Protection-OLD", "Annuity Plus", None]
             }
-            # Scalar Example Part 1: Strip specific trailing suffixes
-            af1_se = ActuarialFrame(data_strip_end)
-            af_stripped = af1_se.select(
-                af1_se["description_raw"].str.strip_chars_end(pl.col("codes_to_strip")).alias("base_description_attempt")
+            af = ActuarialFrame(data)
+            result = af.select(
+                af["plan_name_raw"].str.strip_suffix("-OLD").alias("plan_name")
             )
-            print(af_stripped.collect())
+            print(result.collect())
+            ```
 
-            # Scalar Example Part 2: Strip trailing whitespace only
-            af2_se = ActuarialFrame(data_strip_end) # Use a fresh frame instance
-            af_rstripped_ws = af2_se.select(
-                af2_se["description_raw"].str.strip_chars_end().alias("rstrip_whitespace")
+            ```text
+            shape: (4, 1)
+            ┌───────────────────────┐
+            │ plan_name             │
+            │ ---                   │
+            │ str                   │
+            ╞═══════════════════════╡
+            │ Term Basic            │
+            │ Income Protection     │
+            │ Annuity Plus          │
+            │ null                  │
+            └───────────────────────┘
+            ```
+
+        Vector (list) example – clean trailing punctuation in claim notes::
+
+            ```python
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
+
+            notes_data = {
+                "claim_id": ["C1", "C2"],
+                "notes": [["Approved.", "Paid."], [None, "In Review."]],
+            }
+            af_list = ActuarialFrame(notes_data)
+            af_list = af_list.with_columns(
+                af_list["notes"].cast(pl.List(pl.String))
             )
-            print(af_rstripped_ws.collect())
+            cleaned = af_list.select(
+                af_list["notes"].str.strip_suffix(".").alias("notes_cleaned")
+            )
+            print(cleaned.collect())
             ```
 
-            ```
-            shape: (4, 1)
-            ┌──────────────────────────┐
-            │ base_description_attempt │
-            │ ---                      │
-            │ str                      │
-            ╞══════════════════════════╡
-            │ Term Life Plan           │
-            │ Whole Life -             │
-            │ Annuity - TypeB          │
-            │ null                     │
-            └──────────────────────────┘
-
-            shape: (4, 1)
-            ┌────────────────────────┐
-            │ rstrip_whitespace      │
-            │ ---                    │
-            │ str                    │
-            ╞════════════════════════╡
-            │ Term Life Plan - Basic │
-            │ Whole Life - OptA      │
-            │ Annuity - TypeB*       │
-            │ null                   │
-            └────────────────────────┘
-            ```
-
-            **Vector (List Shimming) Example: Removing trailing punctuation from agent notes**
-
-            ```
-            # Set string length for more consistent doctest output
-            with pl.Config(fmt_str_lengths=100):
-                data_list_se = {
-                    "agent_id": [101, 102],
-                    "notes_list": [["Client interested!!", "Done."], [None, "Call back asap."]]
-                }
-                af_list_se = ActuarialFrame(data_list_se).with_columns(
-                    pl.col("notes_list").cast(pl.List(pl.String))
-                )
-                af_list_stripped = af_list_se.select(
-                    af_list_se["notes_list"].str.strip_chars_end(".! ").alias("cleaned_notes")
-                )
-                print(af_list_stripped.collect())
-            ```
-
-            ```
+            ```text
             shape: (2, 1)
-            ┌───────────────────────────────┐
-            │ cleaned_notes                 │
-            │ ---                           │
-            │ list[str]                     │
-            ╞═══════════════════════════════╡
-            │ ["Client interested", "Done"] │
-            │ [null, "Call back asap"]      │
-            └───────────────────────────────┘
+            ┌────────────────────────┐
+            │ notes_cleaned          │
+            │ ---                    │
+            │ list[str]              │
+            ╞════════════════════════╡
+            │ ["Approved", "Paid"]    │
+            │ [null, "In Review"]     │
+            └────────────────────────┘
             ```
         """
         return self._call_string_method("strip_suffix", suffix=suffix)
