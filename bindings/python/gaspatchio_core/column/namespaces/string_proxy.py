@@ -1874,77 +1874,85 @@ class StringNamespaceProxy:
         return self.rjust(width=width, fill_char=fill_char)
 
     def rjust(self, width: int, fill_char: str = " ") -> "ExpressionProxy":
-        """Pad the start of strings with a specified character (right-aligns content).
+        """Right-align strings by padding on the left.
 
-        Mirrors Polars' `Expr.str.pad_start`.
-        Strings that are already at least `width` characters long are unchanged.
-        For `List[String]` columns, applies element-wise.
+        Strings shorter than ``width`` are padded on the left with ``fill_char``.
+        If the column is ``List[String]`` the padding is applied to each element
+        of the list.
+
+        !!! note "When to use"
+            Use ``rjust`` when you need to format text fields for fixed-width
+            outputs in life insurance work, such as:
+
+            * Aligning premium or claim amounts before exporting to legacy
+              ledger systems.
+            * Presenting policy identifiers or rider codes in uniformly padded
+              columns for regulatory or management reports.
 
         Args:
             width: The desired total length of the string after padding.
             fill_char: The character to pad with. Defaults to a space.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` with strings padded at the start.
+            ExpressionProxy: An ``ExpressionProxy`` with strings padded at the
+                start.
 
         Examples:
-            **Scalar Example: Right-aligning numeric strings for reports**
-            ```
-            # Test with pl.Config to ensure consistent display
-            with pl.Config(fmt_str_lengths=100):
-                from gaspatchio_core.frame.base import ActuarialFrame
-                import polars as pl
-                data = {
-                    "amount_str": ["12.3", "1234.56", None, "7"],
-                }
-                af = ActuarialFrame(data)
-                af_rjust = af.select(
-                    af["amount_str"].str.rjust(10, " ").alias("rjust_amount")
-                )
+            **Scalar example – formatting premium amounts**
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+            import polars as pl
+
+            data = {"premium_str": ["123.45", "7", None]}
+            af = ActuarialFrame(data)
+            af_rjust = af.select(
+                af["premium_str"].str.rjust(8).alias("rjust_premium")
+            )
+            with pl.Config(fmt_str_lengths=100, tbl_width_chars=100):
                 print(af_rjust.collect())
             ```
 
-            ```
-            shape: (4, 1)
-            ┌──────────────┐
-            │ rjust_amount │
-            │ ---          │
-            │ str          │
-            ╞══════════════╡
-            │       12.3   │
-            │    1234.56   │
-            │ null         │
-            │          7   │
-            └──────────────┘
-            ```
-
-            **Vector (List Shimming) Example: Right-padding list elements**
-            ```
-            with pl.Config(fmt_str_lengths=100):
-                from gaspatchio_core.frame.base import ActuarialFrame # Added import
-                import polars as pl # Added import
-                data_list = {
-                    "batch_id": ["Y01"],
-                    "item_ids": [["ID1", "SHORT", "ID12345"]]
-                }
-                af_list = ActuarialFrame(data_list).with_columns(
-                    pl.col("item_ids").cast(pl.List(pl.String))
-                )
-                af_list_rjust = af_list.select(
-                    af_list["item_ids"].str.rjust(10, "0").alias("rjust_item_ids")
-                )
-                print(af_list_rjust.collect())
+            ```text
+            shape: (3, 1)
+            ┌───────────────┐
+            │ rjust_premium │
+            │ ---           │
+            │ str           │
+            ╞═══════════════╡
+            │   123.45      │
+            │        7      │
+            │ null          │
+            └───────────────┘
             ```
 
+            **Vector example – aligning claim references**
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+            import polars as pl
+
+            data_list = {
+                "batch_id": ["B100"],
+                "claim_refs": [["C1", "C234", "C56789"]],
+            }
+            af_list = ActuarialFrame(data_list).with_columns(
+                pl.col("claim_refs").cast(pl.List(pl.String))
+            )
+            result = af_list.select(
+                af_list["claim_refs"].str.rjust(6, "0").alias("formatted_refs")
+            )
+            with pl.Config(fmt_str_lengths=100, tbl_width_chars=100):
+                print(result.collect())
             ```
+
+            ```text
             shape: (1, 1)
-            ┌────────────────────────────────────────────┐
-            │ rjust_item_ids                             │
-            │ ---                                        │
-            │ list[str]                                  │
-            ╞════════════════════════════════════════════╡
-            │ ["0000000ID1", "00000SHORT", "000ID12345"] │
-            └────────────────────────────────────────────┘
+            ┌────────────────────────────────┐
+            │ formatted_refs                 │
+            │ ---                            │
+            │ list[str]                      │
+            ╞════════════════════════════════╡
+            │ ["0000C1", "00C234", "C56789"] │
+            └────────────────────────────────┘
             ```
         """
         return self._call_string_method("pad_start", length=width, fill_char=fill_char)
