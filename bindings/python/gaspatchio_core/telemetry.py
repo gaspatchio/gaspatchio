@@ -174,7 +174,7 @@ def install_performance_monitors():
     pl.Expr.map_elements = map_elements_wrapper
     pl.Expr.map_batches = map_batches_wrapper
 
-    logger.debug("Performance monitoring enabled for map_elements and map_batches")
+    logger.trace("Performance monitoring enabled for map_elements and map_batches")
 
 
 def configure_telemetry(enable=True):
@@ -190,4 +190,4 @@ def configure_telemetry(enable=True):
         # Restore original functions when disabling
         pl.Expr.map_elements = original_map_elements
         pl.Expr.map_batches = original_map_batches
-        logger.debug("Performance monitoring disabled")
+        logger.trace("Performance monitoring disabled")

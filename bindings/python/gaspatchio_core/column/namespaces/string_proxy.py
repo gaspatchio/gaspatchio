@@ -178,7 +178,7 @@ class StringNamespaceProxy:
 
         if isinstance(self._parent_proxy, ColumnProxy):
             try:
-                schema = self._parent_af._df.schema
+                schema = self._parent_af._df.collect_schema()
                 dtype = schema.get(self._parent_proxy.name)
                 if isinstance(dtype, pl.List):
                     inner_type = dtype.inner
@@ -400,13 +400,34 @@ class StringNamespaceProxy:
         )
 
     def to_uppercase(self) -> "ExpressionProxy":
-        """Converts all characters in strings to uppercase.
+        """Converts all characters in string columns to uppercase.
 
-        This is useful for standardizing text data, such as policy status codes,
-        product codes, or any textual field where case consistency is important
-        for matching or aggregation. It mirrors Polars' `Expr.str.to_uppercase`.
-        For `List[String]` columns, such as a list of rider codes attached to a
-        policy, the operation is applied element-wise to each string in the list.
+        This function standardizes textual data by converting all characters in a
+        string column to uppercase. This is essential for ensuring consistency
+        in data fields critical for actuarial analysis, such as policy status
+        codes, product identifiers, or geographical regions, facilitating
+        accurate matching, aggregation, and reporting.
+
+        !!! note "When to use"
+            In actuarial modeling and data processing, converting text to uppercase is vital for:
+
+            *   **Standardizing Categorical Data:** Ensuring that codes like policy status
+                (e.g., "active", "Lapsed", "ACTIVE" all become "ACTIVE"), gender codes
+                (e.g., "m", "F" become "M", "F"), or smoker status (e.g. "non-smoker",
+                "Smoker" become "NON-SMOKER", "SMOKER") are consistent for grouping
+                and analysis.
+            *   **Improving Data Matching:** Facilitating joins and lookups between
+                different datasets where case sensitivity might cause mismatches
+                (e.g., matching policyholder names or addresses from different sources).
+            *   **Enhancing Readability and Reporting:** Presenting data in a uniform
+                case for reports and dashboards, especially for identifiers or codes.
+            *   **Preparing Text for Analysis:** As a preprocessing step before text
+                mining or natural language processing tasks on fields like claim
+                descriptions or underwriter notes, where case normalization can
+                simplify pattern recognition.
+            *   **Simplifying Rule-Based Logic:** When applying business rules that
+                depend on string comparisons (e.g., identifying policies with specific
+                rider codes like "ADB" or "WP" irrespective of their original casing).
 
         Returns:
             ExpressionProxy: A new `ExpressionProxy` with strings converted to uppercase.
@@ -417,7 +438,7 @@ class StringNamespaceProxy:
             Policy status might be entered in various cases ("active", "Lapsed", "ACTIVE").
             Converting to uppercase ensures consistency for analysis.
 
-            ```
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
 
             data = {
@@ -431,7 +452,7 @@ class StringNamespaceProxy:
             print(af_upper_status.collect())
             ```
 
-            ```
+            ```text
             shape: (4, 1)
             ┌─────────────────────┐
             │ status_standardized │
@@ -445,14 +466,14 @@ class StringNamespaceProxy:
             └─────────────────────┘
             ```
 
-            **Vector (List Shimming) Example: Uppercasing rider codes for a policy**
+            **Vector Example: Uppercasing rider codes for a policy**
 
             A policy might have multiple rider codes stored in a list. To ensure
             uniformity, we can convert all rider codes to uppercase.
 
-            ```
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            import polars as pl # Needed for pl.List, pl.String
 
             data_policy_riders = {
                 "policy_id": ["R4001", "R4002", "R4003"],
@@ -462,8 +483,10 @@ class StringNamespaceProxy:
                     ["gio"]
                 ]
             }
-            af_riders = ActuarialFrame(data_policy_riders).with_columns(
-                pl.col("rider_codes_list").cast(pl.List(pl.String))
+            af_riders = ActuarialFrame(data_policy_riders)
+            # Ensure the list column has the correct Polars type for the string operation
+            af_riders = af_riders.with_columns(
+                af_riders["rider_codes_list"].cast(pl.List(pl.String))
             )
             af_upper_riders = af_riders.select(
                 af_riders["rider_codes_list"].str.to_uppercase().alias("upper_rider_codes")
@@ -1911,66 +1934,6 @@ class StringNamespaceProxy:
         )
 
     def extract_all(self, pattern: str) -> "ExpressionProxy":
-        """Extract all occurrences of a regex pattern.
-
-        Mirrors Polars' `Expr.str.extract_all`.
-        Returns a list of strings for each input string.
-        For `List[String]` columns, this means it will produce a `List[List[String]]`.
-
-        Args:
-            pattern: The regex pattern to extract.
-
-        Returns:
-            ExpressionProxy: An `ExpressionProxy` of type `List[String]`.
-
-        Examples:
-            **Scalar Example: Extracting all rider codes from a description string**
-
-            >>> from gaspatchio_core.frame.base import ActuarialFrame
-            >>> data = {
-            ...     "policy_desc": ["Policy with riders ADB, WP, CI.", "Base policy only.", "Riders: LTC, GIO.", None]
-            ... }
-            >>> af = ActuarialFrame(data)
-            >>> af_extracted = af.select(
-            ...     af["policy_desc"].str.extract_all(r"([A-Z]{2,3})").alias("rider_codes_extracted")
-            ... )
-            >>> print(af_extracted.collect()) # doctest: +NORMALIZE_WHITESPACE
-            shape: (4, 1)
-            ┌───────────────────────┐
-            │ rider_codes_extracted │
-            │ ---                   │
-            │ list[str]             │
-            ╞═══════════════════════╡
-            │ ["ADB", "WP", "CI\"]   │
-            │ []                    │
-            │ ["LTC", "GIO\"]        │
-            │ null                  │
-            └───────────────────────┘
-
-            **Vector (List Shimming) Example: Extracting tags from lists of notes**
-
-            >>> data_list = {
-            ...     "record_id": ["R1"],
-            ...     "note_entries": [["Call #urgent, Follow-up #important", "Meeting #Q1, Review #pending"]]
-            ... }
-            >>> af_list = ActuarialFrame(data_list).with_columns(
-            ...     pl.col("note_entries").cast(pl.List(pl.String))
-            ... )
-            >>> # This will result in List[List[String]] due to shimming extract_all
-            >>> af_list_extracted = af_list.select(
-            ...     af_list["note_entries"].str.extract_all(r"#\w+").alias("all_tags_per_note")
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-            ...     print(af_list_extracted.collect()) # doctest: +NORMALIZE_WHITESPACE
-            shape: (1, 1)
-            ┌──────────────────────────────────────────────────┐
-            │ all_tags_per_note                                │
-            │ ---                                              │
-            │ list[list[str]]                                  │
-            ╞══════════════════════════════════════════════════╡
-            │ [["#urgent", "#important"], ["#Q1", "#pending"]] │
-            └──────────────────────────────────────────────────┘
-        """
         return self._call_string_method("extract_all", pattern=pattern)
 
     def replace(
@@ -1980,75 +1943,6 @@ class StringNamespaceProxy:
         literal: bool = False,
         n: int = 1,
     ) -> "ExpressionProxy":
-        """Replace occurrences of a regex pattern with a replacement string.
-
-        Mirrors Polars' `Expr.str.replace`.
-        For `List[String]` columns, applies element-wise.
-
-        Args:
-            pattern: Regex pattern or literal string to search for.
-            value: String or expression to replace with.
-            literal: Treat `pattern` as a literal if True. Default is False (regex).
-            n: Maximum number of replacements to make. Default is 1. Use -1 for all.
-
-        Returns:
-            ExpressionProxy: An `ExpressionProxy` with strings after replacement.
-
-        Examples:
-            **Scalar Example: Standardizing state abbreviations**
-
-            >>> from gaspatchio_core.frame.base import ActuarialFrame
-            >>> import polars as pl
-            >>> data = {
-            ...     "address_line": ["PO Box 123, New York, N.Y.", "1 Main St, Calif.", "Suite 5, Florida"],
-            ... }
-            >>> af = ActuarialFrame(data)
-            >>> af_replaced = af.select(
-            ...     af["address_line"].str.replace(r"N\.Y\.", "NY", n=-1).alias("std_address_1"),
-            ... )
-            >>> af_replaced = af_replaced.with_columns( # Apply second replace in a new step for clarity in doctest
-            ...     pl.col("std_address_1").str.replace(r"Calif\.", "CA", n=-1).alias("std_address_2")
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-            ...     print(af_replaced.collect().select("std_address_2")) # doctest: +NORMALIZE_WHITESPACE
-            shape: (3, 1)
-            ┌──────────────────────────┐
-            │ std_address_2            │
-            │ ---                      │
-            │ str                      │
-            ╞══════════════════════════╡
-            │ PO Box 123, New York, NY │
-            │ 1 Main St, CA            │
-            │ Suite 5, Florida         │
-            └──────────────────────────┘
-
-            **Vector (List Shimming) Example: Masking PII in lists of comments**
-
-            >>> data_list = {
-            ...     "case_id": ["C001"],
-            ...     "comments": [["Client phone: 555-1234", "Email: test@example.com", "DOB: 01/01/1990"]]
-            ... }
-            >>> af_list = ActuarialFrame(data_list).with_columns(
-            ...     pl.col("comments").cast(pl.List(pl.String))
-            ... )
-            >>> # Break down chained replace for doctest stability and to avoid shimming issues with chained calls
-            >>> temp_af = af_list.select( # Corrected: Ensure select() is properly closed
-            ...     af_list["comments"].str.replace(r"\d{3}-\d{4}", "[PHONE]", n=-1).alias("temp_masked")
-            ... )
-            >>> af_list_masked = temp_af.select( # Second replace on the result of the first
-            ...     temp_af["temp_masked"].str.replace(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", "[EMAIL]", n=-1).alias("masked_comments")
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-            ...     print(af_list_masked.collect().select("masked_comments")) # doctest: +NORMALIZE_WHITESPACE
-            shape: (1, 1)
-            ┌────────────────────────────────────────────────────────────────┐
-            │ masked_comments                                                │
-            │ ---                                                            │
-            │ list[str]                                                      │
-            ╞════════════════════════════════════════════════════════════════╡
-            │ ["Client phone: [PHONE]", "Email: [EMAIL]", "DOB: 01/01/1990"] │
-            └────────────────────────────────────────────────────────────────┘
-        """
         return self._call_string_method(
             "replace", pattern=pattern, value=value, literal=literal, n=n
         )
@@ -2056,184 +1950,14 @@ class StringNamespaceProxy:
     def replace_all(
         self, pattern: str | pl.Expr, value: str | pl.Expr, literal: bool = False
     ) -> "ExpressionProxy":
-        """Replace all occurrences of a regex pattern with a replacement string.
-
-        This is a convenience method for `replace` with `n=-1`.
-        Mirrors Polars' `Expr.str.replace_all`.
-        For `List[String]` columns, applies element-wise.
-
-        Args:
-            pattern: Regex pattern or literal string to search for.
-            value: String or expression to replace with.
-            literal: Treat `pattern` as a literal if True. Default is False (regex).
-
-        Returns:
-            ExpressionProxy: An `ExpressionProxy` with strings after replacement.
-
-        Examples:
-            **Scalar Example: Replacing all instances of 'Temp' with 'Temporary'**
-
-            >>> from gaspatchio_core.frame.base import ActuarialFrame
-            >>> data = {"status_desc": ["Temp Status", "Another Temp Note", "Permanent"]}
-            >>> af = ActuarialFrame(data)
-            >>> af_replaced = af.select(
-            ...     af["status_desc"].str.replace_all("Temp", "Temporary").alias("full_status_desc")
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-            ...    print(af_replaced.collect()) # doctest: +NORMALIZE_WHITESPACE
-            shape: (3, 1)
-            ┌────────────────────────┐
-            │ full_status_desc       │
-            │ ---                    │
-            │ str                    │
-            ╞════════════════════════╡
-            │ Temporary Status       │
-            │ Another Temporary Note │
-            │ Permanent              │
-            └────────────────────────┘
-
-            **Vector (List Shimming) Example: Normalizing currency symbols in lists**
-
-            >>> data_list = {
-            ...     "policy_id": ["P001"],
-            ...     "premium_notes": [["Amt: $100", "Fee: USD 20", "Total: CAD 50"]]
-            ... }
-            >>> af_list = ActuarialFrame(data_list).with_columns(
-            ...     pl.col("premium_notes").cast(pl.List(pl.String))
-            ... )
-            >>> af_list_norm = af_list.select(
-            ...     af_list["premium_notes"].str.replace_all(r"\$|USD|CAD", "CUR", literal=False).alias("normalized_currency")
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-            ...    print(af_list_norm.collect()) # doctest: +NORMALIZE_WHITESPACE
-            shape: (1, 1)
-            ┌─────────────────────────────────────────────────┐
-            │ normalized_currency                             │
-            │ ---                                             │
-            │ list[str]                                       │
-            ╞═════════════════════════════════════════════════╡
-            │ ["Amt: CUR100", "Fee: CUR 20", "Total: CUR 50"] │
-            └─────────────────────────────────────────────────┘
-        """
         return self._call_string_method(
             "replace_all", pattern=pattern, value=value, literal=literal
         )
 
     def split(self, by: str | pl.Expr, inclusive: bool = False) -> "ExpressionProxy":
-        """Split strings by a delimiter.
-
-        Mirrors Polars' `Expr.str.split`. Returns a `List[String]`.
-        For `List[String]` columns, this means it will produce a `List[List[String]]`.
-
-        Args:
-            by: The delimiter to split by (string or expression).
-            inclusive: If True, include the delimiter in the result. Default is False.
-
-        Returns:
-            ExpressionProxy: An `ExpressionProxy` of type `List[String]`.
-
-        Examples:
-            **Scalar Example: Splitting policyholder names into parts**
-
-            >>> from gaspatchio_core.frame.base import ActuarialFrame
-            >>> data = {"full_name": ["Doe, John A.", "Smith, Jane B.", None, "O'Malley, Pat"]}
-            >>> af = ActuarialFrame(data)
-            >>> af_split = af.select(
-            ...     af["full_name"].str.split(by=", ").alias("name_parts")
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_split.collect()) # doctest: +NORMALIZE_WHITESPACE
-            shape: (4, 1)
-            ┌──────────────────────┐
-            │ name_parts           │
-            │ ---                  │
-            │ list[str]            │
-            ╞══════════════════════╡
-            │ ["Doe", "John A."]   │
-            │ ["Smith", "Jane B."] │
-            │ null                 │
-            │ ["O'Malley", "Pat"]  │
-            └──────────────────────┘
-
-            **Vector (List Shimming) Example: Splitting lists of comma-separated tags**
-
-            >>> data_list = {
-            ...     "policy_id": ["POL1"],
-            ...     "tag_strings": [["urgent,high-value", "internal,review-needed", None]]
-            ... }
-            >>> af_list = ActuarialFrame(data_list).with_columns(
-            ...     pl.col("tag_strings").cast(pl.List(pl.String))
-            ... )
-            >>> af_list_split = af_list.select(
-            ...     af_list["tag_strings"].str.split(by=",").alias("tags_split_list")
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...    print(af_list_split.collect()) # doctest: +NORMALIZE_WHITESPACE
-            shape: (1, 1)
-            ┌─────────────────────────────────────────────────────────────────┐
-            │ tags_split_list                                                 │
-            │ ---                                                             │
-            │ list[list[str]]                                                 │
-            ╞═════════════════════════════════════════════════════════════════╡
-            │ [["urgent", "high-value"], ["internal", "review-needed"], null] │
-            └─────────────────────────────────────────────────────────────────┘
-        """
         return self._call_string_method("split", by=by, inclusive=inclusive)
 
     def slice(
         self, offset: int | pl.Expr, length: Optional[int | pl.Expr] = None
     ) -> "ExpressionProxy":
-        """Slice substrings from strings.
-
-        Mirrors Polars' `Expr.str.slice`.
-        For `List[String]` columns, applies element-wise.
-
-        Args:
-            offset: Start of the slice (0-indexed). Negative values count from the end.
-                    Can be an integer or a Polars expression.
-            length: Optional length of the slice. If None, slices to the end of the string.
-                    Can be an integer or a Polars expression.
-
-        Returns:
-            ExpressionProxy: An `ExpressionProxy` with the sliced substrings.
-
-        Examples:
-            **Scalar Example: Extracting year from YYYY-MM-DD date strings**
-
-            >>> from gaspatchio_core.frame.base import ActuarialFrame
-            >>> data = {"date_str": ["2023-10-26", "2024-01-15", None]}
-            >>> af = ActuarialFrame(data)
-            >>> af_sliced = af.select(
-            ...     af["date_str"].str.slice(offset=0, length=4).alias("year"),
-            ...     af["date_str"].str.slice(offset=-2).alias("day") # Last 2 characters
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100): # Added Config
-            ...     print(af_sliced.collect()) # doctest: +NORMALIZE_WHITESPACE
-            shape: (3, 2)
-            ┌──────┬──────┐
-            │ year ┆ day  │
-            │ ---  ┆ ---  │
-            │ str  ┆ str  │
-            ╞══════╪══════╡
-            │ 2023 ┆ 26   │
-            │ 2024 ┆ 15   │
-            │ null ┆ null │
-            └──────┴──────┘
-
-            **Vector (List Shimming) Example: Getting initials from lists of names**
-
-            >>> data_list = {
-            ...     "policy_id": ["P007"],
-            ...     "agent_names": [["John Doe", "Alice Wonderland", None, "Bob"]]
-            ... }
-            >>> af_list = ActuarialFrame(data_list).with_columns(
-            ...     pl.col("agent_names").cast(pl.List(pl.String))
-            ... )
-            >>> af_list_sliced = af_list.select(
-            ...     af_list["agent_names"].str.slice(offset=0, length=1).alias("first_initials")
-            ... )
-            >>> af_list_sliced_result = af_list_sliced.collect() # Collect first
-            >>> print(af_list_sliced_result["first_initials"].to_list()) # Print as Python list
-            [['J', 'A', None, 'B']]
-        """
         return self._call_string_method("slice", offset=offset, length=length)
