@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio-core"
-version = "0.0.13"
+version = "0.0.14"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@sudden.co.nz" }]
@@ -21,6 +21,7 @@ dependencies = [
     "python-dateutil>=2.9.0.post0",
     "ruff>=0.11.10",
     "markdown-it-py>=3.0.0",
+    "docstring-parser>=0.16",
 ]
 
 [project.scripts]

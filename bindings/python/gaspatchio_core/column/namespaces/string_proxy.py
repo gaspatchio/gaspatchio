@@ -259,13 +259,19 @@ class StringNamespaceProxy:
     ) -> "ExpressionProxy":
         """Checks if strings in a column contain a specified pattern.
 
-        This method is essential for tasks like identifying policies with specific
-        riders, flagging claims based on keywords in descriptions, or segmenting
-        customers based on free-text survey responses. It mirrors Polars'
-        `Expr.str.contains` and supports both literal string matching and regex.
-        When applied to a column of `List[String]`, such as a list of claim notes
-        for a single policy, the operation is performed element-wise on each
-        string within each list, returning a list of booleans.
+        This method searches for a pattern within string values, returning a boolean
+        indicating if the pattern exists in each string. It's useful for filtering,
+        data categorization, and identifying records with specific text patterns.
+
+        !!! note "When to use"
+            In actuarial work, this function is invaluable when you need to:
+
+            * Identify policies with specific riders or endorsements from description fields
+            * Find claims that mention particular medical conditions or causes
+            * Filter customer feedback containing specific keywords for risk analysis
+            * Segment policyholders based on address information (e.g., rural vs urban)
+            * Flag policies or claims with special handling notes (e.g., "legal review")
+            * Screen underwriting notes for high-risk indicators
 
         Args:
             pattern (str | pl.Expr): The substring or regex pattern to search for.
@@ -288,7 +294,7 @@ class StringNamespaceProxy:
             Imagine you have a dataset of policy descriptions and you want to flag
             all policies that include an "ADB" rider.
 
-            ```
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
 
             data = {
@@ -307,7 +313,7 @@ class StringNamespaceProxy:
             print(af_with_adb_rider.collect())
             ```
 
-            ```
+            ```text
             shape: (4, 1)
             ┌───────────────┐
             │ has_adb_rider │
@@ -321,15 +327,15 @@ class StringNamespaceProxy:
             └───────────────┘
             ```
 
-            **Vector (List Shimming) Example: Checking underwriter notes for high-risk keywords**
+            **Vector Example: Checking underwriter notes for high-risk keywords**
 
             Suppose each policy has a list of notes from underwriters. We want to check
             if any note for a given policy contains keywords like "medical history"
             or "hazardous occupation", which might indicate higher risk.
 
-            ```
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl # Keep this import if pl.List or pl.String is used explicitly
+            import polars as pl
 
             uw_notes_data = {
                 "policy_id": ["UW001", "UW002", "UW003"],
@@ -339,7 +345,7 @@ class StringNamespaceProxy:
                     ["No concerning notes.", None, "Possible hazardous occupation mentioned."]
                 ]
             }
-            # Ensure the list column has the correct Polars type for shimming
+            # Ensure the list column has the correct Polars type
             af_notes = ActuarialFrame(uw_notes_data).with_columns(
                 pl.col("underwriter_notes").cast(pl.List(pl.String))
             )
@@ -354,18 +360,16 @@ class StringNamespaceProxy:
             print(af_medical_check.collect())
 
             # Check for "hazardous occupation" using regex (case-insensitive)
-            # Note: Polars regex is case-sensitive by default. For case-insensitivity,
-            # you'd typically use regex flags like `(?i)`.
             af_hazardous_check = af_notes.select(
                 af_notes["underwriter_notes"].str.contains(
                     r"(?i)hazardous occupation" # Case-insensitive regex
                 ).alias("mentions_hazardous_occupation")
             )
-            print("\\nHazardous Occupation Check:")
+            print("Hazardous Occupation Check:")
             print(af_hazardous_check.collect())
             ```
 
-            ```
+            ```text
             Medical History Check:
             shape: (3, 1)
             ┌──────────────────────────┐
