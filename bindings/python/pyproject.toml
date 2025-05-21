@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio-core"
-version = "0.0.11"
+version = "0.0.14"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@sudden.co.nz" }]
@@ -9,27 +9,30 @@ dependencies = [
     "logfire>=3.4.0",
     "loguru>=0.7.3",
     "numpy>=1.24.0,<2.2",
-    "polars>=1.23.0",
-    "polars-u64-idx>=1.23.0",
+    "polars>=1.27.0",
+    "polars-u64-idx>=1.27.0",
     "rich>=13.9.4",
     "typer>=0.15.1",
     "pyarrow>=15.0.0",
     "pytest>=8.3.4",
     "boto3>=1.37.2",
-    "numba>=0.59.0",
     "datacompy>=0.16.0",
     "thefuzz[speedup]>=0.22.1",
     "python-dateutil>=2.9.0.post0",
+    "ruff>=0.11.10",
+    "markdown-it-py>=3.0.0",
+    "docstring-parser>=0.16",
 ]
 
 [project.scripts]
 gaspatchio-core = "gaspatchio_core:main"
+gp-docstrings = "gaspatchio_core.examples.docstrings.cli:app"
 
 [project.optional-dependencies]
-pandas = ["polars-u64-idx>=1.23.0"]
-numpy = ["polars-u64-idx>=1.23.0"]
-pyarrow = ["polars-u64-idx>=1.23.0"]
-excel = ["polars-u64-idx>=1.23.0"]
+pandas = ["polars-u64-idx>=1.27.0"]
+numpy = ["polars-u64-idx>=1.27.0"]
+pyarrow = ["polars-u64-idx>=1.27.0"]
+excel = ["polars-u64-idx>=1.27.0"]
 
 [tool.maturin]
 module-name = "gaspatchio_core._internal"
@@ -41,7 +44,13 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [dependency-groups]
-dev = ["ai-code-tracker>=0.1.1"]
+dev = [
+    "ai-code-tracker>=0.1.1",
+    "hypothesis>=6.131.15",
+    "mypy>=1.15.0",
+    "pyright>=1.1.400",
+    "pytest-accept>=0.1.12",
+]
 
 [tool.uv]
 # Rebuild package when any rust files change
@@ -51,3 +60,12 @@ cache-keys = [
     { file = "**/*.rs" },
 ]
 config-settings = { "build-args" = "--profile=dev" }
+
+[tool.pytest.ini_options]
+addopts = ["--gp-docstring-paths=gaspatchio_core/column/namespaces/dt_proxy.py"]
+# You can add more patterns here or override on the command line.
+# Example:
+# markers = [
+#     "slow: marks tests as slow to run",
+# ]
+# testpaths = ["tests", "gaspatchio_core"]

@@ -26,31 +26,33 @@ LIB = Path(__file__).parent
 
 
 def assumption_lookup(*keys: IntoExpr, table_name: str) -> pl.Expr:
-    """Creates a Polars expression for performing an assumption lookup.
+    """Performs a high-performance lookup against a pre-registered assumption table.
 
-    This function looks up values from a previously registered assumption table
-    based on the provided key columns.
+    This function integrates with Polars expressions to retrieve values from
+    assumption tables based on one or more key columns. It's designed for
+    actuarial modeling, supporting both scalar and vector lookups. In a vector
+    lookup, a key column can contain lists of values, and the function returns a
+    corresponding list of results for each input list.
+
+    The underlying mechanism uses efficient hash maps implemented in Rust for
+    O(1) average-case lookup performance. Assumption tables must be registered
+    globally using `register_table` (not detailed here but covered in other
+    documentation) before they can be used with `assumption_lookup`.
 
     Args:
-        *keys: One or more key columns (can be column names as strings or
-            Polars expressions).
-        table_name: The name of the assumption table registered in the global registry.
+        *keys (IntoExpr): One or more key expressions to use for the lookup.
+            Each key can be a column name (str) or a Polars expression (`pl.Expr`).
+            The order of keys must match the order specified during table registration.
+        table_name (str): The name of the assumption table (previously registered
+            using `register_table`) to perform the lookup against.
 
     Returns:
-        A Polars expression that performs the lookup when evaluated.
+        pl.Expr: A Polars expression representing the looked-up values.
+            If a key column contains lists (vector lookup), the result will also be a
+            list of corresponding values for each input list.
 
-    Examples:
-        >>> import polars as pl
-        >>> from gaspatchio_core.assumptions import assumption_lookup
-        >>> # Assuming 'mortality_rates' table is registered with keys 'age' and 'gender'
-        >>> df = pl.DataFrame({"age": [30, 31], "gender": ["M", "F"]})
-        >>> df.with_columns(
-        ...     mort_rate=assumption_lookup("age", "gender", table_name="mortality_rates")
-        ... )
-        # This will compute the lookup when the DataFrame is evaluated.
 
     """
-    # Ensure keys are actual expressions, converting strings to pl.col()
     key_exprs = [pl.col(key) if isinstance(key, str) else key for key in keys]
 
     return register_plugin_function(

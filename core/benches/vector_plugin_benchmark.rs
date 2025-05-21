@@ -16,7 +16,7 @@ fn benchmark_fill_series(c: &mut Criterion) {
         increment: 2,
     };
 
-    for size in [10, 100, 1_000, 10_000, 100_000, 1_000_000].iter() {
+    for size in [100, 1_000, 10_000].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             let length_series = create_length_series("length", size);
             let inputs = [length_series];

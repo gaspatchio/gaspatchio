@@ -21,21 +21,21 @@ Usage:
     python -m gaspatchio-core.scripts.run_model <directory> --policy-id POLICY123 --output-csv result.csv
 """
 
-import importlib.util
 import logging
 import os
 import sys
-import time
 from pathlib import Path
 
 import polars as pl
 import typer
-from datacompy import PolarsCompare
-from gaspatchio_core.dsl.core import (
-    ActuarialFrame,
-    run_model,
+from gaspatchio_core.runner import (
+    ModelRunConfig,
+    ModelRunResult,
+    transpose_single_policy_result,
 )
-from gaspatchio_core.utils import read_model_points
+from gaspatchio_core.runner import (
+    run_model as execute_runner_run_model,
+)
 from loguru import logger
 from typing_extensions import Annotated
 
@@ -96,83 +96,14 @@ for logger_name in ["gaspatchio_core", "gaspatchio_core.lookup"]:
 # Now import the modules that might use Rust logging
 
 
-def load_model_from_path(model_path, function_name="life_model"):
-    """Dynamically load a model function from a Python file"""
-    model_path = Path(model_path)
-    if not model_path.exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
-
-    spec = importlib.util.spec_from_file_location("model_module", model_path)
-    model_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(model_module)
-
-    # Look specifically for the specified function name
-    if hasattr(model_module, function_name) and callable(
-        getattr(model_module, function_name)
-    ):
-        model_func = getattr(model_module, function_name)
-        # Optional: Add a check for argument count if needed
-        # if hasattr(model_func, '__code__') and model_func.__code__.co_argcount in [1, 2]:
-        #     return model_func
-        # else:
-        #     raise ValueError(f"Function '{function_name}' found but has incorrect signature.")
-        return model_func
-    else:
-        raise ValueError(f"No function named '{function_name}' found in {model_path}")
+# Define Typer app globally
+app = typer.Typer(
+    help="Run GasPatchIO actuarial models from a directory.",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 
 
-def transpose_single_policy_result(result_df):
-    """
-    Transpose a single policy result so that vector columns are displayed as rows.
-
-    Args:
-        result_df: A DataFrame containing a single row with vector columns
-
-    Returns:
-        A transposed DataFrame with one row per element in the longest vector
-    """
-    if len(result_df) != 1:
-        raise ValueError("Transposition only works with a single policy result")
-
-    # Get the first (and only) row as a dictionary
-    row = result_df.row(0, named=True)
-
-    # Find all list/vector columns and determine the max length
-    max_length = 0
-    vector_cols = []
-    scalar_cols = []
-
-    for col_name, value in row.items():
-        if isinstance(value, (list, tuple)) or (
-            hasattr(value, "__iter__") and not isinstance(value, (str, bytes))
-        ):
-            vector_cols.append(col_name)
-            max_length = max(max_length, len(value))
-        else:
-            scalar_cols.append(col_name)
-
-    if max_length == 0:
-        logger.info("No vector columns found in result, displaying as-is")
-        return result_df
-
-    # Create a new dictionary to build the transposed DataFrame
-    transposed_data = {}
-
-    # Spread vector columns across rows
-    for col_name in vector_cols:
-        vector = row[col_name]
-        # If the vector is shorter than max_length, pad with None
-        padded_vector = list(vector) + [None] * (max_length - len(vector))
-        transposed_data[col_name] = padded_vector
-
-    # Repeat scalar values for each row
-    for col_name in scalar_cols:
-        transposed_data[col_name] = [row[col_name]] * max_length
-
-    # Create the transposed DataFrame
-    return pl.DataFrame(transposed_data)
-
-
+@app.command()
 def main(
     directory: Annotated[
         str,
@@ -267,359 +198,230 @@ def main(
         ),
     ] = "Policy number",
 ):
-    # Calculate absolute paths
-    directory_path = Path(directory)
-    model_path = directory_path / model_file
-    model_points_path = directory_path / model_points_file
+    # Create configuration object
+    config = ModelRunConfig(
+        directory=Path(directory),
+        model_file=model_file,
+        model_points_file=model_points_file,
+        mode=mode,
+        model_function_name=model_function_name,
+        id_column_name=id_column_name,
+    )
 
-    logger.info("Loading model from {}", model_path)
-    model_func = load_model_from_path(model_path, model_function_name)
+    # Execute the model run using the runner function
+    try:
+        logger.debug(f"Runner Config: {config=}")
+        # Get the ModelRunResult object
+        run_result: ModelRunResult = execute_runner_run_model(config)
+    except (FileNotFoundError, ValueError, Exception) as e:
+        logger.error("Model execution failed: {}", e)
+        raise typer.Exit(code=1)
 
-    logger.info("Reading model points data from {}", model_points_path)
-    start = time.time()
-    data_lazy = read_model_points(model_points_path)  # Keep it lazy initially
+    # Check for errors reported by the runner
+    if run_result.errors:
+        logger.error("Runner reported errors:")
+        for err in run_result.errors:
+            logger.error(f"- {err}")
+        raise typer.Exit(code=1)
 
-    # Filter for specific policy if requested (still lazy)
+    # Extract results from the result object
+    result_df = run_result.result
+    profile_info = run_result.metrics.profile_info
+    total_time = run_result.metrics.total_time_s
+
+    # --- Add filtering based on policy_id if provided ---
     if policy_id:
-        logger.info("Filtering for single policy with ID: {}", policy_id)
-        try:
-            policy_id_int = int(policy_id)
-        except ValueError:
-            logger.error("Policy ID must be an integer, got: {}", policy_id)
-            raise ValueError(f"Policy ID must be an integer, got: {policy_id}")
-
-        # Use the provided ID column name
-        # Check if policy exists before filtering
-        # Collect only the necessary column to check existence efficiently
-        existing_ids = (
-            data_lazy.select(id_column_name)
-            .unique()
-            .collect()
-            .get_column(id_column_name)
+        logger.info(
+            f"Filtering results for policy ID: {policy_id} using column: {id_column_name}"
         )
-        if policy_id_int not in existing_ids:
-            logger.error(
-                "Policy ID '{}' not found in column '{}'. Available IDs preview: {}",
-                policy_id,
-                id_column_name,
-                existing_ids[:10].to_list(),
+        try:
+            # Ensure the ID column exists
+            if id_column_name not in result_df.columns:
+                logger.error(
+                    f"ID column '{id_column_name}' not found in results. Available columns: {result_df.columns}"
+                )
+                raise typer.Exit(code=1)
+
+            # Attempt to cast policy_id to the dtype of the ID column for safe comparison
+            id_col_dtype = result_df[id_column_name].dtype
+            try:
+                typed_policy_id = pl.Series([policy_id]).cast(id_col_dtype)[0]
+                logger.debug(
+                    f"Comparing with typed policy ID: {typed_policy_id} (type: {type(typed_policy_id)}) against column type {id_col_dtype}"
+                )
+            except Exception as cast_error:
+                logger.warning(
+                    f"Could not cast provided policy_id '{policy_id}' to column type {id_col_dtype}. Attempting direct comparison. Error: {cast_error}"
+                )
+                typed_policy_id = policy_id  # Fallback to original string
+
+            result_df = result_df.filter(pl.col(id_column_name) == typed_policy_id)
+            logger.info(
+                f"Found {len(result_df)} row(s) after filtering for policy ID {policy_id}"
             )
-            raise ValueError(f"Policy ID '{policy_id}' not found in '{id_column_name}'")
+            if len(result_df) == 0:
+                logger.warning(f"Policy ID {policy_id} not found in the results.")
+            elif len(result_df) > 1:
+                logger.warning(
+                    f"Multiple rows found for policy ID {policy_id}. Check your ID column and data."
+                )
 
-        # Now filter the LazyFrame
-        data_lazy = data_lazy.filter(pl.col(id_column_name) == policy_id_int)
+        except Exception as filter_error:
+            logger.error(
+                f"Error filtering results for policy ID {policy_id}: {filter_error}"
+            )
+            raise typer.Exit(code=1)
+    # --- End filtering ---
 
-        # No need to check for multiple policies here, ActuarialFrame handles it
+    # Display profile info
+    print("\n--- Profile Info ---")
+    print(profile_info)
+    print("--------------------\n")
 
-    # Create ActuarialFrame with specified mode
-    logger.info("Starting model run in {} mode...", mode)
-    logger.info(f"polars thread size: {pl.thread_pool_size()}")
-
-    # Pass the lazy data to ActuarialFrame
-    df = ActuarialFrame(data_lazy, mode=mode)
-
-    df.show_query_plan(True)
-
-    # Run the model - this modifies df in place or returns the modified df
-    run_model(model_func, df)
-
-    # Collect the result *after* the model run logic is defined in df
-    result, profile = df.profile()  # Get the collected DataFrame and profile info
-
-    print(profile)
-
-    end = time.time()
-    total_time = end - start
-    records = len(result)
-    # Handle division by zero if records is 0
+    # Calculate and log timing
+    records = len(result_df)
     time_per_record_s = total_time / records if records > 0 else 0
     time_per_record_ms = (total_time * 1e3) / records if records > 0 else 0
     time_per_record_ns = (total_time * 1e9) / records if records > 0 else 0
     logger.info(
-        "Model run completed in {:.2f} seconds ({:.3f} s | {:.3f} ms | {:.3f} ns per record)",
+        "(From CLI) Model run completed in {:.2f} seconds ({:.3f} s | {:.3f} ms | {:.3f} ns per record)",
         total_time,
         time_per_record_s,
         time_per_record_ms,
         time_per_record_ns,
     )
 
-    # Get the tracked column order *from the ActuarialFrame instance*
-    tracked_column_order = df.get_column_order()
-    # Get columns actually present in the final materialized DataFrame
-    final_result_columns = result.columns
-    # Filter the tracked order to only include columns that exist in the result
-    # This handles cases where columns were defined but not ultimately selected/output
-    available_ordered_columns = [
-        col for col in tracked_column_order if col in final_result_columns
-    ]
-
+    # Handle output file/display logic
     if output_file:
-        output_path = Path(output_file)
+        output_path = output_file
         logger.info("Writing results to Parquet file: {}", output_path)
-        # Select columns in the desired order before writing (optional but good practice)
-        result.select(available_ordered_columns).write_parquet(output_path)
+        # Use original full column order if available, otherwise just use available columns
+        cols_to_write = (
+            getattr(run_result.metrics, "tracked_column_order", None)
+            or result_df.columns
+        )
+        result_df.select(cols_to_write).write_parquet(output_path)
         logger.info("Results saved successfully.")
     else:
+        # Determine column order - use tracked order from metrics if available, using getattr
+        tracked_column_order = (
+            getattr(run_result.metrics, "tracked_column_order", None) or []
+        )
+        final_result_columns = (
+            result_df.columns
+        )  # Columns in the (potentially filtered) df
+        # Use tracked order, but only columns that actually exist in the final df
+        available_ordered_columns = [
+            col for col in tracked_column_order if col in final_result_columns
+        ]
+        # Add any columns present in final df but not in tracked_order
+        available_ordered_columns.extend(
+            [
+                col
+                for col in final_result_columns
+                if col not in available_ordered_columns
+            ]
+        )
+
+        # Calculate columns to print based on -f and -l BEFORE checking for policy_id
+        first_cols = available_ordered_columns[:first_n]
+        last_cols = available_ordered_columns[-last_n:]
+        # Ensure columns are unique if first_n + last_n > total columns
+        combined_unique_cols_set = set(first_cols)
+        combined_unique_cols = first_cols + [
+            col for col in last_cols if col not in combined_unique_cols_set
+        ]
+
+        # Ensure selected columns actually exist before deciding what to print
+        # Handle case where there are fewer columns than first_n + last_n
+        if not combined_unique_cols:
+            final_cols_to_print = available_ordered_columns
+        else:
+            final_cols_to_print = [
+                col for col in combined_unique_cols if col in result_df.columns
+            ]
+
         saved_to_file = False
-        if policy_id and len(result) == 1:
+        # Check policy_id again - now len(result_df) should be 1 if filtering was successful and ID was unique
+        if policy_id and len(result_df) == 1:
             logger.info("Transposing single policy result")
-            # Transpose still operates on the collected 'result' DataFrame
-            transposed_result = transpose_single_policy_result(result)
+            # Ensure transpose function gets the correctly filtered (single row) df
+            transposed_result = transpose_single_policy_result(result_df)
             logger.info("Transposed result has {} rows", len(transposed_result))
 
-            # Determine output path and save if needed
-            if output_csv:
-                # User specified an output directory for the CSV
-                if output_file:
-                    logger.error(
-                        "--output-file and --output-csv are mutually exclusive when using --policy-id"
-                    )
-                    raise typer.Exit(code=1)
-                output_dir = Path(output_csv)
-                output_filename = f"{policy_id}_gs_output.csv"
-                output_path = output_dir / output_filename
+            # Determine columns to print for transposed result
+            transposed_columns = transposed_result.columns
+            first_transposed_cols = transposed_columns[:first_n]
+            last_transposed_cols = transposed_columns[-last_n:]
+            combined_transposed_set = set(first_transposed_cols)
+            final_transposed_cols_to_print = first_transposed_cols + [
+                col
+                for col in last_transposed_cols
+                if col not in combined_transposed_set
+            ]
 
-                # Ensure the directory exists
-                output_dir.mkdir(parents=True, exist_ok=True)
+            logger.debug(
+                f"Selected columns for transposed print (-f {first_n}, -l {last_n}): {final_transposed_cols_to_print}"
+            )
 
-                logger.info(
-                    "Writing transposed single policy result to specified directory as {}: {}",
-                    output_filename,
-                    output_path,
+            # Check if --output-csv was specified
+            if output_csv is not None:
+                csv_dir = Path(output_csv) or Path(
+                    "."
+                )  # Default to current dir if empty string
+                csv_dir.mkdir(parents=True, exist_ok=True)
+                csv_path = csv_dir / f"{policy_id}_gs_output.csv"
+                logger.info(f"Writing transposed result to CSV: {csv_path}")
+                # Write only the selected columns
+                transposed_result.select(final_transposed_cols_to_print).write_csv(
+                    csv_path
                 )
-                # Use transposed_result for writing
-                transposed_result.write_csv(output_path)
-                logger.info("Transposed result saved successfully to CSV.")
-                saved_to_file = True
+                saved_to_file = True  # Flag that we saved
+            else:
+                saved_to_file = False  # Ensure flag is false if not saving CSV
 
-                # --- Reconciliation Step ---
-                try:
-                    source_data_filename = f"{policy_id}_data.csv"
-                    source_data_path = output_dir / source_data_filename
-                    logger.info(
-                        "Attempting to read source data for reconciliation: {}",
-                        source_data_path,
-                    )
-
-                    if not source_data_path.exists():
-                        logger.warning(
-                            "Source data file for reconciliation not found: {}. Skipping reconciliation.",
-                            source_data_path,
-                        )
-                    else:
-                        ss_df = pl.read_csv(
-                            source_data_path
-                        )  # Assuming source has a 'month' column
-                        # Use transposed_result for reconciliation
-                        model_df = transposed_result
-
-                        # Ensure 'month' column exists in both dataframes
-                        join_column = (
-                            "month"  # <-- Make sure this is the correct column name
-                        )
-                        if (
-                            join_column not in ss_df.columns
-                            or join_column not in model_df.columns
-                        ):
-                            logger.warning(
-                                f"Join column '{join_column}' not found in both source and model data. Skipping reconciliation."
-                            )
-                        else:
-                            logger.info("Running reconciliation comparison...")
-                            compare = PolarsCompare(
-                                ss_df,
-                                model_df,
-                                join_columns=join_column,
-                                abs_tol=0.00001,
-                                rel_tol=0,
-                                df1_name="source_data",
-                                df2_name="model_output",
-                            )
-
-                            recon_report = compare.report()
-
-                            recon_dir = output_dir
-                            recon_dir.mkdir(parents=True, exist_ok=True)
-                            recon_filename = f"{policy_id}_recon.md"
-                            recon_path = recon_dir / recon_filename
-
-                            logger.info(
-                                "Saving reconciliation report to: {}", recon_path
-                            )
-                            with open(recon_path, "w") as f:
-                                f.write(recon_report)
-                            logger.info("Reconciliation report saved successfully.")
-
-                except Exception as e:
-                    logger.error(
-                        "Error during reconciliation: {}. Reconciliation skipped.", e
-                    )
-                # --- End Reconciliation Step ---
-
-            # Print transposed result to console if not saved
             if not saved_to_file:
-                # Make sure all columns are displayed with good formatting
                 pl.Config.set_tbl_width_chars(1500)
-                pl.Config.set_fmt_str_lengths(30)  # Increased from 10
-                pl.Config.set_tbl_cols(-1)  # Ensure all selected cols can be shown
-                pl.Config.set_tbl_rows(rows)  # Use the rows parameter
+                pl.Config.set_fmt_str_lengths(30)
+                pl.Config.set_tbl_cols(-1)  # Let Polars decide column wrapping
+                pl.Config.set_tbl_rows(
+                    rows
+                )  # Use the --rows param for transposed output
+                with pl.Config(tbl_cols=-1, tbl_rows=rows):
+                    print("\nTransposed Result (Columns filtered by -f/-l):")
+                    # --- CORRECTED: Select columns before printing ---
+                    print(transposed_result.select(final_transposed_cols_to_print))
+
+            else:
+                logger.info("Transposed results saved to CSV, skipping print.")
+        else:
+            # Print the (potentially ID-filtered but not transposed) results
+            if len(result_df) == 0 and policy_id:
+                logger.info("No data to display for the specified policy ID.")
+            elif len(result_df) > 0:
+                # Use the column selection calculated before the policy_id check for non-transposed output
                 with pl.Config(
-                    tbl_cols=-1, tbl_rows=rows
-                ):  # Reiterate config for clarity/safety
-                    print("Transposed Result (Selected Columns):")
-                    # Apply first_n and last_n to the *columns* of the transposed result,
-                    # using the original assignment order.
-                    first_cols = available_ordered_columns[:first_n]
-                    last_cols = available_ordered_columns[-last_n:]
-                    # Combine first and last, ensuring uniqueness while preserving order
-                    combined_unique_cols = first_cols + [
-                        col for col in last_cols if col not in first_cols
-                    ]
-                    # Select the columns from the transposed result
-                    print(transposed_result.select(combined_unique_cols))
-
-        elif (
-            not output_file
-        ):  # Only print original result if not single policy and not saving to Parquet
-            # Ensure all columns are displayed when printing to console
-            # Print original (non-transposed) result using tracked order
-            with pl.Config(
-                tbl_cols=-1, tbl_rows=rows, tbl_width_chars=1500, fmt_str_lengths=30
-            ):
-                print("Result (Columns ordered by assignment):")
-                # Use the available_ordered_columns for selection
-                first_cols = available_ordered_columns[:first_n]
-                last_cols = available_ordered_columns[-last_n:]
-                # Combine first and last, ensuring uniqueness while preserving order
-                combined_unique_cols = first_cols + [
-                    col for col in last_cols if col not in first_cols
-                ]
-                # Select from the original 'result' DataFrame using the ordered subset
-                print(result.select(combined_unique_cols))
+                    tbl_cols=-1,  # Show all columns initially to select from
+                    tbl_rows=rows,
+                    tbl_width_chars=1500,
+                    fmt_str_lengths=30,
+                ):
+                    print(
+                        "\nResult (Columns ordered by assignment - best effort, filtered by -f/-l):"
+                    )
+                    if not final_cols_to_print:
+                        logger.warning(
+                            "No columns selected or available to display based on -f/-l settings."
+                        )
+                        print(
+                            result_df
+                        )  # Print dataframe with default columns if selection fails
+                    else:
+                        print(result_df.select(final_cols_to_print))
+            else:
+                logger.info("No results to display.")
 
 
-def compare_modes(
-    directory: Annotated[
-        str,
-        typer.Argument(
-            help="Directory containing model.py and model-points.parquet",
-        ),
-    ],
-    model_file: Annotated[
-        str,
-        typer.Option(
-            "--model-file",
-            "-m",
-            help="Model file (if not 'model.py')",
-        ),
-    ] = "model.py",
-    model_points_file: Annotated[
-        str,
-        typer.Option(
-            "--model-points-file",
-            "-p",
-            help="Model points file (if not 'model-points.parquet')",
-        ),
-    ] = "model-points.parquet",
-    model_function_name: Annotated[
-        str,
-        typer.Option(
-            "--model-function-name",
-            help="Name of the model function to run within the model file",
-        ),
-    ] = "life_model",
-):
-    """Compare debug and optimize modes using a dataset from specified directory"""
-    # Calculate absolute paths
-    directory_path = Path(directory)
-    model_path = directory_path / model_file
-    model_points_path = directory_path / model_points_file
-
-    logger.info("Loading model from {}", model_path)
-    model_func = load_model_from_path(model_path, model_function_name)
-
-    # Read data from parquet file
-    print(f"Reading model points from {model_points_path}...")
-    data = read_model_points(model_points_path)
-
-    # Run in debug mode
-    print("Running in debug mode...")
-    df_debug = ActuarialFrame(data, mode="debug")
-
-    debug_start = time.time()
-    result_debug = run_model(model_func, df_debug).collect()
-    debug_end = time.time()
-    debug_time = debug_end - debug_start
-
-    records = len(result_debug)
-
-    print(f"Debug mode completed in {debug_time:.4f} seconds")
-    print(f"Debug mode: {debug_time / records * 1000:.4f} ms per record")
-    print("Debug mode result:")
-    print(result_debug)
-
-    # Run in optimize mode
-    print("\nRunning in optimize mode...")
-    df_optimize = ActuarialFrame(data, mode="optimize")
-
-    optimize_start = time.time()
-    result_optimize = run_model(model_func, df_optimize).collect()
-    optimize_end = time.time()
-    optimize_time = optimize_end - optimize_start
-
-    print(f"Optimize mode completed in {optimize_time:.4f} seconds")
-    print(f"Optimize mode: {optimize_time / records * 1000:.4f} ms per record")
-    print("Optimize mode result:")
-    print(result_optimize)
-
-    # Verify results are identical
-    print("\nResults are identical:", result_debug.equals(result_optimize))
-
-    # Performance comparison
-    speedup = debug_time / optimize_time if optimize_time > 0 else float("inf")
-    print("\nPerformance comparison:")
-    print(f"Debug mode: {debug_time:.4f} seconds")
-    print(f"Optimize mode: {optimize_time:.4f} seconds")
-    print(
-        f"Speedup factor: {speedup:.2f}x (optimize is {speedup:.2f} times faster than debug)"
-    )
-
-
+# Run the Typer app
 if __name__ == "__main__":
-    app = typer.Typer()
-    app.command()(main)
-    app.command()(compare_modes)
-
-    # Run if called directly
-    try:
-        import sys
-
-        if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
-            # Check if the first argument is a path (likely a directory)
-            if os.path.exists(sys.argv[1]):
-                # Call main directly
-                policy_id_arg = None
-                model_func_name_arg = "life_model"
-                # Check if policy-id was provided in command line
-                for i, arg in enumerate(sys.argv):
-                    if arg in ["--policy-id", "-i"] and i + 1 < len(sys.argv):
-                        policy_id_arg = sys.argv[i + 1]
-                    # Check if model-function-name was provided
-                    if arg == "--model-function-name" and i + 1 < len(sys.argv):
-                        model_func_name_arg = sys.argv[i + 1]
-                # No need to break, continue checking other args
-
-                main(
-                    directory=sys.argv[1],
-                    model_file="model.py",
-                    model_points_file="model-points.parquet",
-                    mode="debug",
-                    policy_id=policy_id_arg,
-                    model_function_name=model_func_name_arg,
-                )
-                sys.exit(0)
-    except Exception as e:
-        logger.error(f"Error running direct mode: {e}")
-
-    # Otherwise use the typer app
     app()

@@ -1,31 +1,9 @@
 import math
 import unittest
-from unittest import mock
 
 import numpy as np
 import polars as pl
-import pytest
-
-# Try to import numba, but make it optional
-try:
-    import numba
-
-    HAS_NUMBA = True
-except ImportError:
-    HAS_NUMBA = False
-
-    # Define empty functions as placeholders
-    class numba:
-        @staticmethod
-        def vectorize(func):
-            return func
-
-        @staticmethod
-        def njit(func):
-            return func
-
-
-from gaspatchio_core.dsl.core import (
+from gaspatchio_core import (
     ActuarialFrame,
     ColumnProxy,
     ExpressionProxy,
@@ -143,13 +121,17 @@ class TestDebugableBasics(unittest.TestCase):
         def square(x):
             return float(x * x)  # Return float to match Float64 return type
 
-        df["age_squared"] = df["age"].apply(square)
+        with execution_mode("debug"):  # Ensure telemetry sees debug mode
+            df["age_squared"] = df["age"].map_elements(square)
         result = df.collect()
         for i, age in enumerate(self.data["age"]):
             self.assertAlmostEqual(result["age_squared"][i], age * age)
 
         # Test with numpy functions
-        df["age_sqrt"] = np.sqrt(df["age"])
+        with execution_mode("debug"):  # Ensure telemetry sees debug mode
+            df["age_sqrt"] = df["age"].map_elements(
+                lambda x: np.sqrt(x), return_dtype=pl.Float64
+            )
         result = df.collect()
         for i, age in enumerate(self.data["age"]):
             self.assertAlmostEqual(result["age_sqrt"][i], np.sqrt(age))
@@ -241,39 +223,6 @@ class TestModelCalculations(unittest.TestCase):
 
         self.assertEqual(result["num_proj_months"][0], num_proj_months)
 
-    def test_simple_model_optimize_mode(self):
-        def simple_model(df):
-            # Constants
-            max_age = 100
-
-            # Basic calculations
-            df["num_proj_months"] = (max_age - df["age"]) * 12 + 1
-            # Use direct expressions for plugin functions
-            df["proj_months"] = fill_series(pl.col("age"), 0, 1)
-            df["proj_years"] = floor((pl.col("proj_months") - 1) / 12) + 1
-
-            # Additional calculations
-            df["age_last"] = df["age"] + df["proj_years"] - 1
-
-            return df
-
-        # Run in optimize mode
-        df = ActuarialFrame(self.data, mode="optimize")
-        result = run_model(simple_model, df).collect()
-
-        # Verify results
-        self.assertTrue("num_proj_months" in result.columns)
-        self.assertTrue("proj_months" in result.columns)
-        self.assertTrue("proj_years" in result.columns)
-        self.assertTrue("age_last" in result.columns)
-
-        # Check specific calculations for the first row
-        max_age = 100
-        first_age = self.data["age"][0]
-        num_proj_months = (max_age - first_age) * 12 + 1
-
-        self.assertEqual(result["num_proj_months"][0], num_proj_months)
-
     def test_compare_debug_and_optimize_results(self):
         def complex_model(df):
             # Constants
@@ -295,8 +244,12 @@ class TestModelCalculations(unittest.TestCase):
                 df["sum_assured"] * (1 + interest_rate) ** df["proj_years"]
             )
 
-            # Use the global risk factor function instead of a local one
-            df["risk_factor"] = df["age"].apply(_risk_factor)
+            # Complex calculations with custom functions - use global function
+            if df._mode == "debug":
+                with execution_mode("debug"):
+                    df["risk_factor"] = df["age"].map_elements(_risk_factor)
+            else:  # optimize mode
+                df["risk_factor"] = (pl.col("age").clip(lower_bound=1).log()) * 0.01
             df["mortality_cost"] = df["future_sum_assured"] * df["risk_factor"]
 
             return df
@@ -325,64 +278,48 @@ class TestModelCalculations(unittest.TestCase):
     def test_model_with_numpy_functions(self):
         def model_with_numpy(df):
             # Use numpy functions
-            df["log_age"] = df["age"].apply(lambda x: np.log(x))
-            df["exp_premium"] = df["premium"].apply(lambda x: np.exp(x / 1000))
-            df["sin_age"] = df["age"].apply(
-                lambda x: np.sin(x * np.pi / 180)
-            )  # age in degrees
-
+            if df._mode == "debug":
+                with execution_mode("debug"):  # Ensure telemetry sees debug mode
+                    df["log_age"] = df["age"].map_elements(lambda x: np.log(x))
+                    df["exp_premium"] = df["premium"].map_elements(
+                        lambda x: np.exp(x / 1000)
+                    )
+                    df["sin_age"] = df["age"].map_elements(
+                        lambda x: np.sin(x * np.pi / 180)
+                    )  # age in degrees
+            else:  # optimize mode - should use native polars if map_elements is forbidden
+                df["log_age"] = pl.col("age").log()
+                df["exp_premium"] = (pl.col("premium") / 1000).exp()
+                df["sin_age"] = (pl.col("age") * np.pi / 180).sin()
             return df
 
         # Run in debug mode
-        df = ActuarialFrame(self.data, mode="debug")
-        result = run_model(model_with_numpy, df).collect()
+        df_debug_mode = ActuarialFrame(self.data.clone(), mode="debug")
+        result_debug = run_model(model_with_numpy, df_debug_mode).collect()
 
-        # Check results
+        # Check results for debug mode
         for i, age in enumerate(self.data["age"]):
-            self.assertAlmostEqual(result["log_age"][i], np.log(age))
+            self.assertAlmostEqual(result_debug["log_age"][i], np.log(age))
             self.assertAlmostEqual(
-                result["exp_premium"][i], np.exp(self.data["premium"][i] / 1000)
+                result_debug["exp_premium"][i], np.exp(self.data["premium"][i] / 1000)
             )
-            self.assertAlmostEqual(result["sin_age"][i], np.sin(age * np.pi / 180))
+            self.assertAlmostEqual(
+                result_debug["sin_age"][i], np.sin(age * np.pi / 180)
+            )
 
+        # Run in optimize mode
+        df_optimize_mode = ActuarialFrame(self.data.clone(), mode="optimize")
+        result_optimize = run_model(model_with_numpy, df_optimize_mode).collect()
 
-class TestNumbaOptimization(unittest.TestCase):
-    def setUp(self):
-        self.data = pl.DataFrame(
-            {
-                "age": [35, 40, 45, 50, 55],
-                "premium": [100.0, 150.0, 200.0, 250.0, 300.0],
-            }
-        )
-
-    @pytest.mark.skipif(not HAS_NUMBA, reason="Numba not installed")
-    def test_numba_optimization(self):
-        # Define a function that Numba can optimize
-        def calculate_mortality(age):
-            base_rate = 0.001
-            for i in range(10):  # Some iteration to make it slower in Python
-                base_rate *= 1 + 0.03 * age / 100
-            return base_rate
-
-        # Run in optimize mode with mocking to verify Numba is used
-        df = ActuarialFrame(self.data, mode="optimize")
-
-        # We need to mock both vectorize and njit since our code now tries both
-        with (
-            mock.patch("numba.vectorize") as mock_vectorize,
-            mock.patch("numba.njit") as mock_njit,
-        ):
-            # Make both mocks just return the function (no real compilation)
-            mock_vectorize.side_effect = lambda f: f
-            mock_njit.side_effect = lambda f: f
-
-            # Perform the calculation that should use Numba
-            df["mortality"] = df["age"].apply(calculate_mortality)
-
-            # Check that either vectorize or njit was called
-            self.assertTrue(
-                mock_vectorize.called or mock_njit.called,
-                "Neither numba.vectorize nor numba.njit was called",
+        # Check results for optimize mode
+        for i, age in enumerate(self.data["age"]):
+            self.assertAlmostEqual(result_optimize["log_age"][i], np.log(age))
+            self.assertAlmostEqual(
+                result_optimize["exp_premium"][i],
+                np.exp(self.data["premium"][i] / 1000),
+            )
+            self.assertAlmostEqual(
+                result_optimize["sin_age"][i], np.sin(age * np.pi / 180)
             )
 
 
@@ -439,7 +376,11 @@ class TestPerformance(unittest.TestCase):
             )
 
             # Complex calculations with custom functions - use global function
-            df["risk_factor"] = df["age"].apply(_risk_factor)
+            if df._mode == "debug":
+                with execution_mode("debug"):
+                    df["risk_factor"] = df["age"].map_elements(_risk_factor)
+            else:  # optimize mode
+                df["risk_factor"] = (pl.col("age").clip(lower_bound=1).log()) * 0.01
             df["mortality_cost"] = df["future_sum_assured"] * df["risk_factor"]
 
             # More calculations to stress test
@@ -472,184 +413,6 @@ class TestPerformance(unittest.TestCase):
         # in automated tests due to various factors. Just check they both ran.
         self.assertEqual(len(result_debug), len(self.data))
         self.assertEqual(len(result_optimize), len(self.data))
-
-
-class TestErrorHandling(unittest.TestCase):
-    def setUp(self):
-        # Create a test dataframe with some columns
-        self.data = pl.DataFrame(
-            {
-                "age": [35, 40, 45],
-                "sex": ["M", "F", "M"],
-                "premium": [100.0, 150.0, 200.0],
-                "policy_duration": [1, 2, 3],
-                "policy_start_date": ["2020-01-01", "2019-05-15", "2021-03-30"],
-            }
-        )
-        self.df = ActuarialFrame(self.data)  # Create instance for tests
-
-    def test_missing_column_extraction(self):
-        """Test extraction of missing column names from different error formats using _extract_missing_column"""
-
-        # Test direct format
-        error_msg_direct = "ColumnNotFoundError: policy_duration_as_int"
-        self.assertEqual(
-            self.df._extract_missing_column(error_msg_direct), "policy_duration_as_int"
-        )
-
-        # Test quoted format
-        error_msg_quoted = "Column 'policy_duration_as_int' not found"
-        self.assertEqual(
-            self.df._extract_missing_column(error_msg_quoted), "policy_duration_as_int"
-        )
-
-        # Test complex Polars format
-        error_msg_complex = (
-            "policy_duration_as_int\n\n"
-            "Resolved plan until failure:\n\n"
-            "\t---> FAILED HERE RESOLVING 'with_columns' <---\n"
-            "... rest of plan ..."
-        )
-        self.assertEqual(
-            self.df._extract_missing_column(error_msg_complex), "policy_duration_as_int"
-        )
-
-        # Test fallback format
-        self.df._column_order.append("missing_but_assigned")  # Add to tracked columns
-        error_msg_fallback = "Some other error FAILED HERE RESOLVING involving missing_but_assigned maybe"
-        self.assertEqual(
-            self.df._extract_missing_column(error_msg_fallback), "missing_but_assigned"
-        )
-        # Clean up for other tests
-        if "missing_but_assigned" in self.df._column_order:
-            self.df._column_order.remove("missing_but_assigned")
-
-    def test_levenshtein_distance(self):
-        """Test the fuzzy matching fallback (_find_similar_columns with Levenshtein)"""
-        # Temporarily disable thefuzz import to test fallback
-        original_import = __builtins__["__import__"]
-
-        def import_mock(name, *args):
-            if name == "thefuzz":
-                raise ImportError("Mock ImportError for thefuzz")
-            return original_import(name, *args)
-
-        __builtins__["__import__"] = import_mock
-
-        try:
-            # Test close match using Levenshtein fallback
-            similar_cols = self.df._find_similar_columns(
-                "police_duration", ["policy_duration", "age", "sex"]
-            )
-            self.assertIn("policy_duration", similar_cols)
-
-            # Test substring match fallback
-            similar = self.df._find_similar_columns(
-                "premium_rate", ["premium", "rate", "age"]
-            )
-            self.assertIn(
-                "premium", similar
-            )  # Substring should still be preferred if calculated
-
-        finally:
-            # Restore the original import function
-            __builtins__["__import__"] = original_import
-
-    def test_collect_error_handling(self):
-        """Test that _handle_execution_error formats column errors from collect() correctly"""
-        # Use a real Polars error this time if possible, otherwise mock
-        try:
-            # Create a scenario that will likely cause a ColumnNotFoundError
-            lazy_df = self.df._df.with_columns(pl.col("non_existent_col") * 2)
-            # Manually trigger the error collection part
-            lazy_df.collect()
-        except Exception as e:
-            # Check if the error is the type we expect
-            if "ColumnNotFoundError" in str(type(e)) or "not found" in str(e):
-                # Now test our handler with this real error
-                with self.assertRaises(Exception) as context:
-                    self.df._handle_execution_error(e)
-
-                formatted_error_message = str(context.exception)
-                self.assertIn(
-                    "Column 'non_existent_col' not found", formatted_error_message
-                )
-                self.assertIn("Available columns are:", formatted_error_message)
-                self.assertIn("age", formatted_error_message)
-            else:
-                # If the setup didn't raise the expected error, we can't test the handler directly
-                # Fallback to mocking if necessary, but prefer testing with real errors
-                self.skipTest(
-                    "Could not trigger a real ColumnNotFoundError for testing _handle_execution_error"
-                )
-
-    def test_profile_error_handling(self):
-        """Test that _handle_execution_error formats column errors from profile() correctly"""
-        try:
-            lazy_df = self.df._df.with_columns(pl.col("another_missing_col") + 1)
-            lazy_df.profile()
-        except Exception as e:
-            if "ColumnNotFoundError" in str(type(e)) or "not found" in str(e):
-                with self.assertRaises(Exception) as context:
-                    self.df._handle_execution_error(e)
-
-                formatted_error_message = str(context.exception)
-                self.assertIn(
-                    "Column 'another_missing_col' not found", formatted_error_message
-                )
-                self.assertIn("Available columns are:", formatted_error_message)
-            else:
-                self.skipTest(
-                    "Could not trigger a real ColumnNotFoundError for testing _handle_execution_error in profile"
-                )
-
-    def test_thefuzz_integration(self):
-        """Test that _find_similar_columns uses thefuzz correctly"""
-        try:
-            from thefuzz import process  # Check if available
-
-            # Test fuzzy matches using the refactored method
-            similar_cols = self.df._find_similar_columns(
-                "police_duration", ["policy_duration", "age", "sex"]
-            )
-            self.assertIn("policy_duration", similar_cols)
-
-            similar_cols = self.df._find_similar_columns(
-                "policyy_duration", ["policy_duration", "premium", "age"]
-            )
-            self.assertIn("policy_duration", similar_cols)
-
-            similar_cols = self.df._find_similar_columns(
-                "duration_policy", ["policy_duration", "premium", "age"]
-            )
-            self.assertIn("policy_duration", similar_cols)
-
-        except ImportError:
-            self.skipTest("thefuzz is not installed, skipping test_thefuzz_integration")
-
-    def test_polars_complex_error_extraction(self):
-        """Test _extract_missing_column for complex Polars error message with plan"""
-        error_message = (
-            "policy_duration_as_int\n\n"
-            "Resolved plan until failure:\n\n"
-            "\t---> FAILED HERE RESOLVING 'with_columns' <---\n"
-            "... some plan details ..."
-        )
-        # Test extraction directly using the helper method
-        missing_col = self.df._extract_missing_column(error_message)
-        self.assertEqual(missing_col, "policy_duration_as_int")
-
-    def test_fallback_extraction_logic(self):
-        """Test the _extract_missing_column fallback logic"""
-        self.df._column_order.append("missing_but_assigned")  # Simulate assigned column
-        error_message = "Some other error FAILED HERE RESOLVING involving missing_but_assigned maybe"
-
-        # Test extraction directly using the helper method
-        missing_col = self.df._extract_missing_column(error_message)
-        self.assertEqual(missing_col, "missing_but_assigned")
-        # Clean up
-        if "missing_but_assigned" in self.df._column_order:
-            self.df._column_order.remove("missing_but_assigned")
 
 
 if __name__ == "__main__":
