@@ -2049,14 +2049,80 @@ class StringNamespaceProxy:
         return self._call_string_method("pad_start", length=width, fill_char=fill_char)
 
     def pad_end(self, width: int, fill_char: str = " ") -> "ExpressionProxy":
-        """Alias for `ljust`. Pads the end of strings (left-aligns content).
+        """Left-align strings by padding on the right.
+
+        Strings shorter than ``width`` are padded on the right with ``fill_char``.
+        If the column is ``List[String]`` the padding is applied to each element
+        of the list.
+
+        !!! note "When to use"
+            *   Format policy numbers or claim identifiers for extracts that
+                require fixed-width fields.
+            *   Pad abbreviations in list columns (such as rider codes) so that
+                they line up cleanly in cross-system feeds.
 
         Args:
             width: The desired total length of the string after padding.
             fill_char: The character to pad with. Defaults to a space.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` with strings padded at the end.
+            ExpressionProxy: An ``ExpressionProxy`` with strings padded at the
+                end.
+
+        Examples:
+            **Scalar example – fixed-width policy codes**
+            ```python
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
+            with pl.Config(fmt_str_lengths=100):
+
+                data = {"policy_code": ["L101", "L20", None]}
+                af = ActuarialFrame(data)
+                result = af.select(
+                    af["policy_code"].str.pad_end(6, "0").alias("fixed_length_code")
+                )
+                print(result.collect())
+            ```
+
+            ```text
+            shape: (3, 1)
+            ┌───────────────────┐
+            │ fixed_length_code │
+            │ ---               │
+            │ str               │
+            ╞═══════════════════╡
+            │ L10100            │
+            │ L20000            │
+            │ null              │
+            └───────────────────┘
+            ```
+
+            **Vector example – padding claim codes in a list**
+            ```python
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
+            with pl.Config(fmt_str_lengths=100):
+
+                data_list = {"batch_id": ["B200"], "claim_codes": [["A1", "XYZ", "C1234"]]}
+                af_list = ActuarialFrame(data_list).with_columns(
+                    pl.col("claim_codes").cast(pl.List(pl.String))
+                )
+                result = af_list.select(
+                    af_list["claim_codes"].str.pad_end(6, "_").alias("aligned_codes")
+                )
+                print(result.collect())
+            ```
+
+            ```text
+            shape: (1, 1)
+            ┌────────────────────────────────┐
+            │ aligned_codes                  │
+            │ ---                            │
+            │ list[str]                      │
+            ╞════════════════════════════════╡
+            │ ["A1____", "XYZ___", "C1234_"] │
+            └────────────────────────────────┘
+            ```
         """
         return self.ljust(width=width, fill_char=fill_char)
 
