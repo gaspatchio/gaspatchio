@@ -1395,137 +1395,116 @@ class StringNamespaceProxy:
     def remove_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy":
         """Alias for `strip_prefix`. Remove a prefix from each string.
 
-        This function is an alias for `strip_prefix`. It removes a specified
-        leading substring (prefix) from each string in a column. If a string
-        does not start with the given prefix, it remains unchanged. This is
-        particularly useful for cleaning and standardizing data where
-        identifiers or codes might have consistent but unwanted prefixes.
-
-        For `List[String]` columns, the operation is applied element-wise to each
-        string within each list.
+        The prefix is removed from the beginning of every string. Strings
+        without that prefix remain unchanged. ``List[String]`` columns are
+        processed element by element.
 
         !!! note "When to use"
-            *   **Standardizing Product Codes:** If product codes are prefixed with
-                system identifiers (e.g., "SYS_TERM", "SYS_WL"), you can remove "SYS_"
-                to get the core product code ("TERM", "WL") for analysis or mapping.
-            *   **Cleaning Client Identifiers:** Removing prefixes from client IDs
-                that might indicate the source system or a temporary status (e.g.,
-                "TEMP-CLIENT123" becomes "CLIENT123").
-            *   **Normalizing Location Data:** If geographical codes have a regional
-                prefix (e.g., "US-NY", "CA-ON"), stripping the country prefix might be
-                needed for specific regional analyses.
-            *   **Processing External Data Feeds:** When data from external vendors
-                includes prefixed identifiers that need to be aligned with internal
-                formats.
+            *   **Standardizing vendor codes** before mapping them to your base
+                product dictionary.
+            *   **Cleaning temporary policy identifiers** created during data
+                migrations.
+            *   **Dropping country prefixes** from location codes when you need
+                only the state or province.
 
         Args:
-            prefix: The prefix to remove from each string.
-                        Can also be a Polars expression that evaluates to a string.
+            prefix: The substring to remove. May be a literal string or an
+                expression resolving to one.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` with the specified prefix removed.
+            ExpressionProxy: The expression with the prefix removed.
 
         Examples:
-            **Scalar Example: Removing 'TEMP-' prefix from temporary policy IDs**
-
-            Scenario: You have a column of policy IDs where some are temporary and
-            prefixed with "TEMP-". You need to clean these IDs by removing the prefix.
+            **Scalar example – clean temporary policy IDs**
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
             import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
 
-            data_strip_prefix = {
-                "policy_id_raw": ["TEMP-001", "TEMP-002", "003", None, "TEMP-004", "POL-005"],
-                "processing_prefix": ["TEMP-", "TEMP-", "TEMP-", "TEMP-", "TEMP-", "POL-"]
+            data = {
+                "policy_id_raw": ["TMP-001", "TMP-002", "003", None],
+                "processing_prefix": ["TMP-", "TMP-", "TMP-", "TMP-"],
             }
-            af = ActuarialFrame(data_strip_prefix)
 
-            # Example 1a: Strip a fixed prefix "TEMP-"
-            af_stripped_fixed = af.select(
-                af["policy_id_raw"].str.remove_prefix("TEMP-").alias("cleaned_id_fixed")
-            )
-            print("Stripped with fixed prefix 'TEMP-' using remove_prefix:")
-            print(af_stripped_fixed.collect())
+            with pl.Config(set_tbl_width_chars=100):
+                af_fixed = ActuarialFrame(data)
+                fixed = af_fixed.select(
+                    af_fixed["policy_id_raw"].str.remove_prefix("TMP-").alias("policy_id")
+                ).collect()
+                print(fixed)
 
-            # Example 1b: Strip prefix defined in another column
-            af_stripped_dynamic = af.select(
-                af["policy_id_raw"].str.remove_prefix(pl.col("processing_prefix")).alias("cleaned_id_dynamic")
-            )
-            print("\nStripped with dynamic prefix from 'processing_prefix' column using remove_prefix:")
-            print(af_stripped_dynamic.collect())
+                af_dynamic = ActuarialFrame(data)
+                dynamic = af_dynamic.select(
+                    af_dynamic["policy_id_raw"].str.remove_prefix(
+                        af_dynamic["processing_prefix"]
+                    ).alias("policy_id")
+                ).collect()
+                print()
+                print("Dynamic prefix removal:")
+                print(dynamic)
             ```
 
             ```text
-            Stripped with fixed prefix 'TEMP-' using remove_prefix:
-            shape: (6, 1)
-            ┌──────────────────┐
-            │ cleaned_id_fixed │
-            │ ---              │
-            │ str              │
-            ╞══════════════════╡
-            │ 001              │
-            │ 002              │
-            │ 003              │
-            │ null             │
-            │ 004              │
-            │ POL-005          │
-            └──────────────────┘
-
-            Stripped with dynamic prefix from 'processing_prefix' column using remove_prefix:
-            shape: (6, 1)
-            ┌────────────────────┐
-            │ cleaned_id_dynamic │
-            │ ---                │
-            │ str                │
-            ╞════════════════════╡
-            │ 001                │
-            │ 002                │
-            │ 003                │
-            │ null               │
-            │ 004                │
-            │ 005                │
-            └────────────────────┘
+            shape: (4, 1)
+            ┌───────────┐
+            │ policy_id │
+            │ ---       │
+            │ str       │
+            ╞═══════════╡
+            │ 001       │
+            │ 002       │
+            │ 003       │
+            │ null      │
+            └───────────┘
+            Dynamic prefix removal:
+            shape: (4, 1)
+            ┌───────────┐
+            │ policy_id │
+            │ ---       │
+            │ str       │
+            ╞═══════════╡
+            │ 001       │
+            │ 002       │
+            │ 003       │
+            │ null      │
+            └───────────┘
             ```
 
-            **Vector (List Shimming) Example: Removing 'LEGACY-' prefix from lists of product feature codes**
-
-            Scenario: A policy has a list of associated feature codes, some of which
-            are from a legacy system and prefixed with "LEGACY-".
+            **Vector example – remove ``LEGACY-`` from feature codes**
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
             import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
 
-            data_list = {
-                "policy_key": ["POLICY_A", "POLICY_B"],
+            af_list = ActuarialFrame({
+                "policy_key": ["P1", "P2"],
                 "feature_codes_raw": [
-                    ["LEGACY-RIDER1", "NEW_FEATURE_X", "LEGACY-BENEFIT2"],
-                    [None, "LEGACY-COVERAGE_Y", "STANDARD_Z"]
-                ]
-            }
-            af_list = ActuarialFrame(data_list)
+                    ["LEGACY-RIDER1", "BENEFIT_A"],
+                    [None, "LEGACY-OPTION_B"],
+                ],
+            })
             af_list = af_list.with_columns(
                 af_list["feature_codes_raw"].cast(pl.List(pl.String))
             )
-            af_list_stripped = af_list.select(
-                af_list["feature_codes_raw"].str.remove_prefix("LEGACY-").alias("cleaned_feature_codes")
-            )
-            # Use pl.Config to ensure consistent output for doctest
-            with pl.Config(fmt_str_lengths=100):
-                print(af_list_stripped.collect())
+            with pl.Config(set_tbl_width_chars=100, fmt_str_lengths=100):
+                result = af_list.select(
+                    af_list["feature_codes_raw"].str.remove_prefix("LEGACY-").alias(
+                        "feature_codes"
+                    )
+                ).collect()
+                print(result)
             ```
 
             ```text
             shape: (2, 1)
-            ┌────────────────────────────────────────────┐
-            │ cleaned_feature_codes                      │
-            │ ---                                        │
-            │ list[str]                                  │
-            ╞════════════════════════════════════════════╡
-            │ ["RIDER1", "NEW_FEATURE_X", "BENEFIT2"]    │
-            │ [null, "COVERAGE_Y", "STANDARD_Z"]         │
-            └────────────────────────────────────────────┘
+            ┌─────────────────────────┐
+            │ feature_codes           │
+            │ ---                     │
+            │ list[str]               │
+            ╞═════════════════════════╡
+            │ ["RIDER1", "BENEFIT_A"] │
+            │ [null, "OPTION_B"]      │
+            └─────────────────────────┘
             ```
         """
         return self.strip_prefix(prefix=prefix)
