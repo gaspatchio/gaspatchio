@@ -1328,9 +1328,8 @@ class StringNamespaceProxy:
         Returns:
             ExpressionProxy with the prefix removed.
 
-        Examples
-        --------
-        Scalar example – cleaning policy IDs::
+        Examples:
+            **Scalar example – cleaning policy IDs**
 
             ```python
             import polars as pl
@@ -1357,7 +1356,7 @@ class StringNamespaceProxy:
             └────────┘
             ```
 
-        Vector example – removing ``LEGACY-`` from feature codes::
+            **Vector example – removing ``LEGACY-`` from feature codes**
 
             ```python
             import polars as pl
@@ -1548,9 +1547,8 @@ class StringNamespaceProxy:
         Returns:
             ExpressionProxy: The expression with the suffix removed.
 
-        Examples
-        --------
-        Scalar example – normalize plan names::
+        Examples:
+            **Scalar example – normalize plan names**
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
@@ -1579,7 +1577,7 @@ class StringNamespaceProxy:
             └───────────────────────┘
             ```
 
-        Vector (list) example – clean trailing punctuation in claim notes::
+            **Vector (list) example – clean trailing punctuation in claim notes**
 
             ```python
             import polars as pl
@@ -1815,9 +1813,8 @@ class StringNamespaceProxy:
             ExpressionProxy: An ``ExpressionProxy`` with strings padded at the
                 end.
 
-        Examples
-        --------
-        Scalar example – fixed-width account codes::
+        Examples:
+            **Scalar example – fixed-width account codes**
 
             ```python
             import polars as pl
@@ -1846,7 +1843,7 @@ class StringNamespaceProxy:
             └────────────┘
             ```
 
-        Vector example – padding elements in a list column::
+            **Vector example – padding elements in a list column**
 
             ```python
             import polars as pl
@@ -2153,9 +2150,8 @@ class StringNamespaceProxy:
                 indicating for each input string whether it starts with the prefix.
                 If the input was `List[String]`, the output will be `List[bool]`.
 
-        Examples
-        --------
-        Scalar example – policy prefixes::
+        Examples:
+            **Scalar example – policy prefixes**
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
@@ -2189,7 +2185,7 @@ class StringNamespaceProxy:
             └────────────────┘
             ```
 
-        Vector (list) example – rider prefixes::
+            **Vector (list) example – rider prefixes**
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
@@ -2251,9 +2247,8 @@ class StringNamespaceProxy:
             ends with ``suffix``. For list columns, the result is a list of
             booleans.
 
-        Examples
-        --------
-        Scalar example – region codes::
+        Examples:
+            **Scalar example – region codes**
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
@@ -2282,7 +2277,7 @@ class StringNamespaceProxy:
             └──────────────┘
             ```
 
-        Vector (list) example – status flags::
+            **Vector (list) example – status flags**
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
@@ -2588,9 +2583,8 @@ class StringNamespaceProxy:
             * Capture all state abbreviations from an address string when
               assessing geographical concentration risk.
 
-        Examples
-        --------
-        Scalar example – Extracting amounts from claim descriptions::
+        Examples:
+            **Scalar example – Extracting amounts from claim descriptions**
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
@@ -2618,7 +2612,7 @@ class StringNamespaceProxy:
             └───────────────────────┘
             ```
 
-        Vector example – Extracting policy numbers from lists of notes::
+            **Vector example – Extracting policy numbers from lists of notes**
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
