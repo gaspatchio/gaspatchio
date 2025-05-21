@@ -2354,6 +2354,92 @@ class StringNamespaceProxy:
         )
 
     def extract_all(self, pattern: str) -> "ExpressionProxy":
+        r"""Extract all non-overlapping regex matches as a list.
+
+        Mirrors Polars' `Expr.str.extract_all`. For `List[String]` columns, the
+        extraction is applied element-wise.
+
+        Args:
+            pattern: The regex pattern to search for.
+
+        Returns:
+            ExpressionProxy: An `ExpressionProxy` containing a list of all
+                matches for each row.
+
+        !!! note "When to use"
+            Life insurance actuaries might use this to:
+
+            * Collect every monetary amount mentioned in claim notes for
+              validation against the claim ledger.
+            * Extract all policy reference numbers from free-text fields when
+              reconciling cross-policy transactions.
+            * Gather every ICD code from a medical report to determine claim
+              triggers.
+            * Capture all state abbreviations from an address string when
+              assessing geographical concentration risk.
+
+        Examples
+        --------
+        Scalar example – Extracting amounts from claim descriptions::
+
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+
+            data = {
+                "claim_id": ["C1", "C2"],
+                "details": ["Paid $150.00 and $25.50 fee", "Refunded $10.00"]
+            }
+            af = ActuarialFrame(data)
+            af_amounts = af.select(
+                af["details"].str.extract_all(r"\$([0-9]+\.[0-9]{2})").alias("amounts")
+            )
+            print(af_amounts.collect())
+            ```
+
+            ```text
+            shape: (2, 1)
+            ┌───────────────────────┐
+            │ amounts               │
+            │ ---                   │
+            │ list[str]             │
+            ╞═══════════════════════╡
+            │ ["150.00", "25.50"]   │
+            │ ["10.00"]             │
+            └───────────────────────┘
+            ```
+
+        Vector example – Extracting policy numbers from lists of notes::
+
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+            import polars as pl
+
+            notes = {
+                "claim_id": ["C1"],
+                "notes": [["Policy 12345 reported", "Adjustment for policy 98765"]]
+            }
+            af = ActuarialFrame(notes)
+            af_list = af.with_columns(
+                af["notes"].cast(pl.List(pl.String))
+            )
+            result = af_list.select(
+                af_list["notes"].str.extract_all(r"\\d+").alias("policy_numbers")
+            )
+            with pl.Config(tbl_width_chars=80):
+                print(result.collect())  # doctest: +NORMALIZE_WHITESPACE
+            ```
+
+            ```text
+            shape: (1, 1)
+            ┌────────────────────┐
+            │ policy_numbers     │
+            │ ---                │
+            │ list[str]          │
+            ╞════════════════════╡
+            │ ["12345", "98765"] │
+            └────────────────────┘
+            ```
+        """
         return self._call_string_method("extract_all", pattern=pattern)
 
     def replace(
