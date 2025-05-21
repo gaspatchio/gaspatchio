@@ -1973,25 +1973,28 @@ class StringNamespaceProxy:
         product features for a policy, the operation is performed element-wise on
         each string within each list, returning a list of booleans.
 
+        !!! note "When to use"
+            Use this function when you need to:
+            * Classify policies by prefix to drive product-specific assumptions.
+            * Identify riders with a particular prefix (e.g., primary benefits) when stored in a list column.
+            * Validate codes against expected prefixes coming from another column.
+
         Args:
             prefix: The substring to check for at the beginning of each string.
-                    Can be a literal string (e.g., "TERM-") or a Polars expression
-                    (e.g., `pl.col("another_column_with_prefixes")`).
+                Can be a literal string (e.g., "TERM-") or a Polars expression
+                (e.g., `pl.col("another_column_with_prefixes")`).
 
         Returns:
             ExpressionProxy: A new `ExpressionProxy` containing a boolean Series
                 indicating for each input string whether it starts with the prefix.
                 If the input was `List[String]`, the output will be `List[bool]`.
 
-        Examples:
-            **Scalar Example: Identifying Term Life policies by policy number prefix**
+        Examples
+        --------
+        Scalar example – policy prefixes::
 
-            Suppose policy numbers are prefixed to indicate the general product category.
-            We want to identify all "TERM-" policies.
-
-            ```
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
 
             data_policies = {
                 "policy_no": ["TERM-1001", "WL-2002", "TERM-1003", None, "UL-3004", "TERM-1004"],
@@ -2006,7 +2009,7 @@ class StringNamespaceProxy:
             print(af_term_policies.collect())
             ```
 
-            ```
+            ```text
             shape: (6, 1)
             ┌────────────────┐
             │ is_term_policy │
@@ -2022,19 +2025,16 @@ class StringNamespaceProxy:
             └────────────────┘
             ```
 
-            **Vector Example: Checking for primary benefit riders in a list of rider codes**
+        Vector (list) example – rider prefixes::
 
-            Each policy might have a list of rider codes. We want to check if any of these
-            codes start with "B-" indicating a primary benefit rider.
-
-            ```
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
             import polars as pl
 
             data_policy_riders = {
                 "policy_id": ["P201", "P202", "P203"],
                 "rider_codes_list": [
-                    ["B-ADB", "S-WP", "S-CI"], # B-AccidentalDeathBenefit, S-WaiverOfPremium, S-CriticalIllness
+                    ["B-ADB", "S-WP", "S-CI"],  # B-AccidentalDeathBenefit, S-WaiverOfPremium, S-CriticalIllness
                     ["S-LTC", None, "B-GIO"],  # S-LongTermCare, B-GuaranteedInsurabilityOption
                     ["S-WPR", "S-CIR"]
                 ]
@@ -2049,7 +2049,7 @@ class StringNamespaceProxy:
             print(af_primary_benefit_check.collect())
             ```
 
-            ```
+            ```text
             shape: (3, 1)
             ┌───────────────────────────┐
             │ has_primary_benefit_rider │
