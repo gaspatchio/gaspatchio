@@ -264,8 +264,6 @@ class StringNamespaceProxy:
         data categorization, and identifying records with specific text patterns.
 
         !!! note "When to use"
-            In actuarial work, this function is invaluable when you need to:
-
             * Identify policies with specific riders or endorsements from description fields
             * Find claims that mention particular medical conditions or causes
             * Filter customer feedback containing specific keywords for risk analysis
@@ -452,8 +450,6 @@ class StringNamespaceProxy:
         accurate matching, aggregation, and reporting.
 
         !!! note "When to use"
-            In actuarial modeling and data processing, converting text to uppercase is vital for:
-
             *   **Standardizing Categorical Data:** Ensuring that codes like policy status
                 (e.g., "active", "Lapsed", "ACTIVE" all become "ACTIVE"), gender codes
                 (e.g., "m", "F" become "M", "F"), or smoker status (e.g. "non-smoker",
@@ -562,8 +558,6 @@ class StringNamespaceProxy:
         facilitating accurate matching, aggregation, and text analysis.
 
         !!! note "When to use"
-            In actuarial modeling and data processing, converting text to lowercase is valuable for:
-
             *   **Normalizing Text for Analysis:** Preparing free-text fields (e.g.,
                 underwriting notes, claim descriptions, occupation details) for text mining
                 or NLP by ensuring terms like "SMOKER", "Smoker", and "smoker" are
@@ -662,8 +656,6 @@ class StringNamespaceProxy:
         operation for understanding string data characteristics.
 
         !!! note "When to use"
-            In actuarial work, determining the length of string fields is useful for:
-
             *   **Data Quality Checks:** Identifying unexpectedly short or long strings
                 that might indicate data entry errors or truncation (e.g., validating
                 the length of policy numbers, postal codes, or identification numbers).
@@ -762,9 +754,6 @@ class StringNamespaceProxy:
         representing the number of characters. This is an alias for `n_chars()`.
 
         !!! note "When to use"
-            In actuarial practice, determining the character length of string fields is
-            important for:
-
             *   **Data Validation:** Ensuring identifiers like policy numbers, social
                 security numbers, or postal codes adhere to expected length constraints,
                 helping to identify data entry errors.
@@ -869,8 +858,6 @@ class StringNamespaceProxy:
         the number of characters may not equal the number of bytes.
 
         !!! note "When to use"
-            In actuarial contexts, understanding the byte length of string data can be important for:
-
             *   **Data Storage Estimation:** Accurately estimating storage requirements for
                 datasets containing text fields, especially with international character sets
                 (e.g., policyholder names, addresses from various regions).
@@ -979,8 +966,6 @@ class StringNamespaceProxy:
         the operation is applied element-wise to each string in the list.
 
         !!! note "When to use"
-            In actuarial data preparation, `strip_chars` is frequently used to:
-
             *   **Cleanse Identifier Fields:** Remove extraneous characters (e.g., spaces, hyphens, special symbols)
                 from policy numbers, claim IDs, or client identifiers to ensure consistency for matching and lookups.
                 For example, "POL- 123* " could become "POL-123" by stripping " *".
@@ -1149,8 +1134,6 @@ class StringNamespaceProxy:
         status codes for a policy), the operation is performed element-wise.
 
         !!! note "When to use"
-            In actuarial data processing, `strip_chars_start` is valuable for:
-
             *   **Normalizing Prefixed Identifiers:** Removing consistent prefixes from
                 identifiers like policy numbers (e.g., "PN-", "TEMP_"), claim codes
                 (e.g., "CL-"), or agent codes to get the core identifier.
@@ -1423,9 +1406,6 @@ class StringNamespaceProxy:
         string within each list.
 
         !!! note "When to use"
-            In actuarial data management, `remove_prefix` (or `strip_prefix`)
-            is valuable for:
-
             *   **Standardizing Product Codes:** If product codes are prefixed with
                 system identifiers (e.g., "SYS_TERM", "SYS_WL"), you can remove "SYS_"
                 to get the core product code ("TERM", "WL") for analysis or mapping.
@@ -1558,8 +1538,6 @@ class StringNamespaceProxy:
         For ``List[String]`` columns, the operation is applied element-wise.
 
         !!! note "When to use"
-            Actuaries use `strip_suffix` when:
-
             *   **Normalizing coverage names** that include trailing version codes such as "-OLD".
             *   **Preparing ledger accounts** by removing year suffixes like "-2024" before comparing periods.
             *   **Cleaning temporary identifiers** imported from external systems (for example, removing a trailing "-TMP").
@@ -1644,8 +1622,6 @@ class StringNamespaceProxy:
         a list of strings, the removal is applied element-wise.
 
         !!! note "When to use"
-            In actuarial workflows, removing suffixes is useful for:
-
             *   **Normalizing Product Names:** Stripping version tags like
                 "-2024" or "_NEW" from product identifiers so that experience can
                 be grouped by the base product.
@@ -1987,9 +1963,6 @@ class StringNamespaceProxy:
         of the list.
 
         !!! note "When to use"
-            Use ``rjust`` when you need to format text fields for fixed-width
-            outputs in life insurance work, such as:
-
             * Aligning premium or claim amounts before exporting to legacy
               ledger systems.
             * Presenting policy identifiers or rider codes in uniformly padded
@@ -2088,7 +2061,6 @@ class StringNamespaceProxy:
         each string within each list, returning a list of booleans.
 
         !!! note "When to use"
-            Use this function when you need to:
             * Classify policies by prefix to drive product-specific assumptions.
             * Identify riders with a particular prefix (e.g., primary benefits) when stored in a list column.
             * Validate codes against expected prefixes coming from another column.
@@ -2186,7 +2158,6 @@ class StringNamespaceProxy:
         `List[String]`, the check is applied to every element within each list.
 
         !!! note "When to use"
-            Use this function when you need to:
             * Verify that policy identifiers end with region or product codes.
             * Flag claim or log entries that end with status markers like "OK"
               or "PENDING".
@@ -2530,8 +2501,6 @@ class StringNamespaceProxy:
                 matches for each row.
 
         !!! note "When to use"
-            Life insurance actuaries might use this to:
-
             * Collect every monetary amount mentioned in claim notes for
               validation against the claim ledger.
             * Extract all policy reference numbers from free-text fields when
@@ -2620,8 +2589,6 @@ class StringNamespaceProxy:
         treated as a plain string; otherwise it is interpreted as a regex.
 
         !!! note "When to use"
-            Actuaries may find ``replace`` useful when:
-
             *   **Updating Legacy Codes:** Converting outdated product or policy
                 codes to a new standard so assumption tables align across
                 systems.
