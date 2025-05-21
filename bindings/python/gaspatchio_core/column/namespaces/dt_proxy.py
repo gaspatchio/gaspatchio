@@ -34,6 +34,10 @@ class DtNamespaceProxy:
         """
         Initialize the DtNamespaceProxy.
 
+        This constructor is typically not called directly by users. It's used
+        internally when accessing the `.dt` attribute of an `ActuarialFrame`
+        column or expression proxy (e.g., `af["my_date_col"].dt`).
+
         Args:
             parent_proxy: The parent proxy (ColumnProxy or ExpressionProxy)
                           from which this dt namespace is accessed.
@@ -181,7 +185,16 @@ class DtNamespaceProxy:
     def year(self) -> "ExpressionProxy":
         """Extract the year from the underlying datetime expression.
 
-        Corresponds to Polars ``Expr.dt.year()``.
+        This function isolates the year component from a date or datetime,
+        returning it as an integer (e.g., 2023). It is applicable to both
+        single date values and lists of dates within your `ActuarialFrame`.
+
+        !!! note "When to use"
+            Extracting the year is fundamental in actuarial analysis for:
+            *   **Valuation and Reporting:** Determining the calendar year for financial reporting or regulatory submissions.
+            *   **Experience Studies:** Grouping data by calendar year of event (e.g., year of claim, year of lapse) to analyze trends.
+            *   **Cohort Analysis:** Defining cohorts based on the year of policy issue or birth year.
+            *   **Projection Models:** Calculating durations or projecting cash flows based on calendar years.
 
         Examples
         --------
@@ -242,7 +255,20 @@ class DtNamespaceProxy:
         return self._call_dt_method("year")
 
     def month(self) -> "ExpressionProxy":
-        """Extract the month number from a date/datetime expression.
+        """Extract the month number (1-12) from a date or datetime expression.
+
+        This function allows you to isolate the month component from a series of
+        dates or datetimes. The result is an integer representing the month,
+        where January is 1 and December is 12.
+
+        !!! note "When to use"
+            In actuarial modeling, extracting the month from dates is crucial for various analyses.
+            For instance, you might use this to:
+
+            *   Analyze seasonality in claims (e.g., identifying if certain types of claims are more frequent in specific months).
+            *   Group policies by their issue month for cohort analysis or to study underwriting patterns.
+            *   Determine premium due dates or benefit payment schedules that occur on a monthly basis.
+            *   Calculate fractional year components for financial calculations.
 
         Examples
         --------
@@ -302,7 +328,17 @@ class DtNamespaceProxy:
         return self._call_dt_method("month")
 
     def day(self) -> "ExpressionProxy":
-        """Extract the day number of the month from a date/datetime expression.
+        """Extract the day number of the month (1-31) from a date/datetime expression.
+
+        This function isolates the day component from a date or datetime,
+        returning it as an integer (e.g., 15 for the 15th of the month).
+        It works for both individual dates and lists of dates.
+
+        !!! note "When to use"
+            Extracting the day of the month can be useful in actuarial contexts for:
+            *   **Specific Date Checks:** Identifying events occurring on particular days (e.g., end-of-month processing).
+            *   **Intra-month Analysis:** Analyzing patterns within a month, though less common than month or year analysis.
+            *   **Data Validation:** Ensuring dates fall within expected day ranges for specific calculations.
 
         Examples
         --------

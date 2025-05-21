@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import re
 from pathlib import Path
 from typing import cast
@@ -60,6 +61,13 @@ def pytest_addoption(parser):  # Renamed back to parser
         default=False,
         help="Update docstring example outputs in files instead of checking them.",
     )
+    group.addoption(
+        "--gp-docstring-paths",
+        action="append",  # Allows specifying multiple paths
+        default=[],
+        nargs="*",  # Allows space-separated values for a single --gp-docstring-paths
+        help="Glob patterns for files/directories to include in docstring checks. (e.g., 'src/gaspatchio_core/accessors/*.py' 'tests/specific_module/**.py'). Can be specified multiple times.",
+    )
     # --gp-examples-dir might become obsolete or change meaning with file-based collection
     # For now, let's comment it out or decide its new role.
     # group.addoption(
@@ -94,16 +102,60 @@ def pytest_configure(config):
 def pytest_collect_file(parent, path):
     # path is a py.path.local object, convert to pathlib.Path for modern API usage
     file_path = Path(str(path))
+
+    # Correctly flatten the list of lists for --gp-docstring-paths
+    raw_pattern_groups = parent.session.config.getoption("gp_docstring_paths")
+    docstring_paths_patterns = []
+    if raw_pattern_groups:
+        for group in (
+            raw_pattern_groups
+        ):  # Each 'group' is a list of patterns from one --gp-docstring-paths usage
+            docstring_paths_patterns.extend(group)
+
     if file_path.suffix == ".py" and file_path.name != "__init__.py":
-        # Check if the file is within the paths specified to pytest for collection
-        # This avoids collecting from venv or other non-project paths if not intended.
-        # `parent.session.config.args` contains the paths pytest was invoked with.
-        # We need to ensure `path` is under one of these.
-        # For simplicity, we assume pytest is invoked on relevant project paths.
-        # More robust checking might be needed for complex project structures.
-        return DocstringExampleFile.from_parent(
-            parent, path=file_path
-        )  # Pass pathlib.Path object
+        if docstring_paths_patterns:  # Only apply filtering if patterns are provided
+            should_collect = False
+
+            try:
+                path_to_match = file_path.relative_to(parent.session.config.rootpath)
+            except ValueError:
+                path_to_match = file_path  # Fallback to absolute/direct path matching
+
+            for pattern in docstring_paths_patterns:
+                if fnmatch.fnmatch(str(path_to_match), pattern):
+                    should_collect = True
+                    break
+                # Also check against the full file path in case patterns are absolute or don't match relative
+                elif fnmatch.fnmatch(str(file_path), pattern):
+                    should_collect = True
+                    break
+
+            if not should_collect:
+                if (
+                    parent.session.config.option.verbose > 1
+                ):  # Becomes > 0 for normal verbosity, > 1 for more detail
+                    print(
+                        f"Docstring plugin: Skipping {file_path} (tried matching: {path_to_match}) as it doesn't match patterns: {docstring_paths_patterns}"
+                    )
+                return None
+        else:
+            # No --gp-docstring-paths specified.
+            # Default behavior: collect all .py files (by falling through).
+            # To collect NONE by default if option is not present (i.e., plugin only active if paths are specified):
+            # if parent.session.config.option.verbose > 0: # Changed from >1 to >0
+            #     print(f"Docstring plugin: Skipping {file_path} as --gp-docstring-paths is not set, and plugin requires explicit paths.")
+            # return None
+            pass  # Current behavior: if no paths, process all python files.
+
+        # Original logic continues if the file should be collected
+        # Verbose logging for when a file *is* being processed for docstrings
+        if parent.session.config.option.verbose > 0:
+            # This specific print might be too noisy if many files are processed.
+            # Consider printing only when examples are actually found or if a file is *about* to be parsed.
+            # print(f"Docstring plugin: Collecting docstring examples from {file_path}")
+            pass
+
+        return DocstringExampleFile.from_parent(parent, path=file_path)
     return None
 
 

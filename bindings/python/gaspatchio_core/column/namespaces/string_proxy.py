@@ -510,73 +510,103 @@ class StringNamespaceProxy:
         return self._call_string_method("to_uppercase")
 
     def to_lowercase(self) -> "ExpressionProxy":
-        """Convert strings to lowercase.
+        """Converts all characters in string columns to lowercase.
 
-        Mirrors Polars' `Expr.str.to_lowercase`.
-        For `List[String]` columns, applies element-wise.
+        This function standardizes textual data by converting all characters in a
+        string column to lowercase. This is essential for ensuring consistency
+        in data fields critical for actuarial analysis, such as system codes,
+        free-text fields like occupation or medical conditions, or external data sources,
+        facilitating accurate matching, aggregation, and text analysis.
+
+        !!! note "When to use"
+            In actuarial modeling and data processing, converting text to lowercase is valuable for:
+
+            *   **Normalizing Text for Analysis:** Preparing free-text fields (e.g.,
+                underwriting notes, claim descriptions, occupation details) for text mining
+                or NLP by ensuring terms like "SMOKER", "Smoker", and "smoker" are
+                treated identically.
+            *   **Improving Data Matching with External Sources:** When integrating data
+                from various systems or third-party providers where case consistency
+                is not guaranteed (e.g., matching addresses, names, or city information).
+            *   **Standardizing User Input:** Converting user-entered data (e.g., search
+                terms, filter criteria) to a consistent case before processing or
+                querying.
 
         Returns:
             ExpressionProxy: An `ExpressionProxy` with strings converted to lowercase.
 
         Examples:
-            **Scalar Example: Normalizing email domains**
+            **Scalar Example: Normalizing occupation descriptions for risk analysis**
 
-            ```
+            Occupation descriptions might be entered in various casings. Converting to
+            lowercase helps in standardizing them for consistent risk factor analysis
+            or grouping.
+
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
 
             data = {
-                "client_id": [101, 102, 103],
-                "email_domain": ["Example.COM", "Test.Org", "Sample.NET"]
+                "policy_id": ["POL001", "POL002", "POL003", "POL004"],
+                "occupation_raw": ["Engineer", "software DEVELOPER", "Teacher", "Project Manager"]
             }
             af = ActuarialFrame(data)
-            af_lower_domain = af.select(
-                af["email_domain"].str.to_lowercase().alias("lower_domain")
+            af_lower_occupation = af.select(
+                af["occupation_raw"].str.to_lowercase().alias("occupation_normalized")
             )
-            print(af_lower_domain.collect())
+            print(af_lower_occupation.collect())
             ```
 
-            ```
-            shape: (3, 1)
-            ┌──────────────┐
-            │ lower_domain │
-            │ ---          │
-            │ str          │
-            ╞══════════════╡
-            │ example.com  │
-            │ test.org     │
-            │ sample.net   │
-            └──────────────┘
+            ```text
+            shape: (4, 1)
+            ┌───────────────────────┐
+            │ occupation_normalized │
+            │ ---                   │
+            │ str                   │
+            ╞═══════════════════════╡
+            │ engineer              │
+            │ software developer    │
+            │ teacher               │
+            │ project manager       │
+            └───────────────────────┘
             ```
 
-            **Vector (List Shimming) Example: Lowercasing product feature tags**
+            **Vector Example: Lowercasing medical condition codes from multiple sources**
 
-            ```
+            Medical condition codes might come from different systems with varying casing.
+            Lowercasing them ensures they can be consistently mapped or analyzed.
+
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
             import polars as pl
 
-            data_list = {
-                "product_id": ["P501", "P502"],
-                "feature_tags": [["GUARANTEED_ISSUE", "Online"], ["FLEXIBLE_PREMIUM", "RIDER_Available"]]
+            data_medical_codes = {
+                "claim_id": ["C001", "C002"],
+                "condition_codes_list": [
+                    ["DIAB_T2", "HBP", "ASTHMA"], # DIAB_T2 = Type 2 Diabetes, HBP = High Blood Pressure
+                    ["hbp", None, "copd"]         # COPD = Chronic Obstructive Pulmonary Disease
+                ]
             }
-            af_list = ActuarialFrame(data_list).with_columns(
-                pl.col("feature_tags").cast(pl.List(pl.String))
+            af_codes = ActuarialFrame(data_medical_codes)
+            # Ensure the list column has the correct Polars type for the string operation
+            af_codes = af_codes.with_columns(
+                af_codes["condition_codes_list"].cast(pl.List(pl.String))
             )
-            af_lower_tags = af_list.select(
-                af_list["feature_tags"].str.to_lowercase().alias("lower_feature_tags")
+            af_lower_codes = af_codes.select(
+                af_codes["condition_codes_list"].str.to_lowercase().alias("lower_condition_codes")
             )
-            print(af_lower_tags.collect())
+            print(af_lower_codes.collect())
             ```
 
-            ```
+            ```text
             shape: (2, 1)
-            ┌─────────────────────────────────────────┐
-            │ lower_feature_tags                      │
-            │ ---                                     │
-            │ list[str]                               │
-            ╞═════════════════════════════════════════╡
-            │ ["guaranteed_issue", "online"]          │
-            │ ["flexible_premium", "rider_available"] │
-            └─────────────────────────────────────────┘
+            ┌─────────────────────────────────────┐
+            │ lower_condition_codes               │
+            │ ---                                 │
+            │ list[str]                           │
+            ╞═════════════════════════════════════╡
+            │ ["diab_t2", "hbp", "asthma"]        │
+            │ ["hbp", null, "copd"]               │
+            └─────────────────────────────────────┘
             ```
         """
         return self._call_string_method("to_lowercase")
@@ -584,8 +614,28 @@ class StringNamespaceProxy:
     def n_chars(self) -> "ExpressionProxy":
         """Get the number of characters in each string.
 
-        Mirrors Polars' `Expr.str.len_chars` (Polars' `n_chars` is an alias for `len_chars`).
-        For `List[String]` columns, applies element-wise, returning a `List[UInt32]`.
+        This function calculates the length of each string in a column, returning
+        an integer representing the number of characters. It's a fundamental
+        operation for understanding string data characteristics.
+
+        !!! note "When to use"
+            In actuarial work, determining the length of string fields is useful for:
+
+            *   **Data Quality Checks:** Identifying unexpectedly short or long strings
+                that might indicate data entry errors or truncation (e.g., validating
+                the length of policy numbers, postal codes, or identification numbers).
+            *   **Feature Engineering:** Creating new features based on string length
+                for predictive models (e.g., the length of a claim description might
+                correlate with claim complexity).
+            *   **Data Cleaning & Transformation:** Deciding on padding or truncation
+                strategies if string fields need to conform to a fixed length for
+                system integration or reporting.
+            *   **Understanding Free-Text Fields:** Analyzing the distribution of lengths
+                in fields like underwriter notes or medical descriptions to gauge the
+                amount of detail typically provided.
+            *   **Filtering or Segmenting Data:** Selecting records based on the length
+                of a specific string field (e.g., finding all policyholder names
+                shorter than 3 characters for review).
 
         Returns:
             ExpressionProxy: An `ExpressionProxy` with the character count (as UInt32)
@@ -594,7 +644,10 @@ class StringNamespaceProxy:
         Examples:
             **Scalar Example: Length of product names**
 
-            ```
+            To understand the typical length of product names in your portfolio,
+            or to identify names that might be too long for certain display formats.
+
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
 
             data = {
@@ -608,7 +661,7 @@ class StringNamespaceProxy:
             print(af_len.collect())
             ```
 
-            ```
+            ```text
             shape: (3, 1)
             ┌─────────────┐
             │ name_length │
@@ -621,9 +674,13 @@ class StringNamespaceProxy:
             └─────────────┘
             ```
 
-            **Vector (List Shimming) Example: Length of beneficiary names in a list**
+            **Vector Example: Length of beneficiary names in a list**
 
-            ```
+            For policies with multiple beneficiaries, you might want to check the length
+            of each beneficiary's name, perhaps to ensure it fits within system limits
+            or for data validation.
+
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
             import polars as pl
 
@@ -631,8 +688,9 @@ class StringNamespaceProxy:
                 "policy_id": ["P001", "P002"],
                 "beneficiaries": [["John A. Doe", "Jane B. Smith"], ["Robert King", None, "Alice Wonderland"]]
             }
-            af_list = ActuarialFrame(data_list).with_columns(
-                pl.col("beneficiaries").cast(pl.List(pl.String))
+            af_list_initial = ActuarialFrame(data_list)
+            af_list = af_list_initial.with_columns(
+                af_list_initial["beneficiaries"].cast(pl.List(pl.String))
             )
             af_bene_len = af_list.select(
                 af_list["beneficiaries"].str.n_chars().alias("beneficiary_name_lengths")
@@ -640,7 +698,7 @@ class StringNamespaceProxy:
             print(af_bene_len.collect())
             ```
 
-            ```
+            ```text
             shape: (2, 1)
             ┌──────────────────────────┐
             │ beneficiary_name_lengths │
@@ -657,33 +715,105 @@ class StringNamespaceProxy:
     def len_chars(self) -> "ExpressionProxy":
         """Alias for `n_chars`. Get the number of characters in each string.
 
-        Mirrors Polars' `Expr.str.len_chars`.
-        For `List[String]` columns, applies element-wise, returning a `List[UInt32]`.
+        Calculates the length of each string in a column, returning an integer
+        representing the number of characters. This is an alias for `n_chars()`.
+
+        !!! note "When to use"
+            In actuarial practice, determining the character length of string fields is
+            important for:
+
+            *   **Data Validation:** Ensuring identifiers like policy numbers, social
+                security numbers, or postal codes adhere to expected length constraints,
+                helping to identify data entry errors.
+            *   **System Integration:** Verifying that string data, such as client names or
+                addresses, does not exceed length limitations of downstream systems or
+                databases.
+            *   **Feature Engineering:** Using the length of free-text fields (e.g., claim
+                descriptions, underwriter notes) as a potential feature in predictive
+                models, where length might correlate with complexity or severity.
+            *   **Data Quality Assessment:** Identifying outliers or anomalies in string
+                lengths that might indicate corrupted or incomplete data.
 
         Returns:
             ExpressionProxy: An `ExpressionProxy` with the character count (as UInt32)
-                             for each string.
+                             for each string. If the input was `List[String]`,
+                             the output will be `List[UInt32]`.
 
         Examples:
-            ```
+            **Scalar Example: Validating policy number length**
+
+            Scenario: You need to check if policy numbers in your dataset conform to an
+            expected length, say 7 characters.
+
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
-            af = ActuarialFrame({"city_names": ["New York", "Los Angeles", None, "Chicago"]})
-            result = af.select(af["city_names"].str.len_chars().alias("char_count"))
-            print(result.collect())
+
+            data = {
+                "policy_id_raw": ["POL1234", "POL567", "POL89012", None, "POL3456"],
+                "premium": [100.0, 150.0, 200.0, 50.0, 120.0]
+            }
+            af = ActuarialFrame(data)
+
+            # Calculate the length of each policy_id_raw
+            af_len_check = af.select(
+                af["policy_id_raw"].str.len_chars().alias("policy_id_length")
+            )
+            print(af_len_check.collect())
             ```
 
+            ```text
+            shape: (5, 1)
+            ┌──────────────────┐
+            │ policy_id_length │
+            │ ---              │
+            │ u32              │
+            ╞══════════════════╡
+            │ 7                │
+            │ 6                │
+            │ 8                │
+            │ null             │
+            │ 7                │
+            └──────────────────┘
             ```
-            shape: (4, 1)
-            ┌────────────┐
-            │ char_count │
-            │ ---        │
-            │ u32        │
-            ╞════════════╡
-            │ 8          │
-            │ 11         │
-            │ null       │
-            │ 7          │
-            └────────────┘
+
+            **Vector Example: Character count of claim notes**
+
+            Scenario: Each policy may have a list of associated claim notes. You want to find
+            the character length of each note to understand the verbosity or for display purposes.
+
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+            import polars as pl
+
+            data_list = {
+                "policy_id": ["P7001", "P7002"],
+                "claim_notes_list": [
+                    ["Short note.", "This is a much longer note regarding the claim details.", None],
+                    ["Urgent review needed!", "All clear."]
+                ]
+            }
+            af_list_notes = ActuarialFrame(data_list)
+            # Ensure the list column has the correct Polars type
+            af_list_notes = af_list_notes.with_columns(
+                af_list_notes["claim_notes_list"].cast(pl.List(pl.String))
+            )
+
+            af_notes_len = af_list_notes.select(
+                af_list_notes["claim_notes_list"].str.len_chars().alias("note_char_lengths")
+            )
+            print(af_notes_len.collect())
+            ```
+
+            ```text
+            shape: (2, 1)
+            ┌───────────────────────────┐
+            │ note_char_lengths         │
+            │ ---                       │
+            │ list[u32]                 │
+            ╞═══════════════════════════╡
+            │ [11, 53, null]            │
+            │ [20, 9]                   │
+            └───────────────────────────┘
             ```
         """
         return self._call_string_method("len_chars")
@@ -691,32 +821,53 @@ class StringNamespaceProxy:
     def len_bytes(self) -> "ExpressionProxy":
         """Get the number of bytes in each string.
 
-        Mirrors Polars' `Expr.str.len_bytes`.
-        For `List[String]` columns, applies element-wise, returning a `List[UInt32]`.
+        Calculates the byte length of each string in a column. This is particularly
+        useful when dealing with multi-byte character encodings (like UTF-8) where
+        the number of characters may not equal the number of bytes.
+
+        !!! note "When to use"
+            In actuarial contexts, understanding the byte length of string data can be important for:
+
+            *   **Data Storage Estimation:** Accurately estimating storage requirements for
+                datasets containing text fields, especially with international character sets
+                (e.g., policyholder names, addresses from various regions).
+            *   **System Integration Limits:** Ensuring that string data, when exported or
+                sent to other systems, conforms to byte-length restrictions imposed by
+                those systems (e.g., fixed-width file formats or database field constraints
+                defined in bytes).
+            *   **Performance Considerations:** Recognizing that operations on strings with
+                many multi-byte characters might be more resource-intensive.
+            *   **Encoding Issue Detection:** While not a direct detection method, unexpected
+                byte lengths compared to character lengths might hint at encoding problems
+                or the presence of unusual characters.
 
         Returns:
             ExpressionProxy: An `ExpressionProxy` with the byte count (as UInt32)
-                             for each string.
+                             for each string. If the input was `List[String]`,
+                             the output will be `List[UInt32]`.
 
         Examples:
             **Scalar Example: Byte length of UTF-8 encoded client names**
 
-            ```
+            Scenario: You have client names that may include characters from various
+            languages, and you need to understand their storage size in bytes.
+
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
 
             data = {
-                "client_id": ["C001", "C002", "C003"],
-                "client_name": ["René", "沐宸", "Zoë"]
+                "client_id": ["C001", "C002", "C003", "C004"],
+                "client_name": ["René", "沐宸", "Zoë", "John Doe"] # French, Chinese, German, English names
             }
             af = ActuarialFrame(data)
-            af_len = af.select(
+            af_byte_len = af.select(
                 af["client_name"].str.len_bytes().alias("name_byte_length")
             )
-            print(af_len.collect())
+            print(af_byte_len.collect())
             ```
 
-            ```
-            shape: (3, 1)
+            ```text
+            shape: (4, 1)
             ┌──────────────────┐
             │ name_byte_length │
             │ ---              │
@@ -725,38 +876,49 @@ class StringNamespaceProxy:
             │ 5                │
             │ 6                │
             │ 4                │
+            │ 8                │
             └──────────────────┘
             ```
 
-            **Vector (List Shimming) Example: Byte length of comments in a list**
+            **Vector Example: Byte length of free-text comments in a list**
 
-            ```
+            Scenario: A policy record contains a list of comments, potentially with
+            special characters or different languages. You need to find the byte
+            length of each comment.
+
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
             import polars as pl
 
-            data_list = {
-                "case_id": ["Case1", "Case2"],
-                "comments": [["Test €", "OK"], ["€€", None]]
+            data_list_comments = {
+                "policy_id": ["P501", "P502"],
+                "comments_list": [
+                    ["Test € symbol", "Standard comment.", None], # Euro symbol is multi-byte
+                    ["Résumé", "日本語のコメント"] # French with accent, Japanese comment
+                ]
             }
-            af_list = ActuarialFrame(data_list).with_columns(
-                pl.col("comments").cast(pl.List(pl.String))
+            af_comments = ActuarialFrame(data_list_comments)
+            # Ensure the list column has the correct Polars type
+            af_comments = af_comments.with_columns(
+                af_comments["comments_list"].cast(pl.List(pl.String))
             )
-            af_comm_len = af_list.select(
-                af_list["comments"].str.len_bytes().alias("comment_byte_lengths")
+
+            af_comment_byte_len = af_comments.select(
+                af_comments["comments_list"].str.len_bytes().alias("comment_byte_lengths")
             )
-            print(af_comm_len.collect())
+            print(af_comment_byte_len.collect())
             ```
 
-            ```
+            ```text
             shape: (2, 1)
-            ┌──────────────────────┐
-            │ comment_byte_lengths │
-            │ ---                  │
-            │ list[u32]            │
-            ╞══════════════════════╡
-            │ [8, 2]               │
-            │ [6, null]            │
-            └──────────────────────┘
+            ┌──────────────────────────┐
+            │ comment_byte_lengths     │
+            │ ---                      │
+            │ list[u32]                │
+            ╞══════════════════════════╡
+            │ [13, 17, null]           │
+            │ [7, 21]                  │
+            └──────────────────────────┘
             ```
         """
         return self._call_string_method("len_bytes")

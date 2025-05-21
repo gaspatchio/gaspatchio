@@ -60,3 +60,12 @@ cache-keys = [
     { file = "**/*.rs" },
 ]
 config-settings = { "build-args" = "--profile=dev" }
+
+[tool.pytest.ini_options]
+addopts = ["--gp-docstring-paths=gaspatchio_core/column/namespaces/dt_proxy.py"]
+# You can add more patterns here or override on the command line.
+# Example:
+# markers = [
+#     "slow: marks tests as slow to run",
+# ]
+# testpaths = ["tests", "gaspatchio_core"]
