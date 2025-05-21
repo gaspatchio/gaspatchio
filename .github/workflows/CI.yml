@@ -45,11 +45,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      - name: Install uv
-        run: pip install uv
+      - name: Install uv and cache dependencies
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          cache-dependency-glob: |
+            bindings/python/uv.lock
+            bindings/python/pyproject.toml
+          working-directory: bindings/python
+      - name: Cache maturin build artifacts
+        uses: actions/cache@v4
+        with:
+          path: bindings/python/target
+          key: ${{ runner.os }}-maturin-${{ hashFiles('**/Cargo.lock', 'bindings/python/**/*.rs', 'core/src/**/*.rs') }}
+          restore-keys: |
+            ${{ runner.os }}-maturin-
       - name: Build maturin binary
         uses: PyO3/maturin-action@v1
         with:
