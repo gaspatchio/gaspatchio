@@ -2199,40 +2199,58 @@ class StringNamespaceProxy:
     ) -> "ExpressionProxy":
         """Convert string values to Date, Datetime, or Time.
 
-        Mirrors Polars' `Expr.str.strptime`.
-        For `List[String]` columns, applies element-wise.
+        This method parses textual date or time information into Polars temporal
+        types. For `List[String]` columns, each element is parsed individually.
+
+        !!! note "When to use"
+            *   Convert policy issue or claim reporting dates that are stored as
+                strings in raw data extracts.
+            *   Parse lists of event timestamps—such as claim status updates—when
+                building experience studies or exposure models.
+            *   Ingest external datasets from underwriting or administration
+                systems where date fields come in a variety of text formats.
 
         Args:
-            dtype: The Polars temporal type to convert to (pl.Date, pl.Datetime, or pl.Time).
-            format: The strf/strptime format string. If None, attempts to infer.
-                    See `chrono crate documentation` for format specifiers.
-            strict: If True (default), raise an error on parsing failure.
-            exact: If True (default), require an exact format match.
-            cache: If True (default), cache parsing results for performance.
-            ambiguous: How to handle ambiguous datetimes (e.g., due to DST transitions).
-                       Can be 'raise' (default), 'earliest', 'latest', or 'null'.
-                       Can also be a Polars expression.
+            dtype: The Polars temporal type to convert to (``pl.Date``, ``pl.Datetime``,
+                or ``pl.Time``).
+            format: The strf/strptime format string. If ``None``, the format is
+                inferred where possible.
+            strict: If ``True`` (default), raise an error on parsing failure.
+            exact: If ``True`` (default), require an exact format match.
+            cache: If ``True`` (default), cache parsing results for performance.
+            ambiguous: How to handle ambiguous datetimes, such as daylight-saving
+                transitions. Options are ``"raise"`` (default), ``"earliest"``,
+                ``"latest"``, or ``"null"``. Can also be a Polars expression.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` with strings converted to the specified temporal type.
+            ExpressionProxy: Strings converted to the specified temporal type.
 
         Examples:
             **Scalar Example: Parsing policy issue dates**
 
-            >>> from gaspatchio_core.frame.base import ActuarialFrame
-            >>> import polars as pl
-            >>> data = {
-            ...     "policy_id": ["A100", "B200", "C300"],
-            ...     "issue_date_str": ["2021-01-15", "20/02/2022", "2023-03-10 14:30:00"] # Restored input
-            ... }
-            >>> af = ActuarialFrame(data)
-            >>> af_parsed_dates = af.select(
-            ...     af["issue_date_str"].str.strptime(pl.Date, "%Y-%m-%d", strict=False).alias("issue_date_strict_fmt"),
-            ...     af["issue_date_str"].str.strptime(pl.Date, "%d/%m/%Y", strict=False).alias("issue_date_dmy_fmt"),
-            ...     af["issue_date_str"].str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False).alias("issue_datetime")
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-            ...     print(af_parsed_dates.collect()) # doctest: +NORMALIZE_WHITESPACE
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+            import polars as pl
+
+            data = {
+                "policy_id": ["A100", "B200", "C300"],
+                "issue_date_str": [
+                    "2021-01-15",
+                    "20/02/2022",
+                    "2023-03-10 14:30:00"
+                ]
+            }
+            af = ActuarialFrame(data)
+            af_parsed_dates = af.select(
+                af["issue_date_str"].str.strptime(pl.Date, "%Y-%m-%d", strict=False).alias("issue_date_strict_fmt"),
+                af["issue_date_str"].str.strptime(pl.Date, "%d/%m/%Y", strict=False).alias("issue_date_dmy_fmt"),
+                af["issue_date_str"].str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False).alias("issue_datetime"),
+            )
+            with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
+                print(af_parsed_dates.collect())
+            ```
+
+            ```text
             shape: (3, 3)
             ┌───────────────────────┬────────────────────┬─────────────────────┐
             │ issue_date_strict_fmt ┆ issue_date_dmy_fmt ┆ issue_datetime      │
@@ -2243,24 +2261,32 @@ class StringNamespaceProxy:
             │ null                  ┆ 2022-02-20         ┆ null                │
             │ null                  ┆ null               ┆ 2023-03-10 14:30:00 │
             └───────────────────────┴────────────────────┴─────────────────────┘
+            ```
 
-            **Vector (List Shimming) Example: Parsing lists of event timestamps**
+            **Vector Example: Parsing lists of event timestamps**
 
-            >>> data_list = {
-            ...     "claim_id": ["CL001"],
-            ...     "event_timestamps_str": [["2023-04-01T10:00:00", "2023-04-01T10:05:00", "Invalid"]]
-            ... }
-            >>> af_list = ActuarialFrame(data_list).with_columns(
-            ...     pl.col("event_timestamps_str").cast(pl.List(pl.String))
-            ... )
-            >>> af_parsed_list = af_list.select(
-            ...     af_list["event_timestamps_str"].str.strptime(
-            ...         pl.Datetime, "%Y-%m-%dT%H:%M:%S", strict=False
-            ...     ).alias("event_datetimes_μs")
-            ... )
-            >>> result = af_parsed_list.collect()
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-            ...     print(result) # doctest: +NORMALIZE_WHITESPACE
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+            import polars as pl
+
+            data_list = {
+                "claim_id": ["CL001"],
+                "event_timestamps_str": [["2023-04-01T10:00:00", "2023-04-01T10:05:00", "Invalid"]],
+            }
+            af_list = ActuarialFrame(data_list).with_columns(
+                pl.col("event_timestamps_str").cast(pl.List(pl.String))
+            )
+            af_parsed_list = af_list.select(
+                af_list["event_timestamps_str"].str.strptime(
+                    pl.Datetime, "%Y-%m-%dT%H:%M:%S", strict=False
+                ).alias("event_datetimes_μs")
+            )
+            result = af_parsed_list.collect()
+            with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
+                print(result)
+            ```
+
+            ```text
             shape: (1, 1)
             ┌──────────────────────────────────────────────────┐
             │ event_datetimes_μs                               │
@@ -2269,6 +2295,7 @@ class StringNamespaceProxy:
             ╞══════════════════════════════════════════════════╡
             │ [2023-04-01 10:00:00, 2023-04-01 10:05:00, null] │
             └──────────────────────────────────────────────────┘
+            ```
         """
         from ..dispatch import _ensure_polars_expr_or_literal
 
