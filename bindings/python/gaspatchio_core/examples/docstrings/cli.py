@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from typing import List, Optional, cast
 
@@ -143,6 +144,103 @@ def run_print_check_command(
         )
         raise typer.Exit(code=1)
 
+    # --- BEGIN NEW LINTING STEP ---
+    if pytest is None:
+        typer.echo(
+            typer.style(
+                "Warning: pytest is not installed. Structural linting of docstrings (e.g., for legacy formats) will be skipped.",
+                fg=typer.colors.YELLOW,
+            )
+        )
+    else:
+        path_to_check: str
+        if target_file:
+            path_to_check = str(target_file)
+        elif root_dir:
+            path_to_check = str(root_dir)
+        else:
+            # This case should ideally not be reached due to the initial check,
+            # but as a safeguard:
+            typer.echo(
+                typer.style(
+                    "Error: No target path specified for structural lint check.",
+                    fg=typer.colors.RED,
+                )
+            )
+            raise typer.Exit(code=1)
+
+        typer.echo(
+            typer.style(
+                f"\\n--- Running Structural Docstring Lint Check on: {path_to_check} ---",
+                fg=typer.colors.BLUE,
+                bold=True,
+            )
+        )
+        lint_pytest_args: List[str] = [
+            "-m",
+            "gaspatchio_docstring_structure_check",  # Only structural checks
+            path_to_check,
+        ]
+        if target_method:  # If a method is targeted, apply -k to the lint check as well
+            typer.echo(
+                f"Structural lint check focusing on method/context: '*{target_method}*'"
+            )
+            lint_pytest_args.extend(["-k", target_method])
+
+        # Optionally, make pytest quieter if it passes, e.g., by adding "-q" or "--tb=no"
+        # lint_pytest_args.append("-q")
+
+        try:
+            lint_exit_code_val = pytest.main(
+                lint_pytest_args
+            )  # pytest.main can accept List[str]
+            lint_exit_code = int(lint_exit_code_val)
+
+            if lint_exit_code == 0:  # pytest.ExitCode.OK
+                typer.echo(
+                    typer.style("Structural lint checks passed.", fg=typer.colors.GREEN)
+                )
+            elif lint_exit_code == 5:  # pytest.ExitCode.NO_TESTS_COLLECTED
+                typer.echo(
+                    typer.style(
+                        "No items found for structural lint check (this is usually OK if scope is narrow).",
+                        fg=typer.colors.YELLOW,
+                    )
+                )
+            else:
+                typer.echo(
+                    typer.style(
+                        f"Structural docstring lint checks FAILED (e.g., legacy '>>>' examples found or other issues). Pytest exited with code {lint_exit_code}. Review output above and convert examples to Markdown format if necessary.",
+                        fg=typer.colors.RED,
+                        bold=True,
+                    )
+                )
+                raise typer.Exit(code=lint_exit_code)
+        except Exception as e:  # Catch broad exceptions from pytest.main or casting
+            typer.echo(
+                typer.style(
+                    f"Error invoking pytest for structural lint check: {e}",
+                    fg=typer.colors.RED,
+                )
+            )
+            raise typer.Exit(code=1)
+    typer.echo(  # Add a blank line for separation before execution checks start
+        ""
+    )
+    # --- END NEW LINTING STEP ---
+
+    # Configure logging for the parser module to show DEBUG messages
+    parser_logger = logging.getLogger("gaspatchio_core.examples.docstrings.parse")
+    if not parser_logger.handlers:  # Add handler only if none are configured
+        stream_handler = logging.StreamHandler()
+        # Basic formatter, customize if needed
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        stream_handler.setFormatter(formatter)
+        parser_logger.addHandler(stream_handler)
+    parser_logger.setLevel(logging.DEBUG)
+
     parser = GaspatchioDocstringParser()
     parsed_docstrings: List[GaspatchioDocstring] = []
 
@@ -159,14 +257,22 @@ def run_print_check_command(
 
     all_examples: List[DocstringCodeExample] = []
     for docstring_obj in parsed_docstrings:
-        for example_obj in docstring_obj.examples:
-            # Ensure parent_docstring is linked for context
-            example_obj.parent_docstring = docstring_obj
-            all_examples.append(example_obj)
+        all_examples.extend(docstring_obj.examples)
+
+    typer.echo(
+        f"DEBUG: Total examples found by parser before any filtering: {len(all_examples)}"
+    )
+    for i, ex in enumerate(all_examples):
+        typer.echo(f"DEBUG: Example {i} object_context: {ex.object_context}")
 
     if target_method:
         original_count = len(all_examples)
-        all_examples = [ex for ex in all_examples if target_method in ex.object_context]
+        typer.echo(f"DEBUG: Filtering for method: '{target_method}'")
+        # Filter based on the end of the object_context, to be more flexible
+        # like pytest's -k often is for Class.method patterns.
+        all_examples = [
+            ex for ex in all_examples if ex.object_context.endswith(target_method)
+        ]
         filter_target_name = str(target_file) if target_file else str(root_dir)
         typer.echo(
             f"Filtered {original_count} examples down to {len(all_examples)} matching method '*{target_method}*' in {filter_target_name}"

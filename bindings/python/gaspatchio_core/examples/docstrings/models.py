@@ -17,9 +17,6 @@ class DocstringCodeExample(BaseModel):
     object_context: str
     example_index: int
     raw_source_location: Tuple[str, int]
-    parent_docstring: Optional["GaspatchioDocstring"] = Field(
-        default=None, exclude=True
-    )
     prefix_tags: List[str] = Field(default_factory=list)
 
     def _extract_code_from_snippet(self) -> str:
@@ -232,6 +229,7 @@ class DocstringReturn(BaseModel):
 class GaspatchioDocstring(BaseModel):
     short_description: Optional[str] = None
     long_description: Optional[str] = None
+    when_to_use: Optional[str] = None
     parameters: List[DocstringParameter] = []
     returns: Optional[DocstringReturn] = None
     examples: List[DocstringCodeExample] = []
@@ -245,14 +243,92 @@ class GaspatchioDocstring(BaseModel):
 
         Checks:
         - short_description exists
+        - long_description exists
+        - when_to_use exists (for public methods)
+        - examples list is not empty (for public methods)
         - parameter count + names match inspect.signature() (TODO)
         - examples[#].output is non-empty **if** snippet ends with a pure expression
         - returns section present when fn actually returns non-None (TODO)
         - Presence of legacy '>>>' doctest examples.
         """
         issues: List[str] = []
+
+        # Determine if the object is a class, __init__, private/protected, or public method/function
+        path_parts = self.object_path.split(".")
+        object_name = path_parts[-1]
+        parent_name = path_parts[-2] if len(path_parts) > 1 else None
+
+        # Heuristic:
+        # - If only one part, it's a module-level function/object.
+        # - If two parts, it could be ClassName or module.function.
+        # - If three+ parts, it's module.ClassName.method_name
+
+        is_class_docstring = False
+        is_init_method = False
+        is_private_or_protected = object_name.startswith("_")
+        is_method = False
+
+        # A simple check to see if the second to last part looks like a class name (typically CamelCase)
+        # and the last part is not CamelCase (typically snake_case for methods)
+        if (
+            len(path_parts) >= 2
+            and parent_name
+            and parent_name[0].isupper()
+            and (not object_name[0].isupper() or object_name == "__init__")
+        ):
+            is_method = True
+            if object_name == "__init__":
+                is_init_method = True
+        elif (
+            len(path_parts) >= 1 and object_name[0].isupper() and not parent_name
+        ):  # top level class
+            is_class_docstring = True
+        elif (
+            len(path_parts) >= 2
+            and object_name[0].isupper()
+            and parent_name
+            and not parent_name[0].isupper()
+        ):  # class nested in module
+            is_class_docstring = True
+
+        # Strict checks apply to public functions or public methods not __init__
+        # Functions are identified if they are not methods and not class docstrings.
+        is_function = not is_method and not is_class_docstring
+
+        requires_strict_checks = (
+            is_method and not is_init_method and not is_private_or_protected
+        ) or (is_function and not is_private_or_protected)
+
         if not self.short_description:
-            issues.append("Missing short_description.")
+            issues.append(f"[{self.object_path}] Missing short_description.")
+        if not self.long_description:
+            issues.append(f"[{self.object_path}] Missing long_description.")
+
+        if requires_strict_checks:
+            if not self.when_to_use:
+                issues.append(
+                    f"[{self.object_path}] Missing when_to_use section (required for public methods/functions)."
+                )
+            if not self.examples:
+                issues.append(
+                    f"[{self.object_path}] Missing examples section or no examples found (required for public methods/functions)."
+                )
+        else:
+            # Optional checks or different handling for classes, __init__, private methods
+            if (
+                not self.when_to_use
+                and not is_class_docstring
+                and not is_init_method
+                and not is_private_or_protected
+            ):  # Still good to have for public functions
+                pass  # Optionally log a warning or skip if truly optional
+            if (
+                not self.examples
+                and not is_class_docstring
+                and not is_init_method
+                and not is_private_or_protected
+            ):
+                pass  # Optionally log a warning or skip
 
         # Check for legacy doctest markers (>>> or ...)
         # The current parser in parse.py only extracts examples from Markdown fenced code blocks.

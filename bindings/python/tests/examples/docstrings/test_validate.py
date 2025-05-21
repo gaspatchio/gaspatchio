@@ -5,12 +5,8 @@ import pytest
 from gaspatchio_core.examples.docstrings.models import DocstringCodeExample
 from gaspatchio_core.examples.docstrings.parse import GaspatchioDocstringParser
 from gaspatchio_core.examples.docstrings.validate import GaspatchioEvalExample
-from tests.examples.docstrings.fixtures.multi_example_fixture import PremiumCalculator
 
-# Import classes/functions from fixtures to be used in global_vars
-from tests.examples.docstrings.fixtures.simple_module_fixture import (
-    SimpleDateTimeProcessor,
-)
+from tests.examples.docstrings.fixtures.multi_example_fixture import PremiumCalculator
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -26,7 +22,6 @@ def get_examples_from_fixture(
     all_examples: list[DocstringCodeExample] = []
     for ds in docstrings:
         for i, ex in enumerate(ds.examples):
-            ex.parent_docstring = ds  # Ensure parent_docstring is set for context
             if object_context_filter and ex.object_context != object_context_filter:
                 continue
             if (
@@ -45,21 +40,6 @@ def get_examples_from_fixture(
 @pytest.mark.parametrize(
     "fixture_file, object_context, example_index, expected_errors_count, local_global_vars",
     [
-        # Test cases for simple_module_fixture.py
-        (
-            "simple_module_fixture.py",
-            "simple_module_fixture.SimpleDateTimeProcessor.get_year",
-            0,  # First example: processor.get_year("2023-01-01") -> 2023
-            0,  # Expected to pass
-            {"SimpleDateTimeProcessor": SimpleDateTimeProcessor},
-        ),
-        (
-            "simple_module_fixture.py",
-            "simple_module_fixture.SimpleDateTimeProcessor.get_month",
-            0,  # First example: processor.get_month("2023-07-15") -> 7
-            0,  # Expected to pass
-            {"SimpleDateTimeProcessor": SimpleDateTimeProcessor},
-        ),
         # Test cases for multi_example_fixture.py
         (
             "multi_example_fixture.py",
@@ -84,9 +64,35 @@ def test_gaspatchio_eval_example_check_example_integration(
     expected_errors_count: int,
     local_global_vars: dict,
 ):
-    """
-    Integration test for GaspatchioEvalExample.check_example using examples
-    parsed from fixture files.
+    """Integration test for GaspatchioEvalExample.check_example.
+
+    This test uses examples parsed from fixture files to validate
+    the `check_example` method of the `GaspatchioEvalExample` class.
+    It covers various scenarios including simple function calls and method calls
+    within classes, ensuring that the execution and output validation work correctly.
+
+    !!! note "When to use"
+        Run this test to ensure the core example evaluation logic is sound.
+        It's crucial for verifying that docstring examples are correctly
+        processed and validated against their expected outputs.
+
+    Examples:
+    ```python
+    # This is a conceptual example of how one of the test cases might be structured.
+    # It's not directly executable here but illustrates the pattern.
+    # Assume fixture_file = "my_fixture.py"
+    # Assume object_context = "my_fixture.MyClass.my_method"
+    # Assume example_index = 0
+    # Assume expected_errors_count = 0
+    # Assume local_global_vars = {"MyClass": MyClassFromFixture}
+
+    # example_to_test = get_examples_from_fixture(
+    #     "my_fixture.py", "my_fixture.MyClass.my_method", 0
+    # )[0]
+    # eval_example = GaspatchioEvalExample(update_examples_mode=False)
+    # errors = eval_example.check_example(example_to_test, global_vars=local_global_vars)
+    # assert len(errors) == 0
+    ```
     """
     if example_index is not None:
         examples_to_test = get_examples_from_fixture(

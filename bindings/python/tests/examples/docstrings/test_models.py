@@ -72,6 +72,7 @@ def valid_docstring(basic_code_example: DocstringCodeExample) -> GaspatchioDocst
     return GaspatchioDocstring(
         short_description="This is a valid short description.",
         long_description="This is a long description.",
+        when_to_use="When you need a valid docstring for testing.",
         parameters=[],
         returns=None,
         examples=[basic_code_example],
@@ -88,6 +89,8 @@ def docstring_no_short_desc(
 ) -> GaspatchioDocstring:
     return GaspatchioDocstring(
         short_description=None,
+        long_description="This is a long description for a docstring with no short description.",
+        when_to_use="When testing behavior for missing short descriptions.",
         examples=[basic_code_example],
         raw_docstring="Raw",
         object_path="test_module.no_short",
@@ -102,6 +105,8 @@ def docstring_with_expr_no_output_example(
 ) -> GaspatchioDocstring:
     return GaspatchioDocstring(
         short_description="Short desc.",
+        long_description="Long description for testing expression with no output.",
+        when_to_use="When testing examples that end in an expression without providing output.",
         examples=[code_example_ending_in_expr_no_output],
         raw_docstring="Raw",
         object_path="test_module.expr_no_output_parent",
@@ -116,6 +121,8 @@ def docstring_with_no_prompt_example(
 ) -> GaspatchioDocstring:
     return GaspatchioDocstring(
         short_description="Short desc.",
+        long_description="Long description for testing example with no prompt.",
+        when_to_use="When testing Markdown-style examples without '>>>' prompts.",
         examples=[code_example_no_prompt],
         raw_docstring="Raw",
         object_path="test_module.no_prompt_parent",
@@ -130,6 +137,8 @@ def docstring_with_assignment_example(
 ) -> GaspatchioDocstring:
     return GaspatchioDocstring(
         short_description="This is a valid short description.",
+        long_description="Long description for testing assignment without output.",
+        when_to_use="When testing examples that perform assignments without explicit output.",
         examples=[code_example_assignment_no_output],
         raw_docstring="Raw docstring here",
         object_path="test_module.assignment_function",
@@ -174,6 +183,8 @@ def test_validate_structure_example_ends_in_expr_with_output(
 ):
     docstring = GaspatchioDocstring(
         short_description="Short desc.",
+        long_description="Long description for testing expression with output.",
+        when_to_use="When testing examples that end in an expression and provide output.",
         examples=[code_example_ending_in_expr_with_output],
         raw_docstring="Raw",
         object_path="p",
@@ -331,7 +342,6 @@ def test_lint_empty_snippet(empty_snippet_example: DocstringCodeExample):
 
 
 def test_lint_non_python_snippet():
-    """Test how lint handles a snippet that is not valid Python at all."""
     example = DocstringCodeExample(
         snippet=">>> This is not python code at all!\n... !@#$%^&*()",
         output=None,
@@ -423,15 +433,20 @@ def test_dt_proxy_month_docstring_lint():
         # but for this test, method start line is a good proxy.
     except (TypeError, OSError):  # OSError if source not found
         start_line_num = 1  # Fallback
+        # Provide a default file_path_str if source is not found.
+        # This is a simplification; in a real scenario, you might handle this differently.
+        file_path_str = "unknown_file.py"
+    else:
+        file_path_str = str(Path(inspect.getfile(method_object)).resolve())
 
     # Parse the docstring to get DocstringCodeExample instances
     # Use a dummy object_path for this self-contained test if full path isn't critical
-    object_path = f"{fixture_path.stem}.DtNamespaceProxy.month"
+    object_path = f"{Path(file_path_str).stem}.DtNamespaceProxy.month"
 
     parsed_docstring = parser.parse_docstring_from_text(
-        raw_docstring,
+        docstring_text=raw_docstring,
         object_path=object_path,
-        file_path_str=str(fixture_path.resolve()),
+        file_path_str=file_path_str,  # Use resolved or default file_path_str
         docstring_start_line=start_line_num,
     )
 
