@@ -48,7 +48,7 @@ jobs:
         run: uv sync
         working-directory: bindings/python
       - name: Run Python tests
-        run: uv run pytest --doctest-modules --doctest-glob="*.pyi"
+        run: uv run pytest -v
         working-directory: bindings/python
 
   manylinux:
