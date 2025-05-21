@@ -1795,28 +1795,36 @@ class StringNamespaceProxy:
         return self._call_string_method("zfill", length=length)
 
     def ljust(self, width: int, fill_char: str = " ") -> "ExpressionProxy":
-        """Pad the end of strings with a specified character (left-aligns content).
+        """Left-align strings by padding on the right.
 
-        Mirrors Polars' `Expr.str.pad_end`.
-        Strings that are already at least `width` characters long are unchanged.
-        For `List[String]` columns, applies element-wise.
+        Strings shorter than ``width`` are padded on the right with ``fill_char``.
+        When the column contains ``List[String]`` values, each element is padded
+        individually.
+
+        !!! note "When to use"
+            *   Formatting account or policy identifiers for fixed-width exports.
+            *   Preparing ledger extracts where text fields must be left-aligned.
+            *   Normalizing rider or sub-account codes stored as lists so they
+                compare consistently.
 
         Args:
             width: The desired total length of the string after padding.
             fill_char: The character to pad with. Defaults to a space.
-        Returns:
-            ExpressionProxy: An `ExpressionProxy` with strings padded at the end.
 
-        Examples:
-            **Scalar Example: Formatting account codes to a fixed width**
-            ```
-            # Test with pl.Config to ensure consistent display
+        Returns:
+            ExpressionProxy: An ``ExpressionProxy`` with strings padded at the
+                end.
+
+        Examples
+        --------
+        Scalar example – fixed-width account codes::
+
+            ```python
             import polars as pl
             from gaspatchio_core.frame.base import ActuarialFrame
+
             with pl.Config(fmt_str_lengths=100):
-                data = {
-                    "account_code": ["A1", "B123", None, "C"],
-                }
+                data = {"account_code": ["A1", "B123", None, "C"]}
                 af = ActuarialFrame(data)
                 af_ljust = af.select(
                     af["account_code"].str.ljust(6, "-").alias("ljust_code")
@@ -1824,7 +1832,7 @@ class StringNamespaceProxy:
                 print(af_ljust.collect())
             ```
 
-            ```
+            ```text
             shape: (4, 1)
             ┌────────────┐
             │ ljust_code │
@@ -1838,16 +1846,20 @@ class StringNamespaceProxy:
             └────────────┘
             ```
 
-            **Vector (List Shimming) Example: Padding list elements**
+        Vector example – padding elements in a list column::
 
-            ```
+            ```python
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
+
             with pl.Config(fmt_str_lengths=100):
                 data_list = {
                     "batch_id": ["X01"],
-                    "sub_codes": [["S1", "LONGCODE", "S23"]]
+                    "sub_codes": [["S1", "LONGCODE", "S23"]],
                 }
-                af_list = ActuarialFrame(data_list).with_columns(
-                    pl.col("sub_codes").cast(pl.List(pl.String))
+                af_list = ActuarialFrame(data_list)
+                af_list = af_list.with_columns(
+                    af_list["sub_codes"].cast(pl.List(pl.String))
                 )
                 af_list_ljust = af_list.select(
                     af_list["sub_codes"].str.ljust(8, "X").alias("ljust_sub_codes")
@@ -1855,7 +1867,7 @@ class StringNamespaceProxy:
                 print(af_list_ljust.collect())
             ```
 
-            ```
+            ```text
             shape: (1, 1)
             ┌──────────────────────────────────────┐
             │ ljust_sub_codes                      │
