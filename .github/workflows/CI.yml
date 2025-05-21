@@ -54,6 +54,7 @@ jobs:
   manylinux:
     name: Manylinux Build
     runs-on: ubuntu-latest
+    needs: [rust-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
       - name: Build with Docker
@@ -74,6 +75,7 @@ jobs:
 
   windows:
     runs-on: ${{ matrix.platform.runner }}
+    needs: [rust-tests, python-tests]
     strategy:
       matrix:
         platform:
@@ -99,6 +101,7 @@ jobs:
 
   macos:
     runs-on: ${{ matrix.platform.runner }}
+    needs: [rust-tests, python-tests]
     strategy:
       matrix:
         platform:
@@ -125,6 +128,7 @@ jobs:
 
   sdist:
     runs-on: ubuntu-latest
+    needs: [rust-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
       - name: Build sdist
