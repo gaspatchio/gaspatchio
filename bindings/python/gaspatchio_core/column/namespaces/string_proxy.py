@@ -1621,7 +1621,7 @@ class StringNamespaceProxy:
         Examples:
             **Scalar Example: Cleaning up trailing codes from product descriptions**
 
-            ```
+            ```python
             from gaspatchio_core.frame.base import ActuarialFrame
             import polars as pl
             data_strip_end = {
@@ -1713,20 +1713,29 @@ class StringNamespaceProxy:
         return self.strip_suffix(suffix=suffix)
 
     def zfill(self, length: int) -> "ExpressionProxy":
-        """Pad the start of strings with zeros until the string reaches a certain length.
+        """Pad string columns with leading zeros to a minimum width.
 
-        Mirrors Polars' `Expr.str.zfill`.
-        Strings that are already at least `length` characters long are unchanged.
-        For `List[String]` columns, applies element-wise.
+        Use this to ensure identifiers such as policy or claim numbers share a
+        consistent length. Shorter strings are padded on the left with zeros so
+        each value reaches ``length`` characters. When working with list columns,
+        the padding is applied element-wise.
+
+        !!! note "When to use"
+            *   Standardizing policy numbers from multiple administration
+                systems before merging with valuation data
+            *   Preparing zero-padded claim numbers for extracts sent to
+                reinsurers or regulators
+            *   Creating fixed-width keys when joining to rating tables
 
         Args:
             length: The desired minimum length of the string.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` with strings padded with leading zeros.
+            ExpressionProxy: An `ExpressionProxy` with strings padded with
+            leading zeros.
 
         Examples:
-            **Scalar Example: Standardizing policy serial numbers to a fixed length**
+            **Scalar Example: Standardizing policy serial numbers**
             ```
             # Test with pl.Config to ensure consistent display
             with pl.Config(fmt_str_lengths=100):
@@ -1757,15 +1766,18 @@ class StringNamespaceProxy:
             └────────────────┘
             ```
 
-            **Vector (List Shimming) Example: Padding numerical components in claim codes**
+            **Vector Example: Padding numerical components in claim codes**
             ```
             with pl.Config(fmt_str_lengths=100):
+                from gaspatchio_core.frame.base import ActuarialFrame
+                import polars as pl
                 data_list = {
                     "claim_batch": ["B01", "B02"],
                     "item_codes": [["A1", "B123", "C04"], [None, "D56"]]
                 }
-                af_list = ActuarialFrame(data_list).with_columns(
-                    pl.col("item_codes").cast(pl.List(pl.String))
+                af_list = ActuarialFrame(data_list)
+                af_list = af_list.with_columns(
+                    af_list["item_codes"].cast(pl.List(pl.String))
                 )
                 af_list_zfilled = af_list.select(
                     af_list["item_codes"].str.zfill(4).alias("zfilled_item_codes")
@@ -2320,8 +2332,15 @@ class StringNamespaceProxy:
     def extract(self, pattern: str, group_index: int = 1) -> "ExpressionProxy":
         """Extract a capturing group from a regex pattern.
 
-        Mirrors Polars' `Expr.str.extract`.
-        For `List[String]` columns, applies element-wise.
+        This method returns the specified group from each string that matches
+        ``pattern``. It operates element-wise on list columns, making it ideal
+        for pulling identifiers or amounts embedded in free-text fields.
+
+        !!! note "When to use"
+            *   Retrieve policy or claim numbers from combined identifiers or
+                descriptive text
+            *   Capture monetary amounts from claim notes for validation
+            *   Isolate classification codes embedded within longer strings
 
         Args:
             pattern: The regex pattern with capturing groups.
@@ -2332,16 +2351,22 @@ class StringNamespaceProxy:
 
         Examples:
             **Scalar Example: Extracting policy numbers from combined IDs**
+            ```python
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
 
-            >>> from gaspatchio_core.frame.base import ActuarialFrame
-            >>> data = {
-            ...     "full_id": ["POLICY-12345-AB", "CLAIM-67890-CD", "POLICY-ABCDE-FG"],
-            ... }
-            >>> af = ActuarialFrame(data)
-            >>> af_extracted = af.select(
-            ...     af["full_id"].str.extract(r"POLICY-(\\w+)-.*", group_index=1).alias("policy_num")
-            ... )
-            >>> print(af_extracted.collect())
+            with pl.Config(fmt_str_lengths=100):
+                data = {
+                    "full_id": ["POLICY-12345-AB", "CLAIM-67890-CD", "POLICY-ABCDE-FG"],
+                }
+                af = ActuarialFrame(data)
+                af_extracted = af.select(
+                    af["full_id"].str.extract(r"POLICY-(\\w+)-.*", group_index=1).alias("policy_num")
+                )
+                print(af_extracted.collect())
+            ```
+
+            ```text
             shape: (3, 1)
             ┌────────────┐
             │ policy_num │
@@ -2352,21 +2377,29 @@ class StringNamespaceProxy:
             │ null       │
             │ ABCDE      │
             └────────────┘
+            ```
 
-            **Vector (List Shimming) Example: Extracting amounts from transaction descriptions**
+            **Vector Example: Extracting amounts from transaction descriptions**
+            ```python
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
+            with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
 
-            >>> data_list = {
-            ...     "policy_id": ["P001"],
-            ...     "transactions": [["Premium paid: $100.50", "Fee: $10.00", "Adjustment: $-5.25"]]
-            ... }
-            >>> af_list = ActuarialFrame(data_list).with_columns(
-            ...     pl.col("transactions").cast(pl.List(pl.String))
-            ... )
-            >>> af_list_extracted = af_list.select(
-            ...     af_list["transactions"].str.extract(r"\\$?([-+]?\\d+\\.\\d{2})", group_index=1).alias("amounts_str")
-            ... )
-            >>> with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-            ...     print(af_list_extracted.collect()) # doctest: +NORMALIZE_WHITESPACE
+                data_list = {
+                    "policy_id": ["P001"],
+                    "transactions": [["Premium paid: $100.50", "Fee: $10.00", "Adjustment: $-5.25"]],
+                }
+                af_list = ActuarialFrame(data_list)
+                af_list = af_list.with_columns(
+                    af_list["transactions"].cast(pl.List(pl.String))
+                )
+                af_list_extracted = af_list.select(
+                    af_list["transactions"].str.extract(r"\\$?([-+]?\\d+\\.\\d{2})", group_index=1).alias("amounts_str")
+                )
+                print(af_list_extracted.collect())
+            ```
+
+            ```text
             shape: (1, 1)
             ┌──────────────────────────────┐
             │ amounts_str                  │
@@ -2375,6 +2408,7 @@ class StringNamespaceProxy:
             ╞══════════════════════════════╡
             │ ["100.50", "10.00", "-5.25"] │
             └──────────────────────────────┘
+            ```
         """
         return self._call_string_method(
             "extract", pattern=pattern, group_index=group_index
