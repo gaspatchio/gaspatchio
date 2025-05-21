@@ -2390,6 +2390,107 @@ class StringNamespaceProxy:
         literal: bool = False,
         n: int = 1,
     ) -> "ExpressionProxy":
+        """Replace occurrences of a pattern in each string.
+
+        This method searches every string in the column for a given substring or
+        regular expression pattern and replaces the first ``n`` matches with the
+        provided ``value``. When ``literal`` is ``True`` the ``pattern`` is
+        treated as a plain string; otherwise it is interpreted as a regex.
+
+        !!! note "When to use"
+            Actuaries may find ``replace`` useful when:
+
+            *   **Updating Legacy Codes:** Converting outdated product or policy
+                codes to a new standard so assumption tables align across
+                systems.
+            *   **Cleaning Free-Text Fields:** Removing or altering specific
+                phrases in underwriting or claim notes prior to text analysis.
+            *   **Normalizing Reference Data:** Adjusting naming conventions in
+                data feeds before merging them with internal models.
+
+        Args:
+            pattern: Substring or regex pattern to search for. May also be a
+                Polars expression yielding the pattern.
+            value: Replacement text. Can be a string or a Polars expression.
+            literal: If ``True``, ``pattern`` is treated as a literal string.
+            n: Maximum number of replacements per string. Defaults to ``1``.
+
+        Returns:
+            ExpressionProxy: A new expression with the specified replacements
+            applied.
+
+        Examples:
+            **Scalar Example: Normalizing policy status descriptions**
+
+            Scenario: Some policy statuses contain the phrase ``"IN FORCE"``.
+            Replace it with ``"INFORCE"`` for consistency.
+
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+
+            data = {
+                "policy_id": ["P1", "P2", "P3"],
+                "status_raw": ["IN FORCE", "LAPSED", "IN FORCE"],
+            }
+            af = ActuarialFrame(data)
+            af_clean = af.select(
+                af["status_raw"].str.replace("IN FORCE", "INFORCE", literal=True).alias("status")
+            )
+            print(af_clean.collect())
+            ```
+
+            ```text
+            shape: (3, 1)
+            ┌─────────┐
+            │ status  │
+            │ ---     │
+            │ str     │
+            ╞═════════╡
+            │ INFORCE │
+            │ LAPSED  │
+            │ INFORCE │
+            └─────────┘
+            ```
+
+            **Vector Example: Removing 'NOTE: ' from lists of claim notes**
+
+            Scenario: Each policy has a list of claim notes and some entries
+            start with ``"NOTE: "``. Remove this prefix from each note.
+
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+            import polars as pl
+
+            notes_data = {
+                "policy_id": ["A1", "A2"],
+                "claim_notes": [
+                    ["NOTE: Initial review", "Payment authorised"],
+                    [None, "NOTE: Follow up required"],
+                ],
+            }
+            af_notes = ActuarialFrame(notes_data)
+            af_notes = af_notes.with_columns(
+                af_notes["claim_notes"].cast(pl.List(pl.String))
+            )
+            af_clean_notes = af_notes.select(
+                af_notes["claim_notes"].str.replace("NOTE: ", "", literal=True, n=1).alias("clean_notes")
+            )
+            with pl.Config(fmt_str_lengths=60):
+                print(af_clean_notes.collect())
+            ```
+
+            ```text
+            shape: (2, 1)
+            ┌──────────────────────────────────────────┐
+            │ clean_notes                               │
+            │ ---                                      │
+            │ list[str]                                │
+            ╞══════════════════════════════════════════╡
+            │ ["Initial review", "Payment authorised"] │
+            │ [null, "Follow up required"]             │
+            └──────────────────────────────────────────┘
+            ```
+        """
         return self._call_string_method(
             "replace", pattern=pattern, value=value, literal=literal, n=n
         )
