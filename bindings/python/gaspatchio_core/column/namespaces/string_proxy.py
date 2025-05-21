@@ -1708,45 +1708,43 @@ class StringNamespaceProxy:
         return self.strip_suffix(suffix=suffix)
 
     def zfill(self, length: int) -> "ExpressionProxy":
-        """Pad string columns with leading zeros to a minimum width.
+        """Pad strings with leading zeros to a minimum width.
 
-        Use this to ensure identifiers such as policy or claim numbers share a
-        consistent length. Shorter strings are padded on the left with zeros so
-        each value reaches ``length`` characters. When working with list columns,
-        the padding is applied element-wise.
+        Shorter values are padded on the left with zeros so each entry reaches
+        ``length`` characters. For list columns, the padding occurs element-wise.
 
         !!! note "When to use"
-            *   Standardizing policy numbers from multiple administration
+            *   Standardizing policy numbers from different administration
                 systems before merging with valuation data
             *   Preparing zero-padded claim numbers for extracts sent to
                 reinsurers or regulators
-            *   Creating fixed-width keys when joining to rating tables
+            *   Building fixed-width keys when joining to rating tables or
+                mapping grids
 
         Args:
             length: The desired minimum length of the string.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` with strings padded with
-            leading zeros.
+            ExpressionProxy: Strings padded with leading zeros.
 
-        Examples:
-            **Scalar Example: Standardizing policy serial numbers**
-            ```
-            # Test with pl.Config to ensure consistent display
+        Examples
+        --------
+        Scalar example – Standardizing policy serial numbers::
+
+            ```python
             import polars as pl
             from gaspatchio_core.frame.base import ActuarialFrame
+
             with pl.Config(fmt_str_lengths=100):
-                data = {
-                    "policy_serial": ["123", "45", "6789", None, "1"],
-                }
+                data = {"policy_serial": ["123", "45", "6789", None, "1"]}
                 af = ActuarialFrame(data)
-                af_zfilled = af.select(
+                result = af.select(
                     af["policy_serial"].str.zfill(5).alias("zfilled_serial")
                 )
-                print(af_zfilled.collect())
+                print(result.collect())
             ```
 
-            ```
+            ```text
             shape: (5, 1)
             ┌────────────────┐
             │ zfilled_serial │
@@ -1761,26 +1759,28 @@ class StringNamespaceProxy:
             └────────────────┘
             ```
 
-            **Vector Example: Padding numerical components in claim codes**
-            ```
+        Vector example – Padding numerical components in claim codes::
+
+            ```python
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
+
             with pl.Config(fmt_str_lengths=100):
-                from gaspatchio_core.frame.base import ActuarialFrame
-                import polars as pl
-                data_list = {
+                data = {
                     "claim_batch": ["B01", "B02"],
-                    "item_codes": [["A1", "B123", "C04"], [None, "D56"]]
+                    "item_codes": [["A1", "B123", "C04"], [None, "D56"]],
                 }
-                af_list = ActuarialFrame(data_list)
-                af_list = af_list.with_columns(
-                    af_list["item_codes"].cast(pl.List(pl.String))
+                af = ActuarialFrame(data)
+                af = af.with_columns(
+                    af["item_codes"].cast(pl.List(pl.String))
                 )
-                af_list_zfilled = af_list.select(
-                    af_list["item_codes"].str.zfill(4).alias("zfilled_item_codes")
+                result = af.select(
+                    af["item_codes"].str.zfill(4).alias("zfilled_item_codes")
                 )
-                print(af_list_zfilled.collect())
+                print(result.collect())
             ```
 
-            ```
+            ```text
             shape: (2, 1)
             ┌──────────────────────────┐
             │ zfilled_item_codes       │
