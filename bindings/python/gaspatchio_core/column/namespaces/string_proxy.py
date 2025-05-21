@@ -1704,11 +1704,96 @@ class StringNamespaceProxy:
     def remove_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy":
         """Alias for `strip_suffix`. Remove a suffix from each string.
 
+        This method behaves identically to :py:meth:`strip_suffix`, removing the
+        specified trailing substring from each string value. If a string does not
+        end with the provided suffix it is returned unchanged. When the column is
+        a list of strings, the removal is applied element-wise.
+
+        !!! note "When to use"
+            In actuarial workflows, removing suffixes is useful for:
+
+            *   **Normalizing Product Names:** Stripping version tags like
+                "-2024" or "_NEW" from product identifiers so that experience can
+                be grouped by the base product.
+            *   **Cleaning Import Data:** Eliminating temporary indicators such
+                as "-DRAFT" that may be appended to policy numbers imported from
+                administration systems.
+            *   **Simplifying Text Fields:** Removing trailing notes like
+                "*cancelled" from agent remarks prior to text analytics or
+                matching.
+
         Args:
-            suffix: The suffix to remove.
+            suffix: The suffix to remove. Can be a literal string or a Polars
+                expression that evaluates to a string.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` with the suffix removed.
+            ExpressionProxy: A new `ExpressionProxy` with the suffix removed.
+
+        Examples:
+            **Scalar Example: Removing '-OLD' from policy codes**
+
+            Scenario: Historical policy codes may include a trailing ``-OLD``
+            suffix that should be dropped for reporting.
+
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+
+            data = {"policy_code": ["TERM10-OLD", "WL-OLD", "ANN"]}
+            af = ActuarialFrame(data)
+            af_clean = af.select(
+                af["policy_code"].str.remove_suffix("-OLD").alias("code_clean")
+            )
+            print(af_clean.collect())
+            ```
+
+            ```text
+            shape: (3, 1)
+            ┌─────────────┐
+            │ code_clean  │
+            │ ---         │
+            │ str         │
+            ╞═════════════╡
+            │ TERM10      │
+            │ WL          │
+            │ ANN         │
+            └─────────────┘
+            ```
+
+            **Vector (list) example: Removing trailing '*exp' from lists of
+            underwriting notes**
+
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+            import polars as pl
+
+            notes_data = {
+                "policy_id": [1, 2],
+                "uw_notes": [
+                    ["Declined*exp", "Check later*exp"],
+                    ["Approved", None],
+                ],
+            }
+            af_notes = ActuarialFrame(notes_data)
+            af_notes = af_notes.with_columns(
+                af_notes["uw_notes"].cast(pl.List(pl.String))
+            )
+            af_notes_clean = af_notes.select(
+                af_notes["uw_notes"].str.remove_suffix("*exp").alias("notes_clean")
+            )
+            print(af_notes_clean.collect())
+            ```
+
+            ```text
+            shape: (2, 1)
+            ┌────────────────────────────┐
+            │ notes_clean                │
+            │ ---                        │
+            │ list[str]                  │
+            ╞════════════════════════════╡
+            │ ["Declined", "Check later"] │
+            │ ["Approved", null]          │
+            └────────────────────────────┘
+            ```
         """
         return self.strip_suffix(suffix=suffix)
 
