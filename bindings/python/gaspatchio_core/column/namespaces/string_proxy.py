@@ -2065,33 +2065,46 @@ class StringNamespaceProxy:
         return self._call_string_method("starts_with", prefix=prefix)
 
     def ends_with(self, suffix: str | pl.Expr) -> "ExpressionProxy":
-        """Check if strings end with a given substring.
+        """Check if strings end with a specific substring.
 
-        Mirrors Polars' `Expr.str.ends_with`.
-        For `List[String]` columns, applies element-wise.
+        This method returns a boolean expression showing whether each string
+        value ends with the provided suffix. For columns containing
+        `List[String]`, the check is applied to every element within each list.
+
+        !!! note "When to use"
+            Use this function when you need to:
+            * Verify that policy identifiers end with region or product codes.
+            * Flag claim or log entries that end with status markers like "OK"
+              or "PENDING".
+            * Validate strings against suffixes supplied in another column, such
+              as checking payout account numbers.
 
         Args:
-            suffix: The substring to check for at the end of each string.
-                    Can be a literal string or a Polars expression.
+            suffix: The substring to test for at the end of each string. It can
+                be a literal value or a Polars expression.
 
         Returns:
-            ExpressionProxy: A boolean `ExpressionProxy` indicating if strings end with the suffix.
+            ExpressionProxy: A boolean result indicating whether each string
+            ends with ``suffix``. For list columns, the result is a list of
+            booleans.
 
-        Examples:
-            **Scalar Example: Identifying policies by region suffix**
+        Examples
+        --------
+        Scalar example – region codes::
 
-            >>> from gaspatchio_core.frame.base import ActuarialFrame
-            >>> import polars as pl
-            >>> data = {
-            ...     "policy_id": ["P100-US", "P101-CA", "P102-US", None, "P103-EU"],
-            ...     "check_suffix": ["-US", "-US", "-CA", "-EU", "-EU"]
-            ... }
-            >>> # Scalar Example Part 1: Remove fixed suffix "-US"
-            >>> af_is_us_frame = ActuarialFrame(data)
-            >>> af_is_us = af_is_us_frame.select(
-            ...     af_is_us_frame["policy_id"].str.ends_with("-US").alias("is_us_policy")
-            ... )
-            >>> print(af_is_us.collect())
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+
+            af = ActuarialFrame({
+                "policy_id": ["P100-US", "P101-CA", "P102-US", None, "P103-EU"]
+            })
+            result = af.select(
+                af["policy_id"].str.ends_with("-US").alias("is_us_policy")
+            )
+            print(result.collect())
+            ```
+
+            ```text
             shape: (5, 1)
             ┌──────────────┐
             │ is_us_policy │
@@ -2104,52 +2117,42 @@ class StringNamespaceProxy:
             │ null         │
             │ false        │
             └──────────────┘
-            >>> # Check for suffix from another column
-            >>> af_is_us_data_for_dynamic = { # Renamed to avoid conflict and ensure self-containment
-            ...     "policy_id": ["P100-US", "P101-CA", "P102-US", None, "P103-EU"],
-            ...     "check_suffix": ["-US", "-US", "-CA", "-EU", "-EU"]
-            ... }
-            >>> af_dynamic_suffix_frame = ActuarialFrame(af_is_us_data_for_dynamic)
-            >>> af_dynamic_suffix = af_dynamic_suffix_frame.select(
-            ...     af_dynamic_suffix_frame["policy_id"].str.ends_with(pl.col("check_suffix")).alias("ends_dynamic_suffix")
-            ... )
-            >>> print(af_dynamic_suffix.collect())
-            shape: (5, 1)
-            ┌─────────────────────┐
-            │ ends_dynamic_suffix │
-            │ ---                 │
-            │ bool                │
-            ╞═════════════════════╡
-            │ true                │
-            │ false               │
-            │ false               │
-            │ null                │
-            │ true                │
-            └─────────────────────┘
+            ```
 
-            **Vector (List Shimming) Example: Checking for status suffixes in comments**
+        Vector (list) example – status flags::
 
-            >>> with pl.Config(fmt_str_lengths=100):
-            ...     data_list = {
-            ...         "item_id": ["I01", "I02"],
-            ...         "log_entries": [["Transaction OK", "Review PENDING"], [None, "Approved:FINAL"]]
-            ...     }
-            ...     af_list = ActuarialFrame(data_list).with_columns(
-            ...         pl.col("log_entries").cast(pl.List(pl.String))
-            ...     )
-            ...     af_list_check = af_list.select(
-            ...         af_list["log_entries"].str.ends_with("OK").alias("is_status_ok")
-            ...     )
-            ...     print(af_list_check.collect())
+            ```python
+            from gaspatchio_core.frame.base import ActuarialFrame
+            import polars as pl
+
+            logs = {
+                "policy_id": ["A100", "A101"],
+                "update_notes": [
+                    ["Issued OK", "Review PENDING"],
+                    [None, "Paid OK"],
+                ],
+            }
+            af_logs = ActuarialFrame(logs)
+            af_logs = af_logs.with_columns(
+                af_logs["update_notes"].cast(pl.List(pl.String))
+            )
+            status_ok = af_logs.select(
+                af_logs["update_notes"].str.ends_with("OK").alias("ends_with_ok")
+            )
+            print(status_ok.collect())
+            ```
+
+            ```text
             shape: (2, 1)
             ┌───────────────┐
-            │ is_status_ok  │
+            │ ends_with_ok  │
             │ ---           │
             │ list[bool]    │
             ╞═══════════════╡
             │ [true, false] │
-            │ [null, false] │
+            │ [null, true]  │
             └───────────────┘
+            ```
         """
         return self._call_string_method("ends_with", suffix=suffix)
 
