@@ -1729,9 +1729,9 @@ class StringNamespaceProxy:
             **Scalar Example: Standardizing policy serial numbers to a fixed length**
             ```
             # Test with pl.Config to ensure consistent display
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
             with pl.Config(fmt_str_lengths=100):
-                from gaspatchio_core.frame.base import ActuarialFrame
-                import polars as pl
                 data = {
                     "policy_serial": ["123", "45", "6789", None, "1"],
                 }
@@ -1804,9 +1804,9 @@ class StringNamespaceProxy:
             **Scalar Example: Formatting account codes to a fixed width**
             ```
             # Test with pl.Config to ensure consistent display
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
             with pl.Config(fmt_str_lengths=100):
-                from gaspatchio_core.frame.base import ActuarialFrame
-                import polars as pl
                 data = {
                     "account_code": ["A1", "B123", None, "C"],
                 }
@@ -1864,12 +1864,87 @@ class StringNamespaceProxy:
     def pad_start(self, width: int, fill_char: str = " ") -> "ExpressionProxy":
         """Alias for `rjust`. Pads the start of strings (right-aligns content).
 
+        Adds characters to the beginning of each string until it reaches the
+        given width. This is handy when preparing fixed-width extracts or
+        aligning numeric text fields in actuarial reports.
+
+        !!! note "When to use"
+            *   Preparing policy identifiers for legacy mainframe interfaces
+                that expect fixed-width fields.
+            *   Aligning premium or reserve amounts in textual summaries
+                generated for regulators or management.
+            *   Standardizing rider codes stored in lists so that they can be
+                compared consistently across policies.
+
         Args:
             width: The desired minimum length of the string.
             fill_char: The character to pad with. Defaults to a space.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` with strings padded at the start.
+            ExpressionProxy: An `ExpressionProxy` with strings padded at the
+            start.
+
+        Examples:
+            **Scalar Example: Align premium amounts in a report**
+            ```python
+            # Test with pl.Config to ensure consistent display
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
+            with pl.Config(fmt_str_lengths=100):
+
+                data = {
+                    "premium_str": ["1200.5", "85.75", None]
+                }
+                af = ActuarialFrame(data)
+                result = af.select(
+                    af["premium_str"].str.pad_start(8, " ").alias("padded_premium")
+                )
+                print(result.collect())
+            ```
+
+            ```
+            shape: (3, 1)
+            ┌────────────────┐
+            │ padded_premium │
+            │ ---            │
+            │ str            │
+            ╞════════════════╡
+            │    1200.5      │
+            │      85.75     │
+            │ null           │
+            └────────────────┘
+            ```
+
+            **Vector Example: Pad rider codes stored as a list**
+            ```python
+            # Test with pl.Config to ensure consistent display
+            import polars as pl
+            from gaspatchio_core.frame.base import ActuarialFrame
+            with pl.Config(fmt_str_lengths=100):
+
+                data_list = {
+                    "policy_id": ["P01"],
+                    "rider_codes": [["RID1", "LONGRID", "R2"]]
+                }
+                af_list = ActuarialFrame(data_list).with_columns(
+                    pl.col("rider_codes").cast(pl.List(pl.String))
+                )
+                result = af_list.select(
+                    af_list["rider_codes"].str.pad_start(8, "0").alias("padded_rider_codes")
+                )
+                print(result.collect())
+            ```
+
+            ```
+            shape: (1, 1)
+            ┌──────────────────────────────────────────┐
+            │ padded_rider_codes                       │
+            │ ---                                      │
+            │ list[str]                                │
+            ╞══════════════════════════════════════════╡
+            │ ["0000RID1", "0LONGRID", "000000R2"]     │
+            └──────────────────────────────────────────┘
+            ```
         """
         return self.rjust(width=width, fill_char=fill_char)
 
