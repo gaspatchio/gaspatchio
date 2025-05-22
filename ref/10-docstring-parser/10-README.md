@@ -188,20 +188,106 @@ Found Y examples to check.
 All Y examples checked passed execution checks.
 ```
 
+**Key Differences: `run-print-check` vs. `lint`**
+
+It's important to understand the distinct roles of `run-print-check` and the `lint` commands:
+
+*   **`uv run gp-docstrings run-print-check`**:
+    *   **Purpose**: Primarily focused on the **runtime correctness of code examples and their documented output**.
+    *   **What it does**:
+        1.  Parses docstrings.
+        2.  Performs an initial structural lint check on the docstrings (e.g., identifying legacy `>>>` examples that should be converted to Markdown). If this fails, it stops.
+        3.  Executes each Python code snippet found in the docstring examples.
+        4.  Compares the *actual output* (from `stdout` or the value of the last expression) against the *expected output* documented in the docstring.
+        5.  Reports any runtime errors during snippet execution or mismatches between actual and expected output.
+    *   **Use when**: You want to verify that your code examples run correctly and produce the output you've documented. This is crucial for ensuring examples stay up-to-date with code changes.
+    *   **Example**: `uv run gp-docstrings run-print-check --file gaspatchio_core/column/namespaces/string_proxy.py --method "StringNamespaceProxy.contains"` will execute the examples for the `contains` method and check if their output matches what's in the docstring.
+
+*   **`uv run gp-docstrings lint` or `uv run pytest ... --gp-docstring-paths=...`**:
+    *   **Purpose**: Focused on the **structural integrity of the docstring and the code style/quality of the embedded examples**.
+    *   **What it does (via `pytest` plugin integration for the latter)**:
+        1.  Parses docstrings.
+        2.  **Structural Validation**: Checks if the docstring adheres to the expected format (e.g., presence of required sections like `short_description`, `long_description`, `when_to_use`; correct parameter and return type annotations; no legacy `>>>` examples). This is handled by `DocstringStructureItem` in the `pytest` plugin.
+        3.  **Code Snippet Linting**: Uses **Ruff** to lint the Python code within each example for style issues, potential bugs, and adherence to coding standards (e.g., unused imports, line length, proper syntax). This is handled by `DocstringExampleItem.lint()` in the `pytest` plugin.
+        4.  It does *not* primarily focus on comparing the runtime output of the example with the documented output in the same way `run-print-check` does. While the `pytest` items *could* be extended to do full execution checks, their main role in the current setup is structural and style linting.
+    *   **Use when**: You want to ensure your docstrings are well-formed and that the code examples within them are clean, well-styled, and free of common linting errors. This helps maintain overall code quality and readability.
+    *   **Example**: `uv run pytest gaspatchio_core/column/namespaces/string_proxy.py --gp-docstring-paths="gaspatchio_core/column/namespaces/string_proxy.py"` will check the structure of docstrings in `string_proxy.py` and lint the code snippets within its examples using Ruff.
+
+In summary:
+*   Use `run-print-check` to ensure your examples **work as advertised**.
+*   Use `lint` (either variant) to ensure your docstrings and example code are **well-written and structured**.
+
+Both are important for maintaining high-quality documentation.
+
 ### Lint and Validate Docstring Examples (`lint`)
 
 Uses `pytest` to discover and validate docstring examples. This includes structural validation, Ruff linting, and execution checks.
 
+The `gp-docstrings lint` command is still available for focused linting via its own machinery:
 ```bash
-# Lint examples in the dt_proxy.py file
+# Lint examples in the dt_proxy.py file using the gp-docstrings command
 uv run gp-docstrings lint --file gaspatchio_core/column/namespaces/dt_proxy.py
 
-# Lint a specific method, e.g., DtNamespaceProxy.day
+# Lint a specific method, e.g., DtNamespaceProxy.day, using the gp-docstrings command
 uv run gp-docstrings lint --file gaspatchio_core/column/namespaces/dt_proxy.py --method "DtNamespaceProxy.day"
 
-# Run in strict mode (pytest -x, stops on first failure)
+# Run gp-docstrings lint in strict mode (stops on first failure)
 uv run gp-docstrings lint --file gaspatchio_core/column/namespaces/dt_proxy.py --strict
 ```
+
+**Alternatively, and for CI/broader checks, you can run linting directly with `pytest`**:
+
+This leverages the `pytest` plugin for docstring checking. You need to tell `pytest` which files to check using the `--gp-docstring-paths` option.
+
+```bash
+# Lint examples in a specific file using pytest directly
+uv run pytest gaspatchio_core/column/namespaces/string_proxy.py --gp-docstring-paths="gaspatchio_core/column/namespaces/string_proxy.py"
+
+# Lint examples in multiple files or using glob patterns
+uv run pytest --gp-docstring-paths="gaspatchio_core/column/namespaces/*.py" "gaspatchio_core/utils/another_module.py"
+
+# To run all docstring tests discovered by the plugin based on pyproject.toml configuration (see below):
+uv run pytest -m gaspatchio_docstring_example
+# To run only structural checks:
+uv run pytest -m gaspatchio_docstring_structure_check
+# To run both:
+uv run pytest -m "gaspatchio_docstring_example or gaspatchio_docstring_structure_check"
+```
+
+**Configuring Docstring Test Discovery in `pyproject.toml`:**
+
+To avoid specifying `--gp-docstring-paths` every time, you can configure the default paths for the `pytest` plugin in your `pyproject.toml` file. This is the recommended way to manage which files are included in docstring testing.
+
+Add or modify the `tool.pytest.ini_options` section:
+
+```toml
+[tool.pytest.ini_options]
+# Add or append to existing addopts
+# For example, if you have other addopts: addopts = ["--cov=.", "--gp-docstring-paths=gaspatchio_core/column/**/*.py"]
+addopts = ["--gp-docstring-paths=gaspatchio_core/column/namespaces/dt_proxy.py", "--gp-docstring-paths=gaspatchio_core/frame/*.py"]
+# You can specify multiple paths. Each path is a glob pattern.
+# Example to include all .py files under gaspatchio_core/column/namespaces:
+# addopts = ["--gp-docstring-paths=gaspatchio_core/column/namespaces/**/*.py"]
+# Example to include specific files:
+# addopts = ["--gp-docstring-paths=gaspatchio_core/column/namespaces/dt_proxy.py", "--gp-docstring-paths=gaspatchio_core/utils/specific_util.py"]
+
+# It's also good practice to register the markers used by the plugin:
+markers = [
+    "gaspatchio_docstring_example: Marks test as a Gaspatchio docstring example execution/lint check",
+    "gaspatchio_docstring_structure_check: Marks test as a Gaspatchio docstring structure validation check",
+]
+# testpaths = ["tests", "gaspatchio_core"] # Optional: define where pytest looks for tests in general
+```
+
+With `pyproject.toml` configured, you can simply run:
+```bash
+uv run pytest
+# or to run only docstring related tests:
+uv run pytest -m "gaspatchio_docstring_example or gaspatchio_docstring_structure_check"
+```
+This will use the paths defined in `addopts` to discover docstring examples.
+
+The `gp-docstrings lint` command remains useful for quick checks on specific files or methods without relying on the full `pytest` collection and execution cycle, especially if you haven't configured `pyproject.toml` or want to override its settings for a one-off check.
 
 ### Update Docstring Example Outputs (`update`)
 

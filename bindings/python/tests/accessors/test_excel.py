@@ -2,10 +2,11 @@ import datetime
 
 import polars as pl
 import pytest
-from gaspatchio_core import ActuarialFrame
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from polars.testing import assert_series_equal
+
+from gaspatchio_core import ActuarialFrame
 
 # Test data for from_excel_serial
 EXCEL_SERIAL_DATA = {
@@ -185,13 +186,206 @@ def test_yearfrac_act_act_literal_end_date():
     ),
     basis_str=st.text(
         min_size=1, alphabet=st.characters(min_codepoint=97, max_codepoint=122)
-    ).filter(lambda x: x.lower() != "act/act"),
+    ).filter(
+        lambda x: x.lower()
+        not in ["act/act", "us_nasd_30_360", "30/360", "actual/actual"]
+    ),
 )
 def test_yearfrac_invalid_basis_hypothesis(start_date_val, end_date_val, basis_str):
     af = ActuarialFrame({"start": [start_date_val], "end": [end_date_val]})
-    with pytest.raises(
-        NotImplementedError, match=f"Day count basis '{basis_str}' not yet implemented."
-    ):
+    with pytest.raises(ValueError, match="Invalid basis"):
         res_expr = af["start"].excel.yearfrac(af["end"], basis=basis_str)
         # Need to alias the expression for with_columns
         af.with_columns(res_expr.alias("test_col")).collect()
+
+
+# --- Tests for yearfrac with list inputs ---
+
+
+def test_yearfrac_list_start_scalar_end():
+    """Test yearfrac with a list of start dates and a scalar end date."""
+    start_dates_list = [
+        datetime.date(2020, 1, 1),
+        datetime.date(2020, 6, 15),
+        None,  # Test with None in list
+    ]
+    end_date_scalar = datetime.date(2021, 1, 1)
+    df = pl.DataFrame(
+        {"start_list": [start_dates_list]},
+        schema={"start_list": pl.List(pl.Date)},
+    )
+    af = ActuarialFrame(df)
+
+    expected_fractions = [
+        (datetime.date(2021, 1, 1) - datetime.date(2020, 1, 1)).days / 365.25,
+        (datetime.date(2021, 1, 1) - datetime.date(2020, 6, 15)).days / 365.25,
+        None,
+    ]
+
+    res_af = af.with_columns(
+        af["start_list"].excel.yearfrac(end_date_scalar).alias("year_frac_list")
+    )
+    result_list = res_af.collect()["year_frac_list"][0]
+
+    # Create polars Series for comparison to handle None and float precision
+    expected_series = pl.Series("expected", expected_fractions, dtype=pl.Float64)
+    result_series = pl.Series("result", result_list, dtype=pl.Float64)
+    assert_series_equal(result_series, expected_series, rtol=1e-5, check_names=False)
+
+
+def test_yearfrac_scalar_start_list_end():
+    """Test yearfrac with a scalar start date and a list of end dates."""
+    start_date_scalar = datetime.date(2020, 1, 1)
+    end_dates_list = [
+        datetime.date(2020, 7, 1),
+        datetime.date(2021, 1, 1),
+    ]
+    df = pl.DataFrame(
+        {"end_list": [end_dates_list]}, schema={"end_list": pl.List(pl.Date)}
+    )
+    af = ActuarialFrame(df)
+    expected_fractions = [
+        (datetime.date(2020, 7, 1) - start_date_scalar).days / 365.25,
+        (datetime.date(2021, 1, 1) - start_date_scalar).days / 365.25,
+    ]
+
+    res_af = af.with_columns(
+        af["end_list"]
+        .excel.yearfrac(start_date_scalar, basis="act/act")
+        .alias("year_frac_list")
+        # Note: yearfrac is called on the 'non-list' part if one is scalar/column and other is list
+        # So if start_date_scalar was a ColumnProxy, it would be start_date_scalar.excel.yearfrac(af["end_list"])
+        # However, our accessor is on ColumnProxy/ExpressionProxy, so we need to test it on the list side here
+        # to confirm pl.element() works correctly with the scalar.
+        # The implementation logic for yearfrac handles start_expr_polars.list.eval or end_expr_polars.list.eval
+        # So, this test implicitly covers `pl.lit(start_date_scalar).excel.yearfrac(af["end_list"])` if that were possible
+        # A more direct way is to make start_date_scalar a column:
+    )
+    # Re-do with scalar start as a proper column to test the other pl.element() path
+    df_col_start = pl.DataFrame(
+        {"s_date": [start_date_scalar], "end_list": [end_dates_list]},
+        schema={"s_date": pl.Date, "end_list": pl.List(pl.Date)},
+    )
+    af_col_start = ActuarialFrame(df_col_start)
+    res_af_col_start = af_col_start.with_columns(
+        af_col_start["s_date"]
+        .excel.yearfrac(af_col_start["end_list"])
+        .alias("year_frac_list")
+    )
+
+    result_list = res_af_col_start.collect()["year_frac_list"][0]
+    expected_series = pl.Series("expected", expected_fractions, dtype=pl.Float64)
+    result_series = pl.Series("result", result_list, dtype=pl.Float64)
+    assert_series_equal(result_series, expected_series, rtol=1e-5, check_names=False)
+
+
+def test_yearfrac_list_start_col_end():
+    """Test yearfrac with a list of start dates and a column of end dates."""
+    data = {
+        "start_list_col": [
+            [datetime.date(2020, 1, 1), datetime.date(2020, 2, 1)],
+            [datetime.date(2021, 1, 1)],
+        ],
+        "end_col_val": [datetime.date(2020, 12, 31), datetime.date(2021, 12, 31)],
+    }
+    df = pl.DataFrame(
+        data, schema={"start_list_col": pl.List(pl.Date), "end_col_val": pl.Date}
+    )
+    af = ActuarialFrame(df)
+
+    # Expected: for each row, yearfrac(list_item, end_col_val_for_that_row)
+    expected_results = [
+        [
+            (datetime.date(2020, 12, 31) - datetime.date(2020, 1, 1)).days / 365.25,
+            (datetime.date(2020, 12, 31) - datetime.date(2020, 2, 1)).days / 365.25,
+        ],
+        [(datetime.date(2021, 12, 31) - datetime.date(2021, 1, 1)).days / 365.25],
+    ]
+    res_af = af.with_columns(
+        af["start_list_col"].excel.yearfrac(af["end_col_val"]).alias("calculated_yf")
+    )
+    result_series_of_lists = res_af.collect()["calculated_yf"]
+
+    # Compare element-wise for lists within series
+    assert len(result_series_of_lists) == len(expected_results)
+    for res_list, exp_list in zip(result_series_of_lists, expected_results):
+        assert_series_equal(pl.Series(res_list), pl.Series(exp_list), rtol=1e-5)
+
+
+def test_yearfrac_col_start_list_end():
+    """Test yearfrac with a column of start dates and a list of end dates."""
+    data = {
+        "start_col_val": [datetime.date(2020, 1, 1), datetime.date(2021, 1, 1)],
+        "end_list_col": [
+            [datetime.date(2020, 12, 31), datetime.date(2021, 1, 15)],
+            [datetime.date(2021, 6, 1), datetime.date(2022, 1, 1)],
+        ],
+    }
+    df = pl.DataFrame(
+        data, schema={"start_col_val": pl.Date, "end_list_col": pl.List(pl.Date)}
+    )
+    af = ActuarialFrame(df)
+    expected_results = [
+        [
+            (datetime.date(2020, 12, 31) - datetime.date(2020, 1, 1)).days / 365.25,
+            (datetime.date(2021, 1, 15) - datetime.date(2020, 1, 1)).days / 365.25,
+        ],
+        [
+            (datetime.date(2021, 6, 1) - datetime.date(2021, 1, 1)).days / 365.25,
+            (datetime.date(2022, 1, 1) - datetime.date(2021, 1, 1)).days / 365.25,
+        ],
+    ]
+    res_af = af.with_columns(
+        af["start_col_val"].excel.yearfrac(af["end_list_col"]).alias("calculated_yf")
+    )
+    result_series_of_lists = res_af.collect()["calculated_yf"]
+    assert len(result_series_of_lists) == len(expected_results)
+    for res_list, exp_list in zip(result_series_of_lists, expected_results):
+        assert_series_equal(pl.Series(res_list), pl.Series(exp_list), rtol=1e-5)
+
+
+def test_yearfrac_both_lists_raises_not_implemented():
+    """Test that yearfrac raises NotImplementedError if both inputs are lists."""
+    df = pl.DataFrame(
+        {
+            "start_list": [[datetime.date(2020, 1, 1)]],
+            "end_list": [[datetime.date(2021, 1, 1)]],
+        },
+        schema={
+            "start_list": pl.List(pl.Date),
+            "end_list": pl.List(pl.Date),
+        },
+    )
+    af = ActuarialFrame(df)
+    with pytest.raises(
+        NotImplementedError, match="both start and end dates are list columns"
+    ):
+        res_expr = af["start_list"].excel.yearfrac(af["end_list"])
+        af.with_columns(res_expr.alias("yf_both_lists")).collect()
+
+
+def test_yearfrac_empty_list_input():
+    """Test yearfrac with an empty list of start dates."""
+    df = pl.DataFrame(
+        {"start_empty_list": [[]], "end_val": [datetime.date(2021, 1, 1)]},
+        schema={"start_empty_list": pl.List(pl.Date), "end_val": pl.Date},
+    )
+    af = ActuarialFrame(df)
+    res_af = af.with_columns(
+        af["start_empty_list"].excel.yearfrac(af["end_val"]).alias("year_frac_empty")
+    )
+    result_list = res_af.collect()["year_frac_empty"][0]
+    assert list(result_list) == []  # Polars list.eval on empty list produces empty list
+
+    df_end_empty = pl.DataFrame(
+        {"start_val": [datetime.date(2020, 1, 1)], "end_empty_list": [[]]},
+        schema={"start_val": pl.Date, "end_empty_list": pl.List(pl.Date)},
+    )
+    af_end_empty = ActuarialFrame(df_end_empty)
+    res_af_end_empty = af_end_empty.with_columns(
+        af_end_empty["start_val"]
+        .excel.yearfrac(af_end_empty["end_empty_list"])
+        .alias("year_frac_empty_end")
+    )
+    result_list_end_empty = res_af_end_empty.collect()["year_frac_empty_end"][0]
+    assert list(result_list_end_empty) == []
