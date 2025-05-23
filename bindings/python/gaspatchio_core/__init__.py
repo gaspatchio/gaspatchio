@@ -3,6 +3,7 @@ Gaspatchio Core - Actuarial computation framework
 """
 
 # Import key components for easier access
+# Explicitly import the public API components
 from gaspatchio_core.telemetry import (
     configure_telemetry,
 )
@@ -16,6 +17,12 @@ from . import (
 )
 
 # Explicitly import the public API components
+from .assumptions import (
+    assumption_lookup,
+    get_table_metadata,
+    list_tables_with_metadata,
+    load_assumptions,
+)
 from .column import ColumnProxy, ExpressionProxy
 from .errors import PerformanceWarning
 from .frame import ActuarialFrame, run_model
@@ -34,6 +41,11 @@ __all__ = [
     "ActuarialFrame",
     "ColumnProxy",
     "ExpressionProxy",
+    # Assumptions
+    "load_assumptions",
+    "assumption_lookup",
+    "get_table_metadata",
+    "list_tables_with_metadata",
     # Execution
     "run_model",
     # Utilities
