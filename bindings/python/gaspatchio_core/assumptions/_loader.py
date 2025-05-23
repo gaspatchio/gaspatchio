@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Literal, Union
 
 import polars as pl
+from loguru import logger
 
 from ..registry import TableRegistry
 
@@ -218,6 +219,9 @@ def _materialise(source: Union[str, Path, pl.DataFrame]) -> pl.DataFrame:
         ValueError: If file format is not supported or data is invalid
     """
     if isinstance(source, pl.DataFrame):
+        logger.debug(
+            f"Using provided DataFrame with {source.shape[0]} rows and {source.shape[1]} columns"
+        )
         return source
 
     # Convert to Path for easier handling
@@ -225,24 +229,65 @@ def _materialise(source: Union[str, Path, pl.DataFrame]) -> pl.DataFrame:
         source = Path(source)
 
     if not source.exists():
-        raise FileNotFoundError(f"Source file not found: {source}")
+        # Enhanced error message with suggestions
+        raise FileNotFoundError(
+            f"Source file not found: {source}\n"
+            f"Suggestions:\n"
+            f"  • Check the file path is correct\n"
+            f"  • Ensure the file exists in the current working directory: {Path.cwd()}\n"
+            f"  • Use absolute path if the file is in a different directory\n"
+            f"  • Check file permissions"
+        )
 
     # Detect file type and read appropriately
     suffix = source.suffix.lower()
 
+    logger.debug(f"Reading {suffix} file: {source}")
+
     if suffix == ".csv":
         try:
-            return pl.read_csv(source, infer_schema_length=10000)
+            df = pl.read_csv(source, infer_schema_length=10000)
+            logger.debug(
+                f"Successfully read CSV with {df.shape[0]} rows and {df.shape[1]} columns"
+            )
+            return df
+        except pl.exceptions.PolarsError as e:
+            raise ValueError(
+                f"Failed to read CSV file {source}: {e}\n"
+                f"Suggestions:\n"
+                f"  • Check the CSV format is valid (proper delimiters, headers)\n"
+                f"  • Ensure text encoding is UTF-8\n"
+                f"  • Try opening the file in a text editor to verify format\n"
+                f"  • Check for corrupted data or missing values"
+            ) from e
         except Exception as e:
-            raise ValueError(f"Failed to read CSV file {source}: {e}") from e
+            raise ValueError(f"Unexpected error reading CSV file {source}: {e}") from e
     elif suffix == ".parquet":
         try:
-            return pl.read_parquet(source)
+            df = pl.read_parquet(source)
+            logger.debug(
+                f"Successfully read Parquet with {df.shape[0]} rows and {df.shape[1]} columns"
+            )
+            return df
+        except pl.exceptions.PolarsError as e:
+            raise ValueError(
+                f"Failed to read Parquet file {source}: {e}\n"
+                f"Suggestions:\n"
+                f"  • Check the Parquet file is not corrupted\n"
+                f"  • Ensure the file was created with a compatible Parquet version\n"
+                f"  • Try reading with a different Parquet reader to verify integrity"
+            ) from e
         except Exception as e:
-            raise ValueError(f"Failed to read Parquet file {source}: {e}") from e
+            raise ValueError(
+                f"Unexpected error reading Parquet file {source}: {e}"
+            ) from e
     else:
         raise ValueError(
-            f"Unsupported file format: {suffix}. Supported formats: .csv, .parquet"
+            f"Unsupported file format: {suffix}. Supported formats: .csv, .parquet\n"
+            f"Suggestions:\n"
+            f"  • Convert your data to CSV or Parquet format\n"
+            f"  • Use pl.DataFrame() to create data programmatically\n"
+            f"  • Check file extension matches the actual format"
         )
 
 
@@ -273,18 +318,30 @@ def _analyse_shape(
         ValueError: If specified id columns don't exist or other validation errors
     """
     if df.is_empty():
-        raise ValueError("DataFrame is empty")
+        raise ValueError(
+            "DataFrame is empty - no rows to process.\n"
+            "Suggestions:\n"
+            "  • Check your data source contains data\n"
+            "  • Verify any filtering hasn't removed all rows\n"
+            "  • Ensure the file was read correctly"
+        )
 
     # Get all column names and their types
     all_columns = df.columns
     numeric_columns = [col for col in all_columns if df[col].dtype.is_numeric()]
     non_numeric_columns = [col for col in all_columns if not df[col].dtype.is_numeric()]
 
+    logger.debug(
+        f"DataFrame analysis: {len(all_columns)} total columns, "
+        f"{len(numeric_columns)} numeric, {len(non_numeric_columns)} non-numeric"
+    )
+
     # Process id column specification
     if id is None:
         # Auto-detect: prioritize non-numeric columns first, then common id column names
         if non_numeric_columns:
             id_columns = [non_numeric_columns[0]]  # Take first non-numeric column
+            logger.debug(f"Auto-detected id column from non-numeric: {id_columns[0]}")
         else:
             # All columns are numeric - look for common id column patterns
             potential_id_cols = []
@@ -306,9 +363,13 @@ def _analyse_shape(
 
             if potential_id_cols:
                 id_columns = [potential_id_cols[0]]  # Take first matching pattern
+                logger.debug(
+                    f"Auto-detected id column from pattern matching: {id_columns[0]}"
+                )
             else:
                 # Fallback: use first column as id if all else fails
                 id_columns = [all_columns[0]]
+                logger.debug(f"Using first column as id (fallback): {id_columns[0]}")
     elif isinstance(id, str):
         # Split string on comma only, not whitespace (to handle column names with spaces)
         if "," in id:
@@ -316,14 +377,23 @@ def _analyse_shape(
         else:
             # Single column name - don't split
             id_columns = [id.strip()]
+        logger.debug(f"Using specified id columns: {id_columns}")
     else:  # isinstance(id, list)
         id_columns = [str(col) for col in id]
+        logger.debug(f"Using provided id column list: {id_columns}")
 
     # Validate that all id columns exist
     missing_columns = [col for col in id_columns if col not in all_columns]
     if missing_columns:
+        available_cols = ", ".join(all_columns)
         raise ValueError(
-            f"Specified id columns not found in DataFrame: {missing_columns}"
+            f"Specified id columns not found in DataFrame: {missing_columns}\n"
+            f"Available columns: {available_cols}\n"
+            f"Column types: {dict(zip(all_columns, [str(df[col].dtype) for col in all_columns]))}\n"
+            f"Suggestions:\n"
+            f"  • Check column name spelling and case sensitivity\n"
+            f"  • Use df.columns to see available column names\n"
+            f"  • Consider auto-detection by setting id=None"
         )
 
     # Separate remaining columns into numeric and non-numeric (excluding id columns)
@@ -336,6 +406,11 @@ def _analyse_shape(
     # Only count numeric columns as value columns for actuarial tables
     # Text columns are typically descriptive fields, not value columns to be melted
     is_wide = len(remaining_numeric) > 1
+
+    logger.debug(
+        f"Table type: {'wide' if is_wide else 'curve'} "
+        f"({len(remaining_numeric)} numeric columns after id exclusion)"
+    )
 
     return id_columns, remaining_numeric, remaining_non_numeric, is_wide
 
@@ -571,6 +646,24 @@ def _create_overflow_expansion(
         # No overflow data to expand - return empty DataFrame with correct schema
         return pl.DataFrame(schema=df.schema).clear()
 
+    # Calculate expansion size for memory warning
+    expansion_range = max_value - start_value + 1
+    original_rows = len(overflow_data)
+    total_new_rows = original_rows * expansion_range
+
+    # Memory warning for large expansions
+    if total_new_rows > 1_000_000:
+        logger.warning(
+            f"Large overflow expansion detected: {total_new_rows:,} rows will be created "
+            f"({original_rows:,} overflow rows × {expansion_range} duration values). "
+            f"This may consume significant memory. Consider reducing max_overflow parameter."
+        )
+    elif total_new_rows > 100_000:
+        logger.info(
+            f"Overflow expansion creating {total_new_rows:,} rows "
+            f"({original_rows:,} overflow rows × {expansion_range} duration values)"
+        )
+
     # Create expanded rows for each duration in range
     expansion_rows = []
     for duration in range(start_value, max_value + 1):
@@ -580,7 +673,11 @@ def _create_overflow_expansion(
 
     # Concatenate all expansion rows
     if expansion_rows:
-        return pl.concat(expansion_rows)
+        result = pl.concat(expansion_rows)
+        logger.debug(
+            f"Created {len(result)} overflow expansion rows for range {start_value}-{max_value}"
+        )
+        return result
     else:
         return pl.DataFrame(schema=df.schema).clear()
 
@@ -791,37 +888,73 @@ def load_assumptions(
         ```
     """
 
-    # Parameter validation
+    logger.info(f"Loading assumption table '{name}'")
+
+    # Enhanced parameter validation with specific error messages
     if not isinstance(name, str) or not name.strip():
-        raise ValueError("name must be a non-empty string")
+        raise ValueError(
+            "name must be a non-empty string\n"
+            "Suggestions:\n"
+            "  • Use descriptive names like 'mortality_2012' or 'lapse_ultimate'\n"
+            "  • Avoid empty strings or whitespace-only names"
+        )
 
     if not isinstance(value, str) or not value.strip():
-        raise ValueError("value must be a non-empty string")
+        raise ValueError(
+            "value must be a non-empty string\n"
+            "Suggestions:\n"
+            "  • Use descriptive names like 'rate', 'qx', 'probability'\n"
+            "  • Avoid empty strings or whitespace-only names"
+        )
 
     if value_vars is not None and not isinstance(value_vars, list):
-        raise ValueError("value_vars must be a list of column names or None")
+        raise ValueError(
+            "value_vars must be a list of column names or None\n"
+            "Examples:\n"
+            "  • value_vars=['Male', 'Female'] for gender-specific columns\n"
+            "  • value_vars=['1', '2', '3', 'Ultimate'] for duration columns"
+        )
 
     if not isinstance(max_overflow, int) or max_overflow < 1 or max_overflow > 1000:
-        raise ValueError("max_overflow must be an integer between 1 and 1000")
+        raise ValueError(
+            "max_overflow must be an integer between 1 and 1000\n"
+            "Suggestions:\n"
+            "  • Use 200 for typical actuarial projections\n"
+            "  • Use 100 for shorter-term analyses\n"
+            "  • Use 500+ only for very long-term projections"
+        )
 
     # Validate overflow parameter
     if overflow is not None and overflow != "auto" and not isinstance(overflow, str):
-        raise ValueError("overflow must be 'auto', a column name string, or None")
+        raise ValueError(
+            "overflow must be 'auto', a column name string, or None\n"
+            "Examples:\n"
+            "  • overflow='auto' for automatic detection\n"
+            "  • overflow='Ultimate' for explicit overflow column\n"
+            "  • overflow=None to disable overflow handling"
+        )
 
     # Validate metadata parameter
     if metadata is not None and not isinstance(metadata, dict):
-        raise ValueError("metadata must be a dictionary or None")
+        raise ValueError(
+            "metadata must be a dictionary or None\n"
+            "Examples:\n"
+            "  • metadata={'source': '2012 IAM Tables', 'version': '1.0'}\n"
+            "  • metadata={'effective_date': '2013-01-01', 'basis': 'select_ultimate'}"
+        )
 
     # Step 1: Materialize the data
     try:
         df = _materialise(source)
     except (FileNotFoundError, ValueError) as e:
-        raise e  # Re-raise with original message
+        logger.error(f"Failed to load data for table '{name}': {e}")
+        raise
 
     # Step 2: Analyse the shape and identify columns
     try:
         id_columns, numeric_columns, text_columns, is_wide = _analyse_shape(df, id)
     except ValueError as e:
+        logger.error(f"Failed to analyze table structure for '{name}': {e}")
         raise ValueError(f"Failed to analyse DataFrame structure: {e}") from e
 
     # Handle value_vars for selective melting
@@ -865,6 +998,12 @@ def load_assumptions(
         # Store metadata if provided
         if metadata is not None:
             _TABLE_METADATA[name] = metadata.copy()
+
+        # Success logging for curve tables
+        logger.info(
+            f"Successfully loaded curve table '{name}': "
+            f"{len(tidy_df)} rows, {len(id_columns)} id columns"
+        )
 
         return tidy_df
     else:
@@ -911,5 +1050,16 @@ def load_assumptions(
         # Store metadata if provided
         if metadata is not None:
             _TABLE_METADATA[name] = metadata.copy()
+
+        # Success logging for wide tables
+        expanded_info = ""
+        if overflow is not None and overflow_col is not None:
+            expanded_info = f", overflow expanded to {max_overflow}"
+
+        logger.info(
+            f"Successfully loaded wide table '{name}': "
+            f"{len(tidy_df)} rows, {len(id_columns)} id columns, "
+            f"{len(columns_to_melt)} value columns{expanded_info}"
+        )
 
         return tidy_df

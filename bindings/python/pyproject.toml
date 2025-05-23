@@ -50,6 +50,7 @@ dev = [
     "mypy>=1.15.0",
     "pyright>=1.1.400",
     "pytest-accept>=0.1.12",
+    "pytest-benchmark>=5.1.0",
 ]
 
 [tool.uv]

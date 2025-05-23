@@ -279,37 +279,6 @@ class TestBackwardCompatibilityIntegration:
         assert len(with_mortality) == 1
         assert with_mortality["mortality"].item() == 0.0011
 
-    def test_performance_comparison(self):
-        """Test that lookup performance meets expectations."""
-        import time
-
-        # Create larger table for performance testing
-        large_mortality = pl.DataFrame(
-            {"age": list(range(18, 100)), "qx": [0.001 + i * 0.0001 for i in range(82)]}
-        )
-
-        gs.load_assumptions("large_mortality", large_mortality, value="qx")
-
-        # Test lookup performance using single-row pattern
-        test_ages = [25, 35, 45, 55, 65, 75, 85, 95]
-
-        start_time = time.time()
-
-        # Perform multiple lookups
-        for _ in range(100):
-            for age in test_ages:
-                test_df = pl.DataFrame({"age": [age]})
-                result = test_df.with_columns(
-                    gs.assumption_lookup("age", table_name="large_mortality").alias(
-                        "rate"
-                    )
-                )
-
-        lookup_time = time.time() - start_time
-
-        # 100 loops × 8 values should be very fast
-        assert lookup_time < 0.1  # Under 100ms for 800 total lookups
-
 
 class TestErrorHandlingIntegration:
     """Test comprehensive error handling in the integrated API."""
