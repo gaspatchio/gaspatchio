@@ -1,39 +1,39 @@
 """
-Tests for breaking changes in the new simplified API.
+Tests for the top-level only assumptions API.
 
 This module verifies that:
-1. Old import paths now fail with helpful error messages
-2. New top-level import paths work correctly
-3. Only the planned symbols are available at top-level
-4. Users are guided toward the new API
+1. Top-level imports work correctly
+2. Package-level imports for main functions correctly fail (restricted)
+3. Package-level metadata imports still work
+4. The API enforces the intended usage pattern
 """
 
 import pytest
 
 
-class TestBreakingChangeImports:
-    """Test that import breaking changes work as expected."""
+class TestTopLevelOnlyImports:
+    """Test that the top-level only import restriction works as expected."""
 
-    def test_old_assumption_lookup_import_fails(self):
-        """Test that importing assumption_lookup from assumptions submodule now fails."""
+    def test_assumption_lookup_import_from_package_fails(self):
+        """Test that importing assumption_lookup from assumptions package fails."""
         with pytest.raises(ImportError):
             from gaspatchio_core.assumptions import assumption_lookup  # noqa: F401
 
-    def test_old_load_assumptions_import_fails(self):
-        """Test that importing load_assumptions from assumptions submodule now fails."""
+    def test_load_assumptions_import_from_package_fails(self):
+        """Test that importing load_assumptions from assumptions package fails."""
         with pytest.raises(ImportError):
             from gaspatchio_core.assumptions import load_assumptions  # noqa: F401
 
-    def test_old_combined_import_fails(self):
-        """Test that importing both functions from assumptions submodule fails."""
+    def test_combined_import_from_package_fails(self):
+        """Test that importing both functions from assumptions package fails."""
         with pytest.raises(ImportError):
             from gaspatchio_core.assumptions import (  # noqa: F401
                 assumption_lookup,
                 load_assumptions,
             )
 
-    def test_new_top_level_imports_work(self):
-        """Test that new top-level imports work correctly."""
+    def test_top_level_imports_work(self):
+        """Test that top-level imports work correctly."""
         import gaspatchio_core as gs
 
         # These should all work
@@ -45,14 +45,14 @@ class TestBreakingChangeImports:
         assert callable(gs.assumption_lookup)
         assert callable(gs.load_assumptions)
 
-    def test_metadata_functions_still_available_in_submodule(self):
-        """Test that metadata functions are still available in the assumptions submodule."""
+    def test_metadata_functions_available_in_package(self):
+        """Test that metadata functions are available in the assumptions package."""
         from gaspatchio_core.assumptions import (
             get_table_metadata,
             list_tables_with_metadata,
         )
 
-        # These should still work
+        # These should work
         assert callable(get_table_metadata)
         assert callable(list_tables_with_metadata)
 
@@ -60,48 +60,93 @@ class TestBreakingChangeImports:
         """Test that only the planned symbols are available at top-level."""
         import gaspatchio_core as gs
 
-        # These 4 symbols should be available
+        # These symbols should be available
         required_symbols = [
             "load_assumptions",
             "assumption_lookup",
             "ActuarialFrame",
-            # Note: read_csv was mentioned in spec but doesn't seem to be implemented
         ]
 
         for symbol in required_symbols:
-            if symbol != "read_csv":  # Skip read_csv for now as discussed
-                assert hasattr(gs, symbol), f"Missing required symbol: {symbol}"
-                assert symbol in gs.__all__, f"Symbol {symbol} not in __all__"
+            assert hasattr(gs, symbol), f"Missing required symbol: {symbol}"
+            assert symbol in gs.__all__, f"Symbol {symbol} not in __all__"
+
+    def test_package_level_api_surface_metadata_only(self):
+        """Test that the assumptions package exports only metadata functions."""
+        from gaspatchio_core import assumptions
+
+        # Should have metadata functions
+        metadata_functions = [
+            "get_table_metadata",
+            "list_tables_with_metadata",
+        ]
+
+        for func in metadata_functions:
+            assert hasattr(assumptions, func), f"Missing metadata function: {func}"
+            assert func in assumptions.__all__, f"Function {func} not in __all__"
+
+        # Should NOT have main functions
+        main_functions = ["assumption_lookup", "load_assumptions"]
+        for func in main_functions:
+            assert not hasattr(assumptions, func), (
+                f"Main function {func} should not be in package"
+            )
+            assert func not in assumptions.__all__, (
+                f"Function {func} should not be in __all__"
+            )
 
 
-class TestNewAPIWorkflow:
-    """Test that the new API workflow functions correctly end-to-end."""
+class TestTopLevelAPIWorkflow:
+    """Test that the API workflow functions correctly with top-level imports only."""
 
-    def test_complete_workflow_with_new_api(self):
-        """Test complete assumption loading and lookup workflow using new API."""
+    def test_complete_workflow_with_top_level_api(self):
+        """Test complete assumption loading and lookup workflow using top-level API."""
         import gaspatchio_core as gs
         import polars as pl
 
         # Create test data
         df = pl.DataFrame({"Age": [30, 31, 32], "qx": [0.001, 0.0011, 0.0012]})
 
-        # Load using new API
-        result = gs.load_assumptions("breaking_change_test", df, value="qx")
+        # Load using top-level API
+        result = gs.load_assumptions("top_level_test", df, value="qx")
 
         # Verify structure
         assert result.columns == ["Age", "qx"]
         assert len(result) == 3
 
-        # Test lookup using new API
+        # Test lookup using top-level API
         test_df = pl.DataFrame({"Age": [31]})
         lookup_result = test_df.with_columns(
-            gs.assumption_lookup("Age", table_name="breaking_change_test").alias("qx")
+            gs.assumption_lookup("Age", table_name="top_level_test").alias("qx")
         )
 
         assert lookup_result["qx"].item() == 0.0011
 
-    def test_wide_table_workflow_with_new_api(self):
-        """Test wide table workflow using new API."""
+    def test_complete_workflow_with_direct_imports(self):
+        """Test complete assumption loading and lookup workflow using direct imports from top level."""
+        import polars as pl
+        from gaspatchio_core import assumption_lookup, load_assumptions
+
+        # Create test data
+        df = pl.DataFrame({"Age": [30, 31, 32], "qx": [0.001, 0.0011, 0.0012]})
+
+        # Load using direct import
+        result = load_assumptions("direct_import_test", df, value="qx")
+
+        # Verify structure
+        assert result.columns == ["Age", "qx"]
+        assert len(result) == 3
+
+        # Test lookup using direct import
+        test_df = pl.DataFrame({"Age": [31]})
+        lookup_result = test_df.with_columns(
+            assumption_lookup("Age", table_name="direct_import_test").alias("qx")
+        )
+
+        assert lookup_result["qx"].item() == 0.0011
+
+    def test_wide_table_workflow_top_level_only(self):
+        """Test wide table workflow using top-level imports only."""
         import gaspatchio_core as gs
         import polars as pl
 
@@ -115,49 +160,63 @@ class TestNewAPIWorkflow:
             }
         )
 
-        # Load using new API
-        result = gs.load_assumptions("wide_breaking_change_test", df, value="rate")
+        # Load using top-level API
+        result = gs.load_assumptions("wide_top_level_test", df, value="rate")
 
         # Verify structure
         assert result.columns == ["Age", "variable", "rate"]
         assert len(result) == 6  # 2 ages × 3 durations
 
-        # Test lookup using new API
+        # Test lookup using top-level API
         test_df = pl.DataFrame({"Age": [30], "variable": ["2"]})
         lookup_result = test_df.with_columns(
             gs.assumption_lookup(
-                "Age", "variable", table_name="wide_breaking_change_test"
+                "Age", "variable", table_name="wide_top_level_test"
             ).alias("rate")
         )
 
         assert lookup_result["rate"].item() == 0.0008
 
 
-class TestErrorMessagesAndGuidance:
-    """Test that error messages provide helpful guidance for migration."""
+class TestRestrictedAPIBehavior:
+    """Test that the restricted API provides clear guidance."""
 
-    def test_import_error_provides_guidance(self):
-        """Test that ImportError provides helpful guidance about the new API."""
+    def test_import_error_messages_are_helpful(self):
+        """Test that ImportError provides helpful guidance about the top-level API."""
         try:
             from gaspatchio_core.assumptions import assumption_lookup  # noqa: F401
 
             pytest.fail("Expected ImportError was not raised")
         except ImportError as e:
-            # The error message should be helpful
-            # (Though we're not requiring specific text since it's auto-generated)
+            # The error message should mention the function name
             assert "assumption_lookup" in str(e)
 
-    def test_module_docstring_provides_guidance(self):
-        """Test that module docstrings provide migration guidance."""
+        try:
+            from gaspatchio_core.assumptions import load_assumptions  # noqa: F401
+
+            pytest.fail("Expected ImportError was not raised")
+        except ImportError as e:
+            # The error message should mention the function name
+            assert "load_assumptions" in str(e)
+
+    def test_package_module_docstring_describes_restriction(self):
+        """Test that module docstrings describe the top-level only API."""
         from gaspatchio_core import assumptions
 
-        # The module should still exist but with limited functionality
+        # The module should exist and have documentation
         assert hasattr(assumptions, "__doc__")
+        assert assumptions.__doc__ is not None
 
-        # Should only have metadata functions
+        # Should only have metadata functions, not main functions
         assert hasattr(assumptions, "get_table_metadata")
         assert hasattr(assumptions, "list_tables_with_metadata")
-
-        # Should NOT have the main functions
         assert not hasattr(assumptions, "assumption_lookup")
         assert not hasattr(assumptions, "load_assumptions")
+
+    def test_top_level_direct_imports_work(self):
+        """Test that users can import functions directly from top level."""
+        # This is the recommended import pattern
+        from gaspatchio_core import assumption_lookup, load_assumptions
+
+        assert callable(assumption_lookup)
+        assert callable(load_assumptions)

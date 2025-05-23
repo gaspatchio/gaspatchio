@@ -775,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "gaspatchio_core_lib"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "arc-swap",
  "criterion",

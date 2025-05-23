@@ -20,13 +20,92 @@ _TABLE_METADATA: Dict[str, Dict[str, Any]] = {}
 
 
 def get_table_metadata(table_name: str) -> Dict[str, Any] | None:
-    """Retrieve metadata for a registered table.
+    """Retrieve metadata for a registered assumption table.
+
+    Actuarial assumption tables often contain important metadata about their
+    source, creation date, and business context. This function allows you to
+    retrieve the metadata dictionary that was stored when the table was loaded
+    using `load_assumptions()`.
+
+    !!! note "When to use"
+        *   Documenting assumption table sources and versions for audit trails.
+        *   Retrieving business metadata like effective dates, basis descriptions, or source systems.
+        *   Validating that the correct assumption table version is being used in models.
+        *   Creating assumption inventory reports that show table metadata alongside model results.
 
     Args:
         table_name: Name of the table to get metadata for
 
     Returns:
         dict | None: Copy of metadata dictionary if found, None otherwise
+
+    Examples
+    --------
+    Scalar example - Retrieving Mortality Table Metadata::
+
+        Scenario: You've loaded a mortality table with metadata and want to verify its source information.
+
+        ```python
+        import polars as pl
+        from gaspatchio_core.assumptions import load_assumptions, get_table_metadata
+
+        # Load table with metadata
+        mortality_data = pl.DataFrame({
+            "age": [20, 21, 22],
+            "qx": [0.001, 0.0011, 0.0012]
+        })
+
+        metadata = {
+            "source": "2012 IAM Mortality Tables",
+            "effective_date": "2013-01-01",
+            "table_type": "select_ultimate"
+        }
+
+        load_assumptions("mortality_2012", mortality_data, metadata=metadata)
+
+        # Retrieve metadata
+        retrieved_metadata = get_table_metadata("mortality_2012")
+        print(retrieved_metadata["source"])
+        ```
+
+        ```
+        2012 IAM Mortality Tables
+        ```
+
+    Vector (list) example – Multiple Table Metadata Comparison::
+
+        Scenario: You want to compare metadata across multiple assumption tables to ensure consistency.
+
+        ```python
+        import polars as pl
+        from gaspatchio_core.assumptions import load_assumptions, get_table_metadata
+
+        # Load multiple tables with different metadata
+        for year in [2012, 2017]:
+            data = pl.DataFrame({
+                "age": [20, 21],
+                "qx": [0.001 * (1 + (year-2012)*0.1), 0.0011 * (1 + (year-2012)*0.1)]
+            })
+
+            metadata = {
+                "source": f"{year} IAM Mortality Tables",
+                "year": year
+            }
+
+            load_assumptions(f"mortality_{year}", data, metadata=metadata)
+
+        # Compare metadata
+        table_names = ["mortality_2012", "mortality_2017"]
+        for name in table_names:
+            meta = get_table_metadata(name)
+            if meta:
+                print(f"{name}: {meta['source']}")
+        ```
+
+        ```
+        mortality_2012: 2012 IAM Mortality Tables
+        mortality_2017: 2017 IAM Mortality Tables
+        ```
     """
     metadata = _TABLE_METADATA.get(table_name)
     if metadata is not None:
@@ -35,16 +114,98 @@ def get_table_metadata(table_name: str) -> Dict[str, Any] | None:
 
 
 def list_tables_with_metadata() -> Dict[str, Dict[str, Any]]:
-    """List all tables that have metadata stored.
+    """List all assumption tables that have metadata stored.
+
+    This function provides an inventory of all loaded assumption tables that
+    have associated metadata. It's useful for discovering what tables are
+    available and understanding their business context without having to
+    remember specific table names.
+
+    !!! note "When to use"
+        *   Creating assumption inventory reports for actuarial documentation.
+        *   Auditing which assumption tables are currently loaded in your analysis session.
+        *   Discovering available tables when working with unfamiliar models or datasets.
+        *   Building assumption governance dashboards that track table usage and metadata.
 
     Returns:
         dict: Dictionary mapping table names to their metadata
+
+    Examples
+    --------
+    Scalar example - Basic Inventory Report::
+
+        Scenario: You want to see all loaded assumption tables and their basic information.
+
+        ```python
+        import polars as pl
+        from gaspatchio_core.assumptions import load_assumptions, list_tables_with_metadata
+
+        # Load a few tables with metadata
+        mortality_data = pl.DataFrame({"age": [20, 21], "qx": [0.001, 0.0011]})
+        load_assumptions("mortality_2012", mortality_data,
+                        metadata={"source": "2012 IAM", "type": "mortality"})
+
+        lapse_data = pl.DataFrame({"duration": [1, 2], "lapse_rate": [0.05, 0.03]})
+        load_assumptions("lapse_ultimate", lapse_data,
+                        metadata={"source": "Company Experience", "type": "lapse"})
+
+        # List all tables with metadata
+        all_tables = list_tables_with_metadata()
+        print(f"Found {len(all_tables)} tables with metadata")
+        ```
+
+        ```
+        Found 2 tables with metadata
+        ```
+
+    Vector (list) example – Metadata Reporting by Type::
+
+        Scenario: You want to group assumption tables by their type for documentation purposes.
+
+        ```python
+        import polars as pl
+        from gaspatchio_core.assumptions import load_assumptions, list_tables_with_metadata
+
+        # Load multiple tables with type metadata
+        tables_info = [
+            ("mortality_select", {"age": [20, 21], "qx": [0.001, 0.0011]}, {"type": "mortality"}),
+            ("mortality_ultimate", {"age": [20, 21], "qx": [0.0008, 0.0009]}, {"type": "mortality"}),
+            ("lapse_early", {"duration": [1, 2], "rate": [0.05, 0.03]}, {"type": "lapse"}),
+        ]
+
+        for name, data, metadata in tables_info:
+            df = pl.DataFrame(data)
+            load_assumptions(name, df, metadata=metadata)
+
+        # Group by type
+        all_tables = list_tables_with_metadata()
+        type_groups = {}
+        for table_name, metadata in all_tables.items():
+            table_type = metadata.get("type", "unknown")
+            if table_type not in type_groups:
+                type_groups[table_type] = []
+            type_groups[table_type].append(table_name)
+
+        for table_type, table_names in type_groups.items():
+            print(f"{table_type}: {len(table_names)} tables")
+        ```
+
+        ```
+        mortality: 2 tables
+        lapse: 1 tables
+        ```
     """
     return _TABLE_METADATA.copy()
 
 
 def _materialise(source: Union[str, Path, pl.DataFrame]) -> pl.DataFrame:
     """Materialize data from various sources into a Polars DataFrame.
+
+    This internal function handles the conversion of different data sources
+    (file paths or existing DataFrames) into a standardized Polars DataFrame
+    format. It supports CSV and Parquet file formats with optimized reading
+    settings for actuarial data, including extended schema inference for
+    complex data types.
 
     Args:
         source: Data source - file path (str/Path) or existing DataFrame
@@ -89,6 +250,13 @@ def _analyse_shape(
     df: pl.DataFrame, id: Union[str, list[str], None]
 ) -> tuple[list[str], list[str], list[str], bool]:
     """Analyse DataFrame shape and identify id and numeric columns.
+
+    This internal function performs comprehensive analysis of the DataFrame
+    structure to automatically classify columns into identifiers and value
+    columns. It handles both explicit column specifications and intelligent
+    auto-detection based on data types and common actuarial naming patterns.
+    The function determines whether the table is in curve format (single value
+    column) or wide format (multiple value columns requiring melting).
 
     Args:
         df: DataFrame to analyse
@@ -177,6 +345,13 @@ def _detect_overflow_column(
 ) -> Union[str, None]:
     """Detect overflow column in wide table columns.
 
+    This internal function identifies overflow columns in actuarial wide tables
+    using either explicit specification or intelligent pattern matching. It
+    recognizes common actuarial overflow column naming conventions such as
+    "Ult.", "Ultimate", "999", and empty strings. This is crucial for proper
+    handling of assumption tables where certain rates apply beyond the
+    explicitly modeled duration periods.
+
     Args:
         wide_cols: List of wide column names to search
         overflow: Overflow specification - None, "auto", or specific column name
@@ -224,6 +399,13 @@ def _get_max_numeric_duration(
 ) -> Union[int, None]:
     """Get the maximum numeric value among wide columns.
 
+    This internal function extracts numeric duration values from column names
+    to determine the maximum explicitly modeled duration in a wide table. It
+    handles various column naming conventions including pure numeric columns
+    ("1", "2", "3") and mixed formats ("Duration_1", "Year_5"). This maximum
+    value is used to determine the starting point for overflow expansion in
+    assumption tables.
+
     Args:
         wide_cols: List of wide column names
         exclude_overflow: Overflow column to exclude from search
@@ -264,6 +446,12 @@ def _get_max_numeric_duration(
 
 def _tidy_curve(df: pl.DataFrame, id_cols: list[str], value: str) -> pl.DataFrame:
     """Tidy a curve table (single numeric column) with proper column naming.
+
+    This internal function handles the tidying of curve-format assumption tables
+    where there is a single value column alongside identifier columns. It
+    validates that the table structure is indeed a curve (not a wide table),
+    renames the value column to the specified name for consistency, and ensures
+    proper column ordering for downstream processing and lookups.
 
     Args:
         df: DataFrame with id columns + single numeric column
@@ -307,6 +495,13 @@ def _tidy_wide_basic(
 ) -> pl.DataFrame:
     """Tidy a wide table by melting wide columns to long format.
 
+    This internal function transforms wide-format assumption tables into
+    standardized long format using Polars' unpivot operation. It melts the
+    specified wide columns while preserving identifier columns, creating a
+    "variable" column for the original column names and a value column for
+    the rates. This transformation is essential for efficient lookups and
+    consistent data structure across different assumption table formats.
+
     Args:
         df: DataFrame with id columns + wide columns
         id_cols: List of id column names
@@ -346,6 +541,13 @@ def _create_overflow_expansion(
     max_value: int,
 ) -> pl.DataFrame:
     """Create overflow expansion rows for the specified range.
+
+    This internal function generates additional rows for assumption tables
+    by replicating overflow rates across a range of duration values. It
+    takes the overflow column values and creates new rows for each duration
+    from start_value to max_value, effectively extending the assumption
+    table coverage beyond the explicitly modeled durations. This is common
+    in actuarial tables where ultimate rates apply to extended periods.
 
     Args:
         df: Melted DataFrame containing overflow data
@@ -392,6 +594,13 @@ def _tidy_wide_with_overflow_expansion(
     max_overflow: int = 200,
 ) -> pl.DataFrame:
     """Tidy a wide table with overflow expansion.
+
+    This internal function combines basic wide table melting with overflow
+    expansion capabilities. It first transforms the wide table to long format,
+    then identifies overflow columns and expands their values across the
+    specified duration range. This creates a comprehensive assumption table
+    that covers both explicitly modeled durations and extended periods using
+    ultimate rates, which is essential for long-term actuarial projections.
 
     Args:
         df: DataFrame with id columns + wide columns
@@ -451,6 +660,13 @@ def load_assumptions(
     detects the table format (curve vs wide table) and handles data transformation,
     overflow expansion, and registration for high-performance lookups.
 
+    !!! note "When to use"
+        *   Loading mortality tables for life insurance pricing and reserving calculations.
+        *   Importing lapse rate assumptions for policy projection models.
+        *   Setting up morbidity tables for disability insurance or critical illness products.
+        *   Loading economic scenario assumptions like interest rates or inflation curves.
+        *   Preparing assumption tables for IFRS 17 or Solvency II regulatory models.
+
     Args:
         name: Unique name for the assumption table. Used for lookups via
             assumption_lookup(). Must not conflict with existing table names.
@@ -482,38 +698,97 @@ def load_assumptions(
         ValueError: For invalid parameters or malformed data.
         FileNotFoundError: If source file doesn't exist.
 
-    Examples:
-        Basic curve loading:
-        >>> import polars as pl
-        >>> df = pl.DataFrame({"Age": [20, 21], "qx": [0.001, 0.0011]})
-        >>> result = load_assumptions("curve_test", df, value="qx")
-        >>> result.columns
-        ['Age', 'qx']
-        >>> len(result)
-        2
+    Examples
+    --------
+    Basic curve loading::
 
-        Wide table loading:
-        >>> wide_df = pl.DataFrame({
-        ...     "Age": [20, 21],
-        ...     "1": [0.001, 0.0011],
-        ...     "2": [0.0008, 0.0009]
-        ... })
-        >>> result = load_assumptions("wide_test", wide_df)
-        >>> result.columns
-        ['Age', 'variable', 'rate']
-        >>> len(result)  # 2 ages * 2 durations
-        4
+        Scenario: Loading an interest rate curve for pricing calculations.
 
-        Overflow handling:
-        >>> overflow_df = pl.DataFrame({
-        ...     "Age": [20, 21],
-        ...     "1": [0.001, 0.0011],
-        ...     "Ult.": [0.0005, 0.0006]
-        ... })
-        >>> result = load_assumptions("overflow_test", overflow_df,
-        ...                          overflow="Ult.", max_overflow=3)
-        >>> len(result)  # 2 ages * (2 original + 2 expanded) = 8
-        8
+        | Term | Rate  | Description                    |
+        |------|-------|--------------------------------|
+        | 1    | 0.025 | 1-year Treasury rate          |
+        | 5    | 0.035 | 5-year Treasury rate          |
+        | 10   | 0.042 | 10-year Treasury rate         |
+
+        ```python
+        import polars as pl
+        import gaspatchio_core as gs
+
+        df = pl.DataFrame({
+            "term": [1, 5, 10],
+            "interest_rate": [0.025, 0.035, 0.042]
+        })
+        gs.load_assumptions("treasury_curve", df, value="interest_rate")
+
+        # Lookup interest rates for specific terms
+        rate = gs.lookup_assumptions("treasury_curve", {"term": 5})
+        print(rate)
+        ```
+
+        ```
+        0.035
+        ```
+
+    Wide table loading::
+
+        Scenario: Loading a mortality table with separate columns for male and female rates.
+
+        | Age | Male_qx | Female_qx | Description              |
+        |-----|---------|-----------|--------------------------|
+        | 30  | 0.00074 | 0.00049   | Age 30 mortality rates   |
+        | 31  | 0.00081 | 0.00053   | Age 31 mortality rates   |
+        | 32  | 0.00089 | 0.00058   | Age 32 mortality rates   |
+
+        ```python
+        import polars as pl
+        import gaspatchio_core as gs
+
+        mortality_df = pl.DataFrame({
+            "age": [30, 31, 32],
+            "male_qx": [0.00074, 0.00081, 0.00089],
+            "female_qx": [0.00049, 0.00053, 0.00058]
+        })
+        gs.load_assumptions("mortality_table", mortality_df)
+
+        # Lookup male mortality rate for age 31
+        qx_male = gs.lookup_assumptions("mortality_table", {"age": 31, "variable": "male_qx"})
+        print(qx_male)
+        ```
+
+        ```
+        0.00081
+        ```
+
+    Overflow handling::
+
+        Scenario: Loading a morbidity table with ultimate rates that need to be extended.
+
+        | Age | Year_1 | Year_2 | Ultimate | Description                    |
+        |-----|--------|--------|----------|--------------------------------|
+        | 40  | 0.0120 | 0.0110 | 0.0095   | Age 40 disability rates       |
+        | 41  | 0.0135 | 0.0125 | 0.0105   | Age 41 disability rates       |
+
+        ```python
+        import polars as pl
+        import gaspatchio_core as gs
+
+        morbidity_df = pl.DataFrame({
+            "age": [40, 41],
+            "1": [0.0120, 0.0135],
+            "2": [0.0110, 0.0125],
+            "Ultimate": [0.0095, 0.0105]
+        })
+        gs.load_assumptions("morbidity_table", morbidity_df,
+                           overflow="Ultimate", max_overflow=5)
+
+        # Lookup expanded ultimate rate for year 4 (should use ultimate value)
+        rate_year4 = gs.lookup_assumptions("morbidity_table", {"age": 40, "variable": "4"})
+        print(rate_year4)
+        ```
+
+        ```
+        0.0095
+        ```
     """
 
     # Parameter validation

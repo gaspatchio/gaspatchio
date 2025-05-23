@@ -1,13 +1,14 @@
 """
-Gaspatchio Core Assumptions API
+Gaspatchio Core Assumptions API - Metadata functions only
+
+Main assumption functions (load_assumptions, assumption_lookup) are available
+at the top level only: import gaspatchio_core as gs
 """
 
 # Import functions from the loader module
-# BREAKING CHANGE: Remove direct exports to force users to use top-level imports only
 from ._loader import get_table_metadata, list_tables_with_metadata
 
-# Re-export only metadata functions - load_assumptions and assumption_lookup
-# are now only available at the top level (gaspatchio_core.load_assumptions)
+# Only export metadata functions - main functions available at top level only
 __all__ = [
     "get_table_metadata",
     "list_tables_with_metadata",
