@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING, TypeAlias
 from . import functions as functions
 
 # Import types for the public API
+from .assumptions import assumption_lookup as assumption_lookup
+from .assumptions import get_table_metadata as get_table_metadata
+from .assumptions import list_tables_with_metadata as list_tables_with_metadata
+from .assumptions import load_assumptions as load_assumptions
 from .column import ColumnProxy as ColumnProxy
 from .column import ExpressionProxy as ExpressionProxy
 from .errors import PerformanceWarning as PerformanceWarning
@@ -27,13 +31,23 @@ if TYPE_CHECKING:
 
 # Define __all__ to match __init__.py
 __all__: list[str] = [
+    # Core classes
     "ActuarialFrame",
     "ColumnProxy",
     "ExpressionProxy",
+    # Assumptions
+    "load_assumptions",
+    "assumption_lookup",
+    "get_table_metadata",
+    "list_tables_with_metadata",
+    # Execution
     "run_model",
+    # Utilities
     "execution_mode",
     "get_default_mode",
     "set_default_mode",
+    # Errors
     "PerformanceWarning",
+    # Modules (for direct function access)
     "functions",
 ]

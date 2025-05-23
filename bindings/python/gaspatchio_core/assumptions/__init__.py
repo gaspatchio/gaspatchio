@@ -63,8 +63,6 @@ def assumption_lookup(*keys: IntoExpr, table_name: str) -> pl.Expr:
 
 # Re-export all functions
 __all__ = [
-    "load_assumptions",
-    "assumption_lookup",
     "get_table_metadata",
     "list_tables_with_metadata",
 ]

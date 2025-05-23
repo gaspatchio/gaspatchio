@@ -167,7 +167,7 @@ Update `_loader.py`:
    - Convert variable column to string type
    - Return tidy DataFrame with id_cols + ["variable"] + [value]
 
-3. Update `load_assumptions()`:
+3. Update `load_assumptions()` to use the new function:
    - Handle both curve and wide table cases
    - For wide tables, call _tidy_wide_basic()
    - Pass correct keys to registry.register_table(): id_cols + ["variable"] for wide tables
@@ -356,50 +356,76 @@ Ensure all edge cases are handled gracefully with clear error messages.
 
 ---
 
-### Step 9: Legacy Compatibility & Error Handling
+### Step 9: Breaking Changes & API Migration
 
-**Objective:** Ensure backward compatibility and robust error handling.
+**Objective:** Implement the breaking changes required for the new simplified API.
 
-**Files to Create:**
-- `bindings/python/tests/assumptions/test_legacy.py`
+**Files to Update:**
+- `gaspatchio_core/__init__.py`
+- `gaspatchio_core/assumptions.py` 
+- `bindings/python/tests/assumptions/test_breaking_changes.py`
 
-**Prompt 9:**
+**Prompt 9:** - Breaking change
 
 ```
-Ensure complete backward compatibility and add comprehensive error handling.
+Implement the breaking changes required for the new simplified API according to the plan.
 
-Update `_loader.py`:
+Update `gaspatchio_core/__init__.py`:
 
-1. Add robust error handling throughout:
-   - File I/O errors with helpful messages and suggestions
-   - DataFrame validation errors with specific column/type information  
-   - Memory warnings for very large expansions
-   - Clear errors for malformed wide tables or ambiguous formats
+1. **BREAKING CHANGE**: Add top-level imports for the new API:
+   ```python
+   from .assumptions import load_assumptions, assumption_lookup
+   ```
 
-2. Add performance optimizations:
-   - Lazy evaluation where possible
-   - Memory-efficient overflow expansion for large tables
-   - Progress indicators for large operations if needed
+2. Remove any deep import paths that were previously available
+3. Ensure these 4 symbols are available at top-level:
+   - `gs.load_assumptions()`
+   - `gs.assumption_lookup()` 
+   - `gs.ActuarialFrame`
 
-3. Add logging support using the project's logging framework:
-   - Log successful table registrations with basic stats
-   - Log warnings for large memory expansions
-   - Debug logging for shape detection and overflow logic
+Update `gaspatchio_core/assumptions.py`:
 
-Create `bindings/python/tests/assumptions/test_legacy.py`:
-- Test that all existing TableRegistry + assumption_lookup workflows continue to work unchanged
-- Test importing from old paths vs new paths
-- Test mixed usage: some tables loaded via old API, some via new API
-- Verify no performance regressions in existing lookup code
+1. **BREAKING CHANGE**: Remove `assumption_lookup` from being directly importable:
+   - The function should only be available via `gaspatchio_core.assumption_lookup`
+   - Remove any exports that allow `from gaspatchio_core.assumptions import assumption_lookup`
+
+2. Keep the implementation intact but make it internal-only
+3. Add clear deprecation notices in docstrings about the import path change
+
+Add comprehensive error handling throughout:
+
+1. File I/O errors with helpful messages suggesting common fixes
+2. DataFrame validation errors with specific column/type information  
+3. Memory warnings for very large overflow expansions (>1M rows)
+4. Clear errors for malformed wide tables or ambiguous column detection
+
+Add logging support:
+- Log successful table registrations with basic stats (rows, columns, overflow expansion)
+- Log warnings for large memory expansions
+- Debug logging for auto-detection decisions (curve vs wide, overflow column detection)
+
+Create `bindings/python/tests/assumptions/test_breaking_changes.py`:
+- Test that old import paths now fail with helpful error messages:
+  ```python
+  # This should now raise ImportError with helpful message
+  from gaspatchio_core.assumptions import assumption_lookup
+  ```
+- Test that new import paths work correctly:
+  ```python
+  import gaspatchio_core as gs
+  gs.assumption_lookup(...)  # Should work
+  ```
+- Test that `TableRegistry().register_table()` is no longer the recommended path
+- Verify that only the 4 planned symbols are available at top-level
 
 Create `bindings/python/tests/assumptions/test_errors.py`:
 - Test all error conditions with representative data
-- Test file not found, permission errors, corrupt files
+- Test file not found, permission errors, corrupt files  
 - Test malformed DataFrames, missing columns, wrong data types
 - Test memory limits and very large overflow expansions
-- Verify error messages are actionable and user-friendly
+- Verify error messages are actionable and include migration guidance
 
-Run the complete test suite and ensure all tests pass reliably.
+The goal is a clean, simplified API where users only need `import gaspatchio_core as gs` and can access all assumption functionality through the top-level namespace.
 ```
 
 ---
@@ -463,12 +489,12 @@ The implementation should be ready for production use with comprehensive test co
 Each step must meet these criteria before proceeding:
 
 ✅ **All tests pass** for the current and previous steps  
-✅ **No breaking changes** to existing functionality  
+✅ **Breaking changes implemented correctly** - old import paths fail with helpful messages  
 ✅ **Type hints** are complete and mypy-clean  
 ✅ **Error handling** is comprehensive with clear messages  
 ✅ **Performance** meets or exceeds existing implementation  
 ✅ **Code coverage** is >95% for new code  
-✅ **Integration** works seamlessly with existing codebase  
+✅ **New API only** - only the 4 planned symbols work at top-level
 
 ---
 
