@@ -5,9 +5,12 @@ This module tests the overflow detection and expansion logic that pre-computes
 all overflow entries at registration time for maximum lookup performance.
 """
 
+from __future__ import annotations
+
+# Use new top-level imports instead of submodule imports
+import gaspatchio_core as gs
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions import assumption_lookup
 from gaspatchio_core.assumptions._loader import (
     _create_overflow_expansion,
     _detect_overflow_column,
@@ -374,7 +377,7 @@ def test_overflow_integration_with_lookup():
 
         # Perform lookup using the correct syntax
         result_df = test_df.with_columns(
-            assumption_lookup(
+            gs.assumption_lookup(
                 "Age", "variable", table_name="mortality_lookup_test"
             ).alias("rate")
         )
@@ -420,7 +423,7 @@ def test_overflow_performance_large_expansion():
     for duration in test_durations:
         test_df = pl.DataFrame({"Age": [22], "variable": [duration]})
         result_df = test_df.with_columns(
-            assumption_lookup(
+            gs.assumption_lookup(
                 "Age", "variable", table_name="mortality_large_expansion"
             ).alias("rate")
         )
@@ -451,7 +454,7 @@ def test_overflow_memory_usage_warning():
     # Verify lookup works for extreme values using correct syntax
     test_df = pl.DataFrame({"Age": [30], "variable": ["999"]})
     result_df = test_df.with_columns(
-        assumption_lookup(
+        gs.assumption_lookup(
             "Age", "variable", table_name="mortality_huge_expansion"
         ).alias("rate")
     )

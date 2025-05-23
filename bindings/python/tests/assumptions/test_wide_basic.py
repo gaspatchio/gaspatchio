@@ -10,14 +10,14 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import gaspatchio_core as gs
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions import assumption_lookup, load_assumptions
 from gaspatchio_core.assumptions._loader import (
     _analyse_shape,
     _detect_overflow_column,
     _get_max_numeric_duration,
-    _tidy_wide_basic,
+    _tidy_wide_with_overflow_expansion,
 )
 
 
@@ -36,7 +36,7 @@ class TestWideTableBasic:
             }
         )
 
-        result = load_assumptions("wide_basic_test", df, value="mortality_rate")
+        result = gs.load_assumptions("wide_basic_test", df, value="mortality_rate")
 
         # Verify the result structure
         assert result.columns == ["Age", "variable", "mortality_rate"]
@@ -58,7 +58,7 @@ class TestWideTableBasic:
             }
         )
 
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "wide_explicit_id", df, id="AttAge", value="lapse_rate"
         )
 
@@ -77,7 +77,7 @@ class TestWideTableBasic:
             }
         )
 
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "wide_multi_id", df, id=["Age", "Gender"], value="rate"
         )
 
@@ -96,7 +96,7 @@ class TestWideTableBasic:
             }
         )
 
-        result = load_assumptions("select_mortality_lookup", df, value="qx")
+        result = gs.load_assumptions("select_mortality_lookup", df, value="qx")
 
         # Test lookups for different age/duration combinations
         test_cases = [
@@ -111,7 +111,7 @@ class TestWideTableBasic:
 
             # Perform lookup
             lookup_result = single_row_df.with_columns(
-                assumption_lookup(
+                gs.assumption_lookup(
                     "Age", "variable", table_name="select_mortality_lookup"
                 ).alias("qx")
             )
@@ -138,7 +138,7 @@ class TestWideTableBasic:
         )
 
         # Use value_vars to select only the gender/smoking columns
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "gender_smoking_select",
             df,
             id="age-last",
@@ -173,7 +173,7 @@ class TestWideTableBasic:
             }
         )
 
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "mortality_value_vars_lookup",
             df,
             id="age-last",
@@ -193,7 +193,7 @@ class TestWideTableBasic:
         test_single = pl.DataFrame({"age-last": [25], "variable": ["MNS"]})
 
         lookup_result = test_single.with_columns(
-            assumption_lookup(
+            gs.assumption_lookup(
                 "age-last", "variable", table_name="mortality_value_vars_lookup"
             ).alias("mortality_rate")
         )
@@ -212,15 +212,15 @@ class TestWideTableBasic:
 
         # Test invalid value_vars
         with pytest.raises(ValueError, match="Specified value_vars columns not found"):
-            load_assumptions("invalid_value_vars", df, value_vars=["nonexistent"])
+            gs.load_assumptions("invalid_value_vars", df, value_vars=["nonexistent"])
 
         # Test empty value_vars
         with pytest.raises(ValueError, match="No columns found to use as values"):
-            load_assumptions("empty_value_vars", df, value_vars=[])
+            gs.load_assumptions("empty_value_vars", df, value_vars=[])
 
         # Test invalid value_vars type
         with pytest.raises(ValueError, match="value_vars must be a list"):
-            load_assumptions("invalid_type_value_vars", df, value_vars="rate1")
+            gs.load_assumptions("invalid_type_value_vars", df, value_vars="rate1")
 
     def test_wide_table_auto_id_detection(self):
         """Test automatic id column detection for wide tables."""
@@ -234,7 +234,7 @@ class TestWideTableBasic:
             }
         )
 
-        result = load_assumptions("wide_auto_id", df, value="rate")
+        result = gs.load_assumptions("wide_auto_id", df, value="rate")
 
         assert result.columns == ["PolicyYear", "variable", "rate"]
         assert len(result) == 9
@@ -250,7 +250,7 @@ class TestWideTableBasic:
             }
         )
 
-        result = load_assumptions("wide_numeric_only", df, value="rate")
+        result = gs.load_assumptions("wide_numeric_only", df, value="rate")
 
         assert result.columns == ["Age", "variable", "rate"]
         assert len(result) == 9
@@ -265,7 +265,7 @@ class TestWideTableBasic:
             }
         )
 
-        result = load_assumptions("custom_value_name", df, value="custom_rate")
+        result = gs.load_assumptions("custom_value_name", df, value="custom_rate")
 
         assert result.columns == ["Age", "variable", "custom_rate"]
         assert "custom_rate" in result.columns
@@ -291,7 +291,7 @@ class TestWideTableBasic:
         )
 
         # Load using value_vars like model_test.py would
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "mortality_model_test_pattern",
             mortality_df,
             id="age-last",
@@ -312,7 +312,7 @@ class TestWideTableBasic:
         test_lookup = pl.DataFrame({"age-last": [30], "variable": ["MNS"]})
 
         lookup_result = test_lookup.with_columns(
-            assumption_lookup(
+            gs.assumption_lookup(
                 "age-last", "variable", table_name="mortality_model_test_pattern"
             ).alias("mortality_rate")
         )
@@ -334,7 +334,9 @@ class TestTidyWideBasic:
             }
         )
 
-        result = _tidy_wide_basic(df, ["Age"], ["Dur1", "Dur2", "Dur3"], "rate")
+        result = _tidy_wide_with_overflow_expansion(
+            df, ["Age"], ["Dur1", "Dur2", "Dur3"], "rate"
+        )
 
         assert result.columns == ["Age", "variable", "rate"]
         assert len(result) == 9
@@ -356,7 +358,9 @@ class TestTidyWideBasic:
             }
         )
 
-        result = _tidy_wide_basic(df, ["Age", "Gender"], ["Year1", "Year2"], "rate")
+        result = _tidy_wide_with_overflow_expansion(
+            df, ["Age", "Gender"], ["Year1", "Year2"], "rate"
+        )
 
         assert result.columns == ["Age", "Gender", "variable", "rate"]
         assert len(result) == 8  # 4 id combinations × 2 year columns
@@ -366,7 +370,7 @@ class TestTidyWideBasic:
         df = pl.DataFrame({"Age": [20, 21, 22], "rate": [0.1, 0.2, 0.3]})
 
         with pytest.raises(ValueError, match="Specified wide columns not found"):
-            _tidy_wide_basic(df, ["Age"], ["nonexistent"], "rate")
+            _tidy_wide_with_overflow_expansion(df, ["Age"], ["nonexistent"], "rate")
 
     def test_tidy_wide_preserve_column_order(self):
         """Test that column ordering is preserved in melting."""
@@ -379,7 +383,9 @@ class TestTidyWideBasic:
             }
         )
 
-        result = _tidy_wide_basic(df, ["Age"], ["Z_col", "A_col", "M_col"], "rate")
+        result = _tidy_wide_with_overflow_expansion(
+            df, ["Age"], ["Z_col", "A_col", "M_col"], "rate"
+        )
 
         # Check that the order of variables matches the input order
         age_20_vars = result.filter(pl.col("Age") == 20)["variable"].to_list()
@@ -478,7 +484,7 @@ class TestFileLoadingWide:
             csv_path = Path(f.name)
 
         try:
-            result = load_assumptions("wide_from_csv", csv_path, value="rate")
+            result = gs.load_assumptions("wide_from_csv", csv_path, value="rate")
             assert result.columns == ["Age", "variable", "rate"]
             assert len(result) == 9
         finally:
@@ -501,7 +507,9 @@ class TestFileLoadingWide:
             parquet_path = Path(f.name)
 
         try:
-            result = load_assumptions("wide_from_parquet", parquet_path, value="rate")
+            result = gs.load_assumptions(
+                "wide_from_parquet", parquet_path, value="rate"
+            )
             assert result.columns == ["Age", "variable", "rate"]
             assert len(result) == 9  # 3 ages × 3 duration columns (not 4)
         finally:
@@ -522,17 +530,17 @@ class TestWideTableParameterValidation:
         )
 
         # Valid usage - even with single value_var, should create wide format
-        result = load_assumptions("valid_value_vars", df, value_vars=["rate1"])
+        result = gs.load_assumptions("valid_value_vars", df, value_vars=["rate1"])
         assert len(result) == 2
         assert result.columns == ["Age", "variable", "rate"]  # Should be wide format
 
         # Invalid type
         with pytest.raises(ValueError, match="value_vars must be a list"):
-            load_assumptions("invalid_value_vars_type", df, value_vars="rate1")
+            gs.load_assumptions("invalid_value_vars_type", df, value_vars="rate1")
 
         # Missing columns
         with pytest.raises(ValueError, match="Specified value_vars columns not found"):
-            load_assumptions("missing_value_vars", df, value_vars=["missing_col"])
+            gs.load_assumptions("missing_value_vars", df, value_vars=["missing_col"])
 
 
 class TestOverflowDetection:
@@ -649,7 +657,7 @@ class TestOverflowDetection:
         )
 
         # Should work without error - overflow detection happens internally
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "overflow_auto_test", df, overflow="auto", value="rate"
         )
 
@@ -677,7 +685,7 @@ class TestOverflowDetection:
         )
 
         # Should work without error
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "overflow_explicit_test", df, overflow="Ultimate", value="rate"
         )
 
@@ -704,7 +712,9 @@ class TestOverflowDetection:
         )
 
         # Should work without error - no overflow processing
-        result = load_assumptions("overflow_none_test", df, overflow=None, value="rate")
+        result = gs.load_assumptions(
+            "overflow_none_test", df, overflow=None, value="rate"
+        )
 
         assert result.columns == ["Age", "variable", "rate"]
         assert len(result) == 12  # 3 ages × 4 columns
@@ -723,6 +733,6 @@ class TestOverflowDetection:
         with pytest.raises(
             ValueError, match="Specified overflow column 'NonExistent' not found"
         ):
-            load_assumptions(
+            gs.load_assumptions(
                 "overflow_error_test", df, overflow="NonExistent", value="rate"
             )

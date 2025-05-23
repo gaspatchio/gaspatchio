@@ -4,6 +4,13 @@ Gaspatchio Core - Actuarial computation framework
 
 # Import key components for easier access
 # Explicitly import the public API components
+# Explicitly import the public API components
+# BREAKING CHANGE: Import directly from source modules, not the assumptions package
+# Import assumption_lookup from the standalone .py file (not the package)
+import importlib.util
+import sys
+from pathlib import Path
+
 from gaspatchio_core.telemetry import (
     configure_telemetry,
 )
@@ -16,9 +23,16 @@ from . import (
     functions,
 )
 
-# Explicitly import the public API components
-from .assumptions import (
-    assumption_lookup,
+# Load assumption_lookup from the standalone assumptions.py module
+_assumptions_module_path = Path(__file__).parent / "assumptions.py"
+_spec = importlib.util.spec_from_file_location(
+    "assumptions_module", _assumptions_module_path
+)
+_assumptions_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_assumptions_module)
+assumption_lookup = _assumptions_module.assumption_lookup
+
+from .assumptions._loader import (
     get_table_metadata,
     list_tables_with_metadata,
     load_assumptions,

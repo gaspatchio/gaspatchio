@@ -7,9 +7,10 @@ overwriting scenarios, and concurrent loading scenarios.
 
 import time
 
+# Use new top-level imports instead of submodule imports
+import gaspatchio_core as gs
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions import assumption_lookup, load_assumptions
 
 
 class TestDuplicateTableNames:
@@ -25,13 +26,13 @@ class TestDuplicateTableNames:
         table_name = f"mortality_duplicate_test_{unique_suffix}"
 
         # First registration should succeed
-        load_assumptions(table_name, df1)
+        gs.load_assumptions(table_name, df1)
 
         # Second registration with same name should raise error
         with pytest.raises(
             ValueError, match=f"Failed to register table '{table_name}'"
         ):
-            load_assumptions(table_name, df2)
+            gs.load_assumptions(table_name, df2)
 
     def test_duplicate_table_name_wide_vs_curve(self):
         """Test duplicate names between different table types."""
@@ -45,13 +46,13 @@ class TestDuplicateTableNames:
         table_name = f"mixed_type_duplicate_{unique_suffix}"
 
         # Load curve first
-        load_assumptions(table_name, curve_df, value="qx")
+        gs.load_assumptions(table_name, curve_df, value="qx")
 
         # Try to load wide table with same name - should fail
         with pytest.raises(
             ValueError, match=f"Failed to register table '{table_name}'"
         ):
-            load_assumptions(table_name, wide_df)
+            gs.load_assumptions(table_name, wide_df)
 
     def test_duplicate_with_overflow_table(self):
         """Test duplicate names with overflow tables."""
@@ -71,13 +72,13 @@ class TestDuplicateTableNames:
         table_name = f"overflow_duplicate_test_{unique_suffix}"
 
         # Load overflow table first
-        load_assumptions(table_name, overflow_df, overflow="Ult.")
+        gs.load_assumptions(table_name, overflow_df, overflow="Ult.")
 
         # Try to load simple table with same name - should fail
         with pytest.raises(
             ValueError, match=f"Failed to register table '{table_name}'"
         ):
-            load_assumptions(table_name, simple_df)
+            gs.load_assumptions(table_name, simple_df)
 
     def test_case_sensitive_table_names(self):
         """Test that table names are case sensitive."""
@@ -96,14 +97,14 @@ class TestDuplicateTableNames:
         ]
 
         for name in names:
-            load_assumptions(name, df, value="qx")
+            gs.load_assumptions(name, df, value="qx")
 
         # Verify all are registered and accessible
         test_df = pl.DataFrame({"Age": [30]})
 
         for table_name in names:
             result = test_df.with_columns(
-                assumption_lookup("Age", table_name=table_name).alias("qx")
+                gs.assumption_lookup("Age", table_name=table_name).alias("qx")
             )
             assert result["qx"].item() == 0.001
 
@@ -112,20 +113,20 @@ class TestDuplicateTableNames:
         df = pl.DataFrame({"Age": [30, 31], "qx": [0.001, 0.0011]})
 
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            load_assumptions("", df)
+            gs.load_assumptions("", df)
 
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            load_assumptions("   ", df)
+            gs.load_assumptions("   ", df)
 
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            load_assumptions("\t\n", df)
+            gs.load_assumptions("\t\n", df)
 
     def test_none_table_name_error(self):
         """Test that None table name is rejected."""
         df = pl.DataFrame({"Age": [30, 31], "qx": [0.001, 0.0011]})
 
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            load_assumptions(None, df)
+            gs.load_assumptions(None, df)
 
     def test_numeric_string_table_names_allowed(self):
         """Test that numeric string table names are allowed and case sensitive."""
@@ -142,12 +143,12 @@ class TestDuplicateTableNames:
         ]
 
         for name in valid_names:
-            load_assumptions(name, df, value="qx")
+            gs.load_assumptions(name, df, value="qx")
 
             # Verify accessibility
             test_df = pl.DataFrame({"Age": [30]})
             result = test_df.with_columns(
-                assumption_lookup("Age", table_name=name).alias("qx")
+                gs.assumption_lookup("Age", table_name=name).alias("qx")
             )
             assert result["qx"].item() == 0.001
 
@@ -168,13 +169,13 @@ class TestTableOverwriting:
         table_name = f"overwrite_test_{unique_suffix}"
 
         # First load
-        load_assumptions(table_name, df1)
+        gs.load_assumptions(table_name, df1)
 
         # Second load should fail (no overwrite parameter supported)
         with pytest.raises(
             ValueError, match=f"Failed to register table '{table_name}'"
         ):
-            load_assumptions(table_name, df2)
+            gs.load_assumptions(table_name, df2)
 
     def test_registry_state_after_failed_duplicate(self):
         """Test that registry state is consistent after failed duplicate registration."""
@@ -186,16 +187,16 @@ class TestTableOverwriting:
         table_name = f"registry_state_test_{unique_suffix}"
 
         # First registration
-        result1 = load_assumptions(table_name, df1, value="qx")
+        result1 = gs.load_assumptions(table_name, df1, value="qx")
 
         # Failed second registration
         with pytest.raises(ValueError):
-            load_assumptions(table_name, df2, value="qx")
+            gs.load_assumptions(table_name, df2, value="qx")
 
         # Original table should still be accessible and unchanged
         test_df = pl.DataFrame({"Age": [30]})
         result = test_df.with_columns(
-            assumption_lookup("Age", table_name=table_name).alias("qx")
+            gs.assumption_lookup("Age", table_name=table_name).alias("qx")
         )
         assert result["qx"].item() == 0.001  # Should still be original value
 
@@ -211,7 +212,7 @@ class TestTableOverwriting:
         df = pl.DataFrame({"Age": [30, 31], "qx": [0.001, 0.0011]})
 
         table_name = f"unique_test_{unique_suffix}"
-        result = load_assumptions(table_name, df, value="qx")
+        result = gs.load_assumptions(table_name, df, value="qx")
 
         assert len(result) == 2
         assert result.columns == ["Age", "qx"]
@@ -241,13 +242,13 @@ class TestTableNameValidation:
 
         for name in valid_names:
             try:
-                result = load_assumptions(name, df, value="qx")
+                result = gs.load_assumptions(name, df, value="qx")
                 assert len(result) == 2
 
                 # Verify accessibility
                 test_df = pl.DataFrame({"Age": [30]})
                 lookup_result = test_df.with_columns(
-                    assumption_lookup("Age", table_name=name).alias("qx")
+                    gs.assumption_lookup("Age", table_name=name).alias("qx")
                 )
                 assert lookup_result["qx"].item() == 0.001
             except Exception as e:
@@ -264,13 +265,13 @@ class TestTableNameValidation:
         long_name = f"{'a' * 500}_{unique_suffix}"
 
         # Should work (no artificial length limit imposed)
-        result = load_assumptions(long_name, df, value="qx")
+        result = gs.load_assumptions(long_name, df, value="qx")
         assert len(result) == 2
 
         # Verify accessibility
         test_df = pl.DataFrame({"Age": [30]})
         lookup_result = test_df.with_columns(
-            assumption_lookup("Age", table_name=long_name).alias("qx")
+            gs.assumption_lookup("Age", table_name=long_name).alias("qx")
         )
         assert lookup_result["qx"].item() == 0.001
 
@@ -314,11 +315,11 @@ class TestConcurrentLoading:
         results = []
         for name, df in tables_data:
             if "lapse_rates" in name:
-                result = load_assumptions(
+                result = gs.load_assumptions(
                     name, df, id="Duration", value_vars=["Male", "Female"]
                 )
             else:
-                result = load_assumptions(name, df)
+                result = gs.load_assumptions(name, df)
             results.append((name, result))
 
         # Verify all are accessible
@@ -327,7 +328,7 @@ class TestConcurrentLoading:
                 # Test wide table lookup
                 test_df = pl.DataFrame({"Duration": [1], "variable": ["Male"]})
                 result = test_df.with_columns(
-                    assumption_lookup("Duration", "variable", table_name=name).alias(
+                    gs.assumption_lookup("Duration", "variable", table_name=name).alias(
                         "rate"
                     )
                 )
@@ -336,14 +337,14 @@ class TestConcurrentLoading:
                 # Test different id column
                 test_df = pl.DataFrame({"Year": [1]})
                 result = test_df.with_columns(
-                    assumption_lookup("Year", table_name=name).alias("rate")
+                    gs.assumption_lookup("Year", table_name=name).alias("rate")
                 )
                 assert result["rate"].item() == 0.03
             else:
                 # Test mortality tables
                 test_df = pl.DataFrame({"Age": [30]})
                 result = test_df.with_columns(
-                    assumption_lookup("Age", table_name=name).alias("qx")
+                    gs.assumption_lookup("Age", table_name=name).alias("qx")
                 )
                 assert result["qx"].item() in [0.001, 0.0009]  # Either table value
 
@@ -360,13 +361,13 @@ class TestConcurrentLoading:
         unique_suffix = str(int(time.time() * 1000000))[-8:]
         table_name = f"isolation_test_mortality_{unique_suffix}"
 
-        result = load_assumptions(table_name, df, value="qx")
+        result = gs.load_assumptions(table_name, df, value="qx")
         assert len(result) == 2
 
         # Verify accessibility
         test_df = pl.DataFrame({"Age": [30]})
         lookup_result = test_df.with_columns(
-            assumption_lookup("Age", table_name=table_name).alias("qx")
+            gs.assumption_lookup("Age", table_name=table_name).alias("qx")
         )
         assert lookup_result["qx"].item() == 0.001
 
@@ -398,9 +399,9 @@ class TestConcurrentLoading:
         wide_name = f"wide_table_{unique_suffix}"
         overflow_name = f"overflow_table_{unique_suffix}"
 
-        load_assumptions(curve_name, curve_df, value="qx")
-        load_assumptions(wide_name, wide_df)
-        load_assumptions(
+        gs.load_assumptions(curve_name, curve_df, value="qx")
+        gs.load_assumptions(wide_name, wide_df)
+        gs.load_assumptions(
             overflow_name, overflow_df, id="Duration", overflow="Ult.", max_overflow=5
         )
 
@@ -408,14 +409,14 @@ class TestConcurrentLoading:
         # Curve table test
         test_df = pl.DataFrame({"Age": [30]})
         curve_result = test_df.with_columns(
-            assumption_lookup("Age", table_name=curve_name).alias("qx")
+            gs.assumption_lookup("Age", table_name=curve_name).alias("qx")
         )
         assert curve_result["qx"].item() == 0.001
 
         # Wide table test
         test_df = pl.DataFrame({"Age": [30], "variable": ["1"]})
         wide_result = test_df.with_columns(
-            assumption_lookup("Age", "variable", table_name=wide_name).alias("rate")
+            gs.assumption_lookup("Age", "variable", table_name=wide_name).alias("rate")
         )
         assert wide_result["rate"].item() == 0.002
 
@@ -424,8 +425,8 @@ class TestConcurrentLoading:
             {"Duration": [1], "variable": ["4"]}
         )  # Expanded duration
         overflow_result = test_df.with_columns(
-            assumption_lookup("Duration", "variable", table_name=overflow_name).alias(
-                "rate"
-            )
+            gs.assumption_lookup(
+                "Duration", "variable", table_name=overflow_name
+            ).alias("rate")
         )
         assert overflow_result["rate"].item() == 0.03  # Should match Ult. value

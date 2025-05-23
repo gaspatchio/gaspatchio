@@ -7,14 +7,10 @@ comprehensive parameter validation, edge cases, and performance with large table
 
 import time
 
+# Use new top-level imports instead of submodule imports
+import gaspatchio_core as gs
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions import (
-    assumption_lookup,
-    get_table_metadata,
-    list_tables_with_metadata,
-    load_assumptions,
-)
 
 
 class TestValueVarsSelectiveMelting:
@@ -33,7 +29,7 @@ class TestValueVarsSelectiveMelting:
         )
 
         # Only melt gender columns
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "selective_gender_test",
             df,
             id="Age",
@@ -51,7 +47,7 @@ class TestValueVarsSelectiveMelting:
         # Verify lookup works
         test_df = pl.DataFrame({"Age": [30], "variable": ["Male"]})
         lookup_result = test_df.with_columns(
-            assumption_lookup(
+            gs.assumption_lookup(
                 "Age", "variable", table_name="selective_gender_test"
             ).alias("rate")
         )
@@ -71,7 +67,7 @@ class TestValueVarsSelectiveMelting:
         )
 
         # Select only specific numeric columns, ignoring others
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "mixed_types_selective",
             df,
             id=["Product", "Age"],
@@ -87,7 +83,7 @@ class TestValueVarsSelectiveMelting:
             {"Product": ["Term"], "Age": [30], "variable": ["Female"]}
         )
         lookup_result = test_df.with_columns(
-            assumption_lookup(
+            gs.assumption_lookup(
                 "Product", "Age", "variable", table_name="mixed_types_selective"
             ).alias("mortality_rate")
         )
@@ -104,7 +100,7 @@ class TestValueVarsSelectiveMelting:
         )
 
         # Force wide table treatment by specifying value_vars (even with single column)
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "forced_wide_single", df, id="Age", value_vars=["Rate"], value="qx"
         )
 
@@ -129,7 +125,7 @@ class TestValueVarsSelectiveMelting:
         )
 
         # Selective melting with overflow
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "selective_with_overflow",
             df,
             id="Age",
@@ -162,7 +158,7 @@ class TestValueVarsSelectiveMelting:
             ValueError,
             match="Specified value_vars columns not found in DataFrame: \\['Missing', 'AlsoMissing'\\]",
         ):
-            load_assumptions(
+            gs.load_assumptions(
                 "missing_columns_test",
                 df,
                 value_vars=["Male", "Missing", "AlsoMissing"],
@@ -179,7 +175,7 @@ class TestValueVarsSelectiveMelting:
         )
 
         with pytest.raises(ValueError, match="No columns found to use as values"):
-            load_assumptions("empty_value_vars_test", df, value_vars=[])
+            gs.load_assumptions("empty_value_vars_test", df, value_vars=[])
 
 
 class TestMetadataSupport:
@@ -196,15 +192,15 @@ class TestMetadataSupport:
             "date_created": "2024-01-15",
         }
 
-        load_assumptions("metadata_test_basic", df, metadata=metadata, value="qx")
+        gs.load_assumptions("metadata_test_basic", df, metadata=metadata, value="qx")
 
         # Retrieve metadata
-        retrieved_metadata = get_table_metadata("metadata_test_basic")
+        retrieved_metadata = gs.get_table_metadata("metadata_test_basic")
         assert retrieved_metadata == metadata
 
         # Verify it's a copy, not the original
         retrieved_metadata["modified"] = True
-        original_retrieved = get_table_metadata("metadata_test_basic")
+        original_retrieved = gs.get_table_metadata("metadata_test_basic")
         assert "modified" not in original_retrieved
 
     def test_metadata_storage_wide_table(self):
@@ -225,7 +221,7 @@ class TestMetadataSupport:
             "source_file": "mortality_2020.csv",
         }
 
-        load_assumptions(
+        gs.load_assumptions(
             "metadata_wide_test",
             df,
             metadata=metadata,
@@ -233,23 +229,23 @@ class TestMetadataSupport:
             max_overflow=200,
         )
 
-        retrieved_metadata = get_table_metadata("metadata_wide_test")
+        retrieved_metadata = gs.get_table_metadata("metadata_wide_test")
         assert retrieved_metadata == metadata
 
     def test_metadata_none_handling(self):
         """Test tables without metadata."""
         df = pl.DataFrame({"Age": [30, 31], "qx": [0.001, 0.0011]})
 
-        load_assumptions("no_metadata_test", df, value="qx")
+        gs.load_assumptions("no_metadata_test", df, value="qx")
 
         # Should return None for tables without metadata
-        retrieved_metadata = get_table_metadata("no_metadata_test")
+        retrieved_metadata = gs.get_table_metadata("no_metadata_test")
         assert retrieved_metadata is None
 
     def test_metadata_missing_table(self):
         """Test metadata retrieval for non-existent table."""
         # Should return None for missing tables
-        retrieved_metadata = get_table_metadata("table_that_does_not_exist")
+        retrieved_metadata = gs.get_table_metadata("table_that_does_not_exist")
         assert retrieved_metadata is None
 
     def test_metadata_complex_nested_data(self):
@@ -276,11 +272,11 @@ class TestMetadataSupport:
             },
         }
 
-        load_assumptions(
+        gs.load_assumptions(
             "complex_metadata_test", df, metadata=complex_metadata, value="qx"
         )
 
-        retrieved_metadata = get_table_metadata("complex_metadata_test")
+        retrieved_metadata = gs.get_table_metadata("complex_metadata_test")
         assert retrieved_metadata == complex_metadata
 
     def test_list_tables_with_metadata(self):
@@ -292,12 +288,12 @@ class TestMetadataSupport:
         metadata1 = {"type": "mortality", "version": "1.0"}
         metadata2 = {"type": "interest", "version": "2.0"}
 
-        load_assumptions("table_list_1", df1, metadata=metadata1, value="qx")
-        load_assumptions("table_list_2", df2, metadata=metadata2, value="rate")
-        load_assumptions("table_list_no_meta", df1, value="qx")  # No metadata
+        gs.load_assumptions("table_list_1", df1, metadata=metadata1, value="qx")
+        gs.load_assumptions("table_list_2", df2, metadata=metadata2, value="rate")
+        gs.load_assumptions("table_list_no_meta", df1, value="qx")  # No metadata
 
         # List all tables with metadata
-        all_metadata = list_tables_with_metadata()
+        all_metadata = gs.list_tables_with_metadata()
 
         # Should include tables with metadata, but not the one without
         assert "table_list_1" in all_metadata
@@ -317,16 +313,16 @@ class TestComprehensiveParameterValidation:
 
         # Invalid value types
         with pytest.raises(ValueError, match="value must be a non-empty string"):
-            load_assumptions("value_test_1", df, value="")
+            gs.load_assumptions("value_test_1", df, value="")
 
         with pytest.raises(ValueError, match="value must be a non-empty string"):
-            load_assumptions("value_test_2", df, value="   ")
+            gs.load_assumptions("value_test_2", df, value="   ")
 
         with pytest.raises(ValueError, match="value must be a non-empty string"):
-            load_assumptions("value_test_3", df, value=123)
+            gs.load_assumptions("value_test_3", df, value=123)
 
         with pytest.raises(ValueError, match="value must be a non-empty string"):
-            load_assumptions("value_test_4", df, value=None)
+            gs.load_assumptions("value_test_4", df, value=None)
 
     def test_value_vars_parameter_validation(self):
         """Test value_vars parameter validation."""
@@ -336,17 +332,17 @@ class TestComprehensiveParameterValidation:
         with pytest.raises(
             ValueError, match="value_vars must be a list of column names or None"
         ):
-            load_assumptions("value_vars_test_1", df, value_vars="Male")
+            gs.load_assumptions("value_vars_test_1", df, value_vars="Male")
 
         with pytest.raises(
             ValueError, match="value_vars must be a list of column names or None"
         ):
-            load_assumptions("value_vars_test_2", df, value_vars=123)
+            gs.load_assumptions("value_vars_test_2", df, value_vars=123)
 
         with pytest.raises(
             ValueError, match="value_vars must be a list of column names or None"
         ):
-            load_assumptions("value_vars_test_3", df, value_vars={"Male", "Female"})
+            gs.load_assumptions("value_vars_test_3", df, value_vars={"Male", "Female"})
 
     def test_max_overflow_parameter_validation(self):
         """Test max_overflow parameter validation."""
@@ -358,27 +354,27 @@ class TestComprehensiveParameterValidation:
         with pytest.raises(
             ValueError, match="max_overflow must be an integer between 1 and 1000"
         ):
-            load_assumptions("max_overflow_test_1", df, max_overflow=0)
+            gs.load_assumptions("max_overflow_test_1", df, max_overflow=0)
 
         with pytest.raises(
             ValueError, match="max_overflow must be an integer between 1 and 1000"
         ):
-            load_assumptions("max_overflow_test_2", df, max_overflow=-5)
+            gs.load_assumptions("max_overflow_test_2", df, max_overflow=-5)
 
         with pytest.raises(
             ValueError, match="max_overflow must be an integer between 1 and 1000"
         ):
-            load_assumptions("max_overflow_test_3", df, max_overflow=1001)
+            gs.load_assumptions("max_overflow_test_3", df, max_overflow=1001)
 
         with pytest.raises(
             ValueError, match="max_overflow must be an integer between 1 and 1000"
         ):
-            load_assumptions("max_overflow_test_4", df, max_overflow="100")
+            gs.load_assumptions("max_overflow_test_4", df, max_overflow="100")
 
         with pytest.raises(
             ValueError, match="max_overflow must be an integer between 1 and 1000"
         ):
-            load_assumptions("max_overflow_test_5", df, max_overflow=100.5)
+            gs.load_assumptions("max_overflow_test_5", df, max_overflow=100.5)
 
     def test_overflow_parameter_validation(self):
         """Test overflow parameter validation."""
@@ -390,17 +386,17 @@ class TestComprehensiveParameterValidation:
         with pytest.raises(
             ValueError, match="overflow must be 'auto', a column name string, or None"
         ):
-            load_assumptions("overflow_test_1", df, overflow=123)
+            gs.load_assumptions("overflow_test_1", df, overflow=123)
 
         with pytest.raises(
             ValueError, match="overflow must be 'auto', a column name string, or None"
         ):
-            load_assumptions("overflow_test_2", df, overflow=["Ult."])
+            gs.load_assumptions("overflow_test_2", df, overflow=["Ult."])
 
         # Valid overflow values should work
-        load_assumptions("overflow_test_valid_1", df, overflow="auto")
-        load_assumptions("overflow_test_valid_2", df, overflow="Ult.")
-        load_assumptions("overflow_test_valid_3", df, overflow=None)
+        gs.load_assumptions("overflow_test_valid_1", df, overflow="auto")
+        gs.load_assumptions("overflow_test_valid_2", df, overflow="Ult.")
+        gs.load_assumptions("overflow_test_valid_3", df, overflow=None)
 
     def test_metadata_parameter_validation(self):
         """Test metadata parameter validation."""
@@ -408,16 +404,16 @@ class TestComprehensiveParameterValidation:
 
         # Invalid metadata types
         with pytest.raises(ValueError, match="metadata must be a dictionary or None"):
-            load_assumptions("metadata_test_1", df, metadata="invalid")
+            gs.load_assumptions("metadata_test_1", df, metadata="invalid")
 
         with pytest.raises(ValueError, match="metadata must be a dictionary or None"):
-            load_assumptions("metadata_test_2", df, metadata=123)
+            gs.load_assumptions("metadata_test_2", df, metadata=123)
 
         with pytest.raises(ValueError, match="metadata must be a dictionary or None"):
-            load_assumptions("metadata_test_3", df, metadata=["item1", "item2"])
+            gs.load_assumptions("metadata_test_3", df, metadata=["item1", "item2"])
 
         # Valid metadata should work
-        load_assumptions("metadata_test_valid", df, metadata={"key": "value"})
+        gs.load_assumptions("metadata_test_valid", df, metadata={"key": "value"})
 
 
 class TestEdgeCases:
@@ -428,13 +424,13 @@ class TestEdgeCases:
         empty_df = pl.DataFrame(schema={"Age": pl.Int32, "qx": pl.Float64})
 
         with pytest.raises(ValueError, match="DataFrame is empty"):
-            load_assumptions("empty_df_test", empty_df)
+            gs.load_assumptions("empty_df_test", empty_df)
 
     def test_single_row_table_curve(self):
         """Test loading single-row curve table."""
         df = pl.DataFrame({"Age": [30], "qx": [0.001]})
 
-        result = load_assumptions("single_row_curve", df, value="qx")
+        result = gs.load_assumptions("single_row_curve", df, value="qx")
 
         assert len(result) == 1
         assert result.columns == ["Age", "qx"]
@@ -442,7 +438,7 @@ class TestEdgeCases:
         # Test lookup
         test_df = pl.DataFrame({"Age": [30]})
         lookup_result = test_df.with_columns(
-            assumption_lookup("Age", table_name="single_row_curve").alias("qx")
+            gs.assumption_lookup("Age", table_name="single_row_curve").alias("qx")
         )
         assert lookup_result["qx"].item() == 0.001
 
@@ -450,7 +446,7 @@ class TestEdgeCases:
         """Test loading single-row wide table."""
         df = pl.DataFrame({"Age": [30], "1": [0.001], "2": [0.0008], "Ult.": [0.0005]})
 
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "single_row_wide", df, overflow="Ult.", max_overflow=5
         )
 
@@ -460,7 +456,7 @@ class TestEdgeCases:
         # Test lookup for expanded duration
         test_df = pl.DataFrame({"Age": [30], "variable": ["4"]})
         lookup_result = test_df.with_columns(
-            assumption_lookup("Age", "variable", table_name="single_row_wide").alias(
+            gs.assumption_lookup("Age", "variable", table_name="single_row_wide").alias(
                 "rate"
             )
         )
@@ -477,7 +473,7 @@ class TestEdgeCases:
             }
         )
 
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "unicode_test",
             df,
             id="年齢",
@@ -491,7 +487,7 @@ class TestEdgeCases:
         # Test lookup with Unicode
         test_df = pl.DataFrame({"年齢": [30], "variable": ["男性"]})
         lookup_result = test_df.with_columns(
-            assumption_lookup("年齢", "variable", table_name="unicode_test").alias(
+            gs.assumption_lookup("年齢", "variable", table_name="unicode_test").alias(
                 "死亡率"
             )
         )
@@ -509,7 +505,7 @@ class TestEdgeCases:
             }
         )
 
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "special_chars_test",
             df,
             id="Age (Years)",
@@ -522,7 +518,7 @@ class TestEdgeCases:
         # Test lookup with special characters
         test_df = pl.DataFrame({"Age (Years)": [30], "variable": ["Rate-Male"]})
         lookup_result = test_df.with_columns(
-            assumption_lookup(
+            gs.assumption_lookup(
                 "Age (Years)", "variable", table_name="special_chars_test"
             ).alias("mortality_rate")
         )
@@ -539,16 +535,16 @@ class TestEdgeCases:
             }
         )
 
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "large_values_test", df, overflow="Ult.", max_overflow=5
         )
 
         # Should handle large values correctly
         test_df = pl.DataFrame({"Age": [30], "variable": ["1"]})
         lookup_result = test_df.with_columns(
-            assumption_lookup("Age", "variable", table_name="large_values_test").alias(
-                "rate"
-            )
+            gs.assumption_lookup(
+                "Age", "variable", table_name="large_values_test"
+            ).alias("rate")
         )
         assert lookup_result["rate"].item() == 1e10
 
@@ -561,12 +557,12 @@ class TestEdgeCases:
             }
         )
 
-        result = load_assumptions("small_values_test", df, value="qx")
+        result = gs.load_assumptions("small_values_test", df, value="qx")
 
         # Should handle small values correctly
         test_df = pl.DataFrame({"Age": [30]})
         lookup_result = test_df.with_columns(
-            assumption_lookup("Age", table_name="small_values_test").alias("qx")
+            gs.assumption_lookup("Age", table_name="small_values_test").alias("qx")
         )
         assert lookup_result["qx"].item() == 1e-10
 
@@ -586,7 +582,7 @@ class TestPerformanceWithLargeTables:
         )
 
         start_time = time.time()
-        result = load_assumptions("large_curve_test", df, value="qx")
+        result = gs.load_assumptions("large_curve_test", df, value="qx")
         load_time = time.time() - start_time
 
         assert len(result) == n_rows
@@ -597,7 +593,7 @@ class TestPerformanceWithLargeTables:
         start_time = time.time()
         test_df = pl.DataFrame({"Age": [50000]})
         lookup_result = test_df.with_columns(
-            assumption_lookup("Age", table_name="large_curve_test").alias("qx")
+            gs.assumption_lookup("Age", table_name="large_curve_test").alias("qx")
         )
         lookup_time = time.time() - start_time
 
@@ -621,7 +617,7 @@ class TestPerformanceWithLargeTables:
         )
 
         start_time = time.time()
-        result = load_assumptions("large_wide_test", df)
+        result = gs.load_assumptions("large_wide_test", df)
         load_time = time.time() - start_time
 
         assert len(result) == n_ages * 5  # 50K rows
@@ -632,7 +628,7 @@ class TestPerformanceWithLargeTables:
         start_time = time.time()
         test_df = pl.DataFrame({"Age": [5000], "variable": ["3"]})
         lookup_result = test_df.with_columns(
-            assumption_lookup("Age", "variable", table_name="large_wide_test").alias(
+            gs.assumption_lookup("Age", "variable", table_name="large_wide_test").alias(
                 "rate"
             )
         )
@@ -656,7 +652,7 @@ class TestPerformanceWithLargeTables:
 
         # Expand to 100 durations
         start_time = time.time()
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "memory_efficiency_test", df, overflow="Ult.", max_overflow=100
         )
         load_time = time.time() - start_time
@@ -670,7 +666,7 @@ class TestPerformanceWithLargeTables:
         # Verify expansion worked correctly
         test_df = pl.DataFrame({"Age": [25], "variable": ["99"]})
         lookup_result = test_df.with_columns(
-            assumption_lookup(
+            gs.assumption_lookup(
                 "Age", "variable", table_name="memory_efficiency_test"
             ).alias("rate")
         )
@@ -693,7 +689,7 @@ class TestPerformanceWithLargeTables:
 
         start_time = time.time()
         for name, df in tables_data:
-            load_assumptions(name, df, value="rate")
+            gs.load_assumptions(name, df, value="rate")
         total_load_time = time.time() - start_time
 
         # Should handle all tables in reasonable time
@@ -703,7 +699,7 @@ class TestPerformanceWithLargeTables:
         for i, (name, _) in enumerate(tables_data):
             test_df = pl.DataFrame({"Age": [10000]})
             lookup_result = test_df.with_columns(
-                assumption_lookup("Age", table_name=name).alias("rate")
+                gs.assumption_lookup("Age", table_name=name).alias("rate")
             )
             expected_rate = 0.001 + i * 0.0001
             assert lookup_result["rate"].item() == pytest.approx(expected_rate)

@@ -7,9 +7,10 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+# Use new top-level imports instead of submodule imports
+import gaspatchio_core as gs
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions import assumption_lookup, load_assumptions
 from gaspatchio_core.assumptions._loader import (
     _analyse_shape,
     _materialise,
@@ -28,7 +29,7 @@ class TestCurveLoading:
         )
 
         # Load the curve with auto-detected id column
-        result = load_assumptions("test_mortality_basic", df, value="qx")
+        result = gs.load_assumptions("test_mortality_basic", df, value="qx")
 
         # Verify the result structure
         assert result.columns == ["Age", "qx"]
@@ -42,7 +43,7 @@ class TestCurveLoading:
             {"Duration": [1, 2, 3, 4, 5], "lapse_rate": [0.05, 0.04, 0.03, 0.03, 0.03]}
         )
 
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "test_lapse_explicit", df, id="Duration", value="lapse_rate"
         )
 
@@ -55,7 +56,7 @@ class TestCurveLoading:
             {"Age": [20, 21, 22], "mortality_rate": [0.001, 0.0011, 0.0012]}
         )
 
-        result = load_assumptions("test_rename_col", df, value="qx")
+        result = gs.load_assumptions("test_rename_col", df, value="qx")
 
         assert result.columns == ["Age", "qx"]
         assert result["qx"].to_list() == [0.001, 0.0011, 0.0012]
@@ -67,7 +68,7 @@ class TestCurveLoading:
             {"Age": [30, 31, 32, 33, 34], "qx": [0.002, 0.0021, 0.0022, 0.0023, 0.0024]}
         )
 
-        result = load_assumptions("mortality_lookup_integration", df, value="qx")
+        result = gs.load_assumptions("mortality_lookup_integration", df, value="qx")
 
         # Test individual scalar lookups
         test_ages = [30, 32, 34]
@@ -79,7 +80,7 @@ class TestCurveLoading:
 
             # Perform lookup
             lookup_result = single_row_df.with_columns(
-                assumption_lookup(
+                gs.assumption_lookup(
                     "Age", table_name="mortality_lookup_integration"
                 ).alias("qx")
             )
@@ -101,7 +102,7 @@ class TestCurveLoading:
             }
         )
 
-        result = load_assumptions(
+        result = gs.load_assumptions(
             "multi_id_curve", df, id=["Age", "Gender"], value="rate"
         )
 
@@ -119,7 +120,7 @@ class TestCurveLoading:
         )
 
         # Should now work since we support wide tables
-        result = load_assumptions("wide_table_test", df, value="rate")
+        result = gs.load_assumptions("wide_table_test", df, value="rate")
 
         # Verify it's a wide table result
         assert result.columns == ["Age", "variable", "rate"]
@@ -130,7 +131,7 @@ class TestCurveLoading:
         df = pl.DataFrame({"Age": ["20", "21", "22"], "Category": ["A", "B", "C"]})
 
         with pytest.raises(ValueError, match="No columns found to use as values"):
-            load_assumptions("should_fail_no_numeric", df)
+            gs.load_assumptions("should_fail_no_numeric", df)
 
     def test_parameter_validation(self):
         """Test that parameter validation works correctly."""
@@ -138,35 +139,35 @@ class TestCurveLoading:
 
         # Test invalid name
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            load_assumptions("", df)
+            gs.load_assumptions("", df)
 
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            load_assumptions("   ", df)
+            gs.load_assumptions("   ", df)
 
         # Test invalid value column name
         with pytest.raises(ValueError, match="value must be a non-empty string"):
-            load_assumptions("test", df, value="")
+            gs.load_assumptions("test", df, value="")
 
         # Test invalid max_overflow
         with pytest.raises(
             ValueError, match="max_overflow must be an integer between 1 and 1000"
         ):
-            load_assumptions("test", df, max_overflow=0)
+            gs.load_assumptions("test", df, max_overflow=0)
 
         with pytest.raises(
             ValueError, match="max_overflow must be an integer between 1 and 1000"
         ):
-            load_assumptions("test", df, max_overflow=1001)
+            gs.load_assumptions("test", df, max_overflow=1001)
 
         # Test invalid overflow parameter
         with pytest.raises(
             ValueError, match="overflow must be 'auto', a column name string, or None"
         ):
-            load_assumptions("test", df, overflow=123)
+            gs.load_assumptions("test", df, overflow=123)
 
         # Test invalid metadata
         with pytest.raises(ValueError, match="metadata must be a dictionary or None"):
-            load_assumptions("test", df, metadata="invalid")
+            gs.load_assumptions("test", df, metadata="invalid")
 
     def test_wide_table_detection_ready_for_step_4(self):
         """Test that we correctly detect wide tables and now support them."""
@@ -181,7 +182,7 @@ class TestCurveLoading:
         )
 
         # Should now work with wide table support
-        result = load_assumptions("wide_table_step4_test", df, value="rate")
+        result = gs.load_assumptions("wide_table_step4_test", df, value="rate")
 
         # Verify the result structure
         assert result.columns == ["Age", "variable", "rate"]
