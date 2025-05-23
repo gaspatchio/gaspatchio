@@ -13,7 +13,7 @@ use polars::series::Series;
 use polars_core::utils::concat_df;
 use rayon::prelude::*;
 use std::sync::Mutex;
-use tracing::{debug, error, instrument, span, trace, warn, Level};
+use tracing::{debug, error, instrument, trace, warn};
 
 /// Represents the type of transformation to apply during table registration.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -261,44 +261,44 @@ fn extract_value_from_list_series(
 }
 
 /// Converts a Vec<Value> into a Polars Series with a specified DataType.
+/// Optimized version with pre-allocation and reduced cloning.
 fn create_series_from_values(
     values: &[Value],
     name: PlSmallStr,
     dtype: &DataType,
 ) -> PolarsResult<Series> {
-    // name is PlSmallStr
     match dtype {
         DataType::Int64 => {
-            let ints: Vec<Option<i64>> = values
-                .iter()
-                .map(|v| match v {
-                    Value::Int(i) => Some(*i),
-                    Value::Null => None,
-                    _ => None,
-                })
-                .collect();
+            let mut ints = Vec::with_capacity(values.len());
+            for value in values {
+                match value {
+                    Value::Int(i) => ints.push(Some(*i)),
+                    Value::Null => ints.push(None),
+                    _ => ints.push(None),
+                }
+            }
             Ok(Int64Chunked::from_slice_options(name, &ints).into_series())
         }
         DataType::Float64 => {
-            let floats: Vec<Option<f64>> = values
-                .iter()
-                .map(|v| match v {
-                    Value::Float(f) => Some(*f),
-                    Value::Null => None,
-                    _ => None,
-                })
-                .collect();
+            let mut floats = Vec::with_capacity(values.len());
+            for value in values {
+                match value {
+                    Value::Float(f) => floats.push(Some(*f)),
+                    Value::Null => floats.push(None),
+                    _ => floats.push(None),
+                }
+            }
             Ok(Float64Chunked::from_slice_options(name, &floats).into_series())
         }
         DataType::String => {
-            let strings: Vec<Option<String>> = values
-                .iter()
-                .map(|v| match v {
-                    Value::String(s) => Some(s.clone()),
-                    Value::Null => None,
-                    _ => None,
-                })
-                .collect();
+            let mut strings = Vec::with_capacity(values.len());
+            for value in values {
+                match value {
+                    Value::String(s) => strings.push(Some(s.clone())),
+                    Value::Null => strings.push(None),
+                    _ => strings.push(None),
+                }
+            }
             Ok(StringChunked::from_slice_options(name, &strings).into_series())
         }
         DataType::Null => Ok(Series::new_null(name, values.len())),
@@ -660,6 +660,7 @@ fn get_inner_list_len(list_series: &Series, row_idx: usize) -> PolarsResult<usiz
 }
 
 /// Executes the vector lookup logic when at least one key is a List Series.
+/// Optimized version with minimal allocations and reduced overhead.
 #[instrument(
     level = "debug",
     skip(lookup_index, keys, vector_indices),
@@ -684,109 +685,114 @@ fn execute_vector_lookup(
         ));
     }
 
-    let first_vector_series = keys[*vector_indices.first().unwrap()]; // Reference outside the parallel loop
+    let first_vector_series = keys[*vector_indices.first().unwrap()];
 
-    // ---- START: Parallelized loop ----
-    // Convert the range into a parallel iterator and map over it.
-    // Each iteration (for a given 'i') will produce a PolarsResult<Series>.
-    let series_list_results: PolarsResult<Vec<Series>> = (0..output_len)
-        .into_par_iter() // Use Rayon's parallel iterator
-        .map(|i| {
-            // Process each row 'i' in parallel
-            // --- Start of closure: Contains the logic from the original loop body ---
-            // Note: Error handling inside the closure uses '?' which will bubble up
-            // to the collect step.
+    // Convert vector_indices to a HashSet for O(1) lookup
+    let vector_indices_set: std::collections::HashSet<usize> =
+        vector_indices.iter().copied().collect();
 
-            // It's often better to avoid complex logging spans inside tight parallel loops
-            // due to potential overhead/contention, but let's keep it for now.
-            let row_span = span!(Level::DEBUG, "vector_lookup_row", row = i);
-            let _enter = row_span.enter();
+    // Determine if parallelization is worth the overhead
+    // For small datasets, sequential processing can be faster due to reduced overhead
+    let use_parallel = output_len > 100; // Threshold can be tuned
 
-            let inner_len = get_inner_list_len(first_vector_series, i)?;
-            // Optional: Add a trace/debug log here if needed, outside the inner loop
-            // trace!("Processing row {} with inner_len: {}", i, inner_len);
+    let series_list_results: PolarsResult<Vec<Series>> = if use_parallel {
+        // Parallel version for larger datasets
+        (0..output_len)
+            .into_par_iter()
+            .map(|i| {
+                process_row_optimized(
+                    lookup_index,
+                    keys,
+                    &vector_indices_set,
+                    first_vector_series,
+                    i,
+                )
+            })
+            .collect()
+    } else {
+        // Sequential version for smaller datasets
+        (0..output_len)
+            .map(|i| {
+                process_row_optimized(
+                    lookup_index,
+                    keys,
+                    &vector_indices_set,
+                    first_vector_series,
+                    i,
+                )
+            })
+            .collect()
+    };
 
-            let inner_series = if inner_len == 0 {
-                trace!("Inner list is empty for row {}, creating empty series", i);
-                Series::new_empty("inner".into(), &lookup_index.value_dtype)
-            } else {
-                let mut inner_results: Vec<Value> = Vec::with_capacity(inner_len);
-                for element_idx in 0..inner_len {
-                    // Spans inside the inner loop might add significant overhead in parallel execution
-                    // Consider removing or sampling if performance is critical.
-                    // let element_span = span!(Level::TRACE, "vector_lookup_element", element = element_idx);
-                    // let _enter_elem = element_span.enter();
+    let series_list = series_list_results?;
 
-                    let mut current_key = Vec::with_capacity(keys.len());
-                    let mut key_contains_null_or_error = false;
-
-                    // Construct key
-                    for (key_idx, series) in keys.iter().enumerate() {
-                        let value_result = if vector_indices.contains(&key_idx) {
-                            extract_value_from_list_series(series, i, element_idx)
-                        } else {
-                            let scalar_idx = if series.len() == 1 { 0 } else { i };
-                            extract_value_from_series(series, scalar_idx)
-                        };
-                        match value_result {
-                            Ok(Value::Null) => {
-                                current_key.push(Value::Null);
-                                key_contains_null_or_error = true;
-                            }
-                            Ok(val) => current_key.push(val),
-                            Err(_) => {
-                                current_key.push(Value::Null);
-                                key_contains_null_or_error = true;
-                                // Optionally log the error here if needed, but be mindful of performance
-                            }
-                        }
-                    }
-
-                    // trace!(?current_key, key_contains_null = key_contains_null_or_error, "Constructed key for element");
-
-                    // Perform lookup
-                    let result_value = if key_contains_null_or_error {
-                        // trace!("Key contains null or error for row {}, element {}, defaulting result to Null", i, element_idx);
-                        Value::Null
-                    } else {
-                        lookup_index.lookup(&current_key).unwrap_or(Value::Null)
-                    };
-                    // trace!(?result_value, "Lookup result for element");
-                    inner_results.push(result_value);
-                }
-                // Create Series from results for this inner list
-                trace!(
-                    result_count = inner_results.len(),
-                    "Creating inner series for row {}",
-                    i
-                );
-                create_series_from_values(
-                    &inner_results,
-                    "inner".into(),
-                    &lookup_index.value_dtype,
-                )?
-            };
-            Ok(inner_series) // Return Ok(inner_series) from the closure
-                             // --- End of closure ---
-        })
-        .collect(); // Collect the results. This handles the Results from the map.
-                    // If any map operation returned Err, `collect()` will return that Err.
-                    // Otherwise, it returns Ok(Vec<Series>).
-
-    // ---- END: Parallelized loop ----
-
-    // Check the result of the parallel collection
-    let series_list = series_list_results?; // Propagate error if collection failed
-
-    // Build ListChunked from the Vec<Series> (collected in parallel)
-    debug!(
-        "Building final ListChunked from {} inner series",
-        series_list.len()
-    );
+    // Build ListChunked from the Vec<Series>
     let list_chunked = ListChunked::from_iter(series_list.into_iter().map(Some))
         .with_name(lookup_index.value_column.as_str().into());
 
     Ok(list_chunked.into_series())
+}
+
+/// Optimized row processing function with minimal allocations
+#[inline]
+fn process_row_optimized(
+    lookup_index: &LookupIndex,
+    keys: &[&Series],
+    vector_indices_set: &std::collections::HashSet<usize>,
+    first_vector_series: &Series,
+    row_idx: usize,
+) -> PolarsResult<Series> {
+    let inner_len = get_inner_list_len(first_vector_series, row_idx)?;
+
+    if inner_len == 0 {
+        return Ok(Series::new_empty("inner".into(), &lookup_index.value_dtype));
+    }
+
+    // Pre-allocate result vector with known capacity
+    let mut inner_results = Vec::with_capacity(inner_len);
+    // Pre-allocate key vector with known capacity - reuse across iterations
+    let mut current_key = Vec::with_capacity(keys.len());
+
+    for element_idx in 0..inner_len {
+        current_key.clear(); // Reuse the allocation
+        let mut key_has_null = false;
+
+        // Construct key with optimized path selection
+        for (key_idx, series) in keys.iter().enumerate() {
+            let value_result = if vector_indices_set.contains(&key_idx) {
+                // Vector key path
+                extract_value_from_list_series(series, row_idx, element_idx)
+            } else {
+                // Scalar key path - optimize index calculation
+                let scalar_idx = if series.len() == 1 { 0 } else { row_idx };
+                extract_value_from_series(series, scalar_idx)
+            };
+
+            match value_result {
+                Ok(Value::Null) => {
+                    current_key.push(Value::Null);
+                    key_has_null = true;
+                }
+                Ok(val) => current_key.push(val),
+                Err(_) => {
+                    current_key.push(Value::Null);
+                    key_has_null = true;
+                }
+            }
+        }
+
+        // Perform lookup with early exit for null keys
+        let result_value = if key_has_null {
+            Value::Null
+        } else {
+            lookup_index.lookup(&current_key).unwrap_or(Value::Null)
+        };
+
+        inner_results.push(result_value);
+    }
+
+    // Create Series from results for this inner list
+    create_series_from_values(&inner_results, "inner".into(), &lookup_index.value_dtype)
 }
 
 /// Internal function to perform the actual vector or scalar lookup.
