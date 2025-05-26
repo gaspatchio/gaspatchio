@@ -1478,7 +1478,9 @@ mod tests {
 
     #[test]
     fn test_mixed_vector_scalar_lookup() -> PolarsResult<()> {
-        reset_global_registry();
+        // Create a local registry to avoid race conditions with global state
+        let mut registry = TableRegistry::new();
+
         // Create a test assumption table
         let df = df!(
             "category" => &["A", "A", "A", "B", "B", "B"],
@@ -1486,12 +1488,11 @@ mod tests {
             "rate" => &[0.1, 0.2, 0.3, 1.1, 1.2, 1.3]
         )?;
 
-        register_table(
+        registry.register_table_internal(
             "mixed_test_rates",
             df,
             vec!["category".to_string(), "duration".to_string()],
             "rate",
-            None,
         )?;
 
         // Test 1: Multi-row scalar key with vector key - should take row-wise matching values
@@ -1506,7 +1507,6 @@ mod tests {
         let vector_key = list_builder.finish().into_series();
 
         // Run the lookup
-        let registry = get_registry();
         let result = registry
             .lookup_vector("mixed_test_rates", &[&scalar_key, &vector_key])
             .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;

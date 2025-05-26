@@ -85,7 +85,7 @@ def assumption_lookup(*keys: IntoExpr, table_name: str) -> pl.Expr:
 
     return register_plugin_function(
         plugin_path=LIB,
-        function_name="lookup_plugin_binding",  # Must match #[polars_expr] function name
+        function_name="lookup_by_table_and_hash",  # Must match #[polars_expr] function name
         args=key_exprs,
         kwargs={"table_name": table_name},
         is_elementwise=False,  # Vector lookup is not elementwise

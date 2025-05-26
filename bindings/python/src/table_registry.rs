@@ -2,9 +2,10 @@ use gaspatchio_core_lib::index::{self as core_index, RegistryError, TransformSpe
 use polars::prelude::DataFrame; // Removed unused Polars types
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3_polars::PyDataFrame; // Removed PyExpr import
-                              // Removed unused import: Mutex
-                              // Removed HashMap import as core_index::TableRegistry is used
+use pyo3_polars::PyDataFrame;
+// Removed PyExpr import
+// Removed unused import: Mutex
+// Removed HashMap import as core_index::TableRegistry is used
 use pyo3::{types::PyDict, FromPyObject, PyAny, PyObject, PyResult, Python};
 
 // Removed unused global static registry instance

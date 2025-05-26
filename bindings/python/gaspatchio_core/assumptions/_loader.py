@@ -14,7 +14,7 @@ from typing import Any, Dict, Literal, Union
 import polars as pl
 from loguru import logger
 
-from ..registry import TableRegistry
+from .._internal import PyAssumptionTableRegistry
 
 # Global metadata storage for assumption tables
 _TABLE_METADATA: Dict[str, Dict[str, Any]] = {}
@@ -987,7 +987,7 @@ def load_assumptions(
             raise e  # Re-raise with original message
 
         # Register with TableRegistry
-        registry = TableRegistry()
+        registry = PyAssumptionTableRegistry()
         registry.register_table(
             name=name,
             df=tidy_df,
@@ -1039,7 +1039,7 @@ def load_assumptions(
             raise e  # Re-raise with original message
 
         # Register with TableRegistry for wide tables
-        registry = TableRegistry()
+        registry = PyAssumptionTableRegistry()
         registry.register_table(
             name=name,
             df=tidy_df,
