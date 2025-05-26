@@ -84,3 +84,50 @@ class TableRegistry:
             # Convert potential PyO3 errors (like PyValueError from Rust) to Python ValueError
             # Or handle specific Rust errors if needed
             raise ValueError(f"Failed to register table '{name}': {e}") from e
+
+
+class AssumptionTableRegistry:
+    """Provides methods to register and manage assumption tables.
+
+    This class acts as a Python wrapper around the underlying Rust registry.
+    """
+
+    def __init__(self):
+        """Initializes the registry wrapper."""
+        # Create an instance of the Rust PyTableRegistry
+        self._registry = _internal.PyAssumptionTableRegistry()
+
+    def register_table(
+        self,
+        name: str,
+        df: pl.DataFrame,
+        keys: List[str],
+        value_column: str,
+    ) -> None:
+        """Registers a table (DataFrame) with the global registry.
+
+        Args:
+            name: The unique name for this table in the registry.
+            df: The DataFrame containing the assumption data.
+            keys: List of column names to use as lookup keys *after* transformation.
+            value_column: The name of the column containing the values *after* transformation.
+            transform_spec: Optional dictionary specifying how to transform the input `df`
+                before creating the lookup index. Required keys depend on `transform_type`.
+                For `WideToLong`: `transform_type`, `id_vars`, `value_vars`, `var_name`, `value_name`.
+
+        Raises:
+            ValueError: If registration fails in the underlying Rust implementation
+                (e.g., duplicate name, invalid keys/columns, transformation error).
+        """
+        try:
+            # Call the Rust method via the internal instance
+            self._registry.register_table(
+                name,
+                df,  # PyO3 handles the conversion from Polars DF
+                keys,
+                value_column,
+            )
+        except Exception as e:
+            # Convert potential PyO3 errors (like PyValueError from Rust) to Python ValueError
+            # Or handle specific Rust errors if needed
+            raise ValueError(f"Failed to register table '{name}': {e}") from e

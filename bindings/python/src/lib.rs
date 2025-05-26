@@ -1,8 +1,8 @@
 mod assumptions;
 mod table_registry;
 mod vector;
-
 use gaspatchio_core_lib::index::reset_global_registry as rust_reset_global_registry;
+
 use log::{debug, info};
 use pyo3::prelude::*;
 
@@ -30,6 +30,8 @@ fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
 
     // Add the PyTableRegistry class directly to the internal module
     m.add_class::<table_registry::PyTableRegistry>()?;
+
+    m.add_class::<assumptions::PyAssumptionTableRegistry>()?;
 
     // Add the reset function
     m.add_function(wrap_pyfunction!(reset_global_registry, m)?)?;
