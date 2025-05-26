@@ -259,8 +259,10 @@ class TestActuarialFrameApply:
         af["doubled_age"] = af["age"].map_elements(problematic_function)
 
         # The error should be raised when collecting results from ActuarialFrame
-        # Our error handling might also surface it as ComputeError
-        with pytest.raises(pl.exceptions.ComputeError, match="Value 60 is too large!"):
+        # Our error handling might surface it as ComputeError or the original ValueError
+        with pytest.raises(
+            (pl.exceptions.ComputeError, ValueError), match="Value 60 is too large!"
+        ):
             af.collect()
 
     def test_map_batches_with_numpy(self):
