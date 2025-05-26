@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 // Import the core logic function and assume Kwargs struct is defined there
 use gaspatchio_core_lib::assumptions::{
     get_global_assumption_registry, register_assumption_table_global,
-    reset_global_assumption_registry, AssumptionTableRegistry,
+    reset_global_assumption_registry,
 };
 use gaspatchio_core_lib::index::{perform_lookup, AssumptionLookupKwargs}; // Assuming moved Kwargs struct
 

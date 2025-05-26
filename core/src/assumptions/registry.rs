@@ -170,6 +170,10 @@ impl AssumptionTableRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Test mutex to serialize global registry tests
+    static TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
     #[test]
     fn test_assumption_table_registry_basics() {
@@ -206,6 +210,9 @@ mod tests {
 
     #[test]
     fn test_global_registry_basics() -> PolarsResult<()> {
+        // Serialize access to global registry
+        let _guard = TEST_MUTEX.lock().unwrap();
+
         // Reset global registry for clean test
         reset_global_assumption_registry();
 
@@ -233,6 +240,9 @@ mod tests {
 
     #[test]
     fn test_global_registry_duplicate_registration() -> PolarsResult<()> {
+        // Serialize access to global registry
+        let _guard = TEST_MUTEX.lock().unwrap();
+
         // Reset global registry for clean test
         reset_global_assumption_registry();
 
