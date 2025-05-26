@@ -11,6 +11,18 @@ import polars as pl
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def reset_registry():
+    """Reset the global assumption registry before each test."""
+    from gaspatchio_core._internal import PyAssumptionTableRegistry
+
+    registry = PyAssumptionTableRegistry()
+    registry.reset()
+    yield
+    # Optionally reset after test too for extra safety
+    registry.reset()
+
+
 class TestTopLevelAPIImports:
     """Test that the public API is correctly exported at the top level."""
 
@@ -292,7 +304,7 @@ class TestErrorHandlingIntegration:
 
         # Second load with same name should raise error (current behavior)
         mortality_v2 = pl.DataFrame({"age": [25], "qx": [0.002]})
-        with pytest.raises(ValueError, match="already exists"):
+        with pytest.raises(RuntimeError, match="already exists"):
             gs.load_assumptions("duplicate_test_unique", mortality_v2, value="qx")
 
         # Verify the original table is still there

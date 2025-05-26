@@ -11,6 +11,18 @@ This module verifies that:
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def reset_registry():
+    """Reset the global assumption registry before each test."""
+    from gaspatchio_core._internal import PyAssumptionTableRegistry
+
+    registry = PyAssumptionTableRegistry()
+    registry.reset()
+    yield
+    # Optionally reset after test too for extra safety
+    registry.reset()
+
+
 class TestTopLevelOnlyImports:
     """Test that the top-level only import restriction works as expected."""
 
@@ -88,9 +100,14 @@ class TestTopLevelOnlyImports:
         # Should NOT have main functions
         main_functions = ["assumption_lookup", "load_assumptions"]
         for func in main_functions:
-            assert not hasattr(assumptions, func), (
-                f"Main function {func} should not be in package"
-            )
+            # hasattr() triggers __getattr__ which should raise ImportError
+            try:
+                hasattr(assumptions, func)
+                assert False, (
+                    f"Main function {func} should not be accessible in package"
+                )
+            except ImportError:
+                pass  # This is expected
             assert func not in assumptions.__all__, (
                 f"Function {func} should not be in __all__"
             )
@@ -210,8 +227,19 @@ class TestRestrictedAPIBehavior:
         # Should only have metadata functions, not main functions
         assert hasattr(assumptions, "get_table_metadata")
         assert hasattr(assumptions, "list_tables_with_metadata")
-        assert not hasattr(assumptions, "assumption_lookup")
-        assert not hasattr(assumptions, "load_assumptions")
+
+        # Main functions should trigger ImportError when accessed
+        try:
+            hasattr(assumptions, "assumption_lookup")
+            assert False, "assumption_lookup should not be accessible"
+        except ImportError:
+            pass  # Expected
+
+        try:
+            hasattr(assumptions, "load_assumptions")
+            assert False, "load_assumptions should not be accessible"
+        except ImportError:
+            pass  # Expected
 
     def test_top_level_direct_imports_work(self):
         """Test that users can import functions directly from top level."""

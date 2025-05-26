@@ -13,6 +13,18 @@ import polars as pl
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def reset_registry():
+    """Reset the global assumption registry before each test."""
+    from gaspatchio_core._internal import PyAssumptionTableRegistry
+
+    registry = PyAssumptionTableRegistry()
+    registry.reset()
+    yield
+    # Optionally reset after test too for extra safety
+    registry.reset()
+
+
 class TestDuplicateTableNames:
     """Test duplicate table name handling."""
 
@@ -30,7 +42,7 @@ class TestDuplicateTableNames:
 
         # Second registration with same name should raise error
         with pytest.raises(
-            ValueError, match=f"Failed to register table '{table_name}'"
+            RuntimeError, match=f"assumption table '{table_name}' already exists"
         ):
             gs.load_assumptions(table_name, df2)
 
@@ -50,7 +62,7 @@ class TestDuplicateTableNames:
 
         # Try to load wide table with same name - should fail
         with pytest.raises(
-            ValueError, match=f"Failed to register table '{table_name}'"
+            RuntimeError, match=f"assumption table '{table_name}' already exists"
         ):
             gs.load_assumptions(table_name, wide_df)
 
@@ -76,7 +88,7 @@ class TestDuplicateTableNames:
 
         # Try to load simple table with same name - should fail
         with pytest.raises(
-            ValueError, match=f"Failed to register table '{table_name}'"
+            RuntimeError, match=f"assumption table '{table_name}' already exists"
         ):
             gs.load_assumptions(table_name, simple_df)
 
@@ -173,7 +185,7 @@ class TestTableOverwriting:
 
         # Second load should fail (no overwrite parameter supported)
         with pytest.raises(
-            ValueError, match=f"Failed to register table '{table_name}'"
+            RuntimeError, match=f"assumption table '{table_name}' already exists"
         ):
             gs.load_assumptions(table_name, df2)
 
@@ -190,7 +202,7 @@ class TestTableOverwriting:
         result1 = gs.load_assumptions(table_name, df1, value="qx")
 
         # Failed second registration
-        with pytest.raises(ValueError):
+        with pytest.raises(RuntimeError):
             gs.load_assumptions(table_name, df2, value="qx")
 
         # Original table should still be accessible and unchanged
