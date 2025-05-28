@@ -63,6 +63,33 @@ class _BaseProxy:
 
     # --- Common Autopatched Methods/Namespaces (Returning ExpressionProxy) ---
     def alias(self, name: str) -> "ExpressionProxy": ...
+    def clip(self, lower_bound: float, upper_bound: float) -> "ExpressionProxy":
+        """
+        Clip the values in this expression to the given bounds.
+
+        Parameters
+        ----------
+        lower_bound : float
+            The lower bound to clip to.
+        upper_bound : float
+            The upper bound to clip to.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression representing the clipped values.
+
+        Examples
+        --------
+        >>> from gaspatchio_core import ActuarialFrame
+        >>> data = {
+        ...     "age": [25, 30, 35, 40, 45],
+        ... }
+        >>> af = ActuarialFrame(data)
+        >>> af["age_clipped"] = af["age"].clip(lower_bound=26, upper_bound=44)
+
+
+        """
     def cast(
         self, dtype: PolarsDataType, *, strict: bool = True
     ) -> "ExpressionProxy": ...

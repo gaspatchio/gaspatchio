@@ -519,6 +519,50 @@ def _get_max_numeric_duration(
     return max_duration
 
 
+def _convert_keys_to_f64(df: pl.DataFrame, key_columns: list[str]) -> pl.DataFrame:
+    """Convert lookup key columns to f64 where possible for optimal performance.
+
+    This function attempts to convert key columns to f64 for faster lookups.
+    Only converts columns that can be safely converted without data loss.
+    String columns containing numeric values (like "1", "2", "3") will be
+    converted to f64, while mixed or non-numeric columns retain their original type.
+
+    Args:
+        df: DataFrame to process
+        key_columns: List of key column names to attempt conversion
+
+    Returns:
+        pl.DataFrame: DataFrame with converted key columns
+    """
+    conversions = {}
+
+    for col in key_columns:
+        if col not in df.columns:
+            continue
+
+        try:
+            # Try to convert to f64 - this will fail if data can't be converted
+            converted = df[col].cast(pl.Float64, strict=True)
+            conversions[col] = pl.Float64
+            logger.debug(f"Converting key column '{col}' to f64")
+        except (pl.exceptions.ComputeError, pl.exceptions.InvalidOperationError):
+            # Keep original type if conversion fails
+            logger.debug(
+                f"Keeping key column '{col}' as {df[col].dtype} (f64 conversion not possible)"
+            )
+            continue
+
+    if conversions:
+        df = df.with_columns(
+            [pl.col(col).cast(dtype) for col, dtype in conversions.items()]
+        )
+        logger.info(
+            f"Converted {len(conversions)} key columns to f64: {list(conversions.keys())}"
+        )
+
+    return df
+
+
 def _tidy_curve(df: pl.DataFrame, id_cols: list[str], value: str) -> pl.DataFrame:
     """Tidy a curve table (single numeric column) with proper column naming.
 
@@ -749,6 +793,7 @@ def load_assumptions(
     overflow: Union[Literal["auto"], str, None] = "auto",
     max_overflow: int = 200,
     metadata: dict[str, Any] | None = None,
+    lookup_keys: Union[list[str], None] = None,
 ) -> pl.DataFrame:
     """Load and register assumption tables from various sources.
 
@@ -785,6 +830,11 @@ def load_assumptions(
             Only used when overflow handling is enabled. Defaults to 200.
         metadata: Optional metadata dictionary to store with the table.
             Can be retrieved later for documentation purposes.
+        lookup_keys: Optional list of custom column names to use for lookups.
+            If provided, the processed table columns will be renamed to match
+            these names for clearer lookup code. For wide tables, should include
+            both id column names and the variable column name.
+            Example: ["issue_age", "year_lookup"] for a 2-key lookup.
 
     Returns:
         pl.DataFrame: The processed and registered assumption table.
@@ -886,6 +936,31 @@ def load_assumptions(
         ```
         0.0095
         ```
+
+    Custom lookup keys::
+
+        Scenario: Loading a mortality table with custom column names for clearer lookup code.
+
+        ```python
+        import polars as pl
+        import gaspatchio_core as gs
+
+        mortality_df = pl.DataFrame({
+            "age": [30, 31, 32],
+            "1": [0.00074, 0.00081, 0.00089],
+            "2": [0.00049, 0.00053, 0.00058],
+            "Ultimate": [0.00045, 0.00048, 0.00052]
+        })
+
+        # Load with custom lookup key names
+        gs.load_assumptions("mortality_table", mortality_df,
+                           lookup_keys=["issue_age", "year_lookup"],
+                           overflow="Ultimate")
+
+        # Now use the custom key names for lookups
+        qx = gs.assumption_lookup("issue_age", "year_lookup",
+                                 table_name="mortality_table")
+        ```
     """
 
     logger.info(f"Loading assumption table '{name}'")
@@ -943,6 +1018,23 @@ def load_assumptions(
             "  • metadata={'effective_date': '2013-01-01', 'basis': 'select_ultimate'}"
         )
 
+    # Validate lookup_keys parameter
+    if lookup_keys is not None:
+        if not isinstance(lookup_keys, list):
+            raise ValueError(
+                "lookup_keys must be a list of strings or None\n"
+                "Examples:\n"
+                "  • lookup_keys=['issue_age', 'year_lookup'] for 2-key lookup\n"
+                "  • lookup_keys=['age'] for single-key lookup"
+            )
+        if not all(isinstance(key, str) and key.strip() for key in lookup_keys):
+            raise ValueError(
+                "All lookup_keys must be non-empty strings\n"
+                "Examples:\n"
+                "  • lookup_keys=['issue_age', 'year_lookup']\n"
+                "  • lookup_keys=['age', 'duration']"
+            )
+
     # Step 1: Materialize the data
     try:
         df = _materialise(source)
@@ -986,12 +1078,32 @@ def load_assumptions(
         except ValueError as e:
             raise e  # Re-raise with original message
 
+        # Apply custom lookup keys if provided
+        if lookup_keys is not None:
+            expected_keys = len(id_columns)
+            if len(lookup_keys) != expected_keys:
+                raise ValueError(
+                    f"lookup_keys length ({len(lookup_keys)}) must match number of id columns ({expected_keys}) for curve tables\n"
+                    f"Expected: {expected_keys} keys for id columns: {id_columns}\n"
+                    f"Provided: {len(lookup_keys)} keys: {lookup_keys}"
+                )
+
+            # Create rename mapping for id columns
+            rename_mapping = dict(zip(id_columns, lookup_keys))
+            tidy_df = tidy_df.rename(rename_mapping)
+            final_keys = lookup_keys
+        else:
+            final_keys = id_columns
+
+        # Convert key columns to f64 where possible for optimal lookup performance
+        tidy_df = _convert_keys_to_f64(tidy_df, final_keys)
+
         # Register with TableRegistry
         registry = PyAssumptionTableRegistry()
         registry.register_table(
             name=name,
             df=tidy_df,
-            keys=id_columns,
+            keys=final_keys,
             value_column=value,
         )
 
@@ -1038,12 +1150,33 @@ def load_assumptions(
         except ValueError as e:
             raise e  # Re-raise with original message
 
+        # Apply custom lookup keys if provided
+        if lookup_keys is not None:
+            expected_keys = len(id_columns) + 1  # +1 for variable column
+            if len(lookup_keys) != expected_keys:
+                raise ValueError(
+                    f"lookup_keys length ({len(lookup_keys)}) must match number of lookup columns ({expected_keys}) for wide tables\n"
+                    f"Expected: {expected_keys} keys for id columns + variable: {id_columns + ['variable']}\n"
+                    f"Provided: {len(lookup_keys)} keys: {lookup_keys}"
+                )
+
+            # Create rename mapping for id columns + variable column
+            original_keys = id_columns + ["variable"]
+            rename_mapping = dict(zip(original_keys, lookup_keys))
+            tidy_df = tidy_df.rename(rename_mapping)
+            final_keys = lookup_keys
+        else:
+            final_keys = id_columns + ["variable"]  # Include variable column in keys
+
+        # Convert key columns to f64 where possible for optimal lookup performance
+        tidy_df = _convert_keys_to_f64(tidy_df, final_keys)
+
         # Register with TableRegistry for wide tables
         registry = PyAssumptionTableRegistry()
         registry.register_table(
             name=name,
             df=tidy_df,
-            keys=id_columns + ["variable"],  # Include variable column in keys
+            keys=final_keys,
             value_column=value,
         )
 

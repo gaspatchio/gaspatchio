@@ -51,6 +51,22 @@ _NUMERIC_UNARY: Set[str] = {
     "is_not_null",
 }
 
+# Numeric methods that should be applied element-wise on list columns
+_NUMERIC_ELEMENTWISE: Set[str] = {
+    "clip",
+    "clip_min",
+    "clip_max",
+    "round",  # Also in unary, but can take decimals arg
+    "pow",  # Can be binary
+    "mod",  # Binary operation
+    "add",
+    "sub",
+    "mul",
+    "truediv",
+    "floordiv",
+    "cast",  # Type casting
+}
+
 _NAMESPACES: Set[str] = {
     "dt",
     "str",
@@ -332,27 +348,66 @@ def _method_caller(
     from .column_proxy import ColumnProxy
     from .expression_proxy import ExpressionProxy
 
+    # Check if this is a unary numeric op (no args)
     is_unary_numeric_op = name in _NUMERIC_UNARY and not a and not kw
+    # Check if this is an element-wise numeric op (may have args)
+    is_elementwise_op = name in _NUMERIC_ELEMENTWISE
+
     should_use_list_shim = False
-    if is_unary_numeric_op:
+    if is_unary_numeric_op or is_elementwise_op:
         if isinstance(self_proxy, ColumnProxy) and parent_af:
             try:
-                dtype = parent_af._df.schema.get(self_proxy.name)
+                # Use collect_schema() to avoid performance warning
+                schema = parent_af._df.collect_schema()
+                dtype = schema.get(self_proxy.name)
                 should_use_list_shim = isinstance(dtype, pl.List)
             except Exception:
                 pass
         elif isinstance(self_proxy, ExpressionProxy):
-            should_use_list_shim = True
+            # For expressions, we can't easily determine the output type
+            # Be more conservative: only try list shimming if the expression string
+            # suggests it might involve list operations
+            expr_str = str(base_expr)
+            # Heuristic: if the expression contains list operations or references list columns
+            might_be_list = False
+            if "list." in expr_str.lower():
+                # Expression contains explicit list operations
+                might_be_list = True
+            elif parent_af:
+                # Check if the expression references any list columns by name
+                schema = parent_af._df.collect_schema()
+                list_column_names = [
+                    name for name, dtype in schema.items() if isinstance(dtype, pl.List)
+                ]
+                # Check if any list column names appear in the expression
+                might_be_list = any(
+                    f'col("{col_name}")' in expr_str or f"'{col_name}'" in expr_str
+                    for col_name in list_column_names
+                )
+            should_use_list_shim = might_be_list
+
     try:
         if should_use_list_shim:
             try:
+                # Get the element method
                 element_method = getattr(pl.element(), name)
-                result = base_expr.list.eval(element_method())
+                if is_unary_numeric_op:
+                    # For unary ops, call without arguments
+                    result = base_expr.list.eval(element_method())
+                else:
+                    # For element-wise ops with arguments, pass them through
+                    unwrapped_args = [_unwrap(arg) for arg in a]
+                    unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
+                    result = base_expr.list.eval(
+                        element_method(*unwrapped_args, **unwrapped_kwargs)
+                    )
             except Exception:
+                # Fallback to regular method call if list.eval fails
                 unwrapped_args = [_unwrap(arg) for arg in a]
                 unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
                 result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
         else:
+            # Regular method call for non-list columns
             unwrapped_args = [_unwrap(arg) for arg in a]
             unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
             result = polars_attr(*unwrapped_args, **unwrapped_kwargs)

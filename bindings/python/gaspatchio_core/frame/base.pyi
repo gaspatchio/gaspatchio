@@ -79,8 +79,8 @@ class ActuarialFrame:
         """Execute and materialize the dataframe."""
         ...
 
-    def profile(self) -> pl.DataFrame:
-        """Execute and materialize the dataframe with profiling (stub)."""
+    def profile(self) -> tuple[pl.DataFrame, pl.DataFrame]:
+        """Execute and materialize the dataframe with profiling, returning (result_df, profile_info)."""
         ...
 
     def with_columns(self: ActuarialFrameT, *exprs: IntoExprColumn) -> ActuarialFrameT:

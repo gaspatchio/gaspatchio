@@ -554,4 +554,130 @@ def test_namespace_chaining(sample_af: ActuarialFrame):
     assert result_df["result"].to_list() == [5, 50, 0]
 
 
+def test_clip_on_expression_proxy_works(sample_af: ActuarialFrame):
+    """Test that clip() works correctly on ExpressionProxy (chained operations)."""
+    # This reproduces the issue from model_calculation.py where:
+    # af["term_offset"] = (af["year"] - 26).clip(lower_bound=0)
+    # was failing with: `clip` only supports physical numeric types
+
+    # Create a simple expression that results in an ExpressionProxy
+    expr_proxy = sample_af["scalar_int"] + 5  # This creates an ExpressionProxy
+
+    # Apply clip to the ExpressionProxy - this should work
+    clipped_proxy = expr_proxy.clip(lower_bound=0)
+
+    assert isinstance(clipped_proxy, ExpressionProxy)
+
+    # Verify execution works
+    try:
+        result_df = sample_af._df.with_columns(
+            clipped_proxy._expr.alias("clipped")
+        ).collect()
+        assert "clipped" in result_df.columns
+        # Check that values are properly clipped (all should be >= 0)
+        assert result_df["clipped"].min() >= 0
+    except Exception as e:
+        pytest.fail(f"Clip execution failed on ExpressionProxy: {e}")
+
+
+def test_clip_with_arguments_on_expression_proxy(sample_af: ActuarialFrame):
+    """Test that clip() with both bounds works on ExpressionProxy."""
+    # Test the more complex case with both bounds
+    expr_proxy = sample_af["scalar_int"] * 2 - 3  # This creates an ExpressionProxy
+
+    # Apply clip with both bounds
+    clipped_proxy = expr_proxy.clip(lower_bound=0, upper_bound=10)
+
+    assert isinstance(clipped_proxy, ExpressionProxy)
+
+    # Verify execution works
+    try:
+        result_df = sample_af._df.with_columns(
+            clipped_proxy._expr.alias("clipped")
+        ).collect()
+        assert "clipped" in result_df.columns
+        # Check that values are properly clipped
+        assert result_df["clipped"].min() >= 0
+        assert result_df["clipped"].max() <= 10
+    except Exception as e:
+        pytest.fail(f"Clip with bounds execution failed on ExpressionProxy: {e}")
+
+
+def test_clip_on_list_column_via_expression_proxy(sample_af: ActuarialFrame):
+    """Test that clip() works on list columns when accessed via ExpressionProxy.
+
+    This reproduces the issue where clip() on list columns fails when the column
+    is accessed through an expression chain, which would create an ExpressionProxy.
+    """
+    # Create a scenario where we have a list column accessed via an expression
+    # This simulates what might happen in model_calculation.py where operations
+    # on list columns create ExpressionProxy objects
+
+    # First, let's create a list column with some negative values to clip
+    test_af = ActuarialFrame({"list_values": [[-5, 10, -2], [3, -8, 15], [-1, 0, 7]]})
+
+    # Access the list column through an expression that creates an ExpressionProxy
+    # Use a safer operation that doesn't cause list length conflicts
+    expr_proxy = (
+        test_af["list_values"] * 1
+    )  # This creates an ExpressionProxy without changing values
+
+    # Now apply clip - this should use list shimming to clip each element
+    clipped_proxy = expr_proxy.clip(lower_bound=0)
+
+    assert isinstance(clipped_proxy, ExpressionProxy)
+
+    # The expression should use list.eval for proper element-wise clipping
+    expr_str = str(clipped_proxy._expr).replace(" ", "")
+    # With proper list shimming, we should see .eval() in the expression
+    assert ".eval(" in expr_str, (
+        f"Expected list shimming (.eval()) but got: {clipped_proxy._expr}"
+    )
+
+    # Verify execution works and clips each element correctly
+    try:
+        result_df = test_af._df.with_columns(
+            clipped_proxy._expr.alias("clipped")
+        ).collect()
+        assert "clipped" in result_df.columns
+
+        # Check that all negative values have been clipped to 0
+        result_lists = result_df["clipped"].to_list()
+        expected_lists = [
+            [0, 10, 0],
+            [3, 0, 15],
+            [0, 0, 7],
+        ]  # Negative values clipped to 0
+        assert result_lists == expected_lists
+
+    except Exception as e:
+        pytest.fail(f"Clip execution failed on list column via ExpressionProxy: {e}")
+
+
+def test_clip_on_direct_list_column_still_works(sample_af: ActuarialFrame):
+    """Test that clip() still works on direct list column access (ColumnProxy)."""
+    # Create a test with list column accessed directly (ColumnProxy)
+    test_af = ActuarialFrame({"list_values": [[-5, 10, -2], [3, -8, 15], [-1, 0, 7]]})
+
+    # Direct access creates a ColumnProxy
+    clipped_proxy = test_af["list_values"].clip(lower_bound=0)
+
+    assert isinstance(clipped_proxy, ExpressionProxy)
+
+    # Should use list shimming (.eval())
+    expr_str = str(clipped_proxy._expr).replace(" ", "")
+    assert ".eval(" in expr_str
+
+    # Verify execution
+    try:
+        result_df = test_af._df.with_columns(
+            clipped_proxy._expr.alias("clipped")
+        ).collect()
+        result_lists = result_df["clipped"].to_list()
+        expected_lists = [[0, 10, 0], [3, 0, 15], [0, 0, 7]]
+        assert result_lists == expected_lists
+    except Exception as e:
+        pytest.fail(f"Clip execution failed on direct list column: {e}")
+
+
 # --- Additional Delegation Nuance Tests --- END ---
