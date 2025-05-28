@@ -43,8 +43,8 @@ class TestWideTableBasic:
         assert len(result) == 9  # 3 ages × 3 duration columns
 
         # Check that data is correctly melted
-        age_30_data = result.filter(pl.col("Age") == 30).sort("variable")
-        assert age_30_data["variable"].to_list() == ["1", "2", "3"]
+        age_30_data = result.filter(pl.col("Age") == 30.0).sort("variable")
+        assert age_30_data["variable"].to_list() == [1.0, 2.0, 3.0]  # Now f64 values
         assert age_30_data["mortality_rate"].to_list() == [0.001, 0.0008, 0.0005]
 
     def test_load_wide_table_with_explicit_id(self):
@@ -100,9 +100,9 @@ class TestWideTableBasic:
 
         # Test lookups for different age/duration combinations
         test_cases = [
-            (30, "1", 0.002),
-            (31, "2", 0.0016),
-            (32, "3", 0.0012),
+            (30.0, 1.0, 0.002),  # Now using f64 values
+            (31.0, 2.0, 0.0016),
+            (32.0, 3.0, 0.0012),
         ]
 
         for age, duration, expected_rate in test_cases:
@@ -190,7 +190,7 @@ class TestWideTableBasic:
         assert variables == ["FNS", "FS", "MNS", "MS"]
 
         # Test individual lookup (batch lookups seem to have issues with the underlying implementation)
-        test_single = pl.DataFrame({"age-last": [25], "variable": ["MNS"]})
+        test_single = pl.DataFrame({"age-last": [25.0], "variable": ["MNS"]})
 
         lookup_result = test_single.with_columns(
             gs.assumption_lookup(
@@ -309,7 +309,7 @@ class TestWideTableBasic:
         assert "extra_col" not in variables
 
         # Verify a specific lookup works
-        test_lookup = pl.DataFrame({"age-last": [30], "variable": ["MNS"]})
+        test_lookup = pl.DataFrame({"age-last": [30.0], "variable": ["MNS"]})
 
         lookup_result = test_lookup.with_columns(
             gs.assumption_lookup(

@@ -51,3 +51,4 @@ docs/_build/
 /bindings/python/jobs/my-model/~$estimations_workbook.xlsm
 /bindings/python/jobs/my-model/docs
 /bindings/python/.hypothesis
+/bindings/python/tests/.hypothesis

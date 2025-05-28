@@ -132,7 +132,7 @@ class TestTopLevelAPIWorkflow:
         assert len(result) == 3
 
         # Test lookup using top-level API
-        test_df = pl.DataFrame({"Age": [31]})
+        test_df = pl.DataFrame({"Age": [31.0]})
         lookup_result = test_df.with_columns(
             gs.assumption_lookup("Age", table_name="top_level_test").alias("qx")
         )
@@ -155,7 +155,7 @@ class TestTopLevelAPIWorkflow:
         assert len(result) == 3
 
         # Test lookup using direct import
-        test_df = pl.DataFrame({"Age": [31]})
+        test_df = pl.DataFrame({"Age": [31.0]})  # age now f64
         lookup_result = test_df.with_columns(
             assumption_lookup("Age", table_name="direct_import_test").alias("qx")
         )
@@ -185,7 +185,7 @@ class TestTopLevelAPIWorkflow:
         assert len(result) == 6  # 2 ages × 3 durations
 
         # Test lookup using top-level API
-        test_df = pl.DataFrame({"Age": [30], "variable": ["2"]})
+        test_df = pl.DataFrame({"Age": [30.0], "variable": [2.0]})  # both now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup(
                 "Age", "variable", table_name="wide_top_level_test"

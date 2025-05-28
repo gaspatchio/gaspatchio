@@ -63,7 +63,7 @@ class TestMortalityCurveIntegration:
         assert len(result) == 6
 
         # Test lookup functionality with top-level API using single-row pattern
-        test_cases = [(22, 0.00054), (24, 0.00062), (25, 0.00067)]
+        test_cases = [(22.0, 0.00054), (24.0, 0.00062), (25.0, 0.00067)]
 
         for age, expected_rate in test_cases:
             test_df = pl.DataFrame({"age": [age]})
@@ -94,7 +94,11 @@ class TestMortalityCurveIntegration:
         result = gs.load_assumptions("yield_curve", interest_rates, value="spot_rate")
 
         # Test individual lookups (following working pattern)
-        test_cases = [(1, 0.025), (10, 0.042), (30, 0.046)]
+        test_cases = [
+            (1.0, 0.025),
+            (10.0, 0.042),
+            (30.0, 0.046),
+        ]  # Now using f64 values
 
         for duration, expected_rate in test_cases:
             test_df = pl.DataFrame({"duration": [duration]})
@@ -143,8 +147,8 @@ class TestSelectUltimateTableIntegration:
 
         # Test lookup for select period using single-row pattern
         test_cases = [
-            (25, "M", "2", 0.00062),  # Male age 25 duration 2
-            (26, "F", "1", 0.00038),  # Female age 26 duration 1
+            (25.0, "M", "2", 0.00062),  # Male age 25 duration 2 - age now f64
+            (26.0, "F", "1", 0.00038),  # Female age 26 duration 1 - age now f64
         ]
 
         for age, gender, variable, expected_rate in test_cases:
@@ -162,7 +166,9 @@ class TestSelectUltimateTableIntegration:
             assert actual_rate == expected_rate
 
         # Test lookup for ultimate period (expanded)
-        test_df = pl.DataFrame({"age": [27], "gender": ["F"], "variable": ["8"]})
+        test_df = pl.DataFrame(
+            {"age": [27.0], "gender": ["F"], "variable": ["8"]}
+        )  # age now f64
         ultimate_rates = test_df.with_columns(
             gs.assumption_lookup(
                 "age", "gender", "variable", table_name="select_ultimate_mortality"
@@ -279,7 +285,7 @@ class TestBackwardCompatibilityIntegration:
         gs.load_assumptions("new_mortality_api", mortality_new, value="qx")
 
         # Both should work in lookups using single-row pattern
-        test_df = pl.DataFrame({"age": [31]})
+        test_df = pl.DataFrame({"age": [31.0]})  # age now f64
 
         # Test new table lookup
         with_mortality = test_df.with_columns(
@@ -308,7 +314,7 @@ class TestErrorHandlingIntegration:
             gs.load_assumptions("duplicate_test_unique", mortality_v2, value="qx")
 
         # Verify the original table is still there
-        test_df = pl.DataFrame({"age": [25]})
+        test_df = pl.DataFrame({"age": [25.0]})  # age now f64
         result = test_df.with_columns(
             gs.assumption_lookup("age", table_name="duplicate_test_unique").alias(
                 "rate"
@@ -331,7 +337,7 @@ class TestErrorHandlingIntegration:
 
     def test_missing_table_lookup(self):
         """Test lookup against non-existent table."""
-        test_df = pl.DataFrame({"age": [25]})
+        test_df = pl.DataFrame({"age": [25.0]})  # age now f64
 
         # This should raise an error when the lookup is executed
         with pytest.raises(Exception):  # Specific error depends on implementation

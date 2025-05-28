@@ -71,7 +71,7 @@ class TestCurveLoading:
         result = gs.load_assumptions("mortality_lookup_integration", df, value="qx")
 
         # Test individual scalar lookups
-        test_ages = [30, 32, 34]
+        test_ages = [30.0, 32.0, 34.0]  # Now using f64 values
         expected_rates = [0.002, 0.0022, 0.0024]
 
         for age, expected_rate in zip(test_ages, expected_rates):
