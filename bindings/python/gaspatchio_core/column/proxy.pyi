@@ -35,6 +35,109 @@ if TYPE_CHECKING:
     # Type alias for DtNamespaceProxy parent, consistent with dt_proxy.py
     ParentProxyType = ColumnProxy | ExpressionProxy
 
+    # --- Namespaces (Accessors returning Namespace Proxies) ---
+    @property
+    def dt(self) -> "_DtNamespaceProxy": ...  # MODIFIED: Changed to DtNamespaceProxy
+    @property
+    def str(
+        self,
+    ) -> "_StringNamespaceProxy": ...  # MODIFIED: Changed to StringNamespaceProxy
+    @property
+    def list(self) -> "PolarsExprList": ...  # Use aliased name in string hint
+    @property
+    def arr(self) -> "ExprArray": ...
+    @property
+    def struct(self) -> "ExprStruct": ...
+    @property
+    def cat(self) -> "ExprCategorical": ...
+    @property
+    def bin(self) -> "ExprBinary": ...
+
+    # Although __dir__ is added dynamically, including it helps tools
+    def __dir__(self) -> List[str]: ...
+
+# --- Stub for DtNamespaceProxy --- ADDED ---
+class DtNamespaceProxy:
+    """Stub for DtNamespaceProxy for type hinting."""
+
+    _parent_proxy: "ParentProxyType"
+    _parent_af: "ActuarialFrame | None"
+
+    def __init__(
+        self, parent_proxy: "ParentProxyType", parent_af: "ActuarialFrame | None"
+    ) -> None: ...
+    def year(self) -> "ExpressionProxy":
+        """Return an ExpressionProxy with the calendar year (i32)."""
+        ...
+
+    # Add other common dt methods as they are implemented or needed for type hints
+    # For now, __getattr__ will handle them dynamically at runtime, but stubs improve DX.
+    def month(self) -> "ExpressionProxy":
+        """Return an ExpressionProxy with the calendar month (i8)."""
+        ...
+    def day(self) -> "ExpressionProxy":
+        """Return an ExpressionProxy with the day of month (i8)."""
+        ...
+    def __getattr__(
+        self, name: str
+    ) -> Callable[..., "ExpressionProxy"]: ...  # MODIFIED: More precise return type
+
+# --- Stub for StringNamespaceProxy --- ADDED ---
+class StringNamespaceProxy:
+    """Stub for StringNamespaceProxy for type hinting."""
+
+    _parent_proxy: (
+        "ParentProxyType"  # Assuming ParentProxyType is ColumnProxy | ExpressionProxy
+    )
+    _parent_af: "ActuarialFrame | None"
+
+    def __init__(
+        self, parent_proxy: "ParentProxyType", parent_af: "ActuarialFrame | None"
+    ) -> None: ...
+
+    # --- Explicitly defined methods from string_proxy.py ---
+    def contains(
+        self, pattern: str | pl.Expr, literal: bool = False, strict: bool = False
+    ) -> "ExpressionProxy": ...
+    def to_uppercase(self) -> "ExpressionProxy": ...
+    def to_lowercase(self) -> "ExpressionProxy": ...
+    def n_chars(self) -> "ExpressionProxy": ...
+    def len_chars(self) -> "ExpressionProxy": ...
+    def len_bytes(self) -> "ExpressionProxy": ...
+    def strip_chars(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def strip_chars_start(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def lstrip(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def strip_chars_end(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def rstrip(
+        self, characters: Optional[str | pl.Expr] = None
+    ) -> "ExpressionProxy": ...
+    def strip_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
+    def remove_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
+    def strip_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
+    def remove_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
+    def zfill(self, alignment: int) -> "ExpressionProxy": ...
+    def ljust(self, width: int, fill_char: str = " ") -> "ExpressionProxy": ...
+    def pad_start(
+        self, width: int, fill_char: str = " "
+    ) -> "ExpressionProxy": ...  # Alias for rjust
+    def rjust(self, width: int, fill_char: str = " ") -> "ExpressionProxy": ...
+    def pad_end(
+        self, width: int, fill_char: str = " "
+    ) -> "ExpressionProxy": ...  # Alias for ljust
+    def starts_with(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
+    def ends_with(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
+
+    # Add __getattr__ for dynamic methods if we want to hint them generally
+    def __getattr__(self, name: str) -> Callable[..., "ExpressionProxy"]: ...
+
 # Base class for shared proxy methods/properties
 class _BaseProxy:
     """Base stub containing methods/properties common to ColumnProxy and ExpressionProxy."""
@@ -261,9 +364,7 @@ class _BaseProxy:
         ```
 
         """
-    def cast(
-        self, dtype: PolarsDataType, *, strict: bool = True
-    ) -> "ExpressionProxy":
+    def cast(self, dtype: PolarsDataType, *, strict: bool = True) -> "ExpressionProxy":
         """Cast values in this expression to a different data type.
 
         Converts the data type of values in the column or expression to the specified
@@ -1809,7 +1910,7 @@ class _BaseProxy:
         ```python
         # Basic pattern
         column.when(condition).then(value_if_true).otherwise(value_if_false)
-        
+
         # Chained conditions
         column.when(condition1).then(value1).when(condition2).then(value2).otherwise(default)
         ```
@@ -1862,7 +1963,7 @@ class _BaseProxy:
                               .when(af["value"] > 500).then("MEDIUM")
                               .otherwise("LOW")
         )
-        
+
         # With default calculation
         adjusted_amount = af["amount"].when(af["special_case"]).then(af["amount"] * 1.2)
                                      .otherwise(af["amount"])
@@ -2374,7 +2475,7 @@ class _BaseProxy:
 
         data = {
             "year": [1, 2, 3, 4, 5],
-            "log_interest_rate": [math.log(1.03), math.log(1.035), math.log(1.04), 
+            "log_interest_rate": [math.log(1.03), math.log(1.035), math.log(1.04),
                                 math.log(1.025), math.log(1.045)],
         }
         af = ActuarialFrame(data)
@@ -2818,106 +2919,3 @@ class _BaseProxy:
 
         """
         ...
-
-    # --- Namespaces (Accessors returning Namespace Proxies) ---
-    @property
-    def dt(self) -> "_DtNamespaceProxy": ...  # MODIFIED: Changed to DtNamespaceProxy
-    @property
-    def str(
-        self,
-    ) -> "_StringNamespaceProxy": ...  # MODIFIED: Changed to StringNamespaceProxy
-    @property
-    def list(self) -> "PolarsExprList": ...  # Use aliased name in string hint
-    @property
-    def arr(self) -> "ExprArray": ...
-    @property
-    def struct(self) -> "ExprStruct": ...
-    @property
-    def cat(self) -> "ExprCategorical": ...
-    @property
-    def bin(self) -> "ExprBinary": ...
-
-    # Although __dir__ is added dynamically, including it helps tools
-    def __dir__(self) -> List[str]: ...
-
-# --- Stub for DtNamespaceProxy --- ADDED ---
-class DtNamespaceProxy:
-    """Stub for DtNamespaceProxy for type hinting."""
-
-    _parent_proxy: "ParentProxyType"
-    _parent_af: "ActuarialFrame | None"
-
-    def __init__(
-        self, parent_proxy: "ParentProxyType", parent_af: "ActuarialFrame | None"
-    ) -> None: ...
-    def year(self) -> "ExpressionProxy":
-        """Return an ExpressionProxy with the calendar year (i32)."""
-        ...
-
-    # Add other common dt methods as they are implemented or needed for type hints
-    # For now, __getattr__ will handle them dynamically at runtime, but stubs improve DX.
-    def month(self) -> "ExpressionProxy":
-        """Return an ExpressionProxy with the calendar month (i8)."""
-        ...
-    def day(self) -> "ExpressionProxy":
-        """Return an ExpressionProxy with the day of month (i8)."""
-        ...
-    def __getattr__(
-        self, name: str
-    ) -> Callable[..., "ExpressionProxy"]: ...  # MODIFIED: More precise return type
-
-# --- Stub for StringNamespaceProxy --- ADDED ---
-class StringNamespaceProxy:
-    """Stub for StringNamespaceProxy for type hinting."""
-
-    _parent_proxy: (
-        "ParentProxyType"  # Assuming ParentProxyType is ColumnProxy | ExpressionProxy
-    )
-    _parent_af: "ActuarialFrame | None"
-
-    def __init__(
-        self, parent_proxy: "ParentProxyType", parent_af: "ActuarialFrame | None"
-    ) -> None: ...
-
-    # --- Explicitly defined methods from string_proxy.py ---
-    def contains(
-        self, pattern: str | pl.Expr, literal: bool = False, strict: bool = False
-    ) -> "ExpressionProxy": ...
-    def to_uppercase(self) -> "ExpressionProxy": ...
-    def to_lowercase(self) -> "ExpressionProxy": ...
-    def n_chars(self) -> "ExpressionProxy": ...
-    def len_chars(self) -> "ExpressionProxy": ...
-    def len_bytes(self) -> "ExpressionProxy": ...
-    def strip_chars(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
-    def strip_chars_start(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
-    def lstrip(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
-    def strip_chars_end(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
-    def rstrip(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
-    def strip_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
-    def remove_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
-    def strip_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
-    def remove_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
-    def zfill(self, alignment: int) -> "ExpressionProxy": ...
-    def ljust(self, width: int, fill_char: str = " ") -> "ExpressionProxy": ...
-    def pad_start(
-        self, width: int, fill_char: str = " "
-    ) -> "ExpressionProxy": ...  # Alias for rjust
-    def rjust(self, width: int, fill_char: str = " ") -> "ExpressionProxy": ...
-    def pad_end(
-        self, width: int, fill_char: str = " "
-    ) -> "ExpressionProxy": ...  # Alias for ljust
-    def starts_with(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
-    def ends_with(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
-
-    # Add __getattr__ for dynamic methods if we want to hint them generally
-    def __getattr__(self, name: str) -> Callable[..., "ExpressionProxy"]: ...
