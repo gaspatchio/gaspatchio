@@ -30,10 +30,18 @@ class DateFrameAccessor(BaseFrameAccessor):
 
     Accessed via `.date` on an ActuarialFrame instance,
     e.g., `af.date`.
+
+    This accessor allows for complex date manipulations at the frame level,
+    such as generating timelines for projections or adding durations to multiple
+    date columns simultaneously. It integrates with Polars expressions for
+    optimized performance.
     """
 
     def __init__(self, frame: "ActuarialFrame"):
-        """Initializes the accessor with the parent ActuarialFrame."""
+        """Initializes the accessor with the parent ActuarialFrame.
+
+        This is typically called internally when accessing `af.date`.
+        """
         super().__init__(frame)
 
     def create_timeline(
@@ -50,6 +58,12 @@ class DateFrameAccessor(BaseFrameAccessor):
         using the specified frequency. The result is exploded to create
         a longer DataFrame where each original row is repeated for each date
         in its timeline.
+
+        !!! note "When to use"
+            *   **Period-to-Event Transformation:** This method is useful when you need to transform row-per-period data
+                (where each row has a start and end date) into row-per-event data
+                (where each row represents a specific point in time, like a month-end).
+                For example, to calculate monthly exposures from policy start/end dates.
 
         Args:
             start_col: Column or expression for the start date of the interval.
@@ -69,6 +83,36 @@ class DateFrameAccessor(BaseFrameAccessor):
             pl.ColumnNotFoundError: If start_col or end_col cannot be resolved.
             pl.ComputeError: If date range generation fails (e.g., invalid freq,
                              incompatible date types).
+
+        Examples:
+            ```python
+            import datetime
+            from gaspatchio_core import ActuarialFrame
+            data = {
+                "policy_id": [1, 2],
+                "start_date": [datetime.date(2023, 1, 1), datetime.date(2023, 2, 15)],
+                "end_date": [datetime.date(2023, 3, 1), datetime.date(2023, 4, 15)],
+            }
+            af = ActuarialFrame(data)
+            # Create a monthly timeline
+            timeline_af = af.date.create_timeline("start_date", "end_date", freq="1mo", new_col_name="month_end")
+            print(timeline_af.collect())
+            ```
+            
+            ```text
+            shape: (5, 4)
+            ┌───────────┬────────────┬────────────┬────────────┐
+            │ policy_id ┆ start_date ┆ end_date   ┆ month_end  │
+            │ ---       ┆ ---        ┆ ---        ┆ ---        │
+            │ i64       ┆ date       ┆ date       ┆ date       │
+            ╞═══════════╪════════════╪════════════╪════════════╡
+            │ 1         ┆ 2023-01-01 ┆ 2023-03-01 ┆ 2023-01-01 │
+            │ 1         ┆ 2023-01-01 ┆ 2023-03-01 ┆ 2023-02-01 │
+            │ 2         ┆ 2023-02-15 ┆ 2023-04-15 ┆ 2023-02-15 │
+            │ 2         ┆ 2023-02-15 ┆ 2023-04-15 ┆ 2023-03-15 │
+            │ 2         ┆ 2023-02-15 ┆ 2023-04-15 ┆ 2023-04-15 │
+            └───────────┴────────────┴────────────┴────────────┘
+            ```
         """
         # --- Input Validation and Expression Conversion --- #
         try:
@@ -116,6 +160,17 @@ class DateFrameAccessor(BaseFrameAccessor):
     ) -> "ActuarialFrame":
         """Adds a duration string (e.g., '1Y', '3M', '-7d') to a date column.
 
+        This function leverages Polars' powerful duration arithmetic to efficiently
+        modify dates within the ActuarialFrame. It can create a new column with
+        the resulting dates or modify an existing column if `new_col_name` is not
+        provided and `date_col` is a string name.
+
+        !!! note "When to use"
+            *   **Date Arithmetic:** Use this method to shift dates by a fixed duration, such as calculating
+                a policy anniversary, determining a future maturity date, or finding a
+                past event date. It's particularly useful for batch operations on an
+                entire column of dates.
+
         Args:
             date_col: The column containing the dates to add the duration to.
             duration_str: The duration string in Polars format (e.g., "1Y6M", "-3d12h").
@@ -130,6 +185,57 @@ class DateFrameAccessor(BaseFrameAccessor):
                       is attempted without providing a string name for date_col.
             pl.ComputeError: If the duration addition fails (e.g., invalid duration string,
                              incompatible date types).
+
+        Examples:
+            ```python
+            import datetime
+            from gaspatchio_core import ActuarialFrame
+            data = {
+                "event_date": [datetime.date(2023, 1, 15), datetime.date(2023, 6, 30)],
+                "term_months": [6, 12]
+            }
+            af = ActuarialFrame(data)
+            # Add 1 year to event_date
+            af_plus_1y = af.date.add_duration("event_date", "1Y", new_col_name="event_plus_1y")
+            print(af_plus_1y.collect())
+            ```
+            
+            ```text
+            shape: (2, 3)
+            ┌────────────┬─────────────┬─────────────────┐
+            │ event_date ┆ term_months ┆ event_plus_1y   │
+            │ ---        ┆ ---         ┆ ---             │
+            │ date       ┆ i64         ┆ date            │
+            ╞════════════╪═════════════╪═════════════════╡
+            │ 2023-01-15 ┆ 6           ┆ 2024-01-15      │
+            │ 2023-06-30 ┆ 12          ┆ 2024-06-30      │
+            └────────────┴─────────────┴─────────────────┘
+            ```
+            
+            ```python
+            # Example with new column for clarity (using same data as above):
+            import datetime
+            from gaspatchio_core import ActuarialFrame
+            data = {
+                "event_date": [datetime.date(2023, 1, 15), datetime.date(2023, 6, 30)],
+                "term_months": [6, 12]
+            }
+            af = ActuarialFrame(data)
+            af_minus_3m_new_col = af.date.add_duration("event_date", "-3MO", new_col_name="event_minus_3m")
+            print(af_minus_3m_new_col.collect())
+            ```
+            
+            ```text
+            shape: (2, 3)
+            ┌────────────┬─────────────┬────────────────┐
+            │ event_date ┆ term_months ┆ event_minus_3m │
+            │ ---        ┆ ---         ┆ ---            │
+            │ date       ┆ i64         ┆ date           │
+            ╞════════════╪═════════════╪════════════════╡
+            │ 2023-01-15 ┆ 6           ┆ 2022-10-15     │
+            │ 2023-06-30 ┆ 12          ┆ 2023-03-30     │
+            └────────────┴─────────────┴────────────────┘
+            ```
         """
         # Import from new location
         from ..frame.base import ActuarialFrame
@@ -175,6 +281,21 @@ class DateFrameAccessor(BaseFrameAccessor):
         """
         Creates a projection timeline for actuarial calculations within the frame.
 
+        This powerful method generates a series of projection dates for each row
+        in the ActuarialFrame based on various actuarial projection methodologies.
+        It can handle projections to a maximum age, for a fixed term (in years or
+        months), or until a specific fixed date. The resulting timeline is added
+        as a new list column to the frame, which can then be exploded for
+        detailed cashflow modeling or analysis.
+
+        !!! note "When to use"
+            *   **Actuarial Projections:** This is a cornerstone function for actuarial modeling. Use it to:
+                - Generate monthly, quarterly, semi-annual, or annual projection dates.
+                - Model policies projecting to a maximum age (e.g., whole life insurance).
+                - Model policies with fixed terms (e.g., term life insurance, annuities certain).
+                - Align projections to specific calendar dates.
+                - Prepare data for per-period calculations like reserves, premiums, or benefits.
+
         Args:
             valuation_date: The valuation date from which to project
             projection_end_type: How to determine the end of the projection:
@@ -196,6 +317,48 @@ class DateFrameAccessor(BaseFrameAccessor):
 
         Returns:
             The updated ActuarialFrame instance (`self._frame`).
+
+        Examples:
+            ```python no_output_check
+            import datetime
+            from gaspatchio_core import ActuarialFrame
+            data = {
+                "policy_id": ["A1", "B2"],
+                "issue_age": [30, 45], # Needed for maximum_age projection
+                "policy_term_years": [0, 10] # Example, not directly used by max_age
+            }
+            af = ActuarialFrame(data)
+            val_date = datetime.date(2024, 1, 1)
+            
+            # Example 1: Project to maximum age of 65, monthly
+            af_max_age = af.date.create_projection_timeline(
+                valuation_date=val_date,
+                projection_end_type="maximum_age",
+                projection_end_value=32, # Max age of 32 for policy A1 (30+2), 47 for B2 (45+2)
+                issue_age_column="issue_age",
+                projection_frequency="annual", # Simplified for example
+                output_column="projection_dates_max_age"
+            )
+            
+            # Example 2: Project for a fixed term of 2 years, quarterly
+            af_fixed_term = af.date.create_projection_timeline(
+                valuation_date=val_date,
+                projection_end_type="term_years",
+                projection_end_value=2,
+                projection_frequency="quarterly",
+                output_column="projection_dates_fixed_term"
+            )
+            
+            # Example 3: Project to a fixed date, annually
+            fixed_end_date = datetime.date(2025, 12, 31)
+            af_fixed_date = af.date.create_projection_timeline(
+                valuation_date=val_date,
+                projection_end_type="fixed_date",
+                projection_end_value=fixed_end_date,
+                projection_frequency="annual",
+                output_column="projection_dates_fixed_date"
+            )
+            ```
         """
         # Eagerly validate projection_frequency
         valid_frequencies = ("monthly", "quarterly", "semi-annual", "annual")
@@ -317,14 +480,20 @@ class DateFrameAccessor(BaseFrameAccessor):
 # Add registration decorator
 @register_accessor("date", kind="column")
 class DateColumnAccessor(BaseColumnAccessor):
-    """Provides date-related methods applicable to columns or expressions.
+    """Provides date-related methods for `ColumnProxy` or `ExpressionProxy` objects.
 
-    Accessed via `.date` on an ActuarialFrame column or expression proxy,
+    Accessed via `.date` on a column or expression,
     e.g., `af["my_date_col"].date`.
+
+    This accessor offers convenient methods to manipulate and extract
+    information from date/datetime columns within Polars expressions.
     """
 
     def __init__(self, proxy: "ColumnProxy | ExpressionProxy"):
-        """Initializes the accessor with the parent proxy."""
+        """Initializes the accessor with the parent proxy object.
+
+        This is typically called internally when accessing `.date` on a column/expression.
+        """
         super().__init__(proxy)
         # Refine type hint now that we expect specific proxy types
         self._proxy: "ColumnProxy | ExpressionProxy" = proxy
@@ -332,24 +501,92 @@ class DateColumnAccessor(BaseColumnAccessor):
     def to_period(self, freq: str = "M") -> "ExpressionProxy":
         """Converts a date/datetime column to a period representation (e.g., year-month).
 
-        Currently truncates the date to the beginning of the specified frequency.
+        This is useful for grouping or aggregating data by specific time periods
+        like month, quarter, or year. It truncates the date to the beginning
+        of the specified period.
+
+        !!! note "When to use"
+            *   **Period Aggregation:** Use this to aggregate daily or weekly data into monthly, quarterly, or annual summaries.
+            *   **Time Series Features:** For creating features for time series models based on periods.
+            *   **Date Alignment:** When you need to align dates to a common period start (e.g., all dates in January
+                2023 become 2023-01-01 if `freq="M"`).
 
         Args:
-            freq: The frequency to truncate to ('Y', 'M', 'W', 'D').
-                  More complex Polars frequencies might work but are less standard for periods.
+            freq: The frequency string for period conversion (e.g., "M", "Q", "Y").
+                  See Polars documentation for `truncate` for available frequencies.
+                  Commonly: "1mo" (month), "1q" (quarter), "1y" (year).
+                  Note: "M", "Q", "Y" are often aliases in Polars but prefer explicit
+                  "1mo", "1q", "1y" for clarity with `dt.truncate`.
 
         Returns:
-            An ExpressionProxy representing the truncated date (start of the period).
+            An `ExpressionProxy` representing the date column truncated to the
+            specified period.
 
-        Raises:
-            RuntimeError: If the proxy is not part of an ActuarialFrame context.
-            pl.ComputeError: On truncation errors.
+        Examples:
+            ```python
+            import datetime
+            from gaspatchio_core import ActuarialFrame
+            data = {
+                "event_timestamp": [
+                    datetime.datetime(2023, 1, 15, 10, 30, 0),
+                    datetime.datetime(2023, 1, 20, 14, 0, 0),
+                    datetime.datetime(2023, 2, 5, 8, 0, 0),
+                ]
+            }
+            af = ActuarialFrame(data)
+            # Convert to Year-Month
+            af_month = af.with_columns(
+                month=af["event_timestamp"].date.to_period(freq="1mo")
+            )
+            print(af_month.collect())
+            ```
+            
+            ```text
+            shape: (3, 2)
+            ┌─────────────────────┬────────────┐
+            │ event_timestamp     ┆ month      │
+            │ ---                 ┆ ---        │
+            │ datetime[μs]        ┆ date       │
+            ╞═════════════════════╪════════════╡
+            │ 2023-01-15 10:30:00 ┆ 2023-01-01 │
+            │ 2023-01-20 14:00:00 ┆ 2023-01-01 │
+            │ 2023-02-05 08:00:00 ┆ 2023-02-01 │
+            └─────────────────────┴────────────┘
+            ```
+            
+            ```python
+            # Convert to Year (using same data as previous example)
+            import datetime
+            from gaspatchio_core import ActuarialFrame
+            data = {
+                "event_timestamp": [
+                    datetime.datetime(2023, 1, 15, 10, 30, 0),
+                    datetime.datetime(2023, 1, 20, 14, 0, 0),
+                    datetime.datetime(2023, 2, 5, 8, 0, 0),
+                ]
+            }
+            af = ActuarialFrame(data)
+            af_year = af.with_columns(
+                year=af["event_timestamp"].date.to_period(freq="1y")
+            )
+            print(af_year.collect())
+            ```
+            
+            ```text
+            shape: (3, 2)
+            ┌─────────────────────┬────────────┐
+            │ event_timestamp     ┆ year       │
+            │ ---                 ┆ ---        │
+            │ datetime[μs]        ┆ date       │
+            ╞═════════════════════╪════════════╡
+            │ 2023-01-15 10:30:00 ┆ 2023-01-01 │
+            │ 2023-01-20 14:00:00 ┆ 2023-01-01 │
+            │ 2023-02-05 08:00:00 ┆ 2023-01-01 │
+            └─────────────────────┴────────────┘
+            ```
         """
-        # Import from new location
-        from ..column.expression_proxy import ExpressionProxy
-
-        parent_frame = self._get_parent_frame()
-        base_expr = self._get_polars_expr()
+        # Ensure the underlying proxy is an expression
+        expr = self._proxy._ensure_expr()
 
         # Polars interval string mapping (simplified)
         polars_freq_map = {
@@ -363,6 +600,9 @@ class DateColumnAccessor(BaseColumnAccessor):
         )  # Default to input if not found
 
         # Use dt.truncate for period start
-        period_expr = base_expr.dt.truncate(polars_freq)
+        period_expr = expr.dt.truncate(polars_freq)
 
-        return ExpressionProxy(period_expr.cast(pl.Date), parent_frame)
+        # Import ExpressionProxy from new location
+        from ..column.expression_proxy import ExpressionProxy
+        
+        return ExpressionProxy(period_expr.cast(pl.Date), self._proxy._parent_frame)

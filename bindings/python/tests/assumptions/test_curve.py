@@ -11,11 +11,9 @@ from pathlib import Path
 import gaspatchio_core as gs
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions._loader import (
-    _analyse_shape,
-    _materialise,
-    _tidy_curve,
-)
+from gaspatchio_core.assumptions._analysis import _analyse_shape
+from gaspatchio_core.assumptions._source import _materialise
+from gaspatchio_core.assumptions._transform import _tidy_curve
 
 
 class TestCurveLoading:

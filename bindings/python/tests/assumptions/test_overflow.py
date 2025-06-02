@@ -11,13 +11,13 @@ from __future__ import annotations
 import gaspatchio_core as gs
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions._loader import (
+from gaspatchio_core.assumptions._overflow import (
     _create_overflow_expansion,
     _detect_overflow_column,
     _get_max_numeric_duration,
-    _tidy_wide_with_overflow_expansion,
-    load_assumptions,
 )
+from gaspatchio_core.assumptions._transform import _tidy_wide_with_overflow_expansion
+from gaspatchio_core.assumptions.api import load_assumptions
 
 
 def test_detect_overflow_auto_ult_dot():

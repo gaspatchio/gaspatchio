@@ -13,12 +13,12 @@ from pathlib import Path
 import gaspatchio_core as gs
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions._loader import (
-    _analyse_shape,
+from gaspatchio_core.assumptions._analysis import _analyse_shape
+from gaspatchio_core.assumptions._overflow import (
     _detect_overflow_column,
     _get_max_numeric_duration,
-    _tidy_wide_with_overflow_expansion,
 )
+from gaspatchio_core.assumptions._transform import _tidy_wide_with_overflow_expansion
 
 
 class TestWideTableBasic:

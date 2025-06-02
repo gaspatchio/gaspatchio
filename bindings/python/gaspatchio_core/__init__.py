@@ -36,7 +36,7 @@ from .assumptions import (
     get_table_metadata,
     list_tables_with_metadata,
 )
-from .assumptions._loader import load_assumptions
+from .assumptions.api import load_assumptions
 from .column import ColumnProxy, ExpressionProxy
 from .errors import PerformanceWarning
 from .frame import ActuarialFrame, run_model

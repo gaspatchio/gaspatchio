@@ -64,12 +64,14 @@ config-settings = { "build-args" = "--profile=dev" }
 
 [tool.pytest.ini_options]
 addopts = [
-    "--gp-docstring-paths=gaspatchio_core/column/namespaces/dt_proxy.py",
+    "--gp-docstring-paths=gaspatchio_core/assumptionscolumn/namespaces/dt_proxy.py",
     "--gp-docstring-paths=gaspatchio_core/column/namespaces/string_proxy.py",
-    "--gp-docstring-paths=gaspatchio_core/assumptions/_loader.py",
+    "--gp-docstring-paths=gaspatchio_core/accessors/date.py",
+    "--gp-docstring-paths=gaspatchio_core/accessors/excel.py",
+    "--gp-docstring-paths=gaspatchio_core/assumptions/api.py",
     "--gp-docstring-paths=gaspatchio_core/__init__.py",
     "-m",
-    "not benchmark",                                                          # Skip benchmark tests by default
+    "not benchmark",                                                                 # Skip benchmark tests by default
 ]
 markers = [
     "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",

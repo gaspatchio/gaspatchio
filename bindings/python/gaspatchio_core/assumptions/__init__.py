@@ -12,7 +12,7 @@ For loading and lookup operations, use the top-level API:
 """
 
 # Import functions from the loader module
-from ._loader import get_table_metadata, list_tables_with_metadata
+from .api import get_table_metadata, list_tables_with_metadata
 
 
 # Explicitly prevent import of main functions
