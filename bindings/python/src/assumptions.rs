@@ -10,8 +10,8 @@ use pyo3::prelude::*;
 
 // Import the core logic function and assume Kwargs struct is defined there
 use gaspatchio_core_lib::assumptions::{
-    get_global_assumption_registry, register_assumption_table_global,
-    reset_global_assumption_registry,
+    append_to_assumption_table_global, get_global_assumption_registry,
+    register_assumption_table_global, reset_global_assumption_registry,
 };
 use gaspatchio_core_lib::index::{perform_lookup, AssumptionLookupKwargs}; // Assuming moved Kwargs struct
 
@@ -92,6 +92,23 @@ impl PyAssumptionTableRegistry {
         Ok(())
     }
 
+    #[pyo3(signature = (name, df, keys, value_column))]
+    fn append_to_table(
+        &self,
+        name: String,
+        df: PyDataFrame,
+        keys: Vec<String>,
+        value_column: String,
+    ) -> PyResult<()> {
+        let rust_df: DataFrame = df.into();
+
+        // Use the global append function
+        append_to_assumption_table_global(name, rust_df, keys, value_column)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e)))?;
+
+        Ok(())
+    }
+
     fn get_table(&self, name: String) -> PyResult<bool> {
         // Check if table exists in global registry
         let registry = get_global_assumption_registry();
@@ -101,12 +118,30 @@ impl PyAssumptionTableRegistry {
     fn list_tables(&self) -> PyResult<Vec<String>> {
         // Get list of tables from global registry
         let registry = get_global_assumption_registry();
-        Ok(registry.list_tables().into_iter().cloned().collect())
+        Ok(registry.list_tables())
     }
 
     fn reset(&self) -> PyResult<()> {
         // Reset the global registry
         reset_global_assumption_registry();
         Ok(())
+    }
+
+    fn get_table_metadata(&self, name: String) -> PyResult<Option<(usize, Vec<String>)>> {
+        // Get table metadata: (key_count, key_names)
+        let registry = get_global_assumption_registry();
+        if let Some(table) = registry.get_table(&name) {
+            let key_count = table.get_key_count();
+            let key_names = table.get_key_columns_owned();
+            Ok(Some((key_count, key_names)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn table_exists(&self, name: String) -> PyResult<bool> {
+        // Check if table exists in global registry
+        let registry = get_global_assumption_registry();
+        Ok(registry.table_exists(&name))
     }
 }

@@ -333,50 +333,34 @@ class StringNamespaceProxy:
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
 
             uw_notes_data = {
                 "policy_id": ["UW001", "UW002", "UW003"],
                 "underwriter_notes": [
-                    ["Standard risk.", "Family history clear."],
-                    ["Applicant works in construction.", "Reviewed medical history: smoker."],
-                    ["No concerning notes.", None, "Possible hazardous occupation mentioned."]
+                    "Standard risk. Family history clear.",
+                    "Applicant works in construction. Reviewed medical history: smoker.",
+                    "No concerning notes. Possible hazardous occupation mentioned."
                 ]
             }
-            af_notes_initial = ActuarialFrame(uw_notes_data)
-            # Step 1: Cast to list of strings
-            af_notes_casted = af_notes_initial.with_columns(
-                af_notes_initial["underwriter_notes"].cast(pl.List(pl.String)).alias("notes_casted")
+            af_notes = ActuarialFrame(uw_notes_data)
+            af_results = af_notes.select(
+                af_notes["underwriter_notes"].str.contains("medical history").alias("mentions_medical_history"),
+                af_notes["underwriter_notes"].str.contains("(?i)hazardous occupation").alias("mentions_hazardous_occupation"),
             )
-
-            # Step 2: Perform contains checks
-            af_results = af_notes_casted.with_columns(
-                pl.col("notes_casted")
-                .list.eval(pl.element().str.contains(r"medical history").alias("contains_check"))
-                .list.any()
-                .alias("mentions_medical_history"),
-                pl.col("notes_casted")
-                .list.eval(pl.element().str.contains(r"(?i)hazardous occupation").alias("contains_check"))
-                .list.any()
-                .alias("mentions_hazardous_occupation"),
-            ).select(
-                "mentions_medical_history", "mentions_hazardous_occupation"
-            )
-
             print(af_results.collect())
             ```
 
             ```text
             shape: (3, 2)
-            ┌──────────────────────────┬─────────────────────────────────┐
-            │ mentions_medical_history │ mentions_hazardous_occupation │
-            │ ---                      │ ---                             │
-            │ bool                     │ bool                            │
-            ╞══════════════════════════╪═════════════════════════════════╡
-            │ false                    │ false                           │
-            │ true                     │ false                           │
-            │ false                    │ true                            │
-            └──────────────────────────┴─────────────────────────────────┘
+            ┌──────────────────────────┬───────────────────────────────┐
+            │ mentions_medical_history ┆ mentions_hazardous_occupation │
+            │ ---                      ┆ ---                           │
+            │ bool                     ┆ bool                          │
+            ╞══════════════════════════╪═══════════════════════════════╡
+            │ false                    ┆ false                         │
+            │ true                     ┆ false                         │
+            │ false                    ┆ true                          │
+            └──────────────────────────┴───────────────────────────────┘
             ```
 
             **Using `contains` with a list of patterns (regex and literal)**
@@ -386,54 +370,38 @@ class StringNamespaceProxy:
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
 
             uw_notes_data_multi = { # Renamed to avoid conflict
                 "policy_id": ["UW001", "UW002", "UW003"],
                 "underwriter_notes": [
-                    ["Standard risk.", "Family history clear."],
-                    ["Applicant works in construction.", "Reviewed medical history: smoker."],
-                    ["No concerning notes.", None, "Possible hazardous occupation mentioned."]
+                    "Standard risk. Family history clear.",
+                    "Applicant works in construction. Reviewed medical history: smoker.",
+                    "No concerning notes. Possible hazardous occupation mentioned."
                 ]
             }
             af_multi = ActuarialFrame(uw_notes_data_multi)
-            af_multi_processed = af_multi.with_columns(
-                af_multi["underwriter_notes"].cast(pl.List(pl.String)).alias("notes_casted")
-            ).with_columns(
+            af_multi_processed = af_multi.select(
                 # Literal check
-                pl.col("notes_casted") # Corrected: use alias within the expression
-                    .list.eval(pl.element().str.contains("medical history", literal=True))
-                    .list.any()
-                    .alias("lit_medical"),
+                af_multi["underwriter_notes"].str.contains("medical history", literal=True).alias("mentions_medical_history_literal"),
                 # Regex check (case insensitive)
-                pl.col("notes_casted") # Corrected: use alias within the expression
-                    .list.eval(pl.element().str.contains(r"(?i)hazardous occupation"))
-                    .list.any()
-                    .alias("re_hazardous"),
+                af_multi["underwriter_notes"].str.contains(r"(?i)hazardous occupation").alias("mentions_hazardous_occupation_regex"),
                 # Another Regex check (case insensitive) for medical history
-                pl.col("notes_casted") # Corrected: use alias within the expression
-                    .list.eval(pl.element().str.contains(r"(?i)medical history"))
-                    .list.any()
-                    .alias("re_medical"),
-            ).select(
-                pl.col("lit_medical").alias("mentions_medical_history_literal"),
-                pl.col("re_hazardous").alias("mentions_hazardous_occupation_regex"),
-                pl.col("re_medical").alias("mentions_medical_history_regex")
+                af_multi["underwriter_notes"].str.contains(r"(?i)medical history").alias("mentions_medical_history_regex")
             )
             print(af_multi_processed.collect())
             ```
 
             ```text
             shape: (3, 3)
-            ┌────────────────────────────────────┬───────────────────────────────────────┬──────────────────────────────────┐
-            │ mentions_medical_history_literal │ mentions_hazardous_occupation_regex │ mentions_medical_history_regex │
-            │ ---                                │ ---                                   │ ---                              │
-            │ bool                               │ bool                                  │ bool                             │
-            ╞════════════════════════════════════╪═══════════════════════════════════════╪══════════════════════════════════╡
-            │ false                              │ false                                 │ false                            │
-            │ true                               │ false                                 │ true                             │
-            │ false                              │ true                                  │ false                            │
-            └────────────────────────────────────┴───────────────────────────────────────┴──────────────────────────────────┘
+            ┌──────────────────────────────────┬─────────────────────────────────────┬────────────────────────────────┐
+            │ mentions_medical_history_literal ┆ mentions_hazardous_occupation_regex ┆ mentions_medical_history_regex │
+            │ ---                              ┆ ---                                 ┆ ---                            │
+            │ bool                             ┆ bool                                ┆ bool                           │
+            ╞══════════════════════════════════╪═════════════════════════════════════╪════════════════════════════════╡
+            │ false                            ┆ false                               ┆ false                          │
+            │ true                             ┆ false                               ┆ true                           │
+            │ false                            ┆ true                                ┆ false                          │
+            └──────────────────────────────────┴─────────────────────────────────────┴────────────────────────────────┘
             ```
         """
         return self._call_string_method(
@@ -512,20 +480,19 @@ class StringNamespaceProxy:
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl # Needed for pl.List, pl.String
 
             data_policy_riders = {
                 "policy_id": ["R4001", "R4002", "R4003"],
-                "rider_codes_list": [
-                    ["adb", "wp"],
-                    ["ci", None, "ltc", "acc_death"],
-                    ["gio"]
+                "rider_codes_str": [
+                    "adb,wp",
+                    "ci,ltc,acc_death",
+                    "gio"
                 ]
             }
             af_riders = ActuarialFrame(data_policy_riders)
-            # Ensure the list column has the correct Polars type for the string operation
+            # Convert string to list for the string operation
             af_riders = af_riders.with_columns(
-                af_riders["rider_codes_list"].cast(pl.List(pl.String))
+                af_riders["rider_codes_str"].str.split(",").alias("rider_codes_list")
             )
             af_upper_riders = af_riders.select(
                 af_riders["rider_codes_list"].str.to_uppercase().alias("upper_rider_codes")
@@ -535,15 +502,15 @@ class StringNamespaceProxy:
 
             ```text
             shape: (3, 1)
-            ┌───────────────────────────┐
-            │ upper_rider_codes         │
-            │ ---                       │
-            │ list[str]                 │
-            ╞═══════════════════════════╡
-            │ ["ADB", "WP"]             │
-            │ ["CI", null, … "ACC_DEATH"] │
-            │ ["GIO"]                   │
-            └───────────────────────────┘
+            ┌────────────────────────────┐
+            │ upper_rider_codes          │
+            │ ---                        │
+            │ list[str]                  │
+            ╞════════════════════════════╡
+            │ ["ADB", "WP"]              │
+            │ ["CI", "LTC", "ACC_DEATH"] │
+            │ ["GIO"]                    │
+            └────────────────────────────┘
             ```
         """
         return self._call_string_method("to_uppercase")
@@ -2264,14 +2231,16 @@ class StringNamespaceProxy:
 
             logs = {
                 "policy_id": ["A100", "A101"],
-                "update_notes": [
-                    ["Issued OK", "Review PENDING"],
-                    [None, "Paid OK"],
+                "update_notes_str": [
+                    "Issued OK,Review PENDING",
+                    "None,Paid OK",
                 ],
             }
             af_logs = ActuarialFrame(logs)
             af_logs = af_logs.with_columns(
-                af_logs["update_notes"].cast(pl.List(pl.String))
+                af_logs["update_notes_str"].str.split(",").alias("update_notes").map_elements(
+                    lambda x: [None if item == "None" else item for item in x], return_dtype=pl.List(pl.String)
+                )
             )
             status_ok = af_logs.select(
                 af_logs["update_notes"].str.ends_with("OK").alias("ends_with_ok")
@@ -2383,8 +2352,8 @@ class StringNamespaceProxy:
                 af["issue_date_str"].str.strptime(pl.Date, "%d/%m/%Y", strict=False).alias("issue_date_dmy_fmt"),
                 af["issue_date_str"].str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False).alias("issue_datetime"),
             )
-            with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-                print(af_parsed_dates.collect())
+            result = af_parsed_dates.collect()
+            print(result)
             ```
 
             ```text
@@ -2419,8 +2388,7 @@ class StringNamespaceProxy:
                 ).alias("event_datetimes_μs")
             )
             result = af_parsed_list.collect()
-            with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-                print(result)
+            print(result)
             ```
 
             ```text
@@ -2477,18 +2445,16 @@ class StringNamespaceProxy:
         Examples:
             **Scalar Example: Extracting policy numbers from combined IDs**
             ```python
-            import polars as pl
             from gaspatchio_core.frame.base import ActuarialFrame
 
-            with pl.Config(fmt_str_lengths=100):
-                data = {
-                    "full_id": ["POLICY-12345-AB", "CLAIM-67890-CD", "POLICY-ABCDE-FG"],
-                }
-                af = ActuarialFrame(data)
-                af_extracted = af.select(
-                    af["full_id"].str.extract(r"POLICY-(\\w+)-.*", group_index=1).alias("policy_num")
-                )
-                print(af_extracted.collect())
+            data = {
+                "full_id": ["POLICY-12345-AB", "CLAIM-67890-CD", "POLICY-ABCDE-FG"],
+            }
+            af = ActuarialFrame(data)
+            af_extracted = af.select(
+                af["full_id"].str.extract(r"POLICY-([A-Z0-9]+)-.*", group_index=1).alias("policy_num")
+            )
+            print(af_extracted.collect())
             ```
 
             ```text
@@ -2506,22 +2472,19 @@ class StringNamespaceProxy:
 
             **Vector Example: Extracting amounts from transaction descriptions**
             ```python
-            import polars as pl
             from gaspatchio_core.frame.base import ActuarialFrame
-            with pl.Config(fmt_str_lengths=120, tbl_width_chars=100):
-
-                data_list = {
-                    "policy_id": ["P001"],
-                    "transactions": [["Premium paid: $100.50", "Fee: $10.00", "Adjustment: $-5.25"]],
-                }
-                af_list = ActuarialFrame(data_list)
-                af_list = af_list.with_columns(
-                    af_list["transactions"].cast(pl.List(pl.String))
-                )
-                af_list_extracted = af_list.select(
-                    af_list["transactions"].str.extract(r"\\$?([-+]?\\d+\\.\\d{2})", group_index=1).alias("amounts_str")
-                )
-                print(af_list_extracted.collect())
+            data_list = {
+                "policy_id": ["P001"],
+                "transactions": ["Premium paid: $100.50, Fee: $10.00, Adjustment: $-5.25"],
+            }
+            af_list = ActuarialFrame(data_list)
+            af_list = af_list.with_columns(
+                af_list["transactions"].str.split(", ").alias("transactions")
+            )
+            af_list_extracted = af_list.select(
+                af_list["transactions"].str.extract(r"\\$?([-+]?[0-9]+\\.[0-9]{2})", group_index=1).alias("amounts_str")
+            )
+            print(af_list_extracted.collect())
             ```
 
             ```text
@@ -2586,8 +2549,8 @@ class StringNamespaceProxy:
             │ ---                   │
             │ list[str]             │
             ╞═══════════════════════╡
-            │ ["150.00", "25.50"]   │
-            │ ["10.00"]             │
+            │ ["$150.00", "$25.50"] │
+            │ ["$10.00"]            │
             └───────────────────────┘
             ```
 
@@ -2595,32 +2558,30 @@ class StringNamespaceProxy:
 
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
 
             notes = {
                 "claim_id": ["C1"],
-                "notes": [["Policy 12345 reported", "Adjustment for policy 98765"]]
+                "notes": ["Policy 12345 reported, Adjustment for policy 98765"]
             }
             af = ActuarialFrame(notes)
             af_list = af.with_columns(
-                af["notes"].cast(pl.List(pl.String))
+                af["notes"].str.split(", ").alias("notes")
             )
             result = af_list.select(
-                af_list["notes"].str.extract_all(r"\\d+").alias("policy_numbers")
+                af_list["notes"].str.extract_all(r"[0-9]+").alias("policy_numbers")
             )
-            with pl.Config(tbl_width_chars=80):
-                print(result.collect())  # doctest: +NORMALIZE_WHITESPACE
+            print(result.collect())
             ```
 
             ```text
             shape: (1, 1)
-            ┌────────────────────┐
-            │ policy_numbers     │
-            │ ---                │
-            │ list[str]          │
-            ╞════════════════════╡
-            │ ["12345", "98765"] │
-            └────────────────────┘
+            ┌────────────────────────┐
+            │ policy_numbers         │
+            │ ---                    │
+            │ list[list[str]]        │
+            ╞════════════════════════╡
+            │ [["12345"], ["98765"]] │
+            └────────────────────────┘
             ```
         """
         return self._call_string_method("extract_all", pattern=pattern)
@@ -2703,20 +2664,22 @@ class StringNamespaceProxy:
 
             notes_data = {
                 "policy_id": ["A1", "A2"],
-                "claim_notes": [
-                    ["NOTE: Initial review", "Payment authorised"],
-                    [None, "NOTE: Follow up required"],
+                "claim_notes_str": [
+                    "NOTE: Initial review,Payment authorised",
+                    "None,NOTE: Follow up required",
                 ],
             }
             af_notes = ActuarialFrame(notes_data)
             af_notes = af_notes.with_columns(
-                af_notes["claim_notes"].cast(pl.List(pl.String))
+                af_notes["claim_notes_str"].str.split(",").alias("claim_notes").map_elements(
+                    lambda x: [None if item == "None" else item for item in x], return_dtype=pl.List(pl.String)
+                )
             )
             af_clean_notes = af_notes.select(
                 af_notes["claim_notes"].str.replace("NOTE: ", "", literal=True, n=1).alias("clean_notes")
             )
-            with pl.Config(fmt_str_lengths=60):
-                print(af_clean_notes.collect())
+            result = af_clean_notes.collect()
+            print(result)
             ```
 
             ```text

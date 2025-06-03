@@ -45,7 +45,7 @@ class TestValueVarsSelectiveMelting:
         assert variables == ["Female", "Male"]
 
         # Verify lookup works
-        test_df = pl.DataFrame({"Age": [30], "variable": ["Male"]})
+        test_df = pl.DataFrame({"Age": [30.0], "variable": ["Male"]})
         lookup_result = test_df.with_columns(
             gs.assumption_lookup(
                 "Age", "variable", table_name="selective_gender_test"
@@ -80,7 +80,7 @@ class TestValueVarsSelectiveMelting:
 
         # Verify lookup with multiple id columns
         test_df = pl.DataFrame(
-            {"Product": ["Term"], "Age": [30], "variable": ["Female"]}
+            {"Product": ["Term"], "Age": [30.0], "variable": ["Female"]}  # Age now f64
         )
         lookup_result = test_df.with_columns(
             gs.assumption_lookup(
@@ -427,8 +427,8 @@ class TestEdgeCases:
             gs.load_assumptions("empty_df_test", empty_df)
 
     def test_single_row_table_curve(self):
-        """Test loading single-row curve table."""
-        df = pl.DataFrame({"Age": [30], "qx": [0.001]})
+        """Test loading a table with only one row (curve format)."""
+        df = pl.DataFrame({"Age": [30.0], "qx": [0.001]})  # Age now f64
 
         result = gs.load_assumptions("single_row_curve", df, value="qx")
 
@@ -436,31 +436,33 @@ class TestEdgeCases:
         assert result.columns == ["Age", "qx"]
 
         # Test lookup
-        test_df = pl.DataFrame({"Age": [30]})
+        test_df = pl.DataFrame({"Age": [30.0]})  # Age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup("Age", table_name="single_row_curve").alias("qx")
         )
         assert lookup_result["qx"].item() == 0.001
 
     def test_single_row_table_wide(self):
-        """Test loading single-row wide table."""
-        df = pl.DataFrame({"Age": [30], "1": [0.001], "2": [0.0008], "Ult.": [0.0005]})
+        """Test loading a table with only one row (wide format)."""
+        df = pl.DataFrame(
+            {"Age": [30.0], "1": [0.001], "2": [0.0008], "Ult.": [0.0005]}
+        )  # Age now f64
 
         result = gs.load_assumptions(
             "single_row_wide", df, overflow="Ult.", max_overflow=5
         )
 
-        # Should have expanded data
-        assert len(result) > 3  # Original 3 + expansions
+        # Should expand: 1 age × (3 original + 3 expanded) = 6 rows
+        assert len(result) == 6
 
         # Test lookup for expanded duration
-        test_df = pl.DataFrame({"Age": [30], "variable": ["4"]})
+        test_df = pl.DataFrame({"Age": [30.0], "variable": ["4"]})  # Age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup("Age", "variable", table_name="single_row_wide").alias(
                 "rate"
             )
         )
-        assert lookup_result["rate"].item() == 0.0005  # Should match Ult. value
+        assert lookup_result["rate"].item() == 0.0005
 
     def test_unicode_column_names(self):
         """Test tables with Unicode column names."""
@@ -485,7 +487,7 @@ class TestEdgeCases:
         assert result.columns == ["年齢", "variable", "死亡率"]
 
         # Test lookup with Unicode
-        test_df = pl.DataFrame({"年齢": [30], "variable": ["男性"]})
+        test_df = pl.DataFrame({"年齢": [30.0], "variable": ["男性"]})  # Age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup("年齢", "variable", table_name="unicode_test").alias(
                 "死亡率"
@@ -516,7 +518,9 @@ class TestEdgeCases:
         assert len(result) == 8  # 2 ages × 4 variables
 
         # Test lookup with special characters
-        test_df = pl.DataFrame({"Age (Years)": [30], "variable": ["Rate-Male"]})
+        test_df = pl.DataFrame(
+            {"Age (Years)": [30.0], "variable": ["Rate-Male"]}
+        )  # Age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup(
                 "Age (Years)", "variable", table_name="special_chars_test"
@@ -540,7 +544,7 @@ class TestEdgeCases:
         )
 
         # Should handle large values correctly
-        test_df = pl.DataFrame({"Age": [30], "variable": ["1"]})
+        test_df = pl.DataFrame({"Age": [30.0], "variable": ["1"]})  # Age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup(
                 "Age", "variable", table_name="large_values_test"
@@ -560,7 +564,7 @@ class TestEdgeCases:
         result = gs.load_assumptions("small_values_test", df, value="qx")
 
         # Should handle small values correctly
-        test_df = pl.DataFrame({"Age": [30]})
+        test_df = pl.DataFrame({"Age": [30.0]})  # Age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup("Age", table_name="small_values_test").alias("qx")
         )
@@ -591,7 +595,7 @@ class TestPerformanceWithLargeTables:
 
         # Test lookup performance
         start_time = time.time()
-        test_df = pl.DataFrame({"Age": [50000]})
+        test_df = pl.DataFrame({"Age": [50000.0]})  # Age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup("Age", table_name="large_curve_test").alias("qx")
         )
@@ -626,7 +630,7 @@ class TestPerformanceWithLargeTables:
 
         # Test lookup performance
         start_time = time.time()
-        test_df = pl.DataFrame({"Age": [5000], "variable": ["3"]})
+        test_df = pl.DataFrame({"Age": [5000.0], "variable": [3.0]})  # Both now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup("Age", "variable", table_name="large_wide_test").alias(
                 "rate"
@@ -664,7 +668,7 @@ class TestPerformanceWithLargeTables:
         assert load_time < 2.0
 
         # Verify expansion worked correctly
-        test_df = pl.DataFrame({"Age": [25], "variable": ["99"]})
+        test_df = pl.DataFrame({"Age": [25.0], "variable": ["99"]})  # Age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup(
                 "Age", "variable", table_name="memory_efficiency_test"

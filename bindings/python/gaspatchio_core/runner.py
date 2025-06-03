@@ -28,6 +28,7 @@ class RunMetrics(BaseModel):
 
     total_time_s: float
     profile_info: Any
+    tracked_column_order: Optional[List[str]] = None
 
 
 class ModelRunResult(BaseModel):
@@ -148,6 +149,28 @@ def _execute_model_run(
     logger.info("Collecting results...")
     result_df, profile_info = df.profile()
 
+    # Capture the column order from the ActuarialFrame
+    tracked_column_order = df.get_column_order()
+
+    # Reorder the result DataFrame to match the tracked column order
+    if tracked_column_order and not result_df.is_empty():
+        # Only reorder columns that exist in both the tracked order and the result
+        available_columns = result_df.columns
+        ordered_columns = [
+            col for col in tracked_column_order if col in available_columns
+        ]
+        # Add any columns that exist in result but not in tracked order (shouldn't happen, but safety)
+        remaining_columns = [
+            col for col in available_columns if col not in ordered_columns
+        ]
+        final_column_order = ordered_columns + remaining_columns
+
+        if final_column_order != available_columns:
+            logger.debug(
+                f"Reordering columns from {available_columns} to {final_column_order}"
+            )
+            result_df = result_df.select(final_column_order)
+
     end_time = time.time()
     total_time = end_time - start_time
     record_count = len(result_df) if not result_df.is_empty() else 0
@@ -155,7 +178,11 @@ def _execute_model_run(
         f"{run_description} finished in {total_time:.2f} seconds producing {record_count} result records."
     )
 
-    metrics = RunMetrics(total_time_s=total_time, profile_info=profile_info)
+    metrics = RunMetrics(
+        total_time_s=total_time,
+        profile_info=profile_info,
+        tracked_column_order=tracked_column_order,
+    )
     return ModelRunResult(
         result=result_df, metrics=metrics, errors=errors if errors else None
     )
@@ -187,7 +214,9 @@ def run_model(config: ModelRunConfig) -> ModelRunResult:
     except Exception as e:
         logger.opt(exception=True).error("Error during model setup")
         # Return an error result if setup fails
-        metrics = RunMetrics(total_time_s=0.0, profile_info=None)
+        metrics = RunMetrics(
+            total_time_s=0.0, profile_info=None, tracked_column_order=None
+        )
         return ModelRunResult(
             result=pl.DataFrame(), metrics=metrics, errors=[f"Setup Error: {str(e)}"]
         )
@@ -262,5 +291,7 @@ def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
         if not errors:
             errors.append(f"Setup/Filter Error (ID: {policy_id}): {str(e)}")
         # Return an error result
-        metrics = RunMetrics(total_time_s=0.0, profile_info=None)
+        metrics = RunMetrics(
+            total_time_s=0.0, profile_info=None, tracked_column_order=None
+        )
         return ModelRunResult(result=pl.DataFrame(), metrics=metrics, errors=errors)

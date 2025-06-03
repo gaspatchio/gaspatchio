@@ -63,13 +63,20 @@ class ExcelFrameAccessor(BaseFrameAccessor):
     """
 
     def __init__(self, frame: "ActuarialFrame"):
-        """Initializes the accessor with the parent ActuarialFrame."""
+        """Initializes the accessor with the parent ActuarialFrame.
+        
+        Internal initialization method for the Excel frame accessor.
+        """
         super().__init__(frame)
         # Placeholder for any frame-level excel methods
 
 
 def _normalize_basis(basis: BasisType) -> str:
-    """Normalize basis to a standard string representation."""
+    """Normalize basis to a standard string representation.
+    
+    Internal helper function that converts various basis representations
+    (integer or string) to a standardized string format.
+    """
     if basis in BASIS_MAP:
         return BASIS_MAP[basis]
     raise ValueError(
@@ -80,8 +87,10 @@ def _normalize_basis(basis: BasisType) -> str:
 def _adjust_date_us_nasd_30_360(
     year: int, month: int, day: int, is_start: bool, other_day: int = None
 ) -> tuple[int, int, int]:
-    """
-    Apply US NASD 30/360 date adjustments to a date's components.
+    """Apply US NASD 30/360 date adjustments to a date's components.
+    
+    Internal helper function that implements the US NASD 30/360 day count
+    convention date adjustment rules.
 
     Args:
         year: Year component
@@ -138,7 +147,11 @@ def _adjust_date_us_nasd_30_360(
 def _compute_yearfrac_value_exprs(
     start_date_e: pl.Expr, end_date_e: pl.Expr, basis_str: str
 ) -> pl.Expr:
-    """Computes year fraction between two date expressions based on basis."""
+    """Computes year fraction between two date expressions based on basis.
+    
+    Internal helper function that handles the core yearfrac calculation logic
+    for different day count bases using Polars expressions.
+    """
     # Ensure inputs are cast to Date, allowing Polars to attempt conversion
     # strict=False allows for attempted conversion of various date-like inputs.
     s_dt = start_date_e.cast(pl.Date, strict=False)
@@ -241,12 +254,19 @@ class ExcelColumnAccessor(BaseColumnAccessor):
     """
 
     def __init__(self, proxy: "ColumnProxy | ExpressionProxy"):
-        """Initializes the accessor with the parent proxy."""
+        """Initializes the accessor with the parent proxy.
+        
+        Internal initialization method for the Excel column accessor.
+        """
         super().__init__(proxy)
         self._proxy: "ColumnProxy | ExpressionProxy" = proxy
 
     def _get_polars_expr(self) -> pl.Expr:
-        """Helper to get the underlying Polars expression from the proxy."""
+        """Helper to get the underlying Polars expression from the proxy.
+        
+        Internal helper method that extracts the Polars expression from
+        the column or expression proxy for further processing.
+        """
         if hasattr(self._proxy, "_expr") and isinstance(self._proxy._expr, pl.Expr):
             return self._proxy._expr
         elif hasattr(self._proxy, "name") and isinstance(self._proxy.name, str):
@@ -257,7 +277,11 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             )
 
     def _get_parent_frame(self) -> "ActuarialFrame":
-        """Helper to get the parent ActuarialFrame, raising error if absent."""
+        """Helper to get the parent ActuarialFrame, raising error if absent.
+        
+        Internal helper method that retrieves the parent ActuarialFrame
+        context, which is required for many Excel operations.
+        """
         if not hasattr(self._proxy, "_parent") or self._proxy._parent is None:
             raise RuntimeError(
                 "Operation requires the expression/column to be part of an ActuarialFrame context."
@@ -266,21 +290,64 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
     def from_excel_serial(self, epoch: str = "1900") -> "ExpressionProxy":
         """Converts Excel serial numbers (integers or floats) to Polars Date.
-        Follows logic similar to openpyxl for compatibility.
+        
+        Follows logic similar to openpyxl for compatibility. This method handles
+        Excel's date serialization system, including the notorious Excel 1900
+        leap year bug where Excel incorrectly treats 1900 as a leap year.
 
-        1900 Epoch (WINDOWS_1900_EPOCH = 1899-12-30):
-        - Serial 1 is 1900-01-01.
-        - Excel's serial 60 (phantom 1900-02-29) is mapped to 1900-03-01.
-        - Serials > 60 are adjusted by -1 day before adding to epoch.
-        1904 Epoch (MAC_1904_EPOCH = 1904-01-01):
-        - Serial 1 is 1904-01-01. Days to add from epoch are serial - 1.
+        !!! note "When to use"
+            *   **Excel File Import:** When importing Excel files that contain date columns stored as serial numbers rather than proper date values.
+            *   **Legacy Data Processing:** When working with older Excel files or systems that export dates as numeric serial values.
+            *   **Cross-Platform Compatibility:** When handling Excel files that may have been created on different platforms (Windows vs Mac) with different epoch systems.
+            *   **Data Validation:** When you need to convert and validate date serial numbers from external Excel-based data sources.
+
         Args:
             epoch: The epoch system used by Excel ('1900' or '1904').
                    Defaults to '1900'.
+                   
+                   - 1900 Epoch (WINDOWS_1900_EPOCH = 1899-12-30):
+                     Serial 1 is 1900-01-01. Excel's serial 60 (phantom 1900-02-29) 
+                     is mapped to 1900-03-01. Serials > 60 are adjusted by -1 day 
+                     before adding to epoch.
+                   - 1904 Epoch (MAC_1904_EPOCH = 1904-01-01):
+                     Serial 1 is 1904-01-01. Days to add from epoch are serial - 1.
+
         Returns:
             An ExpressionProxy representing the converted date column.
+            
         Raises:
             ValueError: If an invalid epoch is provided.
+            
+        Examples:
+            ```python
+            from gaspatchio_core import ActuarialFrame
+            
+            # Excel serial numbers for some dates
+            data = {
+                "policy_id": ["P001", "P002", "P003"],
+                "excel_date_serial": [44197, 44562, 44927],  # Excel serial numbers
+            }
+            af = ActuarialFrame(data)
+            
+            # Convert Excel serial numbers to proper dates
+            af_with_dates = af.with_columns(
+                actual_date=af["excel_date_serial"].excel.from_excel_serial(epoch="1900")
+            )
+            print(af_with_dates.collect())
+            ```
+            
+            ```text
+            shape: (3, 3)
+            ┌───────────┬────────────────────┬─────────────┐
+            │ policy_id ┆ excel_date_serial  ┆ actual_date │
+            │ ---       ┆ ---                ┆ ---         │
+            │ str       ┆ i64                ┆ date        │
+            ╞═══════════╪════════════════════╪═════════════╡
+            │ P001      ┆ 44197              ┆ 2021-01-01  │
+            │ P002      ┆ 44562              ┆ 2021-12-31  │
+            │ P003      ┆ 44927              ┆ 2022-12-31  │
+            └───────────┴────────────────────┴─────────────┘
+            ```
         """
         base_expr = self._get_polars_expr()
         numeric_expr = base_expr.cast(pl.Float64, strict=False)
@@ -388,7 +455,6 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
             ```python
             import datetime
-            import polars as pl
             from gaspatchio_core import ActuarialFrame
 
             data = {

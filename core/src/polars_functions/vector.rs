@@ -3,6 +3,10 @@ use log::info;
 use polars::prelude::*;
 use serde::Deserialize;
 
+/// Fills a series with incrementing values based on provided parameters.
+///
+/// # Errors
+/// Returns an error if the input series cannot be converted to i64 or if series creation fails.
 pub fn fill_series(inputs: &[Series], kwargs: FillSeriesKwargs) -> PolarsResult<Series> {
     // Log the inputs for debugging.
     info!("fill_series called with inputs: {:?}", inputs);
@@ -45,6 +49,10 @@ pub struct RoundKwargs {
     pub decimal_places: i32,
 }
 
+/// Applies floor operation to numeric series values, optionally dividing by a divisor first.
+///
+/// # Errors
+/// Returns an error if the input series is not numeric or if series operations fail.
 pub fn floor(inputs: &[Series], kwargs: FloorKwargs) -> PolarsResult<Series> {
     // Get the first input series
     let input_series = &inputs[0];
@@ -60,9 +68,9 @@ pub fn floor(inputs: &[Series], kwargs: FloorKwargs) -> PolarsResult<Series> {
             let out: Int32Chunked = ca.apply(|opt_v: Option<i32>| {
                 opt_v.map(|v| {
                     if divisor == 0 {
-                        default as i32
+                        i32::try_from(default).unwrap_or(i32::MAX)
                     } else {
-                        (v as f64 / divisor as f64).floor() as i32
+                        (f64::from(v) / divisor as f64).floor() as i32
                     }
                 })
             });
@@ -123,9 +131,9 @@ pub fn floor(inputs: &[Series], kwargs: FloorKwargs) -> PolarsResult<Series> {
                         let floored: Int32Chunked = ca.apply(|opt_v: Option<i32>| {
                             opt_v.map(|v| {
                                 if divisor == 0 {
-                                    default as i32
+                                    i32::try_from(default).unwrap_or(i32::MAX)
                                 } else {
-                                    (v as f64 / divisor as f64).floor() as i32
+                                    (f64::from(v) / divisor as f64).floor() as i32
                                 }
                             })
                         });
@@ -189,6 +197,10 @@ pub fn floor(inputs: &[Series], kwargs: FloorKwargs) -> PolarsResult<Series> {
     }
 }
 
+/// Rounds numeric series values to the specified number of decimal places.
+///
+/// # Errors
+/// Returns an error if the input series is not numeric or if series operations fail.
 pub fn round(inputs: &[Series], kwargs: RoundKwargs) -> PolarsResult<Series> {
     let input_series = &inputs[0];
     let decimal_places = kwargs.decimal_places;
@@ -205,7 +217,7 @@ pub fn round(inputs: &[Series], kwargs: RoundKwargs) -> PolarsResult<Series> {
             // We'll perform standard rounding to the nearest integer.
             // A warning could be logged if decimal_places > 0.
             let ca = input_series.i32()?;
-            let out: Int32Chunked = ca.apply_values(|v| (v as f64).round() as i32);
+            let out: Int32Chunked = ca.apply_values(|v| f64::from(v).round() as i32);
             Ok(out.into_series())
         }
         DataType::Int64 => {
@@ -231,7 +243,7 @@ pub fn round(inputs: &[Series], kwargs: RoundKwargs) -> PolarsResult<Series> {
                 match series.dtype() {
                     DataType::Int32 => {
                         let ca = series.i32().unwrap();
-                        let rounded: Int32Chunked = ca.apply_values(|v| (v as f64).round() as i32);
+                        let rounded: Int32Chunked = ca.apply_values(|v| f64::from(v).round() as i32);
                         rounded.into_series()
                     }
                     DataType::Int64 => {
@@ -268,6 +280,10 @@ pub fn round(inputs: &[Series], kwargs: RoundKwargs) -> PolarsResult<Series> {
     }
 }
 
+/// Rounds numeric series values to integers (0 decimal places) and casts to Int64.
+///
+/// # Errors
+/// Returns an error if the input series is not numeric or if casting operations fail.
 pub fn round_to_int(inputs: &[Series]) -> PolarsResult<Series> {
     info!("round_to_int called");
     // Prefix with underscore again to silence warning

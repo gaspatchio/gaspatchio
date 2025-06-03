@@ -112,7 +112,7 @@ class TestDuplicateTableNames:
             gs.load_assumptions(name, df, value="qx")
 
         # Verify all are registered and accessible
-        test_df = pl.DataFrame({"Age": [30]})
+        test_df = pl.DataFrame({"Age": [30.0]})  # age now f64
 
         for table_name in names:
             result = test_df.with_columns(
@@ -158,7 +158,7 @@ class TestDuplicateTableNames:
             gs.load_assumptions(name, df, value="qx")
 
             # Verify accessibility
-            test_df = pl.DataFrame({"Age": [30]})
+            test_df = pl.DataFrame({"Age": [30.0]})  # age now f64
             result = test_df.with_columns(
                 gs.assumption_lookup("Age", table_name=name).alias("qx")
             )
@@ -206,7 +206,7 @@ class TestTableOverwriting:
             gs.load_assumptions(table_name, df2, value="qx")
 
         # Original table should still be accessible and unchanged
-        test_df = pl.DataFrame({"Age": [30]})
+        test_df = pl.DataFrame({"Age": [30.0]})  # age now f64
         result = test_df.with_columns(
             gs.assumption_lookup("Age", table_name=table_name).alias("qx")
         )
@@ -258,7 +258,7 @@ class TestTableNameValidation:
                 assert len(result) == 2
 
                 # Verify accessibility
-                test_df = pl.DataFrame({"Age": [30]})
+                test_df = pl.DataFrame({"Age": [30.0]})  # age now f64
                 lookup_result = test_df.with_columns(
                     gs.assumption_lookup("Age", table_name=name).alias("qx")
                 )
@@ -281,7 +281,7 @@ class TestTableNameValidation:
         assert len(result) == 2
 
         # Verify accessibility
-        test_df = pl.DataFrame({"Age": [30]})
+        test_df = pl.DataFrame({"Age": [30.0]})  # age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup("Age", table_name=long_name).alias("qx")
         )
@@ -338,7 +338,9 @@ class TestConcurrentLoading:
         for name, expected_result in results:
             if "lapse_rates" in name:
                 # Test wide table lookup
-                test_df = pl.DataFrame({"Duration": [1], "variable": ["Male"]})
+                test_df = pl.DataFrame(
+                    {"Duration": [1.0], "variable": ["Male"]}
+                )  # Duration now f64
                 result = test_df.with_columns(
                     gs.assumption_lookup("Duration", "variable", table_name=name).alias(
                         "rate"
@@ -347,14 +349,14 @@ class TestConcurrentLoading:
                 assert result["rate"].item() == 0.05
             elif "interest_rates" in name:
                 # Test different id column
-                test_df = pl.DataFrame({"Year": [1]})
+                test_df = pl.DataFrame({"Year": [1.0]})  # Year now f64
                 result = test_df.with_columns(
                     gs.assumption_lookup("Year", table_name=name).alias("rate")
                 )
                 assert result["rate"].item() == 0.03
             else:
                 # Test mortality tables
-                test_df = pl.DataFrame({"Age": [30]})
+                test_df = pl.DataFrame({"Age": [30.0]})  # age now f64
                 result = test_df.with_columns(
                     gs.assumption_lookup("Age", table_name=name).alias("qx")
                 )
@@ -377,7 +379,7 @@ class TestConcurrentLoading:
         assert len(result) == 2
 
         # Verify accessibility
-        test_df = pl.DataFrame({"Age": [30]})
+        test_df = pl.DataFrame({"Age": [30.0]})  # age now f64
         lookup_result = test_df.with_columns(
             gs.assumption_lookup("Age", table_name=table_name).alias("qx")
         )
@@ -419,14 +421,14 @@ class TestConcurrentLoading:
 
         # Verify all are accessible with their respective schemas
         # Curve table test
-        test_df = pl.DataFrame({"Age": [30]})
+        test_df = pl.DataFrame({"Age": [30.0]})  # age now f64
         curve_result = test_df.with_columns(
             gs.assumption_lookup("Age", table_name=curve_name).alias("qx")
         )
         assert curve_result["qx"].item() == 0.001
 
         # Wide table test
-        test_df = pl.DataFrame({"Age": [30], "variable": ["1"]})
+        test_df = pl.DataFrame({"Age": [30.0], "variable": [1.0]})  # both now f64
         wide_result = test_df.with_columns(
             gs.assumption_lookup("Age", "variable", table_name=wide_name).alias("rate")
         )
@@ -434,8 +436,11 @@ class TestConcurrentLoading:
 
         # Overflow table test (including expanded durations)
         test_df = pl.DataFrame(
-            {"Duration": [1], "variable": ["4"]}
-        )  # Expanded duration
+            {
+                "Duration": [1.0],
+                "variable": ["4"],
+            }  # Duration now f64, Expanded duration
+        )
         overflow_result = test_df.with_columns(
             gs.assumption_lookup(
                 "Duration", "variable", table_name=overflow_name

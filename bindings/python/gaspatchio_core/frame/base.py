@@ -286,29 +286,38 @@ class ActuarialFrame:
         except Exception as e:
             _handle_execution_error(self, e)  # Will re-raise or format
 
-    def profile(self) -> pl.DataFrame:
-        """Execute and materialize the dataframe with profiling."""
-        # Query plan logging is handled by trace decorator
-        # if self._show_query_plan and self._df is not None:
-        #    ...
-
+    def profile(self) -> tuple[pl.DataFrame, pl.DataFrame]:
+        """Execute and materialize the dataframe with profiling, returning (result_df, profile_info)."""
         try:
             if self._df is None:
-                return pl.DataFrame()  # Return empty if no data
-            # Polars profile() works on LazyFrames, no need to collect first
-            # However, the exact behavior and output might need verification
-            print("Running Polars profile()...")
-            profile_df = self._df.profile()  # Returns a DataFrame with profile info
-            # The profile_df itself might not be what the user expects back.
-            # Typically, you collect *after* profiling the lazy operations.
-            # Let's clarify the intent: Profile the execution *of* collect?
-            # Or just get the profile info *about* the lazy frame?
-            # For now, return the profile info DataFrame, but log a warning.
-            print(
-                "Warning: profile() returns profiling information, not the computed data. "
-                "Call collect() separately if you need the results."
-            )
-            return profile_df
+                # Return empty dataframes for both result and profile
+                return pl.DataFrame(), pl.DataFrame()
+
+            final_df = self._df
+            # Apply computation graph if it exists (typically built in optimize mode via tracing)
+            if self._computation_graph:
+                # The trace decorator might have already logged the plan if verbose
+                # but repeating here or having a more structured way to log before collect is fine.
+                if self._show_query_plan:
+                    from .tracing import (
+                        log_query_plan,  # Local import to avoid circularity at module level
+                    )
+
+                    log_query_plan(
+                        self._computation_graph, final_df
+                    )  # Log before applying
+
+                for name, expr_val in self._computation_graph:
+                    # Ensure expr_val is a polars expression. _convert_to_expr should handle this
+                    # during __setitem__ or with_columns before it gets into the graph.
+                    final_df = final_df.with_columns(expr_val.alias(name))
+
+                # Optionally clear the graph after applying, though the tracer resets it per call.
+                # self._computation_graph = []
+
+            # Use Polars profile to get both result and profile info
+            result_df, profile_info = final_df.profile()
+            return result_df, profile_info
         except Exception as e:
             _handle_execution_error(self, e)  # Will re-raise or format
 

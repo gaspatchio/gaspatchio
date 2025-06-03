@@ -11,13 +11,13 @@ from __future__ import annotations
 import gaspatchio_core as gs
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions._loader import (
+from gaspatchio_core.assumptions._overflow import (
     _create_overflow_expansion,
     _detect_overflow_column,
     _get_max_numeric_duration,
-    _tidy_wide_with_overflow_expansion,
-    load_assumptions,
 )
+from gaspatchio_core.assumptions._transform import _tidy_wide_with_overflow_expansion
+from gaspatchio_core.assumptions.api import load_assumptions
 
 
 def test_detect_overflow_auto_ult_dot():
@@ -364,11 +364,11 @@ def test_overflow_integration_with_lookup():
 
     # Test lookups using individual single-row DataFrames (following working pattern)
     test_cases = [
-        (30, "1", 0.001),  # Original data
-        (31, "2", 0.0009),  # Original data
-        (30, "Ult.", 0.0005),  # Overflow column
-        (30, "5", 0.0005),  # Expanded duration (should match Ult.)
-        (30, "10", 0.0005),  # Expanded duration (should match Ult.)
+        (30.0, "1", 0.001),  # Original data - Age now f64
+        (31.0, "2", 0.0009),  # Original data - Age now f64
+        (30.0, "Ult.", 0.0005),  # Overflow column - Age now f64
+        (30.0, "5", 0.0005),  # Expanded duration (should match Ult.) - Age now f64
+        (30.0, "10", 0.0005),  # Expanded duration (should match Ult.) - Age now f64
     ]
 
     for age, variable, expected_rate in test_cases:
@@ -452,7 +452,7 @@ def test_overflow_memory_usage_warning():
     assert len(result) == 1001  # 1 age × 1001 durations (1, Ult, 2-1000)
 
     # Verify lookup works for extreme values using correct syntax
-    test_df = pl.DataFrame({"Age": [30], "variable": ["999"]})
+    test_df = pl.DataFrame({"Age": [30.0], "variable": ["999"]})
     result_df = test_df.with_columns(
         gs.assumption_lookup(
             "Age", "variable", table_name="mortality_huge_expansion"

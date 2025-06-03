@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import polars as pl
 import pytest
-from gaspatchio_core.assumptions._loader import load_assumptions
+from gaspatchio_core.assumptions.api import load_assumptions
 
 
 class TestFileIOErrors:
@@ -250,7 +250,7 @@ class TestDataFrameValidation:
 
         # This should trigger wide table processing, but if we somehow force curve processing,
         # it should give a helpful error. Let's test the _tidy_curve function directly.
-        from gaspatchio_core.assumptions._loader import _tidy_curve
+        from gaspatchio_core.assumptions._transform import _tidy_curve
 
         with pytest.raises(ValueError) as exc_info:
             _tidy_curve(df, ["age"], "rate")
@@ -263,7 +263,7 @@ class TestDataFrameValidation:
         """Test error when curve table has no numeric columns."""
         df = pl.DataFrame({"age": ["20", "21"], "description": ["desc1", "desc2"]})
 
-        from gaspatchio_core.assumptions._loader import _tidy_curve
+        from gaspatchio_core.assumptions._transform import _tidy_curve
 
         with pytest.raises(ValueError) as exc_info:
             _tidy_curve(df, ["age"], "rate")
@@ -289,7 +289,7 @@ class TestDataFrameValidation:
 class TestMemoryWarnings:
     """Test memory warnings for large overflow expansions."""
 
-    @patch("gaspatchio_core.assumptions._loader.logger")
+    @patch("gaspatchio_core.assumptions._overflow.logger")
     def test_large_overflow_expansion_warning(self, mock_logger):
         """Test warning for very large overflow expansions (>1M rows)."""
         # Create a dataset that will trigger large expansion
@@ -311,7 +311,7 @@ class TestMemoryWarnings:
         assert "may consume significant memory" in warning_call
         assert "Consider reducing max_overflow parameter" in warning_call
 
-    @patch("gaspatchio_core.assumptions._loader.logger")
+    @patch("gaspatchio_core.assumptions._overflow.logger")
     def test_medium_overflow_expansion_info(self, mock_logger):
         """Test info logging for medium overflow expansions (>100K rows)."""
         # Create a dataset that will trigger info logging
@@ -433,7 +433,7 @@ class TestErrorMessageQuality:
         assert "Use absolute path" in suggestions
         assert "Check file permissions" in suggestions
 
-    @patch("gaspatchio_core.assumptions._loader.logger")
+    @patch("gaspatchio_core.assumptions.api.logger")
     def test_successful_loading_logged(self, mock_logger):
         """Test that successful loading operations are logged."""
         df = pl.DataFrame({"age": [20, 21], "qx": [0.001, 0.002]})
