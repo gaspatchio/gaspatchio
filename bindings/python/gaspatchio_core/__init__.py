@@ -36,7 +36,7 @@ from .assumptions import (
     get_table_metadata,
     list_tables_with_metadata,
 )
-from .assumptions.api import load_assumptions
+from .assumptions.api import append_assumptions, load_assumptions
 from .column import ColumnProxy, ExpressionProxy
 from .errors import PerformanceWarning
 from .frame import ActuarialFrame, run_model
@@ -103,6 +103,7 @@ __all__ = [
     "ExpressionProxy",
     # Assumptions
     "load_assumptions",
+    "append_assumptions",
     "assumption_lookup",
     "get_table_metadata",
     "list_tables_with_metadata",

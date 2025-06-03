@@ -166,17 +166,17 @@ graph TB
 ```mermaid
 graph TB
     subgraph "Python API Layer Container"
-        LoadAPI[load_assumptions<br/>Component]
-        AppendAPI[append_assumptions<br/>Component]
-        LookupAPI[assumption_lookup<br/>Component]
+        LoadAPI[load_assumptions<br/>api.py]
+        AppendAPI[append_assumptions<br/>api.py]
+        LookupAPI[assumption_lookup<br/>api.py]
         
-        Materializer[Data Materializer<br/>_materialise<br/>Component]
-        Analyzer[Shape Analyzer<br/>_analyse_shape<br/>Component]
-        Transformer[Data Transformer<br/>_tidy_functions<br/>Component]
-        Validator[Validation Engine<br/>Component]
+        Materializer[_materialise<br/>_source.py]
+        Analyzer[_analyse_shape<br/>_analysis.py]
+        Transformer[_tidy_*<br/>_transform.py]
+        OverflowHandler[overflow functions<br/>_overflow.py]
         
-        MetaMgr[Metadata Manager<br/>Component]
-        SourceMgr[Source Data Manager<br/>Component]
+        ConfigMgr[configuration management<br/>_config.py]
+        Validator[validation logic<br/>_validation.py]
     end
     
     subgraph "External Interfaces"
@@ -189,22 +189,21 @@ graph TB
     AppendAPI -->|"reads new data"| Materializer
     
     Materializer -->|"CSV/Parquet to DataFrame"| Files
-    Materializer -->|"analyzed DataFrame"| Analyzer
+    Materializer -->|"structured DataFrame"| Analyzer
     
     Analyzer -->|"id/numeric columns identified"| Transformer
+    Transformer -->|"handles overflow expansion"| OverflowHandler
     
-    Transformer -->|"validates structure"| Validator
-    Transformer -->|"tidy long format"| LoadAPI
-    Transformer -->|"tidy long format"| AppendAPI
-    
-    LoadAPI -->|"stores original data"| SourceMgr
-    LoadAPI -->|"stores metadata"| MetaMgr
+    LoadAPI -->|"validates parameters"| Validator
+    LoadAPI -->|"stores table config"| ConfigMgr
     LoadAPI -->|"registers table"| RustReg
     
     AppendAPI -->|"validates compatibility"| Validator
-    AppendAPI -->|"retrieves existing data"| SourceMgr
-    AppendAPI -->|"combines and rebuilds"| Transformer
-    AppendAPI -->|"re-registers table"| RustReg
+    AppendAPI -->|"retrieves table config"| ConfigMgr
+    AppendAPI -->|"appends to table"| RustReg
+    
+    Validator -->|"checks table exists"| ConfigMgr
+    Validator -->|"validates schema"| RustReg
     
     LookupAPI -->|"validates table exists"| Validator
     LookupAPI -->|"validates keys match"| Validator
@@ -217,81 +216,91 @@ graph TB
     style Materializer fill:#83d2fd,color:#000
     style Analyzer fill:#83d2fd,color:#000
     style Transformer fill:#83d2fd,color:#000
+    style OverflowHandler fill:#83d2fd,color:#000
+    style ConfigMgr fill:#83d2fd,color:#000
     style Validator fill:#83d2fd,color:#000
-    style MetaMgr fill:#83d2fd,color:#000
-    style SourceMgr fill:#83d2fd,color:#000
     style RustReg fill:#999999,color:#fff
     style Files fill:#999999,color:#fff
     style ActFrame fill:#999999,color:#fff
 ```
 
 ### Level 4: Code Diagram  
-*Shows the key classes and functions implementing the append functionality*
+*Shows the key modules and functions implementing the append functionality*
 
 ```mermaid
 classDiagram
-    class LoadAssumptions {
+    class api_py {
         +load_assumptions(name, source, **kwargs) DataFrame
+        +append_assumptions(name, source, **kwargs) DataFrame
+        +assumption_lookup(*keys, table_name, validate) Expr
+        +get_table_metadata(table_name) Dict
+        +list_tables_with_metadata() Dict
+    }
+    
+    class _source_py {
         +_materialise(source) DataFrame
+    }
+    
+    class _analysis_py {
         +_analyse_shape(df, id) tuple
+    }
+    
+    class _transform_py {
         +_tidy_curve(df, id_cols, value) DataFrame
         +_tidy_wide_with_overflow_expansion() DataFrame
         +_convert_keys_to_f64(df, key_columns) DataFrame
     }
     
-    class AppendAssumptions {
-        +append_assumptions(name, source, **kwargs) DataFrame
-        +_validate_append_compatibility(orig, new) None
-        +_get_table_source_data(name) DataFrame
-        +_append_table_source_data(name, df) None
-        +_store_table_source_data(name, df, config) None
+    class _overflow_py {
+        +_detect_overflow_column(wide_cols, overflow) str
+        +_get_max_numeric_duration(wide_cols) int
+        +_create_overflow_expansion(df, ...) DataFrame
     }
     
-    class ValidationEngine {
+    class _config_py {
+        +_store_table_config(name, config) None
+        +_get_table_config(name) dict
+        +_table_exists(name) bool
+        +_list_configured_tables() List~str~
+        -_TABLE_CONFIGS Dict
+    }
+    
+    class _validation_py {
+        +_validate_additional_keys(additional_keys) None
+        +_validate_append_compatibility(orig, new) None
         +validate_table_exists(table_name) None
         +validate_table_keys(table_name, keys) None
         +validate_model_columns(af, keys) None
-        +validate_column_types(af, table_name, keys) None
-        +_types_compatible(af_type, table_type) bool
-    }
-    
-    class AssumptionLookup {
-        +assumption_lookup(*keys, table_name, validate) Expr
-        +register_plugin_function() Expr
     }
     
     class PyAssumptionTableRegistry {
         +register_table(name, df, keys, value) None
-        +reregister_table(name, df, keys, value) None
+        +append_to_table(name, df, keys, value) None
         +get_table(name) AssumptionTable
         +list_tables() List~str~
     }
     
     class AssumptionTable {
         +build(df, keys, value) AssumptionTable
+        +append_entries(df, keys, value) None
         +lookup_series(key_series) Series
         +get_key_count() int
         +get_key_name(index) str
         +get_key_columns() List~str~
-        +get_key_types() Dict
     }
     
-    class StorageManager {
-        -_TABLE_SOURCE_DATA Dict
-        -_TABLE_CONFIGS Dict  
-        -_TABLE_METADATA Dict
-        +get_table_metadata(name) Dict
-        +list_tables_with_metadata() Dict
-    }
+    api_py --> _source_py : uses _materialise
+    api_py --> _analysis_py : uses _analyse_shape
+    api_py --> _transform_py : uses _tidy_*
+    api_py --> _config_py : stores/retrieves configs
+    api_py --> _validation_py : validates parameters
+    api_py --> PyAssumptionTableRegistry : registers tables
     
-    LoadAssumptions --> PyAssumptionTableRegistry : registers tables
-    AppendAssumptions --> PyAssumptionTableRegistry : re-registers tables
-    AppendAssumptions --> StorageManager : manages source data
-    AppendAssumptions --> ValidationEngine : validates compatibility
-    AssumptionLookup --> ValidationEngine : validates lookups
-    AssumptionLookup --> PyAssumptionTableRegistry : retrieves tables
+    _transform_py --> _overflow_py : handles overflow expansion
+    _validation_py --> _config_py : checks table existence
+    _validation_py --> PyAssumptionTableRegistry : validates schema
+    
     PyAssumptionTableRegistry --> AssumptionTable : creates and manages
-    LoadAssumptions --> StorageManager : stores metadata
 ```
 
 *These C4 diagrams follow the hierarchical approach recommended by the [C4 model](https://c4model.com/) for visualizing software architecture, showing the system from multiple levels of abstraction.*
@@ -359,7 +368,7 @@ rate = gs.assumption_lookup(
 ### Rebuild-on-Append (Recommended)
 
 **Architecture:**
-- Store original DataFrame data with each table
+- Store original DataFrame data with each tableOK 
 - On append, combine all DataFrames and rebuild AssumptionTable
 - Use copy-on-write semantics for efficiency
 
@@ -377,30 +386,45 @@ rate = gs.assumption_lookup(
 
 ## Recommended Implementation 
 
-### Python Changes (within `gaspatchio_core.assumptions`: `api.py`, `core.py`, `registry.py`, `validation.py`)
+### Python Changes (Refactored Module Structure)
 
-The Python functions and logic described below, originally conceived for a single `_loader.py` file, are now organized across the `gaspatchio_core.assumptions` module, primarily in `api.py` (for public-facing functions like `load_assumptions`, `append_assumptions`, `assumption_lookup`), `core.py` (for internal data processing logic like `_materialise`, `_analyse_shape`, `_tidy_*`), `registry.py` (for managing table configurations and state like `_TABLE_CONFIGS`, `_store_table_config`), and `validation.py` (for validation logic like `_validate_append_compatibility`, `validate_table_exists`).
+The append functionality will be implemented across the existing refactored `gaspatchio_core.assumptions` module structure, with two new modules added:
 
-#### Source Data Storage
+- **`api.py`**: Public-facing functions (`load_assumptions`, `append_assumptions`, `assumption_lookup`)
+- **`_source.py`**: Data materialization (`_materialise`)
+- **`_analysis.py`**: DataFrame structure analysis (`_analyse_shape`)
+- **`_transform.py`**: Data transformation (`_tidy_curve`, `_tidy_wide_with_overflow_expansion`, `_convert_keys_to_f64`)
+- **`_overflow.py`**: Overflow handling (`_detect_overflow_column`, `_create_overflow_expansion`, `_get_max_numeric_duration`)
+- **`_config.py`** (NEW): Table configuration management
+- **`_validation.py`** (NEW): Validation logic for append compatibility and lookup validation
 
-**What Changes:** New global storage for table configuration parameters only. Instead of storing original DataFrames, we store just the configuration needed for validation and retrieve processed data from the Rust registry when appending.
+#### New Module: _config.py
 
-**Why:** The original approach of storing source DataFrames was unnecessarily complex and memory-intensive. Since we can process new append data through the same pipeline and retrieve existing processed data from the Rust registry, we only need to store configuration for compatibility validation.
+**What Changes:** New module for managing table configurations and metadata storage.
+
+**Why:** Separates configuration management from the main API, following the single responsibility principle established in the refactor.
 
 **Key Implementation Details:**
-- `_TABLE_CONFIGS` stores only the configuration parameters used when loading each table
-- No DataFrame storage in Python - processed data lives only in the Rust registry  
-- Append operations retrieve existing processed data from Rust, combine with new processed data, and re-register
-- Much lower memory footprint and simpler architecture
-- Enables the same functionality with cleaner implementation
+- Manages `_TABLE_CONFIGS` global storage for table configuration parameters
+- Stores only the configuration needed for validation, not source DataFrames
+- Provides clean interface for storing and retrieving table configurations
 
 ```python
-# Minimal storage - just configuration for validation
+"""
+Internal module for table configuration management.
+"""
+
+from __future__ import annotations
+from typing import Any, Dict
+from loguru import logger
+
+# Global storage for table configurations (for append compatibility validation)
 _TABLE_CONFIGS: Dict[str, Dict[str, Any]] = {}
 
-def _store_table_config(name: str, config: dict):
+def _store_table_config(name: str, config: dict) -> None:
     """Store table configuration for compatibility validation."""
     _TABLE_CONFIGS[name] = config.copy()
+    logger.debug(f"Stored configuration for table '{name}'")
 
 def _get_table_config(name: str) -> dict:
     """Get stored configuration for a table."""
@@ -411,21 +435,134 @@ def _get_table_config(name: str) -> dict:
 def _table_exists(name: str) -> bool:
     """Check if a table exists in the configuration storage."""
     return name in _TABLE_CONFIGS
+
+def _list_configured_tables() -> list[str]:
+    """List all tables that have stored configurations."""
+    return list(_TABLE_CONFIGS.keys())
 ```
 
-#### Enhanced load_assumptions Function
+#### New Module: _validation.py
 
-**What Changes:** The existing `load_assumptions` function is extended with a new `additional_keys` parameter that allows users to specify constant key-value pairs to be added as columns to the assumption data. This enables building multi-dimensional tables from single-dimension source files.
+**What Changes:** New module for all validation logic related to append compatibility and lookup validation.
 
-**Why:** Instead of loading separate assumption tables for each combination (e.g., 4 separate mortality tables for male/female and smoker/non-smoker), we can load one base table and append the others with different `additional_keys`. This creates a single unified table that can be efficiently looked up with multiple dimensions like `assumption_lookup("sex", "smoking", "age", "year")`.
+**Why:** Centralizes validation logic in a dedicated module, following the separation of concerns established in the refactor.
 
 **Key Implementation Details:**
-- Validates the `additional_keys` parameter to ensure it's a proper dictionary with non-empty string keys
-- Adds the additional key columns to the DataFrame before processing, so they become part of the table schema
-- Stores only the table configuration (not the DataFrame) for potential future appends
-- Maintains backward compatibility - existing code continues to work unchanged
+- Contains append compatibility validation (`_validate_append_compatibility`)
+- Contains lookup validation functions for table existence, key matching, and model column validation
+- Provides comprehensive error messages with suggestions for common issues
 
 ```python
+"""
+Internal module for validation logic.
+"""
+
+from __future__ import annotations
+from typing import Any, Dict
+import polars as pl
+from loguru import logger
+
+from .._internal import PyAssumptionTableRegistry
+from ._config import _table_exists, _get_table_config
+
+def _validate_additional_keys(additional_keys: dict[str, Any] | None) -> None:
+    """Validate additional_keys parameter format."""
+    if additional_keys is not None:
+        if not isinstance(additional_keys, dict):
+            raise ValueError("additional_keys must be a dictionary")
+        if not all(isinstance(k, str) and k.strip() for k in additional_keys.keys()):
+            raise ValueError("All additional_keys must have non-empty string keys")
+
+def _validate_append_compatibility(original_config: dict, new_config: dict) -> None:
+    """Validate that new data is compatible with existing table."""
+    
+    # Check that fundamental parameters match
+    critical_params = ['value', 'overflow', 'max_overflow']
+    for param in critical_params:
+        if original_config.get(param) != new_config.get(param):
+            raise ValueError(f"{param} setting must match existing table: "
+                           f"original={original_config.get(param)}, "
+                           f"new={new_config.get(param)}")
+    
+    # Validate additional_keys structure matches
+    original_keys = set(original_config.get('additional_keys', {}).keys())
+    new_keys = set(new_config.get('additional_keys', {}).keys())
+    
+    if original_keys != new_keys:
+        raise ValueError(
+            f"Additional keys must match existing table structure. "
+            f"Original: {original_keys}, New: {new_keys}"
+        )
+    
+    # Check for data conflicts (same additional_keys values)
+    original_values = original_config.get('additional_keys', {})
+    new_values = new_config.get('additional_keys', {})
+    
+    if original_values == new_values:
+        raise ValueError(
+            "Cannot append data with identical additional_keys values. "
+            "This would create duplicate keys."
+        )
+
+def validate_table_exists(table_name: str) -> None:
+    """Validate that the named table exists in the registry."""
+    registry = PyAssumptionTableRegistry()
+    if not registry.get_table(table_name):
+        available_tables = registry.list_tables()
+        raise ValueError(
+            f"Assumption table '{table_name}' not found. "
+            f"Available tables: {available_tables}"
+        )
+
+def validate_table_keys(table_name: str, lookup_keys: list[str]) -> None:
+    """Validate that lookup keys match the registered table schema."""
+    registry = PyAssumptionTableRegistry()
+    table = registry.get_table(table_name)
+    
+    if table is None:
+        raise ValueError(f"Table '{table_name}' not found")
+    
+    # Get registered keys from table metadata
+    table_keys = table.get_key_columns()  # This method needs to be added to Rust
+    
+    if len(lookup_keys) != len(table_keys):
+        raise ValueError(
+            f"Key count mismatch for table '{table_name}'. "
+            f"Expected {len(table_keys)} keys: {table_keys}, "
+            f"got {len(lookup_keys)}: {lookup_keys}"
+        )
+    
+    # Validate key names match (order-sensitive)
+    for i, (provided_key, expected_key) in enumerate(zip(lookup_keys, table_keys)):
+        if provided_key != expected_key:
+            raise ValueError(
+                f"Key mismatch at position {i} for table '{table_name}'. "
+                f"Expected '{expected_key}', got '{provided_key}'. "
+                f"Full expected order: {table_keys}"
+            )
+
+# Additional validation functions for model columns, type compatibility, etc.
+# ... (see full specification for complete implementation)
+```
+
+#### Enhanced api.py
+
+**What Changes:** The existing `load_assumptions` function in `api.py` is extended with a new `additional_keys` parameter, and a new `append_assumptions` function is added.
+
+**Why:** The public API functions remain in `api.py` as established in the refactor, but now leverage the new modular structure for configuration management and validation.
+
+**Key Implementation Details:**
+- `load_assumptions` gains `additional_keys` parameter and uses new `_config.py` functions
+- New `append_assumptions` function follows same pattern as `load_assumptions` but validates compatibility
+- Both functions use existing transformation pipeline from `_transform.py`, `_analysis.py`, etc.
+- Clean separation between public API and internal implementation details
+
+```python
+# In api.py - additions to existing file
+
+from ._config import _store_table_config, _table_exists, _get_table_config
+from ._validation import _validate_additional_keys, _validate_append_compatibility
+
 def load_assumptions(
     name: str,
     source: Union[str, Path, pl.DataFrame],
@@ -437,33 +574,27 @@ def load_assumptions(
     max_overflow: int = 200,
     metadata: dict[str, Any] | None = None,
     lookup_keys: Union[list[str], None] = None,
-    additional_keys: dict[str, Any] | None = None,  # NEW
+    additional_keys: dict[str, Any] | None = None,  # NEW PARAMETER
 ) -> pl.DataFrame:
-    """Load assumptions with optional additional keys for multi-dimensional tables."""
+    """Load and register assumption tables with optional additional keys."""
     
-    # ... existing validation ...
+    # ... existing validation logic ...
     
-    # Validate additional_keys
-    if additional_keys is not None:
-        if not isinstance(additional_keys, dict):
-            raise ValueError("additional_keys must be a dictionary")
-        if not all(isinstance(k, str) and k.strip() for k in additional_keys.keys()):
-            raise ValueError("All additional_keys must have non-empty string keys")
+    # NEW: Validate additional_keys parameter
+    _validate_additional_keys(additional_keys)
     
     # Step 1: Materialize data
     df = _materialise(source)
     
     # Step 2: Add additional keys as columns
     if additional_keys is not None:
-        for key, value in additional_keys.items():
-            df = df.with_columns(pl.lit(value).alias(key))
+        for key, value_literal in additional_keys.items():
+            df = df.with_columns(pl.lit(value_literal).alias(key))
     
-    # Step 3: Analyze shape (now includes additional keys)
-    id_columns, numeric_columns, text_columns, is_wide = _analyse_shape(df, id)
+    # Step 3-6: Existing processing pipeline (unchanged - uses _analysis.py, _transform.py, etc.)
+    # ... existing logic for shape analysis, transformation, registration ...
     
-    # ... rest of existing logic ...
-    
-    # Store only configuration for potential appends
+    # NEW: Store configuration for potential appends
     _store_table_config(name, {
         'id': id,
         'value': value,
@@ -473,28 +604,14 @@ def load_assumptions(
         'lookup_keys': lookup_keys,
         'additional_keys': additional_keys
     })
-```
+    
+    return tidy_df
 
-#### New append_assumptions Function
-
-**What Changes:** A completely new function that allows appending additional data to an existing assumption table. It validates compatibility with the original table configuration, processes the new data with its own `additional_keys`, and appends the processed entries directly to the existing lookup structure.
-
-**Why:** This is the core of the append functionality. After loading a base table with `load_assumptions`, users can call `append_assumptions` multiple times to add more data with different key combinations. The direct hashmap append approach is the most efficient - we avoid storing DataFrames and rebuilding lookup structures by inserting new entries directly into the existing hashmap.
-
-**Key Implementation Details:**
-- Requires the `additional_keys` parameter (not optional like in `load_assumptions`) since appending without distinguishing keys would create duplicates
-- Validates that the table exists and configurations are compatible (same value column, overflow settings, etc.)
-- Prevents duplicate key combinations that would create ambiguous lookups
-- Processes new data through the same pipeline as `load_assumptions`
-- Converts processed data to hashmap entries and appends directly to existing lookup structure
-- No DataFrame storage or rebuilding needed - direct hashmap manipulation is very fast
-
-```python
 def append_assumptions(
     name: str,
     source: Union[str, Path, pl.DataFrame],
     *,
-    additional_keys: dict[str, Any],
+    additional_keys: dict[str, Any],  # REQUIRED for append
     id: Union[str, list[str], None] = None,
     value: str = "rate",
     value_vars: Union[list[str], None] = None,
@@ -513,7 +630,7 @@ def append_assumptions(
     original_config = _get_table_config(name)
     
     # Validate compatibility
-    _validate_append_compatibility(original_config, {
+    new_config = {
         'id': id,
         'value': value,
         'value_vars': value_vars,
@@ -521,41 +638,20 @@ def append_assumptions(
         'max_overflow': max_overflow,
         'lookup_keys': lookup_keys,
         'additional_keys': additional_keys
-    })
+    }
+    _validate_append_compatibility(original_config, new_config)
     
     # Process new data through same pipeline as load_assumptions
-    new_df = _materialise(source)
+    new_df = _materialise(source)  # Uses _source.py
     
     # Add additional keys
-    for key, val in additional_keys.items():
-        new_df = new_df.with_columns(pl.lit(val).alias(key))
+    for key, value_literal in additional_keys.items():
+        new_df = new_df.with_columns(pl.lit(value_literal).alias(key))
     
-    # Apply same analysis and tidying logic as load_assumptions
-    id_columns, numeric_columns, text_columns, is_wide = _analyse_shape(
-        new_df, original_config.get('id')
-    )
+    # Use existing processing pipeline (same as load_assumptions)
+    # ... same analysis, transformation, and registration logic ...
     
-    # Process through same tidying pipeline
-    if is_wide:
-        tidy_df = _tidy_wide_with_overflow_expansion(
-            new_df, id_columns, 
-            original_config.get('value_vars') or numeric_columns,
-            original_config.get('value'),
-            original_config.get('overflow'),
-            original_config.get('max_overflow')
-        )
-    else:
-        tidy_df = _tidy_curve(new_df, id_columns, original_config.get('value'))
-    
-    # Apply custom lookup keys if needed
-    if original_config.get('lookup_keys'):
-        # ... same key renaming logic as load_assumptions ...
-        pass
-    
-    # Convert to f64 for optimal lookup performance
-    tidy_df = _convert_keys_to_f64(tidy_df, final_keys)
-    
-    # Append directly to existing table structure (no DataFrame storage/rebuilding)
+    # Append directly to existing table structure (calls new Rust method)
     registry = PyAssumptionTableRegistry()
     registry.append_to_table(
         name=name,
@@ -1369,6 +1465,22 @@ The append functionality provides a clean, efficient way to build multi-dimensio
 The comprehensive validation system ensures that assumption lookups fail fast with clear error messages, preventing runtime errors in complex actuarial models. This makes the system more robust and user-friendly, especially for large-scale production models.
 
 The implementation preserves backward compatibility while enabling more sophisticated assumption table architectures that better match actuarial modeling requirements.
+
+### File Structure Summary
+
+After implementation, the `gaspatchio_core.assumptions` module will have this structure:
+
+```
+gaspatchio_core/assumptions/
+├── __init__.py                 # Public exports (load_assumptions, append_assumptions, etc.)
+├── api.py                      # Public API functions (existing, enhanced)
+├── _source.py                  # Data materialization (existing)
+├── _analysis.py                # DataFrame analysis (existing)
+├── _transform.py               # Data transformation (existing)
+├── _overflow.py                # Overflow handling (existing)
+├── _config.py                  # Table configuration management (NEW)
+└── _validation.py              # Validation logic (NEW)
+```
 
 #### No Changes Needed to table.rs
 
