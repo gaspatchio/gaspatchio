@@ -149,6 +149,45 @@ ValueError: "Model points data missing required columns for lookup: ['issue_age'
 
 # Implementation Plan and LLM Prompts
 
+## Critical Structural Requirements
+
+### AssumptionTable Modification Required
+
+**Current Issue**: The existing `AssumptionTable` struct in `gaspatchio-core/core/src/assumptions/table.rs` does **not store key names**, which are required for the validation system. 
+
+**Current Structure** (lines 42-46):
+```rust
+#[derive(Debug)]
+pub struct AssumptionTable {
+    codecs: Vec<ColumnCodec>,
+    map: AHashMap<u64, f64>, // frozen, read-only
+}
+```
+
+**Required Modification**:
+```rust
+#[derive(Debug)]
+pub struct AssumptionTable {
+    keys: Vec<String>,           // NEW: Store key names for metadata queries
+    codecs: Vec<ColumnCodec>,
+    map: AHashMap<u64, f64>,
+}
+```
+
+**Impact Analysis**:
+- ✅ **Backward Compatible**: No changes to lookup algorithms or performance
+- ✅ **Memory Overhead**: Minimal (only storing key names as strings)  
+- ✅ **Performance**: No impact on critical lookup paths
+- ⚠️ **Structural Change**: Requires updating `build()` method and all struct construction
+
+**Required Updates**:
+1. Modify `AssumptionTable::build()` to store `keys.clone()` 
+2. Update all existing tests that construct `AssumptionTable` instances
+3. Add new metadata methods that use the stored keys
+4. Update registry methods to return owned strings instead of references
+
+This structural change is a **prerequisite** for Steps 5-8 of the implementation plan.
+
 ## Implementation Breakdown
 
 The implementation is broken down into 8 incremental steps, each building on the previous step with comprehensive testing:
@@ -357,11 +396,50 @@ Extend the Rust AssumptionTable with metadata methods for validation support.
 
 Context: The validation system needs to query table metadata (key count, key names) from Rust. Add these methods to support the validation framework.
 
+**IMPORTANT**: Current `AssumptionTable` struct does NOT store key names - this requires structural modification.
+
 Requirements:
-1. Add metadata methods to `AssumptionTable` struct in Rust
-2. Expose methods through PyO3 bindings for Python access
-3. Maintain existing functionality and performance
-4. Add proper error handling
+1. **Modify AssumptionTable structure** to store key metadata
+2. Add metadata methods to `AssumptionTable` struct in Rust
+3. Expose methods through PyO3 bindings for Python access
+4. Maintain existing functionality and performance
+5. Add proper error handling
+
+**Required Structural Changes:**
+
+Current AssumptionTable structure:
+```rust
+#[derive(Debug)]
+pub struct AssumptionTable {
+    codecs: Vec<ColumnCodec>,
+    map: AHashMap<u64, f64>, // frozen, read-only
+}
+```
+
+Updated AssumptionTable structure:
+```rust
+#[derive(Debug)]
+pub struct AssumptionTable {
+    keys: Vec<String>,           // NEW: Store key names for metadata
+    codecs: Vec<ColumnCodec>,
+    map: AHashMap<u64, f64>,
+}
+```
+
+**Required Method Updates:**
+
+Update `AssumptionTable::build()` method:
+```rust
+pub fn build(df: DataFrame, keys: Vec<String>, value: String) -> PolarsResult<Self> {
+    // ... existing codec building logic ...
+    
+    Ok(Self { 
+        keys: keys.clone(),  // NEW: Store the keys
+        codecs, 
+        map 
+    })
+}
+```
 
 Methods needed in `AssumptionTable`:
 - `get_key_count() -> usize`
@@ -369,16 +447,21 @@ Methods needed in `AssumptionTable`:
 - `get_key_name(index: usize) -> PolarsResult<String>`
 
 Methods needed in `AssumptionTableRegistry`:
-- `list_tables() -> Vec<String>`
+- `list_tables() -> Vec<String>` (update existing method to return owned strings)
 - `table_exists(name: &str) -> bool`
 
 Implementation details:
-- Store key information in AssumptionTable during build() 
-- `get_key_count`: Return length of keys vector
-- `get_key_columns`: Return clone of keys vector
-- `get_key_name`: Return key at index with bounds checking
-- `list_tables`: Return all registered table names
-- `table_exists`: Check if table name exists in registry
+- Store key information in AssumptionTable during build() by cloning the keys vector
+- `get_key_count`: Return `self.keys.len()`
+- `get_key_columns`: Return `self.keys.clone()`
+- `get_key_name`: Return `self.keys.get(index).cloned()` with bounds checking
+- `list_tables`: Return `self.assumption_tables.keys().cloned().collect()`
+- `table_exists`: Check if table name exists using `self.assumption_tables.contains_key(name)`
+
+**Compatibility Analysis:**
+- ✅ Backward Compatible: No changes to lookup logic or performance
+- ✅ Memory Impact: Minimal (only storing key names - small strings)
+- ✅ Performance Impact: None for lookups, negligible for building
 
 Python binding updates:
 - Expose new methods through PyO3 in the Python wrapper classes
@@ -390,13 +473,14 @@ Write unit tests in Rust:
 - Test error handling for invalid indices
 - Test registry methods work correctly
 - Test integration with existing table building process
+- Test that structural changes don't break existing functionality
 
 Write Python integration tests in `tests/assumptions/test_rust_metadata.py`:
 - Test metadata methods accessible from Python
 - Test error handling translates correctly
 - Test integration with table registration process
 
-The goal is to provide the metadata needed for validation without impacting performance.
+The goal is to provide the metadata needed for validation without impacting performance. The main challenge is the structural modification to store key metadata.
 ```
 
 ### Prompt 6: Enhanced Lookup Validation

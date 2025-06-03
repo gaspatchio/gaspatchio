@@ -42,6 +42,7 @@ impl ColumnCodec {
 
 #[derive(Debug)]
 pub struct AssumptionTable {
+    keys: Vec<String>, // Store key names for metadata queries
     codecs: Vec<ColumnCodec>,
     map: AHashMap<u64, f64>, // frozen, read-only
 }
@@ -89,7 +90,11 @@ impl AssumptionTable {
             map.insert(hash, v);
         }
 
-        Ok(Self { codecs, map })
+        Ok(Self {
+            keys: keys.clone(),
+            codecs,
+            map,
+        })
     }
 
     pub fn lookup_series(&self, key_cols: &[&Series]) -> PolarsResult<Series> {
@@ -416,6 +421,33 @@ impl AssumptionTable {
     }
 
     // Hot path – returns a Series of the same length as the key columns
+
+    // Metadata methods for validation support
+
+    /// Get the number of key columns for this table
+    pub fn get_key_count(&self) -> usize {
+        self.keys.len()
+    }
+
+    /// Get the name of the key column at the specified index
+    pub fn get_key_name(&self, index: usize) -> PolarsResult<&str> {
+        self.keys.get(index).map(|s| s.as_str()).ok_or_else(|| {
+            polars_err!(
+                ComputeError: "Key index {} out of bounds (table has {} keys)",
+                index, self.keys.len()
+            )
+        })
+    }
+
+    /// Get all key column names
+    pub fn get_key_columns(&self) -> &[String] {
+        &self.keys
+    }
+
+    /// Get a cloned copy of all key column names
+    pub fn get_key_columns_owned(&self) -> Vec<String> {
+        self.keys.clone()
+    }
 }
 
 #[cfg(test)]
@@ -1499,6 +1531,102 @@ mod tests {
         assert!((result_f64.get(0).unwrap() - 0.1).abs() < 1e-10);
         assert!((result_f64.get(1).unwrap() - 0.2).abs() < 1e-10);
         assert!((result_f64.get(2).unwrap() - 0.3).abs() < 1e-10);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_table_metadata_methods() -> PolarsResult<()> {
+        // Test the new metadata methods for table key information
+        let df = df! {
+            "age" => [30, 31, 32],
+            "gender" => ["M", "F", "M"],
+            "smoking" => ["Y", "N", "Y"],
+            "rate" => [0.001, 0.0008, 0.0012]
+        }?;
+
+        let table = AssumptionTable::build(
+            df,
+            vec![
+                "age".to_string(),
+                "gender".to_string(),
+                "smoking".to_string(),
+            ],
+            "rate".to_string(),
+        )?;
+
+        // Test get_key_count
+        assert_eq!(table.get_key_count(), 3);
+
+        // Test get_key_name with valid indices
+        assert_eq!(table.get_key_name(0)?, "age");
+        assert_eq!(table.get_key_name(1)?, "gender");
+        assert_eq!(table.get_key_name(2)?, "smoking");
+
+        // Test get_key_name with invalid index
+        let result = table.get_key_name(3);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+
+        // Test get_key_columns
+        let keys = table.get_key_columns();
+        assert_eq!(keys.len(), 3);
+        assert_eq!(keys[0], "age");
+        assert_eq!(keys[1], "gender");
+        assert_eq!(keys[2], "smoking");
+
+        // Test get_key_columns_owned
+        let owned_keys = table.get_key_columns_owned();
+        assert_eq!(owned_keys.len(), 3);
+        assert_eq!(owned_keys[0], "age");
+        assert_eq!(owned_keys[1], "gender");
+        assert_eq!(owned_keys[2], "smoking");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_table_metadata_single_key() -> PolarsResult<()> {
+        // Test metadata methods with single key table
+        let df = df! {
+            "duration" => [1, 2, 3, 4, 5],
+            "lapse_rate" => [0.05, 0.04, 0.03, 0.02, 0.01]
+        }?;
+
+        let table =
+            AssumptionTable::build(df, vec!["duration".to_string()], "lapse_rate".to_string())?;
+
+        assert_eq!(table.get_key_count(), 1);
+        assert_eq!(table.get_key_name(0)?, "duration");
+
+        let keys = table.get_key_columns();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0], "duration");
+
+        // Test out of bounds
+        let result = table.get_key_name(1);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Key index 1 out of bounds"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_table_metadata_empty_keys() -> PolarsResult<()> {
+        // Edge case: test with minimal data structure
+        let df = df! {
+            "key" => [1],
+            "value" => [0.5]
+        }?;
+
+        let table = AssumptionTable::build(df, vec!["key".to_string()], "value".to_string())?;
+
+        assert_eq!(table.get_key_count(), 1);
+        assert_eq!(table.get_key_name(0)?, "key");
+        assert_eq!(table.get_key_columns().len(), 1);
 
         Ok(())
     }

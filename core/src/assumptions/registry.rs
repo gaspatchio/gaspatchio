@@ -162,8 +162,13 @@ impl AssumptionTableRegistry {
     }
 
     /// Lists all registered table names.
-    pub fn list_tables(&self) -> Vec<&String> {
-        self.assumption_tables.keys().collect()
+    pub fn list_tables(&self) -> Vec<String> {
+        self.assumption_tables.keys().cloned().collect()
+    }
+
+    /// Check if a table exists in the registry.
+    pub fn table_exists(&self, name: &str) -> bool {
+        self.assumption_tables.contains_key(name)
     }
 }
 
@@ -270,6 +275,103 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("already exists"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_registry_metadata_methods() -> PolarsResult<()> {
+        let mut registry = AssumptionTableRegistry::new();
+
+        // Initially empty
+        assert_eq!(registry.list_tables().len(), 0);
+        assert!(!registry.table_exists("nonexistent"));
+
+        // Create test data
+        let df1 = df! {
+            "age" => [25, 30, 35],
+            "rate" => [0.1, 0.2, 0.15]
+        }?;
+
+        let df2 = df! {
+            "duration" => [1, 2, 3],
+            "lapse_rate" => [0.05, 0.04, 0.03]
+        }?;
+
+        // Register two tables
+        registry.register_table(
+            "mortality".to_string(),
+            df1,
+            vec!["age".to_string()],
+            "rate".to_string(),
+        )?;
+
+        registry.register_table(
+            "lapse".to_string(),
+            df2,
+            vec!["duration".to_string()],
+            "lapse_rate".to_string(),
+        )?;
+
+        // Test list_tables returns owned strings
+        let table_names = registry.list_tables();
+        assert_eq!(table_names.len(), 2);
+        assert!(table_names.contains(&"mortality".to_string()));
+        assert!(table_names.contains(&"lapse".to_string()));
+
+        // Test table_exists
+        assert!(registry.table_exists("mortality"));
+        assert!(registry.table_exists("lapse"));
+        assert!(!registry.table_exists("nonexistent"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_global_registry_metadata() -> PolarsResult<()> {
+        // Serialize access to global registry
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        // Reset global registry for clean test
+        reset_global_assumption_registry();
+
+        // Create test data
+        let df = df! {
+            "age" => [25, 30, 35],
+            "gender" => ["M", "F", "M"],
+            "rate" => [0.1, 0.2, 0.15]
+        }?;
+
+        // Register the table globally
+        register_assumption_table_global(
+            "metadata_test".to_string(),
+            df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+        )?;
+
+        // Get registry snapshot and test metadata
+        let registry = get_global_assumption_registry();
+
+        // Test list_tables
+        let tables = registry.list_tables();
+        assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0], "metadata_test");
+
+        // Test table_exists
+        assert!(registry.table_exists("metadata_test"));
+        assert!(!registry.table_exists("nonexistent"));
+
+        // Test table metadata through get_table
+        let table = registry.get_table("metadata_test").unwrap();
+        assert_eq!(table.get_key_count(), 2);
+        assert_eq!(table.get_key_name(0)?, "age");
+        assert_eq!(table.get_key_name(1)?, "gender");
+
+        let key_columns = table.get_key_columns();
+        assert_eq!(key_columns.len(), 2);
+        assert_eq!(key_columns[0], "age");
+        assert_eq!(key_columns[1], "gender");
 
         Ok(())
     }
