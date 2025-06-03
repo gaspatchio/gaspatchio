@@ -107,10 +107,16 @@ def _validate_append_compatibility(original_config: dict, new_config: dict) -> N
 
     # Check for data conflicts (same additional_keys values)
     if original_additional_keys == new_additional_keys:
-        raise ValueError(
-            f"Cannot append data with identical additional_keys values: {original_additional_keys}. "
-            f"This would create duplicate key combinations in the lookup table. "
-            f"Each append must have unique additional_keys values to avoid conflicts."
+        # Allow simple table extension (both empty) but prevent actual conflicts (both non-empty and identical)
+        if original_additional_keys:  # Both are non-empty and identical
+            raise ValueError(
+                f"Cannot append data with identical additional_keys values: {original_additional_keys}. "
+                f"This would create duplicate key combinations in the lookup table. "
+                f"Each append must have unique additional_keys values to avoid conflicts."
+            )
+        # If both are empty (simple table extension), allow it
+        logger.debug(
+            "Simple table extension detected (both original and new have empty additional_keys)"
         )
 
     logger.debug("Append compatibility validation passed")

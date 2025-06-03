@@ -542,41 +542,55 @@ Focus on providing excellent developer experience through clear validation error
 ### Prompt 7: Rust Append Implementation
 
 ```
-Implement direct hashmap insertion for append functionality in Rust.
+Implement append functionality in Rust using immutable rebuild approach for optimal lookup performance.
 
-Context: Building on all previous steps, implement the core append logic in Rust using direct hashmap insertion for optimal performance.
+Context: Building on all previous steps, implement the core append logic in Rust using table rebuilding to preserve hot path (lookup) performance. Given the usage pattern of load() → append() → many lookups, prioritize lookup speed over append speed.
+
+**Architecture Decision**: Use immutable rebuild approach to preserve hot path performance.
 
 Requirements:
-1. Add `append_entries` method to `AssumptionTable`
-2. Add `append_to_table` method to `AssumptionTableRegistry`
+1. Keep `AssumptionTable` immutable (no interior mutability for maximum lookup speed)
+2. Add `append_to_table` method to `AssumptionTableRegistry` 
 3. Add global `append_to_assumption_table_global` function
 4. Implement duplicate key validation
-5. Use direct hashmap insertion for optimal performance
+5. Use table rebuilding with `AHashMap::clone()` + `extend()` for efficiency
 
 Methods needed:
 
-`AssumptionTable::append_entries`:
-- Convert DataFrame to hashmap entries using existing build logic
-- Validate no duplicate keys exist
-- Insert entries directly into existing lookup_map
-- Update metadata (entry count, etc.)
+`AssumptionTable::build_combined`:
+- Build new table from existing table + new DataFrame
+- Use `existing.map.clone()` for base (AHashMap clone is efficient)
+- Convert new DataFrame to hashmap entries using existing build logic
+- Validate no duplicate keys exist before extend
+- Use `AHashMap::extend()` for efficient insertion
+- Return new immutable AssumptionTable
 
 `AssumptionTableRegistry::append_to_table`:
 - Get existing table by name
-- Call append_entries on the table
+- Validate compatibility (key count, names, codecs match)
+- Call `AssumptionTable::build_combined()` 
+- Replace `Arc<AssumptionTable>` atomically in registry
 - Handle errors appropriately
 
 Global function:
 - `append_to_assumption_table_global(name, df, keys, value_column)` 
 - Use same locking pattern as existing registration
-- Update global registry atomically
+- Update global registry atomically via Arc replacement
 
 Implementation details:
-- Extract hashmap building logic from existing `build()` method into reusable function
+- **NO CHANGES** to existing `AssumptionTable` struct (keep immutable)
+- Reuse existing `build()` logic for processing new DataFrame entries
 - Validate duplicate keys before any insertion (fail fast)
-- Use `HashMap::extend` for efficient insertion
+- Use `AHashMap::clone()` + `extend()` for efficient combining
 - Provide detailed error messages for duplicate keys
 - Maintain thread safety with existing locking mechanisms
+- Replace entire `Arc<AssumptionTable>` for atomic updates
+
+Performance characteristics:
+- **Lookup**: Zero impact - hot path preserved 🔥
+- **Append**: O(existing_entries + new_entries) rebuild cost (acceptable for initialization)
+- **Memory**: Brief spike during rebuild, then garbage collection
+- **Thread Safety**: Existing ArcSwap pattern, no additional locking needed
 
 Python integration:
 - Update Python bindings to expose new append function
@@ -584,19 +598,19 @@ Python integration:
 - Maintain same error handling patterns
 
 Write Rust unit tests:
-- Test append_entries with valid data
+- Test `build_combined` with valid data
 - Test duplicate key detection and error handling
-- Test hashmap insertion correctness
-- Test metadata updates
-- Test thread safety
+- Test hashmap combining correctness
+- Test Arc replacement in registry
+- Test thread safety with existing patterns
 
 Write Python integration tests in `tests/assumptions/test_rust_append.py`:
 - Test Python to Rust append integration
 - Test error propagation from Rust to Python
-- Test performance compared to rebuild approach
+- Test that lookup performance is unaffected
 - Test data correctness after append
 
-The goal is efficient append operations with robust duplicate detection.
+The goal is append operations that preserve maximum lookup performance while providing robust duplicate detection.
 ```
 
 ### Prompt 8: Integration and Testing

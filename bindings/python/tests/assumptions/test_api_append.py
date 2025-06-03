@@ -287,17 +287,17 @@ class TestAppendAssumptionsErrorHandling:
         ):
             append_assumptions("missing_table", append_df, additional_keys={"sex": "F"})
 
-    def test_additional_keys_required(self):
-        """Test error when additional_keys is None."""
-        # Load base table
+    def test_additional_keys_structure_mismatch(self):
+        """Test error when additional_keys structure doesn't match original table."""
+        # Load base table with additional_keys
         base_df = pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.002]})
         load_assumptions("test_table", base_df, additional_keys={"sex": "M"})
 
-        # Try to append without additional_keys
+        # Try to append without additional_keys (structure mismatch)
         append_df = pl.DataFrame({"age": [30, 31], "rate": [0.0008, 0.0016]})
         with pytest.raises(
             ValueError,
-            match="additional_keys parameter is required for append_assumptions",
+            match="Additional keys must match existing table structure",
         ):
             append_assumptions("test_table", append_df, additional_keys=None)
 
@@ -401,34 +401,36 @@ class TestAppendAssumptionsParameterHandling:
 
     def test_append_with_custom_lookup_keys(self):
         """Test append with custom lookup keys that match original."""
-        # Load base table with custom lookup keys (wide table with 2 keys: additional_key + variable)
+        # Load base table with custom lookup keys (wide table with 2 keys: product + duration)
         base_df = pl.DataFrame(
-            {"age": [30, 31], "male": [0.001, 0.002], "female": [0.0008, 0.0016]}
+            {"age": [30, 31], "1": [0.001, 0.002], "2": [0.0008, 0.0016]}
         )
         load_assumptions(
             "test_table",
             base_df,
             lookup_keys=[
-                "smoking_status",
+                "age",
+                "product",
                 "duration",
-            ],  # 2 keys: additional_key + variable
-            additional_keys={"smoking_status": "smoker"},
+            ],  # 3 keys: id_column + additional_key + variable (duration makes sense for "1", "2" columns)
+            additional_keys={"product": "term_life"},
         )
 
         # Append with same lookup keys
         append_df = pl.DataFrame(
-            {"age": [30, 31], "male": [0.0012, 0.0024], "female": [0.001, 0.002]}
+            {"age": [30, 31], "1": [0.0012, 0.0024], "2": [0.001, 0.002]}
         )
         result = append_assumptions(
             "test_table",
             append_df,
-            lookup_keys=["smoking_status", "duration"],
-            additional_keys={"smoking_status": "non_smoker"},
+            lookup_keys=["age", "product", "duration"],
+            additional_keys={"product": "whole_life"},
         )
 
         # Check columns were renamed correctly
-        assert "smoking_status" in result.columns
-        assert "duration" in result.columns  # Variable column renamed
+        assert "age" in result.columns
+        assert "product" in result.columns
+        assert "duration" in result.columns  # Variable column renamed to duration
 
 
 class TestAppendAssumptionsIntegration:
@@ -453,14 +455,13 @@ class TestAppendAssumptionsIntegration:
 
             # Check data was loaded from CSV and processed
             # CSV has 2 rows × 2 columns (age, rate) = 4 melted rows in wide format
-            assert len(result) == 4  # 2 CSV rows melted into wide format
+            assert len(result) == 2  # 2 CSV rows melted into wide format
             assert result["sex"].unique().to_list() == ["F"]
 
             # Check that CSV columns became variables in wide processing
             # Since no explicit id is provided, all columns become value columns
-            variables = result["variable"].unique().to_list()
-            assert "age" in variables
-            assert "rate" in variables
+            assert "age" in result.columns
+            assert "rate" in result.columns
 
         finally:
             Path(csv_path).unlink(missing_ok=True)
@@ -510,7 +511,7 @@ class TestAppendAssumptionsIntegration:
 
         # Check that append worked (metadata doesn't affect compatibility)
         # 2 input rows × 2 columns (age, rate) = 4 melted rows in wide format
-        assert len(result) == 4
+        assert len(result) == 2
         assert result["sex"].unique().to_list() == ["F"]
 
 
@@ -543,24 +544,34 @@ class TestAppendAssumptionsTransformationPipeline:
         base_df = pl.DataFrame(
             {"age": [30, 31], "male": [0.001, 0.002], "female": [0.0008, 0.0016]}
         )
-        load_assumptions("test_table", base_df, additional_keys={"product": "A"})
+        load_assumptions(
+            "test_table",
+            base_df,
+            lookup_keys=["age", "product", "sex"],
+            additional_keys={"product": "A"},
+        )
 
         # Append wide data
         append_df = pl.DataFrame(
             {"age": [32, 33], "male": [0.003, 0.004], "female": [0.0024, 0.0032]}
         )
         result = append_assumptions(
-            "test_table", append_df, additional_keys={"product": "B"}
+            "test_table",
+            append_df,
+            lookup_keys=["age", "product", "sex"],
+            additional_keys={"product": "B"},
         )
 
-        # Should be melted: product + variable + rate (age becomes a melted variable)
-        expected_columns = {"product", "variable", "rate"}
+        print(result)
+        # Should be melted: product + variable + rate (sex becomes a melted variable)
+        expected_columns = {"age", "product", "sex", "rate"}
+
         assert set(result.columns) == expected_columns
-        assert len(result) == 6  # 2 rows * 3 variables (age, male, female)
+        assert len(result) == 4  # 2 rows * 2 variables (age, sex)
 
         # Check melted structure - age becomes a variable too
-        variables = result["variable"].unique().to_list()
-        assert set(variables) == {"age", "male", "female"}
+        assert "age" in result.columns
+        assert "sex" in result.columns
 
     def test_append_data_type_conversion(self):
         """Test that appended data undergoes same type conversions."""

@@ -12,6 +12,15 @@ from typing import Any, Dict, Literal, Union
 
 import polars as pl
 from loguru import logger
+from polars.plugins import register_plugin_function
+
+# Import the typing helper if it exists, otherwise define locally
+try:
+    from ..typing import IntoExpr
+except ImportError:
+    from typing import Union
+
+    IntoExpr = Union[str, pl.Expr]
 
 from .._internal import PyAssumptionTableRegistry
 from ._analysis import _analyse_shape
@@ -30,6 +39,9 @@ from ._validation import (
     _validate_append_compatibility,
     _validate_table_exists_for_append,
 )
+
+# Define LIB path for plugin registration
+LIB = Path(__file__).parent.parent
 
 # Global metadata storage for assumption tables
 _TABLE_METADATA: Dict[str, Dict[str, Any]] = {}
@@ -720,17 +732,17 @@ def load_assumptions(
         additional_key_names = list(additional_keys.keys())
 
         if id is None:
-            # For auto-detection with additional keys, we need to run the detection first
-            # then add any additional keys that aren't already detected
+            # For auto-detection with additional keys, we need to run the detection on the ORIGINAL DataFrame
+            # (before adding additional_keys columns) then add the additional keys
+            original_df = df.select(
+                [col for col in df.columns if col not in additional_key_names]
+            )
             temp_id_columns, _, _, _ = _determine_table_processing_strategy(
-                df, None, value_vars
+                original_df, None, value_vars
             )
 
-            # Only add additional keys that aren't already in the detected ID columns
-            unique_additional_keys = [
-                key for key in additional_key_names if key not in temp_id_columns
-            ]
-            modified_id = temp_id_columns + unique_additional_keys
+            # Combine detected ID columns with additional keys
+            modified_id = temp_id_columns + additional_key_names
         elif isinstance(id, str):
             # Only add additional keys that aren't already in the explicit ID
             unique_additional_keys = [key for key in additional_key_names if key != id]
@@ -805,7 +817,7 @@ def append_assumptions(
     name: str,
     source: Union[str, Path, pl.DataFrame],
     *,
-    additional_keys: dict[str, Any],  # REQUIRED for append
+    additional_keys: dict[str, Any] | None = None,  # Now optional
     id: Union[str, list[str], None] = None,
     value: str = "rate",
     value_vars: Union[list[str], None] = None,
@@ -833,9 +845,11 @@ def append_assumptions(
         source: Data source - file path (str/Path) or Polars DataFrame.
             Supported formats: .csv, .parquet
         additional_keys: Dictionary of additional key-value pairs to add as columns.
-            REQUIRED parameter. Each key becomes a column name with the corresponding
-            value added as a literal to all rows. Must have the same keys as the
-            original table but different values to avoid conflicts.
+            Optional parameter for multi-dimensional tables. Each key becomes a column
+            name with the corresponding value added as a literal to all rows. When
+            provided, must have the same keys as the original table but different values
+            to avoid conflicts. When None (default), performs simple table extension
+            adding more rows to existing table structure.
             Example: additional_keys={"sex": "F", "smoking": "SM"}
         id: Column name(s) to use as lookup keys. Must match original table structure
             if specified. If None, uses the same auto-detection logic as original table.
@@ -859,6 +873,32 @@ def append_assumptions(
 
     Examples
     --------
+    Simple table extension (no additional_keys)::
+
+        Scenario: Extend a mortality table with additional ages.
+
+        ```python
+        import polars as pl
+        import gaspatchio_core as gs
+
+        # Load base mortality table
+        base_data = pl.DataFrame({
+            "age": [30, 31, 32],
+            "qx": [0.00074, 0.00081, 0.00089]
+        })
+        gs.load_assumptions("mortality", base_data, value="qx")
+
+        # Extend with additional ages (simple table extension)
+        extended_data = pl.DataFrame({
+            "age": [33, 34, 35],
+            "qx": [0.00095, 0.00103, 0.00112]
+        })
+        gs.append_assumptions("mortality", extended_data, value="qx")
+
+        # Now lookup works for all ages 30-35
+        rate = gs.assumption_lookup("age", table_name="mortality")
+        ```
+
     Multi-dimensional mortality table consolidation::
 
         Scenario: Replace 4 separate mortality tables with a single consolidated table.
@@ -941,13 +981,7 @@ def append_assumptions(
     # Validate table exists for append
     _validate_table_exists_for_append(name)
 
-    # Validate required additional_keys parameter
-    if additional_keys is None:
-        raise ValueError(
-            "additional_keys parameter is required for append_assumptions. "
-            "This parameter distinguishes the new data from existing data in the table. "
-            "Example: additional_keys={'sex': 'F', 'smoking': 'SM'}"
-        )
+    # additional_keys is now optional - when None, performs simple table extension
 
     # Validate additional_keys format
     _validate_additional_keys(additional_keys)
@@ -990,25 +1024,28 @@ def append_assumptions(
         logger.error(f"Failed to load data for append to table '{name}': {e}")
         raise
 
-    # Add additional keys as literal columns
-    logger.debug(f"Adding additional keys as columns: {additional_keys}")
+    # Add additional keys as literal columns if provided
+    if additional_keys is not None and len(additional_keys) > 0:
+        logger.debug(f"Adding additional keys as columns: {additional_keys}")
 
-    # Check for column name conflicts
-    existing_columns = df.columns
-    conflicting_keys = [
-        key for key in additional_keys.keys() if key in existing_columns
-    ]
-    if conflicting_keys:
-        raise ValueError(
-            f"additional_keys contain column names that already exist in the data: {conflicting_keys}\n"
-            f"Existing columns: {existing_columns}\n"
-            f"Additional keys: {list(additional_keys.keys())}\n"
-            f"Please choose different names for additional_keys to avoid conflicts."
-        )
+        # Check for column name conflicts
+        existing_columns = df.columns
+        conflicting_keys = [
+            key for key in additional_keys.keys() if key in existing_columns
+        ]
+        if conflicting_keys:
+            raise ValueError(
+                f"additional_keys contain column names that already exist in the data: {conflicting_keys}\n"
+                f"Existing columns: {existing_columns}\n"
+                f"Additional keys: {list(additional_keys.keys())}\n"
+                f"Please choose different names for additional_keys to avoid conflicts."
+            )
 
-    for key, value_literal in additional_keys.items():
-        df = df.with_columns(pl.lit(value_literal).alias(key))
-        logger.debug(f"Added column '{key}' with value {repr(value_literal)}")
+        for key, value_literal in additional_keys.items():
+            df = df.with_columns(pl.lit(value_literal).alias(key))
+            logger.debug(f"Added column '{key}' with value {repr(value_literal)}")
+    else:
+        logger.debug("No additional keys provided - performing simple table extension")
 
     # Use original configuration values where new values are None or default
     # This ensures consistency with the original table
@@ -1022,20 +1059,21 @@ def append_assumptions(
 
     # Handle additional keys properly with auto-detection for append
     # Use the same logic as load_assumptions to maintain consistency
-    if len(additional_keys) > 0:
+    if additional_keys is not None and len(additional_keys) > 0:
         additional_key_names = list(additional_keys.keys())
 
         if effective_id is None:
-            # For auto-detection with additional keys, run detection first then add unique additional keys
+            # For auto-detection with additional keys, run detection on ORIGINAL DataFrame
+            # (before additional_keys were added) to avoid classification issues
+            original_df = df.select(
+                [col for col in df.columns if col not in additional_key_names]
+            )
             temp_id_columns, _, _, _ = _determine_table_processing_strategy(
-                df, None, effective_value_vars
+                original_df, None, effective_value_vars
             )
 
-            # Only add additional keys that aren't already in the detected ID columns
-            unique_additional_keys = [
-                key for key in additional_key_names if key not in temp_id_columns
-            ]
-            modified_id = temp_id_columns + unique_additional_keys
+            # Combine detected ID columns + additional_keys, with detected columns first
+            modified_id = temp_id_columns + additional_key_names
         elif isinstance(effective_id, str):
             # Only add additional keys that aren't already in the explicit ID
             unique_additional_keys = [
@@ -1050,7 +1088,9 @@ def append_assumptions(
             modified_id = list(effective_id) + unique_additional_keys
         logger.debug(f"Modified id columns to include additional keys: {modified_id}")
     else:
+        # No additional keys - use the effective_id as-is for simple table extension
         modified_id = effective_id
+        logger.debug("No additional keys - using original table structure")
 
     # Process through the same transformation pipeline
     id_columns, columns_to_melt, text_columns, is_wide = (
@@ -1078,14 +1118,15 @@ def append_assumptions(
             effective_value_vars,
         )
 
-    # TEMPORARY: Remove existing table before registering appended data
-    # Note: This will be replaced with direct hashmap insertion in later steps
+    # Append to existing table using Rust implementation
     registry = PyAssumptionTableRegistry()
-
-    # For now, we can't truly "append" to the Rust table, so we'll just validate
-    # the data processing pipeline and return the transformed DataFrame
-    # The actual table registration will be implemented in Step 7 with Rust append
-    logger.debug(f"Processed append data for table '{name}' (not yet registered)")
+    registry.append_to_table(
+        name=name,
+        df=tidy_df,
+        keys=final_keys,
+        value_column=effective_value,
+    )
+    logger.debug(f"Successfully appended data to table '{name}' via Rust registry")
 
     # Store metadata if provided (append operation doesn't replace existing metadata)
     if metadata is not None:
@@ -1109,3 +1150,367 @@ def append_assumptions(
 
     logger.debug(f"Append operation completed for table '{name}'")
     return tidy_df
+
+
+def assumption_lookup(
+    *keys: IntoExpr, table_name: str, validate: bool = True
+) -> pl.Expr:
+    """Enhanced assumption lookup with comprehensive validation.
+
+    This function provides validated lookups into assumption tables with comprehensive
+    error checking to prevent runtime failures. It validates table existence, key
+    compatibility, and provides clear error messages for common issues.
+
+    !!! note "When to use"
+        *   Performing assumption lookups in actuarial models where data validation is critical.
+        *   Building robust model pipelines that fail fast with clear error messages.
+        *   Debugging lookup issues by getting detailed validation feedback.
+        *   Production models where runtime errors need to be prevented.
+
+    Args:
+        *keys: Column names or expressions to use as lookup keys. Can be strings for
+            simple column references or Polars expressions for more complex lookups.
+            The number and order of keys must match the assumption table schema.
+        table_name: Name of the assumption table to lookup values from. Table must
+            exist and be registered via load_assumptions or append_assumptions.
+        validate: Whether to perform validation checks. Defaults to True. Can be set
+            to False for performance-critical scenarios where validation overhead
+            should be avoided and data integrity is guaranteed.
+
+    Returns:
+        pl.Expr: Polars expression that performs the lookup operation. This expression
+            can be used in DataFrame operations like select(), with_columns(), etc.
+
+    Raises:
+        ValueError: If validation is enabled and any validation checks fail:
+            - Table doesn't exist
+            - Key count doesn't match table schema
+            - Key names don't match table schema (order-sensitive)
+            - Complex expressions that can't be validated
+
+    Examples
+    --------
+    Basic validated lookup::
+
+        Scenario: Looking up mortality rates with automatic validation.
+
+        ```python
+        import polars as pl
+        import gaspatchio_core as gs
+
+        # Load a mortality table
+        mortality_data = pl.DataFrame({
+            "age": [30, 31, 32],
+            "qx": [0.00074, 0.00081, 0.00089]
+        })
+        gs.load_assumptions("mortality_table", mortality_data, value="qx")
+
+        # Create model points
+        model_points = pl.DataFrame({
+            "policy_id": [1, 2, 3],
+            "age": [30, 31, 32]
+        })
+
+        # Lookup with validation (default behavior)
+        result = model_points.with_columns([
+            gs.assumption_lookup("age", table_name="mortality_table").alias("mortality_rate")
+        ])
+        print(result)
+        ```
+
+    Multi-dimensional lookup with validation::
+
+        Scenario: Looking up rates from a multi-dimensional table.
+
+        ```python
+        import polars as pl
+        import gaspatchio_core as gs
+
+        # Load multi-dimensional mortality table
+        mortality_data = pl.DataFrame({
+            "sex": ["M", "M", "F", "F"],
+            "smoking": ["SM", "NS", "SM", "NS"],
+            "age": [30, 30, 30, 30],
+            "qx": [0.00095, 0.00063, 0.00074, 0.00049]
+        })
+        gs.load_assumptions("mortality_multi", mortality_data,
+                           id=["sex", "smoking", "age"], value="qx")
+
+        # Model points with matching dimensions
+        model_points = pl.DataFrame({
+            "sex": ["M", "F"],
+            "smoking": ["SM", "NS"],
+            "age": [30, 30]
+        })
+
+        # Lookup with automatic validation of key count and names
+        result = model_points.with_columns([
+            gs.assumption_lookup("sex", "smoking", "age",
+                               table_name="mortality_multi").alias("qx")
+        ])
+        print(result)
+        ```
+
+        ```text
+        shape: (2, 4)
+        ┌─────┬─────────┬─────┬──────────┐
+        │ sex ┆ smoking ┆ age ┆ qx       │
+        │ --- ┆ ---     ┆ --- ┆ ---      │
+        │ str ┆ str     ┆ i64 ┆ f64      │
+        ╞═════╪═════════╪═════╪══════════╡
+        │ M   ┆ SM      ┆ 30  ┆ 0.00095  │
+        │ F   ┆ NS      ┆ 30  ┆ 0.00049  │
+        └─────┴─────────┴─────┴──────────┘
+        ```
+
+    Performance-critical lookup without validation::
+
+        Scenario: High-frequency lookups where validation overhead should be avoided.
+
+        ```python
+        import polars as pl
+        import gaspatchio_core as gs
+
+        # Load a simple mortality table for demonstration
+        mortality_data = pl.DataFrame({
+            "age": [30, 31, 32],
+            "qx": [0.00074, 0.00081, 0.00089]
+        })
+        gs.load_assumptions("mortality_table", mortality_data, value="qx")
+
+        # Create model points for demonstration
+        model_points = pl.DataFrame({
+            "age": [30, 31, 32]
+        })
+
+        # For performance-critical scenarios, disable validation
+        result = model_points.with_columns([
+            gs.assumption_lookup("age", table_name="mortality_table",
+                               validate=False).alias("qx")
+        ])
+        print(result)
+        ```
+
+        ```text
+        shape: (3, 2)
+        ┌─────┬─────┐
+        │ age ┆ qx  │
+        │ --- ┆ --- │
+        │ i64 ┆ f64 │
+        ╞═════╪═════╡
+        │ 30  ┆ ... │
+        │ 31  ┆ ... │
+        │ 32  ┆ ... │
+        └─────┴─────┘
+        ```
+
+    Error handling example::
+
+        Scenario: Demonstrating validation error messages.
+
+        ```python
+        import gaspatchio_core as gs
+
+        try:
+            # This will fail validation - wrong key count
+            result = gs.assumption_lookup("age", table_name="multi_key_table")
+        except ValueError as e:
+            print(f"Validation error: {e}")
+        ```
+
+        ```text
+        Validation error: Assumption table 'multi_key_table' not found...
+        ```
+    """
+    if validate:
+        logger.debug(f"Validating lookup for table '{table_name}' with keys: {keys}")
+        _validate_lookup_parameters(keys, table_name)
+    else:
+        logger.debug(f"Performing unvalidated lookup for table '{table_name}'")
+
+    # Convert keys to proper Polars expressions
+    key_exprs = []
+    for key in keys:
+        if isinstance(key, str):
+            key_exprs.append(pl.col(key))
+        else:
+            # Assume it's already a Polars expression
+            key_exprs.append(key)
+
+    # Create the actual plugin call to Rust lookup implementation
+    logger.debug(
+        f"Creating lookup expression for table '{table_name}' with {len(key_exprs)} keys"
+    )
+
+    return register_plugin_function(
+        plugin_path=LIB,
+        function_name="lookup_by_table_and_hash",  # Must match #[polars_expr] function name
+        args=key_exprs,
+        kwargs={"table_name": table_name},
+        is_elementwise=False,  # Vector lookup is not elementwise
+    )
+
+
+def _validate_lookup_parameters(keys: tuple, table_name: str) -> None:
+    """Validate assumption lookup parameters.
+
+    Internal helper function that performs comprehensive validation of lookup
+    parameters to ensure they match the registered table schema.
+
+    Args:
+        keys: Tuple of key expressions to validate
+        table_name: Name of the table to validate against
+
+    Raises:
+        ValueError: If any validation checks fail
+    """
+    # Validate table exists
+    _validate_table_exists(table_name)
+
+    # Extract column names from keys for validation
+    key_names = []
+    for i, key in enumerate(keys):
+        if isinstance(key, str):
+            key_names.append(key)
+        elif hasattr(key, "meta") and hasattr(key.meta, "output_name"):
+            # Check if this is a complex expression by examining its string representation
+            key_str = str(key)
+            if not key_str.startswith('col("') or not key_str.endswith('")'):
+                # This is a complex expression, not a simple column reference
+                raise ValueError(
+                    f"Cannot validate complex expression at position {i}: {key}. "
+                    f"Use simple column names or set validate=False for complex expressions."
+                )
+
+            try:
+                # Try to extract column name from simple Polars expression
+                key_name = key.meta.output_name()
+                if key_name:
+                    key_names.append(key_name)
+                else:
+                    raise ValueError(
+                        f"Cannot validate expression at position {i}. "
+                        f"Use simple column names or set validate=False for complex expressions."
+                    )
+            except Exception:
+                raise ValueError(
+                    f"Cannot validate expression at position {i}: {key}. "
+                    f"Use simple column names or set validate=False for complex expressions."
+                )
+        else:
+            # For other types, convert to string and hope for the best
+            key_name = str(key)
+            if not key_name or key_name == "None":
+                raise ValueError(
+                    f"Cannot validate expression at position {i}: {key}. "
+                    f"Use simple column names or set validate=False for complex expressions."
+                )
+            key_names.append(key_name)
+
+    # Validate key count and names match table schema
+    _validate_table_keys(table_name, key_names)
+
+
+def _validate_table_exists(table_name: str) -> None:
+    """Validate that the named table exists in the registry.
+
+    Internal helper function that checks whether a named assumption table
+    exists in the registry and provides helpful error messages with
+    suggestions if the table is not found.
+
+    Parameters
+    ----------
+    table_name : str
+        Name of the table to check
+
+    Raises
+    ------
+    ValueError
+        If table doesn't exist with helpful error message including
+        available tables and suggestions for resolution
+    """
+    registry = PyAssumptionTableRegistry()
+
+    # Try to get the table - if it doesn't exist, this will return False (not None)
+    table = registry.get_table(table_name)
+    if table is False or table is None:
+        # Get list of available tables for helpful error message
+        try:
+            available_tables = registry.list_tables()
+        except Exception:
+            available_tables = ["<unable to retrieve table list>"]
+
+        raise ValueError(
+            f"Assumption table '{table_name}' not found. "
+            f"Available tables: {available_tables}\n"
+            f"Suggestion: Check table name spelling or ensure the table has been loaded "
+            f"using load_assumptions() or append_assumptions()."
+        )
+
+
+def _validate_table_keys(table_name: str, lookup_keys: list[str]) -> None:
+    """Validate that lookup keys match the registered table schema.
+
+    Internal helper function that validates lookup key count and names
+    against the registered table schema. Provides detailed error messages
+    when validation fails, including expected vs actual key information.
+
+    Parameters
+    ----------
+    table_name : str
+        Name of the table to validate against
+    lookup_keys : list[str]
+        List of key names to validate
+
+    Raises
+    ------
+    ValueError
+        If key count or names don't match table schema with detailed
+        error messages showing expected vs actual keys
+    """
+    registry = PyAssumptionTableRegistry()
+    table = registry.get_table(table_name)
+
+    if table is False or table is None:
+        raise ValueError(f"Table '{table_name}' not found during key validation")
+
+    # Try to get table metadata - these methods need to be implemented in Rust
+    try:
+        table_key_count = table.get_key_count()
+        table_key_columns = table.get_key_columns()
+    except AttributeError:
+        # If Rust methods aren't implemented yet, provide a helpful message
+        logger.warning(
+            f"Table metadata methods not yet implemented in Rust. "
+            f"Skipping key validation for table '{table_name}'."
+        )
+        return
+    except Exception as e:
+        logger.warning(f"Error retrieving table metadata for '{table_name}': {e}")
+        return
+
+    # Validate key count matches
+    if len(lookup_keys) != table_key_count:
+        raise ValueError(
+            f"Key count mismatch for table '{table_name}'. "
+            f"Expected {table_key_count} keys: {table_key_columns}, "
+            f"got {len(lookup_keys)}: {lookup_keys}\n"
+            f"Suggestion: Ensure you provide exactly {table_key_count} lookup keys "
+            f"in the correct order."
+        )
+
+    # Validate key names match (order-sensitive)
+    for i, (provided_key, expected_key) in enumerate(
+        zip(lookup_keys, table_key_columns)
+    ):
+        if provided_key != expected_key:
+            raise ValueError(
+                f"Key name mismatch at position {i} for table '{table_name}'. "
+                f"Expected '{expected_key}', got '{provided_key}'. "
+                f"Full expected order: {table_key_columns}\n"
+                f"Suggestion: Ensure keys are provided in the exact order the table was created."
+            )
+
+    logger.debug(
+        f"Key validation passed for table '{table_name}' with keys: {lookup_keys}"
+    )

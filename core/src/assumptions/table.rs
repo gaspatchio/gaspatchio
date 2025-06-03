@@ -16,7 +16,7 @@ impl ColumnCodec {
     #[inline(always)]
     fn encode(&self, av: AnyValue) -> u64 {
         match (self, av) {
-            (ColumnCodec::String, AnyValue::UInt32(idx)) => idx as u64,
+            // String encoding - handle special cases first (categorical indices)
             (ColumnCodec::String, AnyValue::Categorical(idx, _, _)) => idx as u64,
             (ColumnCodec::String, AnyValue::String(s)) => {
                 // Hash the string content directly
@@ -30,11 +30,76 @@ impl ColumnCodec {
                 hasher.write(s.as_bytes());
                 hasher.finish()
             }
-            (ColumnCodec::Float64, AnyValue::Float64(f)) => f.to_bits(),
-            (ColumnCodec::Integer, AnyValue::UInt64(u)) => u,
+            // Handle integer inputs to String codec by converting to string first
+            (ColumnCodec::String, AnyValue::Int64(i)) => {
+                let s = i.to_string();
+                let mut hasher = AHasher::default();
+                hasher.write(s.as_bytes());
+                hasher.finish()
+            }
+            (ColumnCodec::String, AnyValue::Int32(i)) => {
+                let s = i.to_string();
+                let mut hasher = AHasher::default();
+                hasher.write(s.as_bytes());
+                hasher.finish()
+            }
+            (ColumnCodec::String, AnyValue::UInt64(u)) => {
+                let s = u.to_string();
+                let mut hasher = AHasher::default();
+                hasher.write(s.as_bytes());
+                hasher.finish()
+            }
+            (ColumnCodec::String, AnyValue::UInt32(u)) => {
+                let s = u.to_string();
+                let mut hasher = AHasher::default();
+                hasher.write(s.as_bytes());
+                hasher.finish()
+            }
+
+            (ColumnCodec::String, AnyValue::Float64(f)) => {
+                // Convert float to string, handling special cases
+                let s = if f.fract() == 0.0 && f.is_finite() {
+                    // Whole number: format as integer
+                    format!("{}", f as i64)
+                } else {
+                    // Decimal or special value: format as float
+                    f.to_string()
+                };
+                let mut hasher = AHasher::default();
+                hasher.write(s.as_bytes());
+                hasher.finish()
+            }
+
+            // Float64 codec - normalize whole numbers to integer encoding for consistency
+            (ColumnCodec::Float64, AnyValue::Float64(f)) => {
+                if f.fract() == 0.0 && f.is_finite() {
+                    // Whole number: use integer encoding for consistency with i64 inputs
+                    f as i64 as u64
+                } else {
+                    // True decimal: use float encoding
+                    f.to_bits()
+                }
+            }
+            (ColumnCodec::Float64, AnyValue::Int64(i)) => i as u64,
+            (ColumnCodec::Float64, AnyValue::Int32(i)) => i as u64,
+            (ColumnCodec::Float64, AnyValue::UInt64(u)) => u,
+            (ColumnCodec::Float64, AnyValue::UInt32(u)) => u as u64,
+
+            // Integer codec - handle float inputs that are whole numbers
             (ColumnCodec::Integer, AnyValue::Int64(i)) => i as u64,
-            (ColumnCodec::Integer, AnyValue::UInt32(u)) => u as u64,
             (ColumnCodec::Integer, AnyValue::Int32(i)) => i as u64,
+            (ColumnCodec::Integer, AnyValue::UInt64(u)) => u,
+            (ColumnCodec::Integer, AnyValue::UInt32(u)) => u as u64,
+            (ColumnCodec::Integer, AnyValue::Float64(f)) => {
+                if f.fract() == 0.0 && f.is_finite() {
+                    // Whole number: use integer encoding
+                    f as i64 as u64
+                } else {
+                    // Non-integer: fallback to float bits (edge case)
+                    f.to_bits()
+                }
+            }
+
             _ => 0u64, // fallback
         }
     }
@@ -2205,6 +2270,184 @@ mod tests {
 
             println!("Size {} completed successfully", size);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_f64_table_i64_lookup_bug() -> PolarsResult<()> {
+        // Reproduce the exact issue from the failing Python test
+        // Table is built with f64 age column, but lookup uses i64 age
+
+        // Create table data with f64 age (as happens when Python converts to f64)
+        let df = df! {
+            "age" => [40.0f64, 41.0f64, 42.0f64],
+            "product" => ["A", "A", "A"],
+            "duration" => ["1", "1", "1"],
+            "rate" => [0.012, 0.0135, 0.015]
+        }?;
+
+        println!("Table data types:");
+        for col in df.get_columns() {
+            println!("  {}: {:?}", col.name(), col.dtype());
+        }
+
+        // Build table
+        let table = AssumptionTable::build(
+            df,
+            vec![
+                "age".to_string(),
+                "product".to_string(),
+                "duration".to_string(),
+            ],
+            "rate".to_string(),
+        )?;
+
+        println!("Table codecs: {:?}", table.codecs);
+        println!("Table map entries: {}", table.map.len());
+
+        // Create lookup data with i64 age (as happens from Python model points)
+        let age_series = Series::new("age".into(), &[40i64, 41i64, 42i64]);
+        let product_series = Series::new("product".into(), &["A", "A", "A"]);
+        let duration_series = Series::new("duration".into(), &["1", "1", "1"]);
+
+        println!("\nLookup data types:");
+        println!("  age: {:?}", age_series.dtype());
+        println!("  product: {:?}", product_series.dtype());
+        println!("  duration: {:?}", duration_series.dtype());
+
+        // Attempt lookup
+        let result = table.lookup_series(&[&age_series, &product_series, &duration_series])?;
+        let result_f64 = result.f64()?;
+
+        println!("\nLookup results:");
+        for i in 0..result.len() {
+            let val = result_f64.get(i).unwrap();
+            println!("  [{}]: {}", i, val);
+        }
+
+        // Debug: manually check hash computation for first lookup
+        println!("\n=== Manual hash computation for first lookup ===");
+        let av_age = age_series.get(0)?;
+        let av_product = product_series.get(0)?;
+        let av_duration = duration_series.get(0)?;
+
+        println!(
+            "AnyValues: age={:?}, product={:?}, duration={:?}",
+            av_age, av_product, av_duration
+        );
+
+        let hash_age = table.codecs[0].encode(av_age);
+        let hash_product = table.codecs[1].encode(av_product);
+        let hash_duration = table.codecs[2].encode(av_duration);
+
+        println!(
+            "Individual hashes: age={}, product={}, duration={}",
+            hash_age, hash_product, hash_duration
+        );
+
+        // Compute combined hash using general case logic (3 keys)
+        let mut h = ahash::AHasher::default();
+        h.write_u64(hash_age);
+        h.write_u64(hash_product);
+        h.write_u64(hash_duration);
+        let combined_hash = h.finish();
+
+        println!("Combined hash: {}", combined_hash);
+
+        if let Some(stored_value) = table.map.get(&combined_hash) {
+            println!("Found in map: {}", stored_value);
+        } else {
+            println!("NOT found in map!");
+            println!("Available keys in map:");
+            for (key, value) in table.map.iter().take(5) {
+                println!("  {}: {}", key, value);
+            }
+        }
+
+        // The test should pass - we expect to find the values
+        assert!(
+            !result_f64.get(0).unwrap().is_nan(),
+            "Expected to find value for (40, A, 1) but got NaN"
+        );
+        assert!(
+            !result_f64.get(1).unwrap().is_nan(),
+            "Expected to find value for (41, A, 1) but got NaN"
+        );
+        assert!(
+            !result_f64.get(2).unwrap().is_nan(),
+            "Expected to find value for (42, A, 1) but got NaN"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_duration_integer_lookup_bug() -> PolarsResult<()> {
+        // Test the specific case where duration is stored as string but looked up as integer
+        // This is likely the real bug from the Python test
+
+        // Create table data with string duration (as happens in wide table processing)
+        let df = df! {
+            "age" => [40.0f64, 41.0f64, 42.0f64],
+            "product" => ["A", "A", "A"],
+            "duration" => ["1", "2", "3"],  // STRING duration
+            "rate" => [0.012, 0.0135, 0.015]
+        }?;
+
+        println!("Table data types:");
+        for col in df.get_columns() {
+            println!("  {}: {:?}", col.name(), col.dtype());
+        }
+
+        // Build table
+        let table = AssumptionTable::build(
+            df,
+            vec![
+                "age".to_string(),
+                "product".to_string(),
+                "duration".to_string(),
+            ],
+            "rate".to_string(),
+        )?;
+
+        println!("Table codecs: {:?}", table.codecs);
+
+        // Create lookup data with INTEGER duration (as happens from Python model points)
+        let age_series = Series::new("age".into(), &[40i64, 41i64, 42i64]);
+        let product_series = Series::new("product".into(), &["A", "A", "A"]);
+        let duration_series = Series::new("duration".into(), &[1i64, 2i64, 3i64]); // INTEGER duration
+
+        println!("\nLookup data types:");
+        println!("  age: {:?}", age_series.dtype());
+        println!("  product: {:?}", product_series.dtype());
+        println!("  duration: {:?}", duration_series.dtype()); // This will be Int64
+
+        // Attempt lookup - this should fail/return NaN because String codec != Integer input
+        let result = table.lookup_series(&[&age_series, &product_series, &duration_series])?;
+        let result_f64 = result.f64()?;
+
+        println!("\nLookup results:");
+        for i in 0..result.len() {
+            let val = result_f64.get(i).unwrap();
+            println!("  [{}]: {}", i, val);
+        }
+
+        // Debug: show the codec mismatch
+        println!("\n=== Codec mismatch analysis ===");
+        println!("Table codecs: {:?}", table.codecs);
+        println!("Expected: [Float64, String, String]");
+        println!("Lookup input types: [Int64, String, Int64]");
+        println!("The duration column codec mismatch (String vs Int64) is likely the issue!");
+
+        // Check what happens when we encode integer with String codec
+        let duration_av = duration_series.get(0)?; // Int64(1)
+        println!("Duration AnyValue: {:?}", duration_av);
+        let duration_hash = table.codecs[2].encode(duration_av); // String codec encoding Int64 input
+        println!("Duration hash with String codec: {}", duration_hash);
+
+        // This should fail because the String codec doesn't handle Int64 properly
+        // The encode method returns 0u64 for unhandled cases, which won't match
 
         Ok(())
     }

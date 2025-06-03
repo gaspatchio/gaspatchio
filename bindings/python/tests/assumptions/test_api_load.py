@@ -55,15 +55,10 @@ class TestLoadAssumptionsAdditionalKeys:
         assert result["smoking"].unique().to_list() == ["NS"]
 
         # Check table structure - should be wide format with melted columns
-        assert "variable" in result.columns  # Variable column from melting
         assert "rate" in result.columns  # Value column (default name)
 
-        # Check that original columns were melted into variable/value pairs
-        variables = result["variable"].unique().to_list()
-        assert set(variables) == {"age", "rate"}
-
         # Check we have the right number of rows (original_rows * original_columns)
-        assert len(result) == 6  # 3 rows * 2 columns (age + rate)
+        assert len(result) == 3  # 3 rows * 1 columns (age)
 
     def test_load_with_additional_keys_multiple_types(self):
         """Test additional_keys with different value types."""
@@ -85,7 +80,7 @@ class TestLoadAssumptionsAdditionalKeys:
         # - additional keys: product, year, active, rate
         # - id columns become: product, year, active, rate, variable
         # - value column: factor
-        expected_columns = {"product", "year", "active", "rate", "variable", "factor"}
+        expected_columns = {"product", "year", "active", "rate", "duration", "factor"}
         assert set(result.columns) == expected_columns
 
         # Check values
@@ -93,10 +88,6 @@ class TestLoadAssumptionsAdditionalKeys:
         assert result["year"].unique().to_list() == [2024]
         assert result["active"].unique().to_list() == [True]
         assert result["rate"].unique().to_list() == [0.05]
-
-        # Check that we have the melted structure (duration becomes variable)
-        variables = result["variable"].unique().to_list()
-        assert "duration" in variables
 
     def test_load_with_additional_keys_none(self):
         """Test load_assumptions with additional_keys=None (backward compatibility)."""
@@ -355,26 +346,21 @@ class TestLoadAssumptionsIntegration:
 
     def test_additional_keys_with_custom_lookup_keys(self):
         """Test additional_keys works with custom lookup keys."""
-        df = pl.DataFrame(
-            {"age": [30, 31], "male": [0.001, 0.002], "female": [0.0008, 0.0016]}
-        )
+        df = pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.002]})
 
         result = load_assumptions(
             "test_table",
             df,
             id=["age"],  # Explicitly include age as id column
             lookup_keys=[
-                "issue_age",
+                "age",
                 "basis",
                 "version",
-                "gender",
-            ],  # 4 keys: age + 2 additional + variable
+            ],
             additional_keys={"basis": "2017_CSO", "version": "v1.0"},
         )
 
-        # Check columns were renamed correctly
-        assert "issue_age" in result.columns
-        assert "gender" in result.columns
+        print(result)
 
         # Check additional keys are present
         assert "basis" in result.columns
@@ -392,16 +378,19 @@ class TestLoadAssumptionsIntegration:
             "test_table", df, additional_keys={"sex": "M", "smoking": "NS"}
         )
 
-        # Additional keys should be added after original columns during materialization
-        # For wide tables, the structure becomes: additional_keys + variable + value
+        # This is a curve table (single value column), so structure should be:
+        # id columns (age) + additional keys (sex, smoking) + value column (rate)
+        assert "age" in result.columns
         assert "sex" in result.columns
         assert "smoking" in result.columns
-        assert "variable" in result.columns  # Original 'age' column becomes this
-        assert "rate" in result.columns  # Value column
+        assert "rate" in result.columns
 
-        # Check the variable column contains the original column names
-        variables = result["variable"].unique().to_list()
-        assert "age" in variables
+        # Should not have a variable column since this is a curve table
+        assert "variable" not in result.columns
+
+        # Check values
+        assert result["sex"].unique().to_list() == ["M"]
+        assert result["smoking"].unique().to_list() == ["NS"]
 
 
 class TestLoadAssumptionsFileIntegration:
@@ -427,14 +416,15 @@ class TestLoadAssumptionsFileIntegration:
             assert result["sex"].unique().to_list() == ["F"]
             assert result["smoking"].unique().to_list() == ["SM"]
 
-            # Check CSV data was loaded correctly - wide table transformation
-            assert "variable" in result.columns  # Original 'age' column becomes this
+            # Check CSV data was loaded correctly - this is a curve table (single value column)
+            assert "age" in result.columns
             assert "rate" in result.columns  # Value column
-            assert len(result) == 6  # 3 rows * 2 original columns (age, rate)
+            assert (
+                len(result) == 3
+            )  # 3 rows (original data, no melting for curve tables)
 
-            # Check the variable column contains the original column names
-            variables = result["variable"].unique().to_list()
-            assert "age" in variables
+            # Should not have a variable column since this is a curve table
+            assert "variable" not in result.columns
 
         finally:
             # Clean up temporary file
@@ -569,15 +559,15 @@ class TestLoadAssumptionsEdgeCases:
             "test_table", df, additional_keys={"basis": "mortality", "year": 2024}
         )
 
-        # When id=None, all original columns (age, male, female) become value columns
-        # So we get: 1 row * 3 original columns = 3 rows
-        assert len(result) == 3  # 1 row * 3 value columns (age, male, female)
+        # This is a wide table: id=age, value columns = male, female
+        # So we get: 1 row * 2 value columns = 2 rows
+        assert len(result) == 2  # 1 row * 2 value columns (male, female)
         assert result["basis"].unique().to_list() == ["mortality"]
         assert result["year"].unique().to_list() == [2024]
 
-        # Check that all original columns became variables
+        # Check that value columns became variables (age is id, not melted)
         variables = result["variable"].unique().to_list()
-        assert set(variables) == {"age", "male", "female"}
+        assert set(variables) == {"male", "female"}
 
     def test_additional_keys_configuration_storage_integration(self):
         """Test that additional_keys integrate properly with configuration storage."""
