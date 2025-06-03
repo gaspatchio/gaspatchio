@@ -97,6 +97,127 @@ impl AssumptionTable {
         })
     }
 
+    /// Build a new table by combining an existing table with new DataFrame data.
+    /// Uses immutable rebuild approach for optimal lookup performance.
+    pub fn build_combined(
+        existing: &AssumptionTable,
+        new_df: DataFrame,
+        keys: Vec<String>,
+        value: String,
+    ) -> PolarsResult<Self> {
+        // Validate compatibility with existing table
+        if existing.keys.len() != keys.len() {
+            return Err(polars_err!(
+                ComputeError:
+                "Key count mismatch: existing table has {} keys, new data has {} keys",
+                existing.keys.len(), keys.len()
+            ));
+        }
+
+        for (i, (existing_key, new_key)) in existing.keys.iter().zip(&keys).enumerate() {
+            if existing_key != new_key {
+                return Err(polars_err!(
+                    ComputeError:
+                    "Key name mismatch at position {}: existing table has '{}', new data has '{}'",
+                    i, existing_key, new_key
+                ));
+            }
+        }
+
+        // Validate codecs compatibility by checking column types
+        for (i, key_name) in keys.iter().enumerate() {
+            let new_series = new_df.column(key_name)?;
+            let new_codec = match new_series.dtype() {
+                DataType::String => ColumnCodec::String,
+                DataType::Float64 => ColumnCodec::Float64,
+                _ => ColumnCodec::Integer,
+            };
+
+            // Compare with existing codec
+            if !Self::codecs_compatible(&existing.codecs[i], &new_codec) {
+                return Err(polars_err!(
+                    ComputeError:
+                    "Codec mismatch for key '{}': existing type {:?}, new type {:?}",
+                    key_name, existing.codecs[i], new_codec
+                ));
+            }
+        }
+
+        // Clone existing map as base (AHashMap clone is efficient)
+        let mut combined_map = existing.map.clone();
+
+        // Build new entries from DataFrame
+        let new_entries = Self::build_entries_map(&new_df, &keys, &value, &existing.codecs)?;
+
+        // Validate no duplicate keys before extending
+        for key in new_entries.keys() {
+            if combined_map.contains_key(key) {
+                return Err(polars_err!(
+                    ComputeError:
+                    "Duplicate key found during append. Cannot append data with existing key combinations."
+                ));
+            }
+        }
+
+        // Extend with new entries
+        combined_map.extend(new_entries);
+
+        Ok(Self {
+            keys: existing.keys.clone(),
+            codecs: existing.codecs.clone(),
+            map: combined_map,
+        })
+    }
+
+    /// Build hashmap entries from DataFrame using existing codec logic
+    fn build_entries_map(
+        df: &DataFrame,
+        keys: &[String],
+        value: &str,
+        codecs: &[ColumnCodec],
+    ) -> PolarsResult<AHashMap<u64, f64>> {
+        let n_rows = df.height();
+        let mut map: AHashMap<u64, f64> = AHashMap::with_capacity(n_rows.next_power_of_two());
+
+        let value_series = df.column(value)?.f64()?;
+
+        for row_idx in 0..n_rows {
+            let hash = if codecs.len() == 2 {
+                // Fast path for 2-key case (same as build method)
+                let av1 = df.column(&keys[0])?.get(row_idx)?;
+                let av2 = df.column(&keys[1])?.get(row_idx)?;
+                let hash1 = codecs[0].encode(av1);
+                let hash2 = codecs[1].encode(av2);
+                hash1.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash2
+            } else {
+                // General case (same as build method)
+                let mut h = AHasher::default();
+                for (codec, key_name) in codecs.iter().zip(keys) {
+                    let av = df.column(key_name)?.get(row_idx)?;
+                    h.write_u64(codec.encode(av));
+                }
+                h.finish()
+            };
+            let v = value_series.get(row_idx).unwrap_or(f64::NAN);
+            map.insert(hash, v);
+        }
+
+        Ok(map)
+    }
+
+    /// Check if two codecs are compatible for append operations
+    fn codecs_compatible(existing: &ColumnCodec, new: &ColumnCodec) -> bool {
+        match (existing, new) {
+            (ColumnCodec::String, ColumnCodec::String) => true,
+            (ColumnCodec::Float64, ColumnCodec::Float64) => true,
+            (ColumnCodec::Integer, ColumnCodec::Integer) => true,
+            // Allow integer to float promotion for flexibility
+            (ColumnCodec::Float64, ColumnCodec::Integer) => true,
+            (ColumnCodec::Integer, ColumnCodec::Float64) => true,
+            _ => false,
+        }
+    }
+
     pub fn lookup_series(&self, key_cols: &[&Series]) -> PolarsResult<Series> {
         // Validate input lengths
         if key_cols.len() != self.codecs.len() {
@@ -447,6 +568,11 @@ impl AssumptionTable {
     /// Get a cloned copy of all key column names
     pub fn get_key_columns_owned(&self) -> Vec<String> {
         self.keys.clone()
+    }
+
+    /// Get the number of entries in the lookup table
+    pub fn entry_count(&self) -> usize {
+        self.map.len()
     }
 }
 
@@ -1629,6 +1755,348 @@ mod tests {
         assert_eq!(table.get_key_columns().len(), 1);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_build_combined_basic() -> PolarsResult<()> {
+        // Create base table
+        let base_df = df! {
+            "age" => [30, 31],
+            "gender" => ["M", "F"],
+            "rate" => [0.001, 0.0008]
+        }?;
+
+        let base_table = AssumptionTable::build(
+            base_df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+        )?;
+
+        // Create new data to append
+        let new_df = df! {
+            "age" => [32, 33],
+            "gender" => ["M", "F"],
+            "rate" => [0.0012, 0.001]
+        }?;
+
+        // Build combined table
+        let combined_table = AssumptionTable::build_combined(
+            &base_table,
+            new_df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+        )?;
+
+        // Verify the combined table has all entries
+        assert_eq!(combined_table.entry_count(), 4); // 2 original + 2 new entries
+        assert_eq!(combined_table.keys, base_table.keys);
+        assert_eq!(combined_table.codecs.len(), base_table.codecs.len());
+
+        // Test lookup on combined data
+        let age_series = Series::new("age".into(), &[30, 32, 33]);
+        let gender_series = Series::new("gender".into(), &["M", "M", "F"]);
+        let result = combined_table.lookup_series(&[&age_series, &gender_series])?;
+
+        let result_f64 = result.f64()?;
+        assert!((result_f64.get(0).unwrap() - 0.001).abs() < 1e-10); // 30,M from base
+        assert!((result_f64.get(1).unwrap() - 0.0012).abs() < 1e-10); // 32,M from new
+        assert!((result_f64.get(2).unwrap() - 0.001).abs() < 1e-10); // 33,F from new
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_combined_key_count_mismatch() -> PolarsResult<()> {
+        let base_df = df! {
+            "age" => [30, 31],
+            "rate" => [0.001, 0.0008]
+        }?;
+
+        let base_table =
+            AssumptionTable::build(base_df, vec!["age".to_string()], "rate".to_string())?;
+
+        let new_df = df! {
+            "age" => [32],
+            "gender" => ["M"],
+            "rate" => [0.0012]
+        }?;
+
+        let result = AssumptionTable::build_combined(
+            &base_table,
+            new_df,
+            vec!["age".to_string(), "gender".to_string()], // Different key count
+            "rate".to_string(),
+        );
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Key count mismatch"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_combined_key_name_mismatch() -> PolarsResult<()> {
+        let base_df = df! {
+            "age" => [30, 31],
+            "gender" => ["M", "F"],
+            "rate" => [0.001, 0.0008]
+        }?;
+
+        let base_table = AssumptionTable::build(
+            base_df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+        )?;
+
+        let new_df = df! {
+            "age" => [32],
+            "sex" => ["M"], // Different key name
+            "rate" => [0.0012]
+        }?;
+
+        let result = AssumptionTable::build_combined(
+            &base_table,
+            new_df,
+            vec!["age".to_string(), "sex".to_string()],
+            "rate".to_string(),
+        );
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Key name mismatch"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_combined_duplicate_keys() -> PolarsResult<()> {
+        let base_df = df! {
+            "age" => [30, 31],
+            "gender" => ["M", "F"],
+            "rate" => [0.001, 0.0008]
+        }?;
+
+        let base_table = AssumptionTable::build(
+            base_df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+        )?;
+
+        // Create new data with duplicate key combination
+        let new_df = df! {
+            "age" => [30], // Same as existing
+            "gender" => ["M"], // Same as existing
+            "rate" => [0.0012] // Different value
+        }?;
+
+        let result = AssumptionTable::build_combined(
+            &base_table,
+            new_df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+        );
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Duplicate key found"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_combined_codec_compatibility() -> PolarsResult<()> {
+        let base_df = df! {
+            "age" => [30, 31],
+            "rate" => [0.001, 0.0008]
+        }?;
+
+        let base_table =
+            AssumptionTable::build(base_df, vec!["age".to_string()], "rate".to_string())?;
+
+        // Create new data with incompatible type (string instead of integer)
+        let new_df = df! {
+            "age" => ["thirty-two"], // String instead of integer
+            "rate" => [0.0012]
+        }?;
+
+        let result = AssumptionTable::build_combined(
+            &base_table,
+            new_df,
+            vec!["age".to_string()],
+            "rate".to_string(),
+        );
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Codec mismatch"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_combined_integer_float_compatibility() -> PolarsResult<()> {
+        // Test that integer and float types are compatible
+        let base_df = df! {
+            "age" => [30i32, 31i32],
+            "rate" => [0.001, 0.0008]
+        }?;
+
+        let base_table =
+            AssumptionTable::build(base_df, vec!["age".to_string()], "rate".to_string())?;
+
+        // Append with float age column
+        let new_df = df! {
+            "age" => [32.0f64], // Float instead of integer (should be compatible)
+            "rate" => [0.0012]
+        }?;
+
+        let result = AssumptionTable::build_combined(
+            &base_table,
+            new_df,
+            vec!["age".to_string()],
+            "rate".to_string(),
+        );
+
+        assert!(result.is_ok());
+        let combined = result?;
+        assert_eq!(combined.entry_count(), 3); // Original 2 + 1 new
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_combined_single_key_table() -> PolarsResult<()> {
+        // Test append with single key table (common case)
+        let base_df = df! {
+            "duration" => [1, 2, 3],
+            "lapse_rate" => [0.05, 0.04, 0.03]
+        }?;
+
+        let base_table = AssumptionTable::build(
+            base_df,
+            vec!["duration".to_string()],
+            "lapse_rate".to_string(),
+        )?;
+
+        let new_df = df! {
+            "duration" => [4, 5, 6],
+            "lapse_rate" => [0.02, 0.01, 0.005]
+        }?;
+
+        let combined_table = AssumptionTable::build_combined(
+            &base_table,
+            new_df,
+            vec!["duration".to_string()],
+            "lapse_rate".to_string(),
+        )?;
+
+        assert_eq!(combined_table.entry_count(), 6); // 3 original + 3 new
+
+        // Test lookup on combined data
+        let duration_series = Series::new("duration".into(), &[1, 4, 6]);
+        let result = combined_table.lookup_series(&[&duration_series])?;
+
+        let result_f64 = result.f64()?;
+        assert!((result_f64.get(0).unwrap() - 0.05).abs() < 1e-10); // From base
+        assert!((result_f64.get(1).unwrap() - 0.02).abs() < 1e-10); // From new
+        assert!((result_f64.get(2).unwrap() - 0.005).abs() < 1e-10); // From new
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_combined_large_append() -> PolarsResult<()> {
+        // Test append with larger dataset to verify performance
+        let base_ages: Vec<i32> = (30..40).collect();
+        let base_rates: Vec<f64> = base_ages.iter().map(|&age| age as f64 * 0.001).collect();
+
+        let base_df = df! {
+            "age" => base_ages,
+            "rate" => base_rates
+        }?;
+
+        let base_table =
+            AssumptionTable::build(base_df, vec!["age".to_string()], "rate".to_string())?;
+
+        let new_ages: Vec<i32> = (40..50).collect();
+        let new_rates: Vec<f64> = new_ages.iter().map(|&age| age as f64 * 0.001).collect();
+
+        let new_df = df! {
+            "age" => new_ages,
+            "rate" => new_rates
+        }?;
+
+        let combined_table = AssumptionTable::build_combined(
+            &base_table,
+            new_df,
+            vec!["age".to_string()],
+            "rate".to_string(),
+        )?;
+
+        assert_eq!(combined_table.entry_count(), 20); // 10 original + 10 new
+
+        // Test spot check lookups
+        let test_ages = Series::new("age".into(), &[30, 35, 40, 45]);
+        let result = combined_table.lookup_series(&[&test_ages])?;
+        let result_f64 = result.f64()?;
+
+        assert!((result_f64.get(0).unwrap() - 0.030).abs() < 1e-10); // 30 from base
+        assert!((result_f64.get(1).unwrap() - 0.035).abs() < 1e-10); // 35 from base
+        assert!((result_f64.get(2).unwrap() - 0.040).abs() < 1e-10); // 40 from new
+        assert!((result_f64.get(3).unwrap() - 0.045).abs() < 1e-10); // 45 from new
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_codecs_compatible() {
+        // Test codec compatibility logic
+        assert!(AssumptionTable::codecs_compatible(
+            &ColumnCodec::String,
+            &ColumnCodec::String
+        ));
+        assert!(AssumptionTable::codecs_compatible(
+            &ColumnCodec::Float64,
+            &ColumnCodec::Float64
+        ));
+        assert!(AssumptionTable::codecs_compatible(
+            &ColumnCodec::Integer,
+            &ColumnCodec::Integer
+        ));
+
+        // Test integer/float compatibility
+        assert!(AssumptionTable::codecs_compatible(
+            &ColumnCodec::Float64,
+            &ColumnCodec::Integer
+        ));
+        assert!(AssumptionTable::codecs_compatible(
+            &ColumnCodec::Integer,
+            &ColumnCodec::Float64
+        ));
+
+        // Test incompatible combinations
+        assert!(!AssumptionTable::codecs_compatible(
+            &ColumnCodec::String,
+            &ColumnCodec::Integer
+        ));
+        assert!(!AssumptionTable::codecs_compatible(
+            &ColumnCodec::String,
+            &ColumnCodec::Float64
+        ));
+        assert!(!AssumptionTable::codecs_compatible(
+            &ColumnCodec::Integer,
+            &ColumnCodec::String
+        ));
+        assert!(!AssumptionTable::codecs_compatible(
+            &ColumnCodec::Float64,
+            &ColumnCodec::String
+        ));
     }
 
     #[test]
