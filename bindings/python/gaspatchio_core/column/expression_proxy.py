@@ -67,52 +67,38 @@ class ExpressionProxy:
 
     def __add__(self, other: Any) -> "ExpressionProxy":
         """Addition operator."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr + other_expr, self._parent)
+        # Use the dispatch system to handle list column shimming
+        return self.add(other)
 
     def __sub__(self, other: Any) -> "ExpressionProxy":
         """Subtraction operator."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr - other_expr, self._parent)
+        # Use the dispatch system to handle list column shimming
+        return self.sub(other)
 
     def __mul__(self, other: Any) -> "ExpressionProxy":
         """Multiplication operator."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr * other_expr, self._parent)
+        # Use the dispatch system to handle list column shimming
+        return self.mul(other)
 
     def __truediv__(self, other: Any) -> "ExpressionProxy":
         """True division operator."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr / other_expr, self._parent)
+        # Use the dispatch system to handle list column shimming
+        return self.truediv(other)
 
     def __floordiv__(self, other: Any) -> "ExpressionProxy":
         """Floor division operator."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr // other_expr, self._parent)
+        # Use the dispatch system to handle list column shimming
+        return self.floordiv(other)
 
     def __mod__(self, other: Any) -> "ExpressionProxy":
         """Modulo operator."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr % other_expr, self._parent)
+        # Use the dispatch system to handle list column shimming
+        return self.mod(other)
 
     def __pow__(self, other: Any) -> "ExpressionProxy":
         """Power operator."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr.pow(other_expr), self._parent)
+        # Use the dispatch system to handle list column shimming
+        return self.pow(other)
 
     # Comparison operators
     def __eq__(self, other: Any) -> "ExpressionProxy":  # type: ignore[override]
@@ -160,52 +146,66 @@ class ExpressionProxy:
     # --- Reverse Operators ---
     def __radd__(self, other: Any) -> "ExpressionProxy":
         """Reverse addition operator."""
+        # Convert other to a proxy and use dispatch system
         other_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(other_expr + self._expr, self._parent)
+        other_proxy = ExpressionProxy(other_expr, self._parent)
+        return other_proxy.add(self)
 
     def __rsub__(self, other: Any) -> "ExpressionProxy":
         """Reverse subtraction operator."""
+        # Convert other to a proxy and use dispatch system
         other_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(other_expr - self._expr, self._parent)
+        other_proxy = ExpressionProxy(other_expr, self._parent)
+        return other_proxy.sub(self)
 
     def __rmul__(self, other: Any) -> "ExpressionProxy":
         """Reverse multiplication operator."""
+        # Convert other to a proxy and use dispatch system
         other_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(other_expr * self._expr, self._parent)
+        other_proxy = ExpressionProxy(other_expr, self._parent)
+        return other_proxy.mul(self)
 
     def __rtruediv__(self, other: Any) -> "ExpressionProxy":
         """Reverse true division operator."""
+        # Convert other to a proxy and use dispatch system
         other_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(other_expr / self._expr, self._parent)
+        other_proxy = ExpressionProxy(other_expr, self._parent)
+        return other_proxy.truediv(self)
 
     def __rfloordiv__(self, other: Any) -> "ExpressionProxy":
         """Reverse floor division operator."""
+        # Convert other to a proxy and use dispatch system
         other_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(other_expr // self._expr, self._parent)
+        other_proxy = ExpressionProxy(other_expr, self._parent)
+        return other_proxy.floordiv(self)
 
     def __rmod__(self, other: Any) -> "ExpressionProxy":
         """Reverse modulo operator."""
+        # Convert other to a proxy and use dispatch system
         other_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(other_expr % self._expr, self._parent)
+        other_proxy = ExpressionProxy(other_expr, self._parent)
+        return other_proxy.mod(self)
 
     def __rpow__(self, other: Any) -> "ExpressionProxy":
         """Reverse power operator."""
+        # Convert other to a proxy and use dispatch system
         other_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(other_expr.pow(self._expr), self._parent)
+        other_proxy = ExpressionProxy(other_expr, self._parent)
+        return other_proxy.pow(self)
 
     # --- Explicitly Defined Accessor Properties ---
     # Accessors that are commonly used or have specific logic can be defined explicitly.

@@ -9,6 +9,9 @@ from gaspatchio_core.column import ColumnProxy, ExpressionProxy
 class MockActuarialFrameForExpr:
     def __init__(self):
         self._convert_to_expr_mock = MagicMock()
+        # Mock a _df with a simple schema for dispatch logic
+        mock_df = pl.LazyFrame({"some_col": [1, 2, 3], "test_col": [1, 2, 3]})
+        self._df = mock_df
 
     def _convert_to_expr(self, value):
         if isinstance(value, ExpressionProxy):
