@@ -466,64 +466,106 @@ class _BaseProxy:
 
         """
         ...
-    def sum(self) -> "ExpressionProxy":
-        """Compute the sum of the elements in this expression or column.
+    def sum(self) -> "ExpressionProxy": ...
+    def cum_prod(self, *, reverse: bool = False) -> "ExpressionProxy":
+        """Compute the cumulative product of numeric values.
+
+        Returns the cumulative product of all values in order, with each position
+        containing the product of all values up to and including that position.
+        Essential for compound interest calculations, premium accumulation, and
+        mortality probability chains in actuarial modeling.
+
+        !!! note "When to use"
+            * **Compound Interest Calculations:** Calculate accumulated values where
+                each period's interest compounds with previous periods.
+            * **Mortality Probability Chains:** Compute survival probabilities by
+                multiplying individual period survival rates sequentially.
+            * **Premium Growth Factors:** Track how premiums grow when multiple
+                rate increases are applied consecutively over policy years.
+            * **Investment Return Accumulation:** Calculate portfolio values when
+                multiple investment returns compound over time.
+            * **Discount Factor Chains:** Build discount factor sequences for
+                present value calculations across multiple time periods.
+
+        Parameters
+        ----------
+        reverse : bool, default False
+            When True, computes the cumulative product in reverse order.
 
         Returns
         -------
         ExpressionProxy
-            An expression representing the sum. If used in a `select` or
-            `with_columns` context without a `group_by` or `over`, this will
-            result in a single value. If used within a `group_by` or `over`
-            context, it computes the sum per group or window.
+            An expression containing the cumulative product values.
 
         Examples
         --------
-        **Scalar Sum: Total Claims**
+        **Scalar Example: Interest Rate Accumulation**
 
-        >>> from gaspatchio_core import ActuarialFrame
-        >>> data = {
-        ...     "policy_id": [1, 1, 2, 2, 3],
-        ...     "year": [2020, 2021, 2020, 2021, 2021],
-        ...     "claim_amount": [100, 150, 0, 200, 50],
-        ... }
-        >>> af = ActuarialFrame(data)
-        >>> total_claims_expr = af["claim_amount"].sum()
-        >>> result = af.select(total_claims=total_claims_expr).collect()
-        >>> print(result)
-        shape: (1, 1)
-        ┌──────────────┐
-        │ total_claims │
-        │ ---          │
-        │ i64          │
-        ╞══════════════╡
-        │ 500          │
-        └──────────────┘
+        ```python
+        from gaspatchio_core import ActuarialFrame
 
-        **Vector Sum: Cumulative Claims per Policy**
-        >>> from gaspatchio_core import ActuarialFrame
-        >>> data = {
-        ...     "policy_id": [1, 1, 2, 2, 3],
-        ...     "year": [2020, 2021, 2020, 2021, 2021],
-        ...     "claim_amount": [100, 150, 0, 200, 50],
-        ... }
-        >>> af = ActuarialFrame(data)
-        >>> af["cumulative_claims"] = af["claim_amount"].sum().over("policy_id")
-        >>> result = af.collect()
-        >>> print(result)
-        shape: (5, 4)
-        ┌───────────┬──────┬──────────────┬───────────────────┐
-        │ policy_id ┆ year ┆ claim_amount ┆ cumulative_claims │
-        │ ---       ┆ ---  ┆ ---          ┆ ---               │
-        │ i64       ┆ i64  ┆ i64          ┆ i64               │
-        ╞═══════════╪══════╪══════════════╪═══════════════════╡
-        │ 1         ┆ 2020 ┆ 100          ┆ 250               │
-        │ 1         ┆ 2021 ┆ 150          ┆ 250               │
-        │ 2         ┆ 2020 ┆ 0            ┆ 200               │
-        │ 2         ┆ 2021 ┆ 200          ┆ 200               │
-        │ 3         ┆ 2021 ┆ 50           ┆ 50                │
-        └───────────┴──────┴──────────────┴───────────────────┘
+        data = {
+            "year": [1, 2, 3, 4],
+            "interest_rate": [1.03, 1.025, 1.04, 1.035],
+        }
+        af = ActuarialFrame(data)
+        result = af.select(
+            af["year"],
+            af["interest_rate"],
+            cumulative_factor=af["interest_rate"].cum_prod()
+        ).collect()
+        print(result)
+        ```
 
+        ```text
+        shape: (4, 3)
+        ┌──────┬───────────────┬───────────────────┐
+        │ year ┆ interest_rate ┆ cumulative_factor │
+        │ ---  ┆ ---           ┆ ---               │
+        │ i64  ┆ f64           ┆ f64               │
+        ╞══════╪═══════════════╪═══════════════════╡
+        │ 1    ┆ 1.03          ┆ 1.03              │
+        │ 2    ┆ 1.025         ┆ 1.055750          │
+        │ 3    ┆ 1.04          ┆ 1.097980          │
+        │ 4    ┆ 1.035         ┆ 1.136409          │
+        └──────┴───────────────┴───────────────────┘
+        ```
+
+        **Vector Example: Survival Probability Chains**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "age": [55, 38],
+            "month": [
+                [1, 2, 3, 4],
+                [1, 2, 3, 4]
+            ],
+            "monthly_survival_rate": [
+                [0.9995, 0.9994, 0.9993, 0.9992],
+                [0.9998, 0.9998, 0.9997, 0.9997]
+            ]
+        }
+        af = ActuarialFrame(data)
+
+        af["cumulative_survival"] = af["monthly_survival_rate"].cum_prod()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 5)
+        ┌───────────┬─────┬──────────────┬──────────────────────────────────┬──────────────────────────────────┐
+        │ policy_id ┆ age ┆ month        ┆ monthly_survival_rate            ┆ cumulative_survival              │
+        │ ---       ┆ --- ┆ ---          ┆ ---                              ┆ ---                              │
+        │ str       ┆ i64 ┆ list[i64]    ┆ list[f64]                        ┆ list[f64]                        │
+        ╞═══════════╪═════╪══════════════╪══════════════════════════════════╪══════════════════════════════════╡
+        │ P001      ┆ 55  ┆ [1, 2, 3, 4] ┆ [0.9995, 0.9994, 0.9993, 0.9992]┆ [0.9995, 0.9989, 0.9982, 0.9974]│
+        │ P002      ┆ 38  ┆ [1, 2, 3, 4] ┆ [0.9998, 0.9998, 0.9997, 0.9997]┆ [0.9998, 0.9996, 0.9993, 0.9990]│
+        └───────────┴─────┴──────────────┴──────────────────────────────────┴──────────────────────────────────┘
+        ```
         """
         ...
     def mean(self) -> "ExpressionProxy":
@@ -975,10 +1017,11 @@ class _BaseProxy:
 
         """
         ...
-    def fill_null(self, value: Any) -> "ExpressionProxy":
-        """Replace null (missing) values with a specified value.
+    def fill_null(self, value: Any = None, *, strategy: str = None, limit: int = None) -> "ExpressionProxy":
+        """Replace null (missing) values with a specified value or using a filling strategy.
 
-        Replaces all null values in the expression with the provided value.
+        Replaces all null values in the expression with the provided value or using
+        a specified strategy like forward fill, backward fill, or statistical measures.
         This is crucial for data preprocessing in actuarial analysis, ensuring
         calculations can proceed without interruption from missing data while
         maintaining analytical integrity through appropriate imputation strategies.
@@ -987,27 +1030,33 @@ class _BaseProxy:
             * **Data Imputation:** Replace missing claim amounts with zeros,
               missing policy values with defaults, or missing dates with
               standard values for consistent calculations.
+            * **Time Series Filling:** Use forward or backward fill strategies
+              for missing premium payments, policy status updates, or claim dates.
+            * **Statistical Imputation:** Fill missing values with mean, median,
+              or other statistical measures appropriate for actuarial modeling.
             * **Default Value Assignment:** Set default beneficiaries, standard
               premium frequencies, or default coverage amounts for incomplete records.
             * **Regulatory Compliance:** Ensure all required fields have values
               for regulatory reporting, using appropriate defaults where permissible.
             * **Risk Calculations:** Replace missing risk factors with conservative
               estimates or industry averages to avoid excluding policies from analysis.
-            * **Business Rules Implementation:** Apply business logic for handling
-              missing data, such as assuming standard terms when specific terms are missing.
-            * **Data Standardization:** Ensure consistent data formats by replacing
-              nulls with standardized values across different data sources.
 
         Parameters
         ----------
-        value : Any
+        value : Any, optional
             The value to use as replacement for null values. Can be a scalar value,
-            a Polars expression, or another column reference.
+            a Polars expression, or another column reference. Cannot be used with strategy.
+        strategy : str, optional
+            Strategy for filling null values. Options include 'forward', 'backward',
+            'min', 'max', 'mean', 'zero', 'one'. Cannot be used with value.
+        limit : int, optional
+            Maximum number of consecutive null values to fill. Only applies when
+            using strategy-based filling.
 
         Returns
         -------
         ExpressionProxy
-            An expression with null values replaced by the specified value.
+            An expression with null values replaced according to the specified method.
 
         Examples
         --------
@@ -1042,35 +1091,39 @@ class _BaseProxy:
         └───────────┴────────────────────┘
         ```
 
-        **Vector Example: Fill Missing Beneficiaries with Default**
+        **Vector Example: Fill Missing Premium Payments with Forward Fill Strategy**
 
         ```python
         from gaspatchio_core import ActuarialFrame
 
         data = {
-            "policy_id": ["P001", "P002", "P003", "P004"],
-            "beneficiary": ["John Doe", None, "Jane Smith", None],
+            "month": [1, 2, 3, 4, 5, 6],
+            "premium_received": [1200.0, 1200.0, None, None, 1200.0, None],
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["policy_id"],
-            beneficiary_clean=af["beneficiary"].fill_null("Estate")
+            af["month"],
+            original_premium=af["premium_received"],
+            forward_filled=af["premium_received"].fill_null(strategy="forward"),
+            zero_filled=af["premium_received"].fill_null(0.0)
         ).collect()
         print(result)
         ```
 
         ```text
-        shape: (4, 2)
-        ┌───────────┬──────────────────┐
-        │ policy_id ┆ beneficiary_clean │
-        │ ---       ┆ ---              │
-        │ str       ┆ str              │
-        ╞═══════════╪══════════════════╡
-        │ P001      ┆ John Doe         │
-        │ P002      ┆ Estate           │
-        │ P003      ┆ Jane Smith       │
-        │ P004      ┆ Estate           │
-        └───────────┴──────────────────┘
+        shape: (6, 4)
+        ┌───────┬──────────────────┬──────────────┬─────────────┐
+        │ month ┆ original_premium ┆ forward_filled ┆ zero_filled │
+        │ ---   ┆ ---              ┆ ---          ┆ ---         │
+        │ i64   ┆ f64              ┆ f64          ┆ f64         │
+        ╞═══════╪══════════════════╪══════════════╪═════════════╡
+        │ 1     ┆ 1200.0           ┆ 1200.0       ┆ 1200.0      │
+        │ 2     ┆ 1200.0           ┆ 1200.0       ┆ 1200.0      │
+        │ 3     ┆ null             ┆ 1200.0       ┆ 0.0         │
+        │ 4     ┆ null             ┆ 1200.0       ┆ 0.0         │
+        │ 5     ┆ 1200.0           ┆ 1200.0       ┆ 1200.0      │
+        │ 6     ┆ null             ┆ 1200.0       ┆ 0.0         │
+        └───────┴──────────────────┴──────────────┴─────────────┘
         ```
 
         """
@@ -1545,7 +1598,7 @@ class _BaseProxy:
 
         """
         ...
-    def shift(self, periods: int = 1) -> "ExpressionProxy":
+    def shift(self, n: int = 1, *, fill_value: any = None) -> "ExpressionProxy":
         """Shift values by a specified number of periods.
 
         Moves values forward or backward in the sequence, creating lag or lead variables
@@ -1568,15 +1621,18 @@ class _BaseProxy:
 
         Parameters
         ----------
-        periods : int, default 1
+        n : int, default 1
             Number of periods to shift. Positive values shift forward (creating lags),
             negative values shift backward (creating leads). Zero returns original values.
+        fill_value : any, optional
+            Value to use for filling the shifted positions. If None (default), uses null values.
+            Can be a scalar value, expression, or column reference.
 
         Returns
         -------
         ExpressionProxy
             An expression with values shifted by the specified number of periods.
-            Shifted positions are filled with null values.
+            Shifted positions are filled with the specified fill_value or null values if not provided.
 
         Examples
         --------
@@ -1613,7 +1669,7 @@ class _BaseProxy:
         └─────────────┴─────────────────┴──────────────┘
         ```
 
-        **Vector Example: Quarterly Claims Comparison**
+        **Vector Example: Quarterly Claims Comparison with Fill Value**
 
         ```python
         from gaspatchio_core import ActuarialFrame
@@ -1626,23 +1682,24 @@ class _BaseProxy:
         result = af.select(
             af["quarter"],
             current_claims=af["claim_count"],
-            next_quarter_claims=af["claim_count"].shift(-1)
+            next_quarter_claims=af["claim_count"].shift(-1),
+            prior_quarter_with_fill=af["claim_count"].shift(1, fill_value=0)
         ).collect()
         print(result)
         ```
 
         ```text
-        shape: (4, 3)
-        ┌─────────┬───────────────┬────────────────────┐
-        │ quarter ┆ current_claims ┆ next_quarter_claims │
-        │ ---     ┆ ---           ┆ ---                │
-        │ str     ┆ i64           ┆ i64                │
-        ╞═════════╪═══════════════╪════════════════════╡
-        │ Q1      ┆ 45            ┆ 52                 │
-        │ Q2      ┆ 52            ┆ 38                 │
-        │ Q3      ┆ 38            ┆ 49                 │
-        │ Q4      ┆ 49            ┆ null               │
-        └─────────┴───────────────┴────────────────────┘
+        shape: (4, 4)
+        ┌─────────┬───────────────┬────────────────────┬───────────────────────┐
+        │ quarter ┆ current_claims ┆ next_quarter_claims ┆ prior_quarter_with_fill │
+        │ ---     ┆ ---           ┆ ---                │ ---                   │
+        │ str     ┆ i64           ┆ i64                ┆ i64                   │
+        ╞═════════╪═══════════════╪════════════════════╪═══════════════════════╡
+        │ Q1      ┆ 45            ┆ 52                 ┆ 0                     │
+        │ Q2      ┆ 52            ┆ 38                 ┆ 45                    │
+        │ Q3      ┆ 38            ┆ 49                 ┆ 52                    │
+        │ Q4      ┆ 49            ┆ null               ┆ 38                    │
+        └─────────┴───────────────┴────────────────────┴───────────────────────┘
         ```
 
         """
