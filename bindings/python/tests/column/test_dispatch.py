@@ -3,7 +3,39 @@ import datetime  # Added import
 import polars as pl
 import pytest
 from gaspatchio_core.column import ExpressionProxy
-from gaspatchio_core.column.dispatch import _NUMERIC_UNARY
+
+# Create a subset of operations that are truly unary (no arguments required)
+_TRULY_UNARY_OPS = {
+    # Basic unary operations
+    "abs",
+    "sign",
+    # Rounding (without arguments)
+    "floor",
+    "ceil",
+    # Exponents/Logs
+    "exp",
+    "log",
+    "log1p",
+    "ln",
+    "log10",
+    # Power/Roots
+    "sqrt",
+    "cbrt",
+    "gamma",
+    # Numeric Checks (return Bool)
+    "is_nan",
+    "is_finite",
+    "is_infinite",
+    "is_not_nan",
+    "is_null",
+    "is_not_null",
+    # Cumulative operations (can be called without arguments)
+    "cum_prod",
+    "cum_sum",
+    "cum_max",
+    "cum_min",
+    "cum_count",
+}
 
 # Assuming ActuarialFrame is importable and can be instantiated with a LazyFrame
 # Adjust the import path if necessary
@@ -108,35 +140,18 @@ def test_list_namespace_delegation(sample_af: ActuarialFrame):
 # --- List Shimming (Unary Op) Tests ---
 
 
-@pytest.mark.parametrize("op_name", sorted(list(_NUMERIC_UNARY)))
+@pytest.mark.parametrize("op_name", sorted(list(_TRULY_UNARY_OPS)))
 def test_list_shimming_unary_on_list_col(sample_af: ActuarialFrame, op_name: str):
     """Test that unary numeric ops on List columns use list.eval shim."""
-    if op_name == "round_sig_figs":  # SKIP for now
-        pytest.skip(
-            "round_sig_figs requires arguments, cannot test with simple unary setup."
-        )
     if not hasattr(pl.element(), op_name):
         pytest.skip(f"Unary op '{op_name}' not implemented on pl.element()")
 
-    # Special handling for round() which requires a parameter and float type
-    if op_name == "round":
-        # Use list.eval directly with cast to float and round
-        proxy_op = sample_af["list_int"].list.eval(
-            pl.element().cast(pl.Float64).round(0)
-        )
-    else:
-        proxy_op = getattr(sample_af["list_int"], op_name)()
-
+    proxy_op = getattr(sample_af["list_int"], op_name)()
     assert isinstance(proxy_op, ExpressionProxy)
 
-    # Check expression string, with special case for round
+    # Check expression string
     expr_str = str(proxy_op._expr).replace(" ", "")  # Remove spaces for robust check
-    if op_name == "round":
-        # When using list.eval directly, the string representation is different
-        assert ".eval(" in expr_str
-    else:
-        assert ".eval(" in expr_str
-
+    assert ".eval(" in expr_str
     assert 'col("list_int")' in expr_str
 
     # Verify execution
@@ -147,33 +162,22 @@ def test_list_shimming_unary_on_list_col(sample_af: ActuarialFrame, op_name: str
         pytest.fail(f"List shimming execution failed for {op_name}: {e}")
 
 
-@pytest.mark.parametrize("op_name", sorted(list(_NUMERIC_UNARY)))
+@pytest.mark.parametrize("op_name", sorted(list(_TRULY_UNARY_OPS)))
 def test_list_shimming_unary_on_scalar_col(sample_af: ActuarialFrame, op_name: str):
     """Test that unary numeric ops on scalar columns DO NOT use list.eval shim."""
-    if op_name == "round_sig_figs":  # SKIP for now
-        pytest.skip(
-            "round_sig_figs requires arguments, cannot test with simple unary setup."
-        )
     if not hasattr(pl.col("scalar_int"), op_name):
         pytest.skip(f"Unary op '{op_name}' not implemented on pl.Expr directly")
 
-    # Special handling for round() which requires a parameter and float type
-    if op_name == "round":
-        # Cast to float64 first, then round
-        proxy_op = sample_af["scalar_int"].cast(pl.Float64).round(0)
-    else:
-        proxy_op = getattr(sample_af["scalar_int"], op_name)()
+    proxy_op = getattr(sample_af["scalar_int"], op_name)()
 
     assert isinstance(proxy_op, ExpressionProxy)
     # Check that the expression string is the standard Polars op
     expr_str = str(proxy_op._expr).replace(" ", "")
     assert ".list.eval" not in expr_str
 
-    # MODIFIED ASSERTION: Check for '.<op_name>()' presence, special case log10
+    # Check for operation in expression string, with special cases
     if op_name == "log10":
         assert ".log()" in expr_str  # Expecting .log() based on previous failure
-    elif op_name == "round":
-        assert ".round(" in expr_str  # Check for round with parameters
     else:
         assert f".{op_name}()" in expr_str
     assert 'col("scalar_int")' in expr_str
@@ -193,6 +197,81 @@ def test_list_shimming_non_unary_on_list_col(sample_af: ActuarialFrame):
     expr_str = str(proxy_sum._expr).replace(" ", "")
     assert ".list.eval" not in expr_str
     assert 'col("list_int").sum()' in expr_str
+
+
+# --- Binary Operations with List Shimming Tests ---
+
+
+def test_list_shimming_binary_ops_on_list_col(sample_af: ActuarialFrame):
+    """Test that binary numeric ops on List columns use list.eval shim when appropriate."""
+    # Test operations that require arguments and should be shimmed for list columns
+
+    # Test round with decimals - note: round may show as round() due to default args
+    proxy_round = sample_af["list_float"].round(2)
+    assert isinstance(proxy_round, ExpressionProxy)
+    expr_str = str(proxy_round._expr).replace(" ", "")
+    # round might show as just .round() due to default argument handling
+    assert ".round(" in expr_str or ".round()" in expr_str
+    assert 'col("list_float")' in expr_str
+
+    # Test pow with exponent
+    proxy_pow = sample_af["list_int"].pow(2)
+    assert isinstance(proxy_pow, ExpressionProxy)
+    expr_str = str(proxy_pow._expr).replace(" ", "")
+    assert ".eval(" in expr_str  # This should definitely be shimmed
+    assert 'col("list_int")' in expr_str
+
+    # Test clip with bounds
+    proxy_clip = sample_af["list_int"].clip(-5, 5)
+    assert isinstance(proxy_clip, ExpressionProxy)
+    expr_str = str(proxy_clip._expr).replace(" ", "")
+    assert ".eval(" in expr_str  # This should definitely be shimmed
+    assert 'col("list_int")' in expr_str
+
+    # Test shift with periods
+    proxy_shift = sample_af["list_int"].shift(1)
+    assert isinstance(proxy_shift, ExpressionProxy)
+    expr_str = str(proxy_shift._expr).replace(" ", "")
+    assert ".eval(" in expr_str  # This should definitely be shimmed
+    assert 'col("list_int")' in expr_str
+
+
+def test_list_shimming_binary_ops_on_scalar_col(sample_af: ActuarialFrame):
+    """Test that binary numeric ops on scalar columns DON'T use list.eval shim."""
+    # Test operations that require arguments but should NOT be shimmed for scalar columns
+
+    # Test round with decimals
+    proxy_round = sample_af["scalar_float"].round(2)
+    assert isinstance(proxy_round, ExpressionProxy)
+    expr_str = str(proxy_round._expr).replace(" ", "")
+    assert ".list.eval" not in expr_str
+    assert ".round(" in expr_str
+    assert 'col("scalar_float")' in expr_str
+
+    # Test pow with exponent
+    proxy_pow = sample_af["scalar_int"].pow(2)
+    assert isinstance(proxy_pow, ExpressionProxy)
+    expr_str = str(proxy_pow._expr).replace(" ", "")
+    assert ".list.eval" not in expr_str
+    assert ".pow(" in expr_str
+    assert 'col("scalar_int")' in expr_str
+
+    # Test clip with bounds
+    proxy_clip = sample_af["scalar_int"].clip(-50, 50)
+    assert isinstance(proxy_clip, ExpressionProxy)
+    expr_str = str(proxy_clip._expr).replace(" ", "")
+    assert ".list.eval" not in expr_str
+    assert ".clip(" in expr_str
+    assert 'col("scalar_int")' in expr_str
+
+    # Test shift with periods
+    proxy_shift = sample_af["scalar_int"].shift(1)
+    assert isinstance(proxy_shift, ExpressionProxy)
+    expr_str = str(proxy_shift._expr).replace(" ", "")
+    assert ".list.eval" not in expr_str
+    # shift shows default value in expression string
+    assert ".shift(" in expr_str
+    assert 'col("scalar_int")' in expr_str
 
 
 # --- Operator Tests ---
@@ -525,7 +604,7 @@ def test_list_shimming_empty_and_fallback(sample_af: ActuarialFrame):
     # The goal is to ensure that if the `is_list_type` check fails or returns False,
     # the *standard* Polars method is called without the shim.
     # We already test this for scalar columns in `test_list_shimming_unary_on_scalar_col`.
-    # We can also test a unary method NOT in _NUMERIC_UNARY on a list column.
+    # We can also test a unary method NOT in _NUMERIC_ELEMENTWISE on a list column.
     if hasattr(pl.Expr, "is_first_distinct"):  # Example: boolean unary method
         proxy_op = sample_af["list_int"].is_first_distinct()
         assert isinstance(proxy_op, ExpressionProxy)

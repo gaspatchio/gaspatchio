@@ -23,8 +23,9 @@ if TYPE_CHECKING:
 
 
 # Constants
-_NUMERIC_UNARY: Set[str] = {
-    # Basic
+# Numeric methods that should be applied element-wise on list columns
+_NUMERIC_ELEMENTWISE: Set[str] = {
+    # Basic unary operations
     "abs",
     "sign",
     # Rounding
@@ -42,30 +43,34 @@ _NUMERIC_UNARY: Set[str] = {
     "sqrt",
     "cbrt",
     "gamma",
-    # Numeric Checks (return Bool, but unary)
+    # Numeric Checks (return Bool)
     "is_nan",
     "is_finite",
     "is_infinite",
     "is_not_nan",
     "is_null",
     "is_not_null",
-}
-
-# Numeric methods that should be applied element-wise on list columns
-_NUMERIC_ELEMENTWISE: Set[str] = {
+    # Clipping operations
     "clip",
     "clip_min",
     "clip_max",
-    "round",  # Also in unary, but can take decimals arg
-    "pow",  # Can be binary
-    "mod",  # Binary operation
+    # Binary operations
+    "pow",
+    "mod",
     "add",
     "sub",
     "mul",
     "truediv",
     "floordiv",
-    "cast",  # Type casting
+    # Type operations
+    "cast",
+    # Cumulative operations
     "cum_prod",
+    "cum_sum",
+    "cum_max",
+    "cum_min",
+    "cum_count",
+    # Other operations
     "shift",
     "fill_null",
 }
@@ -289,15 +294,15 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
             )
         if callable(polars_attr):
 
-            def _mc(*a: Any, **kw: Any) -> Any:
+            def _mc(*args: Any, **kwargs: Any) -> Any:
                 return _method_caller(
                     name=name,
                     polars_attr=polars_attr,
                     self_proxy=self_proxy,
                     parent_af=parent_af,
                     base_expr=base_expr,
-                    a=a,
-                    kw=kw,
+                    args=args,
+                    kwargs=kwargs,
                 )
 
             try:
@@ -370,20 +375,18 @@ def _method_caller(
     self_proxy: "ProxyType",
     parent_af: Optional["ActuarialFrame"],
     base_expr: Any,
-    a: tuple,
-    kw: dict,
+    args: tuple,
+    kwargs: dict,
 ) -> Any:
     """Execute the delegated method with proper list-type handling. (Moved out of wrapper)"""
     from .column_proxy import ColumnProxy
     from .expression_proxy import ExpressionProxy
 
-    # Check if this is a unary numeric op (no args)
-    is_unary_numeric_op = name in _NUMERIC_UNARY and not a and not kw
-    # Check if this is an element-wise numeric op (may have args)
+    # Check if this is a numeric operation that should be applied element-wise on list columns
     is_elementwise_op = name in _NUMERIC_ELEMENTWISE
 
     should_use_list_shim = False
-    if is_unary_numeric_op or is_elementwise_op:
+    if is_elementwise_op:
         if isinstance(self_proxy, ColumnProxy) and parent_af:
             try:
                 # Use collect_schema() to avoid performance warning
@@ -420,33 +423,35 @@ def _method_caller(
             try:
                 # Get the element method
                 element_method = getattr(pl.element(), name)
-                if is_unary_numeric_op:
-                    # For unary ops, call without arguments
+
+                # Try to apply the operation element-wise using list.eval
+                if not args and not kwargs:
+                    # For operations without arguments, call directly
                     result = base_expr.list.eval(element_method())
                 else:
-                    # For element-wise ops with arguments, use special unwrapping for list.eval context
+                    # For operations with arguments, use special unwrapping for list.eval context
                     try:
-                        unwrapped_args = [_unwrap_for_list_eval(arg) for arg in a]
+                        unwrapped_args = [_unwrap_for_list_eval(arg) for arg in args]
                         unwrapped_kwargs = {
-                            k: _unwrap_for_list_eval(v) for k, v in kw.items()
+                            k: _unwrap_for_list_eval(v) for k, v in kwargs.items()
                         }
                         result = base_expr.list.eval(
                             element_method(*unwrapped_args, **unwrapped_kwargs)
                         )
                     except ValueError:
                         # If we can't unwrap for list.eval (e.g., column references), fall back to regular method
-                        unwrapped_args = [_unwrap(arg) for arg in a]
-                        unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
+                        unwrapped_args = [_unwrap(arg) for arg in args]
+                        unwrapped_kwargs = {k: _unwrap(v) for k, v in kwargs.items()}
                         result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
             except Exception:
                 # Fallback to regular method call if list.eval fails
-                unwrapped_args = [_unwrap(arg) for arg in a]
-                unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
+                unwrapped_args = [_unwrap(arg) for arg in args]
+                unwrapped_kwargs = {k: _unwrap(v) for k, v in kwargs.items()}
                 result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
         else:
             # Regular method call for non-list columns
-            unwrapped_args = [_unwrap(arg) for arg in a]
-            unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
+            unwrapped_args = [_unwrap(arg) for arg in args]
+            unwrapped_kwargs = {k: _unwrap(v) for k, v in kwargs.items()}
             result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
     except Exception as e:
         raise type(e)(f"Error calling proxied Polars method '{name}': {e}") from e
