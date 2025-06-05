@@ -334,6 +334,32 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
     return wrapper
 
 
+def _unwrap_for_list_eval(arg: Any) -> Any:
+    """Unwrap arguments for use within list.eval context.
+
+    Inside list.eval, we can't use named columns like pl.col("name").
+    We need to convert column references to pl.element() or literals.
+    """
+    from .column_proxy import ColumnProxy
+    from .expression_proxy import ExpressionProxy
+
+    if isinstance(arg, ColumnProxy):
+        # In list.eval context, we can't reference other columns by name
+        # This should be a literal value instead
+        raise ValueError(
+            f"Cannot reference column '{arg.name}' inside list.eval context. Use literal values or pl.element()."
+        )
+    if isinstance(arg, ExpressionProxy):
+        # Complex expressions should also not be used in list.eval directly
+        raise ValueError(
+            "Cannot use complex expressions inside list.eval context. Use literal values or pl.element()."
+        )
+    # For basic Python types, convert to literals that work in list.eval
+    if isinstance(arg, (str, int, float, bool)):
+        return pl.lit(arg)
+    return arg
+
+
 def _method_caller(
     *,
     name: str,
@@ -395,12 +421,20 @@ def _method_caller(
                     # For unary ops, call without arguments
                     result = base_expr.list.eval(element_method())
                 else:
-                    # For element-wise ops with arguments, pass them through
-                    unwrapped_args = [_unwrap(arg) for arg in a]
-                    unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
-                    result = base_expr.list.eval(
-                        element_method(*unwrapped_args, **unwrapped_kwargs)
-                    )
+                    # For element-wise ops with arguments, use special unwrapping for list.eval context
+                    try:
+                        unwrapped_args = [_unwrap_for_list_eval(arg) for arg in a]
+                        unwrapped_kwargs = {
+                            k: _unwrap_for_list_eval(v) for k, v in kw.items()
+                        }
+                        result = base_expr.list.eval(
+                            element_method(*unwrapped_args, **unwrapped_kwargs)
+                        )
+                    except ValueError:
+                        # If we can't unwrap for list.eval (e.g., column references), fall back to regular method
+                        unwrapped_args = [_unwrap(arg) for arg in a]
+                        unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
+                        result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
             except Exception:
                 # Fallback to regular method call if list.eval fails
                 unwrapped_args = [_unwrap(arg) for arg in a]
