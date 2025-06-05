@@ -65,6 +65,9 @@ _NUMERIC_ELEMENTWISE: Set[str] = {
     "truediv",
     "floordiv",
     "cast",  # Type casting
+    "cum_prod",
+    "shift",
+    "fill_null",
 }
 
 _NAMESPACES: Set[str] = {
