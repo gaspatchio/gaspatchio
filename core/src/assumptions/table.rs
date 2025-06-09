@@ -13,11 +13,11 @@ pub enum ColumnCodec {
 }
 
 impl ColumnCodec {
-    #[inline(always)]
+    #[inline]
     fn encode(&self, av: AnyValue) -> u64 {
         match (self, av) {
             // String encoding - handle special cases first (categorical indices)
-            (ColumnCodec::String, AnyValue::Categorical(idx, _, _)) => idx as u64,
+            (ColumnCodec::String, AnyValue::Categorical(idx, _, _)) => u64::from(idx),
             (ColumnCodec::String, AnyValue::String(s)) => {
                 // Hash the string content directly
                 let mut hasher = AHasher::default();

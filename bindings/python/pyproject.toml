@@ -1,9 +1,9 @@
 [project]
 name = "gaspatchio-core"
-version = "0.0.15"
+version = "0.0.16"
 description = "Simple, fast and best served cold"
 readme = "README.md"
-authors = [{ name = "mrmattwright", email = "matt@sudden.co.nz" }]
+authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
 requires-python = ">=3.12"
 dependencies = [
     "logfire>=3.4.0",
@@ -23,25 +23,6 @@ dependencies = [
     "docstring-parser>=0.16",
 ]
 
-[project.scripts]
-gaspatchio-core = "gaspatchio_core:main"
-gp-docstrings = "gaspatchio_core.examples.docstrings.cli:app"
-
-[project.optional-dependencies]
-pandas = ["polars-u64-idx>=1.27.0"]
-numpy = ["polars-u64-idx>=1.27.0"]
-pyarrow = ["polars-u64-idx>=1.27.0"]
-excel = ["polars-u64-idx>=1.27.0"]
-
-[tool.maturin]
-module-name = "gaspatchio_core._internal"
-python-packages = ["gaspatchio_core"]
-python-source = ""
-
-[build-system]
-requires = ["maturin>=1.0,<2.0"]
-build-backend = "maturin"
-
 [dependency-groups]
 dev = [
     "ai-code-tracker>=0.1.1",
@@ -52,6 +33,43 @@ dev = [
     "pytest-benchmark>=5.1.0",
 ]
 
+[project.optional-dependencies]
+pandas = ["polars-u64-idx>=1.27.0"]
+numpy = ["polars-u64-idx>=1.27.0"]
+pyarrow = ["polars-u64-idx>=1.27.0"]
+excel = ["polars-u64-idx>=1.27.0"]
+
+# Build System
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+module-name = "gaspatchio_core._internal"
+python-packages = ["gaspatchio_core"]
+python-source = ""
+
+# Linting, formatting, type checking
+[tool.ruff] 
+select = ["ALL"]
+line-length = 88
+extend-ignore = [
+    "D203",
+    "D212",   # allow either one-line or two-line docstring summaries
+    "D213",   # allow either one-line or two-line docstring summaries
+    "ANN001", # sometimes self/cls isn't annotated
+]
+
+[tool.ruff.format]
+docstring-code-format = true # format code in docstrings too
+
+[tool.mypy]
+python_version = "3.12"
+strict = true     # Enables the full strict bundle  :contentReference[oaicite:2]{index=2}
+ignore_missing_imports = true  # relax only where stubs are unavailable
+plugins = []
+
+# Package management
 [tool.uv]
 # Rebuild package when any rust files change
 cache-keys = [
@@ -61,6 +79,7 @@ cache-keys = [
 ]
 config-settings = { "build-args" = "--profile=dev" }
 
+# Testing
 [tool.pytest.ini_options]
 addopts = [
     "--gp-docstring-paths=gaspatchio_core/assumptions/column/namespaces/dt_proxy.py",
@@ -80,6 +99,8 @@ markers = [
     "slow: marks tests as slow to run",
     "performance: marks tests as performance related",
 ]
-# You can add more patterns here or override on the command line.
-# Example:
-# testpaths = ["tests", "gaspatchio_core"]
+
+# Scripts / CLI paths
+[project.scripts]
+gaspatchio-core = "gaspatchio_core:main"
+gp-docstrings = "gaspatchio_core.examples.docstrings.cli:app"

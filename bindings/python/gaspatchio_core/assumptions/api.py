@@ -8,7 +8,7 @@ tables, handling various formats, and managing associated metadata.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Literal, Union
+from typing import Any, Literal, Union
 
 import polars as pl
 from loguru import logger
@@ -44,17 +44,17 @@ from ._validation import (
 LIB = Path(__file__).parent.parent
 
 # Global metadata storage for assumption tables
-_TABLE_METADATA: Dict[str, Dict[str, Any]] = {}
+_TABLE_METADATA: dict[str, dict[str, Any]] = {}
 
 
 def _validate_load_assumptions_params(
     name: str,
     value: str,
-    value_vars: Union[list[str], None],
+    value_vars: list[str] | None,
     max_overflow: int,
-    overflow: Union[Literal["auto"], str, None],
+    overflow: Literal["auto"] | str | None,
     metadata: dict[str, Any] | None,
-    lookup_keys: Union[list[str], None],
+    lookup_keys: list[str] | None,
     additional_keys: dict[str, Any] | None,
 ) -> None:
     """Validate parameters for the load_assumptions function.
@@ -67,21 +67,21 @@ def _validate_load_assumptions_params(
             "name must be a non-empty string\\n"
             "Suggestions:\\n"
             "  • Use descriptive names like 'mortality_2012' or 'lapse_ultimate'\\n"
-            "  • Avoid empty strings or whitespace-only names"
+            "  • Avoid empty strings or whitespace-only names",
         )
     if not isinstance(value, str) or not value.strip():
         raise ValueError(
             "value must be a non-empty string\\n"
             "Suggestions:\\n"
             "  • Use descriptive names like 'rate', 'qx', 'probability'\\n"
-            "  • Avoid empty strings or whitespace-only names"
+            "  • Avoid empty strings or whitespace-only names",
         )
     if value_vars is not None and not isinstance(value_vars, list):
         raise ValueError(
             "value_vars must be a list of column names or None\\n"
             "Examples:\\n"
             "  • value_vars=['Male', 'Female'] for gender-specific columns\\n"
-            "  • value_vars=['1', '2', '3', 'Ultimate'] for duration columns"
+            "  • value_vars=['1', '2', '3', 'Ultimate'] for duration columns",
         )
     if not isinstance(max_overflow, int) or max_overflow < 1 or max_overflow > 1000:
         raise ValueError(
@@ -89,7 +89,7 @@ def _validate_load_assumptions_params(
             "Suggestions:\\n"
             "  • Use 200 for typical actuarial projections\\n"
             "  • Use 100 for shorter-term analyses\\n"
-            "  • Use 500+ only for very long-term projections"
+            "  • Use 500+ only for very long-term projections",
         )
     if overflow is not None and overflow != "auto" and not isinstance(overflow, str):
         raise ValueError(
@@ -97,14 +97,14 @@ def _validate_load_assumptions_params(
             "Examples:\\n"
             "  • overflow='auto' for automatic detection\\n"
             "  • overflow='Ultimate' for explicit overflow column\\n"
-            "  • overflow=None to disable overflow handling"
+            "  • overflow=None to disable overflow handling",
         )
     if metadata is not None and not isinstance(metadata, dict):
         raise ValueError(
             "metadata must be a dictionary or None\\n"
             "Examples:\\n"
             "  • metadata={'source': '2012 IAM Tables', 'version': '1.0'}\\n"
-            "  • metadata={'effective_date': '2013-01-01', 'basis': 'select_ultimate'}"
+            "  • metadata={'effective_date': '2013-01-01', 'basis': 'select_ultimate'}",
         )
     if lookup_keys is not None:
         if not isinstance(lookup_keys, list):
@@ -112,14 +112,14 @@ def _validate_load_assumptions_params(
                 "lookup_keys must be a list of strings or None\\n"
                 "Examples:\\n"
                 "  • lookup_keys=['issue_age', 'year_lookup'] for 2-key lookup\\n"
-                "  • lookup_keys=['age'] for single-key lookup"
+                "  • lookup_keys=['age'] for single-key lookup",
             )
         if not all(isinstance(key, str) and key.strip() for key in lookup_keys):
             raise ValueError(
                 "All lookup_keys must be non-empty strings\\n"
                 "Examples:\\n"
                 "  • lookup_keys=['issue_age', 'year_lookup']\\n"
-                "  • lookup_keys=['age', 'duration']"
+                "  • lookup_keys=['age', 'duration']",
             )
 
     # Validate additional_keys using the validation module
@@ -128,8 +128,8 @@ def _validate_load_assumptions_params(
 
 def _determine_table_processing_strategy(
     df: pl.DataFrame,
-    id_param: Union[str, list[str], None],
-    value_vars_param: Union[list[str], None],
+    id_param: str | list[str] | None,
+    value_vars_param: list[str] | None,
 ) -> tuple[list[str], list[str], list[str], bool]:
     """Analyzes DataFrame shape and determines if it's wide, and which columns to melt.
 
@@ -138,7 +138,8 @@ def _determine_table_processing_strategy(
     """
     try:
         id_columns, numeric_columns, text_columns, is_wide = _analyse_shape(
-            df, id_param
+            df,
+            id_param,
         )
     except ValueError as e:
         logger.error(f"Failed to analyze table structure: {e}")
@@ -149,7 +150,7 @@ def _determine_table_processing_strategy(
         missing_value_vars = [col for col in value_vars_param if col not in df.columns]
         if missing_value_vars:
             raise ValueError(
-                f"Specified value_vars columns not found in DataFrame: {missing_value_vars}"
+                f"Specified value_vars columns not found in DataFrame: {missing_value_vars}",
             )
         columns_to_melt = value_vars_param
         is_wide = True  # Force wide if value_vars is specified
@@ -159,14 +160,14 @@ def _determine_table_processing_strategy(
     if not columns_to_melt:
         raise ValueError(
             "No columns found to use as values. "
-            "Specify value_vars or ensure there are numeric columns for values."
+            "Specify value_vars or ensure there are numeric columns for values.",
         )
     return id_columns, columns_to_melt, text_columns, is_wide
 
 
 def _prepare_final_keys(
     original_keys: list[str],
-    lookup_keys_param: Union[list[str], None],
+    lookup_keys_param: list[str] | None,
     expected_len: int,
     table_type_for_error: str,
 ) -> tuple[list[str], pl.DataFrame | None, dict[str, str]]:
@@ -185,9 +186,9 @@ def _prepare_final_keys(
                 f"lookup_keys length ({len(lookup_keys_param)}) must match number of "
                 f"id columns ({expected_len}) for {table_type_for_error} tables\\n"
                 f"Expected: {expected_len} keys for id columns: {original_keys}\\n"
-                f"Provided: {len(lookup_keys_param)} keys: {lookup_keys_param}"
+                f"Provided: {len(lookup_keys_param)} keys: {lookup_keys_param}",
             )
-        rename_mapping = dict(zip(original_keys, lookup_keys_param))
+        rename_mapping = dict(zip(original_keys, lookup_keys_param, strict=False))
         final_keys = lookup_keys_param
     return final_keys, df_to_rename, rename_mapping
 
@@ -196,7 +197,7 @@ def _process_curve_table_logic(
     df: pl.DataFrame,
     id_columns: list[str],
     value_param: str,
-    lookup_keys_param: Union[list[str], None],
+    lookup_keys_param: list[str] | None,
 ) -> tuple[pl.DataFrame, list[str]]:
     """Processes a DataFrame as a curve table.
 
@@ -227,10 +228,10 @@ def _process_wide_table_logic(
     columns_to_melt: list[str],
     text_columns: list[str],  # Needed for overflow detection if value_vars is None
     value_param: str,
-    overflow_param: Union[Literal["auto"], str, None],
+    overflow_param: Literal["auto"] | str | None,
     max_overflow_param: int,
-    lookup_keys_param: Union[list[str], None],
-    value_vars_param: Union[list[str], None],  # To guide overflow detection cols
+    lookup_keys_param: list[str] | None,
+    value_vars_param: list[str] | None,  # To guide overflow detection cols
 ) -> tuple[pl.DataFrame, list[str], str | None]:
     """Processes a DataFrame as a wide table, handling overflow and melting.
 
@@ -248,7 +249,8 @@ def _process_wide_table_logic(
 
         try:
             overflow_col_name_detected = _detect_overflow_column(
-                overflow_detection_cols, overflow_param
+                overflow_detection_cols,
+                overflow_param,
             )
         except ValueError as e:
             raise e
@@ -314,16 +316,16 @@ def _finalize_table_registration_and_log(
         logger.info(
             f"Successfully loaded wide table '{name}': "
             f"{len(tidy_df)} rows, {id_columns_len} id columns, "
-            f"{columns_to_melt_len or 0} value columns{expanded_info}"
+            f"{columns_to_melt_len or 0} value columns{expanded_info}",
         )
     else:
         logger.info(
             f"Successfully loaded curve table '{name}': "
-            f"{len(tidy_df)} rows, {id_columns_len} id columns"
+            f"{len(tidy_df)} rows, {id_columns_len} id columns",
         )
 
 
-def get_table_metadata(table_name: str) -> Dict[str, Any] | None:
+def get_table_metadata(table_name: str) -> dict[str, Any] | None:
     """Retrieve metadata for a registered assumption table.
 
     Actuarial assumption tables often contain important metadata about their
@@ -343,7 +345,7 @@ def get_table_metadata(table_name: str) -> Dict[str, Any] | None:
     Returns:
         dict | None: Copy of metadata dictionary if found, None otherwise
 
-    Examples
+    Examples:
     --------
     Scalar example - Retrieving Mortality Table Metadata::
 
@@ -410,6 +412,7 @@ def get_table_metadata(table_name: str) -> Dict[str, Any] | None:
         mortality_2012: 2012 IAM Mortality Tables
         mortality_2017: 2017 IAM Mortality Tables
         ```
+
     """
     metadata = _TABLE_METADATA.get(table_name)
     if metadata is not None:
@@ -417,7 +420,7 @@ def get_table_metadata(table_name: str) -> Dict[str, Any] | None:
     return None
 
 
-def list_tables_with_metadata() -> Dict[str, Dict[str, Any]]:
+def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
     """List all assumption tables that have metadata stored.
 
     This function provides an inventory of all loaded assumption tables that
@@ -434,7 +437,7 @@ def list_tables_with_metadata() -> Dict[str, Dict[str, Any]]:
     Returns:
         dict: Dictionary mapping table names to their metadata
 
-    Examples
+    Examples:
     --------
     Scalar example - Basic Inventory Report::
 
@@ -498,21 +501,22 @@ def list_tables_with_metadata() -> Dict[str, Dict[str, Any]]:
         mortality: 2 tables
         lapse: 1 tables
         ```
+
     """
     return _TABLE_METADATA.copy()
 
 
 def load_assumptions(
     name: str,
-    source: Union[str, Path, pl.DataFrame],
+    source: str | Path | pl.DataFrame,
     *,
-    id: Union[str, list[str], None] = None,
+    id: str | list[str] | None = None,
     value: str = "rate",
-    value_vars: Union[list[str], None] = None,
-    overflow: Union[Literal["auto"], str, None] = "auto",
+    value_vars: list[str] | None = None,
+    overflow: Literal["auto"] | str | None = "auto",
     max_overflow: int = 200,
     metadata: dict[str, Any] | None = None,
-    lookup_keys: Union[list[str], None] = None,
+    lookup_keys: list[str] | None = None,
     additional_keys: dict[str, Any] | None = None,
 ) -> pl.DataFrame:
     """Load and register assumption tables from various sources.
@@ -570,7 +574,7 @@ def load_assumptions(
         ValueError: For invalid parameters or malformed data.
         FileNotFoundError: If source file doesn't exist.
 
-    Examples
+    Examples:
     --------
     Basic curve loading::
 
@@ -686,6 +690,7 @@ def load_assumptions(
         qx = gs.assumption_lookup("issue_age", "year_lookup",
                                  table_name="mortality_table")
         ```
+
     """
     logger.info(f"Loading assumption table '{name}'")
 
@@ -720,12 +725,12 @@ def load_assumptions(
                 f"additional_keys contain column names that already exist in the data: {conflicting_keys}\n"
                 f"Existing columns: {existing_columns}\n"
                 f"Additional keys: {list(additional_keys.keys())}\n"
-                f"Please choose different names for additional_keys to avoid conflicts."
+                f"Please choose different names for additional_keys to avoid conflicts.",
             )
 
         for key, value_literal in additional_keys.items():
             df = df.with_columns(pl.lit(value_literal).alias(key))
-            logger.debug(f"Added column '{key}' with value {repr(value_literal)}")
+            logger.debug(f"Added column '{key}' with value {value_literal!r}")
 
     # Handle additional keys properly with auto-detection
     if additional_keys is not None and len(additional_keys) > 0:
@@ -735,10 +740,12 @@ def load_assumptions(
             # For auto-detection with additional keys, we need to run the detection on the ORIGINAL DataFrame
             # (before adding additional_keys columns) then add the additional keys
             original_df = df.select(
-                [col for col in df.columns if col not in additional_key_names]
+                [col for col in df.columns if col not in additional_key_names],
             )
             temp_id_columns, _, _, _ = _determine_table_processing_strategy(
-                original_df, None, value_vars
+                original_df,
+                None,
+                value_vars,
             )
 
             # Combine detected ID columns with additional keys
@@ -767,7 +774,10 @@ def load_assumptions(
 
     if not is_wide:
         tidy_df, final_keys = _process_curve_table_logic(
-            df, id_columns, value, lookup_keys
+            df,
+            id_columns,
+            value,
+            lookup_keys,
         )
     else:
         tidy_df, final_keys, overflow_col_name_for_log = _process_wide_table_logic(
@@ -807,7 +817,7 @@ def load_assumptions(
     }
     _store_table_config(name, config)
     logger.debug(
-        f"Stored configuration for table '{name}' for future append operations"
+        f"Stored configuration for table '{name}' for future append operations",
     )
 
     return tidy_df
@@ -815,16 +825,16 @@ def load_assumptions(
 
 def append_assumptions(
     name: str,
-    source: Union[str, Path, pl.DataFrame],
+    source: str | Path | pl.DataFrame,
     *,
     additional_keys: dict[str, Any] | None = None,  # Now optional
-    id: Union[str, list[str], None] = None,
+    id: str | list[str] | None = None,
     value: str = "rate",
-    value_vars: Union[list[str], None] = None,
-    overflow: Union[Literal["auto"], str, None] = "auto",
+    value_vars: list[str] | None = None,
+    overflow: Literal["auto"] | str | None = "auto",
     max_overflow: int = 200,
     metadata: dict[str, Any] | None = None,
-    lookup_keys: Union[list[str], None] = None,
+    lookup_keys: list[str] | None = None,
 ) -> pl.DataFrame:
     """Append data to an existing assumption table with additional keys.
 
@@ -871,7 +881,7 @@ def append_assumptions(
             or additional_keys create conflicts.
         FileNotFoundError: If source file doesn't exist.
 
-    Examples
+    Examples:
     --------
     Simple table extension (no additional_keys)::
 
@@ -975,6 +985,7 @@ def append_assumptions(
         rate = gs.assumption_lookup("product", "age", "variable",
                                    table_name="morbidity_table")
         ```
+
     """
     logger.info(f"Appending data to assumption table '{name}'")
 
@@ -1038,12 +1049,12 @@ def append_assumptions(
                 f"additional_keys contain column names that already exist in the data: {conflicting_keys}\n"
                 f"Existing columns: {existing_columns}\n"
                 f"Additional keys: {list(additional_keys.keys())}\n"
-                f"Please choose different names for additional_keys to avoid conflicts."
+                f"Please choose different names for additional_keys to avoid conflicts.",
             )
 
         for key, value_literal in additional_keys.items():
             df = df.with_columns(pl.lit(value_literal).alias(key))
-            logger.debug(f"Added column '{key}' with value {repr(value_literal)}")
+            logger.debug(f"Added column '{key}' with value {value_literal!r}")
     else:
         logger.debug("No additional keys provided - performing simple table extension")
 
@@ -1066,10 +1077,12 @@ def append_assumptions(
             # For auto-detection with additional keys, run detection on ORIGINAL DataFrame
             # (before additional_keys were added) to avoid classification issues
             original_df = df.select(
-                [col for col in df.columns if col not in additional_key_names]
+                [col for col in df.columns if col not in additional_key_names],
             )
             temp_id_columns, _, _, _ = _determine_table_processing_strategy(
-                original_df, None, effective_value_vars
+                original_df,
+                None,
+                effective_value_vars,
             )
 
             # Combine detected ID columns + additional_keys, with detected columns first
@@ -1103,7 +1116,10 @@ def append_assumptions(
 
     if not is_wide:
         tidy_df, final_keys = _process_curve_table_logic(
-            df, id_columns, effective_value, effective_lookup_keys
+            df,
+            id_columns,
+            effective_value,
+            effective_lookup_keys,
         )
     else:
         tidy_df, final_keys, overflow_col_name_for_log = _process_wide_table_logic(
@@ -1140,12 +1156,12 @@ def append_assumptions(
         logger.info(
             f"Successfully appended to wide table '{name}': "
             f"{len(tidy_df)} new rows, {len(id_columns)} id columns, "
-            f"{len(columns_to_melt)} value columns{expanded_info}"
+            f"{len(columns_to_melt)} value columns{expanded_info}",
         )
     else:
         logger.info(
             f"Successfully appended to curve table '{name}': "
-            f"{len(tidy_df)} new rows, {len(id_columns)} id columns"
+            f"{len(tidy_df)} new rows, {len(id_columns)} id columns",
         )
 
     logger.debug(f"Append operation completed for table '{name}'")
@@ -1153,7 +1169,9 @@ def append_assumptions(
 
 
 def assumption_lookup(
-    *keys: IntoExpr, table_name: str, validate: bool = True
+    *keys: IntoExpr,
+    table_name: str,
+    validate: bool = True,
 ) -> pl.Expr:
     """Enhanced assumption lookup with comprehensive validation.
 
@@ -1188,7 +1206,7 @@ def assumption_lookup(
             - Key names don't match table schema (order-sensitive)
             - Complex expressions that can't be validated
 
-    Examples
+    Examples:
     --------
     Basic validated lookup::
 
@@ -1321,6 +1339,7 @@ def assumption_lookup(
         ```text
         Validation error: Assumption table 'multi_key_table' not found...
         ```
+
     """
     if validate:
         logger.debug(f"Validating lookup for table '{table_name}' with keys: {keys}")
@@ -1339,7 +1358,7 @@ def assumption_lookup(
 
     # Create the actual plugin call to Rust lookup implementation
     logger.debug(
-        f"Creating lookup expression for table '{table_name}' with {len(key_exprs)} keys"
+        f"Creating lookup expression for table '{table_name}' with {len(key_exprs)} keys",
     )
 
     return register_plugin_function(
@@ -1363,6 +1382,7 @@ def _validate_lookup_parameters(keys: tuple, table_name: str) -> None:
 
     Raises:
         ValueError: If any validation checks fail
+
     """
     # Validate table exists
     _validate_table_exists(table_name)
@@ -1379,7 +1399,7 @@ def _validate_lookup_parameters(keys: tuple, table_name: str) -> None:
                 # This is a complex expression, not a simple column reference
                 raise ValueError(
                     f"Cannot validate complex expression at position {i}: {key}. "
-                    f"Use simple column names or set validate=False for complex expressions."
+                    f"Use simple column names or set validate=False for complex expressions.",
                 )
 
             try:
@@ -1390,12 +1410,12 @@ def _validate_lookup_parameters(keys: tuple, table_name: str) -> None:
                 else:
                     raise ValueError(
                         f"Cannot validate expression at position {i}. "
-                        f"Use simple column names or set validate=False for complex expressions."
+                        f"Use simple column names or set validate=False for complex expressions.",
                     )
             except Exception:
                 raise ValueError(
                     f"Cannot validate expression at position {i}: {key}. "
-                    f"Use simple column names or set validate=False for complex expressions."
+                    f"Use simple column names or set validate=False for complex expressions.",
                 )
         else:
             # For other types, convert to string and hope for the best
@@ -1403,7 +1423,7 @@ def _validate_lookup_parameters(keys: tuple, table_name: str) -> None:
             if not key_name or key_name == "None":
                 raise ValueError(
                     f"Cannot validate expression at position {i}: {key}. "
-                    f"Use simple column names or set validate=False for complex expressions."
+                    f"Use simple column names or set validate=False for complex expressions.",
                 )
             key_names.append(key_name)
 
@@ -1428,6 +1448,7 @@ def _validate_table_exists(table_name: str) -> None:
     ValueError
         If table doesn't exist with helpful error message including
         available tables and suggestions for resolution
+
     """
     registry = PyAssumptionTableRegistry()
 
@@ -1444,7 +1465,7 @@ def _validate_table_exists(table_name: str) -> None:
             f"Assumption table '{table_name}' not found. "
             f"Available tables: {available_tables}\n"
             f"Suggestion: Check table name spelling or ensure the table has been loaded "
-            f"using load_assumptions() or append_assumptions()."
+            f"using load_assumptions() or append_assumptions().",
         )
 
 
@@ -1467,6 +1488,7 @@ def _validate_table_keys(table_name: str, lookup_keys: list[str]) -> None:
     ValueError
         If key count or names don't match table schema with detailed
         error messages showing expected vs actual keys
+
     """
     registry = PyAssumptionTableRegistry()
     table = registry.get_table(table_name)
@@ -1482,7 +1504,7 @@ def _validate_table_keys(table_name: str, lookup_keys: list[str]) -> None:
         # If Rust methods aren't implemented yet, provide a helpful message
         logger.warning(
             f"Table metadata methods not yet implemented in Rust. "
-            f"Skipping key validation for table '{table_name}'."
+            f"Skipping key validation for table '{table_name}'.",
         )
         return
     except Exception as e:
@@ -1496,21 +1518,21 @@ def _validate_table_keys(table_name: str, lookup_keys: list[str]) -> None:
             f"Expected {table_key_count} keys: {table_key_columns}, "
             f"got {len(lookup_keys)}: {lookup_keys}\n"
             f"Suggestion: Ensure you provide exactly {table_key_count} lookup keys "
-            f"in the correct order."
+            f"in the correct order.",
         )
 
     # Validate key names match (order-sensitive)
     for i, (provided_key, expected_key) in enumerate(
-        zip(lookup_keys, table_key_columns)
+        zip(lookup_keys, table_key_columns, strict=False),
     ):
         if provided_key != expected_key:
             raise ValueError(
                 f"Key name mismatch at position {i} for table '{table_name}'. "
                 f"Expected '{expected_key}', got '{provided_key}'. "
                 f"Full expected order: {table_key_columns}\n"
-                f"Suggestion: Ensure keys are provided in the exact order the table was created."
+                f"Suggestion: Ensure keys are provided in the exact order the table was created.",
             )
 
     logger.debug(
-        f"Key validation passed for table '{table_name}' with keys: {lookup_keys}"
+        f"Key validation passed for table '{table_name}' with keys: {lookup_keys}",
     )

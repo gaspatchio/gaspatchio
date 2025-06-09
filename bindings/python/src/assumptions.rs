@@ -7,13 +7,19 @@ use pyo3_polars::derive::polars_expr;
 use pyo3_polars::PyDataFrame;
 
 use pyo3::prelude::*;
+use serde::Deserialize;
 
 // Import the core logic function and assume Kwargs struct is defined there
 use gaspatchio_core_lib::assumptions::{
     append_to_assumption_table_global, get_global_assumption_registry,
     register_assumption_table_global, reset_global_assumption_registry,
 };
-use gaspatchio_core_lib::index::{perform_lookup, AssumptionLookupKwargs}; // Assuming moved Kwargs struct
+
+// Kwargs struct for the assumption lookup plugin
+#[derive(Deserialize, Debug, Clone)]
+pub struct AssumptionLookupKwargs {
+    pub table_name: String,
+}
 
 // --- Binding Plugin Implementation ---
 
@@ -24,24 +30,6 @@ fn lookup_output_type(_input_fields: &[Field]) -> PolarsResult<Field> {
         // Vector lookup returns a list
         DataType::List(Box::new(value_dtype)),
     ))
-}
-
-// This is the function Polars executes. It wraps the core logic.
-// Polars finds it by symbol name when the corresponding expression is evaluated.
-#[polars_expr(output_type_func=lookup_output_type)]
-fn lookup_plugin_binding(
-    inputs: &[Series],              // These are the key columns
-    kwargs: AssumptionLookupKwargs, // Use the imported Kwargs struct directly
-) -> PolarsResult<Series> {
-    if inputs.is_empty() {
-        // Use polars_err! macro for better error creation
-        return Err(polars_err!(ComputeError: "Lookup requires at least one key column."));
-    }
-
-    let table_name = &kwargs.table_name; // Get table name from kwargs, pass as &str
-    let key_series_refs: Vec<&Series> = inputs.iter().collect(); // All inputs are keys now
-
-    perform_lookup(table_name, &key_series_refs) // Pass table name as &str
 }
 
 #[polars_expr(output_type_func=lookup_output_type)]
@@ -58,9 +46,31 @@ fn lookup_by_table_and_hash(
     let key_series_refs: Vec<&Series> = inputs.iter().collect(); // All inputs are keys now
 
     let registry = get_global_assumption_registry();
+    
+    // Debug logging to diagnose the issue
+    log::debug!(
+        "lookup_by_table_and_hash: Looking for table '{}'. Available tables: {:?}",
+        table_name,
+        registry.list_tables()
+    );
+    
     let table = registry
         .get_table(table_name)
-        .ok_or_else(|| polars_err!(ComputeError: "Table '{}' not found", table_name))?;
+        .ok_or_else(|| {
+            let available_tables = registry.list_tables();
+            polars_err!(
+                ComputeError: 
+                "Table '{}' not found in AssumptionTableRegistry. Available tables: {:?}. Registry has {} tables.",
+                table_name, available_tables, available_tables.len()
+            )
+        })?;
+        
+    log::debug!(
+        "lookup_by_table_and_hash: Found table '{}', performing lookup with {} key columns",
+        table_name,
+        key_series_refs.len()
+    );
+    
     table.lookup_series(&key_series_refs)
 }
 
@@ -85,9 +95,22 @@ impl PyAssumptionTableRegistry {
     ) -> PyResult<()> {
         let rust_df: DataFrame = df.into();
 
+        log::debug!(
+            "PyAssumptionTableRegistry::register_table: Registering table '{}' with {} rows, keys: {:?}, value_column: '{}'",
+            name, rust_df.height(), keys, value_column
+        );
+
         // Use the global registry function
-        register_assumption_table_global(name, rust_df, keys, value_column)
+        register_assumption_table_global(name.clone(), rust_df, keys, value_column)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e)))?;
+
+        // Verify registration
+        let registry = get_global_assumption_registry();
+        let available_tables = registry.list_tables();
+        log::debug!(
+            "PyAssumptionTableRegistry::register_table: Successfully registered '{}'. Registry now has {} tables: {:?}",
+            name, available_tables.len(), available_tables
+        );
 
         Ok(())
     }

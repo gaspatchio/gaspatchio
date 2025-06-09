@@ -23,7 +23,7 @@ fn benchmark_fill_series(c: &mut Criterion) {
             b.iter(|| {
                 fill_series(
                     black_box(&inputs),
-                    black_box(FillSeriesKwargs {
+                    black_box(&FillSeriesKwargs {
                         start: kwargs.start,
                         increment: kwargs.increment,
                     }),
