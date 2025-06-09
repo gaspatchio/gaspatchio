@@ -58,7 +58,13 @@ if TYPE_CHECKING:
 
 # --- Stub for DtNamespaceProxy --- ADDED ---
 class DtNamespaceProxy:
-    """Stub for DtNamespaceProxy for type hinting."""
+    """Date and time accessor for actuarial data analysis.
+    
+    Provides specialized date and time operations essential for actuarial modeling,
+    including policy anniversary calculations, age computations, duration analysis,
+    and regulatory date-based calculations. Enables efficient date arithmetic and
+    extraction of date components for pricing models, reserve calculations, and
+    experience studies."""
 
     _parent_proxy: "ParentProxyType"
     _parent_af: "ActuarialFrame | None"
@@ -67,16 +73,282 @@ class DtNamespaceProxy:
         self, parent_proxy: "ParentProxyType", parent_af: "ActuarialFrame | None"
     ) -> None: ...
     def year(self) -> "ExpressionProxy":
-        """Return an ExpressionProxy with the calendar year (i32)."""
+        """Extract calendar year from date values.
+        
+        Extracts the calendar year component from date columns, essential for
+        actuarial analysis requiring year-based grouping, trend analysis, and
+        regulatory reporting. Converts date values to four-digit year integers
+        for policy anniversary calculations, experience studies, and temporal
+        analysis in actuarial modeling.
+
+        !!! note "When to use"
+            * **Policy Anniversary Analysis:** Group policies by issue year for
+                experience studies and persistency analysis.
+            * **Regulatory Reporting:** Extract years for annual statements,
+                solvency reports, and regulatory filings.
+            * **Trend Analysis:** Analyze mortality, lapse, and claims trends
+                across calendar years.
+            * **Vintage Analysis:** Group model points by policy vintage year
+                for cohort-based analysis and pricing studies.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression containing the calendar year as integers.
+
+        Examples
+        --------
+        **Scalar Example: Policy Issue Year**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+        
+        data = {
+            "policy_id": ["P001", "P002", "P003"],
+            "issue_date": ["2020-03-15", "2021-07-22", "2019-12-01"],
+        }
+        af = ActuarialFrame(data)
+        result = af.with_columns(
+            af["issue_date"].str.to_date().dt.year().alias("issue_year")
+        ).collect()
+        print(result)
+        ```
+
+        ```text
+        shape: (3, 2)
+        ┌───────────┬────────────┐
+        │ policy_id ┆ issue_year │
+        │ ---       ┆ ---        │
+        │ str       ┆ i32        │
+        ╞═══════════╪════════════╡
+        │ P001      ┆ 2020       │
+        │ P002      ┆ 2021       │
+        │ P003      ┆ 2019       │
+        └───────────┴────────────┘
+        ```
+
+        **Vector Example: Claim Year Analysis**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        
+        data = {
+            "policy_id": ["P001", "P002"],
+            "age": [55, 38],
+            "month": [
+                [1, 2, 3, 4],
+                [1, 2, 3, 4]
+            ],
+            "claim_dates": [
+                ["2020-01-15", "2020-06-30", "2021-03-22", "2021-12-15"],
+                ["2019-12-01", "2020-08-15", "2021-11-30", "2022-05-10"]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        af["claim_years"] = af["claim_dates"].str.to_date().dt.year()
+        
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 5)
+        ┌───────────┬─────┬──────────────┬─────────────────────────────┬─────────────────────────┐
+        │ policy_id ┆ age ┆ month        ┆ claim_dates                 ┆ claim_years             │
+        │ ---       ┆ --- ┆ ---          ┆ ---                         ┆ ---                     │
+        │ str       ┆ i64 ┆ list[i64]    ┆ list[str]                   ┆ list[i32]               │
+        ╞═══════════╪═════╪══════════════╪═════════════════════════════╪═════════════════════════╡
+        │ P001      ┆ 55  ┆ [1, 2, 3, 4] ┆ ["2020-01-15", "2020-06-…  ┆ [2020, 2020, 2021, …   │
+        │ P002      ┆ 38  ┆ [1, 2, 3, 4] ┆ ["2019-12-01", "2020-08-…  ┆ [2019, 2020, 2021, …   │
+        └───────────┴─────┴──────────────┴─────────────────────────────┴─────────────────────────┘
+        ```
+        """
         ...
 
     # Add other common dt methods as they are implemented or needed for type hints
     # For now, __getattr__ will handle them dynamically at runtime, but stubs improve DX.
     def month(self) -> "ExpressionProxy":
-        """Return an ExpressionProxy with the calendar month (i8)."""
+        """Extract calendar month from date values.
+        
+        Extracts the calendar month component (1-12) from date columns for
+        seasonal analysis, anniversary tracking, and premium payment scheduling.
+        Essential for actuarial calculations requiring month-based grouping,
+        seasonal mortality patterns, and policy administration workflows.
+
+        !!! note "When to use"
+            * **Premium Payment Cycles:** Extract months for premium billing
+                schedules and payment frequency analysis.
+            * **Seasonal Analysis:** Analyze mortality, lapse, and claims patterns
+                by calendar month for seasonal adjustments.
+            * **Policy Anniversaries:** Track monthly anniversary dates for
+                reserve calculations and policy reviews.
+            * **Regulatory Reporting:** Extract months for quarterly and annual
+                regulatory filing requirements.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression containing the calendar month as integers (1-12).
+
+        Examples
+        --------
+        **Scalar Example: Premium Payment Month**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        
+        data = {
+            "policy_id": ["P001", "P002", "P003"],
+            "payment_date": ["2023-03-15", "2023-07-22", "2023-12-01"],
+        }
+        af = ActuarialFrame(data)
+        result = af.with_columns(
+            af["payment_date"].str.to_date().dt.month().alias("payment_month")
+        ).collect()
+        print(result)
+        ```
+
+        ```text
+        shape: (3, 2)
+        ┌───────────┬───────────────┐
+        │ policy_id ┆ payment_month │
+        │ ---       ┆ ---           │
+        │ str       ┆ i8            │
+        ╞═══════════╪═══════════════╡
+        │ P001      ┆ 3             │
+        │ P002      ┆ 7             │
+        │ P003      ┆ 12            │
+        └───────────┴───────────────┘
+        ```
+
+        **Vector Example: Monthly Premium Schedule**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        
+        data = {
+            "policy_id": ["P001", "P002"],
+            "age": [45, 52],
+            "month": [
+                [1, 2, 3, 4],
+                [1, 2, 3, 4]
+            ],
+            "premium_dates": [
+                ["2023-01-15", "2023-04-15", "2023-07-15", "2023-10-15"],
+                ["2023-02-28", "2023-05-31", "2023-08-31", "2023-11-30"]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        af["premium_months"] = af["premium_dates"].str.to_date().dt.month()
+        
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 5)
+        ┌───────────┬─────┬──────────────┬─────────────────────────────┬───────────────────┐
+        │ policy_id ┆ age ┆ month        ┆ premium_dates               ┆ premium_months    │
+        │ ---       ┆ --- ┆ ---          ┆ ---                         ┆ ---               │
+        │ str       ┆ i64 ┆ list[i64]    ┆ list[str]                   ┆ list[i8]          │
+        ╞═══════════╪═════╪══════════════╪═════════════════════════════╪═══════════════════╡
+        │ P001      ┆ 45  ┆ [1, 2, 3, 4] ┆ ["2023-01-15", "2023-04-…  ┆ [1, 4, 7, 10]     │
+        │ P002      ┆ 52  ┆ [1, 2, 3, 4] ┆ ["2023-02-28", "2023-05-…  ┆ [2, 5, 8, 11]     │
+        └───────────┴─────┴──────────────┴─────────────────────────────┴───────────────────┘
+        ```
+        """
         ...
     def day(self) -> "ExpressionProxy":
-        """Return an ExpressionProxy with the day of month (i8)."""
+        """Extract day of month from date values.
+        
+        Extracts the day component (1-31) from date columns for precise date
+        calculations, payment processing, and policy administration. Essential
+        for actuarial workflows requiring specific day-based analysis, billing
+        cycles, and anniversary date tracking in insurance operations.
+
+        !!! note "When to use"
+            * **Payment Due Dates:** Extract specific days for premium billing
+                schedules and payment reminder systems.
+            * **Policy Anniversaries:** Calculate exact anniversary dates for
+                policy reviews and benefit adjustments.
+            * **Grace Period Calculations:** Determine exact day counts for
+                grace periods and late payment penalties.
+            * **Regulatory Deadlines:** Track specific calendar days for
+                regulatory filing and compliance requirements.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression containing the day of month as integers (1-31).
+
+        Examples
+        --------
+        **Scalar Example: Payment Due Day**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        
+        data = {
+            "policy_id": ["P001", "P002", "P003"],
+            "due_date": ["2023-03-15", "2023-07-01", "2023-12-31"],
+        }
+        af = ActuarialFrame(data)
+        result = af.with_columns(
+            af["due_date"].str.to_date().dt.day().alias("due_day")
+        ).collect()
+        print(result)
+        ```
+
+        ```text
+        shape: (3, 2)
+        ┌───────────┬─────────┐
+        │ policy_id ┆ due_day │
+        │ ---       ┆ ---     │
+        │ str       ┆ i8      │
+        ╞═══════════╪═════════╡
+        │ P001      ┆ 15      │
+        │ P002      ┆ 1       │
+        │ P003      ┆ 31      │
+        └───────────┴─────────┘
+        ```
+
+        **Vector Example: Anniversary Day Tracking**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        
+        data = {
+            "policy_id": ["P001", "P002"],
+            "age": [35, 42],
+            "month": [
+                [1, 2, 3, 4],
+                [1, 2, 3, 4]
+            ],
+            "anniversary_dates": [
+                ["2023-01-15", "2023-02-15", "2023-03-15", "2023-04-15"],
+                ["2023-01-28", "2023-02-28", "2023-03-28", "2023-04-28"]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        af["anniversary_days"] = af["anniversary_dates"].str.to_date().dt.day()
+        
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 5)
+        ┌───────────┬─────┬──────────────┬─────────────────────────────┬──────────────────┐
+        │ policy_id ┆ age ┆ month        ┆ anniversary_dates           ┆ anniversary_days │
+        │ ---       ┆ --- ┆ ---          ┆ ---                         ┆ ---              │
+        │ str       ┆ i64 ┆ list[i64]    ┆ list[str]                   ┆ list[i8]         │
+        ╞═══════════╪═════╪══════════════╪═════════════════════════════╪══════════════════╡
+        │ P001      ┆ 35  ┆ [1, 2, 3, 4] ┆ ["2023-01-15", "2023-02-…  ┆ [15, 15, 15, 15] │
+        │ P002      ┆ 42  ┆ [1, 2, 3, 4] ┆ ["2023-01-28", "2023-02-…  ┆ [28, 28, 28, 28] │
+        └───────────┴─────┴──────────────┴─────────────────────────────┴──────────────────┘
+        ```
+        """
         ...
     def __getattr__(
         self, name: str
@@ -84,7 +356,13 @@ class DtNamespaceProxy:
 
 # --- Stub for StringNamespaceProxy --- ADDED ---
 class StringNamespaceProxy:
-    """Stub for StringNamespaceProxy for type hinting."""
+    """String manipulation accessor for actuarial text data processing.
+    
+    Provides comprehensive string operations for actuarial data management,
+    including policy number formatting, product code standardization, address
+    cleansing, and regulatory text processing. Essential for data quality
+    improvements, matching operations, and preparing text data for actuarial
+    analysis and reporting."""
 
     _parent_proxy: (
         "ParentProxyType"  # Assuming ParentProxyType is ColumnProxy | ExpressionProxy
@@ -140,7 +418,13 @@ class StringNamespaceProxy:
 
 # Base class for shared proxy methods/properties
 class _BaseProxy:
-    """Base stub containing methods/properties common to ColumnProxy and ExpressionProxy."""
+    """Base proxy foundation for actuarial data operations.
+    
+    Provides core functionality shared across column and expression proxies,
+    including arithmetic operations, comparisons, and conditional logic essential
+    for actuarial calculations. Enables seamless mathematical operations on
+    premium calculations, reserve computations, cash flow projections, and
+    statistical analysis in actuarial modeling workflows."""
 
     # --- Operator Overloads (returning ExpressionProxy) ---
     def __add__(self, other: Any) -> "ExpressionProxy": ...
@@ -210,23 +494,23 @@ class _BaseProxy:
             "loading_factor": [1.15, 1.20, 1.10],
         }
         af = ActuarialFrame(data)
-        result = af.select(
-            gross_premium=(af["base_premium"] * af["loading_factor"]).alias("gross_premium")
+        result = af.with_columns(
+            (af["base_premium"] * af["loading_factor"]).alias("gross_premium")
         ).collect()
         print(result)
         ```
 
         ```text
         shape: (3, 1)
-        ┌──────────────┐
+        ┌───────────────┐
         │ gross_premium │
-        │ ---          │
-        │ f64          │
-        ╞══════════════╡
-        │ 1150.0       │
-        │ 1440.0       │
-        │ 880.0        │
-        └──────────────┘
+        │ ---           │
+        │ f64           │
+        ╞═══════════════╡
+        │ 1150.0        │
+        │ 1440.0        │
+        │ 880.0         │
+        └───────────────┘
         ```
 
         **Vector Example: Multiple Derived Calculations**
@@ -240,24 +524,24 @@ class _BaseProxy:
             "age": [35, 45, 55],
         }
         af = ActuarialFrame(data)
-        result = af.select(
-            premium_rate=(af["premium"] / af["sum_assured"] * 1000).alias("premium_per_1000"),
-            age_band=((af["age"] // 10) * 10).alias("age_decade")
+        result = af.with_columns(
+            (af["premium"] / af["sum_assured"] * 1000).alias("premium_per_1000"),
+            ((af["age"] // 10) * 10).alias("age_decade")
         ).collect()
         print(result)
         ```
 
         ```text
         shape: (3, 2)
-        ┌─────────────────┬────────────┐
-        │ premium_per_1000 ┆ age_decade │
-        │ ---             ┆ ---        │
-        │ f64             ┆ i64        │
-        ╞═════════════════╪════════════╡
-        │ 12.0            ┆ 30         │
-        │ 11.2            ┆ 40         │
-        │ 9.0             ┆ 50         │
-        └─────────────────┴────────────┘
+        ┌──────────────┬──────────┐
+        │ premium_rate ┆ age_band │
+        │ ---          ┆ ---      │
+        │ f64          ┆ i64      │
+        ╞══════════════╪══════════╡
+        │ 12.0         ┆ 30       │
+        │ 11.2         ┆ 40       │
+        │ 9.0          ┆ 50       │
+        └──────────────┴──────────┘
         ```
 
         """
@@ -321,13 +605,13 @@ class _BaseProxy:
         ┌──────────────┬──────────────┬──────────────┐
         │ applicant_id ┆ original_age ┆ eligible_age │
         │ ---          ┆ ---          ┆ ---          │
-        │ str          ┆ i64          ┆ f64          │
+        │ str          ┆ i64          ┆ i64          │
         ╞══════════════╪══════════════╪══════════════╡
-        │ A001         ┆ 16           ┆ 18.0         │
-        │ A002         ┆ 25           ┆ 25.0         │
-        │ A003         ┆ 35           ┆ 35.0         │
-        │ A004         ┆ 70           ┆ 65.0         │
-        │ A005         ┆ 85           ┆ 65.0         │
+        │ A001         ┆ 16           ┆ 18           │
+        │ A002         ┆ 25           ┆ 25           │
+        │ A003         ┆ 35           ┆ 35           │
+        │ A004         ┆ 70           ┆ 65           │
+        │ A005         ┆ 85           ┆ 65           │
         └──────────────┴──────────────┴──────────────┘
         ```
 
@@ -337,30 +621,34 @@ class _BaseProxy:
         from gaspatchio_core import ActuarialFrame
 
         data = {
-            "claim_type": ["Auto", "Property", "Liability", "Health"],
-            "claim_amount": [5000.0, 150000.0, 25000.0, 500000.0],
+            "policy_id": ["P001", "P002"],
+            "age": [35, 42],
+            "month": [
+                [1, 2, 3, 4],
+                [1, 2, 3, 4]
+            ],
+            "claim_amounts": [
+                [5000.0, 150000.0, 25000.0, 500000.0],
+                [8000.0, 75000.0, 120000.0, 45000.0]
+            ]
         }
         af = ActuarialFrame(data)
-        result = af.select(
-            af["claim_type"],
-            original_amount=af["claim_amount"],
-            capped_amount=af["claim_amount"].clip(1000.0, 100000.0)
-        ).collect()
-        print(result)
+        
+        af["capped_claims"] = af["claim_amounts"].clip(10000.0, 100000.0)
+        
+        print(af.collect())
         ```
 
         ```text
-        shape: (4, 3)
-        ┌─────────────┬─────────────────┬───────────────┐
-        │ claim_type  ┆ original_amount ┆ capped_amount │
-        │ ---         ┆ ---             ┆ ---           │
-        │ str         ┆ f64             ┆ f64           │
-        ╞═════════════╪═════════════════╪═══════════════╡
-        │ Auto        ┆ 5000.0          ┆ 5000.0        │
-        │ Property    ┆ 150000.0        ┆ 100000.0      │
-        │ Liability   ┆ 25000.0         ┆ 25000.0       │
-        │ Health      ┆ 500000.0        ┆ 100000.0      │
-        └─────────────┴─────────────────┴───────────────┘
+        shape: (2, 5)
+        ┌───────────┬─────┬─────────────┬────────────────────────────────┬─────────────────────────────────┐
+        │ policy_id ┆ age ┆ month       ┆ claim_amounts                  ┆ capped_claims                   │
+        │ ---       ┆ --- ┆ ---         ┆ ---                            ┆ ---                             │
+        │ str       ┆ i64 ┆ list[i64]   ┆ list[f64]                      ┆ list[f64]                       │
+        ╞═══════════╪═════╪═════════════╪════════════════════════════════╪═════════════════════════════════╡
+        │ P001      ┆ 35  ┆ [1, 2, … 4] ┆ [5000.0, 150000.0, … 500000.0] ┆ [10000.0, 100000.0, … 100000.0] │
+        │ P002      ┆ 42  ┆ [1, 2, … 4] ┆ [8000.0, 75000.0, … 45000.0]   ┆ [10000.0, 75000.0, … 45000.0]   │
+        └───────────┴─────┴─────────────┴────────────────────────────────┴─────────────────────────────────┘
         ```
 
         """
@@ -412,7 +700,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            policy_id=af["policy_number"].cast(pl.Int64),
+            af["policy_number"].cast(pl.Int64).alias("policy_id"),
             af["premium"]
         ).collect()
         print(result)
@@ -452,16 +740,16 @@ class _BaseProxy:
 
         ```text
         shape: (4, 2)
-        ┌───────────┬──────────────┐
-        │ age_group ┆ precise_rate │
-        │ ---       ┆ ---          │
-        │ str       ┆ decimal[10,6]│
-        ╞═══════════╪══════════════╡
-        │ 25-35     ┆ 0.001000     │
-        │ 36-45     ┆ 0.002000     │
-        │ 46-55     ┆ 0.004000     │
-        │ 56-65     ┆ 0.008000     │
-        └───────────┴──────────────┘
+        ┌───────────┬───────────────┐
+        │ age_group ┆ precise_rate  │
+        │ ---       ┆ ---           │
+        │ str       ┆ decimal[10,6] │
+        ╞═══════════╪═══════════════╡
+        │ 25-35     ┆ 0.001000      │
+        │ 36-45     ┆ 0.002000      │
+        │ 46-55     ┆ 0.004000      │
+        │ 56-65     ┆ 0.008000      │
+        └───────────┴───────────────┘
         ```
 
         """
@@ -525,9 +813,9 @@ class _BaseProxy:
         │ i64  ┆ f64           ┆ f64               │
         ╞══════╪═══════════════╪═══════════════════╡
         │ 1    ┆ 1.03          ┆ 1.03              │
-        │ 2    ┆ 1.025         ┆ 1.055750          │
-        │ 3    ┆ 1.04          ┆ 1.097980          │
-        │ 4    ┆ 1.035         ┆ 1.136409          │
+        │ 2    ┆ 1.025         ┆ 1.05575           │
+        │ 3    ┆ 1.04          ┆ 1.09798           │
+        │ 4    ┆ 1.035         ┆ 1.1364093         │
         └──────┴───────────────┴───────────────────┘
         ```
 
@@ -557,14 +845,14 @@ class _BaseProxy:
 
         ```text
         shape: (2, 5)
-        ┌───────────┬─────┬──────────────┬──────────────────────────────────┬──────────────────────────────────┐
-        │ policy_id ┆ age ┆ month        ┆ monthly_survival_rate            ┆ cumulative_survival              │
-        │ ---       ┆ --- ┆ ---          ┆ ---                              ┆ ---                              │
-        │ str       ┆ i64 ┆ list[i64]    ┆ list[f64]                        ┆ list[f64]                        │
-        ╞═══════════╪═════╪══════════════╪══════════════════════════════════╪══════════════════════════════════╡
-        │ P001      ┆ 55  ┆ [1, 2, 3, 4] ┆ [0.9995, 0.9994, 0.9993, 0.9992]┆ [0.9995, 0.9989, 0.9982, 0.9974]│
-        │ P002      ┆ 38  ┆ [1, 2, 3, 4] ┆ [0.9998, 0.9998, 0.9997, 0.9997]┆ [0.9998, 0.9996, 0.9993, 0.9990]│
-        └───────────┴─────┴──────────────┴──────────────────────────────────┴──────────────────────────────────┘
+        ┌───────────┬─────┬─────────────┬────────────────────────────┬─────────────────────────────────┐
+        │ policy_id ┆ age ┆ month       ┆ monthly_survival_rate      ┆ cumulative_survival             │
+        │ ---       ┆ --- ┆ ---         ┆ ---                        ┆ ---                             │
+        │ str       ┆ i64 ┆ list[i64]   ┆ list[f64]                  ┆ list[f64]                       │
+        ╞═══════════╪═════╪═════════════╪════════════════════════════╪═════════════════════════════════╡
+        │ P001      ┆ 55  ┆ [1, 2, … 4] ┆ [0.9995, 0.9994, … 0.9992] ┆ [0.9995, 0.9989003, … 0.997403] │
+        │ P002      ┆ 38  ┆ [1, 2, … 4] ┆ [0.9998, 0.9998, … 0.9997] ┆ [0.9998, 0.9996, … 0.999]       │
+        └───────────┴─────┴─────────────┴────────────────────────────┴─────────────────────────────────┘
         ```
         """
         ...
@@ -612,7 +900,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         avg_premium_expr = af["premium"].mean()
-        result = af.select(avg_premium=avg_premium_expr).collect()
+        result = af.with_columns(avg_premium_expr.alias("avg_premium")).collect()
         print(result)
         ```
 
@@ -637,8 +925,8 @@ class _BaseProxy:
             "premium": [1200.0, 1500.0, 800.0, 2000.0, 1100.0],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            avg_premium=af["premium"].mean()
+        result = af.with_columns(
+            af["premium"].mean().alias("avg_premium")
         ).collect()
         print(result)
         ```
@@ -701,7 +989,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         min_claim_expr = af["claim_amount"].min()
-        result = af.select(min_claim=min_claim_expr).collect()
+        result = af.with_columns(min_claim_expr.alias("min_claim")).collect()
         print(result)
         ```
 
@@ -726,8 +1014,8 @@ class _BaseProxy:
             "premium": [1200.0, 800.0, 1500.0, 2000.0, 1100.0],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            min_premium=af["premium"].min()
+        result = af.with_columns(
+            af["premium"].min().alias("min_premium")
         ).collect()
         print(result)
         ```
@@ -790,7 +1078,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         max_claim_expr = af["claim_amount"].max()
-        result = af.select(max_claim=max_claim_expr).collect()
+        result = af.with_columns(max_claim_expr.alias("max_claim")).collect()
         print(result)
         ```
 
@@ -815,8 +1103,8 @@ class _BaseProxy:
             "premium": [1200.0, 800.0, 1500.0, 2000.0, 1100.0],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            max_premium=af["premium"].max()
+        result = af.with_columns(
+            af["premium"].max().alias("max_premium")
         ).collect()
         print(result)
         ```
@@ -879,7 +1167,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         count_claims_expr = af["claim_amount"].count()
-        result = af.select(valid_claims=count_claims_expr).collect()
+        result = af.with_columns(count_claims_expr.alias("valid_claims")).collect()
         print(result)
         ```
 
@@ -904,8 +1192,8 @@ class _BaseProxy:
             "policy_id": ["P001", "P002", None, "P004", "P005"],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            policy_count=af["policy_id"].count()
+        result = af.with_columns(
+            af["policy_id"].count().alias("policy_count")
         ).collect()
         print(result)
         ```
@@ -996,8 +1284,8 @@ class _BaseProxy:
             "beneficiary": ["John Doe", None, "Jane Smith", None, "Bob Wilson"],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            missing_beneficiary_count=af["beneficiary"].is_null().sum()
+        result = af.with_columns(
+            af["beneficiary"].is_null().sum().alias("missing_beneficiary_count")
         ).collect()
         print(result)
         ```
@@ -1079,16 +1367,16 @@ class _BaseProxy:
 
         ```text
         shape: (4, 2)
-        ┌───────────┬────────────────────┐
+        ┌───────────┬─────────────────────┐
         │ policy_id ┆ claim_amount_filled │
-        │ ---       ┆ ---                │
-        │ str       ┆ f64                │
-        ╞═══════════╪════════════════════╡
-        │ P001      ┆ 1200.0             │
-        │ P002      ┆ 0.0                │
-        │ P003      ┆ 2800.0             │
-        │ P004      ┆ 0.0                │
-        └───────────┴────────────────────┘
+        │ ---       ┆ ---                 │
+        │ str       ┆ f64                 │
+        ╞═══════════╪═════════════════════╡
+        │ P001      ┆ 1200.0              │
+        │ P002      ┆ 0.0                 │
+        │ P003      ┆ 2800.0              │
+        │ P004      ┆ 0.0                 │
+        └───────────┴─────────────────────┘
         ```
 
         **Vector Example: Fill Missing Premium Payments with Forward Fill Strategy**
@@ -1112,18 +1400,18 @@ class _BaseProxy:
 
         ```text
         shape: (6, 4)
-        ┌───────┬──────────────────┬──────────────┬─────────────┐
+        ┌───────┬──────────────────┬────────────────┬─────────────┐
         │ month ┆ original_premium ┆ forward_filled ┆ zero_filled │
-        │ ---   ┆ ---              ┆ ---          ┆ ---         │
-        │ i64   ┆ f64              ┆ f64          ┆ f64         │
-        ╞═══════╪══════════════════╪══════════════╪═════════════╡
-        │ 1     ┆ 1200.0           ┆ 1200.0       ┆ 1200.0      │
-        │ 2     ┆ 1200.0           ┆ 1200.0       ┆ 1200.0      │
-        │ 3     ┆ null             ┆ 1200.0       ┆ 0.0         │
-        │ 4     ┆ null             ┆ 1200.0       ┆ 0.0         │
-        │ 5     ┆ 1200.0           ┆ 1200.0       ┆ 1200.0      │
-        │ 6     ┆ null             ┆ 1200.0       ┆ 0.0         │
-        └───────┴──────────────────┴──────────────┴─────────────┘
+        │ ---   ┆ ---              ┆ ---            ┆ ---         │
+        │ i64   ┆ f64              ┆ f64            ┆ f64         │
+        ╞═══════╪══════════════════╪════════════════╪═════════════╡
+        │ 1     ┆ 1200.0           ┆ 1200.0         ┆ 1200.0      │
+        │ 2     ┆ 1200.0           ┆ 1200.0         ┆ 1200.0      │
+        │ 3     ┆ null             ┆ 1200.0         ┆ 0.0         │
+        │ 4     ┆ null             ┆ 1200.0         ┆ 0.0         │
+        │ 5     ┆ 1200.0           ┆ 1200.0         ┆ 1200.0      │
+        │ 6     ┆ null             ┆ 1200.0         ┆ 0.0         │
+        └───────┴──────────────────┴────────────────┴─────────────┘
         ```
 
         """
@@ -1180,9 +1468,9 @@ class _BaseProxy:
         │ ---          │
         │ str          │
         ╞══════════════╡
-        │ TERM         │
-        │ WHOLE        │
         │ UL           │
+        │ WHOLE        │
+        │ TERM         │
         └──────────────┘
         ```
 
@@ -1196,8 +1484,8 @@ class _BaseProxy:
             "age": [35, 42, 35, 58, 42, 67],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            unique_ages=af["age"].unique()
+        result = af.with_columns(
+            af["age"].unique().alias("unique_ages")
         ).collect()
         print(result)
         ```
@@ -1292,8 +1580,8 @@ class _BaseProxy:
             "age": [45, 32, 58, 41, 62],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            sorted_ages=af["age"].sort()
+        result = af.with_columns(
+            af["age"].sort().alias("sorted_ages")
         ).collect()
         print(result)
         ```
@@ -1387,8 +1675,8 @@ class _BaseProxy:
             "age": [35, 42, 28, 45, 58, 33],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            first_ages=af["age"].head(2)
+        result = af.with_columns(
+            af["age"].head(2).alias("first_ages")
         ).collect()
         print(result)
         ```
@@ -1461,15 +1749,15 @@ class _BaseProxy:
 
         ```text
         shape: (3, 1)
-        ┌──────────────┐
+        ┌───────────────┐
         │ recent_claims │
-        │ ---          │
-        │ f64          │
-        ╞══════════════╡
-        │ 1200.0       │
-        │ 800.0        │
-        │ 3200.0       │
-        └──────────────┘
+        │ ---           │
+        │ f64           │
+        ╞═══════════════╡
+        │ 1200.0        │
+        │ 800.0         │
+        │ 3200.0        │
+        └───────────────┘
         ```
 
         **Vector Example: Last 2 Ages by Policy Type**
@@ -1482,8 +1770,8 @@ class _BaseProxy:
             "age": [35, 42, 28, 45, 58, 33],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            last_ages=af["age"].tail(2)
+        result = af.with_columns(
+            af["age"].tail(2).alias("last_ages")
         ).collect()
         print(result)
         ```
@@ -1577,8 +1865,8 @@ class _BaseProxy:
             "age": [35, 42, 28, 45, 58, 33],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            senior_ages=af["age"].filter(af["age"] >= 40)
+        result = af.with_columns(
+            af["age"].filter(af["age"] >= 40).alias("senior_ages")
         ).collect()
         print(result)
         ```
@@ -1656,17 +1944,17 @@ class _BaseProxy:
 
         ```text
         shape: (5, 3)
-        ┌─────────────┬─────────────────┬──────────────┐
+        ┌─────────────┬─────────────────┬───────────────┐
         │ policy_year ┆ current_premium ┆ prior_premium │
-        │ ---         ┆ ---             ┆ ---          │
-        │ i64         ┆ f64             ┆ f64          │
-        ╞═════════════╪═════════════════╪══════════════╡
-        │ 1           ┆ 1200.0          ┆ null         │
-        │ 2           ┆ 1260.0          ┆ 1200.0       │
-        │ 3           ┆ 1323.0          ┆ 1260.0       │
-        │ 4           ┆ 1389.0          ┆ 1323.0       │
-        │ 5           ┆ 1458.0          ┆ 1389.0       │
-        └─────────────┴─────────────────┴──────────────┘
+        │ ---         ┆ ---             ┆ ---           │
+        │ i64         ┆ f64             ┆ f64           │
+        ╞═════════════╪═════════════════╪═══════════════╡
+        │ 1           ┆ 1200.0          ┆ null          │
+        │ 2           ┆ 1260.0          ┆ 1200.0        │
+        │ 3           ┆ 1323.0          ┆ 1260.0        │
+        │ 4           ┆ 1389.0          ┆ 1323.0        │
+        │ 5           ┆ 1458.0          ┆ 1389.0        │
+        └─────────────┴─────────────────┴───────────────┘
         ```
 
         **Vector Example: Quarterly Claims Comparison with Fill Value**
@@ -1690,16 +1978,16 @@ class _BaseProxy:
 
         ```text
         shape: (4, 4)
-        ┌─────────┬───────────────┬────────────────────┬───────────────────────┐
+        ┌─────────┬────────────────┬─────────────────────┬─────────────────────────┐
         │ quarter ┆ current_claims ┆ next_quarter_claims ┆ prior_quarter_with_fill │
-        │ ---     ┆ ---           ┆ ---                │ ---                   │
-        │ str     ┆ i64           ┆ i64                ┆ i64                   │
-        ╞═════════╪═══════════════╪════════════════════╪═══════════════════════╡
-        │ Q1      ┆ 45            ┆ 52                 ┆ 0                     │
-        │ Q2      ┆ 52            ┆ 38                 ┆ 45                    │
-        │ Q3      ┆ 38            ┆ 49                 ┆ 52                    │
-        │ Q4      ┆ 49            ┆ null               ┆ 38                    │
-        └─────────┴───────────────┴────────────────────┴───────────────────────┘
+        │ ---     ┆ ---            ┆ ---                 ┆ ---                     │
+        │ str     ┆ i64            ┆ i64                 ┆ i64                     │
+        ╞═════════╪════════════════╪═════════════════════╪═════════════════════════╡
+        │ Q1      ┆ 45             ┆ 52                  ┆ 0                       │
+        │ Q2      ┆ 52             ┆ 38                  ┆ 45                      │
+        │ Q3      ┆ 38             ┆ 49                  ┆ 52                      │
+        │ Q4      ┆ 49             ┆ null                ┆ 38                      │
+        └─────────┴────────────────┴─────────────────────┴─────────────────────────┘
         ```
 
         """
@@ -1784,7 +2072,6 @@ class _BaseProxy:
 
         ```python
         from gaspatchio_core import ActuarialFrame
-        import polars as pl
 
         data = {
             "age_band": ["30-39", "30-39", "40-49", "40-49", "30-39"],
@@ -1964,12 +2251,12 @@ class _BaseProxy:
 
         This method is always used in conjunction with when() and optionally otherwise():
 
-        ```python
+        ```python # no_run
         # Basic pattern
-        column.when(condition).then(value_if_true).otherwise(value_if_false)
+        result = column.when(condition).then(value_if_true).otherwise(value_if_false)
 
-        # Chained conditions
-        column.when(condition1).then(value1).when(condition2).then(value2).otherwise(default)
+        # Chained conditions  
+        result = column.when(condition1).then(value1).when(condition2).then(value2).otherwise(default)
         ```
 
         """
@@ -2013,17 +2300,14 @@ class _BaseProxy:
 
         This method concludes a conditional chain started with when().then():
 
-        ```python
+        ```python # no_run
         # Complete conditional logic
         result = af.select(
-            category=af["value"].when(af["value"] > 1000).then("HIGH")
-                              .when(af["value"] > 500).then("MEDIUM")
-                              .otherwise("LOW")
+            category=af["value"].when(af["value"] > 1000).then("HIGH").when(af["value"] > 500).then("MEDIUM").otherwise("LOW")
         )
 
         # With default calculation
-        adjusted_amount = af["amount"].when(af["special_case"]).then(af["amount"] * 1.2)
-                                     .otherwise(af["amount"])
+        adjusted_amount = af["amount"].when(af["special_case"]).then(af["amount"] * 1.2).otherwise(af["amount"])
         ```
 
         """
@@ -2101,8 +2385,8 @@ class _BaseProxy:
             "actual_vs_expected": [0.05, -0.03, 0.08, -0.02, 0.04],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            avg_abs_variance=af["actual_vs_expected"].abs().mean()
+        result = af.with_columns(
+            af["actual_vs_expected"].abs().mean().alias("avg_abs_variance")
         ).collect()
         print(result)
         ```
@@ -2193,8 +2477,9 @@ class _BaseProxy:
             "annual_return": [0.035, -0.12, 0.08, 0.002],
         }
         af = ActuarialFrame(data)
-        result = af.group_by(af["annual_return"].sign().alias("return_direction")).agg(
-            count=af["asset_class"].count()
+        result = af.with_columns(
+            af["annual_return"].sign().alias("return_direction"),
+            af["asset_class"].count().alias("count")
         ).collect()
         print(result)
         ```
@@ -2291,16 +2576,16 @@ class _BaseProxy:
 
         ```text
         shape: (4, 2)
-        ┌─────────────┬────────────────┐
+        ┌─────────────┬─────────────────┐
         │ policy_type ┆ completed_years │
-        │ ---         ┆ ---            │
-        │ str         ┆ f64            │
-        ╞═════════════╪════════════════╡
-        │ TERM        ┆ 2.0            │
-        │ WHOLE       ┆ 5.0            │
-        │ UL          ┆ 1.0            │
-        │ ANNUITY     ┆ 10.0           │
-        └─────────────┴────────────────┘
+        │ ---         ┆ ---             │
+        │ str         ┆ f64             │
+        ╞═════════════╪═════════════════╡
+        │ TERM        ┆ 2.0             │
+        │ WHOLE       ┆ 5.0             │
+        │ UL          ┆ 1.0             │
+        │ ANNUITY     ┆ 10.0            │
+        └─────────────┴─────────────────┘
         ```
 
         """
@@ -2352,16 +2637,16 @@ class _BaseProxy:
 
         ```text
         shape: (4, 2)
-        ┌─────────────┬─────────────────────┐
-        │ claim_type  ┆ conservative_reserve │
-        │ ---         ┆ ---                 │
-        │ str         ┆ f64                 │
-        ╞═════════════╪═════════════════════╡
-        │ Property    ┆ 15433.0             │
-        │ Liability   ┆ 28902.0             │
-        │ Auto        ┆ 7235.0              │
-        │ Health      ┆ 45679.0             │
-        └─────────────┴─────────────────────┘
+        ┌────────────┬──────────────────────┐
+        │ claim_type ┆ conservative_reserve │
+        │ ---        ┆ ---                  │
+        │ str        ┆ f64                  │
+        ╞════════════╪══════════════════════╡
+        │ Property   ┆ 15433.0              │
+        │ Liability  ┆ 28902.0              │
+        │ Auto       ┆ 7235.0               │
+        │ Health     ┆ 45679.0              │
+        └────────────┴──────────────────────┘
         ```
 
         **Vector Example: Policy Count Planning**
@@ -2482,15 +2767,15 @@ class _BaseProxy:
 
         ```text
         shape: (3, 4)
-        ┌───────────────┬──────────┬─────────────┬───────────────────┐
-        │ metric        ┆ original ┆ rounded_4dp ┆ rounded_percentage │
-        │ ---           ┆ ---      ┆ ---         ┆ ---               │
-        │ str           ┆ f64      ┆ f64         ┆ f64               │
-        ╞═══════════════╪══════════╪═════════════╪═══════════════════╡
-        │ mortality_rate ┆ 0.001234 ┆ 0.0012      ┆ 0.0               │
-        │ lapse_rate    ┆ 0.045678 ┆ 0.0457      ┆ 0.05              │
-        │ interest_rate ┆ 0.0325   ┆ 0.0325      ┆ 0.03              │
-        └───────────────┴──────────┴─────────────┴───────────────────┘
+        ┌────────────────┬──────────┬─────────────┬────────────────────┐
+        │ metric         ┆ original ┆ rounded_4dp ┆ rounded_percentage │
+        │ ---            ┆ ---      ┆ ---         ┆ ---                │
+        │ str            ┆ f64      ┆ f64         ┆ f64                │
+        ╞════════════════╪══════════╪═════════════╪════════════════════╡
+        │ mortality_rate ┆ 0.001234 ┆ 0.0012      ┆ 0.0                │
+        │ lapse_rate     ┆ 0.045678 ┆ 0.0457      ┆ 0.05               │
+        │ interest_rate  ┆ 0.0325   ┆ 0.0325      ┆ 0.03               │
+        └────────────────┴──────────┴─────────────┴────────────────────┘
         ```
 
         """
@@ -2545,17 +2830,17 @@ class _BaseProxy:
 
         ```text
         shape: (5, 2)
-        ┌──────┬──────────────┐
+        ┌──────┬───────────────┐
         │ year ┆ growth_factor │
-        │ ---  ┆ ---          │
-        │ i64  ┆ f64          │
-        ╞══════╪══════════════╡
-        │ 1    ┆ 1.03         │
-        │ 2    ┆ 1.035        │
-        │ 3    ┆ 1.04         │
-        │ 4    ┆ 1.025        │
-        │ 5    ┆ 1.045        │
-        └──────┴──────────────┘
+        │ ---  ┆ ---           │
+        │ i64  ┆ f64           │
+        ╞══════╪═══════════════╡
+        │ 1    ┆ 1.03          │
+        │ 2    ┆ 1.035         │
+        │ 3    ┆ 1.04          │
+        │ 4    ┆ 1.025         │
+        │ 5    ┆ 1.045         │
+        └──────┴───────────────┘
         ```
 
         **Vector Example: Survival Probability from Cumulative Hazard**
@@ -2651,11 +2936,11 @@ class _BaseProxy:
         │ ---  ┆ ---             │
         │ i64  ┆ f64             │
         ╞══════╪═════════════════╡
-        │ 1    ┆ 0.029558        │
+        │ 1    ┆ 0.029559        │
         │ 2    ┆ 0.034401        │
-        │ 3    ┆ 0.039220        │
+        │ 3    ┆ 0.039221        │
         │ 4    ┆ 0.024693        │
-        │ 5    ┆ 0.043969        │
+        │ 5    ┆ 0.044017        │
         └──────┴─────────────────┘
         ```
 
@@ -2678,16 +2963,16 @@ class _BaseProxy:
 
         ```text
         shape: (4, 2)
-        ┌───────────┬──────────────┐
+        ┌────────────┬──────────────┐
         │ claim_type ┆ log10_amount │
-        │ ---       ┆ ---          │
-        │ str       ┆ f64          │
-        ╞═══════════╪══════════════╡
-        │ Property  ┆ 3.0          │
-        │ Liability ┆ 4.0          │
-        │ Auto      ┆ 5.0          │
-        │ Health    ┆ 6.0          │
-        └───────────┴──────────────┘
+        │ ---        ┆ ---          │
+        │ str        ┆ f64          │
+        ╞════════════╪══════════════╡
+        │ Property   ┆ 3.0          │
+        │ Liability  ┆ 4.0          │
+        │ Auto       ┆ 5.0          │
+        │ Health     ┆ 6.0          │
+        └────────────┴──────────────┘
         ```
 
         """
@@ -2734,7 +3019,7 @@ class _BaseProxy:
         af = ActuarialFrame(data)
         result = af.select(
             af["period"],
-            continuous_rate=af["discrete_rate"].ln()
+            continuous_rate=af["discrete_rate"].log()
         ).collect()
         print(result)
         ```
@@ -2765,7 +3050,7 @@ class _BaseProxy:
         af = ActuarialFrame(data)
         result = af.select(
             af["claim_severity"],
-            ln_amount=af["amount"].ln()
+            ln_amount=af["amount"].log()
         ).collect()
         print(result)
         ```
@@ -2835,16 +3120,16 @@ class _BaseProxy:
 
         ```text
         shape: (4, 2)
-        ┌──────────┬───────────────────┐
+        ┌───────────┬────────────────────┐
         │ portfolio ┆ standard_deviation │
-        │ ---      ┆ ---               │
-        │ str      ┆ f64               │
-        ╞══════════╪═══════════════════╡
-        │ Life     ┆ 50.0              │
-        │ Health   ┆ 40.0              │
-        │ Property ┆ 60.0              │
-        │ Annuity  ┆ 30.0              │
-        └──────────┴───────────────────┘
+        │ ---       ┆ ---                │
+        │ str       ┆ f64                │
+        ╞═══════════╪════════════════════╡
+        │ Life      ┆ 50.0               │
+        │ Health    ┆ 40.0               │
+        │ Property  ┆ 60.0               │
+        │ Annuity   ┆ 30.0               │
+        └───────────┴────────────────────┘
         ```
 
         **Vector Example: Risk-Adjusted Returns**
@@ -2926,8 +3211,8 @@ class _BaseProxy:
             "premium": [1200.0, 1500.0, None, 1800.0],
         }
         af = ActuarialFrame(data)
-        result = af.filter(
-            af["beneficiary"].is_not_null() & af["premium"].is_not_null()
+        result = af.with_columns(
+            (af["beneficiary"].is_not_null() & af["premium"].is_not_null()).alias("complete_record")
         ).collect()
         print(result)
         ```
@@ -2954,9 +3239,9 @@ class _BaseProxy:
             "medical_exam": ["Complete", None, "Complete", None, "Complete"],
         }
         af = ActuarialFrame(data)
-        result = af.group_by("policy_type").agg(
-            total_policies=af["policy_type"].count(),
-            complete_exams=af["medical_exam"].is_not_null().sum()
+        result = af.with_columns(
+            af["policy_type"].count().alias("total_policies"),
+            af["medical_exam"].is_not_null().sum().alias("complete_exams")
         ).collect()
         print(result)
         ```
