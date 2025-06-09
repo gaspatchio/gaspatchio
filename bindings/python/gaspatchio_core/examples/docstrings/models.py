@@ -32,6 +32,11 @@ class DocstringCodeExample(BaseModel):
         """Lints the code snippet using Ruff CLI via subprocess."""
         issues: List[str] = []
 
+        # Skip linting if this example has no_run or similar skip tags
+        skip_tags = {"no_run", "skip_lint", "no_lint"}
+        if any(tag in skip_tags for tag in self.prefix_tags):
+            return issues  # Return empty list - no linting issues
+
         try:
             from ruff.__main__ import find_ruff_bin
 

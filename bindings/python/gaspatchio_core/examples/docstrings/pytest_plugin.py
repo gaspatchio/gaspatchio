@@ -112,7 +112,7 @@ def pytest_collect_file(parent, path):
         ):  # Each 'group' is a list of patterns from one --gp-docstring-paths usage
             docstring_paths_patterns.extend(group)
 
-    if file_path.suffix == ".py" and file_path.name != "__init__.py":
+    if file_path.suffix in (".py", ".pyi") and file_path.name != "__init__.py":
         if docstring_paths_patterns:  # Only apply filtering if patterns are provided
             should_collect = False
 
