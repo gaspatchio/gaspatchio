@@ -19,14 +19,21 @@ from ._analysis import TableSchema, analyze_table
 from ._dimensions import DataDimension, Dimension
 from ._utils import _convert_keys_to_f64, _materialise
 
+# Import for type hints without circular dependency
+
 # Global metadata storage for assumption tables
 _TABLE_METADATA: dict[str, dict[str, Any]] = {}
 
 # Import LIB path for plugin calls
 try:
-    from .._internal import LIB
-except ImportError:
-    LIB = None
+    from .. import _internal
+
+    LIB = Path(_internal.__file__)
+except ImportError as e:
+    raise ImportError(
+        "Failed to import the gaspatchio_core native extension (_internal). "
+        "Ensure the project is built and installed correctly (e.g., using 'maturin develop -uv').",
+    ) from e
 
 
 class Table:
@@ -172,29 +179,50 @@ class Table:
             logger.error(f"Failed to register table '{self._name}' with Rust: {e}")
             raise
 
-    def lookup(self, **kwargs: str | pl.Expr) -> pl.Expr:
+    def lookup(
+        self,
+        _dimensions: dict[str, str | pl.Expr | ColumnProxy] | None = None,
+        **kwargs: str | pl.Expr | ColumnProxy,
+    ) -> pl.Expr:
         """
         Create a lookup expression using dimension names.
 
+        Can be called in three ways:
+        1. With keyword arguments for clean dimension names:
+           table.lookup(age=af["age"], duration=af["duration"])
+
+        2. With a dictionary for dimension names with spaces or special characters:
+           table.lookup({"policy duration": af["policy_duration_as_int"]})
+
+        3. Or both combined:
+           table.lookup({"policy duration": af["duration"]}, age=af["age"])
+
         Args:
+            _dimensions: Optional dictionary mapping dimension names to columns/expressions
             **kwargs: Dimension name to column/expression mapping
 
         Returns:
             Polars expression for the lookup
 
         """
-        if self._validate:
-            self.validate_lookup(**kwargs)
+        # Merge both sources of dimensions
+        all_dimensions = {}
+        if _dimensions:
+            all_dimensions.update(_dimensions)
+        all_dimensions.update(kwargs)
 
-        # Convert kwargs to a list of expressions in the order of key columns
+        if self._validate:
+            self.validate_lookup(**all_dimensions)
+
+        # Convert all_dimensions to a list of expressions in the order of key columns
         if self._df is None:
             raise RuntimeError("Table data not processed. This should not happen.")
 
         key_columns = [col for col in self._df.columns if col != self._value]
 
         # Validate that all required dimensions are provided
-        if set(kwargs.keys()) != set(self._dimensions.keys()):
-            provided = set(kwargs.keys())
+        if set(all_dimensions.keys()) != set(self._dimensions.keys()):
+            provided = set(all_dimensions.keys())
             required = set(self._dimensions.keys())
             missing = required - provided
             extra = provided - required
@@ -214,12 +242,15 @@ class Table:
         # Build list of expressions in key column order
         key_exprs = []
         for col in key_columns:
-            if col in kwargs:
-                value = kwargs[col]
+            if col in all_dimensions:
+                value = all_dimensions[col]
                 if isinstance(value, str):
                     key_exprs.append(pl.col(value))
                 elif isinstance(value, pl.Expr):
                     key_exprs.append(value)
+                elif hasattr(value, "_to_expr"):
+                    # Handle ColumnProxy objects from ActuarialFrame
+                    key_exprs.append(value._to_expr())
                 else:
                     # Convert literal values to expressions
                     key_exprs.append(pl.lit(value))
@@ -231,14 +262,6 @@ class Table:
         logger.debug(
             f"Creating lookup expression for table '{self._name}' with {len(key_exprs)} keys",
         )
-
-        if LIB is None:
-            # For testing purposes, return a placeholder expression
-            # In production, this would indicate a compilation issue
-            logger.warning(
-                "Plugin library not available - using placeholder expression for testing",
-            )
-            return pl.lit(None).alias("lookup_result")
 
         return register_plugin_function(
             plugin_path=LIB,
@@ -399,10 +422,20 @@ class Table:
             return metadata.copy()
         return None
 
-    def validate_lookup(self, **kwargs) -> None:
+    def validate_lookup(
+        self,
+        _dimensions: dict[str, str | pl.Expr | ColumnProxy] | None = None,
+        **kwargs,
+    ) -> None:
         """Validate a lookup configuration without executing"""
+        # Merge both sources of dimensions
+        all_dimensions = {}
+        if _dimensions:
+            all_dimensions.update(_dimensions)
+        all_dimensions.update(kwargs)
+
         # Check that all provided dimensions exist
-        for dim_name in kwargs:
+        for dim_name in all_dimensions:
             if dim_name not in self._dimensions:
                 available_dims = ", ".join(self._dimensions.keys())
                 raise ValueError(
@@ -412,7 +445,7 @@ class Table:
 
         # Check that all required dimensions are provided
         required_dims = set(self._dimensions.keys())
-        provided_dims = set(kwargs.keys())
+        provided_dims = set(all_dimensions.keys())
 
         if required_dims != provided_dims:
             missing = required_dims - provided_dims
@@ -433,11 +466,133 @@ class Table:
 def get_table_metadata(table_name: str) -> dict[str, Any] | None:
     """Retrieve metadata for a registered assumption table.
 
+    Fetches stored metadata for an assumption table that was registered with the
+    framework. Metadata includes information like table descriptions, data sources,
+    validation rules, effective dates, and business context that actuaries need
+    for model documentation and compliance reporting.
+
+    !!! note "When to use"
+        * **Model Documentation:** Retrieve table descriptions, sources, and
+            business context for automated model documentation generation.
+        * **Audit Trails:** Access metadata for regulatory compliance and
+            audit trails showing table lineage and validation status.
+        * **Data Validation:** Check table metadata before performing lookups
+            to ensure data quality and appropriateness for calculations.
+        * **Model Versioning:** Track assumption table versions and effective
+            dates for model change management and rollback procedures.
+
     Args:
         table_name: Name of the table to get metadata for
 
     Returns:
         dict | None: Copy of metadata dictionary if found, None otherwise
+
+    Examples:
+    ---------
+    **Scalar Example: Basic Metadata Retrieval**
+
+    ```python
+    from gaspatchio_core.assumptions import Table, get_table_metadata
+    import polars as pl
+
+    # Create and register a mortality table with metadata
+    mortality_data = pl.DataFrame({
+        "age": [30, 35, 40, 45, 50],
+        "mortality_rate": [0.001, 0.002, 0.004, 0.008, 0.015]
+    })
+    
+    mortality_table = Table(
+        name="mortality_2023",
+        source=mortality_data,
+        dimensions={"age": "age"},
+        value="mortality_rate",
+        metadata={
+            "description": "Standard mortality rates for term life insurance",
+            "source": "Industry Standard Tables 2023",
+            "effective_date": "2023-01-01",
+            "validation_status": "approved"
+        }
+    )
+    
+    # Retrieve metadata
+    metadata = get_table_metadata("mortality_2023")
+    print(metadata)
+    ```
+
+    ```text
+    {
+        'description': 'Standard mortality rates for term life insurance',
+        'source': 'Industry Standard Tables 2023', 
+        'effective_date': '2023-01-01',
+        'validation_status': 'approved'
+    }
+    ```
+
+    **Vector Example: Metadata for Model Documentation**
+
+    ```python
+    from gaspatchio_core.assumptions import Table, get_table_metadata
+    import polars as pl
+
+    # Create multiple assumption tables with rich metadata
+    tables_config = [
+        {
+            "name": "lapse_rates_term",
+            "data": pl.DataFrame({
+                "duration": [1, 2, 3, 4, 5],
+                "lapse_rate": [0.05, 0.08, 0.12, 0.15, 0.18]
+            }),
+            "metadata": {
+                "description": "Lapse rates for term life products",
+                "business_unit": "Individual Life",
+                "last_updated": "2023-12-01",
+                "data_quality": "high"
+            }
+        },
+        {
+            "name": "expense_rates",
+            "data": pl.DataFrame({
+                "year": [1, 2, 3],
+                "expense_rate": [150.0, 25.0, 15.0]
+            }),
+            "metadata": {
+                "description": "Annual expense rates per policy",
+                "currency": "USD",
+                "inflation_adjusted": True,
+                "review_frequency": "quarterly"
+            }
+        }
+    ]
+    
+    # Register tables
+    for config in tables_config:
+        Table(
+            name=config["name"],
+            source=config["data"],
+            dimensions={"duration": "duration"} if "duration" in config["data"].columns else {"year": "year"},
+            value="lapse_rate" if "lapse_rate" in config["data"].columns else "expense_rate",
+            metadata=config["metadata"]
+        )
+    
+    # Generate documentation report
+    for table_name in ["lapse_rates_term", "expense_rates"]:
+        metadata = get_table_metadata(table_name)
+        if metadata:
+            print(f"Table: {table_name}")
+            print(f"  Description: {metadata.get('description', 'N/A')}")
+            print(f"  Last Updated: {metadata.get('last_updated', 'N/A')}")
+            print()
+    ```
+
+    ```text
+    Table: lapse_rates_term
+      Description: Lapse rates for term life products
+      Last Updated: 2023-12-01
+
+    Table: expense_rates
+      Description: Annual expense rates per policy
+      Last Updated: N/A
+    ```
 
     """
     metadata = _TABLE_METADATA.get(table_name)
@@ -449,8 +604,106 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
 def list_tables() -> list[str]:
     """List all registered assumption tables.
 
+    Retrieves the names of all assumption tables that have been registered with
+    the framework. Essential for model inventory management, debugging lookup
+    failures, and ensuring all required tables are available before running
+    actuarial projections or model validations.
+
+    !!! note "When to use"
+        * **Model Validation:** Check that all required assumption tables are
+            loaded before starting model calculations or projections.
+        * **Debugging:** Troubleshoot lookup failures by verifying table
+            registration status and identifying missing tables.
+        * **Model Inventory:** Generate reports of available assumption tables
+            for model documentation and governance processes.
+        * **Dynamic Configuration:** Build dynamic model configurations that
+            adapt based on available assumption tables.
+
     Returns:
         list[str]: List of table names that have been registered
+
+    Examples:
+    ---------
+    **Scalar Example: Basic Table Listing**
+
+    ```python
+    from gaspatchio_core.assumptions import Table, list_tables
+    import polars as pl
+
+    # Register some assumption tables
+    mortality_data = pl.DataFrame({
+        "age": [30, 40, 50],
+        "mortality_rate": [0.001, 0.004, 0.015]
+    })
+    
+    lapse_data = pl.DataFrame({
+        "duration": [1, 2, 3],
+        "lapse_rate": [0.05, 0.08, 0.12]
+    })
+    
+    Table(name="mortality_std", source=mortality_data, 
+          dimensions={"age": "age"}, value="mortality_rate")
+    Table(name="lapse_term", source=lapse_data,
+          dimensions={"duration": "duration"}, value="lapse_rate")
+    
+    # List all registered tables
+    tables = list_tables()
+    print("Registered tables:", tables)
+    ```
+
+    ```text
+    Registered tables: ['mortality_std', 'lapse_term']
+    ```
+
+    **Vector Example: Model Validation Workflow**
+
+    ```python
+    from gaspatchio_core.assumptions import Table, list_tables
+    import polars as pl
+
+    # Define required tables for a term life model
+    required_tables = [
+        "mortality_rates",
+        "lapse_rates", 
+        "expense_rates",
+        "interest_rates"
+    ]
+    
+    # Register some tables (simulating partial loading)
+    mortality_data = pl.DataFrame({
+        "age": [25, 30, 35, 40], 
+        "rate": [0.0008, 0.001, 0.0015, 0.0025]
+    })
+    
+    lapse_data = pl.DataFrame({
+        "duration": [1, 2, 3, 4],
+        "rate": [0.05, 0.08, 0.10, 0.12]
+    })
+    
+    Table(name="mortality_rates", source=mortality_data,
+          dimensions={"age": "age"}, value="rate")
+    Table(name="lapse_rates", source=lapse_data, 
+          dimensions={"duration": "duration"}, value="rate")
+    
+    # Validate model readiness
+    available_tables = list_tables()
+    missing_tables = [table for table in required_tables 
+                     if table not in available_tables]
+    
+    print("Available tables:", sorted(available_tables))
+    print("Missing tables:", missing_tables)
+    
+    if missing_tables:
+        print(f"⚠️  Model not ready - missing {len(missing_tables)} tables")
+    else:
+        print("✅ All required tables loaded - model ready")
+    ```
+
+    ```text
+    Available tables: ['lapse_rates', 'mortality_rates']
+    Missing tables: ['expense_rates', 'interest_rates']
+    ⚠️  Model not ready - missing 2 tables
+    ```
 
     """
     try:
