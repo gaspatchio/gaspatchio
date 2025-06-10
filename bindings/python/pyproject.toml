@@ -89,6 +89,8 @@ addopts = [
     "--gp-docstring-paths=gaspatchio_core/assumptions/api.py",
     "--gp-docstring-paths=gaspatchio_core/column/proxy.pyi",
     "--gp-docstring-paths=gaspatchio_core/__init__.py",
+    "--gp-docstring-paths=gaspatchio_core/__init__.pyi",
+    "--gp-docstring-paths=gaspatchio_core/assumptions/_api.py",
     "-p",
     "gaspatchio_core.examples.docstrings.pytest_plugin",
     "-m",
