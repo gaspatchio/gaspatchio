@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, List, Optional
+import builtins
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from polars.type_aliases import PolarsDataType
@@ -33,48 +35,51 @@ if TYPE_CHECKING:
     )
 
     # Type alias for DtNamespaceProxy parent, consistent with dt_proxy.py
-    ParentProxyType = ColumnProxy | ExpressionProxy
+    type ParentProxyType = ColumnProxy | ExpressionProxy
 
     # --- Namespaces (Accessors returning Namespace Proxies) ---
     @property
-    def dt(self) -> "_DtNamespaceProxy": ...  # MODIFIED: Changed to DtNamespaceProxy
+    def dt(self) -> _DtNamespaceProxy: ...  # MODIFIED: Changed to DtNamespaceProxy
     @property
     def str(
         self,
-    ) -> "_StringNamespaceProxy": ...  # MODIFIED: Changed to StringNamespaceProxy
+    ) -> _StringNamespaceProxy: ...  # MODIFIED: Changed to StringNamespaceProxy
     @property
-    def list(self) -> "PolarsExprList": ...  # Use aliased name in string hint
+    def list(self) -> PolarsExprList: ...  # Use aliased name in string hint
     @property
-    def arr(self) -> "ExprArray": ...
+    def arr(self) -> ExprArray: ...
     @property
-    def struct(self) -> "ExprStruct": ...
+    def struct(self) -> ExprStruct: ...
     @property
-    def cat(self) -> "ExprCategorical": ...
+    def cat(self) -> ExprCategorical: ...
     @property
-    def bin(self) -> "ExprBinary": ...
+    def bin(self) -> ExprBinary: ...
 
     # Although __dir__ is added dynamically, including it helps tools
-    def __dir__(self) -> List[str]: ...
+    def __dir__(self) -> builtins.list[str]: ...
 
 # --- Stub for DtNamespaceProxy --- ADDED ---
 class DtNamespaceProxy:
     """Date and time accessor for actuarial data analysis.
-    
+
     Provides specialized date and time operations essential for actuarial modeling,
     including policy anniversary calculations, age computations, duration analysis,
     and regulatory date-based calculations. Enables efficient date arithmetic and
     extraction of date components for pricing models, reserve calculations, and
-    experience studies."""
+    experience studies.
+    """
 
-    _parent_proxy: "ParentProxyType"
-    _parent_af: "ActuarialFrame | None"
+    _parent_proxy: ParentProxyType
+    _parent_af: ActuarialFrame | None
 
     def __init__(
-        self, parent_proxy: "ParentProxyType", parent_af: "ActuarialFrame | None"
+        self,
+        parent_proxy: ParentProxyType,
+        parent_af: ActuarialFrame | None,
     ) -> None: ...
-    def year(self) -> "ExpressionProxy":
+    def year(self) -> ExpressionProxy:
         """Extract calendar year from date values.
-        
+
         Extracts the calendar year component from date columns, essential for
         actuarial analysis requiring year-based grouping, trend analysis, and
         regulatory reporting. Converts date values to four-digit year integers
@@ -102,8 +107,7 @@ class DtNamespaceProxy:
 
         ```python
         from gaspatchio_core import ActuarialFrame
-        import polars as pl
-        
+
         data = {
             "policy_id": ["P001", "P002", "P003"],
             "issue_date": ["2020-03-15", "2021-07-22", "2019-12-01"],
@@ -132,7 +136,7 @@ class DtNamespaceProxy:
 
         ```python
         from gaspatchio_core import ActuarialFrame
-        
+
         data = {
             "policy_id": ["P001", "P002"],
             "age": [55, 38],
@@ -146,9 +150,9 @@ class DtNamespaceProxy:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         af["claim_years"] = af["claim_dates"].str.to_date().dt.year()
-        
+
         print(af.collect())
         ```
 
@@ -164,13 +168,12 @@ class DtNamespaceProxy:
         └───────────┴─────┴──────────────┴─────────────────────────────┴─────────────────────────┘
         ```
         """
-        ...
 
     # Add other common dt methods as they are implemented or needed for type hints
     # For now, __getattr__ will handle them dynamically at runtime, but stubs improve DX.
-    def month(self) -> "ExpressionProxy":
+    def month(self) -> ExpressionProxy:
         """Extract calendar month from date values.
-        
+
         Extracts the calendar month component (1-12) from date columns for
         seasonal analysis, anniversary tracking, and premium payment scheduling.
         Essential for actuarial calculations requiring month-based grouping,
@@ -197,7 +200,7 @@ class DtNamespaceProxy:
 
         ```python
         from gaspatchio_core import ActuarialFrame
-        
+
         data = {
             "policy_id": ["P001", "P002", "P003"],
             "payment_date": ["2023-03-15", "2023-07-22", "2023-12-01"],
@@ -226,7 +229,7 @@ class DtNamespaceProxy:
 
         ```python
         from gaspatchio_core import ActuarialFrame
-        
+
         data = {
             "policy_id": ["P001", "P002"],
             "age": [45, 52],
@@ -240,9 +243,9 @@ class DtNamespaceProxy:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         af["premium_months"] = af["premium_dates"].str.to_date().dt.month()
-        
+
         print(af.collect())
         ```
 
@@ -258,10 +261,9 @@ class DtNamespaceProxy:
         └───────────┴─────┴──────────────┴─────────────────────────────┴───────────────────┘
         ```
         """
-        ...
-    def day(self) -> "ExpressionProxy":
+    def day(self) -> ExpressionProxy:
         """Extract day of month from date values.
-        
+
         Extracts the day component (1-31) from date columns for precise date
         calculations, payment processing, and policy administration. Essential
         for actuarial workflows requiring specific day-based analysis, billing
@@ -288,7 +290,7 @@ class DtNamespaceProxy:
 
         ```python
         from gaspatchio_core import ActuarialFrame
-        
+
         data = {
             "policy_id": ["P001", "P002", "P003"],
             "due_date": ["2023-03-15", "2023-07-01", "2023-12-31"],
@@ -317,7 +319,7 @@ class DtNamespaceProxy:
 
         ```python
         from gaspatchio_core import ActuarialFrame
-        
+
         data = {
             "policy_id": ["P001", "P002"],
             "age": [35, 42],
@@ -331,9 +333,9 @@ class DtNamespaceProxy:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         af["anniversary_days"] = af["anniversary_dates"].str.to_date().dt.day()
-        
+
         print(af.collect())
         ```
 
@@ -349,107 +351,123 @@ class DtNamespaceProxy:
         └───────────┴─────┴──────────────┴─────────────────────────────┴──────────────────┘
         ```
         """
-        ...
     def __getattr__(
-        self, name: str
-    ) -> Callable[..., "ExpressionProxy"]: ...  # MODIFIED: More precise return type
+        self,
+        name: str,
+    ) -> Callable[..., ExpressionProxy]: ...  # MODIFIED: More precise return type
 
 # --- Stub for StringNamespaceProxy --- ADDED ---
 class StringNamespaceProxy:
     """String manipulation accessor for actuarial text data processing.
-    
+
     Provides comprehensive string operations for actuarial data management,
     including policy number formatting, product code standardization, address
     cleansing, and regulatory text processing. Essential for data quality
     improvements, matching operations, and preparing text data for actuarial
-    analysis and reporting."""
+    analysis and reporting.
+    """
 
     _parent_proxy: (
-        "ParentProxyType"  # Assuming ParentProxyType is ColumnProxy | ExpressionProxy
+        ParentProxyType  # Assuming ParentProxyType is ColumnProxy | ExpressionProxy
     )
-    _parent_af: "ActuarialFrame | None"
+    _parent_af: ActuarialFrame | None
 
     def __init__(
-        self, parent_proxy: "ParentProxyType", parent_af: "ActuarialFrame | None"
+        self,
+        parent_proxy: ParentProxyType,
+        parent_af: ActuarialFrame | None,
     ) -> None: ...
 
     # --- Explicitly defined methods from string_proxy.py ---
     def contains(
-        self, pattern: str | pl.Expr, literal: bool = False, strict: bool = False
-    ) -> "ExpressionProxy": ...
-    def to_uppercase(self) -> "ExpressionProxy": ...
-    def to_lowercase(self) -> "ExpressionProxy": ...
-    def n_chars(self) -> "ExpressionProxy": ...
-    def len_chars(self) -> "ExpressionProxy": ...
-    def len_bytes(self) -> "ExpressionProxy": ...
+        self,
+        pattern: str | pl.Expr,
+        literal: bool = False,
+        strict: bool = False,
+    ) -> ExpressionProxy: ...
+    def to_uppercase(self) -> ExpressionProxy: ...
+    def to_lowercase(self) -> ExpressionProxy: ...
+    def n_chars(self) -> ExpressionProxy: ...
+    def len_chars(self) -> ExpressionProxy: ...
+    def len_bytes(self) -> ExpressionProxy: ...
     def strip_chars(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
+        self,
+        characters: str | pl.Expr | None = None,
+    ) -> ExpressionProxy: ...
     def strip_chars_start(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
+        self,
+        characters: str | pl.Expr | None = None,
+    ) -> ExpressionProxy: ...
     def lstrip(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
+        self,
+        characters: str | pl.Expr | None = None,
+    ) -> ExpressionProxy: ...
     def strip_chars_end(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
+        self,
+        characters: str | pl.Expr | None = None,
+    ) -> ExpressionProxy: ...
     def rstrip(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy": ...
-    def strip_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
-    def remove_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
-    def strip_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
-    def remove_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
-    def zfill(self, alignment: int) -> "ExpressionProxy": ...
-    def ljust(self, width: int, fill_char: str = " ") -> "ExpressionProxy": ...
+        self,
+        characters: str | pl.Expr | None = None,
+    ) -> ExpressionProxy: ...
+    def strip_prefix(self, prefix: str | pl.Expr) -> ExpressionProxy: ...
+    def remove_prefix(self, prefix: str | pl.Expr) -> ExpressionProxy: ...
+    def strip_suffix(self, suffix: str | pl.Expr) -> ExpressionProxy: ...
+    def remove_suffix(self, suffix: str | pl.Expr) -> ExpressionProxy: ...
+    def zfill(self, alignment: int) -> ExpressionProxy: ...
+    def ljust(self, width: int, fill_char: str = " ") -> ExpressionProxy: ...
     def pad_start(
-        self, width: int, fill_char: str = " "
-    ) -> "ExpressionProxy": ...  # Alias for rjust
-    def rjust(self, width: int, fill_char: str = " ") -> "ExpressionProxy": ...
+        self,
+        width: int,
+        fill_char: str = " ",
+    ) -> ExpressionProxy: ...  # Alias for rjust
+    def rjust(self, width: int, fill_char: str = " ") -> ExpressionProxy: ...
     def pad_end(
-        self, width: int, fill_char: str = " "
-    ) -> "ExpressionProxy": ...  # Alias for ljust
-    def starts_with(self, prefix: str | pl.Expr) -> "ExpressionProxy": ...
-    def ends_with(self, suffix: str | pl.Expr) -> "ExpressionProxy": ...
+        self,
+        width: int,
+        fill_char: str = " ",
+    ) -> ExpressionProxy: ...  # Alias for ljust
+    def starts_with(self, prefix: str | pl.Expr) -> ExpressionProxy: ...
+    def ends_with(self, suffix: str | pl.Expr) -> ExpressionProxy: ...
 
     # Add __getattr__ for dynamic methods if we want to hint them generally
-    def __getattr__(self, name: str) -> Callable[..., "ExpressionProxy"]: ...
+    def __getattr__(self, name: str) -> Callable[..., ExpressionProxy]: ...
 
 # Base class for shared proxy methods/properties
 class _BaseProxy:
     """Base proxy foundation for actuarial data operations.
-    
+
     Provides core functionality shared across column and expression proxies,
     including arithmetic operations, comparisons, and conditional logic essential
     for actuarial calculations. Enables seamless mathematical operations on
     premium calculations, reserve computations, cash flow projections, and
-    statistical analysis in actuarial modeling workflows."""
+    statistical analysis in actuarial modeling workflows.
+    """
 
     # --- Operator Overloads (returning ExpressionProxy) ---
-    def __add__(self, other: Any) -> "ExpressionProxy": ...
-    def __sub__(self, other: Any) -> "ExpressionProxy": ...
-    def __mul__(self, other: Any) -> "ExpressionProxy": ...
-    def __truediv__(self, other: Any) -> "ExpressionProxy": ...
-    def __floordiv__(self, other: Any) -> "ExpressionProxy": ...
-    def __mod__(self, other: Any) -> "ExpressionProxy": ...
-    def __pow__(self, other: Any) -> "ExpressionProxy": ...
-    def __eq__(self, other: Any) -> "ExpressionProxy": ...
-    def __ne__(self, other: Any) -> "ExpressionProxy": ...
-    def __lt__(self, other: Any) -> "ExpressionProxy": ...
-    def __le__(self, other: Any) -> "ExpressionProxy": ...
-    def __gt__(self, other: Any) -> "ExpressionProxy": ...
-    def __ge__(self, other: Any) -> "ExpressionProxy": ...
-    def __radd__(self, other: Any) -> "ExpressionProxy": ...
-    def __rsub__(self, other: Any) -> "ExpressionProxy": ...
-    def __rmul__(self, other: Any) -> "ExpressionProxy": ...
-    def __rtruediv__(self, other: Any) -> "ExpressionProxy": ...
-    def __rfloordiv__(self, other: Any) -> "ExpressionProxy": ...
-    def __rmod__(self, other: Any) -> "ExpressionProxy": ...
-    def __rpow__(self, other: Any) -> "ExpressionProxy": ...
+    def __add__(self, other: Any) -> ExpressionProxy: ...
+    def __sub__(self, other: Any) -> ExpressionProxy: ...
+    def __mul__(self, other: Any) -> ExpressionProxy: ...
+    def __truediv__(self, other: Any) -> ExpressionProxy: ...
+    def __floordiv__(self, other: Any) -> ExpressionProxy: ...
+    def __mod__(self, other: Any) -> ExpressionProxy: ...
+    def __pow__(self, other: Any) -> ExpressionProxy: ...
+    def __eq__(self, other: object) -> ExpressionProxy: ...
+    def __ne__(self, other: object) -> ExpressionProxy: ...
+    def __lt__(self, other: Any) -> ExpressionProxy: ...
+    def __le__(self, other: Any) -> ExpressionProxy: ...
+    def __gt__(self, other: Any) -> ExpressionProxy: ...
+    def __ge__(self, other: Any) -> ExpressionProxy: ...
+    def __radd__(self, other: Any) -> ExpressionProxy: ...
+    def __rsub__(self, other: Any) -> ExpressionProxy: ...
+    def __rmul__(self, other: Any) -> ExpressionProxy: ...
+    def __rtruediv__(self, other: Any) -> ExpressionProxy: ...
+    def __rfloordiv__(self, other: Any) -> ExpressionProxy: ...
+    def __rmod__(self, other: Any) -> ExpressionProxy: ...
+    def __rpow__(self, other: Any) -> ExpressionProxy: ...
 
     # --- Common Autopatched Methods/Namespaces (Returning ExpressionProxy) ---
-    def alias(self, name: str) -> "ExpressionProxy":
+    def alias(self, name: str) -> ExpressionProxy:
         """Assign a new name to this expression for use in selections and computations.
 
         Creates a new ExpressionProxy with the specified column name. This is
@@ -543,10 +561,8 @@ class _BaseProxy:
         │ 9.0          ┆ 50       │
         └──────────────┴──────────┘
         ```
-
         """
-        ...
-    def clip(self, lower_bound: float, upper_bound: float) -> "ExpressionProxy":
+    def clip(self, lower_bound: float, upper_bound: float) -> ExpressionProxy:
         """Constrain values to specified minimum and maximum bounds.
 
         Limits values to a specified range by setting any value below the lower bound
@@ -595,7 +611,7 @@ class _BaseProxy:
         result = af.select(
             af["applicant_id"],
             original_age=af["age"],
-            eligible_age=af["age"].clip(18, 65)
+            eligible_age=af["age"].clip(18, 65),
         ).collect()
         print(result)
         ```
@@ -633,9 +649,9 @@ class _BaseProxy:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         af["capped_claims"] = af["claim_amounts"].clip(10000.0, 100000.0)
-        
+
         print(af.collect())
         ```
 
@@ -650,9 +666,8 @@ class _BaseProxy:
         │ P002      ┆ 42  ┆ [1, 2, … 4] ┆ [8000.0, 75000.0, … 45000.0]   ┆ [10000.0, 75000.0, … 45000.0]   │
         └───────────┴─────┴─────────────┴────────────────────────────────┴─────────────────────────────────┘
         ```
-
         """
-    def cast(self, dtype: PolarsDataType, *, strict: bool = True) -> "ExpressionProxy":
+    def cast(self, dtype: PolarsDataType, *, strict: bool = True) -> ExpressionProxy:
         """Cast values in this expression to a different data type.
 
         Converts the data type of values in the column or expression to the specified
@@ -700,8 +715,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["policy_number"].cast(pl.Int64).alias("policy_id"),
-            af["premium"]
+            af["policy_number"].cast(pl.Int64).alias("policy_id"), af["premium"]
         ).collect()
         print(result)
         ```
@@ -751,11 +765,9 @@ class _BaseProxy:
         │ 56-65     ┆ 0.008000      │
         └───────────┴───────────────┘
         ```
-
         """
-        ...
-    def sum(self) -> "ExpressionProxy": ...
-    def cum_prod(self, *, reverse: bool = False) -> "ExpressionProxy":
+    def sum(self) -> ExpressionProxy: ...
+    def cum_prod(self, *, reverse: bool = False) -> ExpressionProxy:
         """Compute the cumulative product of numeric values.
 
         Returns the cumulative product of all values in order, with each position
@@ -800,7 +812,7 @@ class _BaseProxy:
         result = af.select(
             af["year"],
             af["interest_rate"],
-            cumulative_factor=af["interest_rate"].cum_prod()
+            cumulative_factor=af["interest_rate"].cum_prod(),
         ).collect()
         print(result)
         ```
@@ -855,8 +867,7 @@ class _BaseProxy:
         └───────────┴─────┴─────────────┴────────────────────────────┴─────────────────────────────────┘
         ```
         """
-        ...
-    def mean(self) -> "ExpressionProxy":
+    def mean(self) -> ExpressionProxy:
         """Compute the arithmetic mean of numeric values in this expression or column.
 
         Returns the arithmetic mean (average) of all non-null numeric values. For grouped
@@ -943,10 +954,8 @@ class _BaseProxy:
         │ UL          ┆ 1100.0      │
         └─────────────┴─────────────┘
         ```
-
         """
-        ...
-    def min(self) -> "ExpressionProxy":
+    def min(self) -> ExpressionProxy:
         """Find the minimum value in this expression or column.
 
         Returns the smallest non-null value in a numeric column. For grouped operations,
@@ -1032,10 +1041,8 @@ class _BaseProxy:
         │ UL          ┆ 1100.0      │
         └─────────────┴─────────────┘
         ```
-
         """
-        ...
-    def max(self) -> "ExpressionProxy":
+    def max(self) -> ExpressionProxy:
         """Find the maximum value in this expression or column.
 
         Returns the largest non-null value in a numeric column. For grouped operations,
@@ -1121,10 +1128,8 @@ class _BaseProxy:
         │ UL          ┆ 1100.0      │
         └─────────────┴─────────────┘
         ```
-
         """
-        ...
-    def count(self) -> "ExpressionProxy":
+    def count(self) -> ExpressionProxy:
         """Count the number of non-null values in this expression or column.
 
         Returns the count of non-null values in the column. For grouped operations,
@@ -1210,10 +1215,8 @@ class _BaseProxy:
         │ UL          ┆ 1            │
         └─────────────┴──────────────┘
         ```
-
         """
-        ...
-    def is_null(self) -> "ExpressionProxy":
+    def is_null(self) -> ExpressionProxy:
         """Check which values are null (missing) in this expression or column.
 
         Returns a boolean expression indicating which values are null/missing.
@@ -1254,8 +1257,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["claim_id"],
-            missing_amount=af["claim_amount"].is_null()
+            af["claim_id"], missing_amount=af["claim_amount"].is_null()
         ).collect()
         print(result)
         ```
@@ -1302,10 +1304,14 @@ class _BaseProxy:
         │ UL          ┆ 0                        │
         └─────────────┴──────────────────────────┘
         ```
-
         """
-        ...
-    def fill_null(self, value: Any = None, *, strategy: str = None, limit: int = None) -> "ExpressionProxy":
+    def fill_null(
+        self,
+        value: Any = None,
+        *,
+        strategy: str = None,
+        limit: int = None,
+    ) -> ExpressionProxy:
         """Replace null (missing) values with a specified value or using a filling strategy.
 
         Replaces all null values in the expression with the provided value or using
@@ -1359,8 +1365,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["policy_id"],
-            claim_amount_filled=af["claim_amount"].fill_null(0.0)
+            af["policy_id"], claim_amount_filled=af["claim_amount"].fill_null(0.0)
         ).collect()
         print(result)
         ```
@@ -1413,10 +1418,8 @@ class _BaseProxy:
         │ 6     ┆ null             ┆ 1200.0         ┆ 0.0         │
         └───────┴──────────────────┴────────────────┴─────────────┘
         ```
-
         """
-        ...
-    def unique(self) -> "ExpressionProxy":
+    def unique(self) -> ExpressionProxy:
         """Return unique values from this expression or column.
 
         Extracts distinct values, removing duplicates while preserving order of first occurrence.
@@ -1455,9 +1458,7 @@ class _BaseProxy:
             "policy_type": ["TERM", "WHOLE", "TERM", "UL", "WHOLE", "TERM"],
         }
         af = ActuarialFrame(data)
-        result = af.select(
-            unique_types=af["policy_type"].unique()
-        ).collect()
+        result = af.select(unique_types=af["policy_type"].unique()).collect()
         print(result)
         ```
 
@@ -1502,10 +1503,8 @@ class _BaseProxy:
         │ UL          ┆ [42, 67]    │
         └─────────────┴─────────────┘
         ```
-
         """
-        ...
-    def sort(self, *, descending: bool = False) -> "ExpressionProxy":
+    def sort(self, *, descending: bool = False) -> ExpressionProxy:
         """Sort values in this expression or column.
 
         Arranges values in ascending or descending order, maintaining positional relationships
@@ -1598,10 +1597,8 @@ class _BaseProxy:
         │ UL          ┆ [62]        │
         └─────────────┴─────────────┘
         ```
-
         """
-        ...
-    def head(self, n: int = 5) -> "ExpressionProxy":
+    def head(self, n: int = 5) -> ExpressionProxy:
         """Return the first n values from this expression or column.
 
         Retrieves the top n values in their original order, useful for sampling data,
@@ -1693,10 +1690,8 @@ class _BaseProxy:
         │ UL          ┆ [33]        │
         └─────────────┴─────────────┘
         ```
-
         """
-        ...
-    def tail(self, n: int = 5) -> "ExpressionProxy":
+    def tail(self, n: int = 5) -> ExpressionProxy:
         """Return the last n values from this expression or column.
 
         Retrieves the bottom n values in their original order, useful for analyzing
@@ -1741,9 +1736,7 @@ class _BaseProxy:
             "claim_amount": [2500.0, 4800.0, 1200.0, 800.0, 3200.0],
         }
         af = ActuarialFrame(data)
-        result = af.select(
-            recent_claims=af["claim_amount"].tail(3)
-        ).collect()
+        result = af.select(recent_claims=af["claim_amount"].tail(3)).collect()
         print(result)
         ```
 
@@ -1788,10 +1781,8 @@ class _BaseProxy:
         │ UL          ┆ [33]      │
         └─────────────┴───────────┘
         ```
-
         """
-        ...
-    def filter(self, predicate: "ExpressionProxy" | pl.Expr) -> "ExpressionProxy":
+    def filter(self, predicate: ExpressionProxy | pl.Expr) -> ExpressionProxy:
         """Filter values based on a boolean condition.
 
         Selects only values that meet the specified criteria, returning a subset
@@ -1883,10 +1874,8 @@ class _BaseProxy:
         │ UL          ┆ []          │
         └─────────────┴─────────────┘
         ```
-
         """
-        ...
-    def shift(self, n: int = 1, *, fill_value: any = None) -> "ExpressionProxy":
+    def shift(self, n: int = 1, *, fill_value: any = None) -> ExpressionProxy:
         """Shift values by a specified number of periods.
 
         Moves values forward or backward in the sequence, creating lag or lead variables
@@ -1937,7 +1926,7 @@ class _BaseProxy:
         result = af.select(
             af["policy_year"],
             current_premium=af["annual_premium"],
-            prior_premium=af["annual_premium"].shift(1)
+            prior_premium=af["annual_premium"].shift(1),
         ).collect()
         print(result)
         ```
@@ -1989,15 +1978,13 @@ class _BaseProxy:
         │ Q4      ┆ 49             ┆ null                ┆ 38                      │
         └─────────┴────────────────┴─────────────────────┴─────────────────────────┘
         ```
-
         """
-        ...
     def over(
         self,
         partition_by: str | list[str] | pl.Expr | list[pl.Expr],
         *,
         mapping_strategy: str = "join",
-    ) -> "ExpressionProxy":
+    ) -> ExpressionProxy:
         """Apply window function over partitions defined by grouping columns.
 
         Performs calculations within groups while maintaining the original row structure,
@@ -2048,7 +2035,7 @@ class _BaseProxy:
         result = af.select(
             af["policy_type"],
             af["premium"],
-            running_total=af["premium"].sum().over("policy_type")
+            running_total=af["premium"].sum().over("policy_type"),
         ).collect()
         print(result)
         ```
@@ -2100,10 +2087,8 @@ class _BaseProxy:
         │ 30-39    ┆ 900.0        ┆ 1            │
         └──────────┴──────────────┴──────────────┘
         ```
-
         """
-        ...
-    def when(self, *predicates: "ExpressionProxy" | pl.Expr) -> "ExpressionProxy":
+    def when(self, *predicates: ExpressionProxy | pl.Expr) -> ExpressionProxy:
         """Begin a conditional expression chain with specified conditions.
 
         Creates conditional logic for data transformations, allowing different values
@@ -2152,7 +2137,7 @@ class _BaseProxy:
         result = af.select(
             af["policy_id"],
             af["age"],
-            loading_factor=af["age"].when(af["age"] >= 65).then(1.25).otherwise(1.0)
+            loading_factor=af["age"].when(af["age"] >= 65).then(1.25).otherwise(1.0),
         ).collect()
         print(result)
         ```
@@ -2209,10 +2194,8 @@ class _BaseProxy:
         │ WHOLE       ┆ 1000000     ┆ 40  ┆ STANDARD   │
         └─────────────┴─────────────┴─────┴────────────┘
         ```
-
         """
-        ...
-    def then(self, expr: Any) -> "ExpressionProxy":
+    def then(self, expr: Any) -> ExpressionProxy:
         """Specify the value to return when the preceding when() condition is true.
 
         Defines the result value for rows that meet the conditional criteria specified
@@ -2251,17 +2234,22 @@ class _BaseProxy:
 
         This method is always used in conjunction with when() and optionally otherwise():
 
-        ```python # no_run
+        ```python # no_lint no_output_check
         # Basic pattern
         result = column.when(condition).then(value_if_true).otherwise(value_if_false)
 
-        # Chained conditions  
-        result = column.when(condition1).then(value1).when(condition2).then(value2).otherwise(default)
+        # Chained conditions
+        result = (
+            column.when(condition1)
+            .then(value1)
+            .when(condition2)
+            .then(value2)
+            .otherwise(default)
+        )
         ```
 
         """
-        ...
-    def otherwise(self, expr: Any) -> "ExpressionProxy":
+    def otherwise(self, expr: Any) -> ExpressionProxy:
         """Specify the default value when no preceding when() conditions are met.
 
         Provides the fallback value for rows that don't satisfy any of the conditional
@@ -2300,21 +2288,30 @@ class _BaseProxy:
 
         This method concludes a conditional chain started with when().then():
 
-        ```python # no_run
+        ```python # no_lint no_output_check
         # Complete conditional logic
         result = af.select(
-            category=af["value"].when(af["value"] > 1000).then("HIGH").when(af["value"] > 500).then("MEDIUM").otherwise("LOW")
+            category=af["value"]
+            .when(af["value"] > 1000)
+            .then("HIGH")
+            .when(af["value"] > 500)
+            .then("MEDIUM")
+            .otherwise("LOW")
         )
 
         # With default calculation
-        adjusted_amount = af["amount"].when(af["special_case"]).then(af["amount"] * 1.2).otherwise(af["amount"])
+        adjusted_amount = (
+            af["amount"]
+            .when(af["special_case"])
+            .then(af["amount"] * 1.2)
+            .otherwise(af["amount"])
+        )
         ```
 
         """
-        ...
 
     # --- Autopatched Unary Numeric Methods (Returning ExpressionProxy) ---
-    def abs(self) -> "ExpressionProxy":
+    def abs(self) -> ExpressionProxy:
         """Compute the absolute value of numeric values in this expression or column.
 
         Returns the absolute value (magnitude) of all numeric values, converting
@@ -2355,8 +2352,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["claim_id"],
-            abs_adjustment=af["adjustment_amount"].abs()
+            af["claim_id"], abs_adjustment=af["adjustment_amount"].abs()
         ).collect()
         print(result)
         ```
@@ -2403,10 +2399,8 @@ class _BaseProxy:
         │ UL          ┆ 0.08             │
         └─────────────┴──────────────────┘
         ```
-
         """
-        ...
-    def sign(self) -> "ExpressionProxy":
+    def sign(self) -> ExpressionProxy:
         """Compute the sign of numeric values.
 
         Returns the mathematical sign of each value: 1 for positive, -1 for negative,
@@ -2446,9 +2440,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["period"],
-            af["claims_variance"],
-            direction=af["claims_variance"].sign()
+            af["period"], af["claims_variance"], direction=af["claims_variance"].sign()
         ).collect()
         print(result)
         ```
@@ -2495,10 +2487,8 @@ class _BaseProxy:
         │ 1.0              ┆ 3     │
         └──────────────────┴───────┘
         ```
-
         """
-        ...
-    def floor(self) -> "ExpressionProxy":
+    def floor(self) -> ExpressionProxy:
         """Round numeric values down to the nearest integer.
 
         Applies floor function to each value, returning the largest integer less than
@@ -2537,8 +2527,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["policy_id"],
-            completed_age=af["age_decimal"].floor()
+            af["policy_id"], completed_age=af["age_decimal"].floor()
         ).collect()
         print(result)
         ```
@@ -2587,10 +2576,8 @@ class _BaseProxy:
         │ ANNUITY     ┆ 10.0            │
         └─────────────┴─────────────────┘
         ```
-
         """
-        ...
-    def ceil(self) -> "ExpressionProxy":
+    def ceil(self) -> ExpressionProxy:
         """Round numeric values up to the nearest integer.
 
         Applies ceiling function to each value, returning the smallest integer greater than
@@ -2629,8 +2616,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["claim_type"],
-            conservative_reserve=af["reserve_estimate"].ceil()
+            af["claim_type"], conservative_reserve=af["reserve_estimate"].ceil()
         ).collect()
         print(result)
         ```
@@ -2679,10 +2665,8 @@ class _BaseProxy:
         │ West   ┆ 3422.0          │
         └────────┴─────────────────┘
         ```
-
         """
-        ...
-    def round(self, decimals: int = 0) -> "ExpressionProxy":
+    def round(self, decimals: int = 0) -> ExpressionProxy:
         """Round numeric values to specified number of decimal places.
 
         Performs standard mathematical rounding of floating-point values to control
@@ -2727,8 +2711,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["policy_id"],
-            rounded_premium=af["calculated_premium"].round(2)
+            af["policy_id"], rounded_premium=af["calculated_premium"].round(2)
         ).collect()
         print(result)
         ```
@@ -2777,11 +2760,9 @@ class _BaseProxy:
         │ interest_rate  ┆ 0.0325   ┆ 0.0325      ┆ 0.03               │
         └────────────────┴──────────┴─────────────┴────────────────────┘
         ```
-
         """
-        ...
-    def round_sig_figs(self, sig_figs: int) -> "ExpressionProxy": ...
-    def exp(self) -> "ExpressionProxy":
+    def round_sig_figs(self, sig_figs: int) -> ExpressionProxy: ...
+    def exp(self) -> ExpressionProxy:
         """Compute the exponential function (e^x) of numeric values.
 
         Calculates e raised to the power of each value, essential for actuarial
@@ -2817,13 +2798,17 @@ class _BaseProxy:
 
         data = {
             "year": [1, 2, 3, 4, 5],
-            "log_interest_rate": [math.log(1.03), math.log(1.035), math.log(1.04),
-                                math.log(1.025), math.log(1.045)],
+            "log_interest_rate": [
+                math.log(1.03),
+                math.log(1.035),
+                math.log(1.04),
+                math.log(1.025),
+                math.log(1.045),
+            ],
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["year"],
-            growth_factor=af["log_interest_rate"].exp()
+            af["year"], growth_factor=af["log_interest_rate"].exp()
         ).collect()
         print(result)
         ```
@@ -2874,10 +2859,110 @@ class _BaseProxy:
         │ 85  ┆ 0.301194      │
         └─────┴───────────────┘
         ```
-
         """
-        ...
-    def log(self, base: float = ...) -> "ExpressionProxy":
+    def pow(self, exponent: float | int | ExpressionProxy) -> ExpressionProxy:
+        """Raise numeric values to specified power.
+
+        Computes the power operation element-wise, raising each value to the specified
+        exponent. Essential for actuarial calculations involving compound growth,
+        present value computations, mortality rate adjustments, and exponential
+        modeling in insurance and pension mathematics.
+
+        !!! note "When to use"
+            * **Present Value Calculations:** Apply discount factors using compound
+              interest formulas like (1 + i)^(-t) for cash flow valuations.
+            * **Compound Interest:** Calculate future values using (1 + i)^n for
+              policy cash values, premium accumulations, and benefit projections.
+            * **Mortality Rate Adjustments:** Apply exponential improvements or
+              deteriorations to base mortality rates over projection periods.
+            * **Risk Factor Scaling:** Transform linear risk scores to exponential
+              scales for underwriting models and pricing adjustments.
+            * **Reserve Calculations:** Compute actuarial present values using
+              discount factors in life insurance and annuity valuations.
+            * **Stochastic Modeling:** Generate power-law distributions for
+              catastrophic loss modeling and reinsurance pricing.
+
+        Parameters
+        ----------
+        exponent : float | int | ExpressionProxy
+            The power to raise values to. Can be a scalar or column expression.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression containing values raised to the specified power.
+
+        Examples
+        --------
+        **Scalar Example: Present Value Discount Factors**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004"],
+            "discount_base": [1.05, 1.04, 1.06, 1.03],
+            "time_years": [10, 15, 20, 25],
+        }
+        af = ActuarialFrame(data)
+        result = af.select(
+            af["policy_id"],
+            discount_factor=af["discount_base"].pow(-1 * af["time_years"])
+        ).collect()
+        print(result)
+        ```
+
+        ```text
+        shape: (4, 2)
+        ┌───────────┬─────────────────┐
+        │ policy_id ┆ discount_factor │
+        │ ---       ┆ ---             │
+        │ str       ┆ f64             │
+        ╞═══════════╪═════════════════╡
+        │ P001      ┆ 0.613913        │
+        │ P002      ┆ 0.555265        │
+        │ P003      ┆ 0.311805        │
+        │ P004      ┆ 0.477606        │
+        └───────────┴─────────────────┘
+        ```
+
+        **Vector Example: Interest Compounding Factors**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "age": [35, 45],
+            "month": [
+                [1, 2, 3, 4],
+                [1, 2, 3, 4]
+            ],
+            "base_rate": [
+                [1.04, 1.045, 1.05, 1.055],
+                [1.03, 1.035, 1.04, 1.045]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        af["squared_growth"] = af["base_rate"].pow(2.0)
+        
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 5)
+        ┌───────────┬─────┬─────────────┬────────────────────────┬────────────────────────────────┐
+        │ policy_id ┆ age ┆ month       ┆ base_rate              ┆ squared_growth                 │
+        │ ---       ┆ --- ┆ ---         ┆ ---                    ┆ ---                            │
+        │ str       ┆ i64 ┆ list[i64]   ┆ list[f64]              ┆ list[f64]                      │
+        ╞═══════════╪═════╪═════════════╪════════════════════════╪════════════════════════════════╡
+        │ P001      ┆ 35  ┆ [1, 2, … 4] ┆ [1.04, 1.045, … 1.055] ┆ [1.0816, 1.092025, … 1.113025] │
+        │ P002      ┆ 45  ┆ [1, 2, … 4] ┆ [1.03, 1.035, … 1.045] ┆ [1.0609, 1.071225, … 1.092025] │
+        └───────────┴─────┴─────────────┴────────────────────────┴────────────────────────────────┘
+        ```
+        """
+    def log(self, base: float = ...) -> ExpressionProxy:
         """Compute logarithm of numeric values with specified base.
 
         Calculates the logarithm of each value using the specified base, essential for
@@ -2923,8 +3008,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["year"],
-            log_growth_rate=af["growth_factor"].log(math.e)
+            af["year"], log_growth_rate=af["growth_factor"].log(math.e)
         ).collect()
         print(result)
         ```
@@ -2974,11 +3058,9 @@ class _BaseProxy:
         │ Health     ┆ 6.0          │
         └────────────┴──────────────┘
         ```
-
         """
-        ...
-    def log1p(self) -> "ExpressionProxy": ...
-    def ln(self) -> "ExpressionProxy":
+    def log1p(self) -> ExpressionProxy: ...
+    def ln(self) -> ExpressionProxy:
         """Compute the natural logarithm (base e) of numeric values.
 
         Calculates the natural logarithm of each value, fundamental for actuarial
@@ -3018,8 +3100,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["period"],
-            continuous_rate=af["discrete_rate"].log()
+            af["period"], continuous_rate=af["discrete_rate"].log()
         ).collect()
         print(result)
         ```
@@ -3068,11 +3149,9 @@ class _BaseProxy:
         │ Catastrophic ┆ 13.122363 │
         └──────────────┴───────────┘
         ```
-
         """
-        ...
-    def log10(self) -> "ExpressionProxy": ...
-    def sqrt(self) -> "ExpressionProxy":
+    def log10(self) -> ExpressionProxy: ...
+    def sqrt(self) -> ExpressionProxy:
         """Compute the square root of numeric values.
 
         Calculates the positive square root of each value, essential for actuarial
@@ -3112,8 +3191,7 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.select(
-            af["portfolio"],
-            standard_deviation=af["variance"].sqrt()
+            af["portfolio"], standard_deviation=af["variance"].sqrt()
         ).collect()
         print(result)
         ```
@@ -3162,16 +3240,14 @@ class _BaseProxy:
         │ 2023 ┆ 0.07       │
         └──────┴────────────┘
         ```
-
         """
-        ...
-    def cbrt(self) -> "ExpressionProxy": ...
-    def gamma(self) -> "ExpressionProxy": ...
-    def is_nan(self) -> "ExpressionProxy": ...
-    def is_finite(self) -> "ExpressionProxy": ...
-    def is_infinite(self) -> "ExpressionProxy": ...
-    def is_not_nan(self) -> "ExpressionProxy": ...
-    def is_not_null(self) -> "ExpressionProxy":
+    def cbrt(self) -> ExpressionProxy: ...
+    def gamma(self) -> ExpressionProxy: ...
+    def is_nan(self) -> ExpressionProxy: ...
+    def is_finite(self) -> ExpressionProxy: ...
+    def is_infinite(self) -> ExpressionProxy: ...
+    def is_not_nan(self) -> ExpressionProxy: ...
+    def is_not_null(self) -> ExpressionProxy:
         """Check which values are not null (not missing) in this expression or column.
 
         Returns a boolean expression indicating which values are present and valid.
@@ -3212,7 +3288,9 @@ class _BaseProxy:
         }
         af = ActuarialFrame(data)
         result = af.with_columns(
-            (af["beneficiary"].is_not_null() & af["premium"].is_not_null()).alias("complete_record")
+            (af["beneficiary"].is_not_null() & af["premium"].is_not_null()).alias(
+                "complete_record"
+            )
         ).collect()
         print(result)
         ```
@@ -3258,6 +3336,4 @@ class _BaseProxy:
         │ UL          ┆ 1              ┆ 1             │
         └─────────────┴────────────────┴───────────────┘
         ```
-
         """
-        ...
