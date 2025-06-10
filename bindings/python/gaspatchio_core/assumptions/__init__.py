@@ -1,34 +1,57 @@
-"""
-Gaspatchio Core Assumptions API - Metadata functions only
+"""Gaspatchio Assumption API v2 - New modular assumption table system."""
 
-Main assumption functions (load_assumptions, assumption_lookup) are available
-at the top level only: import gaspatchio_core as gs
+# Core API
+from ._analysis import DimensionInfo, TableSchema, analyze_table
+from ._api import Table, get_table_metadata, list_tables, list_tables_with_metadata
+from ._builder import TableBuilder
 
-This module only provides metadata and introspection functions.
-For loading and lookup operations, use the top-level API:
-    import gaspatchio_core as gs
-    gs.load_assumptions(...)
-    gs.assumption_lookup(...)
-"""
+# Dimension types
+from ._dimensions import (
+    CategoricalDimension,
+    ComputedDimension,
+    DataDimension,
+    Dimension,
+    MeltDimension,
+)
 
-# Import functions from the loader module
-from .api import get_table_metadata, list_tables_with_metadata
+# Strategy types
+from ._strategies import (
+    AutoDetectOverflow,
+    ExtendOverflow,
+    FillConstant,
+    FillForward,
+    FillStrategy,
+    LinearInterpolate,
+    OverflowStrategy,
+)
 
+# Legacy metadata functions (kept for backward compatibility)
+# from .api import get_table_metadata, list_tables_with_metadata  # Now using new API versions
 
-# Explicitly prevent import of main functions
-def __getattr__(name):
-    if name in ("load_assumptions", "assumption_lookup"):
-        raise ImportError(
-            f"'{name}' is not available from gaspatchio_core.assumptions. "
-            f"Use the top-level API instead:\n"
-            f"  import gaspatchio_core as gs\n"
-            f"  gs.{name}(...)"
-        )
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-
-
-# Only export metadata functions - main functions available at top level only
 __all__ = [
+    # Core API
+    "Table",
+    "analyze_table",
+    "TableBuilder",
+    # Metadata functions
     "get_table_metadata",
+    "list_tables",
     "list_tables_with_metadata",
+    # Schema types
+    "TableSchema",
+    "DimensionInfo",
+    # Dimensions
+    "Dimension",
+    "DataDimension",
+    "MeltDimension",
+    "CategoricalDimension",
+    "ComputedDimension",
+    # Strategies
+    "OverflowStrategy",
+    "ExtendOverflow",
+    "AutoDetectOverflow",
+    "FillStrategy",
+    "LinearInterpolate",
+    "FillConstant",
+    "FillForward",
 ]
