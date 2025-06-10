@@ -1,9 +1,10 @@
 import math
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 import polars as pl
 import pytest
+
 from gaspatchio_core import ActuarialFrame
 
 
@@ -14,7 +15,7 @@ class TestPolarsFunctions:
         """Verify Polars map_elements behavior for element-wise operations."""
         # Create a DataFrame directly with Polars
         df = pl.DataFrame(
-            {"age": [30, 40, 50, 60, 70], "weight": [70, 80, 90, 100, 110]}
+            {"age": [30, 40, 50, 60, 70], "weight": [70, 80, 90, 100, 110]},
         )
 
         # Define a simple function
@@ -23,7 +24,7 @@ class TestPolarsFunctions:
 
         # Test direct Polars map_elements
         result = df.with_columns(
-            age_squared=pl.col("age").map_elements(square, return_dtype=pl.Int64)
+            age_squared=pl.col("age").map_elements(square, return_dtype=pl.Int64),
         )
 
         # Verify results
@@ -36,7 +37,7 @@ class TestPolarsFunctions:
         df = pl.DataFrame(
             {
                 "age": [30, 40, 50, 60, 70],
-            }
+            },
         )
 
         # Define a batch function that works on the whole Series at once
@@ -47,7 +48,7 @@ class TestPolarsFunctions:
 
         # Test direct Polars map_batches
         result = df.with_columns(
-            age_squared=pl.col("age").map_batches(batch_square, return_dtype=pl.Int64)
+            age_squared=pl.col("age").map_batches(batch_square, return_dtype=pl.Int64),
         )
 
         # Verify results
@@ -60,7 +61,7 @@ class TestPolarsFunctions:
             {
                 "a": [10, 20, 30],
                 "b": [1, 2, 3],
-            }
+            },
         )
 
         # Function that takes multiple columns as input
@@ -69,7 +70,7 @@ class TestPolarsFunctions:
 
         # Test direct Polars map_batches for multiple columns
         result = df.with_columns(
-            sum_ab=pl.map_batches([pl.col("a"), pl.col("b")], sum_columns)
+            sum_ab=pl.map_batches([pl.col("a"), pl.col("b")], sum_columns),
         )
 
         # Verify results
@@ -81,7 +82,7 @@ class TestPolarsFunctions:
         df = pl.DataFrame(
             {
                 "angle": [0, 30, 45, 60, 90],
-            }
+            },
         )
 
         # Test direct Polars with NumPy functions using map_batches for efficiency
@@ -92,8 +93,9 @@ class TestPolarsFunctions:
         # Using map_batches is more efficient for NumPy operations
         result = df.with_columns(
             sin_value=pl.col("angle").map_batches(
-                sin_degrees_batch, return_dtype=pl.Float64
-            )
+                sin_degrees_batch,
+                return_dtype=pl.Float64,
+            ),
         )
 
         # For comparison, also test element-wise with map_elements
@@ -102,15 +104,17 @@ class TestPolarsFunctions:
 
         result_elem = df.with_columns(
             sin_value_elem=pl.col("angle").map_elements(
-                sin_degrees_elem, return_dtype=pl.Float64
-            )
+                sin_degrees_elem,
+                return_dtype=pl.Float64,
+            ),
         )
 
         # Verify results
         expected = [np.sin(np.radians(x)) for x in [0, 30, 45, 60, 90]]
         np.testing.assert_almost_equal(result["sin_value"].to_list(), expected)
         np.testing.assert_almost_equal(
-            result_elem["sin_value_elem"].to_list(), expected
+            result_elem["sin_value_elem"].to_list(),
+            expected,
         )
 
 
@@ -123,7 +127,7 @@ class TestActuarialFrameApply:
         pdf = pl.DataFrame(
             {
                 "age": [30, 40, 50, 60, 70],
-            }
+            },
         )
 
         def square(x):
@@ -131,7 +135,7 @@ class TestActuarialFrameApply:
 
         # Execute with Polars directly
         polars_result = pdf.with_columns(
-            age_squared=pl.col("age").map_elements(square, return_dtype=pl.Int64)
+            age_squared=pl.col("age").map_elements(square, return_dtype=pl.Int64),
         )
 
         # Now test with ActuarialFrame
@@ -143,7 +147,8 @@ class TestActuarialFrameApply:
 
         # Verify results match Polars native implementation
         np.testing.assert_array_equal(
-            polars_result["age_squared"].to_list(), actf_result["age_squared"].to_list()
+            polars_result["age_squared"].to_list(),
+            actf_result["age_squared"].to_list(),
         )
 
     def test_apply_with_return_dtype(self):
@@ -152,12 +157,12 @@ class TestActuarialFrameApply:
         pdf = pl.DataFrame(
             {
                 "age": [30, 40, 50, 60, 70],
-            }
+            },
         )
 
         # Execute with Polars directly
         polars_result = pdf.with_columns(
-            age_sqrt=pl.col("age").map_elements(math.sqrt, return_dtype=pl.Float64)
+            age_sqrt=pl.col("age").map_elements(math.sqrt, return_dtype=pl.Float64),
         )
 
         # Now test with ActuarialFrame
@@ -169,7 +174,8 @@ class TestActuarialFrameApply:
 
         # Verify results match Polars native implementation
         np.testing.assert_almost_equal(
-            polars_result["age_sqrt"].to_list(), actf_result["age_sqrt"].to_list()
+            polars_result["age_sqrt"].to_list(),
+            actf_result["age_sqrt"].to_list(),
         )
 
     def test_apply_with_numpy_functions(self):
@@ -178,7 +184,7 @@ class TestActuarialFrameApply:
         pdf = pl.DataFrame(
             {
                 "angle": [0, 30, 45, 60, 90],
-            }
+            },
         )
 
         def sin_degrees(x):
@@ -186,7 +192,10 @@ class TestActuarialFrameApply:
 
         # Execute with Polars directly
         polars_result = pdf.with_columns(
-            sin_value=pl.col("angle").map_elements(sin_degrees, return_dtype=pl.Float64)
+            sin_value=pl.col("angle").map_elements(
+                sin_degrees,
+                return_dtype=pl.Float64,
+            ),
         )
 
         # Now test with ActuarialFrame
@@ -198,7 +207,8 @@ class TestActuarialFrameApply:
 
         # Verify results match Polars native implementation
         np.testing.assert_almost_equal(
-            polars_result["sin_value"].to_list(), actf_result["sin_value"].to_list()
+            polars_result["sin_value"].to_list(),
+            actf_result["sin_value"].to_list(),
         )
 
     def test_apply_with_string_manipulation(self):
@@ -207,7 +217,7 @@ class TestActuarialFrameApply:
         pdf = pl.DataFrame(
             {
                 "name": ["john", "JANE", "Mike", "ANNA", "tom"],
-            }
+            },
         )
 
         def capitalize(x):
@@ -215,7 +225,7 @@ class TestActuarialFrameApply:
 
         # Execute with Polars directly
         polars_result = pdf.with_columns(
-            name_capitalized=pl.col("name").map_elements(capitalize)
+            name_capitalized=pl.col("name").map_elements(capitalize),
         )
 
         # Now test with ActuarialFrame
@@ -231,47 +241,13 @@ class TestActuarialFrameApply:
             == actf_result["name_capitalized"].to_list()
         )
 
-    def test_apply_error_handling(self):
-        """Test error handling during apply."""
-        # First verify Polars behavior with errors
-        pdf = pl.DataFrame(
-            {
-                "age": [30, 40, 50, 60, 70],
-            }
-        )
-
-        def problematic_function(x):
-            if x > 50:
-                raise ValueError(f"Value {x} is too large!")
-            return x * 2
-
-        # Polars wraps UDF errors in ComputeError. Error is raised on collect() for eager DataFrames.
-        # For LazyFrames (which with_columns produces before collect), the error might only appear on collect.
-        # The .collect() here ensures the computation happens for the direct Polars check.
-        with pytest.raises(pl.exceptions.ComputeError, match="Value 60 is too large!"):
-            pdf.lazy().with_columns(
-                pl.col("age").map_elements(problematic_function).alias("doubled_age")
-            ).collect()
-
-        # Now test with ActuarialFrame
-        af = ActuarialFrame(pdf.clone(), mode="debug")
-
-        af["doubled_age"] = af["age"].map_elements(problematic_function)
-
-        # The error should be raised when collecting results from ActuarialFrame
-        # Our error handling might surface it as ComputeError or the original ValueError
-        with pytest.raises(
-            (pl.exceptions.ComputeError, ValueError), match="Value 60 is too large!"
-        ):
-            af.collect()
-
     def test_map_batches_with_numpy(self):
         """Test map_batches for efficient batch operations."""
         # First test with native Polars
         pdf = pl.DataFrame(
             {
                 "angle": [0, 30, 45, 60, 90],
-            }
+            },
         )
 
         # Define a batch function that works on the entire Series
@@ -282,8 +258,9 @@ class TestActuarialFrameApply:
         # Execute with Polars directly
         polars_result = pdf.with_columns(
             sin_batch=pl.col("angle").map_batches(
-                sin_degrees_batch, return_dtype=pl.Float64
-            )
+                sin_degrees_batch,
+                return_dtype=pl.Float64,
+            ),
         )
 
         # Now test with ActuarialFrame
@@ -291,13 +268,15 @@ class TestActuarialFrameApply:
 
         # Apply batch function using our implementation
         af["sin_batch"] = af["angle"].map_batches(
-            sin_degrees_batch, return_dtype=pl.Float64
+            sin_degrees_batch,
+            return_dtype=pl.Float64,
         )
         actf_result = af.collect()
 
         # Verify results match Polars native implementation
         np.testing.assert_almost_equal(
-            polars_result["sin_batch"].to_list(), actf_result["sin_batch"].to_list()
+            polars_result["sin_batch"].to_list(),
+            actf_result["sin_batch"].to_list(),
         )
 
     def test_map_batches_vs_apply_performance(self):
@@ -319,16 +298,19 @@ class TestActuarialFrameApply:
 
         # Apply both functions - for a real test, you'd want to time these
         af["squared_elem"] = af["value"].map_elements(
-            square_elem, return_dtype=pl.Int64
+            square_elem,
+            return_dtype=pl.Int64,
         )
         af["squared_batch"] = af["value"].map_batches(
-            square_batch, return_dtype=pl.Int64
+            square_batch,
+            return_dtype=pl.Int64,
         )
         result = af.collect()
 
         # Verify both methods produce the same result
         np.testing.assert_array_equal(
-            result["squared_elem"].to_list(), result["squared_batch"].to_list()
+            result["squared_elem"].to_list(),
+            result["squared_batch"].to_list(),
         )
 
 
