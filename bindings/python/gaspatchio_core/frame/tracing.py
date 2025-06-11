@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Callable, List, Tuple
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from loguru import logger
@@ -9,15 +10,28 @@ from loguru import logger
 from ..util import get_default_mode, get_default_verbose
 
 if TYPE_CHECKING:
-    from .base import ActuarialFrame  # noqa: F401 - Avoid circular import
+    from .base import ActuarialFrame
 
 
-def log_query_plan(operations: List[Tuple[str, Any]], frame_df: pl.LazyFrame) -> None:
+def log_query_plan(operations: list[Any], frame_df: pl.LazyFrame) -> None:
     """Logs the query plan if verbose mode is enabled."""
     if get_default_verbose():
         logger.info("Computation Graph:")
-        for i, (name, expr) in enumerate(operations):
-            logger.info(f"  Step {i + 1}: {name} = {expr}")
+        for i, operation in enumerate(operations):
+            # Handle both old tuple format and new TracedOperation format
+            if isinstance(operation, tuple):
+                # Legacy format: (name, expr)
+                name, expr = operation
+                logger.info(f"  Step {i + 1}: {name} = {expr}")
+            else:
+                # New format: TracedOperation
+                logger.info(
+                    f"  Step {i + 1}: {operation.alias} = {operation.expression}",
+                )
+                if hasattr(operation, "metadata") and operation.metadata:
+                    logger.info(
+                        f"    Source: {operation.metadata.display_filename}:{operation.metadata.line_number}",
+                    )
         logger.info("Optimized Query Plan:")
         try:
             logger.info(frame_df.explain(optimized=True))
@@ -37,16 +51,16 @@ def build_trace_decorator(frame_instance: ActuarialFrame) -> Callable:
 
             if mode == "debug":
                 logger.debug(f"Running {func.__name__} in debug mode.")
-                # Pass the frame instance itself if the function expects it
-                # Assuming the decorated function might take the frame as first arg
-                # or might operate implicitly on it. Adjust if needed.
-                # If the function takes the frame explicitly:
-                # result = func(frame_instance, *args, **kwargs)
-                # If it operates implicitly:
-                result = func(*args, **kwargs)
-                return frame_instance if result is None else result
+                # Temporarily disable tracing to execute operations immediately
+                original_tracing_state = frame_instance._tracing
+                frame_instance._tracing = False
+                try:
+                    result = func(*args, **kwargs)
+                    return frame_instance if result is None else result
+                finally:
+                    frame_instance._tracing = original_tracing_state
 
-            elif mode == "optimize":
+            if mode == "optimize":
                 logger.debug(f"Tracing {func.__name__} in optimize mode.")
                 original_tracing_state = frame_instance._tracing
                 original_graph = frame_instance._computation_graph[:]  # Shallow copy
@@ -64,7 +78,7 @@ def build_trace_decorator(frame_instance: ActuarialFrame) -> Callable:
                     captured_operations = frame_instance._computation_graph
                     if captured_operations:
                         logger.debug(
-                            f"{len(captured_operations)} operations captured for later application."
+                            f"{len(captured_operations)} operations captured for later application.",
                         )
                         # Log the plan if verbose, but don't apply yet
                         if get_default_verbose():
@@ -92,12 +106,33 @@ def build_trace_decorator(frame_instance: ActuarialFrame) -> Callable:
 
 
 def append_operation_to_graph(
-    frame_instance: ActuarialFrame, name: str, expr: Any
+    frame_instance: ActuarialFrame,
+    name: str,
+    expr: Any,
 ) -> None:
-    """Appends an operation to the frame's computation graph if tracing is enabled."""
-    if frame_instance._tracing:
-        frame_instance._computation_graph.append((name, expr))
-        logger.trace(f"Graph: Added '{name}' = {expr}")
+    """Appends an operation with metadata to the frame's computation graph if tracing is enabled."""
+    # Fast path: check tracing flag early to avoid any overhead when disabled
+    if not frame_instance._tracing:
+        return
+
+    # Import locally to avoid circular dependencies and cache for performance
+    from ..errors.metadata import TracedOperation, capture_source_context
+
+    # Capture source context from the calling code
+    # Stack depth 2: capture_source_context -> append_operation_to_graph -> user code
+    metadata = capture_source_context(depth=2)
+
+    # Create TracedOperation instead of tuple
+    operation = TracedOperation(
+        alias=name,
+        expression=expr,
+        metadata=metadata,
+    )
+
+    frame_instance._computation_graph.append(operation)
+    logger.trace(
+        f"Graph: Added '{name}' = {expr} at {metadata.display_filename}:{metadata.line_number}",
+    )
 
 
 # You might add more helper functions here if needed, e.g., for complex logic
