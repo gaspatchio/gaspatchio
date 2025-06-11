@@ -463,10 +463,10 @@ def _method_caller(
         if hasattr(self_proxy, '_parent') and self_proxy._parent and self_proxy._parent._tracing:
             # Capture where this proxy method was called from
             try:
-                from ..errors.metadata import capture_source_context
-                context = capture_source_context(depth=2)
-                error_msg += f"\n  Called from: {context.display_filename}:{context.line_number}"
-                error_msg += f"\n  Source: {context.source_line}"
+                if capture_source_context is not None:
+                    context = capture_source_context(depth=2)
+                    error_msg += f"\n  Called from: {context.display_filename}:{context.line_number}"
+                    error_msg += f"\n  Source: {context.source_line}"
             except Exception:
                 # If context capture fails, fall back to basic error
                 pass

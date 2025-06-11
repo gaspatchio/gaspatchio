@@ -67,14 +67,17 @@ def get_default_threads() -> int:
 def get_error_mode() -> str:
     """Get the error handling mode ('basic', 'enhanced', 'debug', or 'off')."""
     global _DEFAULT_ERROR_MODE
-    # Check environment variable with case normalization
-    env_mode = os.environ.get("AF_ERROR_MODE", _DEFAULT_ERROR_MODE)
+    # Always check environment variable first (this allows environment to override programmatic settings)
+    env_mode = os.environ.get("AF_ERROR_MODE")
     if env_mode:
         env_mode = env_mode.lower()
         # Map 'standard' to 'basic' for backward compatibility
         if env_mode == "standard":
             env_mode = "basic"
-    return env_mode
+        return env_mode
+    
+    # Fall back to global setting if no environment variable
+    return _DEFAULT_ERROR_MODE
 
 
 def set_error_mode(mode: str) -> None:
@@ -90,6 +93,7 @@ def set_error_mode(mode: str) -> None:
             f"Invalid error mode: {mode}. Must be 'basic', 'enhanced', 'debug', or 'off'",
         )
     _DEFAULT_ERROR_MODE = mode
+    # Always update environment variable for consistency
     os.environ["AF_ERROR_MODE"] = mode
 
 
