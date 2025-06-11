@@ -10,6 +10,13 @@ from loguru import logger
 from .namespaces.dt_proxy import DtNamespaceProxy
 from .namespaces.string_proxy import StringNamespaceProxy
 
+# Import capture_source_context at module level for testability
+try:
+    from ..errors.metadata import capture_source_context
+except ImportError:
+    # Fallback if import fails to avoid breaking the module
+    capture_source_context = None
+
 # Avoid circular imports at runtime but allow type checking
 if TYPE_CHECKING:
     # Import proxy types for type hinting within functions/methods
@@ -449,7 +456,29 @@ def _method_caller(
             unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
             result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
     except Exception as e:
-        raise type(e)(f"Error calling proxied Polars method '{name}': {e}") from e
+        # Enhanced error message with source context
+        error_msg = f"Error calling proxied Polars method '{name}': {e}"
+        
+        # If we're in a traced context, add source information
+        if hasattr(self_proxy, '_parent') and self_proxy._parent and self_proxy._parent._tracing:
+            # Capture where this proxy method was called from
+            try:
+                from ..errors.metadata import capture_source_context
+                context = capture_source_context(depth=2)
+                error_msg += f"\n  Called from: {context.display_filename}:{context.line_number}"
+                error_msg += f"\n  Source: {context.source_line}"
+            except Exception:
+                # If context capture fails, fall back to basic error
+                pass
+        
+        new_error = type(e)(error_msg)
+        # Preserve the column/expression info for error handling
+        new_error.proxy_info = {
+            'proxy_type': type(self_proxy).__name__,
+            'method': name,
+            'column': getattr(self_proxy, 'name', None)
+        }
+        raise new_error from e
     return _wrap(parent_af, result)
 
 
