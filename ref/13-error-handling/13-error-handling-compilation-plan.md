@@ -8,8 +8,8 @@ Gaspatchio has two independent mode systems that interact to determine execution
 
 | Mode | Environment Variable | Behavior | Operation Execution | Computation Graph | Tracing | Performance |
 |------|---------------------|----------|-------------------|------------------|---------|-------------|
-| **debug** (default) | `GASPATCHIO_MODE=debug` | Operations execute immediately when assigned | `af["col"] = expr` → executed instantly | Empty (`_computation_graph = []`) | `_tracing = False` | Fast execution, no optimization |
-| **optimize** | `GASPATCHIO_MODE=optimize` | Operations captured and deferred until collection | `af["col"] = expr` → stored for later | Populated with `TracedOperation` objects | `_tracing = True` | Slower setup, optimized execution |
+| **debug** (default) | `GASPATCHIO_MODE=debug` | Operations execute immediately when assigned | `af["col"] = expr` → executed instantly | Populated with calculation graph | `_tracing = False` | Fast execution, no optimization |
+| **optimize** | `GASPATCHIO_MODE=optimize` | Operations captured and deferred until collection | `af["col"] = expr` → stored for later | Empty (`_computation_graph = []`) | `_tracing = True` | Slower setup, optimized execution |
 
 ### Error Handling Modes (AF_ERROR_MODE)
 

@@ -52,6 +52,7 @@ class TracedOperation:
     alias: str
     expression: Any  # pl.Expr, but avoiding import here to prevent circular deps
     metadata: OperationMetadata
+    expected_dtype: Any | None = None  # pl.DataType, but avoiding import here
 
 
 def capture_source_context(
