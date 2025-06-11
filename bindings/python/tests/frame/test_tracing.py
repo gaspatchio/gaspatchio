@@ -2,9 +2,10 @@ from unittest.mock import Mock, patch
 
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
+
 from gaspatchio_core import ActuarialFrame, set_default_mode
 from gaspatchio_core.util import set_default_verbose
-from polars.testing import assert_frame_equal
 
 # Sample data for testing
 DATA = {"a": [1, 2, 3], "b": [4, 5, 6]}
@@ -12,7 +13,7 @@ DATA = {"a": [1, 2, 3], "b": [4, 5, 6]}
 
 @pytest.fixture
 def base_frame():
-    "Fixture to provide a basic ActuarialFrame."
+    """Fixture to provide a basic ActuarialFrame."""
     return ActuarialFrame(DATA)
 
 
@@ -61,7 +62,8 @@ def test_trace_optimize_mode_capture(base_frame):
     # Check that operations were captured, not executed immediately on original _df
     original_df = pl.LazyFrame(DATA)
     assert_frame_equal(
-        base_frame._df.collect(), original_df.collect()
+        base_frame._df.collect(),
+        original_df.collect(),
     )  # _df should be updated *after* trace returns
 
     # Check computation graph content (simplified check)
@@ -105,9 +107,15 @@ def test_trace_log_query_plan_called(mock_log_plan, base_frame):
     final_df = args[1]
 
     assert len(captured_ops) == 1
-    assert captured_ops[0][0] == "c"
-    # Check the expression type approximately
-    assert isinstance(captured_ops[0][1], pl.Expr)
+    # Handle both old tuple format and new TracedOperation format
+    if hasattr(captured_ops[0], "alias"):
+        # New TracedOperation format
+        assert captured_ops[0].alias == "c"
+        assert isinstance(captured_ops[0].expression, pl.Expr)
+    else:
+        # Old tuple format
+        assert captured_ops[0][0] == "c"
+        assert isinstance(captured_ops[0][1], pl.Expr)
 
     # Check that the df passed is the final one after applying ops
     expected_final_df = pl.LazyFrame(DATA)

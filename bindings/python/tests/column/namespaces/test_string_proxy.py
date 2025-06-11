@@ -169,7 +169,7 @@ def test_call_string_method_with_args_and_kwargs(sample_af: ActuarialFrame):
     result_expr_proxy = str_proxy._call_string_method("zfill", 3)
     assert isinstance(result_expr_proxy, ExpressionProxy)
     result_af_collected = (
-        sample_af.with_columns(col_proxy.alias("str_int"))
+        sample_af
         .select(result_expr_proxy.alias("zfilled_str"))
         .collect()
     )

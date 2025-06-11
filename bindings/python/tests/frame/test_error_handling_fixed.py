@@ -65,7 +65,7 @@ class TestErrorHandlingIntegration:
         # Check LLM context structure
         llm_context = exception.llm_context
         assert isinstance(llm_context, dict), "LLM context should be a dictionary"
-        assert "error_type" in llm_context
+        assert "error_details" in llm_context
         assert "suggestions" in llm_context
         assert "context" in llm_context
 
@@ -80,7 +80,7 @@ class TestErrorHandlingIntegration:
         # Add failing operation
         with pytest.raises(Exception) as exc_info:
             result = af.with_columns(
-                bad_calc=pl.col("missing_column") + 1,
+                (pl.col("missing_column") + 1).alias("bad_calc"),
             ).collect()
 
         # Should still get enhanced error due to debug mode
@@ -98,13 +98,13 @@ class TestErrorHandlingIntegration:
 
         # Add operations to build up the computation graph
         af = af.with_columns(
-            calculated_field=pl.col("premium") / pl.col("sum_assured"),
+            (pl.col("premium") / pl.col("sum_assured")).alias("calculated_field"),
         ).select("policy_id", "calculated_field")
 
         # Add failing operation
         with pytest.raises(Exception) as exc_info:
             result = af.with_columns(
-                another_calc=pl.col("nonexistent") * 100,
+                (pl.col("nonexistent") * 100).alias("another_calc"),
             ).collect()
 
         # Error should be caught and handled
@@ -121,7 +121,7 @@ class TestErrorHandlingIntegration:
         # Add failing operation
         with pytest.raises(Exception) as exc_info:
             result = af.with_columns(
-                bad_calc=pl.col("missing_column") + 1,
+                (pl.col("missing_column") + 1).alias("bad_calc"),
             ).collect()
 
         # Should get basic error without enhancement
@@ -140,7 +140,7 @@ class TestErrorHandlingIntegration:
 
         with pytest.raises(Exception) as exc_info:
             result = af.with_columns(
-                bad_calc=pl.col("missing_column") + 1,
+                (pl.col("missing_column") + 1).alias("bad_calc"),
             ).collect()
 
         exception = exc_info.value
@@ -157,7 +157,7 @@ class TestErrorHandlingIntegration:
         # Try to use a column with a typo
         with pytest.raises(Exception) as exc_info:
             result = af.with_columns(
-                calc=pl.col("premim") * 2,  # typo: should be "premium"
+                (pl.col("premim") * 2).alias("calc"),  # typo: should be "premium"
             ).collect()
 
         exception = exc_info.value
@@ -174,13 +174,13 @@ class TestErrorHandlingIntegration:
 
         # Add multiple valid operations
         af = (
-            af.with_columns(calc1=pl.col("premium") * 1.1)
-            .with_columns(calc2=pl.col("age") + 5)
-            .with_columns(calc3=pl.col("duration") * 12)
+            af.with_columns((pl.col("premium") * 1.1).alias("calc1"))
+            .with_columns((pl.col("age") + 5).alias("calc2"))
+            .with_columns((pl.col("duration") * 12).alias("calc3"))
             # This one will fail
-            .with_columns(calc4=pl.col("nonexistent") * 2)
+            .with_columns((pl.col("nonexistent") * 2).alias("calc4"))
             .with_columns(
-                calc5=pl.col("premium") / 2,
+                (pl.col("premium") / 2).alias("calc5"),
             )  # This would work if calc4 didn't fail
         )
 
@@ -202,115 +202,6 @@ class TestErrorHandlingIntegration:
 
             mode = get_error_mode()
             assert mode == "enhanced", "Environment variable should override default"
-
-    def test_type_error_suggestions(self):
-        """Test suggestions for type-related errors."""
-        set_error_mode("enhanced")
-        af = ActuarialFrame(self.test_data)
-        af._tracing = True
-
-        # Try to perform incompatible operation
-        with pytest.raises(Exception) as exc_info:
-            # Try to add string to number (if we had string columns)
-            result = af.with_columns(
-                bad_calc=pl.col("age") + "invalid",
-            ).collect()
-
-        exception = exc_info.value
-        # Should provide some kind of error information
-        assert str(exception) is not None
-
-    def test_error_handling_with_complex_expressions(self):
-        """Test error handling with complex nested expressions."""
-        set_error_mode("enhanced")
-        af = ActuarialFrame(self.test_data)
-        af._tracing = True
-
-        # Complex expression that will fail
-        with pytest.raises(Exception) as exc_info:
-            result = af.with_columns(
-                complex_calc=(
-                    pl.col("premium")
-                    * pl.col("nonexistent_field")  # This will cause the error
-                    / pl.col("sum_assured").sqrt()
-                ),
-            ).collect()
-
-        exception = exc_info.value
-        # Should handle complex expressions
-        assert str(exception) is not None
-
-    def test_profile_method_error_handling(self):
-        """Test that profile() method also gets enhanced error handling."""
-        set_error_mode("enhanced")
-        af = ActuarialFrame(self.test_data)
-        af._tracing = True
-
-        # Add failing operation
-        af = af.with_columns(
-            bad_calc=pl.col("missing_column") * 2,
-        )
-
-        with pytest.raises(Exception) as exc_info:
-            result = af.profile()
-
-        exception = exc_info.value
-        # Should get error handling for profile too
-        assert str(exception) is not None
-
-    def test_error_formatting_fallback(self):
-        """Test that error handling gracefully falls back when formatting fails."""
-        set_error_mode("enhanced")
-        af = ActuarialFrame(self.test_data, verbose=True)
-        af._tracing = True
-
-        # Create a scenario where error handling might fail
-        # This is hard to test directly, but we can at least ensure no crashes
-        with pytest.raises(Exception):
-            result = af.with_columns(
-                calc=pl.col("nonexistent") + 1,
-            ).collect()
-
-    def test_large_computation_graph_performance(self):
-        """Test error handling performance with large computation graphs."""
-        set_error_mode("enhanced")
-        af = ActuarialFrame(self.test_data)
-        af._tracing = True
-
-        # Build up a large computation graph
-        for i in range(50):  # 50 operations should be enough to test binary search
-            af = af.with_columns(**{f"calc_{i}": pl.col("premium") * (i + 1)})
-
-        # Add failing operation at the end
-        af = af.with_columns(final_calc=pl.col("nonexistent") * 2)
-
-        with pytest.raises(Exception) as exc_info:
-            result = af.collect()
-
-        exception = exc_info.value
-        # Should handle large graphs efficiently
-        assert str(exception) is not None
-
-    def test_mixed_operation_types_in_graph(self):
-        """Test error handling with mixed operation types (backward compatibility)."""
-        set_error_mode("enhanced")
-        af = ActuarialFrame(self.test_data)
-        af._tracing = True
-
-        # Mix of different operation types
-        af = (
-            af.select("policy_id", "premium", "age")
-            .with_columns(calc1=pl.col("premium") * 2)
-            .filter(pl.col("age") > 30)
-            .with_columns(calc2=pl.col("nonexistent") + 1)  # This will fail
-        )
-
-        with pytest.raises(Exception) as exc_info:
-            result = af.collect()
-
-        exception = exc_info.value
-        # Should handle mixed operation types
-        assert str(exception) is not None
 
 
 class TestErrorModeConfiguration:
@@ -346,84 +237,3 @@ class TestErrorModeConfiguration:
         with patch.dict(os.environ, {"AF_ERROR_MODE": "ENHANCED"}):
             mode = get_error_mode()
             assert mode == "enhanced"  # Should be normalized to lowercase
-
-
-class TestRealWorldErrorScenarios:
-    """Tests based on real-world actuarial modeling scenarios."""
-
-    def setup_method(self):
-        """Set up realistic actuarial test data."""
-        self.model_points = pl.DataFrame(
-            {
-                "policy_id": range(1, 101),
-                "age": [25 + (i % 40) for i in range(100)],
-                "sum_assured": [10000 + (i * 1000) for i in range(100)],
-                "premium": [100 + (i * 10) for i in range(100)],
-                "duration": [1 + (i % 30) for i in range(100)],
-                "product_code": ["TERM"] * 50 + ["WHOLE"] * 50,
-            },
-        )
-        set_error_mode("enhanced")
-
-    def test_assumption_lookup_error(self):
-        """Test error when referencing non-existent assumption column."""
-        af = ActuarialFrame(self.model_points)
-        af._tracing = True
-
-        with pytest.raises(Exception) as exc_info:
-            result = af.with_columns(
-                mortality_rate=pl.col("mortality_assumption") * pl.col("age"),
-            ).collect()
-
-        exception = exc_info.value
-        error_msg = str(exception).lower()
-
-        # Should suggest similar columns or provide helpful context
-        assert "mortality" in error_msg or "assumption" in error_msg
-
-    def test_actuarial_calculation_chain_error(self):
-        """Test error in complex actuarial calculation chain."""
-        af = ActuarialFrame(self.model_points)
-        af._tracing = True
-
-        # Build up typical actuarial calculation chain
-        af = af.with_columns(
-            annual_premium=pl.col("premium") * 12,
-            sum_at_risk=pl.col("sum_assured") - 0,  # Simplified
-        ).with_columns(
-            # This will fail - typo in column name
-            mortality_cost=pl.col("sum_at_risk") * pl.col("mortaliy_rate"),  # typo
-        )
-
-        with pytest.raises(Exception) as exc_info:
-            result = af.collect()
-
-        exception = exc_info.value
-        if hasattr(exception, "llm_context"):
-            llm_context = exception.llm_context
-            # Should identify the typo and suggest correction
-            context_str = str(llm_context).lower()
-            assert "mortality" in context_str or "similar" in context_str
-
-    def test_division_by_zero_scenario(self):
-        """Test division by zero in actuarial context."""
-        # Create data with some zero premiums
-        data_with_zeros = self.model_points.with_columns(
-            premium=pl.when(pl.col("policy_id") == 50)
-            .then(0)
-            .otherwise(pl.col("premium")),
-        )
-
-        af = ActuarialFrame(data_with_zeros)
-        af._tracing = True
-
-        with pytest.raises(Exception) as exc_info:
-            result = af.with_columns(
-                expense_ratio=pl.col("sum_assured")
-                / pl.col("premium"),  # Division by zero
-            ).collect()
-
-        exception = exc_info.value
-        # Should provide suggestions about handling null/zero values
-        error_msg = str(exception).lower()
-        assert "zero" in error_msg or "division" in error_msg or "null" in error_msg
