@@ -50,18 +50,7 @@ def build_trace_decorator(frame_instance: ActuarialFrame) -> Callable:
             mode = get_default_mode()
 
             if mode == "debug":
-                logger.debug(f"Running {func.__name__} in debug mode.")
-                # Temporarily disable tracing to execute operations immediately
-                original_tracing_state = frame_instance._tracing
-                frame_instance._tracing = False
-                try:
-                    result = func(*args, **kwargs)
-                    return frame_instance if result is None else result
-                finally:
-                    frame_instance._tracing = original_tracing_state
-
-            if mode == "optimize":
-                logger.debug(f"Tracing {func.__name__} in optimize mode.")
+                logger.debug(f"Tracing {func.__name__} in debug mode for enhanced error handling.")
                 original_tracing_state = frame_instance._tracing
                 original_graph = frame_instance._computation_graph[:]  # Shallow copy
                 frame_instance._tracing = True
@@ -86,7 +75,7 @@ def build_trace_decorator(frame_instance: ActuarialFrame) -> Callable:
                     else:
                         logger.debug("No operations captured during trace.")
 
-                    # Return the frame instance (state is unchanged wrt _df in optimize mode)
+                    # Return the frame instance (state is unchanged wrt _df in debug mode)
                     # If the original function returned something else, we might lose it here.
                     # The original implementation assumed the function modifies the frame inplace
                     # or returns None. Let's stick to that for now.
@@ -96,6 +85,17 @@ def build_trace_decorator(frame_instance: ActuarialFrame) -> Callable:
                     # Restore original tracing state and graph (if needed, though usually not)
                     frame_instance._tracing = original_tracing_state
                     # frame_instance._computation_graph = original_graph # Usually reset is fine
+
+            if mode == "optimize":
+                logger.debug(f"Running {func.__name__} in optimize mode.")
+                # Temporarily disable tracing to execute operations immediately for performance
+                original_tracing_state = frame_instance._tracing
+                frame_instance._tracing = False
+                try:
+                    result = func(*args, **kwargs)
+                    return frame_instance if result is None else result
+                finally:
+                    frame_instance._tracing = original_tracing_state
 
             else:
                 raise ValueError(f"Unknown execution mode: {mode}")
