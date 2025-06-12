@@ -10,14 +10,23 @@ import polars as pl
 # Expose the functions submodule
 from . import functions as functions
 
-# Import types for the public API - metadata functions from assumptions
+# Import types for the public API - NEW v2 assumption API
+from .assumptions import Table as Table
+from .assumptions import TableBuilder as TableBuilder
 from .assumptions import get_table_metadata as get_table_metadata
+from .assumptions import list_tables as list_tables
 from .assumptions import list_tables_with_metadata as list_tables_with_metadata
+
+# Core proxy classes
 from .column import ColumnProxy as ColumnProxy
 from .column import ExpressionProxy as ExpressionProxy
+
+# Frame and error classes
 from .errors import PerformanceWarning as PerformanceWarning
 from .frame import ActuarialFrame as ActuarialFrame
 from .frame import run_model as run_model
+
+# Utility functions
 from .util import execution_mode as execution_mode
 from .util import get_default_mode as get_default_mode
 from .util import set_default_mode as set_default_mode
@@ -26,26 +35,26 @@ from .util import set_default_mode as set_default_mode
 if TYPE_CHECKING:
     from typing import Union
 
-    IntoExpr = Union[str, pl.Expr]
+    type IntoExpr = str | pl.Expr
 
-# Define the main functions that are in __init__.py directly
+# Define the main functions that are in __init__.py directly (legacy API)
 def assumption_lookup(*keys: IntoExpr, table_name: str) -> pl.Expr: ...
 def load_assumptions(
     name: str,
-    source: Union[str, pl.DataFrame],
+    source: str | pl.DataFrame,
     *,
-    id: Union[str, list[str], None] = None,
+    id: str | list[str] | None = None,
     value: str = "rate",
-    value_vars: Union[list[str], None] = None,
-    overflow: Union[str, None] = "auto",
+    value_vars: list[str] | None = None,
+    overflow: str | None = "auto",
     max_overflow: int = 200,
     metadata: dict[str, any] | None = None,
-    lookup_keys: Union[list[str], None] = None,
+    lookup_keys: list[str] | None = None,
     additional_keys: dict[str, any] | None = None,
 ) -> pl.DataFrame: ...
 def append_assumptions(
     name: str,
-    source: Union[str, pl.DataFrame],
+    source: str | pl.DataFrame,
     *,
     additional_keys: dict[str, any],
 ) -> pl.DataFrame: ...
@@ -53,21 +62,22 @@ def append_assumptions(
 if TYPE_CHECKING:
     # Make submodules available for type checking if needed, but not strictly part of __all__
     from . import accessors as accessors
+    from . import assumptions as assumptions
     from . import errors as errors
     from . import frame as frame
     from . import util as util
 
-# Define __all__ to match __init__.py
+# Define __all__ to match __init__.py exactly
 __all__: list[str] = [
     # Core classes
     "ActuarialFrame",
     "ColumnProxy",
     "ExpressionProxy",
-    # Assumptions
-    "load_assumptions",
-    "append_assumptions",
-    "assumption_lookup",
+    # Assumptions API v2
+    "Table",
+    "TableBuilder",
     "get_table_metadata",
+    "list_tables",
     "list_tables_with_metadata",
     # Execution
     "run_model",

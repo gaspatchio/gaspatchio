@@ -1,6 +1,7 @@
 """Shared delegation logic for ColumnProxy and ExpressionProxy."""
 
 import functools
+import re
 from typing import TYPE_CHECKING, Any, Callable, Optional, Set, Type
 
 import polars as pl
@@ -9,6 +10,13 @@ from loguru import logger
 
 from .namespaces.dt_proxy import DtNamespaceProxy
 from .namespaces.string_proxy import StringNamespaceProxy
+
+# Import capture_source_context at module level for testability
+try:
+    from ..errors.metadata import capture_source_context
+except ImportError:
+    # Fallback if import fails to avoid breaking the module
+    capture_source_context = None
 
 # Avoid circular imports at runtime but allow type checking
 if TYPE_CHECKING:
@@ -385,13 +393,24 @@ def _method_caller(
     should_use_list_shim = False
     if is_unary_numeric_op or is_elementwise_op:
         if isinstance(self_proxy, ColumnProxy) and parent_af:
-            try:
-                # Use collect_schema() to avoid performance warning
-                schema = parent_af._df.collect_schema()
-                dtype = schema.get(self_proxy.name)
-                should_use_list_shim = isinstance(dtype, pl.List)
-            except Exception:
-                pass
+            # First check the computation graph for this column's type
+            if hasattr(parent_af, "_computation_graph"):
+                for op in parent_af._computation_graph:
+                    if (hasattr(op, "alias") and op.alias == self_proxy.name and
+                        hasattr(op, "expected_dtype") and op.expected_dtype):
+                        if isinstance(op.expected_dtype, pl.List):
+                            should_use_list_shim = True
+                            break
+            
+            # If not found in computation graph, check the schema
+            if not should_use_list_shim:
+                try:
+                    # Use collect_schema() to avoid performance warning
+                    schema = parent_af._df.collect_schema()
+                    dtype = schema.get(self_proxy.name)
+                    should_use_list_shim = isinstance(dtype, pl.List)
+                except Exception:
+                    pass
         elif isinstance(self_proxy, ExpressionProxy):
             # For expressions, we can't easily determine the output type
             # Be more conservative: only try list shimming if the expression string
@@ -403,16 +422,30 @@ def _method_caller(
                 # Expression contains explicit list operations
                 might_be_list = True
             elif parent_af:
-                # Check if the expression references any list columns by name
-                schema = parent_af._df.collect_schema()
-                list_column_names = [
-                    name for name, dtype in schema.items() if isinstance(dtype, pl.List)
-                ]
-                # Check if any list column names appear in the expression
-                might_be_list = any(
-                    f'col("{col_name}")' in expr_str or f"'{col_name}'" in expr_str
-                    for col_name in list_column_names
-                )
+                # First check the computation graph for type information
+                if hasattr(parent_af, "_computation_graph"):
+                    # Build a type map from the computation graph
+                    for op in parent_af._computation_graph:
+                        if (hasattr(op, "alias") and hasattr(op, "expected_dtype") and 
+                            op.expected_dtype and isinstance(op.expected_dtype, pl.List)):
+                            # Check if this list column is referenced in the expression
+                            col_pattern = rf'\(?col\s*\(\s*["\']?{re.escape(op.alias)}["\']?\s*\)\)?'
+                            if re.search(col_pattern, expr_str):
+                                might_be_list = True
+                                break
+                
+                # Also check the existing schema
+                if not might_be_list:
+                    schema = parent_af._df.collect_schema()
+                    list_column_names = [
+                        name for name, dtype in schema.items() if isinstance(dtype, pl.List)
+                    ]
+                    # Check if any list column names appear in the expression
+                    # Use regex to handle cases with parentheses and whitespace
+                    might_be_list = any(
+                        re.search(rf'\(?col\s*\(\s*["\']?{re.escape(col_name)}["\']?\s*\)\)?', expr_str) is not None
+                        for col_name in list_column_names
+                    )
             should_use_list_shim = might_be_list
 
     try:
@@ -449,7 +482,31 @@ def _method_caller(
             unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
             result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
     except Exception as e:
-        raise type(e)(f"Error calling proxied Polars method '{name}': {e}") from e
+        # Enhanced error message with source context
+        error_msg = f"Error calling proxied Polars method '{name}': {e}"
+        
+        # If we're in a traced context, add source information
+        if hasattr(self_proxy, '_parent') and self_proxy._parent and self_proxy._parent._tracing:
+            # Capture where this proxy method was called from
+            try:
+                if capture_source_context is not None:
+                    context = capture_source_context(depth=2)
+                    error_msg += f"\n  Called from: {context.display_filename}:{context.line_number}"
+                    error_msg += f"\n  Source: {context.source_line}"
+            except Exception:
+                # If context capture fails, fall back to basic error
+                pass
+        
+        new_error = type(e)(error_msg)
+        # Preserve the column/expression info for error handling
+        new_error.proxy_info = {
+            'proxy_type': type(self_proxy).__name__,
+            'method': name,
+            'column': getattr(self_proxy, 'name', None)
+        }
+        # Mark as already enhanced to prevent re-processing
+        new_error._dispatch_enhanced = True
+        raise new_error from e
     return _wrap(parent_af, result)
 
 

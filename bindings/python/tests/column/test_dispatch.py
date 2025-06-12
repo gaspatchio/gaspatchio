@@ -319,11 +319,11 @@ def test_basic_delegation_arithmetic_moved(sample_af: ActuarialFrame):
 
     # Select columns in the same sorted order for comparison
     final_cols = sorted(full_expected_data.keys())
-    result_lf = af_result._df.select(final_cols)
-    expected_lf = expected_lf.select(final_cols)
+    result_df = af_result.collect()
+    expected_df = expected_lf.select(final_cols).collect()
 
     assert_frame_equal(
-        result_lf.collect(), expected_lf.collect(), check_column_order=False
+        result_df.select(final_cols), expected_df, check_column_order=False
     )
 
 

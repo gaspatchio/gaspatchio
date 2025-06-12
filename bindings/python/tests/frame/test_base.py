@@ -70,68 +70,38 @@ def test_getitem_invalid_type(sample_lazy_frame):
 
 
 # Test __setitem__
-@patch("polars.LazyFrame.with_columns")  # Mock the underlying polars method
-def test_setitem_adds_column(mock_with_columns, sample_lazy_frame):
-    # Arrange
-    mock_lazy_frame = MagicMock(spec=pl.LazyFrame)
-    mock_lazy_frame.schema = sample_lazy_frame.schema
-    mock_lazy_frame.with_columns.return_value = mock_lazy_frame  # Chainable
-
-    af = ActuarialFrame(None)  # Start empty
-    af._df = mock_lazy_frame  # Inject the mock
-
+def test_setitem_adds_column(sample_lazy_frame):
+    # Arrange - create ActuarialFrame in optimize mode to test direct execution
+    af = ActuarialFrame(sample_lazy_frame, mode="optimize")
+    
     # Act
     af["c"] = af["a"] + 1
 
-    # Assert
+    # Assert - should execute immediately in optimize mode
     assert "c" in af.get_column_order()  # Check tracked order
-    mock_lazy_frame.with_columns.assert_called_once()
-    # Check that the expression passed to with_columns is correct
-    args, kwargs = mock_lazy_frame.with_columns.call_args
-    assert isinstance(args[0], pl.Expr)  # First arg should be the expression
-    # Difficult to compare expressions directly, check alias
-    assert args[0].meta.output_name() == "c"
+    collected = af.collect()
+    assert "c" in collected.columns  # Should be executed immediately
+    # Check values are correct
+    assert collected["c"].to_list() == [2, 3, 4]  # a was [1, 2, 3], so a+1 should be [2, 3, 4]
 
 
-@patch("polars.LazyFrame.with_columns")
-def test_setitem_modifies_existing(mock_with_columns, sample_lazy_frame):
-    # Arrange
-    mock_lazy_frame = MagicMock(spec=pl.LazyFrame)
-    mock_lazy_frame.schema = sample_lazy_frame.schema
-    mock_lazy_frame.columns = ["a", "b"]
-    mock_lazy_frame.with_columns.return_value = mock_lazy_frame
-
-    af = ActuarialFrame(None)
-    af._df = mock_lazy_frame
-    af._column_order = ["a", "b"]
+def test_setitem_modifies_existing(sample_lazy_frame):
+    # Arrange - create ActuarialFrame in optimize mode to test direct execution
+    af = ActuarialFrame(sample_lazy_frame, mode="optimize")
 
     # Act
     af["a"] = af["a"] * 2
 
     # Assert
-    assert af.get_column_order() == ["a", "b"]
-    mock_lazy_frame.with_columns.assert_called_once()
-    args, kwargs = mock_lazy_frame.with_columns.call_args
-    assert args[0].meta.output_name() == "a"
+    assert af.get_column_order() == ["a", "b"]  # Order should be preserved
+    collected = af.collect()
+    assert collected["a"].to_list() == [2, 4, 6]  # Original [1, 2, 3] * 2 = [2, 4, 6]
 
 
 # Test with_columns
-@patch("polars.LazyFrame.with_columns")
-def test_with_columns_adds_expressions(mock_with_columns, sample_lazy_frame):
-    # Arrange
-    mock_lazy_frame = MagicMock(spec=pl.LazyFrame)
-    mock_lazy_frame.schema = sample_lazy_frame.schema
-    mock_lazy_frame.columns = ["a", "b"]
-    # Simulate schema update after call
-    new_schema = {"a": pl.Int64, "b": pl.Int64, "c": pl.Int64, "d": pl.Int64}
-    new_mock_frame = MagicMock(
-        spec=pl.LazyFrame, schema=new_schema, columns=list(new_schema.keys())
-    )
-    mock_lazy_frame.with_columns.return_value = new_mock_frame
-
-    af = ActuarialFrame(None)
-    af._df = mock_lazy_frame
-    af._column_order = ["a", "b"]
+def test_with_columns_adds_expressions(sample_lazy_frame):
+    # Arrange - create ActuarialFrame in optimize mode to test direct execution
+    af = ActuarialFrame(sample_lazy_frame, mode="optimize")
 
     # Act
     result_af = af.with_columns(
@@ -141,30 +111,12 @@ def test_with_columns_adds_expressions(mock_with_columns, sample_lazy_frame):
 
     # Assert
     assert result_af is af  # Should return self
-    mock_lazy_frame.with_columns.assert_called_once()
-    args, kwargs = mock_lazy_frame.with_columns.call_args
-
-    # Check if expressions were passed via args or kwargs
-    expressions = None
-    if args:
-        expressions = args[0]  # Assume passed as first positional argument
-    elif "expressions" in kwargs:
-        expressions = kwargs["expressions"]  # Assume passed as 'expressions' kwarg
-    elif kwargs:
-        # Maybe passed directly as kwargs? {alias: expr}
-        expressions = list(kwargs.values())
-
-    assert expressions is not None, "Expressions not found in args or known kwargs"
-    assert isinstance(expressions, (list, tuple)), (
-        "Expressions should be a list or tuple"
-    )
-    assert len(expressions) == 2, "Expected 2 expressions"
-    # Check aliases (Polars >= 0.19.14 uses .meta.output_name())
-    assert expressions[0].meta.output_name() == "c"
-    assert expressions[1].meta.output_name() == "d"
-
-    assert af.get_column_order() == ["a", "b", "c", "d"]  # Order updated
-    assert af._df is new_mock_frame  # Internal df updated
+    assert af.get_column_order() == ["a", "b", "c", "d"]
+    collected = af.collect()
+    assert "c" in collected.columns
+    assert "d" in collected.columns
+    assert collected["c"].to_list() == [2, 3, 4]  # a + 1
+    assert collected["d"].to_list() == [4, 5, 6]  # b values
 
 
 # Test collect / profile (mocking underlying call and error handling)
@@ -232,8 +184,12 @@ def test_pipe_applies_function(sample_lazy_frame):
     result_af = af.pipe(add_col_c)
 
     assert result_af is af  # Function modified in place
-    assert "c" in af._df.columns  # Check underlying mock df if patched, or check order
-    assert "c" in af.get_column_order()
+    assert "c" in af.get_column_order()  # Should be in column order
+    
+    # In debug/tracing mode, column only exists after collection
+    collected = af.collect()
+    assert "c" in collected.columns  # Should exist after collection
+    assert collected["c"].to_list() == [5, 7, 9]  # a + b = [1,2,3] + [4,5,6] = [5,7,9]
 
 
 def test_pipe_returns_self_if_func_returns_none(sample_lazy_frame):

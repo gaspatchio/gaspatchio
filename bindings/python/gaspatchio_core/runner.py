@@ -1,7 +1,7 @@
 import importlib.util
 import time
 from pathlib import Path
-from typing import Any, List, Literal, Optional
+from typing import Any, Literal
 
 import polars as pl
 from loguru import logger
@@ -28,7 +28,7 @@ class RunMetrics(BaseModel):
 
     total_time_s: float
     profile_info: Any
-    tracked_column_order: Optional[List[str]] = None
+    tracked_column_order: list[str] | None = None
 
 
 class ModelRunResult(BaseModel):
@@ -36,9 +36,12 @@ class ModelRunResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    result: pl.DataFrame
-    metrics: RunMetrics
-    errors: Optional[List[str]] = None
+    status: Literal["success", "error"] = "success"
+    result: pl.DataFrame | None = None
+    metrics: RunMetrics | None = None
+    errors: list[str] | None = None
+    error_message: str | None = None
+    error_context: dict[str, Any] | None = None  # For llm_context and enhanced_error
 
 
 def load_model_from_path(model_path, function_name="life_model"):
@@ -53,12 +56,11 @@ def load_model_from_path(model_path, function_name="life_model"):
 
     # Look specifically for the specified function name
     if hasattr(model_module, function_name) and callable(
-        getattr(model_module, function_name)
+        getattr(model_module, function_name),
     ):
         model_func = getattr(model_module, function_name)
         return model_func
-    else:
-        raise ValueError(f"No function named '{function_name}' found in {model_path}")
+    raise ValueError(f"No function named '{function_name}' found in {model_path}")
 
 
 def transpose_single_policy_result(result_df):
@@ -70,6 +72,7 @@ def transpose_single_policy_result(result_df):
 
     Returns:
         A transposed DataFrame with one row per element in the longest vector
+
     """
     if len(result_df) != 1:
         raise ValueError("Transposition only works with a single policy result")
@@ -117,7 +120,7 @@ def _execute_model_run(
     config: ModelRunConfig,
     data_lazy: pl.LazyFrame,
     model_func: callable,
-    policy_id: Optional[str] = None,
+    policy_id: str | None = None,
 ) -> ModelRunResult:
     """Internal helper to execute the model run logic."""
     start_time = time.time()
@@ -134,20 +137,53 @@ def _execute_model_run(
         err_msg = f"No data found{error_suffix} after filtering."
         logger.error(err_msg)
         errors.append(err_msg)
-        # Skip actual model execution if no data
-        raise ValueError(err_msg)
+        # Return error result instead of raising
+        return ModelRunResult(
+            status="error",
+            result=None,
+            metrics=None,
+            errors=errors,
+            error_message=err_msg,
+            error_context=None
+        )
 
     # 5. Run the model using ActuarialFrame and dsl_run_model
-    logger.info("Setting up ActuarialFrame in {} mode...", config.mode)
+    logger.debug("Setting up ActuarialFrame in {} mode...", config.mode)
     df = ActuarialFrame(data_lazy, mode=config.mode)
     # df.show_query_plan(True)
 
-    logger.info("Running model function...")
-    dsl_run_model(model_func, df)
+    logger.debug("Running model function...")
+    try:
+        dsl_run_model(model_func, df)
 
-    # 6. Collect the result and profile
-    logger.info("Collecting results...")
-    result_df, profile_info = df.profile()
+        # 6. Collect the result and profile
+        logger.info("Collecting results...")
+        result_df, profile_info = df.profile()
+    except Exception as e:
+        # Build error context
+        error_context = {}
+        
+        # If the exception already carries enhanced context, capture it
+        if hasattr(e, "llm_context"):
+            error_context["llm_context"] = e.llm_context
+        if hasattr(e, "enhanced_error"):
+            error_context["enhanced_error"] = e.enhanced_error
+            
+        # Use the enhanced error message if available
+        error_message = str(e)
+        
+        # Log that model execution failed (without repeating the full error)
+        logger.debug("Model execution failed with {}", type(e).__name__)
+        
+        # Return error result instead of raising
+        return ModelRunResult(
+            status="error",
+            result=None,
+            metrics=None,
+            errors=[error_message],
+            error_message=error_message,
+            error_context=error_context if error_context else None
+        )
 
     # Capture the column order from the ActuarialFrame
     tracked_column_order = df.get_column_order()
@@ -167,7 +203,7 @@ def _execute_model_run(
 
         if final_column_order != available_columns:
             logger.debug(
-                f"Reordering columns from {available_columns} to {final_column_order}"
+                f"Reordering columns from {available_columns} to {final_column_order}",
             )
             result_df = result_df.select(final_column_order)
 
@@ -175,7 +211,7 @@ def _execute_model_run(
     total_time = end_time - start_time
     record_count = len(result_df) if not result_df.is_empty() else 0
     logger.success(
-        f"{run_description} finished in {total_time:.2f} seconds producing {record_count} result records."
+        f"{run_description} finished in {total_time:.2f} seconds producing {record_count} result records.",
     )
 
     metrics = RunMetrics(
@@ -184,114 +220,94 @@ def _execute_model_run(
         tracked_column_order=tracked_column_order,
     )
     return ModelRunResult(
-        result=result_df, metrics=metrics, errors=errors if errors else None
+        status="success",
+        result=result_df,
+        metrics=metrics,
+        errors=errors if errors else None,
+        error_message=None,
+        error_context=None
     )
 
 
 def run_model(config: ModelRunConfig) -> ModelRunResult:
     """Loads model and points, runs the model for all policies, and returns the ModelRunResult."""
     logger.info(f"Starting full model run with config: {config.model_dump()}\n")
-    try:
-        # 1. Construct full paths
-        model_path = config.directory / config.model_file
-        model_points_path = config.directory / config.model_points_file
 
-        logger.debug(
-            f"Constructed model_path in runner: {model_path=}, type: {type(model_path)}"
-        )
+    # 1. Construct full paths
+    model_path = config.directory / config.model_file
+    model_points_path = config.directory / config.model_points_file
 
-        # 2. Load model function
-        logger.info("Loading model from {}", model_path)
-        model_func = load_model_from_path(model_path, config.model_function_name)
+    logger.debug(
+        f"Constructed model_path in runner: {model_path=}, type: {type(model_path)}",
+    )
 
-        # 3. Read model points (lazy)
-        logger.info("Reading model points data from {}", model_points_path)
-        data_lazy = read_model_points(model_points_path)
+    # 2. Load model function
+    logger.info("Loading model from {}", model_path)
+    model_func = load_model_from_path(model_path, config.model_function_name)
 
-        # Delegate execution to helper
-        return _execute_model_run(config, data_lazy, model_func)
+    # 3. Read model points (lazy)
+    logger.info("Reading model points data from {}", model_points_path)
+    data_lazy = read_model_points(model_points_path)
 
-    except Exception as e:
-        logger.opt(exception=True).error("Error during model setup")
-        # Return an error result if setup fails
-        metrics = RunMetrics(
-            total_time_s=0.0, profile_info=None, tracked_column_order=None
-        )
-        return ModelRunResult(
-            result=pl.DataFrame(), metrics=metrics, errors=[f"Setup Error: {str(e)}"]
-        )
+    # Delegate execution to helper - let enhanced error handling work
+    return _execute_model_run(config, data_lazy, model_func)
 
 
 def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
     """Loads model and points, runs the model for a single policy, and returns the ModelRunResult."""
-    logger.info(
-        f"Starting single policy run for ID: {policy_id} with config: {config.model_dump()}\n"
+    logger.debug(
+        f"Starting single policy run for ID: {policy_id} with config: {config.model_dump()}\n",
     )
-    errors = []  # Initialize errors list here for early exit checks
 
+    # 1. Construct full paths
+    model_path = config.directory / config.model_file
+    model_points_path = config.directory / config.model_points_file
+
+    logger.debug(
+        f"Constructed model_path in runner: {model_path=}, type: {type(model_path)}",
+    )
+
+    # 2. Load model function
+    logger.info("Loading model from {}", model_path)
+    model_func = load_model_from_path(model_path, config.model_function_name)
+
+    # 3. Read model points (lazy)
+    logger.info("Reading model points data from {}", model_points_path)
+    data_lazy = read_model_points(model_points_path)
+
+    # 4. Filter model points for the specified policy_id (lazy)
+    logger.debug("Filtering for single policy with ID: {}", policy_id)
     try:
-        # 1. Construct full paths
-        model_path = config.directory / config.model_file
-        model_points_path = config.directory / config.model_points_file
+        policy_id_int = int(policy_id)
+    except ValueError as e:
+        err_msg = f"Policy ID must be an integer, got: {policy_id}"
+        logger.error(err_msg)
+        raise ValueError(err_msg) from e
 
-        logger.debug(
-            f"Constructed model_path in runner: {model_path=}, type: {type(model_path)}"
+    # Check if policy exists before filtering (on the full dataset)
+    existing_ids = (
+        data_lazy.select(config.id_column_name)
+        .unique()
+        .lazy()
+        .collect()
+        .get_column(config.id_column_name)
+    )
+    if policy_id_int not in existing_ids:
+        err_msg = (
+            f"Policy ID '{policy_id}' not found in column '{config.id_column_name}'. "
+            f"Available IDs preview: {existing_ids[:10].to_list()}"
         )
+        logger.error(err_msg)
+        raise ValueError(err_msg)
 
-        # 2. Load model function
-        logger.info("Loading model from {}", model_path)
-        model_func = load_model_from_path(model_path, config.model_function_name)
+    filtered_data_lazy = data_lazy.filter(
+        pl.col(config.id_column_name) == policy_id_int,
+    )
 
-        # 3. Read model points (lazy)
-        logger.info("Reading model points data from {}", model_points_path)
-        data_lazy = read_model_points(model_points_path)
-
-        # 4. Filter model points for the specified policy_id (lazy)
-        logger.info("Filtering for single policy with ID: {}", policy_id)
-        try:
-            policy_id_int = int(policy_id)
-        except ValueError as e:
-            err_msg = f"Policy ID must be an integer, got: {policy_id}"
-            logger.error(err_msg)
-            errors.append(err_msg)
-            raise ValueError(err_msg) from e
-
-        # Check if policy exists before filtering (on the full dataset)
-        existing_ids = (
-            data_lazy.select(config.id_column_name)
-            .unique()
-            .lazy()
-            .collect()
-            .get_column(config.id_column_name)
-        )
-        if policy_id_int not in existing_ids:
-            err_msg = (
-                f"Policy ID '{policy_id}' not found in column '{config.id_column_name}'. "
-                f"Available IDs preview: {existing_ids[:10].to_list()}"
-            )
-            logger.error(err_msg)
-            errors.append(err_msg)
-            raise ValueError(err_msg)
-
-        filtered_data_lazy = data_lazy.filter(
-            pl.col(config.id_column_name) == policy_id_int
-        )
-
-        # Delegate execution to helper
-        return _execute_model_run(
-            config, filtered_data_lazy, model_func, policy_id=policy_id
-        )
-
-    except Exception as e:
-        # Capture setup/filtering errors
-        logger.error(
-            f"Error during single policy setup/filtering (ID: {policy_id}): {e}"
-        )
-        # Add error if not already added by validation checks
-        if not errors:
-            errors.append(f"Setup/Filter Error (ID: {policy_id}): {str(e)}")
-        # Return an error result
-        metrics = RunMetrics(
-            total_time_s=0.0, profile_info=None, tracked_column_order=None
-        )
-        return ModelRunResult(result=pl.DataFrame(), metrics=metrics, errors=errors)
+    # Delegate execution to helper - let enhanced error handling work
+    return _execute_model_run(
+        config,
+        filtered_data_lazy,
+        model_func,
+        policy_id=policy_id,
+    )

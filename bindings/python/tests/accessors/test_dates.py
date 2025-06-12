@@ -3,8 +3,8 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-from datacompy import PolarsCompare
 from dateutil.relativedelta import relativedelta
+
 from gaspatchio_core import ActuarialFrame
 
 # REMOVED: from gaspatchio_core.dates import create_projection_timeline, generate_projection_dates
@@ -182,7 +182,8 @@ def test_invalid_frequency():
     valuation_date = datetime.date(2020, 1, 1)
 
     with pytest.raises(
-        ValueError, match="Invalid projection frequency"
+        ValueError,
+        match="Invalid projection frequency",
     ):  # Check the error message
         # UPDATED: Call via accessor
         af.date.create_projection_timeline(
@@ -204,7 +205,8 @@ def test_invalid_end_type():
     valuation_date = datetime.date(2020, 1, 1)
 
     with pytest.raises(
-        ValueError, match="Invalid projection end type"
+        ValueError,
+        match="Invalid projection end type",
     ):  # Check error message
         # UPDATED: Call via accessor
         af.date.create_projection_timeline(
@@ -301,98 +303,6 @@ def test_invalid_end_type():
 
 
 # Keep remaining tests as they test accessor methods already
-@pytest.mark.skip(reason="TODO")
-def test_timeline_generation_matches_reconciliation_fixture():
-    """Test timeline generation against reconciliation fixture.
-
-    Compares the output of create_projection_timeline against
-    a known-good fixture CSV generated from previous reconciliation efforts.
-    """
-    # 1. Load input data (minimal required)
-    # UPDATED: Use correct relative path and resolve
-    input_fixture = (TEST_DIR.parent / "fixtures" / "timeline_input.csv").resolve()
-    df_input = pl.read_csv(input_fixture.as_posix(), infer_schema_length=10000)
-    af_input = ActuarialFrame(df_input)
-
-    # 2. Load expected output data
-    # UPDATED: Use correct relative path and resolve
-    expected_fixture = (
-        TEST_DIR.parent / "fixtures" / "expected_timeline_output.csv"
-    ).resolve()
-    df_expected = pl.read_csv(expected_fixture.as_posix(), infer_schema_length=10000)
-
-    # 3. Define valuation date (matching fixture generation)
-    valuation_date = datetime.date(2024, 12, 31)
-
-    # 4. Run create_projection_timeline with model_calculation.py params
-    af_output = af_input.date.create_projection_timeline(
-        valuation_date=valuation_date,
-        projection_end_type="maximum_age",
-        projection_end_value=99,
-        issue_age_column="Policyholder issue age",
-        projection_frequency="monthly",
-        projection_start_offset_months=12,
-        store_start_date=True,  # Keep these to ensure the columns exist for generate_projection_dates
-        store_end_date=True,
-        output_column="generated_proj_dates",
-    )
-
-    # 5. Extract generated dates and create DataFrame with row number
-    df_out = af_output.collect()
-
-    print(df_out)
-
-    generated_dates_list = df_out["generated_proj_dates"][0]
-    generated_df = pl.DataFrame(
-        {"date": generated_dates_list}  # Use common column name 'date'
-    ).with_row_count("row_nr")  # Add row number as join key
-
-    print(generated_df)
-
-    # 6. Compare using DataComPy
-    # If lengths match, perform detailed comparison
-    compare = PolarsCompare(
-        generated_df,
-        df_expected,
-        join_columns=["row_nr"],  # Join on the row number
-        df1_name="Generated",
-        df2_name="Expected (CSV)",
-    )
-
-    # Always run the comparison, even if lengths differ, to get the report
-    if not compare.matches(
-        ignore_extra_columns=True
-    ):  # Ignore length differences for matching logic
-        print("\nDataComPy Report:")
-        print(compare.report())
-
-        # Try to find the first mismatch in the intersecting rows
-        first_mismatch_info = "Could not determine first mismatch row."
-        if (
-            not compare.intersect_rows.is_empty()
-            and "date_match" in compare.intersect_rows.columns
-        ):
-            mismatched_rows = compare.intersect_rows.filter(
-                pl.col("date_match") == False
-            )
-            if not mismatched_rows.is_empty():
-                first_mismatch_row_nr = mismatched_rows["row_nr"].min()
-                first_mismatch_gen = generated_df.filter(
-                    pl.col("row_nr") == first_mismatch_row_nr
-                )["date"][0]
-                first_mismatch_exp = df_expected.filter(
-                    pl.col("row_nr") == first_mismatch_row_nr
-                )["date"][0]
-                first_mismatch_info = (
-                    f"First mismatch occurred at row number (0-based): {first_mismatch_row_nr}\n"
-                    f"  Generated Date: {first_mismatch_gen}\n"
-                    f"  Expected Date:  {first_mismatch_exp}"
-                )
-
-        print(f"\n{first_mismatch_info}")
-        pytest.fail(
-            "Generated dates do not match expected dates. See report and first mismatch above."
-        )
 
 
 def test_error_when_start_date_not_stored():

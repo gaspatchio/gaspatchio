@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
 import polars as pl
@@ -35,6 +35,9 @@ if TYPE_CHECKING:
     from ..accessors.date import DateFrameAccessor
     from ..accessors.excel import ExcelFrameAccessor
     from ..accessors.finance import FinanceFrameAccessor
+    
+    # Import TracedOperation for type hints
+    from ..errors.metadata import TracedOperation
 
 
 # TODO: Move _DEFAULT_THREADS to util? For now, define locally or assume 0.
@@ -143,7 +146,8 @@ class ActuarialFrame:
         self._threads = threads if threads is not None else _DEFAULT_THREADS
 
         # ADDED: Initialize tracing attributes
-        self._computation_graph: list[tuple[str, Any]] = []
+        # Support both legacy tuple format and new TracedOperation format for backward compatibility
+        self._computation_graph: List[Union[tuple[str, Any], "TracedOperation"]] = []
         self._tracing: bool = False
 
         # Excluded context, _operation_log
@@ -274,10 +278,15 @@ class ActuarialFrame:
                         self._computation_graph, final_df
                     )  # Log before applying
 
-                for name, expr_val in self._computation_graph:
-                    # Ensure expr_val is a polars expression. _convert_to_expr should handle this
-                    # during __setitem__ or with_columns before it gets into the graph.
-                    final_df = final_df.with_columns(expr_val.alias(name))
+                for operation in self._computation_graph:
+                    # Handle both old tuple format and new TracedOperation format
+                    if isinstance(operation, tuple):
+                        # Legacy format: (name, expr)
+                        name, expr_val = operation
+                        final_df = final_df.with_columns(expr_val.alias(name))
+                    else:
+                        # New format: TracedOperation
+                        final_df = final_df.with_columns(operation.expression.alias(operation.alias))
 
                 # Optionally clear the graph after applying, though the tracer resets it per call.
                 # self._computation_graph = []
@@ -307,10 +316,15 @@ class ActuarialFrame:
                         self._computation_graph, final_df
                     )  # Log before applying
 
-                for name, expr_val in self._computation_graph:
-                    # Ensure expr_val is a polars expression. _convert_to_expr should handle this
-                    # during __setitem__ or with_columns before it gets into the graph.
-                    final_df = final_df.with_columns(expr_val.alias(name))
+                for operation in self._computation_graph:
+                    # Handle both old tuple format and new TracedOperation format
+                    if isinstance(operation, tuple):
+                        # Legacy format: (name, expr)
+                        name, expr_val = operation
+                        final_df = final_df.with_columns(expr_val.alias(name))
+                    else:
+                        # New format: TracedOperation
+                        final_df = final_df.with_columns(operation.expression.alias(operation.alias))
 
                 # Optionally clear the graph after applying, though the tracer resets it per call.
                 # self._computation_graph = []

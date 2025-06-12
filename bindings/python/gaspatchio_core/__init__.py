@@ -22,12 +22,14 @@ from . import (
     functions,
 )
 
-# Import assumptions functionality - metadata from package, main functions directly
+# Import assumptions functionality - new API
 from .assumptions import (
+    Table,
+    TableBuilder,
     get_table_metadata,
+    list_tables,
     list_tables_with_metadata,
 )
-from .assumptions.api import append_assumptions, assumption_lookup, load_assumptions
 from .column import ColumnProxy, ExpressionProxy
 from .errors import PerformanceWarning
 from .frame import ActuarialFrame, run_model
@@ -36,10 +38,6 @@ from .util import (
     get_default_mode,  # Getter
     set_default_mode,  # Setter
 )
-
-if TYPE_CHECKING:
-    pass  # Keep this structure for potential future complex types
-
 
 configure_telemetry(enable=True)
 
@@ -50,11 +48,11 @@ __all__ = [
     "ActuarialFrame",
     "ColumnProxy",
     "ExpressionProxy",
-    # Assumptions
-    "load_assumptions",
-    "append_assumptions",
-    "assumption_lookup",
+    # Assumptions API v2
+    "Table",
+    "TableBuilder",
     "get_table_metadata",
+    "list_tables",
     "list_tables_with_metadata",
     # Execution
     "run_model",

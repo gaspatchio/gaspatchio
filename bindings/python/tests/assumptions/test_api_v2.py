@@ -1,0 +1,659 @@
+"""
+Tests for the new Table API (v2) - dimension-based assumption tables.
+"""
+
+import polars as pl
+import pytest
+
+from gaspatchio_core.assumptions._analysis import TableSchema
+from gaspatchio_core.assumptions._api import Table
+from gaspatchio_core.assumptions._dimensions import (
+    CategoricalDimension,
+    ComputedDimension,
+    DataDimension,
+    MeltDimension,
+)
+from gaspatchio_core.assumptions._strategies import (
+    ExtendOverflow,
+)
+
+
+class TestTableCreation:
+    """Test basic Table class creation and initialization"""
+
+    def test_simple_curve_table_creation(self):
+        """Test creating a simple curve table with DataDimension"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31, 32],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_mortality",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        assert table._name == "test_mortality"
+        assert "age" in table.dimensions
+        assert table._value == "qx"
+
+    def test_string_shorthand_for_dimensions(self):
+        """Test creating table with string shorthand for dimensions"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31, 32],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_shorthand",
+            source=data,
+            dimensions={
+                "age": "age",  # String shorthand
+            },
+            value="qx",
+        )
+
+        assert table._name == "test_shorthand"
+        assert "age" in table.dimensions
+        assert isinstance(table.dimensions["age"], DataDimension)
+        assert table.dimensions["age"].column == "age"
+        assert table._value == "qx"
+
+    def test_mixed_dimension_types(self):
+        """Test using both string shorthand and explicit dimension objects"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31, 32],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_mixed",
+            source=data,
+            dimensions={
+                "age": "age",  # String shorthand
+                "sex": CategoricalDimension("M"),  # Explicit dimension
+            },
+            value="qx",
+        )
+
+        assert "age" in table.dimensions
+        assert "sex" in table.dimensions
+        assert isinstance(table.dimensions["age"], DataDimension)
+        assert isinstance(table.dimensions["sex"], CategoricalDimension)
+        assert table.dimensions["age"].column == "age"
+        assert table.dimensions["sex"].value == "M"
+
+    def test_multiple_string_shorthand_dimensions(self):
+        """Test using string shorthand for multiple dimensions"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "duration": [1, 2],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_multiple_shorthand",
+            source=data,
+            dimensions={
+                "age": "age",
+                "duration": "duration",
+            },
+            value="qx",
+        )
+
+        assert "age" in table.dimensions
+        assert "duration" in table.dimensions
+        assert isinstance(table.dimensions["age"], DataDimension)
+        assert isinstance(table.dimensions["duration"], DataDimension)
+        assert table.dimensions["age"].column == "age"
+        assert table.dimensions["duration"].column == "duration"
+
+    def test_backward_compatibility_explicit_data_dimension(self):
+        """Test that explicit DataDimension usage still works (backward compatibility)"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31, 32],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        # Both approaches should be equivalent
+        table_explicit = Table(
+            name="test_explicit",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        table_shorthand = Table(
+            name="test_shorthand_equiv",
+            source=data,
+            dimensions={
+                "age": "age",
+            },
+            value="qx",
+        )
+
+        # Both should create equivalent DataDimension objects
+        assert isinstance(table_explicit.dimensions["age"], DataDimension)
+        assert isinstance(table_shorthand.dimensions["age"], DataDimension)
+        assert (
+            table_explicit.dimensions["age"].column
+            == table_shorthand.dimensions["age"].column
+        )
+
+    def test_wide_table_creation_with_melt(self):
+        """Test creating a wide table with MeltDimension"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "1": [0.01, 0.02],
+                "2": [0.015, 0.025],
+                "Ultimate": [0.005, 0.01],
+            },
+        )
+
+        table = Table(
+            name="test_wide",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+                "duration": MeltDimension(
+                    columns=["1", "2", "Ultimate"],
+                    overflow=ExtendOverflow("Ultimate", to_value=10),
+                ),
+            },
+            value="qx",
+        )
+
+        assert table._name == "test_wide"
+        assert "age" in table.dimensions
+        assert "duration" in table.dimensions
+        assert isinstance(table.dimensions["duration"], MeltDimension)
+
+    def test_table_with_categorical_dimension(self):
+        """Test creating table with categorical dimensions"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31, 32],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_categorical",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+                "sex": CategoricalDimension("M"),
+            },
+            value="qx",
+        )
+
+        assert "sex" in table.dimensions
+        assert isinstance(table.dimensions["sex"], CategoricalDimension)
+        assert table.dimensions["sex"].value == "M"
+
+    def test_table_with_computed_dimension(self):
+        """Test creating table with computed dimensions"""
+        data = pl.DataFrame(
+            {
+                "issue_age": [30, 31, 32],
+                "policy_year": [1, 1, 1],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_computed",
+            source=data,
+            dimensions={
+                "issue_age": DataDimension("issue_age"),
+                "policy_year": DataDimension("policy_year"),
+                "attained_age": ComputedDimension(
+                    pl.col("issue_age") + pl.col("policy_year") - 1,
+                    "attained_age",
+                ),
+            },
+            value="qx",
+        )
+
+        assert "attained_age" in table.dimensions
+        assert isinstance(table.dimensions["attained_age"], ComputedDimension)
+
+
+class TestTableDataProcessing:
+    """Test table data processing and transformation"""
+
+    def test_process_data_creates_tidy_format(self):
+        """Test that _process_data transforms data correctly"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "1": [0.01, 0.02],
+                "2": [0.015, 0.025],
+            },
+        )
+
+        table = Table(
+            name="test_process",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+                "duration": MeltDimension(["1", "2"]),
+            },
+            value="rate",
+        )
+
+        # Check that the table was processed (we can't access _df directly yet)
+        # This will be tested once the class is implemented
+        assert table._name == "test_process"
+
+    def test_dimension_processing_order(self):
+        """Test that dimensions are processed in the correct order"""
+        data = pl.DataFrame(
+            {
+                "base_age": [30, 31],
+                "duration": [1, 2],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_order",
+            source=data,
+            dimensions={
+                "age": DataDimension("base_age", rename_to="age"),
+                "duration": DataDimension("duration"),
+                "sex": CategoricalDimension("F"),
+                "attained_age": ComputedDimension(
+                    pl.col("age") + pl.col("duration") - 1,
+                    "attained_age",
+                ),
+            },
+            value="qx",
+        )
+
+        # Verify dimensions are stored correctly
+        assert "age" in table.dimensions
+        assert "sex" in table.dimensions
+        assert "attained_age" in table.dimensions
+
+
+class TestTableLookup:
+    """Test table lookup functionality"""
+
+    def test_lookup_with_column_names(self):
+        """Test lookup using column names as strings"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31, 32],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_lookup",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        # Create lookup expression
+        lookup_expr = table.lookup(age="age")
+
+        # Should return a Polars expression
+        assert isinstance(lookup_expr, pl.Expr)
+
+    def test_lookup_with_expressions(self):
+        """Test lookup using Polars expressions"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31, 32],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_lookup_expr",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        # Create lookup expression using pl.col
+        lookup_expr = table.lookup(age=pl.col("issue_age"))
+
+        # Should return a Polars expression
+        assert isinstance(lookup_expr, pl.Expr)
+
+
+class TestTableExtend:
+    """Test table extension functionality"""
+
+    def test_extend_with_compatible_data(self):
+        """Test extending table with compatible additional data"""
+        initial_data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_extend",
+            source=initial_data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        # Extend with additional data
+        additional_data = pl.DataFrame(
+            {
+                "age": [32, 33],
+                "qx": [0.003, 0.004],
+            },
+        )
+
+        extended_table = table.extend(additional_data)
+
+        # Should return the same table instance for chaining
+        assert extended_table is table
+
+    def test_extend_with_dimension_overrides(self):
+        """Test extending table with dimension overrides (compatible structure)"""
+        initial_data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_extend_override",
+            source=initial_data,
+            dimensions={
+                "age": DataDimension("age"),
+                "sex": CategoricalDimension(
+                    "F",
+                    name="sex",
+                ),  # Original table has sex dimension
+            },
+            value="qx",
+        )
+
+        # Extend with different sex category (compatible structure)
+        additional_data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.0015, 0.0025],
+            },
+        )
+
+        extended_table = table.extend(
+            additional_data,
+            dimensions={
+                "sex": CategoricalDimension(
+                    "M",
+                    name="sex",
+                ),  # Explicit name to match original
+            },
+        )
+
+        assert extended_table is table
+
+
+class TestTableProperties:
+    """Test table property methods"""
+
+    def test_dimensions_property(self):
+        """Test dimensions property returns copy"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_props",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        dims = table.dimensions
+        assert "age" in dims
+        assert isinstance(dims["age"], DataDimension)
+
+        # Should be a copy
+        dims["new_dim"] = DataDimension("other")
+        assert "new_dim" not in table.dimensions
+
+    def test_schema_property(self):
+        """Test schema property returns TableSchema"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_schema",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        schema = table.schema
+        assert isinstance(schema, TableSchema)
+
+    def test_dimension_values(self):
+        """Test dimension_values method"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31, 32],
+                "sex": ["M", "F", "M"],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_dim_values",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+                "sex": DataDimension("sex"),
+            },
+            value="qx",
+        )
+
+        age_values = table.dimension_values("age")
+        assert isinstance(age_values, list)
+        # Exact values will depend on implementation
+
+
+class TestTableValidation:
+    """Test table validation functionality"""
+
+    def test_validate_lookup_valid_dimensions(self):
+        """Test validate_lookup with valid dimension names"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_validate",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        # Should not raise
+        table.validate_lookup(age="age")
+
+    def test_validate_lookup_invalid_dimensions(self):
+        """Test validate_lookup with invalid dimension names"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_validate_invalid",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        # Should raise ValueError
+        with pytest.raises(ValueError, match="Invalid dimension"):
+            table.validate_lookup(nonexistent="age")
+
+
+class TestTableExport:
+    """Test table export functionality"""
+
+    def test_to_dataframe(self):
+        """Test exporting table as DataFrame"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_export",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        exported_df = table.to_dataframe()
+        assert isinstance(exported_df, pl.DataFrame)
+
+    def test_describe(self):
+        """Test table description method"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_describe",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+        )
+
+        description = table.describe()
+        assert isinstance(description, str)
+        assert "test_describe" in description
+
+
+class TestTableErrorHandling:
+    """Test error handling in Table class"""
+
+    def test_invalid_dimension_configuration(self):
+        """Test error when dimension configuration is invalid"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        # Should raise error for non-existent column
+        with pytest.raises(ValueError):
+            Table(
+                name="test_error",
+                source=data,
+                dimensions={
+                    "age": DataDimension("nonexistent_column"),
+                },
+                value="qx",
+            )
+
+    def test_invalid_value_column(self):
+        """Test error when value column doesn't exist"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        # Should raise error for non-existent value column
+        with pytest.raises(ValueError):
+            Table(
+                name="test_value_error",
+                source=data,
+                dimensions={
+                    "age": DataDimension("age"),
+                },
+                value="nonexistent_value",
+            )
+
+    def test_validation_disabled(self):
+        """Test that validation can be disabled"""
+        data = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        # Should not raise with validation disabled, even with bad config
+        # This test depends on implementation details
+        table = Table(
+            name="test_no_validation",
+            source=data,
+            dimensions={
+                "age": DataDimension("age"),
+            },
+            value="qx",
+            validate=False,
+        )
+
+        assert table._name == "test_no_validation"

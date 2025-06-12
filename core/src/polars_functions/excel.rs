@@ -7,9 +7,12 @@ pub struct YearFracKwargs {
     pub basis: String,
 }
 
-pub fn year_frac(inputs: &[Series], kwargs: YearFracKwargs) -> PolarsResult<Series> {
+/// Calculates the year fraction between two dates based on the specified basis.
+///
+/// # Errors
+/// Returns an error if an unsupported basis is provided or if series processing fails.
+pub fn year_frac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Series> {
     let start_date_series = &inputs[0];
-    let _end_date_series = &inputs[1];
 
     let basis = kwargs.basis.as_str();
 
@@ -21,11 +24,7 @@ pub fn year_frac(inputs: &[Series], kwargs: YearFracKwargs) -> PolarsResult<Seri
             Ok(Series::new("year_frac".into(), year_fractions))
         }
         _ => Err(PolarsError::ComputeError(
-            format!(
-                "Invalid basis '{}'. Supported bases: act/360, act/365",
-                basis
-            )
-            .into(),
+            format!("Invalid basis '{basis}'. Supported bases: act/360, act/365").into(),
         )),
     }
 }

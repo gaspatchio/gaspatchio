@@ -17,8 +17,14 @@ _DEFAULT_VERBOSE = os.environ.get("GASPATCHIO_VERBOSE", "True").lower() in (
     "yes",
 )
 _DEFAULT_THREADS = int(
-    os.environ.get("GASPATCHIO_THREADS", "0")
+    os.environ.get("GASPATCHIO_THREADS", "0"),
 )  # 0 means use all available
+
+# Error handling mode configuration
+_DEFAULT_ERROR_MODE = os.environ.get(
+    "AF_ERROR_MODE",
+    "enhanced",
+)  # enhanced (default), basic, debug, off
 
 # Functions moved from dsl/core.py
 
@@ -58,6 +64,39 @@ def get_default_threads() -> int:
     return _DEFAULT_THREADS
 
 
+def get_error_mode() -> str:
+    """Get the error handling mode ('enhanced' (default), 'basic', 'debug', or 'off')."""
+    global _DEFAULT_ERROR_MODE
+    # Always check environment variable first (this allows environment to override programmatic settings)
+    env_mode = os.environ.get("AF_ERROR_MODE")
+    if env_mode:
+        env_mode = env_mode.lower()
+        # Map 'standard' to 'basic' for backward compatibility
+        if env_mode == "standard":
+            env_mode = "basic"
+        return env_mode
+    
+    # Fall back to global setting if no environment variable
+    return _DEFAULT_ERROR_MODE
+
+
+def set_error_mode(mode: str) -> None:
+    """Set the error handling mode ('basic', 'enhanced', 'debug', or 'off')."""
+    global _DEFAULT_ERROR_MODE
+    # Normalize case and handle 'standard' alias
+    mode = mode.lower()
+    if mode == "standard":
+        mode = "basic"
+    
+    if mode not in ("basic", "enhanced", "debug", "off"):
+        raise ValueError(
+            f"Invalid error mode: {mode}. Must be 'basic', 'enhanced', 'debug', or 'off'",
+        )
+    _DEFAULT_ERROR_MODE = mode
+    # Always update environment variable for consistency
+    os.environ["AF_ERROR_MODE"] = mode
+
+
 # Note: Setting default threads requires careful consideration due to Polars' global state
 
 
@@ -81,23 +120,24 @@ def _expr_to_str(value: Any) -> str:
         # This might be complex and depends on the expression structure
         # For now, just use the default Polars string representation
         return str(value)
-    elif isinstance(value, str):
+    if isinstance(value, str):
         # Handle string literals correctly (e.g., for column names)
         # return f'"{value}"' # Don't add extra quotes
         return str(value)
-    else:
-        # Handle other literals (numbers, booleans)
-        return str(value)
+    # Handle other literals (numbers, booleans)
+    return str(value)
 
 
 __all__ = [
-    "get_default_mode",
-    "set_default_mode",
-    "get_default_verbose",
-    "set_default_verbose",
-    "get_default_threads",
-    "execution_mode",
     "_expr_to_str",  # Keep internal for now?
+    "execution_mode",
+    "get_default_mode",
+    "get_default_threads",
+    "get_default_verbose",
+    "get_error_mode",
     "read_model_points",
     "read_model_points_from_s3",
+    "set_default_mode",
+    "set_default_verbose",
+    "set_error_mode",
 ]

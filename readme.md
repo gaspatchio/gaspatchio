@@ -1,3 +1,93 @@
+# Gaspatchio Core
+
+Gaspatchio is a high-performance actuarial modeling framework that combines Python's simplicity with Rust's performance. It's designed for building and running actuarial models at scale, processing millions of policy projections efficiently while maintaining Excel function compatibility.
+
+**New to Gaspatchio?** Start with the [Architecture Summary](ref/ARCHITECTURE_SUMMARY.md) for a comprehensive overview of key design decisions and technical motivations behind the framework.
+
+## Overview
+
+Gaspatchio represents a modern approach to actuarial modeling, addressing the fundamental tension between the need for debuggable, maintainable models and the performance requirements of production systems. Here's what makes it unique:
+
+### Key Design Decisions
+
+The framework evolved over time. Each major decision is documented in the [ref/](ref/) directory:
+
+1. **[Python-Native DSL](ref/01-dsl/)** - Write models in Python, not a custom language
+2. **[ActuarialFrame Abstraction](ref/02-assumptions/)** - DataFrames enhanced for actuarial projections
+3. **[Core/Bindings Separation](ref/03-library-isolation/)** - Pure Rust core with language bindings
+4. **[High-Performance Lookups](ref/04-assumption-lookup/)** - O(1) assumption table access
+5. **[Polars Integration](ref/05-dsl-polars-wrapper/)** - Leverage best-in-class DataFrame library
+6. **[Domain Namespacing](ref/07-dsl-namespacing/)** - Organized, discoverable actuarial functions
+7. **[Type-Safe Proxies](ref/09-concrete-proxies/)** - Full IDE support with autocompletion
+8. **[Contextual Errors](ref/13-error-handling/)** - Actionable error messages for model debugging
+
+### Why This Matters for Actuaries
+
+- **Excel Function Compatibility**: Working toward comprehensive Excel function support (currently partial coverage)
+- **Vector Operations**: Natural support for time-based projections and mortality tables
+- **Assumption Management**: Efficient lookup tables with automatic transformations
+- **Debugging**: Enhanced error messages and operation tracing during development
+- **Performance**: High-performance Polars engine for production workloads
+- **AI-Ready**: Designed for LLM-assisted development with comprehensive documentation
+
+### Enhanced Debugging and Tracing
+
+Actuarial models in Gaspatchio are written in pure Python with a familiar DataFrame API. The framework provides two execution modes for different development needs:
+- **Debug Mode**: Enhanced tracing and logging for detailed error messages and operation tracking
+- **Optimize Mode**: Streamlined execution with minimal overhead for production performance
+
+Both modes use the same high-performance Polars engine underneath, with debug mode providing additional introspection capabilities to help actuaries understand and troubleshoot their models.
+
+
+## Architecture Overview
+
+```mermaid
+graph TB
+    subgraph "Python User Code"
+        Model["Actuarial Model 
+        (Pure Python)"]
+        AF["ActuarialFrame API"]
+    end
+    
+    subgraph "gaspatchio-core/bindings/python"
+        PyInterface["Python Interface
+        (Type Hints & Docs)"]
+        PyO3["PyO3 Bindings
+        (Rust ↔ Python)"]
+    end
+    
+    subgraph "gaspatchio-core/core"
+        Core["Pure Rust Core"]
+        Polars["Polars Functions"]
+        Lookups["Assumption Lookups"]
+        Registry["Table Registry"]
+    end
+    
+    subgraph "Execution Modes"
+        Debug["Debug Mode 
+        (Computational Graph for Tracing Errors)"]
+        Optimize["Optimize Mode (Direct Execution)"]
+    end
+    
+    Model --> AF    
+    PyInterface --> PyO3
+    PyO3 --> Core
+    Core --> Polars
+    Core --> Lookups
+    Core --> Registry
+    
+    AF -.->|"mode=debug"| Debug
+    AF -.->|"mode=optimize"| Optimize
+    Debug --> PyInterface
+    Optimize --> PyInterface
+    
+    style Model fill:#e1f5fe
+    style AF fill:#b3e5fc
+    style Debug fill:#fff3e0
+    style Optimize fill:#c8e6c9
+    style Core fill:#ffcdd2
+```
+
 ## Project Architecture
 
 This project follows a modular architecture with clear separation of concerns:
@@ -62,6 +152,56 @@ This separation provides several benefits:
 3. **Testing Efficiency**: Core functionality can be tested in Rust without Python dependencies, allowing for faster test cycles.
 4. **Performance Optimization**: Benchmarking can be done directly on the core library, ensuring optimal performance.
 5. **Maintainability**: Changes to the Python interface don't require recompiling the Rust code, and vice versa.
+
+## Technical Deep Dive
+
+### ActuarialFrame: The Core Abstraction
+
+At the heart of Gaspatchio is the `ActuarialFrame` - a DataFrame designed specifically for actuarial projections:
+
+```python
+# Create projection timeline using vector operations
+af["proj_months"] = af.fill_series(af["num_proj_months"], 0, 1)
+af["age"] = af["age"] + (af["proj_months"] / 12)
+
+# Multi-dimensional assumption lookups
+af["mortality_rate"] = gs.assumption_lookup(
+    "age-last", "variable", table_name="mortality_rates"
+)
+
+# Actuarial calculations with list operations
+af["P[IF]"] = pl.col("monthly_persist_prob").cum_prod().shift(1).fill_null(1.0)
+
+# Excel function compatibility
+af["year_frac"] = af["effective_date"].excel.yearfrac(af["date"], 0)
+```
+
+### Performance Architecture
+
+The dual execution mode is achieved through careful API design:
+
+1. **Debug Mode**: Operations execute with enhanced tracing and logging for debugging
+2. **Optimize Mode**: Operations execute with minimal overhead for performance
+
+```python
+# Same code, different execution modes
+af = ActuarialFrame(data, mode="optimize")  # Optimized execution
+af = ActuarialFrame(data, mode="debug")     # Debug execution with tracing
+```
+
+### Assumption Management
+
+Gaspatchio provides O(1) lookup performance for assumption tables through HashMap-based indexing:
+
+```python
+# Register assumption tables once
+registry = TableRegistry()
+registry.register("mortality", mortality_df)
+registry.register("lapse", lapse_df)
+
+# Efficient lookups in projections
+af["mortality_rate"] = gs.assumption_lookup("age-last", "variable", table_name="mortality_rates")
+```
 
 ### Project Documentation
 
