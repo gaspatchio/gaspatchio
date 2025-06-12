@@ -107,8 +107,8 @@ class TestCompilationErrorHandling:
         # Test console output without emoji
         plain_output = error.enhanced_error.to_console(use_emoji=False)
         assert "ERROR:" in plain_output
-        assert "Failed Operation:" in plain_output
-        assert "DataFrame State:" in plain_output
+        assert "Operation:" in plain_output
+        assert "Calculation State Before Error:" in plain_output
         
     def test_compilation_error_json_output(self):
         """Test JSON output for compilation errors."""

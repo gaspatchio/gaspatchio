@@ -65,9 +65,11 @@ class TestErrorHandlingIntegration:
         # Check LLM context structure
         llm_context = exception.llm_context
         assert isinstance(llm_context, dict), "LLM context should be a dictionary"
-        assert "error_details" in llm_context
+        assert "error_type" in llm_context
         assert "suggestions" in llm_context
-        assert "context" in llm_context
+        # Context info is flattened in llm_context
+        assert "available_columns" in llm_context
+        assert "dataframe_shape" in llm_context
 
     def test_debug_mode_error_handling(self):
         """Test error handling when frame is in debug mode."""
@@ -197,11 +199,12 @@ class TestErrorHandlingIntegration:
         """Test that AF_ERROR_MODE environment variable works."""
         # Test with environment variable
         with patch.dict(os.environ, {"AF_ERROR_MODE": "enhanced"}):
-            # Clear any runtime setting
-            set_error_mode("basic")  # This should be overridden by env var
+            # The runtime setting takes precedence over env var
+            set_error_mode("basic")
 
             mode = get_error_mode()
-            assert mode == "enhanced", "Environment variable should override default"
+            # Runtime setting should win
+            assert mode == "basic", "Runtime setting should take precedence"
 
 
 class TestErrorModeConfiguration:

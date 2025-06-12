@@ -104,5 +104,5 @@ markers = [
 
 # Scripts / CLI paths
 [project.scripts]
-gaspatchio-core = "gaspatchio_core:main"
 gp-docstrings = "gaspatchio_core.examples.docstrings.cli:app"
+gprun = "gaspatchio_core.cli:app"

@@ -75,10 +75,12 @@ class TestFriendlyErrorFormatter:
         # Test format_error
         error_msg = formatter.format_error()
 
-        assert "❌ Calculation error in model_calculation.py:27" in error_msg
+        assert "❌ Calculation Error" in error_msg
+        assert "📍 Location: model_calculation.py:27" in error_msg
         assert 'af["premium_total"] = af["premium"] * 12' in error_msg
-        assert "Polars raised → ValueError: Test error message" in error_msg
-        assert "📊 Last good data (preview):" in error_msg
+        assert "Type: ValueError" in error_msg
+        assert "Message: Test error message" in error_msg
+        assert "📊 Calculation State Before Error:" in error_msg
         assert "policy_id" in error_msg
         assert "premium" in error_msg
 
@@ -241,7 +243,7 @@ class TestFriendlyErrorFormatter:
 
         # Should handle LazyFrame without error
         error_msg = formatter.format_error()
-        assert "📊 Last good data (preview):" in error_msg
+        assert "📊 Calculation State Before Error:" in error_msg
 
         # LLM format should work with LazyFrame
         llm_format = formatter.format_for_llm()

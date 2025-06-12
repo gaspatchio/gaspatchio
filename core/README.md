@@ -1,5 +1,9 @@
 # Gaspatchio Core
 
+Gaspatchio Core is the high-performance Rust engine that powers the Gaspatchio actuarial modeling framework. This library provides the computational backbone for efficient DataFrame operations, assumption table management, and vectorized calculations essential for actuarial projections.
+
+For a comprehensive understanding of the architectural decisions and how they benefit actuarial modeling workflows, see the **[Architecture Summary](../ref/ARCHITECTURE_SUMMARY.md)**.
+
 ## Overview
 
 Gaspatchio Core is a high-performance Rust library underpinning an actuarial modeling system. It is designed to provide a flexible and efficient backend for complex actuarial calculations.

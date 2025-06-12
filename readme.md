@@ -2,21 +2,15 @@
 
 Gaspatchio is a high-performance actuarial modeling framework that combines Python's simplicity with Rust's performance. It's designed for building and running actuarial models at scale, processing millions of policy projections efficiently while maintaining Excel function compatibility.
 
-## New to Gaspatchio?
+**New to Gaspatchio?** Start with the [Architecture Summary](ref/ARCHITECTURE_SUMMARY.md) for a comprehensive overview of key design decisions and technical motivations behind the framework.
+
+## Overview
 
 Gaspatchio represents a modern approach to actuarial modeling, addressing the fundamental tension between the need for debuggable, maintainable models and the performance requirements of production systems. Here's what makes it unique:
 
-### The Core Innovation: Enhanced Debugging and Tracing
-
-Actuarial models in Gaspatchio are written in pure Python with a familiar DataFrame API. The framework provides two execution modes for different development needs:
-- **Debug Mode**: Enhanced tracing and logging for detailed error messages and operation tracking
-- **Optimize Mode**: Streamlined execution with minimal overhead for production performance
-
-Both modes use the same high-performance Polars engine underneath, with debug mode providing additional introspection capabilities to help actuaries understand and troubleshoot their models.
-
 ### Key Design Decisions
 
-The framework evolved through careful consideration of actuarial needs. Each major decision is documented in the [ref/](ref/) directory:
+The framework evolved over time. Each major decision is documented in the [ref/](ref/) directory:
 
 1. **[Python-Native DSL](ref/01-dsl/)** - Write models in Python, not a custom language
 2. **[ActuarialFrame Abstraction](ref/02-assumptions/)** - DataFrames enhanced for actuarial projections
@@ -36,18 +30,30 @@ The framework evolved through careful consideration of actuarial needs. Each maj
 - **Performance**: High-performance Polars engine for production workloads
 - **AI-Ready**: Designed for LLM-assisted development with comprehensive documentation
 
+### Enhanced Debugging and Tracing
+
+Actuarial models in Gaspatchio are written in pure Python with a familiar DataFrame API. The framework provides two execution modes for different development needs:
+- **Debug Mode**: Enhanced tracing and logging for detailed error messages and operation tracking
+- **Optimize Mode**: Streamlined execution with minimal overhead for production performance
+
+Both modes use the same high-performance Polars engine underneath, with debug mode providing additional introspection capabilities to help actuaries understand and troubleshoot their models.
+
+
 ## Architecture Overview
 
 ```mermaid
 graph TB
     subgraph "Python User Code"
-        Model["Actuarial Model\n(Pure Python)"]
+        Model["Actuarial Model 
+        (Pure Python)"]
         AF["ActuarialFrame API"]
     end
     
     subgraph "gaspatchio-core/bindings/python"
-        PyInterface["Python Interface\n(Type Hints & Docs)"]
-        PyO3["PyO3 Bindings\n(Rust ↔ Python)"]
+        PyInterface["Python Interface
+        (Type Hints & Docs)"]
+        PyO3["PyO3 Bindings
+        (Rust ↔ Python)"]
     end
     
     subgraph "gaspatchio-core/core"
@@ -58,12 +64,12 @@ graph TB
     end
     
     subgraph "Execution Modes"
-        Debug["Debug Mode\n(+ Computational Graph\nfor Tracing & Errors)"]
-        Optimize["Optimize Mode\n(Direct Execution)"]
+        Debug["Debug Mode 
+        (Computational Graph for Tracing Errors)"]
+        Optimize["Optimize Mode (Direct Execution)"]
     end
     
-    Model --> AF
-    AF --> PyInterface
+    Model --> AF    
     PyInterface --> PyO3
     PyO3 --> Core
     Core --> Polars
@@ -72,8 +78,8 @@ graph TB
     
     AF -.->|"mode=debug"| Debug
     AF -.->|"mode=optimize"| Optimize
-    Debug --> PyO3
-    Optimize --> PyO3
+    Debug --> PyInterface
+    Optimize --> PyInterface
     
     style Model fill:#e1f5fe
     style AF fill:#b3e5fc
