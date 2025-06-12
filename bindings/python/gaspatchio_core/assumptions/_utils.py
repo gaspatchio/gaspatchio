@@ -148,7 +148,7 @@ def _convert_keys_to_f64(df: pl.DataFrame, key_columns: list[str]) -> pl.DataFra
         df = df.with_columns(
             [pl.col(col).cast(dtype) for col, dtype in conversions.items()],
         )
-        logger.info(
+        logger.debug(
             f"Converted {len(conversions)} key columns to f64: {list(conversions.keys())}",
         )
 

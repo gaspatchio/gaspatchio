@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import logging as log
+import os
 import re
 from typing import TYPE_CHECKING
 
 import polars as pl  # Import polars for exception type checking
+from loguru import logger
+
+from .metadata import TracedOperation
 
 # Import thefuzz only if available, provide fallback
 try:
@@ -104,18 +107,22 @@ def _find_similar_columns(
         return []
 
 
-def _format_column_error(
+def _format_column_message(
     frame: ActuarialFrame,
-    original_exception: Exception,
     missing_col: str,
     original_msg: str,
-) -> Exception:
-    """Formats a helpful error message for a missing column, including original error."""
+) -> str:
+    """Format a helpful error message for a missing column."""
     try:
-        # Use columns property which works for both Lazy and Eager frames
-        available_cols = frame._df.columns
+        # For LazyFrame, use collect_schema().names() to avoid warning
+        if hasattr(frame._df, 'collect_schema'):
+            available_cols = frame._df.collect_schema().names()
+        else:
+            # For eager DataFrame, use columns directly
+            available_cols = frame._df.columns
     except Exception:
-        available_cols = frame._column_order  # Fallback
+        # Fallback to tracked column order
+        available_cols = frame._column_order if frame._column_order else []
 
     similar_cols = _find_similar_columns(missing_col, available_cols)
 
@@ -134,12 +141,78 @@ def _format_column_error(
         f"\n\nOriginal Polars Error: {original_msg}"  # Include original message
     )
 
-    # Return a new exception of the original type with the formatted message
+    return error_msg
+
+
+def _format_column_error(
+    frame: ActuarialFrame,
+    original_exception: Exception,
+    missing_col: str,
+    original_msg: str,
+) -> Exception:
+    """Legacy function - formats a helpful error message for a missing column."""
+    # This is kept for backward compatibility but just calls the new function
+    error_msg = _format_column_message(frame, missing_col, original_msg)
     return type(original_exception)(error_msg)
+
+
+def _is_compilation_error(e: Exception) -> bool:
+    """
+    Detect if an exception is a compilation error.
+
+    Compilation errors occur during query optimization before execution.
+    """
+    error_str = str(e)
+
+    # Check for specific compilation error patterns
+    if isinstance(e, pl.exceptions.ComputeError):
+        # Many compilation errors are ComputeError type
+        if any(
+            pattern in error_str
+            for pattern in [
+                "FAILED HERE RESOLVING",
+                "got invalid or ambiguous dtypes",
+                "type coercion",
+                "schema mismatch",
+            ]
+        ):
+            return True
+
+    # Check for column not found during compilation
+    if isinstance(e, pl.exceptions.ColumnNotFoundError):
+        # If there's optimization context, it's compilation
+        if (
+            "query optimization" in error_str
+            or "FAILED HERE" in error_str
+            or "Resolved plan" in error_str
+        ):
+            return True
+
+    # Check for other compilation-specific patterns
+    compilation_patterns = [
+        "failed during query optimization",
+        "unable to determine output schema",
+        "cannot resolve expression type",
+        "type inference failed",
+    ]
+
+    return any(pattern in error_str for pattern in compilation_patterns)
 
 
 def _handle_execution_error(frame: ActuarialFrame, e: Exception):
     """Handle errors during collect() or profile(), providing enhanced context and suggestions."""
+    # Skip if already processed (any kind of processing)
+    if any(
+        hasattr(e, attr)
+        for attr in [
+            "_enhanced_processed",
+            "_basic_formatted",
+            "enhanced_error",
+            "_dispatch_enhanced",
+        ]
+    ):
+        raise e
+
     # Import locally to avoid circular dependencies and only import when needed
     from ..util import get_error_mode
 
@@ -151,6 +224,12 @@ def _handle_execution_error(frame: ActuarialFrame, e: Exception):
         frame._tracing or frame._mode == "debug" or error_mode in ["enhanced", "debug"]
     ):
         raise e
+
+    # NEW: Check for compilation errors FIRST
+    if _is_compilation_error(e) and error_mode in ["enhanced", "debug"]:
+        # Route to compilation handler
+        logger.debug("Detected compilation error, routing to compilation handler")
+        return _handle_compilation_error(frame, e)
 
     # Check if we have metadata-enabled operations (TracedOperation) in the graph
     has_traced_operations = False
@@ -194,45 +273,53 @@ def _handle_execution_error(frame: ActuarialFrame, e: Exception):
                     enhanced_msg = formatter.format_error()
                     llm_context = formatter.format_for_llm()
 
-                    # Create new exception and store LLM context for programmatic access
-                    new_exception = type(e)(enhanced_msg)
-                    new_exception.llm_context = llm_context
-
                     # Log enhanced error if verbose mode is on
                     if getattr(frame, "_verbose", False):
-                        log.info(
+                        logger.debug(
                             f"Enhanced error handling applied: operation at index {fail_idx}",
                         )
-                        log.debug(f"Enhanced error details: {enhanced_msg}")
 
-                    raise new_exception from e
+                    # Instead of creating a new exception, modify the original one
+                    # This preserves the exception type while updating the message
+                    e.args = (enhanced_msg,)
+                    e.llm_context = llm_context
+                    # Mark the exception as already processed to prevent re-processing
+                    e._enhanced_processed = True
+                    raise e
                 except Exception as format_step_error:
-                    # Log which specific step failed
+                    # Log which specific step failed (without the full enhanced error message)
+                    logger.debug(f"Exception modification failed: {type(format_step_error).__name__}")
                     if getattr(frame, "_verbose", False):
-                        log.exception(
+                        logger.trace(
                             f"Specific formatting step failed: {format_step_error}",
                         )
-                        log.exception("Full traceback for formatting failure:")
-                    raise format_step_error
+                    # Don't raise the formatting error, just continue to fallback
+                    pass
             # No metadata available, log this case
             if getattr(frame, "_verbose", False):
-                log.debug(
+                logger.debug(
                     "Enhanced error handling: no metadata available for failing operation",
                 )
 
         except Exception as format_error:
             # If enhanced error handling fails, fall back to basic formatting
+            logger.debug(f"Enhanced error handling failed, falling back to basic formatting")
             if getattr(frame, "_verbose", False):
-                log.warning(
+                logger.trace(
                     f"Enhanced error handling failed: {format_error}, falling back to basic formatting",
                 )
 
     # Fall back to basic column error formatting for column-related errors
     _handle_basic_column_error(frame, e)
+    # This should never reach here as _handle_basic_column_error always raises
 
 
 def _handle_basic_column_error(frame: ActuarialFrame, e: Exception):
     """Handle basic column errors with similarity suggestions (fallback method)."""
+    # Skip if already enhanced
+    if hasattr(e, "enhanced_error"):
+        raise e
+
     error_msg = str(e)
     error_msg_str = str(error_msg) if error_msg is not None else ""
 
@@ -259,45 +346,124 @@ def _handle_basic_column_error(frame: ActuarialFrame, e: Exception):
     # If a missing column *was* identified, format the error
     if missing_col:
         try:
-            formatted_exception = _format_column_error(
-                frame,
-                e,
-                missing_col,
-                error_msg_str,
-            )
+            # Format the message but modify the original exception
+            formatted_msg = _format_column_message(frame, missing_col, error_msg_str)
+            e.args = (formatted_msg,)
+            e._basic_formatted = True
             if getattr(frame, "_verbose", False):
-                log.error(f"Column error formatted: {missing_col}")
-            raise formatted_exception from e
+                logger.trace(f"Column error formatted: {missing_col}")
+            raise e
         except Exception as format_err:
-            # If formatting itself fails, log the formatting error and raise the original
-            log.exception(
-                f"Failed to format column error for '{missing_col}': {format_err}",
-            )
-            if getattr(frame, "_verbose", False):
-                log.exception(f"Original execution error: {error_msg_str}")
-            raise e from None  # Raise original error
+            # If formatting itself fails, log and raise original
+            logger.debug(f"Failed to format column error: {format_err}")
+            raise e
     else:
-        # If no missing column identified by checks, log original and re-raise
+        # If no missing column identified, just re-raise
         if getattr(frame, "_verbose", False):
-            log.error(
-                f"Execution failed (non-column error or unidentified): {error_msg_str}",
-            )
+            logger.trace(f"Execution failed: {error_msg_str}")
         raise e
 
 
-def _handle_compilation_error(frame: "ActuarialFrame", e: Exception):
+def _is_column_reference_compilation_error(e: Exception) -> bool:
+    """Check if this is a compilation error due to missing column reference."""
+    if isinstance(e, pl.exceptions.ColumnNotFoundError):
+        return True
+
+    error_str = str(e)
+    patterns = [
+        "column not found",
+        "ColumnNotFoundError",
+        "no column named",
+        "unable to find column",
+    ]
+    return any(pattern in error_str for pattern in patterns)
+
+
+def _handle_compilation_error_enhanced(frame: ActuarialFrame, e: Exception):
+    """
+    Handle compilation errors with enhanced context using operation replay.
+
+    This function uses CompilationErrorFinder to replay operations and find
+    the exact failing operation with full context.
+    """
+    try:
+        # Import compilation-specific components
+        from .compilation_finder import CompilationErrorFinder
+
+        # Find the failing operation using compilation-aware replay
+        finder = CompilationErrorFinder(frame, e)
+        fail_idx, fail_op, last_good_df = finder.find_failing_operation()
+
+        if fail_op and last_good_df is not None:
+            # Build enhanced error using Pydantic models
+            enhanced_error = _build_enhanced_compilation_error(
+                exception=e,
+                operation=fail_op,
+                operation_index=fail_idx,
+                dataframe=last_good_df,
+                total_operations=len(frame._computation_graph),
+            )
+
+            # Determine output format based on context
+            if _is_interactive_console():
+                error_message = enhanced_error.to_console(use_emoji=True)
+            else:
+                error_message = enhanced_error.to_console(use_emoji=False)
+
+            # Instead of creating a new exception, modify the original
+            # This prevents re-wrapping and re-processing
+            e.args = (error_message,)  # Update the message
+
+            # Attach structured data for programmatic access
+            e.enhanced_error = enhanced_error
+            e.llm_context = enhanced_error.to_llm_context()
+
+            # Attach methods directly to the exception instance
+            def _to_json():
+                return enhanced_error.to_json()
+
+            def _to_dict():
+                return enhanced_error.to_dict()
+
+            e.to_json = _to_json
+            e.to_dict = _to_dict
+
+            # Mark as already processed
+            e._enhanced_processed = True
+
+            raise e
+        # Fallback to basic handling if we can't find the operation
+        return _handle_basic_column_error(frame, e)
+
+    except Exception as finder_error:
+        # If enhanced handling fails, just log and re-raise original
+        logger.debug(f"Enhanced compilation error finder failed: {finder_error}")
+        raise e
+
+
+def _handle_compilation_error(frame: ActuarialFrame, e: Exception):
     """Handle Polars compilation/optimization errors with helpful messages."""
     from ..util import get_error_mode
-    
+
     error_mode = get_error_mode()
     error_msg = str(e)
-    
+
+    # NEW: Check for column reference errors with enhanced handling
+    if _is_column_reference_compilation_error(e):
+        if error_mode in ["enhanced", "debug"] and frame._computation_graph:
+            _handle_compilation_error_enhanced(frame, e)
+            # Should never reach here as enhanced handler always raises
+        else:
+            # Fall back to basic column error handling
+            _handle_basic_column_error(frame, e)
+            # Should never reach here as basic handler always raises
+
     # Check for common compilation error patterns
     if "got invalid or ambiguous dtypes" in error_msg:
         # Extract the problematic expression and operation
         problem_expr = None
         operation_name = None
-        
+
         # Try to extract the expression causing the issue
         if "in expression" in error_msg:
             try:
@@ -305,29 +471,34 @@ def _handle_compilation_error(frame: "ActuarialFrame", e: Exception):
                 problem_expr = expr_part
             except (IndexError, AttributeError):
                 pass
-        
+
         # Try to extract the operation from the resolved plan
         if "FAILED HERE RESOLVING" in error_msg:
             try:
-                lines = error_msg.split('\n')
+                lines = error_msg.split("\n")
                 for line in lines:
                     if "FAILED HERE RESOLVING" in line:
-                        operation_name = line.split("'")[1] if "'" in line else "query optimization"
+                        operation_name = (
+                            line.split("'")[1] if "'" in line else "query optimization"
+                        )
                         break
             except (IndexError, AttributeError):
                 operation_name = "query optimization"
-        
+
         # Create enhanced error message for type coercion issues
         enhanced_msg = _format_type_coercion_error(
-            error_msg, problem_expr, operation_name, frame
+            error_msg,
+            problem_expr,
+            operation_name,
+            frame,
         )
-        
+
         if error_mode in ["enhanced", "debug"]:
             # Create enhanced exception with helpful context
             new_exception = type(e)(enhanced_msg)
-            if hasattr(e, '__cause__'):
+            if hasattr(e, "__cause__"):
                 new_exception.__cause__ = e.__cause__
-            
+
             # Add LLM context for programmatic access
             new_exception.llm_context = {
                 "error_type": "compilation_error",
@@ -338,19 +509,19 @@ def _handle_compilation_error(frame: "ActuarialFrame", e: Exception):
                     "Ensure consistent data types in operations (all scalar or all list)",
                     "Use explicit casting with .cast() to resolve type ambiguity",
                     "Check if list columns are being mixed with scalar operations",
-                    "Consider using .explode() to convert list columns to scalar before operations"
+                    "Consider using .explode() to convert list columns to scalar before operations",
                 ],
-                "original_error": error_msg
+                "original_error": error_msg,
             }
-            
+
             raise new_exception from e
-    
+
     # For other compilation errors, provide general enhancement
     if error_mode in ["enhanced", "debug"]:
         enhanced_msg = f"""
 ❌ Query compilation failed during optimization
 
-Failed operation: {operation_name or 'query optimization'}
+Failed operation: {operation_name or "query optimization"}
 
 💡 Polars compilation error:
 {error_msg}
@@ -365,40 +536,238 @@ Failed operation: {operation_name or 'query optimization'}
    The computation graph was built successfully but Polars couldn't 
    optimize the query due to type inference issues.
 """
-        
+
         new_exception = type(e)(enhanced_msg)
         new_exception.llm_context = {
             "error_type": "compilation_error",
-            "sub_type": "optimization_failure", 
+            "sub_type": "optimization_failure",
             "original_error": error_msg,
             "suggestions": [
                 "Check for data type mismatches in expressions",
                 "Ensure column operations use consistent types",
                 "Break complex expressions into simpler steps",
-                "Use explicit type casting where needed"
-            ]
+                "Use explicit type casting where needed",
+            ],
         }
         raise new_exception from e
-    
+
     # Basic mode - just re-raise original
     raise e
 
 
-def _format_type_coercion_error(error_msg: str, problem_expr: str | None, operation_name: str | None, frame: "ActuarialFrame") -> str:
+def _is_interactive_console() -> bool:
+    """Detect if running in an interactive console."""
+    import sys
+
+    # Check if stdout is a terminal
+    if not hasattr(sys.stdout, "isatty"):
+        return False
+
+    if not sys.stdout.isatty():
+        return False
+
+    # Check for common CI environment variables
+    ci_vars = ["CI", "CONTINUOUS_INTEGRATION", "GITHUB_ACTIONS", "GITLAB_CI"]
+    if any(os.environ.get(var) for var in ci_vars):
+        return False
+
+    # Check for Jupyter/IPython
+    try:
+        get_ipython()  # type: ignore
+        return True
+    except NameError:
+        pass
+
+    return True
+
+
+def _build_enhanced_compilation_error(
+    exception: Exception,
+    operation: TracedOperation,
+    operation_index: int,
+    dataframe: pl.DataFrame,
+    total_operations: int,
+) -> EnhancedError:
+    """Build structured enhanced error from components."""
+    from .models import (
+        ColumnInfo,
+        DataFrameContext,
+        EnhancedError,
+        ErrorMetadata,
+        ErrorType,
+        OperationContext,
+        SourceLocation,
+    )
+
+    # Determine error type
+    error_type = _classify_error_type(exception)
+
+    # Extract missing column if applicable
+    missing_column = None
+    if error_type == ErrorType.COLUMN_NOT_FOUND:
+        missing_column = _extract_missing_column_robust(str(exception))
+
+    # Build metadata
+    metadata = ErrorMetadata(
+        error_type=error_type,
+        error_category="compilation",
+        original_message=str(exception),
+    )
+
+    # Build operation context
+    operation_context = OperationContext(
+        index=operation_index,
+        total_operations=total_operations,
+        alias=operation.alias,
+        expression=str(operation.expression),
+        source=SourceLocation(
+            file_path=operation.metadata.file_name,
+            line_number=operation.metadata.line_number,
+            function_name=operation.metadata.function_name,
+            source_line=operation.metadata.source_line,
+        ),
+        expected_dtype=str(operation.expected_dtype)
+        if operation.expected_dtype
+        else None,
+    )
+
+    # Build dataframe context
+    columns = [
+        ColumnInfo(name=col, dtype=str(dtype))
+        for col, dtype in dataframe.schema.items()
+    ]
+
+    dataframe_context = DataFrameContext(
+        shape=dataframe.shape,
+        columns=columns,
+        preview_rows=dataframe.limit(5).to_dicts() if not dataframe.is_empty() else [],
+    )
+
+    # Generate suggestions
+    suggestions = _generate_compilation_suggestions(
+        error_type=error_type,
+        missing_column=missing_column,
+        available_columns=[col.name for col in columns],
+        operation=operation,
+    )
+
+    # Build complete error
+    return EnhancedError(
+        metadata=metadata,
+        operation=operation_context,
+        dataframe=dataframe_context,
+        suggestions=suggestions,
+        additional_context={
+            "missing_column": missing_column,
+            "execution_mode": "compilation",
+        },
+    )
+
+
+def _classify_error_type(exception: Exception) -> ErrorType:
+    """Classify the error type based on exception."""
+    from .models import ErrorType
+
+    if isinstance(exception, pl.exceptions.ColumnNotFoundError):
+        return ErrorType.COLUMN_NOT_FOUND
+
+    error_str = str(exception)
+    if "type mismatch" in error_str or "ambiguous dtypes" in error_str:
+        return ErrorType.TYPE_MISMATCH
+    if "invalid operation" in error_str:
+        return ErrorType.INVALID_OPERATION
+    if "schema" in error_str:
+        return ErrorType.SCHEMA_CONFLICT
+
+    return ErrorType.UNKNOWN
+
+
+def _generate_compilation_suggestions(
+    error_type: ErrorType,
+    missing_column: str | None,
+    available_columns: list[str],
+    operation: TracedOperation,
+) -> list[Suggestion]:
+    """Generate suggestions for compilation errors."""
+    from .models import ErrorType, Suggestion, SuggestionType
+
+    suggestions = []
+
+    if error_type == ErrorType.COLUMN_NOT_FOUND and missing_column:
+        # Find similar columns
+        similar_cols = _find_similar_columns(missing_column, available_columns)
+
+        for col in similar_cols[:3]:  # Top 3 suggestions
+            suggestions.append(
+                Suggestion(
+                    text=f"Did you mean '{col}'?",
+                    type=SuggestionType.TYPO_FIX,
+                    relevance_score=0.9,
+                    code_example=f"{operation.alias} = pl.col('{col}')",
+                ),
+            )
+
+        # Suggest checking available columns
+        suggestions.append(
+            Suggestion(
+                text="Use af.columns to list all available columns",
+                type=SuggestionType.DOCUMENTATION,
+                relevance_score=0.7,
+            ),
+        )
+
+        # Check if this might be created by earlier operations
+        if operation.metadata.line_number > 5:
+            suggestions.append(
+                Suggestion(
+                    text=f"Check operations before line {operation.metadata.line_number} which might create this column",
+                    type=SuggestionType.DOCUMENTATION,
+                    relevance_score=0.6,
+                ),
+            )
+
+    elif error_type == ErrorType.TYPE_MISMATCH:
+        suggestions.append(
+            Suggestion(
+                text="Use .cast() to explicitly convert types",
+                type=SuggestionType.TYPE_CAST,
+                relevance_score=0.9,
+                code_example="col('amount').cast(pl.Float64)",
+            ),
+        )
+
+        suggestions.append(
+            Suggestion(
+                text="Check if mixing list columns with scalar operations",
+                type=SuggestionType.DOCUMENTATION,
+                relevance_score=0.8,
+            ),
+        )
+
+    return suggestions
+
+
+def _format_type_coercion_error(
+    error_msg: str,
+    problem_expr: str | None,
+    operation_name: str | None,
+    frame: ActuarialFrame,
+) -> str:
     """Format a type coercion error with helpful suggestions."""
-    
     # Extract the problematic types if available
     problematic_types = None
     if "got invalid or ambiguous dtypes:" in error_msg:
         try:
-            types_part = error_msg.split("got invalid or ambiguous dtypes: '")[1].split("'")[0]
+            types_part = error_msg.split("got invalid or ambiguous dtypes: '")[1].split(
+                "'",
+            )[0]
             problematic_types = types_part
         except (IndexError, AttributeError):
             pass
-    
-    enhanced_msg = f"""❌ Data type mismatch in {operation_name or 'operation'}
 
-🔍 Problem: {problem_expr or 'Expression'} has ambiguous types: {problematic_types or 'mixed types'}
+    enhanced_msg = f"""❌ Data type mismatch in {operation_name or "operation"}
+
+🔍 Problem: {problem_expr or "Expression"} has ambiguous types: {problematic_types or "mixed types"}
 
 💡 Common causes:
    • Mixing list columns with scalar values
@@ -418,5 +787,5 @@ def _format_type_coercion_error(error_msg: str, problem_expr: str | None, operat
 
 Original Polars error:
 {error_msg}"""
-    
+
     return enhanced_msg

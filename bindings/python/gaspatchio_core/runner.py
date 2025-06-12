@@ -36,9 +36,12 @@ class ModelRunResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    result: pl.DataFrame
-    metrics: RunMetrics
+    status: Literal["success", "error"] = "success"
+    result: pl.DataFrame | None = None
+    metrics: RunMetrics | None = None
     errors: list[str] | None = None
+    error_message: str | None = None
+    error_context: dict[str, Any] | None = None  # For llm_context and enhanced_error
 
 
 def load_model_from_path(model_path, function_name="life_model"):
@@ -134,15 +137,22 @@ def _execute_model_run(
         err_msg = f"No data found{error_suffix} after filtering."
         logger.error(err_msg)
         errors.append(err_msg)
-        # Skip actual model execution if no data
-        raise ValueError(err_msg)
+        # Return error result instead of raising
+        return ModelRunResult(
+            status="error",
+            result=None,
+            metrics=None,
+            errors=errors,
+            error_message=err_msg,
+            error_context=None
+        )
 
     # 5. Run the model using ActuarialFrame and dsl_run_model
-    logger.info("Setting up ActuarialFrame in {} mode...", config.mode)
+    logger.debug("Setting up ActuarialFrame in {} mode...", config.mode)
     df = ActuarialFrame(data_lazy, mode=config.mode)
     # df.show_query_plan(True)
 
-    logger.info("Running model function...")
+    logger.debug("Running model function...")
     try:
         dsl_run_model(model_func, df)
 
@@ -150,24 +160,30 @@ def _execute_model_run(
         logger.info("Collecting results...")
         result_df, profile_info = df.profile()
     except Exception as e:
-        # If the exception already carries enhanced context (friendly formatting + llm_context),
-        # surface it as-is so the caller sees the rich, actionable message. Avoid wrapping it in
-        # a new ValueError, otherwise we lose metadata like `llm_context` and the specific
-        # exception type (useful for testing).
+        # Build error context
+        error_context = {}
+        
+        # If the exception already carries enhanced context, capture it
         if hasattr(e, "llm_context"):
-            logger.error(f"Model execution failed with enhanced error: {e}")
-            raise e from None
-
-        enhanced_message = str(e)
-
-        # Basic column-not-found path (legacy) – still provide a clean error without full traceback
-        if "Column" in enhanced_message and "not found" in enhanced_message:
-            logger.error(f"Model execution failed: {enhanced_message}")
-            raise ValueError(enhanced_message) from None
-
-        # Fallback to original behaviour for other errors
-        logger.debug("Re-raising original exception")
-        raise
+            error_context["llm_context"] = e.llm_context
+        if hasattr(e, "enhanced_error"):
+            error_context["enhanced_error"] = e.enhanced_error
+            
+        # Use the enhanced error message if available
+        error_message = str(e)
+        
+        # Log that model execution failed (without repeating the full error)
+        logger.debug("Model execution failed with {}", type(e).__name__)
+        
+        # Return error result instead of raising
+        return ModelRunResult(
+            status="error",
+            result=None,
+            metrics=None,
+            errors=[error_message],
+            error_message=error_message,
+            error_context=error_context if error_context else None
+        )
 
     # Capture the column order from the ActuarialFrame
     tracked_column_order = df.get_column_order()
@@ -204,9 +220,12 @@ def _execute_model_run(
         tracked_column_order=tracked_column_order,
     )
     return ModelRunResult(
+        status="success",
         result=result_df,
         metrics=metrics,
         errors=errors if errors else None,
+        error_message=None,
+        error_context=None
     )
 
 
@@ -236,7 +255,7 @@ def run_model(config: ModelRunConfig) -> ModelRunResult:
 
 def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
     """Loads model and points, runs the model for a single policy, and returns the ModelRunResult."""
-    logger.info(
+    logger.debug(
         f"Starting single policy run for ID: {policy_id} with config: {config.model_dump()}\n",
     )
 
@@ -257,7 +276,7 @@ def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
     data_lazy = read_model_points(model_points_path)
 
     # 4. Filter model points for the specified policy_id (lazy)
-    logger.info("Filtering for single policy with ID: {}", policy_id)
+    logger.debug("Filtering for single policy with ID: {}", policy_id)
     try:
         policy_id_int = int(policy_id)
     except ValueError as e:

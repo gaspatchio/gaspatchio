@@ -400,8 +400,6 @@ def _method_caller(
                         hasattr(op, "expected_dtype") and op.expected_dtype):
                         if isinstance(op.expected_dtype, pl.List):
                             should_use_list_shim = True
-                            if name in ["pow", "fill_null"]:
-                                logger.debug(f"{name} detection - found list type for column '{self_proxy.name}' from computation graph")
                             break
             
             # If not found in computation graph, check the schema
@@ -411,8 +409,6 @@ def _method_caller(
                     schema = parent_af._df.collect_schema()
                     dtype = schema.get(self_proxy.name)
                     should_use_list_shim = isinstance(dtype, pl.List)
-                    if name in ["pow", "fill_null"] and should_use_list_shim:
-                        logger.debug(f"{name} detection - found list type for column '{self_proxy.name}' from schema")
                 except Exception:
                     pass
         elif isinstance(self_proxy, ExpressionProxy):
@@ -436,8 +432,6 @@ def _method_caller(
                             col_pattern = rf'\(?col\s*\(\s*["\']?{re.escape(op.alias)}["\']?\s*\)\)?'
                             if re.search(col_pattern, expr_str):
                                 might_be_list = True
-                                if name == "fill_null":
-                                    logger.debug(f"fill_null detection - found list column '{op.alias}' from computation graph")
                                 break
                 
                 # Also check the existing schema
@@ -446,19 +440,12 @@ def _method_caller(
                     list_column_names = [
                         name for name, dtype in schema.items() if isinstance(dtype, pl.List)
                     ]
-                    # Debug logging
-                    if name == "fill_null":
-                        logger.debug(f"fill_null detection - expr_str: {expr_str}")
-                        logger.debug(f"fill_null detection - list_column_names: {list_column_names}")
                     # Check if any list column names appear in the expression
                     # Use regex to handle cases with parentheses and whitespace
                     might_be_list = any(
                         re.search(rf'\(?col\s*\(\s*["\']?{re.escape(col_name)}["\']?\s*\)\)?', expr_str) is not None
                         for col_name in list_column_names
                     )
-                
-                if name == "fill_null":
-                    logger.debug(f"fill_null detection - might_be_list: {might_be_list}")
             should_use_list_shim = might_be_list
 
     try:
@@ -517,6 +504,8 @@ def _method_caller(
             'method': name,
             'column': getattr(self_proxy, 'name', None)
         }
+        # Mark as already enhanced to prevent re-processing
+        new_error._dispatch_enhanced = True
         raise new_error from e
     return _wrap(parent_af, result)
 

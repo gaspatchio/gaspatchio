@@ -23,8 +23,8 @@ _DEFAULT_THREADS = int(
 # Error handling mode configuration
 _DEFAULT_ERROR_MODE = os.environ.get(
     "AF_ERROR_MODE",
-    "basic",
-)  # basic, enhanced, debug, off
+    "enhanced",
+)  # enhanced (default), basic, debug, off
 
 # Functions moved from dsl/core.py
 
@@ -65,7 +65,7 @@ def get_default_threads() -> int:
 
 
 def get_error_mode() -> str:
-    """Get the error handling mode ('basic', 'enhanced', 'debug', or 'off')."""
+    """Get the error handling mode ('enhanced' (default), 'basic', 'debug', or 'off')."""
     global _DEFAULT_ERROR_MODE
     # Always check environment variable first (this allows environment to override programmatic settings)
     env_mode = os.environ.get("AF_ERROR_MODE")

@@ -284,7 +284,7 @@ class Table:
                 keys=key_columns,
                 value_column=self._value,
             )
-            logger.info(
+            logger.debug(
                 f"Successfully registered table '{self._name}' with {len(processed_df)} rows, "
                 f"{len(key_columns)} key columns: {key_columns}",
             )
@@ -492,10 +492,6 @@ class Table:
                 raise ValueError(f"No value provided for key column '{col}'")
 
         # Create the actual plugin call to Rust lookup implementation
-        logger.debug(
-            f"Creating lookup expression for table '{self._name}' with {len(key_exprs)} keys",
-        )
-
         return register_plugin_function(
             plugin_path=LIB,
             function_name="lookup_by_table_and_hash",  # Must match #[polars_expr] function name

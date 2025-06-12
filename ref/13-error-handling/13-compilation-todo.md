@@ -32,6 +32,9 @@ This document tracks the implementation tasks for enhanced compilation error han
   - [ ] Check for computation graph existence
   - [ ] Convert operations to TracedOperation format
   - [ ] Call CompilationErrorFinder
+  - [ ] Build EnhancedError using Pydantic models
+  - [ ] Detect console vs non-interactive output
+  - [ ] Attach structured data to exception
   - [ ] Handle fallback scenarios
 
 ### 1.2 CompilationErrorFinder Implementation
@@ -253,12 +256,41 @@ This document tracks the implementation tasks for enhanced compilation error han
 
 ---
 
+## Key Implementation Notes
+
+### Pydantic Models Design
+The core insight is to use **Pydantic models as the single source of truth** for error information:
+- All error data is structured and validated
+- Multiple output formats from one model (`to_console()`, `to_json()`, `to_llm_context()`)
+- Type safety throughout the error handling pipeline
+- Easy to extend with new fields or error types
+
+### Output Format Selection
+```python
+# Automatic format selection based on context
+if _is_interactive_console():
+    message = error.to_console(use_emoji=True)  # Pretty for humans
+else:
+    message = error.to_console(use_emoji=False)  # Plain for logs
+
+# Always attach structured data
+exception.enhanced_error = error  # Full Pydantic model
+exception.to_json = error.to_json  # For APIs/MCP
+exception.llm_context = error.to_llm_context()  # For AI
+```
+
 ## Success Criteria
 
 ### Performance
 - [ ] Replay completes in <100ms for typical errors
 - [ ] Memory overhead <10MB for context collection
 - [ ] No impact on successful execution path
+
+### API/Output Quality
+- [ ] JSON output is valid and complete
+- [ ] Console output is readable with proper formatting
+- [ ] LLM context includes all necessary information
+- [ ] Pydantic validation catches malformed errors
 
 ### Quality
 - [ ] All compilation errors show dataframe context

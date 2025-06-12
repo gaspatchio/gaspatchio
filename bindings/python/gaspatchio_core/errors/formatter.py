@@ -9,9 +9,19 @@ suggestions, and data previews.
 from __future__ import annotations
 
 import shutil
+import sys
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
+
+# Import Rich for syntax highlighting
+try:
+    from rich.console import Console
+    from rich.syntax import Syntax
+    from rich.text import Text
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
 
 if TYPE_CHECKING:
     from .metadata import TracedOperation
@@ -45,22 +55,48 @@ class FriendlyErrorFormatter:
     def format_error(self) -> str:
         """Create the friendly error message."""
         error_type = type(self.exception).__name__
-        error_msg = str(self.exception)
+        error_msg = self._clean_error_message(str(self.exception))
 
         # Enhanced error with source location
         lines = [
-            f"❌ Calculation error in {self.operation.metadata.file_name}:{self.operation.metadata.line_number}",
-            f"   Failed operation: {self.operation.alias}",
-            f"   Source: {self.operation.metadata.source_line}",
+            "─" * 80,
+            f"❌ Calculation Error",
+            "─" * 80,
             "",
-            f"Polars raised → {error_type}: {error_msg}",
+            f"📍 Location: {self.operation.metadata.file_name}:{self.operation.metadata.line_number}",
+            f"   Function: {self.operation.metadata.function_name or 'module level'}",
+            f"   Operation: {self.operation.alias}",
             "",
-            "💡 Suggestions:",
-            *[f"   • {suggestion}" for suggestion in self.suggestions],
-            "",
-            "📊 Last good data (preview):",
-            self._format_dataframe_preview(self.last_good_df),
+            "📝 Source Code:",
         ]
+        
+        # Add syntax-highlighted code
+        source_code_lines = self._format_source_code(self.operation.metadata.source_line)
+        lines.extend(source_code_lines)
+        
+        lines.extend([
+            "",
+            f"🔴 Error Details:",
+            f"   Type: {error_type}",
+            f"   Message: {error_msg}",
+            "",
+        ])
+        
+        if self.suggestions:
+            lines.extend([
+                "💡 Suggestions:",
+                *[f"   • {suggestion}" for suggestion in self.suggestions[:3]],
+                "",
+            ])
+        
+        # Simplified data preview
+        lines.extend([
+            "📊 Calculation State Before Error:",
+            "   (This shows the last successful calculation state)",
+            self._format_dataframe_preview(self.last_good_df, max_rows=3),
+            "",
+            "─" * 80,
+        ])
 
         return "\n".join(lines)
 
@@ -180,3 +216,67 @@ class FriendlyErrorFormatter:
         truncated = pl.concat([first_part, ellipsis_df, last_part], how="horizontal")
 
         return truncated
+    
+    def _format_source_code(self, source_line: str) -> list[str]:
+        """Format source code with syntax highlighting if available."""
+        # Check if we should use Rich syntax highlighting
+        if RICH_AVAILABLE and self._should_use_rich_formatting():
+            return self._format_source_code_rich(source_line)
+        else:
+            # Fallback to markdown-style fenced code blocks
+            return [
+                "   ```python",
+                f"   {source_line}",
+                "   ```",
+            ]
+    
+    def _should_use_rich_formatting(self) -> bool:
+        """Check if we should use Rich formatting (TTY and not piped)."""
+        # Check if stdout is a TTY and not being piped
+        return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+    
+    def _format_source_code_rich(self, source_line: str) -> list[str]:
+        """Format source code with Rich syntax highlighting."""
+        try:
+            # Create a console with specific width to match our indentation
+            console = Console(file=None, force_terminal=True, width=120)
+            
+            # Create syntax object with Python highlighting
+            syntax = Syntax(
+                source_line.strip(),
+                "python",
+                theme="monokai",  # Dark theme that works well in terminals
+                line_numbers=False,
+                word_wrap=False,
+                indent_guides=False,
+            )
+            
+            # Render to string
+            with console.capture() as capture:
+                console.print(syntax)
+            
+            highlighted = capture.get()
+            
+            # Split into lines and add our indentation
+            highlighted_lines = []
+            for line in highlighted.strip().split("\n"):
+                highlighted_lines.append(f"   {line}")
+            
+            return highlighted_lines
+            
+        except Exception:
+            # If Rich formatting fails, fall back to plain text
+            return [
+                "   ```python",
+                f"   {source_line}",
+                "   ```",
+            ]
+    
+    def _clean_error_message(self, message: str) -> str:
+        """Clean up error message for display."""
+        # Remove excessive whitespace and newlines
+        message = " ".join(message.split())
+        # Truncate if too long
+        if len(message) > 120:
+            message = message[:117] + "..."
+        return message
