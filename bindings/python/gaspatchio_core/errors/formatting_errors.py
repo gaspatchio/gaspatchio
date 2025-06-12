@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl  # Import polars for exception type checking
 from loguru import logger
@@ -14,6 +14,14 @@ try:
     from thefuzz import fuzz
 except ImportError:
     fuzz = None
+
+# Import Rich for syntax highlighting
+try:
+    from rich.console import Console
+    from rich.syntax import Syntax
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
 
 if TYPE_CHECKING:
     # Avoid circular import during runtime, import for type checking only
@@ -107,6 +115,78 @@ def _find_similar_columns(
         return []
 
 
+def _format_source_code_snippet(source_line: str) -> str:
+    """Format source code with syntax highlighting if available."""
+    # Check if Rich is available for syntax highlighting
+    if RICH_AVAILABLE:
+        try:
+            from rich.console import Console
+            from rich.syntax import Syntax
+            from rich.text import Text
+            
+            # Create a syntax object with Python highlighting
+            syntax = Syntax(source_line.strip(), "python", theme="monokai", line_numbers=False)
+            
+            # Render to string with console
+            console = Console(force_terminal=True, width=100, legacy_windows=False)
+            with console.capture() as capture:
+                console.print("   ", syntax, sep="")
+            
+            return capture.get().rstrip()
+        except Exception as e:
+            # Fallback to plain text if Rich fails
+            logger.trace(f"Rich syntax highlighting failed: {e}")
+    
+    # Fallback: Use markdown-style code block
+    return f"   ```python\n   {source_line}\n   ```"
+
+
+def _find_column_reference_in_graph(
+    frame: ActuarialFrame,
+    missing_col: str,
+) -> dict[str, Any] | None:
+    """
+    Search the computation graph for operations that reference the missing column.
+    
+    Returns dict with file, line, function, operation, and source if found.
+    """
+    if not hasattr(frame, '_computation_graph') or not frame._computation_graph:
+        return None
+    
+    # Search through the computation graph
+    for operation in frame._computation_graph:
+        # Skip tuple operations (legacy format)
+        if isinstance(operation, tuple):
+            continue
+            
+        # Check if this operation references the missing column
+        try:
+            # Get the expression string
+            expr_str = str(operation.expression)
+            
+            # Check if the missing column is referenced in the expression
+            # Look for patterns like col("missing_col") or ["missing_col"]
+            if (f'col("{missing_col}")' in expr_str or 
+                f"col('{missing_col}')" in expr_str or
+                f'["{missing_col}"]' in expr_str or
+                f"['{missing_col}']" in expr_str):
+                
+                # Found the operation that references the missing column
+                if hasattr(operation, 'metadata') and operation.metadata:
+                    return {
+                        'file': operation.metadata.display_filename,
+                        'line': operation.metadata.line_number,
+                        'function': operation.metadata.function_name or 'module level',
+                        'operation': f"{operation.alias} = {operation.expression}",
+                        'source': operation.metadata.source_line
+                    }
+        except Exception:
+            # Skip if we can't process this operation
+            continue
+    
+    return None
+
+
 def _format_column_message(
     frame: ActuarialFrame,
     missing_col: str,
@@ -126,20 +206,80 @@ def _format_column_message(
 
     similar_cols = _find_similar_columns(missing_col, available_cols)
 
-    # Format error message with proper newlines
-    error_msg = f"Column '{missing_col}' not found in the DataFrame.\n\n"
-
-    # Only add suggestions if similar_cols is not empty
-    if similar_cols:
+    # Check if we should use rich formatting
+    from ..util import get_error_mode
+    error_mode = get_error_mode()
+    # Always use rich formatting when enhanced mode is on
+    use_rich = error_mode in ["enhanced", "debug"]
+    
+    if use_rich:
+        # Try to find the source location from computation graph
+        source_location = _find_column_reference_in_graph(frame, missing_col)
+        
+        # Rich formatted error message
+        error_msg = f"\n{'─' * 80}\n"
+        error_msg += "❌ Calculation Error\n"
+        error_msg += f"{'─' * 80}\n\n"
+        
+        if source_location:
+            error_msg += f"📍 Location: {source_location['file']}:{source_location['line']}\n"
+            error_msg += f"   Function: {source_location['function']}\n"
+            error_msg += f"   Operation: {source_location['operation']}\n\n"
+            
+            error_msg += "📝 Source Code:\n"
+            # Format source code with syntax highlighting
+            formatted_source = _format_source_code_snippet(source_location['source'])
+            error_msg += formatted_source + "\n\n"
+        else:
+            error_msg += "📍 Location: (Source location not available)\n"
+            error_msg += "   Operation: Column reference\n\n"
+        
+        error_msg += "🔴 Error Details:\n"
+        error_msg += f"   Type: ColumnNotFoundError\n"
+        error_msg += f"   Message: Column '{missing_col}' not found\n\n"
+        
+        error_msg += "📊 Calculation State Before Error:\n"
+        error_msg += "   (Available columns at the point of failure)\n"
+        # Get shape safely
+        try:
+            if hasattr(frame._df, 'shape'):
+                rows = frame._df.shape[0]
+            else:
+                rows = "unknown"
+        except Exception:
+            rows = "unknown"
+        error_msg += f"   shape: ({rows}, {len(available_cols)})\n"
+        error_msg += "   ┌" + "─" * 78 + "┐\n"
+        
+        # Format columns in a table-like structure
+        for i, col in enumerate(available_cols):
+            if i < 5 or i >= len(available_cols) - 1:  # Show first 5 and last column
+                error_msg += f"   │ {col:<76} │\n"
+            elif i == 5:
+                error_msg += f"   │ ... ({len(available_cols) - 6} more columns) ...{' ' * 49} │\n"
+        
+        error_msg += "   └" + "─" * 78 + "┘\n\n"
+        
+        if similar_cols:
+            error_msg += "💡 Did you mean one of these?\n"
+            for col in similar_cols[:3]:
+                error_msg += f"   • {col}\n"
+            error_msg += "\n"
+        
+        error_msg += "─" * 80
+    else:
+        # Simple formatted error message (original)
+        error_msg = f"Column '{missing_col}' not found in the DataFrame.\n\n"
+        
+        if similar_cols:
+            error_msg += (
+                "Did you mean one of these?\n - " + "\n - ".join(similar_cols) + "\n\n"
+            )
+        
+        error_msg += "Available columns are:\n - " + "\n - ".join(available_cols)
         error_msg += (
-            "Did you mean one of these?\n - " + "\n - ".join(similar_cols) + "\n\n"
+            f"\n\nOriginal Polars Error: {original_msg}"
         )
-
-    # Always list available columns
-    error_msg += "Available columns are:\n - " + "\n - ".join(available_cols)
-    error_msg += (
-        f"\n\nOriginal Polars Error: {original_msg}"  # Include original message
-    )
 
     return error_msg
 

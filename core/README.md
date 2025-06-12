@@ -11,9 +11,9 @@ Key features include:
 *   **Dynamic Table Transformations**: Supports transformations of tables before registration, such as converting wide-format tables (common in actuarial data) to long-format for easier joining.
 *   **Vectorized Lookups**: Provides specialized functions to perform lookups on vector/list columns within DataFrames, essential for time-based projections in actuarial models. This allows for efficient lookup of rates for entire projection arrays in a single operation.
 *   **Python-Native DSL Support**: While the core is in Rust, it's designed to support a Python-native DSL. This allows actuaries to write models in familiar Python, with operations captured and optimized by the Rust core. It aims for a dual execution model: a debug mode for interpretability and an optimized mode for performance.
-*   **Plugin Architecture**: The system is designed to integrate with custom plugin functions, as seen in `index.rs`, which can extend its capabilities.
+*   **Plugin Architecture**: The system is designed to integrate with custom plugin functions, as seen in `vector.rs`, which can extend its capabilities.
 
-The main logic, including data structures like `Value`, `LookupIndex`, `TableRegistry`, and `TransformSpec`, along with core functionalities for building indices, performing scalar and vector lookups, and managing the global table registry, is implemented in `src/index.rs`.
+The main logic, including data structures like `AssumptionTable`, `AssumptionTableRegistry`, and core functionalities for building assumption tables, performing scalar and vector lookups, and managing the global table registry, is implemented in `src/assumptions/`.
 
 ## Building and Testing
 
