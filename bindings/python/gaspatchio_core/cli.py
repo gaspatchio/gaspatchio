@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -9,14 +10,21 @@ from rich.console import Console
 
 from .runner import (  # Changed to relative import
     ModelRunConfig,
-    run_model as run_model_func,
-    run_single_policy as run_single_policy_func,
     transpose_single_policy_result,
+)
+from .runner import (
+    run_model as run_model_func,
+)
+from .runner import (
+    run_single_policy as run_single_policy_func,
 )
 
 # Set default logging level to INFO
 logger.remove()  # Remove default handler
-logger.add(sys.stderr, level="INFO")  # Add handler with INFO level
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+)  # Add handler with level from env var
 
 # Rich console for better output
 console = Console()
@@ -148,6 +156,18 @@ def run_model(
 
     # Apply column selection and display logic
     result_df = model_run.result
+    metrics = model_run.metrics
+
+    # Output metrics at TRACE level
+    logger.trace("\n=== Model Run Metrics ===")
+    logger.trace(f"Total time: {metrics.total_time_s:.2f} seconds")
+    logger.trace("\nProfile Info:")
+    with pl.Config(tbl_cols=-1, tbl_rows=-1, tbl_width_chars=1500, fmt_str_lengths=100):
+        logger.trace(metrics.profile_info)
+    if metrics.tracked_column_order:
+        logger.trace("\nTracked Column Order:")
+        logger.trace(metrics.tracked_column_order)
+    logger.trace("=====================\n")
 
     # Determine column order - use tracked order from metrics if available
     tracked_column_order = (
@@ -382,16 +402,30 @@ def run_single_policy(
         logger.warning("Single policy run completed but produced no result.")
 
 
+def get_versions() -> tuple[str, str]:
+    """Get both Python package and Rust core library versions."""
+    from importlib.metadata import version
+
+    from ._internal import __version__ as rust_version
+
+    try:
+        py_version = version("gaspatchio-core")
+    except Exception:
+        py_version = "unknown"
+
+    return py_version, rust_version
+
+
 def version_callback(value: bool):
     """Print version and exit."""
     if value:
-        from importlib.metadata import version
-
-        try:
-            v = version("gaspatchio-core")
-            console.print(f"[bold green]gprun[/bold green] version: {v}")
-        except Exception:
-            console.print("[bold red]Unable to determine version[/bold red]")
+        py_version, rust_version = get_versions()
+        console.print(
+            f"[bold green]gprun[/bold green] Python package version: {py_version}",
+        )
+        console.print(
+            f"[bold green]gprun[/bold green] Rust core version: {rust_version}",
+        )
         raise typer.Exit()
 
 
