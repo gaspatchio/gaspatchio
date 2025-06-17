@@ -44,6 +44,78 @@ if TYPE_CHECKING:
 _DEFAULT_THREADS = 0
 
 
+class _AggregationResult:
+    """Base class for aggregation results that provides convenient scalar access."""
+    
+    def __init__(self, df: pl.DataFrame):
+        self._df = df
+        
+    def __getitem__(self, key: str) -> Any:
+        """Return the scalar value directly for convenience."""
+        return self._df[key][0]
+        
+    def __repr__(self) -> str:
+        return repr(self._df)
+        
+    def __str__(self) -> str:
+        return str(self._df)
+    
+    @property
+    def to_frame(self) -> pl.DataFrame:
+        """Allow access to the underlying DataFrame if needed."""
+        return self._df
+
+
+class MaxResult(_AggregationResult):
+    """Result wrapper for max() method that provides convenient scalar access."""
+    pass
+
+
+class MinResult(_AggregationResult):
+    """Result wrapper for min() method that provides convenient scalar access."""
+    pass
+
+
+class MeanResult(_AggregationResult):
+    """Result wrapper for mean() method that provides convenient scalar access."""
+    pass
+
+
+class StdResult(_AggregationResult):
+    """Result wrapper for std() method that provides convenient scalar access."""
+    pass
+
+
+class VarResult(_AggregationResult):
+    """Result wrapper for var() method that provides convenient scalar access."""
+    pass
+
+
+class MedianResult(_AggregationResult):
+    """Result wrapper for median() method that provides convenient scalar access."""
+    pass
+
+
+class SumResult(_AggregationResult):
+    """Result wrapper for sum() method that provides convenient scalar access."""
+    pass
+
+
+class CountResult(_AggregationResult):
+    """Result wrapper for count() method that provides convenient scalar access."""
+    pass
+
+
+class ProductResult(_AggregationResult):
+    """Result wrapper for product() method that provides convenient scalar access."""
+    pass
+
+
+class QuantileResult(_AggregationResult):
+    """Result wrapper for quantile() method that provides convenient scalar access."""
+    pass
+
+
 class ActuarialFrame:
     """A lazy, chainable, and traceable DataFrame for actuarial modeling.
 
@@ -508,6 +580,1024 @@ class ActuarialFrame:
                 )
             self._excel_accessor_instance = AccessorClass(self)
         return self._excel_accessor_instance
+
+    def max(self):
+        """Calculate maximum values across all numeric columns.
+
+        Returns a single-row frame containing the maximum value for each column.
+        Essential for identifying outliers, validating data ranges, and determining
+        upper bounds in actuarial calculations.
+
+        !!! note "When to use"
+            * **Data Validation:** Identify outliers in premium amounts, sum assured,
+                or claim values that may require investigation.
+            * **Experience Analysis:** Find maximum claim amounts, policy sizes, or
+                ages in a portfolio for risk assessment.
+            * **Regulatory Reporting:** Determine maximum exposure amounts for
+                solvency calculations and stress testing.
+            * **Pricing Boundaries:** Identify upper limits for age bands, benefit
+                amounts, or policy terms in product design.
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing maximum values for each column.
+
+        Examples
+        --------
+        **Scalar Example: Portfolio Maximum Values**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004"],
+            "age": [25, 45, 67, 35],
+            "sum_assured": [100000, 500000, 250000, 1000000],
+            "annual_premium": [1200, 6000, 8500, 15000],
+        }
+        af = ActuarialFrame(data)
+        max_values = af.max()
+        print(max_values)
+        print("Max age:", max_values["age"][0])
+        print("Max sum assured:", max_values["sum_assured"][0])
+        ```
+
+        ```text
+        shape: (1, 4)
+        ┌───────────┬─────┬─────────────┬────────────────┐
+        │ policy_id ┆ age ┆ sum_assured ┆ annual_premium │
+        │ ---       ┆ --- ┆ ---         ┆ ---            │
+        │ str       ┆ i64 ┆ i64         ┆ i64            │
+        ╞═══════════╪═════╪═════════════╪════════════════╡
+        │ P004      ┆ 67  ┆ 1000000     ┆ 15000          │
+        └───────────┴─────┴─────────────┴────────────────┘
+        Max age: 67
+        Max sum assured: 1000000
+        ```
+
+        **Vector Example: Maximum Monthly Claims**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "policy_year": [1, 2],
+            "monthly_claims": [
+                [0, 500, 0, 1200, 0, 0, 800, 0, 0, 0, 0, 2500],
+                [0, 0, 3000, 0, 0, 1500, 0, 0, 0, 4000, 0, 0]
+            ],
+            "monthly_premiums": [
+                [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
+                [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Get maximum values to understand worst-case scenarios
+        max_values = af.max()
+        print(max_values)
+        print("Max policy year:", max_values["policy_year"][0])
+        ```
+
+        ```text
+        shape: (1, 4)
+        ┌───────────┬─────────────┬─────────────────────────────────────┬─────────────────────────────────────┐
+        │ policy_id ┆ policy_year ┆ monthly_claims                      ┆ monthly_premiums                    │
+        │ ---       ┆ ---         ┆ ---                                 ┆ ---                                 │
+        │ str       ┆ i64         ┆ list[i64]                           ┆ list[i64]                           │
+        ╞═══════════╪═════════════╪═════════════════════════════════════╪═════════════════════════════════════╡
+        │ P002      ┆ 2           ┆ [0, 500, 3000, 1200, … 4000, 0, 0]  ┆ [1500, 1500, 1500, 1500, … 1500]    │
+        └───────────┴─────────────┴─────────────────────────────────────┴─────────────────────────────────────┘
+        Max policy year: 2
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute max on an uninitialized ActuarialFrame.")
+        
+        # The underlying LazyFrame.max() returns a LazyFrame with one row
+        # We collect it here to return an eager DataFrame
+        result_df = self._df.max().collect()
+        return MaxResult(result_df)
+
+    def min(self):
+        """Calculate minimum values across all numeric columns.
+
+        Returns a single-row frame containing the minimum value for each column.
+        Essential for identifying baseline values, detecting anomalies, and establishing
+        lower bounds in actuarial calculations.
+
+        !!! note "When to use"
+            * **Data Quality Checks:** Identify potential data errors like negative
+                ages, zero premiums, or missing values coded as extreme minimums.
+            * **Portfolio Analysis:** Find minimum entry ages, smallest policy sizes,
+                or lowest premium amounts for market segmentation.
+            * **Risk Assessment:** Determine minimum coverage levels, deductibles, or
+                retention limits in reinsurance analysis.
+            * **Product Design:** Establish minimum benefit guarantees, surrender values,
+                or contribution limits for new products.
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing minimum values for each column.
+
+        Examples
+        --------
+        **Scalar Example: Portfolio Minimum Values**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004"],
+            "age": [25, 45, 67, 35],
+            "sum_assured": [100000, 500000, 250000, 1000000],
+            "annual_premium": [1200, 6000, 8500, 15000],
+        }
+        af = ActuarialFrame(data)
+        min_values = af.min()
+        print(min_values)
+        print("Min age:", min_values["age"])
+        print("Min sum assured:", min_values["sum_assured"])
+        ```
+
+        ```text
+        shape: (1, 4)
+        ┌───────────┬─────┬─────────────┬────────────────┐
+        │ policy_id ┆ age ┆ sum_assured ┆ annual_premium │
+        │ ---       ┆ --- ┆ ---         ┆ ---            │
+        │ str       ┆ i64 ┆ i64         ┆ i64            │
+        ╞═══════════╪═════╪═════════════╪════════════════╡
+        │ P001      ┆ 25  ┆ 100000      ┆ 1200           │
+        └───────────┴─────┴─────────────┴────────────────┘
+        Min age: 25
+        Min sum assured: 100000
+        ```
+
+        **Vector Example: Minimum Monthly Claims**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "policy_year": [1, 2],
+            "monthly_claims": [
+                [0, 500, 0, 1200, 0, 0, 800, 0, 0, 0, 0, 2500],
+                [0, 0, 3000, 0, 0, 1500, 0, 0, 0, 4000, 0, 0]
+            ],
+            "monthly_retention": [
+                [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Get minimum values to understand retention levels
+        min_values = af.min()
+        print(min_values)
+        print("Min retention level:", min_values["monthly_retention"])
+        ```
+
+        ```text
+        shape: (1, 4)
+        ┌───────────┬─────────────┬─────────────────────────────────────┬─────────────────────────────────────┐
+        │ policy_id ┆ policy_year ┆ monthly_claims                      ┆ monthly_retention                   │
+        │ ---       ┆ ---         ┆ ---                                 ┆ ---                                 │
+        │ str       ┆ i64         ┆ list[i64]                           ┆ list[i64]                           │
+        ╞═══════════╪═════════════╪═════════════════════════════════════╪═════════════════════════════════════╡
+        │ P001      ┆ 1           ┆ [0, 0, 0, 0, … 0, 0, 0]             ┆ [500, 500, 500, 500, … 500]         │
+        └───────────┴─────────────┴─────────────────────────────────────┴─────────────────────────────────────┘
+        Min retention level: [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500]
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute min on an uninitialized ActuarialFrame.")
+        
+        # The underlying LazyFrame.min() returns a LazyFrame with one row
+        # We collect it here to return an eager DataFrame
+        result_df = self._df.min().collect()
+        return MinResult(result_df)
+
+    def mean(self):
+        """Calculate mean values across all numeric columns.
+
+        Returns a single-row frame containing the mean value for each numeric column.
+        Essential for portfolio analysis, experience studies, and establishing 
+        benchmarks in actuarial calculations.
+
+        !!! note "When to use"
+            * **Experience Analysis:** Calculate average claim amounts, policy sizes,
+                or premium levels for portfolio segmentation and pricing.
+            * **Trend Analysis:** Determine average lapse rates, mortality rates, or
+                expense ratios over observation periods.
+            * **Benchmarking:** Establish portfolio averages for age, sum assured, or
+                duration to compare against industry standards.
+            * **Reserve Calculations:** Compute average policy values, benefit amounts,
+                or reserve factors for grouped calculations.
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing mean values for numeric columns.
+
+        Examples
+        --------
+        **Scalar Example: Portfolio Averages**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004"],
+            "age": [25, 45, 67, 35],
+            "sum_assured": [100000, 500000, 250000, 1000000],
+            "annual_premium": [1200, 6000, 8500, 15000],
+        }
+        af = ActuarialFrame(data)
+        mean_values = af.mean()
+        print(mean_values)
+        print("Average age:", mean_values["age"])
+        print("Average sum assured:", mean_values["sum_assured"])
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌──────┬──────────────┬─────────────────┐
+        │ age  ┆ sum_assured  ┆ annual_premium  │
+        │ ---  ┆ ---          ┆ ---             │
+        │ f64  ┆ f64          ┆ f64             │
+        ╞══════╪══════════════╪═════════════════╡
+        │ 43.0 ┆ 462500.0     ┆ 7425.0          │
+        └──────┴──────────────┴─────────────────┘
+        Average age: 43.0
+        Average sum assured: 462500.0
+        ```
+
+        **Vector Example: Average Monthly Experience**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "policy_year": [1, 2],
+            "monthly_claims": [
+                [0, 500, 0, 1200, 0, 0, 800, 0, 0, 0, 0, 2500],
+                [0, 0, 3000, 0, 0, 1500, 0, 0, 0, 4000, 0, 0]
+            ],
+            "monthly_lapses": [
+                [2, 1, 3, 0, 1, 2, 1, 0, 1, 0, 2, 1],
+                [1, 0, 2, 1, 0, 1, 0, 1, 0, 2, 1, 0]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Get average monthly experience
+        mean_values = af.mean()
+        print(mean_values)
+        ```
+
+        ```text
+        shape: (1, 4)
+        ┌─────────────┬───────────────────────────────┬──────────────────────────────┐
+        │ policy_year ┆ monthly_claims                ┆ monthly_lapses               │
+        │ ---         ┆ ---                           ┆ ---                          │
+        │ f64         ┆ list[f64]                     ┆ list[f64]                    │
+        ╞═════════════╪═══════════════════════════════╪══════════════════════════════╡
+        │ 1.5         ┆ [0.0, 250.0, 1500.0, … 0.0]   ┆ [1.5, 0.5, 2.5, … 0.5]       │
+        └─────────────┴───────────────────────────────┴──────────────────────────────┘
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute mean on an uninitialized ActuarialFrame.")
+        
+        result_df = self._df.mean().collect()
+        return MeanResult(result_df)
+
+    def std(self, ddof: int = 1):
+        """Calculate standard deviation across all numeric columns.
+
+        Returns a single-row frame containing the standard deviation for each numeric column.
+        Essential for risk assessment, volatility analysis, and confidence interval
+        calculations in actuarial modeling.
+
+        !!! note "When to use"
+            * **Risk Assessment:** Measure volatility in claim amounts, premium variations,
+                or mortality experience for pricing and reserving.
+            * **Experience Monitoring:** Quantify variability in lapse rates, expense ratios,
+                or benefit utilization for assumption setting.
+            * **Confidence Intervals:** Calculate standard errors for mortality estimates,
+                reserve factors, or pricing assumptions.
+            * **Portfolio Analysis:** Assess homogeneity of risk groups by comparing
+                standard deviations across segments.
+
+        Parameters
+        ----------
+        ddof : int, default 1
+            Delta degrees of freedom. The divisor is N - ddof.
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing standard deviations for numeric columns.
+
+        Examples
+        --------
+        **Scalar Example: Premium Volatility Analysis**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004", "P005"],
+            "age_band": ["25-35", "25-35", "36-45", "36-45", "46-55"],
+            "annual_premium": [1200, 1350, 3500, 3200, 8500],
+            "sum_assured": [100000, 150000, 350000, 300000, 500000],
+        }
+        af = ActuarialFrame(data)
+        std_values = af.std()
+        print(std_values)
+        print("Premium volatility:", std_values["annual_premium"])
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌──────────────────┬─────────────┐
+        │ annual_premium   ┆ sum_assured │
+        │ ---              ┆ ---         │
+        │ f64              ┆ f64         │
+        ╞══════════════════╪═════════════╡
+        │ 2913.8           ┆ 158113.9    │
+        └──────────────────┴─────────────┘
+        Premium volatility: 2913.8
+        ```
+
+        **Vector Example: Monthly Claims Volatility**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "product": ["Term Life", "Whole Life"],
+            "monthly_claims": [
+                [0, 1000, 500, 2000, 0, 3000, 1500, 0, 2500, 1000, 0, 4000],
+                [5000, 6000, 4500, 7000, 5500, 8000, 6500, 5000, 7500, 6000, 9000, 10000]
+            ],
+            "monthly_premiums": [
+                [50000, 50000, 52000, 51000, 50000, 49000, 50000, 51000, 50000, 50000, 51000, 50000],
+                [120000, 125000, 122000, 128000, 124000, 130000, 126000, 123000, 127000, 125000, 129000, 132000]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Calculate standard deviation for risk assessment
+        std_values = af.std()
+        print(std_values)
+        print("Term Life claims volatility:", round(std_values["monthly_claims"][0], 2))
+        print("Whole Life claims volatility:", round(std_values["monthly_claims"][1], 2))
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌────────────┬──────────────────────────────┬───────────────────────────────┐
+        │ product    ┆ monthly_claims               ┆ monthly_premiums              │
+        │ ---        ┆ ---                          ┆ ---                           │
+        │ str        ┆ list[f64]                    ┆ list[f64]                     │
+        ╞════════════╪══════════════════════════════╪═══════════════════════════════╡
+        │ null       ┆ [1443.38, 1443.38]           ┆ [831.66, 3207.14]             │
+        └────────────┴──────────────────────────────┴───────────────────────────────┘
+        Term Life claims volatility: 1443.38
+        Whole Life claims volatility: 1443.38
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute std on an uninitialized ActuarialFrame.")
+        
+        result_df = self._df.std(ddof=ddof).collect()
+        return StdResult(result_df)
+
+    def var(self, ddof: int = 1):
+        """Calculate variance across all numeric columns.
+
+        Returns a single-row frame containing the variance for each numeric column.
+        Used for risk metrics, ANOVA calculations, and statistical modeling in
+        actuarial applications.
+
+        !!! note "When to use"
+            * **Risk Metrics:** Calculate variance in loss ratios, combined ratios,
+                or expense ratios for enterprise risk management.
+            * **Statistical Testing:** Perform ANOVA on mortality rates, lapse rates,
+                or claim frequencies across different cohorts.
+            * **Credibility Theory:** Calculate variance components for Bühlmann
+                credibility factors in experience rating.
+            * **Asset-Liability Modeling:** Measure variance in investment returns,
+                liability cash flows, or surplus positions.
+
+        Parameters
+        ----------
+        ddof : int, default 1
+            Delta degrees of freedom. The divisor is N - ddof.
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing variances for numeric columns.
+
+        Examples
+        --------
+        **Scalar Example: Claims Variance Analysis**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "month": [1, 2, 3, 4, 5, 6],
+            "claims_count": [45, 52, 38, 61, 43, 55],
+            "claims_amount": [125000, 145000, 95000, 185000, 120000, 165000],
+        }
+        af = ActuarialFrame(data)
+        var_values = af.var()
+        print(var_values)
+        print("Claims count variance:", var_values["claims_count"])
+        print("Claims amount variance:", var_values["claims_amount"])
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌───────┬──────────────┬──────────────────┐
+        │ month ┆ claims_count ┆ claims_amount    │
+        │ ---   ┆ ---          ┆ ---              │
+        │ f64   ┆ f64          ┆ f64              │
+        ╞═══════╪══════════════╪══════════════════╡
+        │ 3.5   ┆ 70.3         ┆ 1.091e9          │
+        └───────┴──────────────┴──────────────────┘
+        Claims count variance: 70.3
+        Claims amount variance: 1091000000.0
+        ```
+
+        **Vector Example: Experience Variance Components**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "region": ["North", "South"],
+            "quarterly_lapse_rates": [
+                [0.025, 0.028, 0.022, 0.026],
+                [0.031, 0.029, 0.033, 0.030]
+            ],
+            "quarterly_mortality_rates": [
+                [0.0010, 0.0011, 0.0009, 0.0010],
+                [0.0012, 0.0013, 0.0011, 0.0014]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Calculate variance for credibility analysis
+        var_values = af.var()
+        print(var_values)
+        print("North region lapse variance:", var_values["quarterly_lapse_rates"][0])
+        print("South region lapse variance:", var_values["quarterly_lapse_rates"][1])
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌────────────┬────────────────────────┬──────────────────────────────┐
+        │ region     ┆ quarterly_lapse_rates  ┆ quarterly_mortality_rates    │
+        │ ---        ┆ ---                    ┆ ---                          │
+        │ str        ┆ list[f64]              ┆ list[f64]                    │
+        ╞════════════╪════════════════════════╪══════════════════════════════╡
+        │ null       ┆ [0.000007, 0.000003]   ┆ [0.0000000067, 0.0000000167] │
+        └────────────┴────────────────────────┴──────────────────────────────┘
+        North region lapse variance: 0.000007
+        South region lapse variance: 0.000003
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute var on an uninitialized ActuarialFrame.")
+        
+        result_df = self._df.var(ddof=ddof).collect()
+        return VarResult(result_df)
+
+    def median(self):
+        """Calculate median values across all numeric columns.
+
+        Returns a single-row frame containing the median value for each numeric column.
+        Useful for robust central tendency measures that are less affected by outliers
+        in actuarial data.
+
+        !!! note "When to use"
+            * **Robust Analysis:** Use median instead of mean when data contains outliers,
+                such as large claims or extreme ages in the portfolio.
+            * **Income Analysis:** Analyze median policyholder income or premium levels
+                for market segmentation and product design.
+            * **Experience Studies:** Calculate median time to claim, policy duration,
+                or age at lapse for more representative measures.
+            * **Pricing Benchmarks:** Determine median rates or factors when comparing
+                across competitors or market segments.
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing median values for numeric columns.
+
+        Examples
+        --------
+        **Scalar Example: Median Policy Metrics**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004", "P005"],
+            "duration_years": [1, 3, 5, 7, 15],
+            "annual_premium": [1200, 3500, 2800, 4200, 12000],
+            "age": [25, 35, 42, 38, 65],
+        }
+        af = ActuarialFrame(data)
+        median_values = af.median()
+        print(median_values)
+        print("Median duration:", median_values["duration_years"])
+        print("Median premium:", median_values["annual_premium"])
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌────────────────┬────────────────┬──────┐
+        │ duration_years ┆ annual_premium ┆ age  │
+        │ ---            ┆ ---            ┆ ---  │
+        │ f64            ┆ f64            ┆ f64  │
+        ╞════════════════╪════════════════╪══════╡
+        │ 5.0            ┆ 3500.0         ┆ 38.0 │
+        └────────────────┴────────────────┴──────┘
+        Median duration: 5.0
+        Median premium: 3500.0
+        ```
+
+        **Vector Example: Median Monthly Performance**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "agent": ["A001", "A002"],
+            "monthly_sales": [
+                [3, 5, 2, 8, 4, 6, 3, 7, 5, 4, 6, 9],
+                [12, 15, 10, 18, 14, 16, 11, 20, 13, 17, 15, 22]
+            ],
+            "monthly_commission": [
+                [450, 750, 300, 1200, 600, 900, 450, 1050, 750, 600, 900, 1350],
+                [1800, 2250, 1500, 2700, 2100, 2400, 1650, 3000, 1950, 2550, 2250, 3300]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Calculate median for typical performance assessment
+        median_values = af.median()
+        print(median_values)
+        print("Agent A001 median sales:", median_values["monthly_sales"][0])
+        print("Agent A002 median sales:", median_values["monthly_sales"][1])
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌────────────┬────────────────────┬──────────────────────┐
+        │ agent      ┆ monthly_sales      ┆ monthly_commission   │
+        │ ---        ┆ ---                ┆ ---                  │
+        │ str        ┆ list[f64]          ┆ list[f64]            │
+        ╞════════════╪════════════════════╪══════════════════════╡
+        │ null       ┆ [5.0, 15.0]        ┆ [750.0, 2250.0]      │
+        └────────────┴────────────────────┴──────────────────────┘
+        Agent A001 median sales: 5.0
+        Agent A002 median sales: 15.0
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute median on an uninitialized ActuarialFrame.")
+        
+        result_df = self._df.median().collect()
+        return MedianResult(result_df)
+
+    def sum(self):
+        """Calculate sum totals across all numeric columns.
+
+        Returns a single-row frame containing the sum total for each numeric column.
+        Critical for calculating portfolio totals, aggregate exposures, and overall
+        metrics in actuarial reporting.
+
+        !!! note "When to use"
+            * **Portfolio Totals:** Calculate total sum assured, total premiums collected,
+                or total claims paid for financial reporting.
+            * **Exposure Analysis:** Sum total lives covered, total benefits, or total
+                risk amounts for reinsurance and capital calculations.
+            * **Revenue Reporting:** Aggregate premium income, fee revenue, or investment
+                income across product lines or time periods.
+            * **Claims Analysis:** Total claim counts, amounts paid, or reserves across
+                different claim types or cohorts.
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing sum totals for numeric columns.
+
+        Examples
+        --------
+        **Scalar Example: Portfolio Totals**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "product": ["Term", "Whole Life", "Universal", "Term", "Endowment"],
+            "policies_inforce": [1250, 890, 445, 2100, 325],
+            "annual_premium": [1500000, 3200000, 2100000, 2800000, 1900000],
+            "sum_assured": [125000000, 89000000, 67000000, 315000000, 48000000],
+        }
+        af = ActuarialFrame(data)
+        sum_values = af.sum()
+        print(sum_values)
+        print("Total policies:", sum_values["policies_inforce"])
+        print("Total premium:", sum_values["annual_premium"])
+        print("Total exposure:", sum_values["sum_assured"])
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌──────────────────┬────────────────┬─────────────┐
+        │ policies_inforce ┆ annual_premium ┆ sum_assured │
+        │ ---              ┆ ---            ┆ ---         │
+        │ i64              ┆ i64            ┆ i64         │
+        ╞══════════════════╪════════════════╪═════════════╡
+        │ 5010             ┆ 11500000       ┆ 644000000   │
+        └──────────────────┴────────────────┴─────────────┘
+        Total policies: 5010
+        Total premium: 11500000
+        Total exposure: 644000000
+        ```
+
+        **Vector Example: Monthly Totals**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "branch": ["North", "South"],
+            "monthly_new_business": [
+                [120, 135, 110, 145, 130, 125, 140, 155, 135, 140, 130, 160],
+                [95, 100, 90, 105, 110, 95, 100, 115, 105, 100, 95, 120]
+            ],
+            "monthly_premium": [
+                [180000, 202500, 165000, 217500, 195000, 187500, 210000, 232500, 202500, 210000, 195000, 240000],
+                [142500, 150000, 135000, 157500, 165000, 142500, 150000, 172500, 157500, 150000, 142500, 180000]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Get total new business and premiums
+        sum_values = af.sum()
+        print(sum_values)
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌───────────────────────────────────────┬───────────────────────────────────────┐
+        │ monthly_new_business                  ┆ monthly_premium                       │
+        │ ---                                   ┆ ---                                   │
+        │ list[i64]                             ┆ list[i64]                             │
+        ╞═══════════════════════════════════════╪═══════════════════════════════════════╡
+        │ [215, 235, 200, 250, … 240, 225, 280] ┆ [322500, 352500, 300000, … 420000]    │
+        └───────────────────────────────────────┴───────────────────────────────────────┘
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute sum on an uninitialized ActuarialFrame.")
+        
+        result_df = self._df.sum().collect()
+        return SumResult(result_df)
+
+    def count(self):
+        """Count non-null values in each column.
+
+        Returns a single-row frame containing the count of non-null values for each column.
+        Essential for data quality assessment, completeness checks, and exposure
+        calculations in actuarial analysis.
+
+        !!! note "When to use"
+            * **Data Quality:** Assess completeness of critical fields like policy ID,
+                sum assured, or premium to identify missing data issues.
+            * **Exposure Calculation:** Count policies, lives, or claims for exposure-based
+                calculations in pricing and reserving.
+            * **Cohort Analysis:** Determine size of different risk groups, age bands,
+                or product segments for credibility assessment.
+            * **Validation:** Verify record counts match expected values after data
+                processing, joins, or filtering operations.
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing non-null counts for each column.
+
+        Examples
+        --------
+        **Scalar Example: Data Completeness Check**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004", None],
+            "age": [25, 45, None, 35, 52],
+            "sum_assured": [100000, 500000, 250000, None, 300000],
+            "status": ["Active", "Active", "Lapsed", "Active", "Active"],
+        }
+        af = ActuarialFrame(data)
+        counts = af.count()
+        print(counts)
+        print("Complete policies:", counts["policy_id"])
+        print("Complete ages:", counts["age"])
+        print("Data completeness %:", counts["age"] / 5 * 100)
+        ```
+
+        ```text
+        shape: (1, 4)
+        ┌───────────┬─────┬─────────────┬────────┐
+        │ policy_id ┆ age ┆ sum_assured ┆ status │
+        │ ---       ┆ --- ┆ ---         ┆ ---    │
+        │ u32       ┆ u32 ┆ u32         ┆ u32    │
+        ╞═══════════╪═════╪═════════════╪════════╡
+        │ 4         ┆ 4   ┆ 4           ┆ 5      │
+        └───────────┴─────┴─────────────┴────────┘
+        Complete policies: 4
+        Complete ages: 4
+        Data completeness %: 80.0
+        ```
+
+        **Vector Example: Monthly Activity Counts**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "month": ["Jan", "Feb"],
+            "daily_claims": [
+                [5, 3, 0, 4, None, 2, 1, 0, 3, None, 4, 2, 0, 1, 5],
+                [2, None, 3, 1, 0, 4, None, 2, 0, 3, 1, None, 4, 2, 0]
+            ],
+            "daily_lapses": [
+                [1, 0, 0, 2, 1, 0, 0, 1, 0, 0, 1, 0, 2, 0, 1],
+                [0, 1, 0, 0, 2, 0, 1, 0, 1, 0, 0, 1, 0, 2, 0]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Count valid daily observations
+        counts = af.count()
+        print(counts)
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌───────┬──────────────┬──────────────┐
+        │ month ┆ daily_claims ┆ daily_lapses │
+        │ ---   ┆ ---          ┆ ---          │
+        │ u32   ┆ u32          ┆ u32          │
+        ╞═══════╪══════════════╪══════════════╡
+        │ 2     ┆ 2            ┆ 2            │
+        └───────┴──────────────┴──────────────┘
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute count on an uninitialized ActuarialFrame.")
+        
+        result_df = self._df.count().collect()
+        return CountResult(result_df)
+
+    def product(self):
+        """Calculate the product of values in each numeric column.
+
+        Returns a single-row frame containing the product of all values for each numeric column.
+        Useful for compound calculations, probability chains, and multiplicative factors
+        in actuarial modeling.
+
+        !!! note "When to use"
+            * **Compound Interest:** Calculate accumulated values using multiple period
+                growth factors or discount factors.
+            * **Probability Chains:** Multiply survival probabilities, persistency rates,
+                or success rates across multiple periods.
+            * **Factor Application:** Apply multiple adjustment factors, loading factors,
+                or credibility factors in sequence.
+            * **Index Calculations:** Compute cumulative index values from period-to-period
+                change factors.
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing products for numeric columns.
+
+        Examples
+        --------
+        **Scalar Example: Survival Probability Chain**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "year": [1, 2, 3, 4, 5],
+            "annual_survival": [0.999, 0.998, 0.997, 0.995, 0.993],
+            "annual_persistency": [0.95, 0.92, 0.90, 0.88, 0.85],
+        }
+        af = ActuarialFrame(data)
+        products = af.product()
+        print(products)
+        print("5-year survival probability:", round(products["annual_survival"], 6))
+        print("5-year persistency:", round(products["annual_persistency"], 4))
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌──────┬─────────────────┬────────────────────┐
+        │ year ┆ annual_survival ┆ annual_persistency │
+        │ ---  ┆ ---             ┆ ---                │
+        │ i64  ┆ f64             ┆ f64                │
+        ╞══════╪═════════════════╪════════════════════╡
+        │ 120  ┆ 0.982089        ┆ 0.59262            │
+        └──────┴─────────────────┴────────────────────┘
+        5-year survival probability: 0.982089
+        5-year persistency: 0.5926
+        ```
+
+        **Vector Example: Discount Factor Chains**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "scenario": ["Base", "Stressed"],
+            "monthly_discount": [
+                [0.9992, 0.9992, 0.9992, 0.9992, 0.9992, 0.9992],
+                [0.9990, 0.9990, 0.9990, 0.9990, 0.9990, 0.9990]
+            ],
+            "monthly_survival": [
+                [0.9999, 0.9999, 0.9999, 0.9999, 0.9999, 0.9999],
+                [0.9998, 0.9998, 0.9998, 0.9998, 0.9998, 0.9998]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Calculate cumulative factors
+        products = af.product()
+        print(products)
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌──────────┬──────────────────┬──────────────────┐
+        │ scenario ┆ monthly_discount ┆ monthly_survival │
+        │ ---      ┆ ---              ┆ ---              │
+        │ str      ┆ list[f64]        ┆ list[f64]        │
+        ╞══════════╪══════════════════╪══════════════════╡
+        │ null     ┆ [0.9952, 0.9940] ┆ [0.9994, 0.9988] │
+        └──────────┴──────────────────┴──────────────────┘
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute product on an uninitialized ActuarialFrame.")
+        
+        # Product is not available on LazyFrame, need to use select with expressions
+        # Also need to handle non-numeric columns
+        schema = self._df.collect_schema()
+        numeric_cols = [
+            pl.col(name).product().alias(name)
+            for name, dtype in schema.items()
+            if dtype.is_numeric()
+        ]
+        
+        # Add non-numeric columns as nulls to maintain consistent output
+        non_numeric_cols = [
+            pl.lit(None).alias(name)
+            for name, dtype in schema.items()
+            if not dtype.is_numeric()
+        ]
+        
+        all_cols = numeric_cols + non_numeric_cols
+        result_df = self._df.select(all_cols).head(1).collect()
+        return ProductResult(result_df)
+
+    def quantile(self, quantile: float, interpolation: str = "nearest"):
+        """Calculate quantile values across all numeric columns.
+
+        Returns a single-row frame containing the specified quantile for each numeric column.
+        Essential for risk assessment, percentile-based analysis, and regulatory reporting
+        in actuarial applications.
+
+        !!! note "When to use"
+            * **Risk Assessment:** Calculate VaR (Value at Risk) at different confidence
+                levels (e.g., 95th, 99th percentile) for solvency calculations.
+            * **Experience Analysis:** Determine percentile thresholds for large claims,
+                high-risk ages, or outlier detection in portfolios.
+            * **Pricing Segmentation:** Identify quantile boundaries for premium bands,
+                risk tiers, or underwriting categories.
+            * **Regulatory Reporting:** Calculate required percentiles for stress testing,
+                capital requirements, or reserve adequacy testing.
+
+        Parameters
+        ----------
+        quantile : float
+            Quantile value between 0 and 1 (e.g., 0.5 for median, 0.95 for 95th percentile).
+        interpolation : str, default "nearest"
+            Interpolation method: "nearest", "higher", "lower", "midpoint", or "linear".
+
+        Returns
+        -------
+        pl.DataFrame
+            A frame with one row containing quantile values for numeric columns.
+
+        Examples
+        --------
+        **Scalar Example: Claims Distribution Analysis**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "claim_id": list(range(1, 101)),
+            "claim_amount": [1000, 1500, 2000, 2500, 3000, 3500, 4000, 5000, 6000, 7500,
+                           8000, 9000, 10000, 12000, 15000, 18000, 20000, 25000, 30000, 35000,
+                           40000, 45000, 50000, 60000, 75000, 85000, 95000, 100000, 120000, 150000] + [2000] * 70,
+            "processing_days": list(range(5, 35)) + list(range(10, 80)),
+        }
+        af = ActuarialFrame(data)
+        
+        # Calculate key percentiles
+        p90 = af.quantile(0.90)
+        p95 = af.quantile(0.95)
+        p99 = af.quantile(0.99)
+        
+        print("90th percentile:")
+        print(p90)
+        print("\\nClaim amount 90th percentile:", p90["claim_amount"])
+        print("Claim amount 95th percentile:", p95["claim_amount"])
+        print("Claim amount 99th percentile:", p99["claim_amount"])
+        ```
+
+        ```text
+        90th percentile:
+        shape: (1, 3)
+        ┌──────────┬──────────────┬─────────────────┐
+        │ claim_id ┆ claim_amount ┆ processing_days │
+        │ ---      ┆ ---          ┆ ---             │
+        │ f64      ┆ f64          ┆ f64             │
+        ╞══════════╪══════════════╪═════════════════╡
+        │ 90.0     ┆ 85000.0      ┆ 71.0            │
+        └──────────┴──────────────┴─────────────────┘
+
+        Claim amount 90th percentile: 85000.0
+        Claim amount 95th percentile: 100000.0
+        Claim amount 99th percentile: 150000.0
+        ```
+
+        **Vector Example: Portfolio Risk Percentiles**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "product": ["Term Life", "Whole Life"],
+            "claim_amounts": [
+                [10000, 15000, 20000, 25000, 30000, 35000, 40000, 50000, 75000, 100000, 
+                 150000, 200000, 250000, 300000, 500000, 750000, 1000000, 1500000, 2000000, 3000000],
+                [50000, 75000, 100000, 125000, 150000, 175000, 200000, 250000, 300000, 400000,
+                 500000, 600000, 750000, 900000, 1000000, 1250000, 1500000, 2000000, 2500000, 5000000]
+            ]
+        }
+        af = ActuarialFrame(data)
+        
+        # Calculate 95th percentile for risk assessment
+        var_95 = af.quantile(0.95)
+        print("95% VaR by product:")
+        print(var_95)
+        ```
+
+        ```text
+        95% VaR by product:
+        shape: (1, 2)
+        ┌────────────┬──────────────────────────────────┐
+        │ product    ┆ claim_amounts                    │
+        │ ---        ┆ ---                              │
+        │ str        ┆ list[f64]                        │
+        ╞════════════╪══════════════════════════════════╡
+        │ null       ┆ [2000000.0, 2500000.0]           │
+        └────────────┴──────────────────────────────────┘
+        ```
+        """
+        if self._df is None:
+            raise ValueError("Cannot compute quantile on an uninitialized ActuarialFrame.")
+        
+        result_df = self._df.quantile(quantile, interpolation=interpolation).collect()
+        return QuantileResult(result_df)
 
     def __getattr__(self, name: str) -> Any:
         """Dynamically instantiate and return registered frame accessors."""

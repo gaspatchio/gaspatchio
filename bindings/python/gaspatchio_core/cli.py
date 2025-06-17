@@ -10,6 +10,7 @@ from rich.console import Console
 
 from .runner import (  # Changed to relative import
     ModelRunConfig,
+    RunMetrics,
     transpose_single_policy_result,
 )
 from .runner import (
@@ -30,7 +31,7 @@ logger.add(
 console = Console()
 
 app = typer.Typer(
-    name="gprun",
+    name="gspio",
     help="Gaspatchio CLI for running actuarial models with high performance",
     add_completion=True,
     rich_markup_mode="rich",
@@ -130,7 +131,7 @@ def run_model(
     """Execute an actuarial model from a file.
 
     [bold green]Example:[/bold green]
-        gprun run-model model_calculation.py model-points.parquet
+        gspio run-model model_calculation.py model-points.parquet
 
     [bold]Column display options:[/bold]
         -s: Start at column index (0-based)
@@ -159,15 +160,7 @@ def run_model(
     metrics = model_run.metrics
 
     # Output metrics at TRACE level
-    logger.trace("\n=== Model Run Metrics ===")
-    logger.trace(f"Total time: {metrics.total_time_s:.2f} seconds")
-    logger.trace("\nProfile Info:")
-    with pl.Config(tbl_cols=-1, tbl_rows=-1, tbl_width_chars=1500, fmt_str_lengths=100):
-        logger.trace(metrics.profile_info)
-    if metrics.tracked_column_order:
-        logger.trace("\nTracked Column Order:")
-        logger.trace(metrics.tracked_column_order)
-    logger.trace("=====================\n")
+    _log_metrics(metrics)
 
     # Determine column order - use tracked order from metrics if available
     tracked_column_order = (
@@ -318,7 +311,7 @@ def run_single_policy(
     """Execute an actuarial model for a single policy ID.
 
     [bold green]Example:[/bold green]
-        gprun run-single model_calculation.py model-points.parquet 1
+        gspio run-single model_calculation.py model-points.parquet 1
 
     [bold]Column display options:[/bold]
         -s: Start at column index (0-based)
@@ -349,6 +342,9 @@ def run_single_policy(
     elif model_run.result is not None and not model_run.result.is_empty():
         # Transpose and print the result for better visibility of list columns
         transposed_result = transpose_single_policy_result(model_run.result)
+
+        # Log metrics
+        _log_metrics(model_run.metrics)
 
         # Use tracked column order from metrics if available, otherwise fall back to transposed columns
         tracked_column_order = (
@@ -421,10 +417,10 @@ def version_callback(value: bool):
     if value:
         py_version, rust_version = get_versions()
         console.print(
-            f"[bold green]gprun[/bold green] Python package version: {py_version}",
+            f"[bold green]gspio[/bold green] Python package version: {py_version}",
         )
         console.print(
-            f"[bold green]gprun[/bold green] Rust core version: {rust_version}",
+            f"[bold green]gspio[/bold green] Rust core version: {rust_version}",
         )
         raise typer.Exit()
 
@@ -448,12 +444,268 @@ def main(
     Run actuarial models with Rust-powered performance and Python simplicity.
 
     [bold]Getting Started:[/bold]
-        Enable shell completion: [cyan]gprun --install-completion[/cyan]
+        Enable shell completion: [cyan]gspio --install-completion[/cyan]
 
     [bold]Common Usage:[/bold]
-        Run full model: [cyan]gprun run-model model.py data.parquet[/cyan]
-        Run single policy: [cyan]gprun run-single model.py data.parquet 123[/cyan]
+        Run full model: [cyan]gspio run-model model.py data.parquet[/cyan]
+        Run single policy: [cyan]gspio run-single model.py data.parquet 123[/cyan]
     """
+
+
+def _log_metrics(metrics: RunMetrics) -> None:
+    """Log metrics from a model run."""
+    logger.trace("\n=== Model Run Metrics ===")
+    logger.trace(f"Total time: {metrics.total_time_s:.2f} seconds")
+    logger.trace("\nProfile Info:")
+
+    profile_df = metrics.profile_info
+    if not profile_df.is_empty():
+        profile_df = profile_df.with_columns(
+            [
+                (pl.col("end") - pl.col("start")).alias("total_time"),
+            ],
+        )
+        sum_total_time = profile_df["total_time"].sum()
+        profile_df = profile_df.with_columns(
+            [
+                (pl.col("total_time") / sum_total_time * 100)
+                .round(2)
+                .alias("percentage"),
+            ],
+        )
+
+    with pl.Config(tbl_cols=-1, tbl_rows=-1, tbl_width_chars=1500, fmt_str_lengths=100):
+        logger.trace(profile_df)
+
+    if metrics.tracked_column_order:
+        logger.trace("\nTracked Column Order:")
+        logger.trace(metrics.tracked_column_order)
+    logger.trace("=====================\n")
+
+
+def _detect_table_structure(df: pl.DataFrame) -> tuple[str, dict[str, str]]:
+    """Detect the value column and dimension structure from a DataFrame.
+
+    Returns:
+        tuple: (value_column_name, dimensions_dict)
+
+    """
+    columns = df.columns
+
+    # Common value column patterns (case-insensitive)
+    value_patterns = [
+        "rate",
+        "value",
+        "amount",
+        "factor",
+        "probability",
+        "qx",
+        "px",
+        "mortality",
+        "lapse",
+        "expense",
+        "interest",
+        "discount",
+        "premium",
+        "zero_spot",
+        "spot",
+        "yield",
+        "price",
+        "cost",
+    ]
+
+    # Try to find value column by pattern matching
+    value_column = None
+    for col in columns:
+        col_lower = col.lower().replace("_", "").replace(" ", "")
+        for pattern in value_patterns:
+            if pattern in col_lower:
+                value_column = col
+                break
+        if value_column:
+            break
+
+    # If no pattern match, look for numeric columns and pick the last one
+    # (assumption: key columns come first, value column comes last)
+    if not value_column:
+        numeric_cols = []
+        for col in columns:
+            dtype = df[col].dtype
+            if dtype in [pl.Float32, pl.Float64, pl.Int32, pl.Int64]:
+                numeric_cols.append(col)
+
+        if numeric_cols:
+            value_column = numeric_cols[-1]  # Take the last numeric column
+
+    # If still no value column found, use the last column
+    if not value_column:
+        value_column = columns[-1]
+
+    # Create dimensions from all other columns
+    dimensions = {col: col for col in columns if col != value_column}
+
+    return value_column, dimensions
+
+
+def _analyze_table_shape(df: pl.DataFrame) -> str:
+    """Analyze whether the table is in 'wide' or 'long' format."""
+    columns = df.columns
+
+    # Check if we have numeric column headers (indicating wide format)
+    numeric_headers = 0
+    for col in columns[1:]:  # Skip first column (usually ID/key)
+        try:
+            float(col)
+            numeric_headers += 1
+        except (ValueError, TypeError):
+            pass
+
+    if numeric_headers > 2:
+        return "wide"
+    return "long"
+
+
+@app.command(name="describe", help="Describe the structure of a data file")
+def describe(
+    file_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the data file (.csv, .parquet, or .xlsx)",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            resolve_path=True,
+        ),
+    ],
+    value_column: Annotated[
+        str | None,
+        typer.Option(
+            "--value-column",
+            "-v",
+            help="Name of the value column (auto-detected if not specified)",
+            rich_help_panel="Table Options",
+        ),
+    ] = None,
+):
+    """Describe the structure of a data file.
+
+    Analyzes a data file and displays information about its structure, including
+    row count, column information, and potential dimension configuration.
+    Automatically detects value columns and table format.
+
+    [bold green]Example:[/bold green]
+        gspio describe data.parquet
+        gspio describe data.csv --value-column custom_rate
+    """
+    with console.status("[bold green]Analyzing file...") as status:
+        # Read the file based on extension with better type inference
+        if file_path.suffix.lower() == ".parquet":
+            df = pl.read_parquet(file_path)
+        elif file_path.suffix.lower() == ".csv":
+            df = pl.read_csv(file_path, infer_schema_length=10000)
+        elif file_path.suffix.lower() in [".xlsx", ".xls"]:
+            df = pl.read_excel(file_path)
+        else:
+            raise typer.BadParameter(
+                f"Unsupported file type: {file_path.suffix}. "
+                "Supported types: .parquet, .csv, .xlsx, .xls",
+            )
+
+        # Analyze table structure
+        table_shape = _analyze_table_shape(df)
+
+        # Detect or use provided value column
+        if value_column is None:
+            detected_value_column, dimensions = _detect_table_structure(df)
+        else:
+            if value_column not in df.columns:
+                available_cols = ", ".join(df.columns)
+                raise typer.BadParameter(
+                    f"Value column '{value_column}' not found. "
+                    f"Available columns: {available_cols}",
+                )
+            detected_value_column = value_column
+            dimensions = {col: col for col in df.columns if col != value_column}
+
+        # Display basic file information
+        console.print(f"\n[bold]File Analysis: {file_path.name}[/bold]")
+        console.print(f"Format: {table_shape.upper()}")
+        console.print(f"Rows: {len(df):,}")
+        console.print(f"Columns: {len(df.columns)}")
+
+        # Show first few rows for context
+        console.print("\n[bold]Sample Data (first 5 rows):[/bold]")
+        with pl.Config(tbl_width_chars=120, fmt_str_lengths=20):
+            console.print(df.head(5))
+
+        # Show detected structure
+        console.print("\n[bold]Detected Structure:[/bold]")
+        console.print(f"Value column: [green]{detected_value_column}[/green]")
+        console.print(f"Key columns: {', '.join(dimensions.keys())}")
+
+        # Generate code example
+        console.print("\n[bold]Code Example:[/bold]")
+
+        # Determine file reading method based on extension
+        if file_path.suffix.lower() == ".parquet":
+            read_code = f'df = pl.read_parquet("{file_path}")'
+        elif file_path.suffix.lower() == ".csv":
+            read_code = f'df = pl.read_csv("{file_path}", infer_schema_length=10000)'
+        elif file_path.suffix.lower() in [".xlsx", ".xls"]:
+            read_code = f'df = pl.read_excel("{file_path}")'
+        else:
+            read_code = f'df = pl.read_csv("{file_path}")'
+
+        # Format dimensions for code
+        dimensions_str = "{\n"
+        for key, value in dimensions.items():
+            dimensions_str += f'    "{key}": "{value}",\n'
+        dimensions_str += "}"
+
+        code_example = f"""```python
+import polars as pl
+from gaspatchio_core.assumptions import Table
+
+# Read the data
+{read_code}
+
+# Create assumption table
+table = Table(
+    name="{file_path.stem}",
+    source=df,
+    dimensions={dimensions_str},
+    value="{detected_value_column}",
+)
+
+# Use the table
+print(table.describe())
+```"""
+
+        console.print(code_example)
+
+        # Try to create a table for detailed analysis
+        try:
+            from .assumptions import Table
+
+            table = Table(
+                name=file_path.stem,
+                source=df,
+                dimensions=dimensions,
+                value=detected_value_column,
+                validate=False,  # Don't validate to avoid errors with complex structures
+            )
+
+            console.print("\n[bold]Table Description:[/bold]")
+            console.print(table.describe())
+
+        except Exception as e:
+            console.print(
+                f"\n[yellow]Note: Could not create assumption table structure: {e}[/yellow]",
+            )
+            console.print(
+                "This might indicate the data needs preprocessing for use as an assumption table.",
+            )
 
 
 if __name__ == "__main__":

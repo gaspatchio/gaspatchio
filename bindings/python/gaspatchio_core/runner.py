@@ -19,7 +19,7 @@ class ModelRunConfig(BaseModel):
     model_file: str = "model.py"
     model_points_file: str = "model-points.parquet"
     mode: Literal["debug", "optimize"] = "debug"
-    model_function_name: str = "life_model"
+    model_function_name: str = "main"
     id_column_name: str = "Policy number"
 
 
@@ -144,7 +144,7 @@ def _execute_model_run(
             metrics=None,
             errors=errors,
             error_message=err_msg,
-            error_context=None
+            error_context=None,
         )
 
     # 5. Run the model using ActuarialFrame and dsl_run_model
@@ -162,19 +162,19 @@ def _execute_model_run(
     except Exception as e:
         # Build error context
         error_context = {}
-        
+
         # If the exception already carries enhanced context, capture it
         if hasattr(e, "llm_context"):
             error_context["llm_context"] = e.llm_context
         if hasattr(e, "enhanced_error"):
             error_context["enhanced_error"] = e.enhanced_error
-            
+
         # Use the enhanced error message if available
         error_message = str(e)
-        
+
         # Log that model execution failed (without repeating the full error)
         logger.debug("Model execution failed with {}", type(e).__name__)
-        
+
         # Return error result instead of raising
         return ModelRunResult(
             status="error",
@@ -182,7 +182,7 @@ def _execute_model_run(
             metrics=None,
             errors=[error_message],
             error_message=error_message,
-            error_context=error_context if error_context else None
+            error_context=error_context if error_context else None,
         )
 
     # Capture the column order from the ActuarialFrame
@@ -225,7 +225,7 @@ def _execute_model_run(
         metrics=metrics,
         errors=errors if errors else None,
         error_message=None,
-        error_context=None
+        error_context=None,
     )
 
 
