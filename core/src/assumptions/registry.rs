@@ -25,6 +25,34 @@ static GLOBAL_REGISTRY: Lazy<ArcSwap<AssumptionTableRegistry>> = Lazy::new(|| {
 // Add a Mutex to serialize registration attempts
 static REGISTRATION_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
+// Helper function to acquire the registration lock with consistent error handling
+fn acquire_registration_lock() -> PolarsResult<std::sync::MutexGuard<'static, ()>> {
+    REGISTRATION_LOCK
+        .lock()
+        .map_err(|_| polars_err!(ComputeError: "Registration lock poisoned"))
+}
+
+// Helper function to update the global registry atomically
+fn update_global_registry<F>(operation_name: &str, table_name: &str, update_fn: F) -> PolarsResult<()>
+where
+    F: FnOnce(&mut AssumptionTableRegistry) -> PolarsResult<()>,
+{
+    let current_arc = GLOBAL_REGISTRY.load_full();
+    let mut new_registry = (*current_arc).clone();
+    
+    match update_fn(&mut new_registry) {
+        Ok(()) => {
+            GLOBAL_REGISTRY.store(Arc::new(new_registry));
+            debug!("Successfully {} table '{}' in global registry", operation_name, table_name);
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Failed to {} table '{}': {}", operation_name, table_name, e);
+            Err(e)
+        }
+    }
+}
+
 /// Gets a thread-safe snapshot (Arc) of the current global AssumptionTableRegistry.
 /// Clients should hold onto this snapshot for the duration of their operation
 /// rather than calling get_global_assumption_registry() repeatedly.
@@ -62,43 +90,68 @@ pub fn register_assumption_table_global(
     keys: Vec<String>,
     value_column: String,
 ) -> PolarsResult<()> {
-    // Acquire the lock to serialize registration attempts
-    let _guard = REGISTRATION_LOCK.lock().map_err(|_| {
-        // Handle potential Mutex poisoning
-        polars_err!(ComputeError: "Registration lock poisoned")
-    })?;
+    let _guard = acquire_registration_lock()?;
 
-    // --- Check for existing table *inside the lock* ---
-    let current_registry = get_global_assumption_registry(); // Get snapshot *after* acquiring lock
+    // Check for existing table inside the lock
+    let current_registry = get_global_assumption_registry();
     if current_registry.get_table(&name).is_some() {
         return Err(polars_err!(ComputeError: "assumption table '{}' already exists", name));
     }
-    drop(current_registry); // Drop Arc before RCU
+    drop(current_registry);
 
-    // --- Atomically Update Registry ---
-    // We use store for synchronous update under the lock
-    let current_arc = GLOBAL_REGISTRY.load_full(); // Get current state again
-    let mut new_registry = (*current_arc).clone();
+    // Atomically update registry
+    update_global_registry("registered", &name, |registry| {
+        registry.register_table(name.clone(), df, keys, value_column)
+    })
+}
 
-    // Register the table internally within the cloned state
-    match new_registry.register_table(name.clone(), df, keys, value_column) {
-        Ok(()) => {
-            // If internal registration succeeded, store the new state
-            GLOBAL_REGISTRY.store(Arc::new(new_registry));
-            debug!(
-                "Successfully registered and stored table '{}' in global registry",
-                name
-            );
-            Ok(())
-        }
-        Err(e) => {
-            // This should not happen due to the upfront check under lock
-            log::error!("Internal registration failed unexpectedly under lock for '{}': {}. Aborting update.", name, e);
-            // Do not store, return the error
-            Err(e)
-        }
+/// Registers or replaces a table in the global registry. This function is idempotent and
+/// allows re-registration of tables, making it suitable for interactive environments like
+/// Jupyter notebooks or test scenarios where models may be run multiple times.
+///
+/// # Arguments
+///
+/// * `name` - The name to register the table under.
+/// * `df` - The DataFrame containing the table data.
+/// * `keys` - A vector of column names to use as lookup keys.
+/// * `value_column` - The name of the column containing the values.
+/// * `force_replace` - If true, forcefully replace existing tables. If false, silently skip.
+///
+/// # Returns
+///
+/// `Ok(())` on success, or a `PolarsError` if table building fails.
+pub fn register_or_replace_assumption_table_global(
+    name: String,
+    df: DataFrame,
+    keys: Vec<String>,
+    value_column: String,
+    force_replace: bool,
+) -> PolarsResult<()> {
+    let _guard = acquire_registration_lock()?;
+
+    // Check for existing table inside the lock
+    let current_registry = get_global_assumption_registry();
+    let table_exists = current_registry.get_table(&name).is_some();
+    drop(current_registry);
+
+    if table_exists && !force_replace {
+        debug!(
+            "Table '{}' already exists and force_replace=false, skipping registration",
+            name
+        );
+        return Ok(());
     }
-    // Lock guard is dropped here
+
+    // Atomically update registry
+    let operation = if table_exists { "replaced" } else { "registered" };
+    update_global_registry(operation, &name, |registry| {
+        // Remove existing table if force_replace is true
+        if table_exists && force_replace {
+            registry.assumption_tables.remove(&name);
+            debug!("Removed existing table '{}' for replacement", name);
+        }
+        registry.register_table(name.clone(), df, keys, value_column)
+    })
 }
 
 /// Appends data to an existing table in the global registry using immutable rebuild approach.
@@ -120,31 +173,12 @@ pub fn append_to_assumption_table_global(
     keys: Vec<String>,
     value_column: String,
 ) -> PolarsResult<()> {
-    // Acquire the lock to serialize append attempts
-    let _guard = REGISTRATION_LOCK
-        .lock()
-        .map_err(|_| polars_err!(ComputeError: "Registration lock poisoned"))?;
+    let _guard = acquire_registration_lock()?;
 
-    // --- Check table exists and perform append *inside the lock* ---
-    let current_arc = GLOBAL_REGISTRY.load_full();
-    let mut new_registry = (*current_arc).clone();
-
-    match new_registry.append_to_table(name.clone(), df, keys, value_column) {
-        Ok(()) => {
-            // If append succeeded, store the new state
-            GLOBAL_REGISTRY.store(Arc::new(new_registry));
-            debug!(
-                "Successfully appended to table '{}' in global registry",
-                name
-            );
-            Ok(())
-        }
-        Err(e) => {
-            debug!("Append failed for table '{}': {}", name, e);
-            Err(e)
-        }
-    }
-    // Lock guard is dropped here
+    // Atomically update registry
+    update_global_registry("appended to", &name, |registry| {
+        registry.append_to_table(name.clone(), df, keys, value_column)
+    })
 }
 
 /// Performs a lookup using the global registry.
@@ -816,6 +850,107 @@ mod tests {
         assert!((result_f64.get(2).unwrap() - 0.100).abs() < 1e-10); // Original
         assert!((result_f64.get(3).unwrap() - 0.101).abs() < 1e-10); // Appended
         assert!((result_f64.get(4).unwrap() - 0.150).abs() < 1e-10); // Appended
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_register_or_replace_idempotent() -> PolarsResult<()> {
+        // Serialize access to global registry
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        // Reset global registry for clean test
+        reset_global_assumption_registry();
+
+        // Create test data
+        let df = df! {
+            "age" => [25, 30, 35],
+            "rate" => [0.1, 0.2, 0.15]
+        }?;
+
+        // First registration
+        register_or_replace_assumption_table_global(
+            "idempotent_test".to_string(),
+            df.clone(),
+            vec!["age".to_string()],
+            "rate".to_string(),
+            false,
+        )?;
+
+        // Verify it's registered
+        let registry = get_global_assumption_registry();
+        assert!(registry.get_table("idempotent_test").is_some());
+
+        // Second registration with force_replace=false (should skip)
+        let result = register_or_replace_assumption_table_global(
+            "idempotent_test".to_string(),
+            df.clone(),
+            vec!["age".to_string()],
+            "rate".to_string(),
+            false,
+        );
+        assert!(result.is_ok());
+
+        // Third registration with force_replace=true (should replace)
+        let new_df = df! {
+            "age" => [25, 30, 35],
+            "rate" => [0.11, 0.21, 0.16]  // Different values
+        }?;
+
+        register_or_replace_assumption_table_global(
+            "idempotent_test".to_string(),
+            new_df,
+            vec!["age".to_string()],
+            "rate".to_string(),
+            true,
+        )?;
+
+        // Verify the table was replaced with new values
+        let age_series = Series::new("age".into(), &[25, 30, 35]);
+        let result = lookup_assumption_global("idempotent_test", &[&age_series])?;
+        let result_f64 = result.f64()?;
+        assert!((result_f64.get(0).unwrap() - 0.11).abs() < 1e-10);
+        assert!((result_f64.get(1).unwrap() - 0.21).abs() < 1e-10);
+        assert!((result_f64.get(2).unwrap() - 0.16).abs() < 1e-10);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reentrancy_scenario() -> PolarsResult<()> {
+        // Serialize access to global registry
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        // Reset global registry for clean test
+        reset_global_assumption_registry();
+
+        // Simulate multiple model runs in same process
+        for i in 1..=3 {
+            // Create test data (could be same or different)
+            let df = df! {
+                "duration" => [1, 2, 3],
+                "lapse_rate" => [0.05 * i as f64, 0.04 * i as f64, 0.03 * i as f64]
+            }?;
+
+            // This should work without errors
+            register_or_replace_assumption_table_global(
+                "lapse_reentrancy".to_string(),
+                df,
+                vec!["duration".to_string()],
+                "lapse_rate".to_string(),
+                true,  // Always replace for reentrancy
+            )?;
+
+            // Verify table works
+            let duration_series = Series::new("duration".into(), &[1, 2, 3]);
+            let result = lookup_assumption_global("lapse_reentrancy", &[&duration_series])?;
+            let result_f64 = result.f64()?;
+            
+            // Check values match current iteration
+            assert!((result_f64.get(0).unwrap() - 0.05 * i as f64).abs() < 1e-10);
+            assert!((result_f64.get(1).unwrap() - 0.04 * i as f64).abs() < 1e-10);
+            assert!((result_f64.get(2).unwrap() - 0.03 * i as f64).abs() < 1e-10);
+        }
 
         Ok(())
     }

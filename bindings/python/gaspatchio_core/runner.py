@@ -160,6 +160,22 @@ def _execute_model_run(
         logger.info("Collecting results...")
         result_df, profile_info = df.profile()
     except Exception as e:
+        # Import error handler
+        from gaspatchio_core.errors.formatting_errors import _handle_frame_error
+        from gaspatchio_core.errors.exception_utils import enhance_exception_with_location
+        
+        # Try to enhance the error if we're in debug mode
+        if config.mode == "debug":
+            try:
+                # Enhance the exception with source location from its traceback
+                enhance_exception_with_location(e)
+                
+                # Try to enhance the error formatting
+                _handle_frame_error(df, e)
+            except Exception as enhanced_e:
+                # If enhancement succeeded, use the enhanced exception
+                e = enhanced_e
+        
         # Build error context
         error_context = {}
 

@@ -8,6 +8,7 @@ import polars as pl  # Import polars for exception type checking
 from loguru import logger
 
 from .metadata import TracedOperation
+from .validation import ValidationError
 
 # Import thefuzz only if available, provide fallback
 try:
@@ -339,8 +340,11 @@ def _is_compilation_error(e: Exception) -> bool:
     return any(pattern in error_str for pattern in compilation_patterns)
 
 
-def _handle_execution_error(frame: ActuarialFrame, e: Exception):
-    """Handle errors during collect() or profile(), providing enhanced context and suggestions."""
+def _handle_frame_error(frame: ActuarialFrame, e: Exception):
+    """Handle errors during frame operations, providing enhanced context and suggestions.
+    
+    This handles both execution errors (from collect/profile) and validation errors.
+    """
     # Skip if already processed (any kind of processing)
     if any(
         hasattr(e, attr)
@@ -358,6 +362,14 @@ def _handle_execution_error(frame: ActuarialFrame, e: Exception):
 
     # Check if we should use enhanced error handling
     error_mode = get_error_mode()
+    
+    # Handle ValidationError with enhanced formatting
+    if isinstance(e, ValidationError) and error_mode in ["enhanced", "debug"]:
+        return _handle_validation_error(frame, e)
+    
+    # Handle AttributeError with enhanced formatting
+    if isinstance(e, AttributeError) and error_mode in ["enhanced", "debug"]:
+        return _handle_attribute_error(frame, e)
 
     # Early exit for production mode - just re-raise
     if not (
@@ -452,6 +464,10 @@ def _handle_execution_error(frame: ActuarialFrame, e: Exception):
     # Fall back to basic column error formatting for column-related errors
     _handle_basic_column_error(frame, e)
     # This should never reach here as _handle_basic_column_error always raises
+
+
+# Backward compatibility alias
+_handle_execution_error = _handle_frame_error
 
 
 def _handle_basic_column_error(frame: ActuarialFrame, e: Exception):
@@ -929,3 +945,46 @@ Original Polars error:
 {error_msg}"""
 
     return enhanced_msg
+
+
+def _handle_validation_error(frame: ActuarialFrame, e: ValidationError):
+    """Handle validation errors with enhanced formatting."""
+    # Import formatter locally to avoid circular imports
+    from .formatter import ValidationErrorFormatter
+    
+    # Create formatter and generate enhanced message
+    formatter = ValidationErrorFormatter(e, frame)
+    enhanced_msg = formatter.format_error()
+    llm_context = formatter.format_for_llm()
+    
+    # Update the exception with enhanced message
+    e.args = (enhanced_msg,)
+    e._enhanced_message = enhanced_msg
+    e.llm_context = llm_context
+    e._enhanced_processed = True
+    
+    # Re-raise the enhanced exception
+    raise e
+
+
+def _handle_attribute_error(frame: ActuarialFrame, e: AttributeError):
+    """Handle attribute errors with enhanced formatting."""
+    # Import formatter locally to avoid circular imports
+    from .formatter import AttributeErrorFormatter
+    
+    # Get source location if not already attached
+    source_location = getattr(e, 'source_location', None)
+    
+    # Create formatter and generate enhanced message
+    formatter = AttributeErrorFormatter(e, source_location, frame)
+    enhanced_msg = formatter.format_error()
+    llm_context = formatter.format_for_llm()
+    
+    # Update the exception with enhanced message
+    e.args = (enhanced_msg,)
+    e._enhanced_message = enhanced_msg
+    e.llm_context = llm_context
+    e._enhanced_processed = True
+    
+    # Re-raise the enhanced exception
+    raise e

@@ -286,17 +286,19 @@ class Table:
         # Store the processed DataFrame
         self._df = processed_df
 
-        # Register with Rust registry
+        # Register with Rust registry using idempotent method
         try:
             registry = PyAssumptionTableRegistry()
-            registry.register_table(
+            # Use register_or_replace_table for idempotent behavior
+            registry.register_or_replace_table(
                 name=self._name,
                 df=processed_df,
                 keys=key_columns,
                 value_column=self._value,
+                force_replace=True,  # Always replace for reentrancy support
             )
             logger.debug(
-                f"Successfully registered table '{self._name}' with {len(processed_df)} rows, "
+                f"Successfully registered/replaced table '{self._name}' with {len(processed_df)} rows, "
                 f"{len(key_columns)} key columns: {key_columns}",
             )
         except Exception as e:
