@@ -1,12 +1,14 @@
 """Accessors for date-related operations on ActuarialFrame columns/expressions."""
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, Union
 
 import polars as pl
 
 # Import registry decorator
 from ..frame.registry import register_accessor
+# Import validation error handling
+from ..errors.validation import capture_validation_context, raise_validation_error
 
 # Use the new base location
 from .base import BaseColumnAccessor, BaseFrameAccessor
@@ -262,6 +264,7 @@ class DateFrameAccessor(BaseFrameAccessor):
         return ActuarialFrame(df_updated)
 
     # MOVED & ADAPTED: create_projection_timeline from dates.py
+    @capture_validation_context
     def create_projection_timeline(
         self,
         valuation_date: datetime.date,
@@ -361,11 +364,13 @@ class DateFrameAccessor(BaseFrameAccessor):
             ```
         """
         # Eagerly validate projection_frequency
-        valid_frequencies = ("monthly", "quarterly", "semi-annual", "annual")
+        valid_frequencies = ["monthly", "quarterly", "semi-annual", "annual"]
         if projection_frequency not in valid_frequencies:
-            raise ValueError(
-                f"Invalid projection frequency: {projection_frequency}. "
-                f"Must be one of {valid_frequencies}"
+            raise_validation_error(
+                f"Invalid projection frequency: {projection_frequency}",
+                valid_options=valid_frequencies,
+                provided_value=projection_frequency,
+                parameter_name="projection_frequency"
             )
 
         # Convert valuation_date to a Polars expression
@@ -415,7 +420,13 @@ class DateFrameAccessor(BaseFrameAccessor):
                 )
             end_date_expr = pl.lit(projection_end_value)
         else:
-            raise ValueError(f"Invalid projection end type: {projection_end_type}")
+            valid_end_types = ["maximum_age", "term_years", "term_months", "fixed_date"]
+            raise_validation_error(
+                f"Invalid projection end type: {projection_end_type}",
+                valid_options=valid_end_types,
+                provided_value=projection_end_type,
+                parameter_name="projection_end_type"
+            )
 
         # --- Apply to frame ---
         updates = {}

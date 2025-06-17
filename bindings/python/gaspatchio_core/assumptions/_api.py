@@ -80,7 +80,7 @@ class Table:
             metadata: Optional metadata dictionary to store with the table
 
         Examples:
-        ---------
+        --------
         **Scalar Example: Basic Mortality Table Creation**
 
         ```python
@@ -88,10 +88,21 @@ class Table:
         import polars as pl
 
         # Create mortality rate data
-        mortality_data = pl.DataFrame({
-            "age": [25, 30, 35, 40, 45, 50, 55, 60],
-            "mortality_rate": [0.0008, 0.001, 0.0015, 0.0025, 0.004, 0.007, 0.012, 0.020]
-        })
+        mortality_data = pl.DataFrame(
+            {
+                "age": [25, 30, 35, 40, 45, 50, 55, 60],
+                "mortality_rate": [
+                    0.0008,
+                    0.001,
+                    0.0015,
+                    0.0025,
+                    0.004,
+                    0.007,
+                    0.012,
+                    0.020,
+                ],
+            }
+        )
 
         # Create and register mortality table
         mortality_table = Table(
@@ -103,8 +114,8 @@ class Table:
             metadata={
                 "description": "Standard mortality rates for term life insurance",
                 "source": "2017 CSO Table",
-                "effective_date": "2024-01-01"
-            }
+                "effective_date": "2024-01-01",
+            },
         )
 
         print(f"Created table: {mortality_table._name}")
@@ -157,7 +168,6 @@ class Table:
         Rows: 9
         Key columns: ['duration', 'product_type']
         ```
-
         """
         self._name = name
 
@@ -184,25 +194,26 @@ class Table:
 
     def _process_data(self, source: str | Path | pl.DataFrame) -> None:
         """Process the data through dimension transformations and register with Rust.
-        
+
         Internal method that processes source data through dimension transformations,
         validates the result, and registers the table with the Rust backend for
         high-performance lookups. This method handles the core data processing
         pipeline for assumption table creation.
-        
+
         !!! note "When to use"
             * **Internal Use Only:** This is a private method called automatically
                 during table initialization and extension operations.
-        
+
         Args:
             source: Data source to process (file path or DataFrame)
-            
+
         Examples:
         --------
         ```python
         # This method is called internally - not for direct use
         # It's invoked automatically when creating or extending tables
         ```
+
         """
         logger.debug(f"Processing data for table '{self._name}'")
 
@@ -275,17 +286,19 @@ class Table:
         # Store the processed DataFrame
         self._df = processed_df
 
-        # Register with Rust registry
+        # Register with Rust registry using idempotent method
         try:
             registry = PyAssumptionTableRegistry()
-            registry.register_table(
+            # Use register_or_replace_table for idempotent behavior
+            registry.register_or_replace_table(
                 name=self._name,
                 df=processed_df,
                 keys=key_columns,
                 value_column=self._value,
+                force_replace=True,  # Always replace for reentrancy support
             )
             logger.debug(
-                f"Successfully registered table '{self._name}' with {len(processed_df)} rows, "
+                f"Successfully registered/replaced table '{self._name}' with {len(processed_df)} rows, "
                 f"{len(key_columns)} key columns: {key_columns}",
             )
         except Exception as e:
@@ -332,7 +345,7 @@ class Table:
             Polars expression for the lookup
 
         Examples:
-        ---------
+        --------
         **Scalar Example: Simple Mortality Lookup**
 
         ```python
@@ -341,22 +354,24 @@ class Table:
         import polars as pl
 
         # Create mortality table
-        mortality_data = pl.DataFrame({
-            "age": [30, 35, 40, 45, 50],
-            "mortality_rate": [0.001, 0.002, 0.004, 0.008, 0.015]
-        })
-        
+        mortality_data = pl.DataFrame(
+            {
+                "age": [30, 35, 40, 45, 50],
+                "mortality_rate": [0.001, 0.002, 0.004, 0.008, 0.015],
+            }
+        )
+
         mortality_table = Table(
             name="mortality_std",
             source=mortality_data,
             dimensions={"age": "age"},
-            value="mortality_rate"
+            value="mortality_rate",
         )
 
         # Create model data and perform lookup
         model_data = {
             "policy_id": ["P001", "P002", "P003"],
-            "current_age": [35, 42, 48]
+            "current_age": [35, 42, 48],
         }
         af = ActuarialFrame(model_data)
 
@@ -364,7 +379,7 @@ class Table:
         af = af.with_columns(
             mortality_rate=mortality_table.lookup(age=af["current_age"])
         )
-        
+
         result = af.collect()
         print(result)
         ```
@@ -395,7 +410,7 @@ class Table:
             "product_type": ["TERM", "WL", "TERM", "WL", "TERM", "WL"],
             "lapse_rate": [0.05, 0.03, 0.08, 0.05, 0.12, 0.07]
         })
-        
+
         lapse_table = Table(
             name="lapse_rates",
             source=lapse_data,
@@ -418,7 +433,7 @@ class Table:
                 product_type=af["product"]
             )
         )
-        
+
         result = af.collect()
         print(result)
         ```
@@ -436,7 +451,6 @@ class Table:
         │ P004      ┆ WL      ┆ 1           ┆ 0.03       │
         └───────────┴─────────┴─────────────┴────────────┘
         ```
-
         """
         # Merge both sources of dimensions
         all_dimensions = {}
@@ -532,7 +546,7 @@ class Table:
             Self for chaining
 
         Examples:
-        ---------
+        --------
         **Scalar Example: Extending Mortality Table**
 
         ```python
@@ -540,26 +554,24 @@ class Table:
         import polars as pl
 
         # Create initial mortality table
-        initial_data = pl.DataFrame({
-            "age": [30, 35, 40],
-            "mortality_rate": [0.001, 0.002, 0.004]
-        })
-        
+        initial_data = pl.DataFrame(
+            {"age": [30, 35, 40], "mortality_rate": [0.001, 0.002, 0.004]}
+        )
+
         mortality_table = Table(
             name="mortality_extended",
             source=initial_data,
             dimensions={"age": "age"},
-            value="mortality_rate"
+            value="mortality_rate",
         )
-        
+
         print(f"Initial rows: {len(mortality_table.to_dataframe())}")
 
         # Extend with additional age bands
-        additional_data = pl.DataFrame({
-            "age": [45, 50, 55],
-            "mortality_rate": [0.008, 0.015, 0.025]
-        })
-        
+        additional_data = pl.DataFrame(
+            {"age": [45, 50, 55], "mortality_rate": [0.008, 0.015, 0.025]}
+        )
+
         mortality_table.extend(source=additional_data)
         print(f"After extension: {len(mortality_table.to_dataframe())}")
         print(mortality_table.to_dataframe().sort("age"))
@@ -594,14 +606,14 @@ class Table:
             "age": [30, 35, 40],
             "rate": [0.001, 0.002, 0.004]
         })
-        
+
         table = Table(
             name="mortality_extended",
             source=base_data,
             dimensions={"age": "age"},
             value="rate"
         )
-        
+
         print("Initial rows:", len(table.to_dataframe()))
 
         # Extend with additional ages
@@ -609,7 +621,7 @@ class Table:
             "age": [45, 50],
             "rate": [0.008, 0.015]
         })
-        
+
         table.extend(source=additional_data)
         print("After extension:", len(table.to_dataframe()))
         ```
@@ -618,7 +630,6 @@ class Table:
         Initial rows: 3
         After extension: 5
         ```
-
         """
         logger.debug(f"Extending table '{self._name}' with additional data")
 
@@ -677,11 +688,11 @@ class Table:
     @property
     def schema(self) -> TableSchema:
         """Get the analyzed schema of this table.
-        
+
         Returns comprehensive schema information about the assumption table including
         column types, value ranges, and structural metadata useful for validation,
         debugging, and documentation generation.
-        
+
         !!! note "When to use"
             * **Data Validation:** Check table schema before model execution
                 to ensure data types and ranges meet model requirements.
@@ -689,25 +700,23 @@ class Table:
                 lookup failures or data quality issues.
             * **Documentation:** Generate technical documentation showing
                 table structure and data characteristics.
-        
+
         Returns:
             TableSchema: Analyzed schema with column information
-        
+
         Examples:
         --------
         ```python
         from gaspatchio_core.assumptions import Table
         import polars as pl
-        
-        data = pl.DataFrame({
-            "age": [30, 35, 40],
-            "rate": [0.001, 0.002, 0.004]
-        })
-        
+
+        data = pl.DataFrame({"age": [30, 35, 40], "rate": [0.001, 0.002, 0.004]})
+
         table = Table("test", data, {"age": "age"}, "rate")
         schema = table.schema
         print(f"Columns: {len(schema.columns)}")
         ```
+
         """
         if self._schema is None:
             if self._df is None:
@@ -718,11 +727,11 @@ class Table:
     @property
     def dimensions(self) -> dict[str, Dimension]:
         """Get dimension configuration (returns a copy).
-        
+
         Returns the dimension configuration used to structure this assumption
         table, providing access to dimension types, processing strategies,
         and validation rules for model analysis and debugging.
-        
+
         !!! note "When to use"
             * **Model Analysis:** Inspect dimension configuration to understand
                 table structure and lookup requirements.
@@ -730,32 +739,33 @@ class Table:
                 on available dimensions and their configurations.
             * **Validation:** Check dimension compatibility when extending
                 tables or building complex lookup expressions.
-        
+
         Returns:
             dict[str, Dimension]: Copy of dimension configuration
-        
+
         Examples:
         --------
         ```python
         from gaspatchio_core.assumptions import Table
         import polars as pl
-        
+
         data = pl.DataFrame({"age": [30, 35], "rate": [0.001, 0.002]})
         table = Table("test", data, {"age": "age"}, "rate")
-        
+
         dims = table.dimensions
         print(f"Dimensions: {list(dims.keys())}")
         ```
+
         """
         return self._dimensions.copy()
 
     def dimension_values(self, dimension: str) -> list[Any]:
         """Get unique values for a specific dimension.
-        
+
         Returns a list of all unique values found in the specified dimension
         column of the assumption table. Useful for understanding the range
         of lookup keys available and for validation of lookup arguments.
-        
+
         !!! note "When to use"
             * **Data Validation:** Check available dimension values before
                 performing lookups to ensure valid lookup keys.
@@ -763,28 +773,28 @@ class Table:
                 product types covered by assumption tables.
             * **Dynamic UI:** Build dropdown lists or selection interfaces
                 showing available lookup values for assumption tables.
-        
+
         Args:
             dimension: Name of the dimension to get values for
-            
+
         Returns:
             list[Any]: List of unique values in the dimension
-            
+
         Examples:
         --------
         ```python
         from gaspatchio_core.assumptions import Table
         import polars as pl
-        
-        data = pl.DataFrame({
-            "age": [30, 35, 40, 30, 35],
-            "rate": [0.001, 0.002, 0.004, 0.001, 0.002]
-        })
-        
+
+        data = pl.DataFrame(
+            {"age": [30, 35, 40, 30, 35], "rate": [0.001, 0.002, 0.004, 0.001, 0.002]}
+        )
+
         table = Table("test", data, {"age": "age"}, "rate")
         ages = table.dimension_values("age")
         print(f"Available ages: {sorted(ages)}")
         ```
+
         """
         if dimension not in self._dimensions:
             available_dims = ", ".join(self._dimensions.keys())
@@ -815,11 +825,11 @@ class Table:
 
     def to_dataframe(self) -> pl.DataFrame:
         """Export the complete table as a DataFrame.
-        
+
         Returns the complete processed assumption table as a Polars DataFrame,
         including all key columns and the value column after dimension processing.
         Useful for data inspection, validation, and integration with external systems.
-        
+
         !!! note "When to use"
             * **Data Inspection:** Export table data for validation, quality
                 checks, and manual review of assumption values.
@@ -827,22 +837,23 @@ class Table:
                 systems, reporting tools, or alternative calculation engines.
             * **Debugging:** Examine processed table structure and data
                 after dimension transformations and validation.
-        
+
         Returns:
             pl.DataFrame: Complete table with all processed data
-        
+
         Examples:
         --------
         ```python
         from gaspatchio_core.assumptions import Table
         import polars as pl
-        
+
         data = pl.DataFrame({"age": [30, 35], "rate": [0.001, 0.002]})
         table = Table("test", data, {"age": "age"}, "rate")
-        
+
         df = table.to_dataframe()
         print(f"Exported {len(df)} rows")
         ```
+
         """
         if self._df is None:
             raise RuntimeError("Table data not processed")
@@ -850,11 +861,11 @@ class Table:
 
     def describe(self) -> str:
         """Get a human-readable description of the table.
-        
+
         Returns a formatted string describing the table structure, including
         row count, column information, and dimension configuration. Useful
         for debugging, documentation, and model analysis.
-        
+
         !!! note "When to use"
             * **Debugging:** Get quick overview of table structure when
                 troubleshooting lookup issues or data problems.
@@ -862,24 +873,22 @@ class Table:
                 documentation and technical specifications.
             * **Model Analysis:** Review table characteristics during
                 model development and validation processes.
-        
+
         Returns:
             str: Human-readable description of the table
-            
+
         Examples:
         --------
         ```python
         from gaspatchio_core.assumptions import Table
         import polars as pl
-        
-        data = pl.DataFrame({
-            "age": [30, 35, 40],
-            "rate": [0.001, 0.002, 0.004]
-        })
-        
+
+        data = pl.DataFrame({"age": [30, 35, 40], "rate": [0.001, 0.002, 0.004]})
+
         table = Table("mortality", data, {"age": "age"}, "rate")
         print(table.describe())
         ```
+
         """
         if self._df is None:
             return f"Table '{self._name}' (not processed)"
@@ -904,11 +913,11 @@ class Table:
     @property
     def metadata(self) -> dict[str, Any] | None:
         """Get metadata for this table.
-        
+
         Returns stored metadata for this assumption table including descriptions,
         data sources, validation status, and business context that was provided
         during table creation.
-        
+
         !!! note "When to use"
             * **Documentation:** Access table metadata for automated
                 documentation generation and model reporting.
@@ -916,23 +925,25 @@ class Table:
                 and review information for compliance reporting.
             * **Model Management:** Check table metadata for version
                 control, effective dates, and change management.
-        
+
         Returns:
             dict[str, Any] | None: Copy of metadata if available, None otherwise
-        
+
         Examples:
         --------
         ```python
         from gaspatchio_core.assumptions import Table
         import polars as pl
-        
+
         data = pl.DataFrame({"age": [30, 35], "rate": [0.001, 0.002]})
-        table = Table("test", data, {"age": "age"}, "rate", 
-                     metadata={"source": "2023 Study"})
-        
+        table = Table(
+            "test", data, {"age": "age"}, "rate", metadata={"source": "2023 Study"}
+        )
+
         meta = table.metadata
         print(f"Source: {meta['source'] if meta else 'None'}")
         ```
+
         """
         metadata = _TABLE_METADATA.get(self._name)
         if metadata is not None:
@@ -945,11 +956,11 @@ class Table:
         **kwargs,
     ) -> None:
         """Validate a lookup configuration without executing.
-        
+
         Checks that a lookup configuration provides all required dimensions
         and that dimension names match the table's configuration. Useful
         for validating lookup calls before execution and catching errors early.
-        
+
         !!! note "When to use"
             * **Error Prevention:** Validate lookup configurations before
                 execution to catch missing or invalid dimensions early.
@@ -957,36 +968,34 @@ class Table:
                 lookup calls for correctness in complex model workflows.
             * **Testing:** Validate lookup configurations in unit tests
                 without executing expensive lookup operations.
-        
+
         Args:
             _dimensions: Optional dictionary mapping dimension names to columns/expressions
             **kwargs: Dimension name to column/expression mapping
-            
+
         Raises:
             ValueError: If dimension configuration is invalid
-            
+
         Examples:
         --------
         ```python
         from gaspatchio_core.assumptions import Table
         import polars as pl
-        
-        data = pl.DataFrame({
-            "age": [30, 35],
-            "rate": [0.001, 0.002]
-        })
-        
+
+        data = pl.DataFrame({"age": [30, 35], "rate": [0.001, 0.002]})
+
         table = Table("test", data, {"age": "age"}, "rate")
-        
+
         # Valid lookup - no error
         table.validate_lookup(age="current_age")
-        
+
         # Invalid lookup - raises ValueError
         try:
             table.validate_lookup(invalid_dim="some_col")
         except ValueError as e:
             print(f"Validation error: {e}")
         ```
+
         """
         # Merge both sources of dimensions
         all_dimensions = {}
@@ -1048,7 +1057,7 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
         dict | None: Copy of metadata dictionary if found, None otherwise
 
     Examples:
-    ---------
+    --------
     **Scalar Example: Basic Metadata Retrieval**
 
     ```python
@@ -1056,11 +1065,13 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
     import polars as pl
 
     # Create and register a mortality table with metadata
-    mortality_data = pl.DataFrame({
-        "age": [30, 35, 40, 45, 50],
-        "mortality_rate": [0.001, 0.002, 0.004, 0.008, 0.015]
-    })
-    
+    mortality_data = pl.DataFrame(
+        {
+            "age": [30, 35, 40, 45, 50],
+            "mortality_rate": [0.001, 0.002, 0.004, 0.008, 0.015],
+        }
+    )
+
     mortality_table = Table(
         name="mortality_2023",
         source=mortality_data,
@@ -1070,10 +1081,10 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
             "description": "Standard mortality rates for term life insurance",
             "source": "Industry Standard Tables 2023",
             "effective_date": "2023-01-01",
-            "validation_status": "approved"
-        }
+            "validation_status": "approved",
+        },
     )
-    
+
     # Retrieve metadata
     metadata = get_table_metadata("mortality_2023")
     print(metadata)
@@ -1082,7 +1093,7 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
     ```text
     {
         'description': 'Standard mortality rates for term life insurance',
-        'source': 'Industry Standard Tables 2023', 
+        'source': 'Industry Standard Tables 2023',
         'effective_date': '2023-01-01',
         'validation_status': 'approved'
     }
@@ -1123,7 +1134,7 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
             }
         }
     ]
-    
+
     # Register tables
     for config in tables_config:
         Table(
@@ -1133,7 +1144,7 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
             value="lapse_rate" if "lapse_rate" in config["data"].columns else "expense_rate",
             metadata=config["metadata"]
         )
-    
+
     # Generate documentation report
     for table_name in ["lapse_rates_term", "expense_rates"]:
         metadata = get_table_metadata(table_name)
@@ -1153,7 +1164,6 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
       Description: Annual expense rates per policy
       Last Updated: N/A
     ```
-
     """
     metadata = _TABLE_METADATA.get(table_name)
     if metadata is not None:
@@ -1183,7 +1193,7 @@ def list_tables() -> list[str]:
         list[str]: List of table names that have been registered
 
     Examples:
-    ---------
+    --------
     **Scalar Example: Basic Table Listing**
 
     ```python
@@ -1191,21 +1201,25 @@ def list_tables() -> list[str]:
     import polars as pl
 
     # Register some assumption tables
-    mortality_data = pl.DataFrame({
-        "age": [30, 40, 50],
-        "mortality_rate": [0.001, 0.004, 0.015]
-    })
-    
-    lapse_data = pl.DataFrame({
-        "duration": [1, 2, 3],
-        "lapse_rate": [0.05, 0.08, 0.12]
-    })
-    
-    Table(name="mortality_std", source=mortality_data, 
-          dimensions={"age": "age"}, value="mortality_rate")
-    Table(name="lapse_term", source=lapse_data,
-          dimensions={"duration": "duration"}, value="lapse_rate")
-    
+    mortality_data = pl.DataFrame(
+        {"age": [30, 40, 50], "mortality_rate": [0.001, 0.004, 0.015]}
+    )
+
+    lapse_data = pl.DataFrame({"duration": [1, 2, 3], "lapse_rate": [0.05, 0.08, 0.12]})
+
+    Table(
+        name="mortality_std",
+        source=mortality_data,
+        dimensions={"age": "age"},
+        value="mortality_rate",
+    )
+    Table(
+        name="lapse_term",
+        source=lapse_data,
+        dimensions={"duration": "duration"},
+        value="lapse_rate",
+    )
+
     # List all registered tables
     tables = list_tables()
     print("Registered tables:", tables)
@@ -1224,35 +1238,35 @@ def list_tables() -> list[str]:
     # Define required tables for a term life model
     required_tables = [
         "mortality_rates",
-        "lapse_rates", 
+        "lapse_rates",
         "expense_rates",
         "interest_rates"
     ]
-    
+
     # Register some tables (simulating partial loading)
     mortality_data = pl.DataFrame({
-        "age": [25, 30, 35, 40], 
+        "age": [25, 30, 35, 40],
         "rate": [0.0008, 0.001, 0.0015, 0.0025]
     })
-    
+
     lapse_data = pl.DataFrame({
         "duration": [1, 2, 3, 4],
         "rate": [0.05, 0.08, 0.10, 0.12]
     })
-    
+
     Table(name="mortality_rates", source=mortality_data,
           dimensions={"age": "age"}, value="rate")
-    Table(name="lapse_rates", source=lapse_data, 
+    Table(name="lapse_rates", source=lapse_data,
           dimensions={"duration": "duration"}, value="rate")
-    
+
     # Validate model readiness
     available_tables = list_tables()
-    missing_tables = [table for table in required_tables 
+    missing_tables = [table for table in required_tables
                      if table not in available_tables]
-    
+
     print("Available tables:", sorted(available_tables))
     print("Missing tables:", missing_tables)
-    
+
     if missing_tables:
         print(f"⚠️  Model not ready - missing {len(missing_tables)} tables")
     else:
@@ -1264,7 +1278,6 @@ def list_tables() -> list[str]:
     Missing tables: ['expense_rates', 'interest_rates']
     ⚠️  Model not ready - missing 2 tables
     ```
-
     """
     try:
         registry = PyAssumptionTableRegistry()
@@ -1296,7 +1309,7 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
         dict: Dictionary mapping table names to their metadata
 
     Examples:
-    ---------
+    --------
     **Scalar Example: Basic Metadata Listing**
 
     ```python
@@ -1304,11 +1317,8 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
     import polars as pl
 
     # Register tables with rich metadata
-    mortality_data = pl.DataFrame({
-        "age": [30, 40, 50],
-        "rate": [0.001, 0.004, 0.015]
-    })
-    
+    mortality_data = pl.DataFrame({"age": [30, 40, 50], "rate": [0.001, 0.004, 0.015]})
+
     Table(
         name="mortality_base",
         source=mortality_data,
@@ -1317,10 +1327,10 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
         metadata={
             "description": "Base mortality rates for healthy lives",
             "source": "Company Experience Study 2023",
-            "effective_date": "2024-01-01"
-        }
+            "effective_date": "2024-01-01",
+        },
     )
-    
+
     # List tables with metadata
     tables_metadata = list_tables_with_metadata()
     for name, meta in tables_metadata.items():
@@ -1342,12 +1352,12 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
         "age": [30, 35, 40],
         "rate": [0.001, 0.002, 0.004]
     })
-    
+
     lapse_df = pl.DataFrame({
         "duration": [1, 2, 3],
         "rate": [0.05, 0.08, 0.12]
     })
-    
+
     # Create tables with metadata
     Table(
         name="mortality_std",
@@ -1356,7 +1366,7 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
         value="rate",
         metadata={"source": "2017 CSO", "version": "v2.1"}
     )
-    
+
     Table(
         name="lapse_rates",
         source=lapse_df,
@@ -1364,7 +1374,7 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
         value="rate",
         metadata={"source": "Company Study", "quality": "High"}
     )
-    
+
     # List all tables with metadata
     tables_meta = list_tables_with_metadata()
     print(f"Found {len(tables_meta)} tables with metadata:")
@@ -1377,6 +1387,5 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
       mortality_std: 2017 CSO
       lapse_rates: Company Study
     ```
-
     """
     return _TABLE_METADATA.copy()

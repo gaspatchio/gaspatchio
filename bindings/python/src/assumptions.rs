@@ -12,7 +12,8 @@ use serde::Deserialize;
 // Import the core logic function and assume Kwargs struct is defined there
 use gaspatchio_core_lib::assumptions::{
     append_to_assumption_table_global, get_global_assumption_registry,
-    register_assumption_table_global, reset_global_assumption_registry,
+    register_assumption_table_global, register_or_replace_assumption_table_global,
+    reset_global_assumption_registry,
 };
 
 // Kwargs struct for the assumption lookup plugin
@@ -166,5 +167,37 @@ impl PyAssumptionTableRegistry {
         // Check if table exists in global registry
         let registry = get_global_assumption_registry();
         Ok(registry.table_exists(&name))
+    }
+
+    #[pyo3(signature = (name, df, keys, value_column, force_replace=true))]
+    fn register_or_replace_table(
+        &self,
+        name: String,
+        df: PyDataFrame,
+        keys: Vec<String>,
+        value_column: String,
+        force_replace: Option<bool>,
+    ) -> PyResult<()> {
+        let rust_df: DataFrame = df.into();
+        let force = force_replace.unwrap_or(true);
+
+        log::debug!(
+            "PyAssumptionTableRegistry::register_or_replace_table: Registering/replacing table '{}' with {} rows, keys: {:?}, value_column: '{}', force_replace: {}",
+            name, rust_df.height(), keys, value_column, force
+        );
+
+        // Use the new idempotent registry function
+        register_or_replace_assumption_table_global(name.clone(), rust_df, keys, value_column, force)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e)))?;
+
+        // Verify registration
+        let registry = get_global_assumption_registry();
+        let available_tables = registry.list_tables();
+        log::debug!(
+            "PyAssumptionTableRegistry::register_or_replace_table: Successfully registered/replaced '{}'. Registry now has {} tables: {:?}",
+            name, available_tables.len(), available_tables
+        );
+
+        Ok(())
     }
 }

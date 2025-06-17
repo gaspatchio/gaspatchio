@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio-core"
-version = "0.0.16"
+version = "0.0.18"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
@@ -21,6 +21,7 @@ dependencies = [
     "ruff>=0.11.10",
     "markdown-it-py>=3.0.0",
     "docstring-parser>=0.16",
+    "fastexcel>=0.14.0",
 ]
 
 [dependency-groups]
@@ -105,4 +106,4 @@ markers = [
 # Scripts / CLI paths
 [project.scripts]
 gp-docstrings = "gaspatchio_core.examples.docstrings.cli:app"
-gprun = "gaspatchio_core.cli:app"
+gspio = "gaspatchio_core.cli:app"

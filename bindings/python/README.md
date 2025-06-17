@@ -17,14 +17,14 @@ uv sync
 
 ## Command Line Interface (CLI)
 
-Gaspatchio Core includes a powerful CLI tool called `gprun` for executing actuarial models.
+Gaspatchio Core includes a powerful CLI tool called `gspio` for executing actuarial models.
 
 ### Enable Shell Completion
 
 For better developer experience, enable tab completion:
 
 ```bash
-gprun --install-completion
+gspio --install-completion
 ```
 
 This enables tab completion for commands, options, and even option values like `--mode`.
@@ -36,12 +36,12 @@ This enables tab completion for commands, options, and even option values like `
 Execute an actuarial model for all policies in your dataset:
 
 ```bash
-gprun run-model model.py model-points.parquet
+gspio run-model model.py model-points.parquet
 ```
 
 With options:
 ```bash
-gprun run-model model.py data.parquet --mode optimize --rows 20
+gspio run-model model.py data.parquet --mode optimize --rows 20
 ```
 
 #### Single Policy Run
@@ -49,12 +49,12 @@ gprun run-model model.py data.parquet --mode optimize --rows 20
 Debug or analyze a specific policy by running the model for just one policy ID:
 
 ```bash
-gprun run-single-policy model.py model-points.parquet 12345
+gspio run-single-policy model.py model-points.parquet 12345
 ```
 
 With custom policy ID column:
 ```bash
-gprun run-single-policy model.py data.parquet 12345 --policy-id-column "PolicyNumber"
+gspio run-single-policy model.py data.parquet 12345 --policy-id-column "PolicyNumber"
 ```
 
 **Important**: The `--policy-id-column` option tells the CLI which column contains your policy identifiers. This is crucial because the CLI needs to:
@@ -108,38 +108,38 @@ Control how results are displayed in the terminal:
 
 ```bash
 # Run model with default settings
-gprun run-model calculations.py policies.parquet
+gspio run-model calculations.py policies.parquet
 
 # Run single policy
-gprun run-single-policy calculations.py policies.parquet 1001
+gspio run-single-policy calculations.py policies.parquet 1001
 ```
 
 #### Advanced Column Filtering
 
 ```bash
 # Show columns 10-20 and last 5 columns, with 30 rows
-gprun run-model model.py data.parquet -s 10 -f 10 -l 5 -r 30
+gspio run-model model.py data.parquet -s 10 -f 10 -l 5 -r 30
 
 # For single policy, show specific columns
-gprun run-single-policy model.py data.parquet 42 -s 5 -f 15 -l 3
+gspio run-single-policy model.py data.parquet 42 -s 5 -f 15 -l 3
 ```
 
 #### Performance Optimization
 
 ```bash
 # Run in optimized mode for better performance
-gprun run-model model.py large-dataset.parquet --mode optimize
+gspio run-model model.py large-dataset.parquet --mode optimize
 
 # Debug mode for development
-gprun run-model model.py test-data.parquet --mode debug -r 50
+gspio run-model model.py test-data.parquet --mode debug -r 50
 ```
 
 #### Custom Policy Identifiers
 
 ```bash
 # Using different policy ID columns
-gprun run-single-policy model.py data.parquet ABC123 --policy-id-column "ContractID"
-gprun run-single-policy model.py data.parquet 789 --policy-id-column "policyholder nr"
+gspio run-single-policy model.py data.parquet ABC123 --policy-id-column "ContractID"
+gspio run-single-policy model.py data.parquet 789 --policy-id-column "policyholder nr"
 ```
 
 ### Model File Requirements

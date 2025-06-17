@@ -8,6 +8,34 @@ Gaspatchio is a high-performance actuarial modeling framework that combines Pyth
 
 Gaspatchio represents a modern approach to actuarial modeling, addressing the fundamental tension between the need for debuggable, maintainable models and the performance requirements of production systems. Here's what makes it unique:
 
+## Principles 
+
+The framework evolved over time. Each major decision is documented in the [ref/](ref/) directory:
+
+### Meet you where you are
+
+- Ergonomics that feels (is) python but reads like a spreadsheet or pure formulas.
+- Assumption tables respect data however it turns up. You dont have to have clean data, or do ETL from other system outputs
+- Vector shimming 
+- Excel.
+
+### Design for AI
+- LLM native, great docs, great error messages built to be using (and tested with) agentic loops. 
+- MCP server, free agent for helping you build models.
+
+### Default fast, nudge to that.
+- Works quickly on your local machine on CPUs, scales with *0 extra effort* to GPUs. 
+- Key benchmarks are:
+  - How easy it is to make a change and see the result quickly, no warmup, no JIT, jsut go.
+  - You'll be in that loop for a while, change=>test=>refine so make that look as tight as possible 
+- This is a case of meeting people where they are in that as much as you can things should run quickly on common hardware. 
+
+### Amazing docs
+- Every method for every function is documented, and runs examples that have verfiied output.
+- Documentation taylored to actuarial use cases.
+- "Recipes" for common actuarial use cases.
+- All documentation is built to be used by AI to help build models. 
+
 ### Key Design Decisions
 
 The framework evolved over time. Each major decision is documented in the [ref/](ref/) directory:

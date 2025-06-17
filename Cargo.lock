@@ -784,7 +784,7 @@ dependencies = [
 
 [[package]]
 name = "gaspatchio_core_lib"
-version = "0.0.7"
+version = "0.0.9"
 dependencies = [
  "ahash",
  "arc-swap",

@@ -37,24 +37,6 @@ if TYPE_CHECKING:
     # Type alias for DtNamespaceProxy parent, consistent with dt_proxy.py
     type ParentProxyType = ColumnProxy | ExpressionProxy
 
-    # --- Namespaces (Accessors returning Namespace Proxies) ---
-    @property
-    def dt(self) -> _DtNamespaceProxy: ...  # MODIFIED: Changed to DtNamespaceProxy
-    @property
-    def str(
-        self,
-    ) -> _StringNamespaceProxy: ...  # MODIFIED: Changed to StringNamespaceProxy
-    @property
-    def list(self) -> PolarsExprList: ...  # Use aliased name in string hint
-    @property
-    def arr(self) -> ExprArray: ...
-    @property
-    def struct(self) -> ExprStruct: ...
-    @property
-    def cat(self) -> ExprCategorical: ...
-    @property
-    def bin(self) -> ExprBinary: ...
-
     # Although __dir__ is added dynamically, including it helps tools
     def __dir__(self) -> builtins.list[str]: ...
 
@@ -465,6 +447,24 @@ class _BaseProxy:
     def __rfloordiv__(self, other: Any) -> ExpressionProxy: ...
     def __rmod__(self, other: Any) -> ExpressionProxy: ...
     def __rpow__(self, other: Any) -> ExpressionProxy: ...
+
+    # --- Namespaces (Accessors returning Namespace Proxies) ---
+    @property
+    def dt(self) -> _DtNamespaceProxy: ...  # MODIFIED: Changed to DtNamespaceProxy
+    @property
+    def str(
+        self,
+    ) -> _StringNamespaceProxy: ...  # MODIFIED: Changed to StringNamespaceProxy
+    @property
+    def list(self) -> PolarsExprList: ...  # Use aliased name in string hint
+    @property
+    def arr(self) -> ExprArray: ...
+    @property
+    def struct(self) -> ExprStruct: ...
+    @property
+    def cat(self) -> ExprCategorical: ...
+    @property
+    def bin(self) -> ExprBinary: ...
 
     # --- Common Autopatched Methods/Namespaces (Returning ExpressionProxy) ---
     def alias(self, name: str) -> ExpressionProxy:
@@ -2860,7 +2860,7 @@ class _BaseProxy:
         └─────┴───────────────┘
         ```
         """
-    def pow(self, exponent: float | int | ExpressionProxy) -> ExpressionProxy:
+    def pow(self, exponent: float | ExpressionProxy) -> ExpressionProxy:
         """Raise numeric values to specified power.
 
         Computes the power operation element-wise, raising each value to the specified
@@ -2907,7 +2907,7 @@ class _BaseProxy:
         af = ActuarialFrame(data)
         result = af.select(
             af["policy_id"],
-            discount_factor=af["discount_base"].pow(-1 * af["time_years"])
+            discount_factor=af["discount_base"].pow(-1 * af["time_years"]),
         ).collect()
         print(result)
         ```
@@ -2944,9 +2944,9 @@ class _BaseProxy:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         af["squared_growth"] = af["base_rate"].pow(2.0)
-        
+
         print(af.collect())
         ```
 
