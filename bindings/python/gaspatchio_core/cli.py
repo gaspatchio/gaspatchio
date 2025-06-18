@@ -405,7 +405,7 @@ def get_versions() -> tuple[str, str]:
     from ._internal import __version__ as rust_version
 
     try:
-        py_version = version("gaspatchio-core")
+        py_version = version("gaspatchio")
     except Exception:
         py_version = "unknown"
 

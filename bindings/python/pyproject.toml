@@ -1,5 +1,5 @@
 [project]
-name = "gaspatchio-core"
+name = "gaspatchio"
 version = "0.0.18"
 description = "Simple, fast and best served cold"
 readme = "README.md"
@@ -39,6 +39,7 @@ pandas = ["polars-u64-idx>=1.27.0"]
 numpy = ["polars-u64-idx>=1.27.0"]
 pyarrow = ["polars-u64-idx>=1.27.0"]
 excel = ["polars-u64-idx>=1.27.0"]
+recipes = ["marimo>=0.10.0"]
 
 # Build System
 [build-system]
@@ -47,7 +48,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 module-name = "gaspatchio_core._internal"
-python-packages = ["gaspatchio_core"]
+python-packages = ["gaspatchio"]
 python-source = ""
 
 # Linting, formatting, type checking
