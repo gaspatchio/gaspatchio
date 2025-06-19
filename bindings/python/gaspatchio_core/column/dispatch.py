@@ -392,6 +392,7 @@ def _method_caller(
 
     should_use_list_shim = False
     if is_unary_numeric_op or is_elementwise_op:
+        logger.trace(f"Checking list shim for {name}: unary={is_unary_numeric_op}, elementwise={is_elementwise_op}")
         if isinstance(self_proxy, ColumnProxy) and parent_af:
             # First check the computation graph for this column's type
             if hasattr(parent_af, "_computation_graph"):
@@ -425,14 +426,17 @@ def _method_caller(
                 # First check the computation graph for type information
                 if hasattr(parent_af, "_computation_graph"):
                     # Build a type map from the computation graph
+                    graph_list_columns = []
                     for op in parent_af._computation_graph:
                         if (hasattr(op, "alias") and hasattr(op, "expected_dtype") and 
                             op.expected_dtype and isinstance(op.expected_dtype, pl.List)):
+                            graph_list_columns.append(op.alias)
                             # Check if this list column is referenced in the expression
                             col_pattern = rf'\(?col\s*\(\s*["\']?{re.escape(op.alias)}["\']?\s*\)\)?'
                             if re.search(col_pattern, expr_str):
                                 might_be_list = True
                                 break
+                    logger.trace(f"Computation graph list columns: {graph_list_columns}")
                 
                 # Also check the existing schema
                 if not might_be_list:
@@ -440,13 +444,36 @@ def _method_caller(
                     list_column_names = [
                         name for name, dtype in schema.items() if isinstance(dtype, pl.List)
                     ]
+                    logger.trace(f"Schema list columns: {list_column_names}")
                     # Check if any list column names appear in the expression
                     # Use regex to handle cases with parentheses and whitespace
                     might_be_list = any(
                         re.search(rf'\(?col\s*\(\s*["\']?{re.escape(col_name)}["\']?\s*\)\)?', expr_str) is not None
                         for col_name in list_column_names
                     )
+                    
+                # If still not detected, check if the expression references a column
+                # that was created from a list operation but hasn't been materialized yet
+                if not might_be_list and hasattr(parent_af, "_computation_graph"):
+                    # Extract column names from the expression
+                    col_matches = re.findall(r'col\s*\(\s*["\']?(\w+)["\']?\s*\)', expr_str)
+                    logger.trace(f"Columns referenced in expression: {col_matches}")
+                    
+                    # Check if any of these columns are the result of list operations
+                    for col_name in col_matches:
+                        # Look for this column in the computation graph
+                        for op in parent_af._computation_graph:
+                            if hasattr(op, "alias") and op.alias == col_name:
+                                # Check if the operation expression contains list operations
+                                op_expr_str = str(op.expression) if hasattr(op, "expression") else ""
+                                if ".eval()" in op_expr_str or ".list." in op_expr_str:
+                                    logger.trace(f"Column {col_name} appears to be from a list operation: {op_expr_str[:100]}...")
+                                    might_be_list = True
+                                    break
+                        if might_be_list:
+                            break
             should_use_list_shim = might_be_list
+            logger.trace(f"ExpressionProxy list shim decision for {name}: might_be_list={might_be_list}, expr_str={expr_str[:100]}...")
 
     try:
         if should_use_list_shim:
