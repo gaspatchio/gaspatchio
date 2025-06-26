@@ -4,7 +4,7 @@
 
 The Calculation Graph feature for Gaspatchio has been **partially implemented**. The core functionality for building and exporting calculation graphs is complete, but the natural variable syntax feature (Part 1 of the MVP) has not been implemented yet.
 
-## ✨ Recent Refactoring (December 2024)
+## ✨ Recent Refactoring (January 2025)
 
 The calculation graph codebase has been significantly refactored for improved maintainability:
 
@@ -15,7 +15,7 @@ The monolithic 625-line `calc_graph.py` has been split into focused modules with
 - **`filter_handler.py`**: `DataFrameFilter` class for DataFrame filtering logic
 - **`graph_utils.py`**: Common utility functions (expression cleaning, dtype simplification)
 - **`graph_builder.py`**: Refactored `CalculationGraph` with factory methods
-- **`calc_graph.py`**: Now only ~270 lines with clean `GraphExporter` class
+- **`calc_graph.py`**: Now only ~210 lines with clean `GraphExporter` class
 
 ### Key Improvements
 - **Eliminated code duplication**: Merged two export functions into one configurable function
@@ -23,6 +23,7 @@ The monolithic 625-line `calc_graph.py` has been split into focused modules with
 - **Type safety**: Pydantic models replace dictionaries and dataclasses
 - **Cleaner methods**: Long functions broken into smaller, testable units
 - **Reduced nesting**: Early returns and guard clauses throughout
+- **Removed backward compatibility**: All code now uses the new `GraphExporter` API
 
 ## What Has Been Implemented ✅
 
@@ -108,7 +109,7 @@ def model(af):
     # ... more calculations
 ```
 
-3. **Export the Graph**:
+3. **Export the Graph (Updated API)**:
 ```python
 # Create exporter
 exporter = GraphExporter(af)
@@ -126,6 +127,8 @@ config = GraphExportConfig(
 result_df = af.collect()
 json_graph = exporter.export(result_df, config)
 ```
+
+**Note**: The old `export_calculation_graph()` and `export_calculation_graph_with_df()` functions have been removed. Use the `GraphExporter` class instead.
 
 4. **Graph Output Format** (Example from my-model model, year 7):
 ```json
@@ -299,7 +302,7 @@ cd gaspatchio-core/bindings/python
 uv run python -m gaspatchio_core.cli calc-graph model.py data.parquet output.json
 ```
 
-✅ **UPDATE (December 2024)**: The `calc-graph` command has been successfully tested with the refactored code:
+✅ **UPDATE (January 2025)**: The `calc-graph` command has been successfully tested with the refactored code:
 ```bash
 # Example from my-model model:
 cd gaspatchio-models/models/my-model
@@ -455,11 +458,11 @@ def _minimal_clean(self, formula: str) -> str:
 - ❌ No automated integration tests with full models
 - ❌ No performance benchmarks
 
-### Recent Test Results (December 2024)
+### Recent Test Results (January 2025)
 
 Successfully tested the refactored calculation graph with a real actuarial model:
 - **Model**: my-model (gaspatchio-models)
-- **Test Case**: Single policy (ID: 1), filtered to year 7
+- **Test Case**: Single policy (ID: 1), filtered to year 7 and year 8
 - **Results**: 
   - Graph correctly identified 16 input columns and 17 computed columns
   - All dependencies were correctly extracted
@@ -467,6 +470,7 @@ Successfully tested the refactored calculation graph with a real actuarial model
   - Year filtering worked correctly with the new `DataFrameFilter`
   - Calculation traces were generated for all computed nodes
   - JSON export included complete graph structure with traces
+  - All 21 tests in `test_tracing_metadata.py` now pass after fixing string-to-expression issues
 
 ## Recommendations for Completion
 
