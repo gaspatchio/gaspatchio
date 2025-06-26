@@ -464,10 +464,9 @@ def _method_caller(
                         # Look for this column in the computation graph
                         for op in parent_af._computation_graph:
                             if hasattr(op, "alias") and op.alias == col_name:
-                                # Check if the operation expression contains list operations
-                                op_expr_str = str(op.expression) if hasattr(op, "expression") else ""
-                                if ".eval()" in op_expr_str or ".list." in op_expr_str:
-                                    logger.trace(f"Column {col_name} appears to be from a list operation: {op_expr_str[:100]}...")
+                                # Check if the operation has a List data type
+                                if hasattr(op, "expected_dtype") and op.expected_dtype and isinstance(op.expected_dtype, pl.List):
+                                    logger.trace(f"Column {col_name} has List dtype in computation graph")
                                     might_be_list = True
                                     break
                         if might_be_list:

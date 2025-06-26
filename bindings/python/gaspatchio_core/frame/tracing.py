@@ -145,17 +145,22 @@ def append_operation_to_graph(
     # Try to infer the expected type of this expression
     expected_dtype = _infer_expression_type(expr, frame_instance)
 
+    # Extract dependencies from the expression
+    from .graph import extract_dependencies
+    dependencies = extract_dependencies(expr)
+
     # Create TracedOperation instead of tuple
     operation = TracedOperation(
         alias=name,
         expression=expr,
         metadata=metadata,
         expected_dtype=expected_dtype,
+        dependencies=dependencies,
     )
 
     frame_instance._computation_graph.append(operation)
     logger.trace(
-        f"Graph: Added '{name}' = {expr} (type={expected_dtype}) at {metadata.display_filename}:{metadata.line_number}",
+        f"Graph: Added '{name}' = {expr} (type={expected_dtype}, deps={dependencies}) at {metadata.display_filename}:{metadata.line_number}",
     )
 
 
