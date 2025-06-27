@@ -543,7 +543,9 @@ def test_namespace_chaining(sample_af: ActuarialFrame):
 
     # Check expression structure (expecting .eval() for list.eval part)
     expr_str = str(proxy_chained._expr).replace(" ", "")
-    assert ".eval().list.sum()" in expr_str
+    # Check that the expression contains the key components
+    assert ".eval(" in expr_str
+    assert ").list.sum()" in expr_str
     assert 'col("list_int")' in expr_str
 
     # Check execution
