@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/column/column_proxy.py
+# hypothesis_version: 6.135.0
+
+['ActuarialFrame', 'DateColumnAccessor', 'ExcelColumnAccessor', 'ExpressionProxy', 'column', 'date', 'excel', 'finance']

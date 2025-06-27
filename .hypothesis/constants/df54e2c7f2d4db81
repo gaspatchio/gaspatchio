@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/frame/graph/expr_analyzer.py
+# hypothesis_version: 6.135.0
+
+['dependencies', 'has_multiple_outputs', 'is_literal', 'output_name']

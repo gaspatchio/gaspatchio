@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/frame/graph/trace_generator.py
+# hypothesis_version: 6.135.0
+
+[0.01, ' [clipped]', ' [lookup]', '")', "')", '(', ')', ')]', '.', '.clip(', '.element()', '.eval()', '.list', '0', '[', '[(', '[]', ']', 'col("', "col('", 'comment', 'dyn float: ', 'dyn int: ', 'dyn str: ', 'expr', 'null', 'result', 'step', 'values']

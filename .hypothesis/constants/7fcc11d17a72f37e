@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/errors/metadata.py
+# hypothesis_version: 6.135.0
+
+['-', '.pyc', '<compiled code>', '<compiled string>', '<interactive input>', '<ipython-input-', '<source unavailable>', '<stdin>', '<string>', '>', 'Jupyter Notebook', '__pycache__', 'ipython-input-']

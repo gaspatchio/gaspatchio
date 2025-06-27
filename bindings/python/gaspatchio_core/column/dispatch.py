@@ -1,11 +1,16 @@
-"""Shared delegation logic for ColumnProxy and ExpressionProxy."""
+"""Shared delegation logic for ColumnProxy and ExpressionProxy.
+
+This module provides the core delegation system that allows proxy objects to
+transparently forward method calls and attribute access to underlying Polars
+expressions while adding additional functionality like list shimming and
+enhanced error handling.
+"""
 
 import functools
 import re
 from typing import TYPE_CHECKING, Any, Callable, Optional, Set, Type
 
 import polars as pl
-import polars.exceptions
 from loguru import logger
 
 from .namespaces.dt_proxy import DtNamespaceProxy
@@ -15,85 +20,61 @@ from .namespaces.string_proxy import StringNamespaceProxy
 try:
     from ..errors.metadata import capture_source_context
 except ImportError:
-    # Fallback if import fails to avoid breaking the module
     capture_source_context = None
 
-# Avoid circular imports at runtime but allow type checking
 if TYPE_CHECKING:
-    # Import proxy types for type hinting within functions/methods
-    # Import frame type for context
     from ..frame.base import ActuarialFrame
     from .column_proxy import ColumnProxy
     from .expression_proxy import ExpressionProxy
 
-    # Define a type alias for proxy types
     ProxyType = ColumnProxy | ExpressionProxy
 
 
-# Constants
+# === CONSTANTS ===
+
+# Operations that are unary (no arguments) and should use list shimming
 _NUMERIC_UNARY: Set[str] = {
-    # Basic
-    "abs",
-    "sign",
-    # Rounding
-    "floor",
-    "ceil",
-    "round",
-    "round_sig_figs",
-    # Exponents/Logs
-    "exp",
-    "log",
-    "log1p",
-    "ln",
-    "log10",
-    # Power/Roots
-    "sqrt",
-    "cbrt",
-    "gamma",
-    # Numeric Checks (return Bool, but unary)
-    "is_nan",
-    "is_finite",
-    "is_infinite",
-    "is_not_nan",
-    "is_null",
-    "is_not_null",
+    # Basic operations
+    "abs", "sign",
+    # Rounding operations
+    "floor", "ceil", "round", "round_sig_figs",
+    # Exponential and logarithmic operations
+    "exp", "log", "log1p", "ln", "log10",
+    # Power and root operations
+    "sqrt", "cbrt", "gamma",
+    # Numeric checks (return Boolean)
+    "is_nan", "is_finite", "is_infinite", "is_not_nan",
+    "is_null", "is_not_null",
 }
 
-# Numeric methods that should be applied element-wise on list columns
+# Operations that may have arguments and should use list shimming
 _NUMERIC_ELEMENTWISE: Set[str] = {
-    "clip",
-    "clip_min",
-    "clip_max",
-    "round",  # Also in unary, but can take decimals arg
-    "pow",  # Can be binary
-    "mod",  # Binary operation
-    "add",
-    "sub",
-    "mul",
-    "truediv",
-    "floordiv",
-    "cast",  # Type casting
-    "cum_prod",
-    "shift",
-    "fill_null",
+    # Clipping operations
+    "clip", "clip_min", "clip_max",
+    # Arithmetic operations
+    "add", "sub", "mul", "truediv", "floordiv", "pow", "mod",
+    # Other numeric operations
+    "round",  # Can take decimals argument
+    "cast",   # Type casting
+    "cum_prod", "shift", "fill_null",
 }
 
+# All available Polars expression namespaces
 _NAMESPACES: Set[str] = {
-    "dt",
-    "str",
-    "list",
-    "arr",
-    "struct",
-    "cat",
-    "bin",
+    "dt",     # Datetime operations
+    "str",    # String operations
+    "list",   # List operations
+    "arr",    # Array operations
+    "struct", # Struct operations
+    "cat",    # Categorical operations
+    "bin",    # Binary operations
 }
 
 
-# Helper Functions
+# === HELPER FUNCTIONS ===
+
 def _unwrap(arg: Any) -> Any:
     """Unwrap ColumnProxy or ExpressionProxy to its underlying Polars equivalent."""
-    # Defer import until needed to avoid circular dependency issues at runtime
-    # This is slightly redundant with TYPE_CHECKING but ensures it works if called early
     from .column_proxy import ColumnProxy
     from .expression_proxy import ExpressionProxy
 
@@ -101,115 +82,103 @@ def _unwrap(arg: Any) -> Any:
         return pl.col(arg.name)
     if isinstance(arg, ExpressionProxy):
         return arg._expr
-    # Consider adding NamespaceProxy handling later if needed
     return arg
 
 
 def _wrap(parent: Optional["ActuarialFrame"], result: Any) -> Any:
     """Wrap Polars Expressions into ExpressionProxy."""
-    from .expression_proxy import ExpressionProxy  # Defer import
+    from .expression_proxy import ExpressionProxy
 
     if isinstance(result, pl.Expr):
         return ExpressionProxy(result, parent)
-    # Potentially wrap other types like Series or namespace objects later if needed
     return result
 
 
 def _ensure_polars_expr_or_literal(arg: Any) -> Any:
-    """Ensure an argument is a Polars expression or a Polars literal if it's a basic type."""
-    from .column_proxy import ColumnProxy  # Defer import
-    from .expression_proxy import ExpressionProxy  # Defer import
-
-    if isinstance(arg, (ColumnProxy, ExpressionProxy)):
-        return _unwrap(arg)
-    if isinstance(arg, pl.Expr):
-        return arg
-    # For basic Python types that Polars might expect as literals (e.g., in `when().then().otherwise()`)
-    # or for arguments like `ambiguous` in strptime.
+    """Convert argument to Polars expression or literal if needed."""
     if isinstance(arg, (str, int, float, bool)):
         return pl.lit(arg)
-    return arg  # Return as-is if it's some other type (e.g., a Polars DataType like pl.Date)
+    return _unwrap(arg) if hasattr(arg, '_expr') or hasattr(arg, 'name') else arg
 
 
-# --- ADD NamespaceProxy --- START ---
-class NamespaceProxy:
-    """A proxy for Polars expression namespaces (dt, str, list, etc.)."""
+# === NAMESPACE HANDLING ===
+
+# Define namespace proxies that have specialized implementations
+SPECIALIZED_NAMESPACES = {
+    "dt": lambda parent_proxy, parent_af: DtNamespaceProxy(parent_proxy, parent_af),
+    "str": lambda parent_proxy, parent_af: StringNamespaceProxy(parent_proxy, parent_af),
+}
+
+
+class GenericNamespaceProxy:
+    """A generic proxy for Polars expression namespaces (list, arr, struct, etc.)."""
 
     def __init__(self, parent_proxy: "ProxyType", namespace_name: str):
         self._parent_proxy = parent_proxy
         self._namespace_name = namespace_name
         self._parent_af = getattr(parent_proxy, "_parent", None)
+        self._base_expr = _get_proxy_base_expr(parent_proxy)
+        self._namespace_obj = self._get_namespace_obj()
 
-    def __getattr__(self, name: str) -> Callable[..., Any]:
-        """Delegate method calls to the actual Polars namespace object."""
-        # Get the base expression from the parent proxy
-        from .column_proxy import ColumnProxy
-        from .expression_proxy import ExpressionProxy
-
-        if isinstance(self._parent_proxy, ColumnProxy):
-            base_expr = pl.col(self._parent_proxy.name)
-        elif isinstance(self._parent_proxy, ExpressionProxy):
-            base_expr = self._parent_proxy._expr
-        else:
-            raise TypeError(
-                "NamespaceProxy parent must be ColumnProxy or ExpressionProxy"
-            )
-
-        # Get the actual Polars namespace object (e.g., ExprDT, ExprList)
+    def _get_namespace_obj(self):
+        """Get the actual Polars namespace object."""
         try:
-            actual_namespace_obj = getattr(base_expr, self._namespace_name)
+            return getattr(self._base_expr, self._namespace_name)
         except AttributeError:
-            # Should not happen if NamespaceProxy is created correctly
             raise AttributeError(
                 f"Base expression has no namespace '{self._namespace_name}'"
             )
 
+    def __getattr__(self, name: str) -> Callable[..., Any]:
+        """Delegate method calls to the actual Polars namespace object."""
         # Get the method from the actual namespace object
         try:
-            actual_method = getattr(actual_namespace_obj, name)
+            actual_method = getattr(self._namespace_obj, name)
         except AttributeError:
             raise AttributeError(
                 f"Polars namespace '{self._namespace_name}' has no attribute '{name}'"
             )
 
         if not callable(actual_method):
-            # If the attribute on the namespace isn't callable, raise error
-            # (or handle properties if namespaces have them, unlikely for dt/str/list)
             raise TypeError(
                 f"Attribute '{name}' on namespace '{self._namespace_name}' is not callable"
             )
 
-        # Return a wrapper function (similar to method_caller)
+        # Return a wrapper function
         @functools.wraps(actual_method)
         def namespace_method_caller(*args: Any, **kwargs: Any) -> Any:
-            # Unwrap arguments
             unwrapped_args = [_unwrap(arg) for arg in args]
             unwrapped_kwargs = {key: _unwrap(val) for key, val in kwargs.items()}
 
-            # Call the actual namespace method
             try:
-                result_intermediate = actual_method(*unwrapped_args, **unwrapped_kwargs)
+                result = actual_method(*unwrapped_args, **unwrapped_kwargs)
             except Exception as e:
                 raise type(e)(
                     f"Error calling Polars namespace method '{self._namespace_name}.{name}': {e}"
                 ) from e
 
-            # Wrap and return the result
-            return _wrap(self._parent_af, result_intermediate)
+            return _wrap(self._parent_af, result)
 
         return namespace_method_caller
 
 
-# --- ADD NamespaceProxy --- END ---
+# === CORE DELEGATION SYSTEM ===
 
-
-# Descriptor for delegation
 class DelegatorDescriptor:
-    """Descriptor to dynamically delegate calls to the underlying Polars object."""
+    """Descriptor that enables transparent delegation to Polars objects.
+    
+    This descriptor is the core mechanism that allows proxy objects to behave
+    like Polars expressions. When an attribute is accessed on a proxy object,
+    this descriptor intercepts the access and delegates it to the underlying
+    Polars expression, handling all the necessary wrapping and unwrapping.
+    
+    Attributes:
+        name: The name of the attribute being delegated
+        wrapper_logic: The function that handles the actual delegation
+    """
 
     def __init__(self, name: str):
         self.name = name
-        # Create the core wrapper function once per attribute name
         self.wrapper_logic = _make_wrapper(self.name)
 
     def __get__(
@@ -217,28 +186,63 @@ class DelegatorDescriptor:
     ) -> Any:
         """Handle attribute access on the proxy instance or class."""
         if instance is None:
-            # Accessed on the class itself (e.g., ColumnProxy.alias). Return the unbound logic.
-            # This might be useful for introspection but typically accessed via instance.
+            # Accessed on the class itself (e.g., ColumnProxy.alias).
             return self.wrapper_logic
 
-        # MODIFIED: Handle 'dt' namespace specifically for instances
-        if self.name == "dt":
+        # Handle namespaces with specialized proxies
+        if self.name in SPECIALIZED_NAMESPACES:
             parent_af = getattr(instance, "_parent", None)
-            return DtNamespaceProxy(parent_proxy=instance, parent_af=parent_af)
-        # ADDED: Handle 'str' namespace specifically for instances
-        if (
-            self.name == "str"
-        ):  # Ensure this is checked after 'dt' or handled mutually exclusively if logic demands
-            parent_af = getattr(instance, "_parent", None)
-            return StringNamespaceProxy(parent_proxy=instance, parent_af=parent_af)
+            return SPECIALIZED_NAMESPACES[self.name](instance, parent_af)
 
-        # Original logic for other attributes on an instance
-        # Accessed on an instance (e.g., col_proxy.alias). Pass the instance.
-        # The wrapper_logic will then decide whether to return a method caller or a property value.
+        # For all other attributes, use the wrapper logic
         return self.wrapper_logic(instance)
 
 
-# Wrapper Factory
+def _get_proxy_base_expr(proxy: "ProxyType") -> pl.Expr:
+    """Get the base expression from a proxy object."""
+    from .column_proxy import ColumnProxy
+    from .expression_proxy import ExpressionProxy
+    
+    if isinstance(proxy, ColumnProxy):
+        return pl.col(proxy.name)
+    elif isinstance(proxy, ExpressionProxy):
+        return proxy._expr
+    else:
+        raise TypeError(f"Unsupported proxy type: {type(proxy).__name__}")
+
+
+def _create_method_wrapper(
+    name: str,
+    polars_attr: Callable,
+    self_proxy: "ProxyType",
+    parent_af: Optional["ActuarialFrame"],
+    base_expr: pl.Expr,
+) -> Callable:
+    """Create a wrapper for a Polars method."""
+    def method_wrapper(*args: Any, **kwargs: Any) -> Any:
+        return _method_caller(
+            name=name,
+            polars_attr=polars_attr,
+            self_proxy=self_proxy,
+            parent_af=parent_af,
+            base_expr=base_expr,
+            a=args,
+            kw=kwargs,
+        )
+    
+    # Preserve docstring
+    try:
+        method_wrapper.__doc__ = getattr(
+            polars_attr, "__doc__", f"Proxied Polars method: {name}"
+        )
+    except Exception:
+        method_wrapper.__doc__ = f"Proxied Polars method: {name}"
+    
+    return method_wrapper
+
+
+# === CORE DELEGATION SYSTEM ===
+
 def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
     """Factory to create the core logic function used by DelegatorDescriptor.
 
@@ -277,69 +281,37 @@ def _make_wrapper(name: str) -> Callable[["ProxyType", ...], Any]:
     """
 
     def wrapper(self_proxy: "ProxyType", *args: Any, **kwargs: Any) -> Any:
-        """Handle attribute access on proxy objects, either method calls or properties."""
-        from .column_proxy import ColumnProxy
-        from .expression_proxy import ExpressionProxy
-
+        """Handle attribute access on proxy objects."""
         parent_af = getattr(self_proxy, "_parent", None)
+        
+        # Get the base expression and Polars attribute
+        base_expr = _get_proxy_base_expr(self_proxy)
         try:
-            if isinstance(self_proxy, ColumnProxy):
-                base_expr = pl.col(self_proxy.name)
-            elif isinstance(self_proxy, ExpressionProxy):
-                base_expr = self_proxy._expr
-            else:
-                raise TypeError(f"Unsupported proxy type: {type(self_proxy).__name__}")
             polars_attr = getattr(base_expr, name)
         except AttributeError as e:
             proxy_type_name = type(self_proxy).__name__
             raise AttributeError(
                 f"Polars object accessed via '{proxy_type_name}' has no attribute '{name}': {e}"
             )
+        
+        # Handle callable attributes (methods)
         if callable(polars_attr):
-
-            def _mc(*a: Any, **kw: Any) -> Any:
-                return _method_caller(
-                    name=name,
-                    polars_attr=polars_attr,
-                    self_proxy=self_proxy,
-                    parent_af=parent_af,
-                    base_expr=base_expr,
-                    a=a,
-                    kw=kw,
-                )
-
-            try:
-                _mc.__doc__ = getattr(
-                    polars_attr, "__doc__", f"Proxied Polars method: {name}"
-                )
-            except Exception:
-                _mc.__doc__ = f"Proxied Polars method: {name} (docstring unavailable)"
-            return _mc
+            return _create_method_wrapper(
+                name, polars_attr, self_proxy, parent_af, base_expr
+            )
+        
+        # Handle non-callable attributes
         if args or kwargs:
             raise TypeError(
                 f"Attribute '{name}' is not callable and cannot accept arguments."
             )
 
-        # MODIFIED: Ensure generic NamespaceProxy is not used for "dt" or "str".
-        # These are now handled by their specific proxies via DelegatorDescriptor.__get__ for instances.
-        if name in _NAMESPACES and name not in ["dt", "str"]:
-            return NamespaceProxy(self_proxy, name)
-        # MODIFICATION: Explicitly check for dt and str to prevent them from falling into the 'else' block
-        # if they were accessed at the class level (where instance specific proxies aren't made)
-        # However, DelegatorDescriptor already handles instance-specific proxies for dt and str.
-        # This 'else' handles non-callable attributes and cases where 'name' is 'dt' or 'str'
-        # but accessed at class level (instance is None in __get__), or if it's a non-proxied namespace.
-        # The DelegatorDescriptor's __get__ should return the wrapper_logic for class-level access,
-        # which then comes here. If 'name' is 'dt' or 'str' here, it means it's likely class-level.
-        # For class-level access, returning the raw Polars namespace object might be intended.
-        elif name in ["dt", "str"]:
-            # This case is primarily for class-level access like ColumnProxy.dt or ColumnProxy.str
-            # It returns the raw Polars namespace object (e.g., polars.expr.datetime_functions.ExprDTFunctions)
-            # This is consistent with how non-proxied namespaces would be handled if they were properties.
-            return polars_attr  # Return the raw polars attribute (namespace object)
-        else:
-            # This handles actual properties (non-callable, non-namespace)
-            return _wrap(parent_af, polars_attr)
+        # Handle generic namespaces
+        if name in _NAMESPACES and name not in SPECIALIZED_NAMESPACES:
+            return GenericNamespaceProxy(self_proxy, name)
+        
+        # Return wrapped properties
+        return _wrap(parent_af, polars_attr)
 
     wrapper.__name__ = f"proxied_{name}"
     return wrapper
@@ -371,6 +343,217 @@ def _unwrap_for_list_eval(arg: Any) -> Any:
     return arg
 
 
+# === LIST SHIMMING DETECTION LOGIC ===
+
+class ColumnTypeDetector:
+    """Unified type detection for columns across schema and computation graph."""
+    
+    def __init__(self, parent_af: Optional["ActuarialFrame"]):
+        self.parent_af = parent_af
+        self._list_columns_cache = None
+    
+    def is_list_column(self, column_name: str) -> bool:
+        """Check if a column is a list type in either schema or computation graph."""
+        if not self.parent_af:
+            return False
+        
+        # Check computation graph first (more recent info)
+        if self._is_list_in_graph(column_name):
+            return True
+        
+        # Then check schema
+        return self._is_list_in_schema(column_name)
+    
+    def get_all_list_columns(self) -> list[str]:
+        """Get all list columns from both schema and computation graph."""
+        if self._list_columns_cache is not None:
+            return self._list_columns_cache
+        
+        if not self.parent_af:
+            return []
+        
+        list_columns = set()
+        
+        # Add from computation graph
+        list_columns.update(self._get_list_columns_from_graph())
+        
+        # Add from schema
+        try:
+            schema = self.parent_af._df.collect_schema()
+            list_columns.update(
+                name for name, dtype in schema.items() 
+                if isinstance(dtype, pl.List)
+            )
+        except Exception:
+            pass
+        
+        self._list_columns_cache = list(list_columns)
+        return self._list_columns_cache
+    
+    def _is_list_in_schema(self, column_name: str) -> bool:
+        """Check if a column is a list type in the schema."""
+        try:
+            schema = self.parent_af._df.collect_schema()
+            dtype = schema.get(column_name)
+            return isinstance(dtype, pl.List)
+        except Exception:
+            return False
+    
+    def _is_list_in_graph(self, column_name: str) -> bool:
+        """Check if a column is a list type in the computation graph."""
+        if not hasattr(self.parent_af, "_computation_graph"):
+            return False
+        
+        for op in self.parent_af._computation_graph:
+            if (hasattr(op, "alias") and op.alias == column_name and
+                hasattr(op, "expected_dtype") and 
+                isinstance(op.expected_dtype, pl.List)):
+                return True
+        return False
+    
+    def _get_list_columns_from_graph(self) -> list[str]:
+        """Get list columns from the computation graph."""
+        if not hasattr(self.parent_af, "_computation_graph"):
+            return []
+        
+        return [
+            op.alias for op in self.parent_af._computation_graph
+            if (hasattr(op, "alias") and hasattr(op, "expected_dtype") and 
+                isinstance(op.expected_dtype, pl.List))
+        ]
+
+
+def _expr_references_list_column(expr_str: str, list_columns: list[str]) -> bool:
+    """Check if an expression references any list columns."""
+    for col_name in list_columns:
+        # Pattern matches col("name") with optional quotes and whitespace
+        col_pattern = rf'\bcol\s*\(\s*["\']?{re.escape(col_name)}["\']?\s*\)'
+        if re.search(col_pattern, expr_str):
+            logger.trace(f"Expression references list column: {col_name}")
+            return True
+    return False
+
+
+def _should_use_list_shim(
+    name: str,
+    self_proxy: "ProxyType", 
+    parent_af: Optional["ActuarialFrame"],
+    base_expr: pl.Expr,
+) -> bool:
+    """Determine if list shimming should be used for the operation."""
+    from .column_proxy import ColumnProxy
+    from .expression_proxy import ExpressionProxy
+    
+    # Only consider list shimming for numeric operations
+    if name not in _NUMERIC_UNARY and name not in _NUMERIC_ELEMENTWISE:
+        return False
+    
+    if not parent_af:
+        return False
+    
+    logger.trace(f"Checking list shim for {name}")
+    
+    # Create a type detector for this operation
+    detector = ColumnTypeDetector(parent_af)
+    
+    # For ColumnProxy, check directly
+    if isinstance(self_proxy, ColumnProxy):
+        is_list = detector.is_list_column(self_proxy.name)
+        if is_list:
+            logger.trace(f"Column {self_proxy.name} is list type")
+        return is_list
+    
+    # For ExpressionProxy, use heuristics
+    if isinstance(self_proxy, ExpressionProxy):
+        expr_str = str(base_expr)
+        
+        # Quick check: explicit list operations
+        if "list." in expr_str.lower():
+            logger.trace(f"Expression contains explicit list operations: {expr_str[:100]}...")
+            return True
+        
+        # Get all list columns and check if expression references any
+        list_columns = detector.get_all_list_columns()
+        logger.trace(f"All list columns: {list_columns}")
+        
+        references_list = _expr_references_list_column(expr_str, list_columns)
+        logger.trace(f"Expression references list columns: {references_list}, expr_str={expr_str[:100]}...")
+        return references_list
+    
+    return False
+
+
+# === METHOD EXECUTION ===
+
+def _execute_list_shim(
+    name: str,
+    base_expr: pl.Expr,
+    args: tuple,
+    kwargs: dict,
+    is_unary: bool,
+) -> pl.Expr:
+    """Execute a method using list.eval for element-wise operations."""
+    element_method = getattr(pl.element(), name)
+    
+    if is_unary:
+        return base_expr.list.eval(element_method())
+    
+    # For operations with arguments, try list.eval context unwrapping
+    try:
+        unwrapped_args = [_unwrap_for_list_eval(arg) for arg in args]
+        unwrapped_kwargs = {
+            k: _unwrap_for_list_eval(v) for k, v in kwargs.items()
+        }
+        return base_expr.list.eval(
+            element_method(*unwrapped_args, **unwrapped_kwargs)
+        )
+    except ValueError:
+        # Can't use list.eval context (e.g., column references)
+        # This will likely fail but preserves original behavior
+        raise
+
+
+def _execute_regular(polars_attr: Callable, args: tuple, kwargs: dict) -> Any:
+    """Execute a regular Polars method."""
+    unwrapped_args = [_unwrap(arg) for arg in args]
+    unwrapped_kwargs = {k: _unwrap(v) for k, v in kwargs.items()}
+    return polars_attr(*unwrapped_args, **unwrapped_kwargs)
+
+
+# === ERROR ENHANCEMENT ===
+
+class ErrorEnhancer:
+    """Centralized error handling and enhancement."""
+    
+    def __init__(self, self_proxy: "ProxyType"):
+        self.proxy = self_proxy
+        self.parent_af = getattr(self_proxy, '_parent', None)
+        self.is_tracing = self.parent_af and self.parent_af._tracing
+    
+    def enhance_method_error(self, e: Exception, method_name: str, context_depth: int = 3) -> Exception:
+        """Enhance an error with proxy context information."""
+        error_msg = f"Error calling proxied Polars method '{method_name}': {e}"
+        
+        # Add source context if tracing is enabled
+        if self.is_tracing and capture_source_context is not None:
+            try:
+                context = capture_source_context(depth=context_depth)
+                error_msg += f"\n  Called from: {context.display_filename}:{context.line_number}"
+                error_msg += f"\n  Source: {context.source_line}"
+            except Exception:
+                pass
+        
+        new_error = type(e)(error_msg)
+        # Attach proxy metadata
+        new_error.proxy_info = {
+            'proxy_type': type(self.proxy).__name__,
+            'method': method_name,
+            'column': getattr(self.proxy, 'name', None)
+        }
+        new_error._dispatch_enhanced = True
+        return new_error
+
+
 def _method_caller(
     *,
     name: str,
@@ -381,185 +564,56 @@ def _method_caller(
     a: tuple,
     kw: dict,
 ) -> Any:
-    """Execute the delegated method with proper list-type handling. (Moved out of wrapper)"""
-    from .column_proxy import ColumnProxy
-    from .expression_proxy import ExpressionProxy
-
-    # Check if this is a unary numeric op (no args)
-    is_unary_numeric_op = name in _NUMERIC_UNARY and not a and not kw
-    # Check if this is an element-wise numeric op (may have args)
-    is_elementwise_op = name in _NUMERIC_ELEMENTWISE
-
-    should_use_list_shim = False
-    if is_unary_numeric_op or is_elementwise_op:
-        logger.trace(f"Checking list shim for {name}: unary={is_unary_numeric_op}, elementwise={is_elementwise_op}")
-        if isinstance(self_proxy, ColumnProxy) and parent_af:
-            # First check the computation graph for this column's type
-            if hasattr(parent_af, "_computation_graph"):
-                for op in parent_af._computation_graph:
-                    if (hasattr(op, "alias") and op.alias == self_proxy.name and
-                        hasattr(op, "expected_dtype") and op.expected_dtype):
-                        if isinstance(op.expected_dtype, pl.List):
-                            should_use_list_shim = True
-                            break
-            
-            # If not found in computation graph, check the schema
-            if not should_use_list_shim:
-                try:
-                    # Use collect_schema() to avoid performance warning
-                    schema = parent_af._df.collect_schema()
-                    dtype = schema.get(self_proxy.name)
-                    should_use_list_shim = isinstance(dtype, pl.List)
-                except Exception:
-                    pass
-        elif isinstance(self_proxy, ExpressionProxy):
-            # For expressions, we can't easily determine the output type
-            # Be more conservative: only try list shimming if the expression string
-            # suggests it might involve list operations
-            expr_str = str(base_expr)
-            # Heuristic: if the expression contains list operations or references list columns
-            might_be_list = False
-            if "list." in expr_str.lower():
-                # Expression contains explicit list operations
-                might_be_list = True
-            elif parent_af:
-                # First check the computation graph for type information
-                if hasattr(parent_af, "_computation_graph"):
-                    # Build a type map from the computation graph
-                    graph_list_columns = []
-                    for op in parent_af._computation_graph:
-                        if (hasattr(op, "alias") and hasattr(op, "expected_dtype") and 
-                            op.expected_dtype and isinstance(op.expected_dtype, pl.List)):
-                            graph_list_columns.append(op.alias)
-                            # Check if this list column is referenced in the expression
-                            col_pattern = rf'\(?col\s*\(\s*["\']?{re.escape(op.alias)}["\']?\s*\)\)?'
-                            if re.search(col_pattern, expr_str):
-                                might_be_list = True
-                                break
-                    logger.trace(f"Computation graph list columns: {graph_list_columns}")
-                
-                # Also check the existing schema
-                if not might_be_list:
-                    schema = parent_af._df.collect_schema()
-                    list_column_names = [
-                        name for name, dtype in schema.items() if isinstance(dtype, pl.List)
-                    ]
-                    logger.trace(f"Schema list columns: {list_column_names}")
-                    # Check if any list column names appear in the expression
-                    # Use regex to handle cases with parentheses and whitespace
-                    might_be_list = any(
-                        re.search(rf'\(?col\s*\(\s*["\']?{re.escape(col_name)}["\']?\s*\)\)?', expr_str) is not None
-                        for col_name in list_column_names
-                    )
-                    
-                # If still not detected, check if the expression references a column
-                # that was created from a list operation but hasn't been materialized yet
-                if not might_be_list and hasattr(parent_af, "_computation_graph"):
-                    # Extract column names from the expression
-                    col_matches = re.findall(r'col\s*\(\s*["\']?(\w+)["\']?\s*\)', expr_str)
-                    logger.trace(f"Columns referenced in expression: {col_matches}")
-                    
-                    # Check if any of these columns are the result of list operations
-                    for col_name in col_matches:
-                        # Look for this column in the computation graph
-                        for op in parent_af._computation_graph:
-                            if hasattr(op, "alias") and op.alias == col_name:
-                                # Check if the operation has a List data type
-                                if hasattr(op, "expected_dtype") and op.expected_dtype and isinstance(op.expected_dtype, pl.List):
-                                    logger.trace(f"Column {col_name} has List dtype in computation graph")
-                                    might_be_list = True
-                                    break
-                        if might_be_list:
-                            break
-            should_use_list_shim = might_be_list
-            logger.trace(f"ExpressionProxy list shim decision for {name}: might_be_list={might_be_list}, expr_str={expr_str[:100]}...")
-
+    """Execute the delegated method with proper list-type handling."""
+    # Determine if we should use list shimming
+    should_use_list_shim = _should_use_list_shim(name, self_proxy, parent_af, base_expr)
+    
+    # Check if this is a unary operation
+    is_unary = name in _NUMERIC_UNARY and not a and not kw
+    
+    logger.trace(f"Method caller for {name}: list_shim={should_use_list_shim}, unary={is_unary}")
+    
+    # Create error enhancer for this method call
+    error_enhancer = ErrorEnhancer(self_proxy)
+    
     try:
         if should_use_list_shim:
             try:
-                # Get the element method
-                element_method = getattr(pl.element(), name)
-                if is_unary_numeric_op:
-                    # For unary ops, call without arguments
-                    result = base_expr.list.eval(element_method())
-                else:
-                    # For element-wise ops with arguments, use special unwrapping for list.eval context
-                    try:
-                        unwrapped_args = [_unwrap_for_list_eval(arg) for arg in a]
-                        unwrapped_kwargs = {
-                            k: _unwrap_for_list_eval(v) for k, v in kw.items()
-                        }
-                        result = base_expr.list.eval(
-                            element_method(*unwrapped_args, **unwrapped_kwargs)
-                        )
-                    except ValueError:
-                        # If we can't unwrap for list.eval (e.g., column references), fall back to regular method
-                        unwrapped_args = [_unwrap(arg) for arg in a]
-                        unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
-                        result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
-            except Exception:
-                # Fallback to regular method call if list.eval fails
-                unwrapped_args = [_unwrap(arg) for arg in a]
-                unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
-                result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
+                logger.trace(f"Executing list shim for {name}")
+                result = _execute_list_shim(name, base_expr, a, kw, is_unary)
+            except Exception as list_error:
+                # Fallback to regular execution if list shimming fails
+                logger.trace(f"List shim failed for {name}, falling back to regular: {list_error}")
+                result = _execute_regular(polars_attr, a, kw)
         else:
-            # Regular method call for non-list columns
-            unwrapped_args = [_unwrap(arg) for arg in a]
-            unwrapped_kwargs = {k: _unwrap(v) for k, v in kw.items()}
-            result = polars_attr(*unwrapped_args, **unwrapped_kwargs)
+            result = _execute_regular(polars_attr, a, kw)
     except Exception as e:
-        # Enhanced error message with source context
-        error_msg = f"Error calling proxied Polars method '{name}': {e}"
-        
-        # If we're in a traced context, add source information
-        if hasattr(self_proxy, '_parent') and self_proxy._parent and self_proxy._parent._tracing:
-            # Capture where this proxy method was called from
-            try:
-                if capture_source_context is not None:
-                    context = capture_source_context(depth=2)
-                    error_msg += f"\n  Called from: {context.display_filename}:{context.line_number}"
-                    error_msg += f"\n  Source: {context.source_line}"
-            except Exception:
-                # If context capture fails, fall back to basic error
-                pass
-        
-        new_error = type(e)(error_msg)
-        # Preserve the column/expression info for error handling
-        new_error.proxy_info = {
-            'proxy_type': type(self_proxy).__name__,
-            'method': name,
-            'column': getattr(self_proxy, 'name', None)
-        }
-        # Mark as already enhanced to prevent re-processing
-        new_error._dispatch_enhanced = True
-        raise new_error from e
+        raise error_enhancer.enhance_method_error(e, name) from e
+    
     return _wrap(parent_af, result)
 
 
-# Autopatching Function
+# === AUTOPATCHING ===
+
 def _autopatch(proxy_cls: Type["ProxyType"]) -> None:
-    """Dynamically add proxied Polars Expr methods/properties/namespaces via descriptors.
+    """Dynamically add Polars expression methods to proxy classes.
 
-    This function is the "magic" that makes the proxy classes behave like Polars expressions.
-    It works by:
-    1. Finding all methods/properties available on Polars expressions
-    2. Adding them to the proxy class using descriptors
-    3. Respecting any existing methods already defined on the proxy class
-    4. Adding a specialized __dir__ method for proper introspection
+    This function enhances proxy classes (ColumnProxy, ExpressionProxy) by:
+    1. Discovering all available Polars expression methods and properties
+    2. Adding them to the proxy class using descriptors for lazy delegation
+    3. Preserving any custom methods already defined on the proxy class
+    4. Enhancing __dir__ for proper introspection and IDE support
 
-    Method Override Mechanism:
-    -------------------------
-    When there's a name conflict between a custom method in your proxy class and
-    a Polars method, your implementation ALWAYS takes precedence. The check
-    `hasattr(proxy_cls, attr_name)` ensures that any methods you've defined on your
-    proxy class won't be overwritten by the Polars equivalent.
-
-    Example: If you define your own custom `map_elements` method on ColumnProxy,
-    and Polars also has a `map_elements` method, your implementation will be used
-    when calling `af["column"].map_elements(...)`.
+    The key innovation is that proxy class methods take precedence over
+    Polars methods, allowing custom implementations to override defaults.
 
     Args:
-        proxy_cls: The proxy class to enhance with Polars methods
+        proxy_cls: The proxy class to enhance (ColumnProxy or ExpressionProxy)
+    
+    Example:
+        >>> _autopatch(ColumnProxy)
+        # Now ColumnProxy instances can call any Polars expression method:
+        # col_proxy.sum(), col_proxy.mean(), col_proxy.dt.year(), etc.
     """
     # === STEP 1: Prepare for patching ===
     processed_attrs: Set[str] = set()
@@ -580,7 +634,7 @@ def _autopatch(proxy_cls: Type["ProxyType"]) -> None:
         # 3. Already exist on the proxy class (this is where method overriding happens!)
         #    This is crucial: your custom implementations take precedence over Polars methods
         if is_internal or attr_name in processed_attrs or hasattr(proxy_cls, attr_name):
-            # Debug info for apply and map_elements
+            # Debug info for interesting methods
             if attr_name in ["apply", "map_elements", "map_batches"]:
                 logger.trace(
                     f"TRACE: Skipping {attr_name} because: "

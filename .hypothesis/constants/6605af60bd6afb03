@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/frame/graph/graph_utils.py
+# hypothesis_version: 6.135.0
+
+['.', 'Boolean', 'Date', 'Datetime', 'Duration', 'Float32', 'Float64', 'Int32', 'Int64', 'List', 'Utf8', 'bool', 'date', 'datetime', 'duration', 'float', 'int', 'list', 'string']

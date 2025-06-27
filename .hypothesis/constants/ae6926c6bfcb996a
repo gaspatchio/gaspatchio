@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/examples/docstrings/models.py
+# hypothesis_version: 6.135.0
+
+['!=', '#', '-', '--isolated', '--no-cache', '--output-format', '.', '... ', ':', '<=', '=', '==', '>=', '>>> ', 'Unknown error', 'UnknownCode', '_', '__init__', 'assert ', 'check', 'class ', 'code', 'def ', 'del ', 'eval', 'except', 'expect_failure', 'finally:', 'for ', 'from ', 'global ', 'import ', 'json', 'location', 'message', 'no_lint', 'no_output_check', 'no_run', 'nonlocal ', 'pass', 'print(', 'raise', 'return', 'row', 'skip_lint', 'try:', 'while ', 'with ', 'yield']

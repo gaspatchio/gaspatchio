@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/accessors/excel.py
+# hypothesis_version: 6.135.0
+
+[0.0, 360.0, 365.25, 100, 360, 400, 1899, 1900, 1904, '0', '1', '1900', '1904', '2', '3', '30/360', '30/360 EU', '30/360 US', '30E/360', '4', 'ActuarialFrame', 'ExpressionProxy', 'IntoExprColumn', '_expr', '_parent', 'act/360', 'act/365', 'act/act', 'actual/360', 'actual/365', 'actual/actual', 'column', 'e_day', 'e_month', 'e_year', 'end_date', 'end_list', 'european_30_360', 'excel', 'frame', 'name', 's_day', 's_month', 's_year', 'start_date', 'start_list', 'us_nasd_30_360']

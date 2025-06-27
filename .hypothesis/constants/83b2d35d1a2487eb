@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/frame/tracing.py
+# hypothesis_version: 6.135.0
+
+[0.0, 2020, '<frozen', 'Computation Graph:', '_computation_graph', '_test_col', 'alias', 'category1', 'debug', 'expected_dtype', 'inner', 'metadata', 'optimize', 'site-packages/']

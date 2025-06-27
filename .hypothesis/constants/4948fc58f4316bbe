@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/errors/validation.py
+# hypothesis_version: 6.135.0
+
+['/date.py', '/runner.py', '/validation.py', ':', 'F', 'Invalid', '__class__', '_mode', 'code_context', 'debug', 'enhanced', 'f_code', 'filename', 'frame', 'lineno', 'model_projection.py', 'wrapper']

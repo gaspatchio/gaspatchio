@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/errors/models.py
+# hypothesis_version: 6.135.0
+
+[0.0, 1.0, 117, 120, '   ```', '   ```python', ', ', '...', 'Suggestions:', 'alias', 'available_columns', 'code', 'code_example', 'column_not_found', 'compilation', 'dataframe_shape', 'documentation', 'error', 'error_category', 'error_type', 'example', 'expression', 'failing_operation', 'index', 'invalid_operation', 'isatty', 'monokai', 'name', 'operation_split', 'original_error', 'python', 'schema_conflict', 'score', 'source_file', 'source_line', 'suggestions', 'text', 'total', 'type', 'type_cast', 'type_mismatch', 'typo_fix', 'unknown', '─', '⚠️', '❌', '💡 Suggestions:', '📊', '📝 Source Code:', '🔍', '🔢', '🔴 Error Details:']
