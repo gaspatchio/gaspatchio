@@ -20,6 +20,9 @@ FILES_TO_DUMP = [
     / "gaspatchio-models/models/my-model/model_calculation.py",
     Path(__file__).parent.parent / "gaspatchio_core/functions/vector.py",
     Path(__file__).parent.parent / "gaspatchio_core/runner.py",
+    Path(__file__).parent.parent.parent.parent / "ref/ARCHITECTURE_SUMMARY.md",
+    Path(__file__).parent.parent / "README.md",
+    Path(__file__).parent.parent / "gaspatchio_core/assumptions/_api.py",
 ]
 
 

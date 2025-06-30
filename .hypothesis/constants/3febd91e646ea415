@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/__init__.py
+# hypothesis_version: 6.135.0
+
+['ActuarialFrame', 'ColumnProxy', 'ExpressionProxy', 'PerformanceWarning', 'Table', 'TableBuilder', 'execution_mode', 'functions', 'get_default_mode', 'get_table_metadata', 'list_tables', 'run_model', 'set_default_mode']

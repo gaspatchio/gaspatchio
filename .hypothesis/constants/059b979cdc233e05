@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/util/__init__.py
+# hypothesis_version: 6.135.0
+
+['0', '1', 'AF_ERROR_MODE', 'GASPATCHIO_MODE', 'GASPATCHIO_THREADS', 'GASPATCHIO_VERBOSE', 'True', '_expr_to_str', 'basic', 'debug', 'enhanced', 'execution_mode', 'get_default_mode', 'get_default_threads', 'get_default_verbose', 'get_error_mode', 'off', 'optimize', 'read_model_points', 'set_default_mode', 'set_default_verbose', 'set_error_mode', 'standard', 'true', 'yes']

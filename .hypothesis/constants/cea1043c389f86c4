@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/util/utils.py
+# hypothesis_version: 6.135.0
+
+['region', 'us-east-1']

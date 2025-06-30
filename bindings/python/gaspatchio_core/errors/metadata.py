@@ -53,6 +53,7 @@ class TracedOperation:
     expression: Any  # pl.Expr, but avoiding import here to prevent circular deps
     metadata: OperationMetadata
     expected_dtype: Any | None = None  # pl.DataType, but avoiding import here
+    dependencies: list[str] | None = None  # Column names this operation depends on
 
 
 def capture_source_context(

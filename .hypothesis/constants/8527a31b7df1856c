@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/examples/docstrings/parse.py
+# hypothesis_version: 6.135.0
+
+[100, 1000, '*.py', '.', 'N/A', 'UnknownObjectPath', 'UnnamedNode', 'code', 'examples', 'name', 'py', 'python', 'utf-8']

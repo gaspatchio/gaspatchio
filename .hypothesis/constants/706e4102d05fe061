@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/assumptions/_api.py
+# hypothesis_version: 6.135.0
+
+[', ', '; ', 'CategoricalDimension', 'ComputedDimension', 'DataDimension', 'MeltDimension', '_to_expr', 'rate', 'table_name', 'value']

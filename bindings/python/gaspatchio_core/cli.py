@@ -405,7 +405,7 @@ def get_versions() -> tuple[str, str]:
     from ._internal import __version__ as rust_version
 
     try:
-        py_version = version("gaspatchio-core")
+        py_version = version("gaspatchio")
     except Exception:
         py_version = "unknown"
 
@@ -706,6 +706,201 @@ print(table.describe())
             console.print(
                 "This might indicate the data needs preprocessing for use as an assumption table.",
             )
+
+
+@app.command(name="calc-graph", help="Generate a calculation graph from a model run")
+def calc_graph(
+    code_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the model code file",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            resolve_path=True,
+        ),
+    ],
+    model_points_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to model points file (.parquet or .csv)",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            resolve_path=True,
+        ),
+    ],
+    output_file: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Path to save the JSON graph",
+            rich_help_panel="Output Options",
+        ),
+    ] = Path("calc_graph.json"),
+    policy_id: Annotated[
+        str | None,
+        typer.Option(
+            "--policy-id",
+            "-p",
+            help="Optional policy ID to run single policy (for debugging)",
+            rich_help_panel="Execution Options",
+        ),
+    ] = None,
+    policy_id_column: Annotated[
+        str,
+        typer.Option(
+            "--policy-id-column",
+            help="Name of the policy ID column in the model points file",
+            rich_help_panel="Execution Options",
+        ),
+    ] = "Policy number",
+    filter_expr: Annotated[
+        str | None,
+        typer.Option(
+            "--filter",
+            "-f",
+            help="Polars filter expression for sample values (e.g., \"col('year') == 1\")",
+            rich_help_panel="Filter Options",
+        ),
+    ] = None,
+):
+    """Generate a calculation graph from a model run.
+    
+    This command runs the model in debug mode to capture the computation graph,
+    then exports it as JSON for visualization and analysis.
+    
+    [bold green]Example:[/bold green]
+        gspio calc-graph model.py data.parquet
+        gspio calc-graph model.py data.parquet -o graph.json
+        gspio calc-graph model.py data.parquet -p "123" -o debug_graph.json
+        gspio calc-graph model.py data.parquet -p "1" -f "col('year') == 1"
+        gspio calc-graph model.py data.parquet -p "1" -f "(col('year') == 1) & (col('month') == 3)"
+    
+    [bold]Output:[/bold]
+        The generated JSON contains nodes (inputs and computed columns) and edges
+        (dependencies between columns) that can be visualized with graph tools.
+    """
+    
+    # Show progress spinner
+    with console.status("[bold green]Running model in debug mode to capture graph...") as status:
+        # Always use debug mode to capture the graph
+        config = ModelRunConfig(
+            directory=code_path.parent,
+            model_file=code_path.name,
+            model_points_file=model_points_path.name,
+            mode="debug",  # Must be debug to capture graph
+            id_column_name=policy_id_column,
+        )
+        
+        # Run appropriate function based on whether policy_id is provided
+        if policy_id:
+            console.print(f"[yellow]Running single policy: {policy_id}[/yellow]")
+            model_run = run_single_policy_func(config, policy_id)
+        else:
+            model_run = run_model_func(config)
+    
+    # Check if the model run failed
+    if model_run.status == "error":
+        console.print(f"[red]Error running model:[/red] {model_run.error_message}")
+        raise typer.Exit(1)
+    
+    # Store the result DataFrame for sample values
+    result_df = model_run.result
+    
+    # Export the calculation graph
+    try:
+        status.update("[bold green]Building calculation graph...")
+        # For now, we need to re-run the model to capture the graph
+        # This is a limitation of the current implementation
+        # In the future, we should store the ActuarialFrame in ModelRunResult
+        
+        # Create a new ActuarialFrame and re-run the model to capture the graph
+        import polars as pl
+        from .frame import ActuarialFrame
+        from .runner import load_model_from_path
+        
+        # Load the model function
+        model_func = load_model_from_path(
+            config.directory / config.model_file,
+            config.model_function_name
+        )
+        
+        # Load the data
+        data_path = config.directory / config.model_points_file
+        if data_path.suffix == ".parquet":
+            df = pl.read_parquet(data_path)
+        else:
+            df = pl.read_csv(data_path)
+        
+        # Filter for single policy if specified
+        if policy_id:
+            # Convert policy_id to appropriate type based on column dtype
+            id_col_dtype = df[config.id_column_name].dtype
+            if id_col_dtype in [pl.Int32, pl.Int64, pl.UInt32, pl.UInt64]:
+                try:
+                    policy_id_typed = int(policy_id)
+                except ValueError:
+                    policy_id_typed = policy_id
+            else:
+                policy_id_typed = str(policy_id)
+            df = df.filter(pl.col(config.id_column_name) == policy_id_typed)
+        
+        # Create ActuarialFrame in debug mode
+        af = ActuarialFrame(df, mode="debug")
+        
+        # Run the model through the trace decorator to capture operations
+        from .frame import run_model as frame_run_model
+        af = frame_run_model(model_func, af)
+        
+        # Now export the graph with sample values from the already computed result
+        from .frame.graph import GraphExporter, GraphExportConfig
+        
+        # Create export configuration
+        export_config = GraphExportConfig(
+            policy_id=policy_id,
+            policy_id_column=config.id_column_name,
+            filter_expr=filter_expr,
+            include_traces=True
+        )
+        
+        # Export using the new GraphExporter
+        exporter = GraphExporter(af)
+        json_graph = exporter.export(result_df, export_config)
+        
+        # Save to file
+        output_file.write_text(json_graph)
+        
+        # Parse JSON to get statistics
+        import json
+        graph_data = json.loads(json_graph)
+        num_nodes = len(graph_data.get("nodes", []))
+        num_inputs = len([n for n in graph_data.get("nodes", []) if n["type"] == "input"])
+        num_computed = len([n for n in graph_data.get("nodes", []) if n["type"] == "computed"])
+        num_edges = len(graph_data.get("edges", []))
+        
+        console.print(f"\n[bold green]✓[/bold green] Calculation graph saved to: {output_file}")
+        console.print(f"  Nodes: {num_nodes} ({num_inputs} inputs, {num_computed} computed)")
+        console.print(f"  Edges: {num_edges}")
+        
+        # Show sample of the graph structure
+        if num_computed > 0:
+            console.print("\n[bold]Sample computed nodes:[/bold]")
+            for node in graph_data["nodes"][:3]:
+                if node["type"] == "computed":
+                    deps = node["data"].get("dependencies", [])
+                    console.print(f"  • {node['id']} ← {', '.join(deps)}")
+                    
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Unexpected error building graph:[/red] {e}")
+        logger.exception("Failed to build calculation graph")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/frame/base.py
+# hypothesis_version: 6.135.0
+
+[', ', ', ...', 'DateFrameAccessor', 'ExcelFrameAccessor', 'ExpressionProxy(...)', 'FinanceFrameAccessor', 'TracedOperation', '_', '_df', 'date', 'excel', 'finance', 'frame', 'nearest']

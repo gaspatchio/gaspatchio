@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/accessors/date.py
+# hypothesis_version: 6.135.0
+
+[100, '1d', '1mo', '1w', '1y', '3mo', '6mo', 'ActuarialFrame', 'D', 'ExpressionProxy', 'IntoExprColumn', 'M', 'W', 'Y', 'annual', 'both', 'column', 'date', 'fixed_date', 'frame', 'issue_age', 'left', 'maximum_age', 'monthly', 'proj_dates', 'projection_end_date', 'projection_end_type', 'projection_frequency', 'quarterly', 'semi-annual', 'term_months', 'term_years', 'timeline_date', 'y']

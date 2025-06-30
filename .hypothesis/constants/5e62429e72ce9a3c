@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/assumptions/_analysis.py
+# hypothesis_version: 6.135.0
+
+[0.1, 1000, ',', ',\n', ', ', 'Float64', 'Int64', 'age', 'auto', 'categorical', 'code', 'continuous', 'cubic', 'curve', 'data_dimensions', 'detected', 'detected_values', 'dimension', 'dtype', 'duration', 'format', 'id', 'index', 'key', 'linear', 'log-linear', 'melt', 'method', 'missing', 'missing_values', 'name', 'numeric_pattern', 'overflow_candidate', 'period', 'product', 'rate', 'row_count', 'sample_values', 'sex', 'smoking', 'suggested_method', 'suggested_type', 'term', 'time', 'unique_count', 'value', 'value_columns', 'wide', 'year']

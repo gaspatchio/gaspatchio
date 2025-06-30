@@ -15,6 +15,7 @@ class MockActuarialFrameForColumn:
         # Mock a _df with a simple schema for dispatch logic
         mock_df = pl.LazyFrame({"test_col": [1, 2, 3]})
         self._df = mock_df
+        self._tracing = False  # Add _tracing attribute required by ErrorEnhancer
 
     def _convert_to_expr(self, value):
         if isinstance(value, ExpressionProxy):

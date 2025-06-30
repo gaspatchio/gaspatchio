@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/frame/graph/graph_models.py
+# hypothesis_version: 6.135.0
+
+['Additional node data', 'Calculation trace', 'Computation formula', 'Node dependencies', 'Policy number', 'Source code location', 'Source node ID', 'Source of input data', 'Target node ID', 'Type of the node', 'assumptions', 'computed', 'inferred', 'input', 'model_points', 'unknown']

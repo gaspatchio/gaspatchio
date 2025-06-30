@@ -1,0 +1,4 @@
+# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/frame/graph/calc_graph.py
+# hypothesis_version: 6.135.0
+
+['_computation_graph', 'alias', 'computed']
