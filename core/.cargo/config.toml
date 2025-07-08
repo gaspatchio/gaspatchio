@@ -1,0 +1,27 @@
+# .cargo/config.toml  – committed to git
+[alias]
+lint = '''
+    clippy
+        --workspace
+        --all-targets
+        --all-features
+        --
+        -W clippy::all
+        -W clippy::cargo
+        -D clippy::correctness
+        -D clippy::suspicious
+        -D clippy::complexity
+'''
+
+# Separate strict check for CI
+lint-strict = '''
+    clippy
+        --workspace
+        --all-targets
+        --all-features
+        --
+        -D warnings
+        -W clippy::all
+        -W clippy::pedantic
+        -W clippy::cargo
+'''

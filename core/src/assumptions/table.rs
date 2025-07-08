@@ -141,7 +141,7 @@ impl AssumptionTable {
                 let av2 = df.column(&keys[1])?.get(row_idx)?;
                 let hash1 = codecs[0].encode(av1);
                 let hash2 = codecs[1].encode(av2);
-                hash1.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash2
+                hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
             } else {
                 // General case
                 let mut h = AHasher::default();
@@ -253,7 +253,7 @@ impl AssumptionTable {
                 let av2 = df.column(&keys[1])?.get(row_idx)?;
                 let hash1 = codecs[0].encode(av1);
                 let hash2 = codecs[1].encode(av2);
-                hash1.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash2
+                hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
             } else {
                 // General case (same as build method)
                 let mut h = AHasher::default();
@@ -374,7 +374,7 @@ impl AssumptionTable {
                 let av2 = unsafe { key_cols[1].get_unchecked(idx) };
                 let hash1 = self.codecs[0].encode(av1);
                 let hash2 = self.codecs[1].encode(av2);
-                hash1.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash2
+                hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
             } else {
                 // General case
                 let mut h = AHasher::default();
@@ -424,7 +424,7 @@ impl AssumptionTable {
                     let hash2 = self.codecs[1].encode(av2);
 
                     // Combine hashes efficiently
-                    let key = hash1.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash2;
+                    let key = hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2;
 
                     if let Some(v) = self.map.get(&key) {
                         *slot = *v;
@@ -538,7 +538,7 @@ impl AssumptionTable {
                 // Use same fast path logic as build for 2-key case
                 let hash1 = self.codecs[0].encode(any_values[0].clone());
                 let hash2 = self.codecs[1].encode(any_values[1].clone());
-                hash1.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash2
+                hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
             } else {
                 // General case
                 let mut h = AHasher::default();
@@ -1046,50 +1046,27 @@ mod tests {
             "gender" => ["M", "F", "M", "F"],
             "rate" => [0.001, 0.0008, 0.0012, 0.001]
         }?;
-
-        println!("Building table...");
         let table = AssumptionTable::build(
             df.clone(),
             vec!["age".to_string(), "gender".to_string()],
             "rate".to_string(),
         )?;
-
-        println!("Table built with {} entries in map", table.map.len());
-
         // Debug: print what's in the map
-        for (hash, value) in &table.map {
-            println!("Hash: {}, Value: {}", hash, value);
-        }
 
         // Test lookup
         let age_series = Series::new("age".into(), &[30]);
         let gender_series = Series::new("gender".into(), &["F"]);
-
-        println!("Looking up (30, F)...");
-
         // Debug: manually compute hash for lookup
         let av1 = age_series.get(0)?;
         let av2 = gender_series.get(0)?;
-        println!("AnyValue 1 (age): {:?}", av1);
-        println!("AnyValue 2 (gender): {:?}", av2);
-
         let hash1 = table.codecs[0].encode(av1);
         let hash2 = table.codecs[1].encode(av2);
-        println!("Hash1 (age): {}", hash1);
-        println!("Hash2 (gender): {}", hash2);
-
-        let combined_hash = hash1.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash2;
-        println!("Combined hash: {}", combined_hash);
-
-        if let Some(value) = table.map.get(&combined_hash) {
-            println!("Found value: {}", value);
-        } else {
-            println!("Value not found in map!");
+        let combined_hash = hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2;
+        if let Some(_value) = table.map.get(&combined_hash) {
+            // Value found in map
         }
 
         let result = table.lookup_series(&[&age_series, &gender_series])?;
-        println!("Lookup result: {:?}", result);
-
         Ok(())
     }
 
@@ -1109,50 +1086,27 @@ mod tests {
             "variable" => ["1", "1", "1", "2", "2", "2", "3", "3", "3"],
             "qx" => [0.002, 0.0021, 0.0022, 0.0015, 0.0016, 0.0017, 0.001, 0.0011, 0.0012]
         }?;
-
-        println!("Building table from melted data...");
         let table = AssumptionTable::build(
             melted_df.clone(),
             vec!["Age".to_string(), "variable".to_string()],
             "qx".to_string(),
         )?;
-
-        println!("Table built with {} entries in map", table.map.len());
-        println!("Codecs: {:?}", table.codecs);
-
         // Debug: print what's in the map with more detail
-        for (hash, value) in &table.map {
-            println!("Hash: {}, Value: {}", hash, value);
-        }
 
         // Test specific lookups that are failing
         let test_cases = vec![(30, "1", 0.002), (31, "2", 0.0016), (32, "3", 0.0012)];
 
         for (age, variable, expected) in test_cases {
-            println!(
-                "\n=== Testing lookup: Age={}, variable='{}', expected={} ===",
-                age, variable, expected
-            );
-
             let age_series = Series::new("Age".into(), &[age]);
             let var_series = Series::new("variable".into(), &[variable]);
 
             // Debug: manually compute hash for lookup
             let av1 = age_series.get(0)?;
             let av2 = var_series.get(0)?;
-            println!("AnyValue 1 (Age): {:?}", av1);
-            println!("AnyValue 2 (variable): {:?}", av2);
-
             let hash1 = table.codecs[0].encode(av1);
             let hash2 = table.codecs[1].encode(av2);
-            println!("Hash1 (Age): {}", hash1);
-            println!("Hash2 (variable): {}", hash2);
-
-            let combined_hash = hash1.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash2;
-            println!("Combined hash: {}", combined_hash);
-
+            let combined_hash = hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2;
             if let Some(value) = table.map.get(&combined_hash) {
-                println!("Found value: {}", value);
                 assert!(
                     (value - expected).abs() < 1e-10,
                     "Expected {}, got {} for Age={}, variable='{}'",
@@ -1170,8 +1124,6 @@ mod tests {
 
             let result = table.lookup_series(&[&age_series, &var_series])?;
             let actual = result.f64()?.get(0).unwrap();
-            println!("Lookup result: {}", actual);
-
             assert!(
                 (actual - expected).abs() < 1e-10,
                 "Lookup failed: Expected {}, got {} for Age={}, variable='{}'",
@@ -1191,19 +1143,13 @@ mod tests {
         let test_strings = vec!["1", "2", "3", "MNS", "FNS", "MS", "FS", "Ultimate", "Ult."];
 
         for test_str in test_strings {
-            println!("Testing string: '{}'", test_str);
-
             // Create a series with the string
             let series = Series::new("test".into(), &[test_str]);
             let av = series.get(0)?;
-            println!("AnyValue: {:?}", av);
-
             // Test codec encoding
             let codec = ColumnCodec::String;
             let hash1 = codec.encode(av.clone());
             let hash2 = codec.encode(av.clone());
-
-            println!("Hash1: {}, Hash2: {}", hash1, hash2);
             assert_eq!(
                 hash1, hash2,
                 "String hashing not consistent for '{}'",
@@ -1216,9 +1162,7 @@ mod tests {
                 let other_av = other_series.get(0)?;
                 let other_hash = codec.encode(other_av);
 
-                if hash1 == other_hash {
-                    println!("WARNING: Hash collision between '{}' and '1'", test_str);
-                }
+                if hash1 == other_hash {}
             }
         }
 
@@ -1231,10 +1175,8 @@ mod tests {
         let test_integers = vec![30, 31, 32, 1, 2, 3, 99, 100];
 
         for test_int in test_integers {
-            println!("Testing integer: {}", test_int);
-
             // Test different integer types
-            let series_i32 = Series::new("test".into(), &[test_int as i32]);
+            let series_i32 = Series::new("test".into(), &[test_int]);
             let series_i64 = Series::new("test".into(), &[test_int as i64]);
             let series_u32 = Series::new("test".into(), &[test_int as u32]);
             let series_u64 = Series::new("test".into(), &[test_int as u64]);
@@ -1243,23 +1185,11 @@ mod tests {
             let av_i64 = series_i64.get(0)?;
             let av_u32 = series_u32.get(0)?;
             let av_u64 = series_u64.get(0)?;
-
-            println!("AnyValue i32: {:?}", av_i32);
-            println!("AnyValue i64: {:?}", av_i64);
-            println!("AnyValue u32: {:?}", av_u32);
-            println!("AnyValue u64: {:?}", av_u64);
-
             let codec = ColumnCodec::Integer;
             let hash_i32 = codec.encode(av_i32);
             let hash_i64 = codec.encode(av_i64);
             let hash_u32 = codec.encode(av_u32);
             let hash_u64 = codec.encode(av_u64);
-
-            println!(
-                "Hash i32: {}, i64: {}, u32: {}, u64: {}",
-                hash_i32, hash_i64, hash_u32, hash_u64
-            );
-
             // All should produce the same hash for the same logical value
             assert_eq!(
                 hash_i32, hash_u32,
@@ -1289,8 +1219,6 @@ mod tests {
 
         for age in &ages {
             for variable in &variables {
-                println!("Testing combination: Age={}, variable='{}'", age, variable);
-
                 // Create series
                 let age_series = Series::new("Age".into(), &[*age]);
                 let var_series = Series::new("variable".into(), &[*variable]);
@@ -1307,14 +1235,8 @@ mod tests {
                 let hash_var = var_codec.encode(av_var);
 
                 // Combine using the same logic as in the code
-                let combined_hash1 = hash_age.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash_var;
-                let combined_hash2 = hash_age.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash_var;
-
-                println!(
-                    "Age hash: {}, Var hash: {}, Combined: {}",
-                    hash_age, hash_var, combined_hash1
-                );
-
+                let combined_hash1 = hash_age.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash_var;
+                let combined_hash2 = hash_age.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash_var;
                 assert_eq!(
                     combined_hash1, combined_hash2,
                     "Hash combination not consistent for Age={}, variable='{}'",
@@ -1334,41 +1256,23 @@ mod tests {
             "variable" => ["1", "2", "3"],
             "value" => [0.002, 0.0016, 0.0012]
         }?;
-
-        println!("=== Testing build vs lookup hash consistency ===");
-
         // Build the table
         let table = AssumptionTable::build(
             df.clone(),
             vec!["Age".to_string(), "variable".to_string()],
             "value".to_string(),
         )?;
-
-        println!("Built table with {} entries", table.map.len());
-
         // For each row in the original data, verify we can look it up correctly
         for row_idx in 0..df.height() {
             let age = df.column("Age")?.get(row_idx)?;
             let variable = df.column("variable")?.get(row_idx)?;
             let expected_value = df.column("value")?.get(row_idx)?;
-
-            println!("\n--- Row {} ---", row_idx);
-            println!(
-                "Age: {:?}, Variable: {:?}, Expected: {:?}",
-                age, variable, expected_value
-            );
-
             // Manually compute the hash using build logic
             let hash_age = table.codecs[0].encode(age.clone());
             let hash_var = table.codecs[1].encode(variable.clone());
-            let build_hash = hash_age.wrapping_mul(0x9e3779b97f4a7c15u64) ^ hash_var;
-
-            println!("Build hash: {}", build_hash);
-
+            let build_hash = hash_age.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash_var;
             // Check if it exists in the map
             if let Some(stored_value) = table.map.get(&build_hash) {
-                println!("Found in map: {}", stored_value);
-
                 if let AnyValue::Float64(expected_f64) = expected_value {
                     assert!(
                         (stored_value - expected_f64).abs() < 1e-10,
@@ -1400,9 +1304,6 @@ mod tests {
             // Perform lookup
             let result = table.lookup_series(&[&age_series, &var_series])?;
             let lookup_value = result.f64()?.get(0).unwrap();
-
-            println!("Lookup result: {}", lookup_value);
-
             if let AnyValue::Float64(expected_f64) = expected_value {
                 assert!(
                     (lookup_value - expected_f64).abs() < 1e-10,
@@ -1429,7 +1330,7 @@ mod tests {
         let mut expected_values = Vec::with_capacity(large_size);
 
         // Cycle through our test data
-        let test_data = vec![
+        let test_data = [
             (30, "M", 0.001),
             (30, "F", 0.0008),
             (31, "M", 0.0012),
@@ -1447,11 +1348,6 @@ mod tests {
 
         let age_series = Series::new("age".into(), ages);
         let gender_series = Series::new("gender".into(), genders);
-
-        println!("Testing fast path with {} elements", large_size);
-        println!("Codecs length: {}", table.codecs.len());
-        println!("Series length: {}", age_series.len());
-
         // This should trigger the fast path
         let result = table.lookup_series(&[&age_series, &gender_series])?;
 
@@ -1554,9 +1450,6 @@ mod tests {
                 Series::new("".into(), &["M", "F"]),
             ],
         );
-
-        println!("Testing vector lookup hash consistency");
-
         let vector_result = table.lookup_series(&[&age_vector, &gender_vector])?;
 
         // Verify result structure
@@ -1646,9 +1539,6 @@ mod tests {
                 Series::new("".into(), &["1", "2", "3"]),
             ],
         );
-
-        println!("Testing vector lookup with Python failing pattern");
-
         let result = table.lookup_series(&[&age_vector, &variable_vector])?;
 
         let list_ca = result.list()?;
@@ -1704,11 +1594,6 @@ mod tests {
             vec!["key1".to_string(), "key2".to_string(), "key3".to_string()],
             "value".to_string(),
         )?;
-
-        println!(
-            "Testing general case hash path with {} codecs",
-            table.codecs.len()
-        );
         assert_eq!(table.codecs.len(), 3); // Should force general case
 
         // Test lookup
@@ -2172,10 +2057,6 @@ mod tests {
 
         // Test different vector lengths to find optimal parallel threshold
         let test_sizes = vec![10, 25, 50, 75, 100, 150, 200, 300, 500];
-
-        println!("Benchmarking parallel threshold for vector lookups:");
-        println!("Size\tSequential(μs)\tParallel(μs)\tSpeedup");
-
         for &size in &test_sizes {
             // Create vector data
             let mut age_builder = ListPrimitiveChunkedBuilder::<Int64Type>::new(
@@ -2207,12 +2088,7 @@ mod tests {
 
             // For this test, we can't easily force parallel vs sequential without modifying the code
             // But we can at least see the current performance characteristics
-
-            println!("{}\t{:.2}\t\t-\t\t-", size, sequential_time.as_micros());
         }
-
-        println!("\nNote: Current threshold is 100. Consider benchmarking with criterion for more accurate results.");
-
         Ok(())
     }
 
@@ -2224,8 +2100,6 @@ mod tests {
         let test_sizes = vec![50, 150]; // One below threshold, one above
 
         for &size in &test_sizes {
-            println!("Testing size {} (threshold is 100)", size);
-
             let mut age_builder = ListPrimitiveChunkedBuilder::<Int64Type>::new(
                 "age".into(),
                 size,
@@ -2267,8 +2141,6 @@ mod tests {
                     panic!("Expected List type");
                 }
             }
-
-            println!("Size {} completed successfully", size);
         }
 
         Ok(())
@@ -2287,11 +2159,6 @@ mod tests {
             "rate" => [0.012, 0.0135, 0.015]
         }?;
 
-        println!("Table data types:");
-        for col in df.get_columns() {
-            println!("  {}: {:?}", col.name(), col.dtype());
-        }
-
         // Build table
         let table = AssumptionTable::build(
             df,
@@ -2302,67 +2169,32 @@ mod tests {
             ],
             "rate".to_string(),
         )?;
-
-        println!("Table codecs: {:?}", table.codecs);
-        println!("Table map entries: {}", table.map.len());
-
         // Create lookup data with i64 age (as happens from Python model points)
         let age_series = Series::new("age".into(), &[40i64, 41i64, 42i64]);
         let product_series = Series::new("product".into(), &["A", "A", "A"]);
         let duration_series = Series::new("duration".into(), &["1", "1", "1"]);
-
-        println!("\nLookup data types:");
-        println!("  age: {:?}", age_series.dtype());
-        println!("  product: {:?}", product_series.dtype());
-        println!("  duration: {:?}", duration_series.dtype());
-
         // Attempt lookup
         let result = table.lookup_series(&[&age_series, &product_series, &duration_series])?;
         let result_f64 = result.f64()?;
-
-        println!("\nLookup results:");
         for i in 0..result.len() {
             let val = result_f64.get(i).unwrap();
-            println!("  [{}]: {}", i, val);
         }
 
         // Debug: manually check hash computation for first lookup
-        println!("\n=== Manual hash computation for first lookup ===");
         let av_age = age_series.get(0)?;
         let av_product = product_series.get(0)?;
         let av_duration = duration_series.get(0)?;
-
-        println!(
-            "AnyValues: age={:?}, product={:?}, duration={:?}",
-            av_age, av_product, av_duration
-        );
-
         let hash_age = table.codecs[0].encode(av_age);
         let hash_product = table.codecs[1].encode(av_product);
         let hash_duration = table.codecs[2].encode(av_duration);
-
-        println!(
-            "Individual hashes: age={}, product={}, duration={}",
-            hash_age, hash_product, hash_duration
-        );
-
         // Compute combined hash using general case logic (3 keys)
         let mut h = ahash::AHasher::default();
         h.write_u64(hash_age);
         h.write_u64(hash_product);
         h.write_u64(hash_duration);
         let combined_hash = h.finish();
-
-        println!("Combined hash: {}", combined_hash);
-
-        if let Some(stored_value) = table.map.get(&combined_hash) {
-            println!("Found in map: {}", stored_value);
-        } else {
-            println!("NOT found in map!");
-            println!("Available keys in map:");
-            for (key, value) in table.map.iter().take(5) {
-                println!("  {}: {}", key, value);
-            }
+        if let Some(_stored_value) = table.map.get(&combined_hash) {
+            // Value found in map
         }
 
         // The test should pass - we expect to find the values
@@ -2395,11 +2227,6 @@ mod tests {
             "rate" => [0.012, 0.0135, 0.015]
         }?;
 
-        println!("Table data types:");
-        for col in df.get_columns() {
-            println!("  {}: {:?}", col.name(), col.dtype());
-        }
-
         // Build table
         let table = AssumptionTable::build(
             df,
@@ -2410,42 +2237,23 @@ mod tests {
             ],
             "rate".to_string(),
         )?;
-
-        println!("Table codecs: {:?}", table.codecs);
-
         // Create lookup data with INTEGER duration (as happens from Python model points)
         let age_series = Series::new("age".into(), &[40i64, 41i64, 42i64]);
         let product_series = Series::new("product".into(), &["A", "A", "A"]);
         let duration_series = Series::new("duration".into(), &[1i64, 2i64, 3i64]); // INTEGER duration
-
-        println!("\nLookup data types:");
-        println!("  age: {:?}", age_series.dtype());
-        println!("  product: {:?}", product_series.dtype());
-        println!("  duration: {:?}", duration_series.dtype()); // This will be Int64
+        // This will be Int64
 
         // Attempt lookup - this should fail/return NaN because String codec != Integer input
         let result = table.lookup_series(&[&age_series, &product_series, &duration_series])?;
         let result_f64 = result.f64()?;
-
-        println!("\nLookup results:");
         for i in 0..result.len() {
             let val = result_f64.get(i).unwrap();
-            println!("  [{}]: {}", i, val);
         }
 
         // Debug: show the codec mismatch
-        println!("\n=== Codec mismatch analysis ===");
-        println!("Table codecs: {:?}", table.codecs);
-        println!("Expected: [Float64, String, String]");
-        println!("Lookup input types: [Int64, String, Int64]");
-        println!("The duration column codec mismatch (String vs Int64) is likely the issue!");
-
         // Check what happens when we encode integer with String codec
         let duration_av = duration_series.get(0)?; // Int64(1)
-        println!("Duration AnyValue: {:?}", duration_av);
         let duration_hash = table.codecs[2].encode(duration_av); // String codec encoding Int64 input
-        println!("Duration hash with String codec: {}", duration_hash);
-
         // This should fail because the String codec doesn't handle Int64 properly
         // The encode method returns 0u64 for unhandled cases, which won't match
 

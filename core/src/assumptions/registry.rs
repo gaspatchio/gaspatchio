@@ -33,17 +33,24 @@ fn acquire_registration_lock() -> PolarsResult<std::sync::MutexGuard<'static, ()
 }
 
 // Helper function to update the global registry atomically
-fn update_global_registry<F>(operation_name: &str, table_name: &str, update_fn: F) -> PolarsResult<()>
+fn update_global_registry<F>(
+    operation_name: &str,
+    table_name: &str,
+    update_fn: F,
+) -> PolarsResult<()>
 where
     F: FnOnce(&mut AssumptionTableRegistry) -> PolarsResult<()>,
 {
     let current_arc = GLOBAL_REGISTRY.load_full();
     let mut new_registry = (*current_arc).clone();
-    
+
     match update_fn(&mut new_registry) {
         Ok(()) => {
             GLOBAL_REGISTRY.store(Arc::new(new_registry));
-            debug!("Successfully {} table '{}' in global registry", operation_name, table_name);
+            debug!(
+                "Successfully {} table '{}' in global registry",
+                operation_name, table_name
+            );
             Ok(())
         }
         Err(e) => {
@@ -143,7 +150,11 @@ pub fn register_or_replace_assumption_table_global(
     }
 
     // Atomically update registry
-    let operation = if table_exists { "replaced" } else { "registered" };
+    let operation = if table_exists {
+        "replaced"
+    } else {
+        "registered"
+    };
     update_global_registry(operation, &name, |registry| {
         // Remove existing table if force_replace is true
         if table_exists && force_replace {
@@ -938,14 +949,14 @@ mod tests {
                 df,
                 vec!["duration".to_string()],
                 "lapse_rate".to_string(),
-                true,  // Always replace for reentrancy
+                true, // Always replace for reentrancy
             )?;
 
             // Verify table works
             let duration_series = Series::new("duration".into(), &[1, 2, 3]);
             let result = lookup_assumption_global("lapse_reentrancy", &[&duration_series])?;
             let result_f64 = result.f64()?;
-            
+
             // Check values match current iteration
             assert!((result_f64.get(0).unwrap() - 0.05 * i as f64).abs() < 1e-10);
             assert!((result_f64.get(1).unwrap() - 0.04 * i as f64).abs() < 1e-10);
