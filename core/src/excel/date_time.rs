@@ -68,21 +68,27 @@ fn calculate_year_frac(
     end_date: NaiveDate,
     basis: i32,
 ) -> PolarsResult<f64> {
-    // Excel always returns positive fractions
+    // Check if we need to return a negative value
+    let is_negative = start_date > end_date;
+    
+    // Always calculate with start <= end for the algorithms
     let (start, end) = if start_date <= end_date {
         (start_date, end_date)
     } else {
         (end_date, start_date)
     };
 
-    match basis {
+    let fraction = match basis {
         0 => calculate_30_360_us(start, end),
         1 => calculate_actual_actual(start, end),
         2 => calculate_actual_360(start, end),
         3 => calculate_actual_365(start, end),
         4 => calculate_30_360_eu(start, end),
         _ => unreachable!(), // Already validated
-    }
+    }?;
+    
+    // Return negative fraction if start was after end
+    Ok(if is_negative { -fraction } else { fraction })
 }
 
 /// US (NASD) 30/360 day count convention
@@ -397,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_reversed_dates() {
-        // Test that reversed dates give the same positive result
+        // Test that reversed dates give opposite results (negative when start > end)
         let date1 = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
         let date2 = NaiveDate::from_ymd_opt(2023, 12, 31).unwrap();
 
@@ -415,12 +421,16 @@ mod tests {
         let values1 = result1.f64().unwrap();
         let values2 = result2.f64().unwrap();
 
-        // Both should give the same positive result
+        // Second should be negative of the first
         assert_relative_eq!(
             values1.get(0).unwrap(),
-            values2.get(0).unwrap(),
+            -values2.get(0).unwrap(),
             epsilon = 1e-10
         );
+        
+        // First should be positive, second should be negative
+        assert!(values1.get(0).unwrap() > 0.0);
+        assert!(values2.get(0).unwrap() < 0.0);
     }
 
     #[test]

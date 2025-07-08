@@ -1,4 +1,5 @@
 mod assumptions;
+mod excel;
 mod vector;
 
 use log::{debug, info};
