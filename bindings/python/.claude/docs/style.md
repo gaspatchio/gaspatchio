@@ -1,0 +1,6 @@
+- All generated or edited code **must already be formatted**; assume `ruff format` (Black-compatible) will run in CI.  
+- Ruff is configured with **`select = ["ALL"]`**, so the code must lint clean except for the ignores defined in `pyproject.toml`.  :contentReference[oaicite:0]{index=0}  
+- Use **f-strings** for all string interpolation.  
+- Use **`pathlib.Path`** instead of `os.path`.  
+- Prefer **`with`** context managers for resource handling.  
+- Never use `print()` for production code – rely on the project’s `loguru` logger.  

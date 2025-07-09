@@ -52,4 +52,7 @@ docs/_build/
 /bindings/python/jobs/my-model/docs
 /bindings/python/.hypothesis
 /bindings/python/tests/.hypothesis
-.claude
+# Claude Code – keep shared config, ditch personal/state
+**/.claude/settings.local.json
+**/.claude/history*
+**/.claude/tmp/
