@@ -1,6 +1,3 @@
-pub mod date_time;
+pub mod yearfrac;
 
-#[cfg(test)]
-mod yearfrac_excel_verification;
-
-pub use date_time::{year_frac, YearFracKwargs};
+pub use yearfrac::{year_frac, YearFracKwargs};

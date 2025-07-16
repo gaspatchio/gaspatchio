@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Python Bindings Development Commands
 
-### Build & Install
-```bash
-# Build Rust extensions with maturin (required after Rust changes)
-maturin build -uv
+- How to build and install the Python bindings
+  ```bash
+  # Build Rust extensions with maturin (required after Rust changes)
+  maturin build -uv
 
-# Install all workspace dependencies
-uv sync
-```
+  # Install all workspace dependencies
+  uv sync
+  ```
 
 ### Testing
 ```bash
@@ -104,7 +104,7 @@ The Python bindings wrap the Rust core library via PyO3:
 4. Use `gspio` CLI to validate changes with real models
 5. Check parent `CLAUDE.md` for broader project guidelines
 
-### Python Rules
+
 
 @.claude/docs/python-general.md
 @.claude/docs/typing.md

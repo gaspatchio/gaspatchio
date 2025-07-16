@@ -2241,7 +2241,7 @@ mod tests {
         let age_series = Series::new("age".into(), &[40i64, 41i64, 42i64]);
         let product_series = Series::new("product".into(), &["A", "A", "A"]);
         let duration_series = Series::new("duration".into(), &[1i64, 2i64, 3i64]); // INTEGER duration
-        // This will be Int64
+                                                                                   // This will be Int64
 
         // Attempt lookup - this should fail/return NaN because String codec != Integer input
         let result = table.lookup_series(&[&age_series, &product_series, &duration_series])?;
@@ -2254,8 +2254,8 @@ mod tests {
         // Check what happens when we encode integer with String codec
         let duration_av = duration_series.get(0)?; // Int64(1)
         let duration_hash = table.codecs[2].encode(duration_av); // String codec encoding Int64 input
-        // This should fail because the String codec doesn't handle Int64 properly
-        // The encode method returns 0u64 for unhandled cases, which won't match
+                                                                 // This should fail because the String codec doesn't handle Int64 properly
+                                                                 // The encode method returns 0u64 for unhandled cases, which won't match
 
         Ok(())
     }
