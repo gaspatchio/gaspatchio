@@ -41,6 +41,13 @@ Before providing your final output, wrap your implementation planning inside <im
 
 Look through other implementations of functions in @src/excel/ to get a sense of how to implement this.
 
+**Performance Considerations:**
+- Define constants for frequently used magic numbers at the module level
+- Create expensive objects (like epoch dates) once outside loops
+- Consider using `#[inline]` for small helper functions
+- Use iterator patterns with `collect::<Float64Chunked>()` for better Polars integration
+- Add `#[allow(clippy::useless_conversion)]` if clippy complains about necessary `.into_iter()` calls on Polars types
+
 **IMPORTANT: Two-Function Design Pattern for Polars Integration**
 
 When implementing Excel functions for Polars, you MUST follow a two-function design pattern:
@@ -85,6 +92,15 @@ See `yearfrac.rs` for a good example of this pattern where `year_frac` handles t
    pub struct FunctionNameKwargs {}
    ```
 
+   For functions with multiple optional parameters, consider using Option<T> for each:
+   ```rust
+   #[derive(Deserialize, Clone)]
+   pub struct FunctionNameKwargs {
+       pub basis: Option<i32>,
+       pub method: Option<String>,
+   }
+   ```
+
 2. Polars Interface Function:
    Create the main function with the required Polars signature:
 
@@ -111,25 +127,24 @@ See `yearfrac.rs` for a good example of this pattern where `year_frac` handles t
        // Process optional parameters
        let optional_value = kwargs.optional_param.unwrap_or(default_value);
        
-       // Calculate results for each row
-       let mut results = Vec::with_capacity(param1_array.len());
-       
-       for idx in 0..param1_array.len() {
-           let param1_opt = param1_array.get(idx);
-           let param2_opt = param2_array.get(idx);
-           
-           match (param1_opt, param2_opt) {
-               (Some(param1), Some(param2)) => {
-                   // Convert to appropriate types if needed (e.g., days to NaiveDate)
-                   // Call calculation function - add ? if it returns Result
-                   let result = calculate_function_name(param1, param2, optional_value);
-                   results.push(Some(result));
+       // Use iterator pattern for better performance and Polars integration
+       #[allow(clippy::useless_conversion)]
+       let result_ca = param1_array
+           .into_iter()
+           .zip(param2_array.into_iter())
+           .map(|(p1_opt, p2_opt)| {
+               match (p1_opt, p2_opt) {
+                   (Some(p1), Some(p2)) => {
+                       // Convert to appropriate types if needed (e.g., days to NaiveDate)
+                       // Call calculation function
+                       Some(calculate_function_name(p1, p2, optional_value))
+                   }
+                   _ => None, // Handle null inputs
                }
-               _ => results.push(None), // Handle null inputs
-           }
-       }
+           })
+           .collect::<Float64Chunked>(); // Adjust type based on return type
        
-       Ok(Series::new("function_name".into(), results))
+       Ok(result_ca.with_name("function_name".into()).into_series())
    }
    ```
 
@@ -149,6 +164,27 @@ See `yearfrac.rs` for a good example of this pattern where `year_frac` handles t
    ```
 
    Include comments in your code to explain any special handling for Excel-specific behavior, known quirks, bugs, limitations, or edge cases.
+   
+   For functions that can return negative values (like YEARFRAC when start > end), handle this explicitly:
+   ```rust
+   fn calculate_function_name(start: Type, end: Type) -> ReturnType {
+       // Check if we need to return a negative value
+       let is_negative = start > end;
+       
+       // Always calculate with normalized order
+       let (normalized_start, normalized_end) = if start <= end {
+           (start, end)
+       } else {
+           (end, start)
+       };
+       
+       // Perform calculation
+       let result = // ... calculation logic
+       
+       // Return negative if order was reversed
+       if is_negative { -result } else { result }
+   }
+   ```
 
 4. Write Comprehensive Tests:
    Create test code with the following structure:
@@ -224,6 +260,19 @@ See `yearfrac.rs` for a good example of this pattern where `year_frac` handles t
        }
 
        // Add more test functions as needed
+       
+       // For Excel compatibility, consider adding a separate test module:
+       #[cfg(test)]
+       mod excel_verification_tests {
+           use super::*;
+           
+           // Test against known Excel outputs
+           #[test]
+           fn test_excel_known_values() {
+               // Use actual values from Excel to verify compatibility
+               // Document any quirks or non-standard behavior
+           }
+       }
    }
    ```
 

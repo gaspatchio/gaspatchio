@@ -3,6 +3,20 @@ use chrono::{Datelike, NaiveDate};
 use polars::prelude::*;
 use serde::Deserialize;
 
+// Day count convention constants
+const DAYS_30_360: f64 = 360.0;
+const DAYS_ACTUAL_365: f64 = 365.0;
+const DAYS_ACTUAL_366: f64 = 366.0;
+const DAYS_PER_MONTH_30_360: i32 = 30;
+const DAYS_PER_YEAR_30_360: i32 = 360;
+
+// Basis constants
+const BASIS_30_360_US: i32 = 0;
+const BASIS_ACTUAL_ACTUAL: i32 = 1;
+const BASIS_ACTUAL_360: i32 = 2;
+const BASIS_ACTUAL_365: i32 = 3;
+const BASIS_30_360_EU: i32 = 4;
+
 #[derive(Deserialize, Clone)]
 pub struct YearFracKwargs {
     pub basis: Option<i32>,
@@ -25,10 +39,10 @@ pub fn year_frac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Ser
     let start_date_series = &inputs[0];
     let end_date_series = &inputs[1];
 
-    let basis = kwargs.basis.unwrap_or(0);
+    let basis = kwargs.basis.unwrap_or(BASIS_30_360_US);
 
     // Validate basis
-    if !(0..=4).contains(&basis) {
+    if !(BASIS_30_360_US..=BASIS_30_360_EU).contains(&basis) {
         return Err(PolarsError::ComputeError(
             format!("Invalid basis '{basis}'. Must be 0, 1, 2, 3, or 4").into(),
         ));
@@ -38,31 +52,34 @@ pub fn year_frac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Ser
     let start_dates = start_date_series.date()?;
     let end_dates = end_date_series.date()?;
 
-    // Calculate year fractions for each pair of dates
-    let mut results = Vec::with_capacity(start_dates.len());
+    // Create epoch date once
+    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1)
+        .expect("Valid epoch date");
 
-    for idx in 0..start_dates.len() {
-        let start_opt = start_dates.get(idx);
-        let end_opt = end_dates.get(idx);
+    // Use binary_elementwise pattern for vectorized operation
+    #[allow(clippy::useless_conversion)]
+    let result_ca = start_dates
+        .into_iter()
+        .zip(end_dates.into_iter())
+        .map(|(start_opt, end_opt)| {
+            match (start_opt, end_opt) {
+                (Some(start_days), Some(end_days)) => {
+                    // Convert days since epoch to NaiveDate
+                    let start_date = epoch + chrono::Duration::days(i64::from(start_days));
+                    let end_date = epoch + chrono::Duration::days(i64::from(end_days));
 
-        match (start_opt, end_opt) {
-            (Some(start_days), Some(end_days)) => {
-                // Convert days since epoch to NaiveDate
-                let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-                let start_date = epoch + chrono::Duration::days(i64::from(start_days));
-                let end_date = epoch + chrono::Duration::days(i64::from(end_days));
-
-                let fraction = calculate_year_frac(start_date, end_date, basis);
-                results.push(Some(fraction));
+                    Some(calculate_year_frac(start_date, end_date, basis))
+                }
+                _ => None,
             }
-            _ => results.push(None),
-        }
-    }
+        })
+        .collect::<Float64Chunked>();
 
-    Ok(Series::new("year_frac".into(), results))
+    Ok(result_ca.with_name("year_frac".into()).into_series())
 }
 
 /// Calculate year fraction for a single pair of dates
+#[inline]
 fn calculate_year_frac(
     start_date: NaiveDate,
     end_date: NaiveDate,
@@ -79,11 +96,11 @@ fn calculate_year_frac(
     };
 
     let fraction = match basis {
-        0 => calculate_30_360_us(start, end),
-        1 => calculate_actual_actual(start, end),
-        2 => calculate_actual_360(start, end),
-        3 => calculate_actual_365(start, end),
-        4 => calculate_30_360_eu(start, end),
+        BASIS_30_360_US => calculate_30_360_us(start, end),
+        BASIS_ACTUAL_ACTUAL => calculate_actual_actual(start, end),
+        BASIS_ACTUAL_360 => calculate_actual_360(start, end),
+        BASIS_ACTUAL_365 => calculate_actual_365(start, end),
+        BASIS_30_360_EU => calculate_30_360_eu(start, end),
         _ => unreachable!(), // Already validated
     };
 
@@ -93,12 +110,12 @@ fn calculate_year_frac(
 
 /// US (NASD) 30/360 day count convention
 fn calculate_30_360_us(start: NaiveDate, end: NaiveDate) -> f64 {
-    let mut d1 = i32::try_from(start.day()).unwrap();
-    let m1 = i32::try_from(start.month()).unwrap();
+    let mut d1 = i32::try_from(start.day()).expect("Day fits in i32");
+    let m1 = i32::try_from(start.month()).expect("Month fits in i32");
     let y1 = start.year();
 
-    let mut d2 = i32::try_from(end.day()).unwrap();
-    let m2 = i32::try_from(end.month()).unwrap();
+    let mut d2 = i32::try_from(end.day()).expect("Day fits in i32");
+    let m2 = i32::try_from(end.month()).expect("Month fits in i32");
     let y2 = end.year();
 
     // Check if dates are last day of February
@@ -108,50 +125,50 @@ fn calculate_30_360_us(start: NaiveDate, end: NaiveDate) -> f64 {
     // Apply US 30/360 rules
     // Rule 1: If both dates are last day of February, set d2 to 30
     if start_is_feb_last && end_is_feb_last {
-        d2 = 30;
+        d2 = DAYS_PER_MONTH_30_360;
     }
 
     // Rule 2: If start date is last day of February, set d1 to 30
     if start_is_feb_last {
-        d1 = 30;
+        d1 = DAYS_PER_MONTH_30_360;
     }
 
     // Rule 3: If d2 is 31 and d1 is 30 or 31, set d2 to 30
-    if d2 == 31 && d1 >= 30 {
-        d2 = 30;
+    if d2 == 31 && d1 >= DAYS_PER_MONTH_30_360 {
+        d2 = DAYS_PER_MONTH_30_360;
     }
 
     // Rule 4: If d1 is 31, set d1 to 30
     if d1 == 31 {
-        d1 = 30;
+        d1 = DAYS_PER_MONTH_30_360;
     }
 
     // Calculate the day count
-    let days = (y2 - y1) * 360 + (m2 - m1) * 30 + (d2 - d1);
-    f64::from(days) / 360.0
+    let days = (y2 - y1) * DAYS_PER_YEAR_30_360 + (m2 - m1) * DAYS_PER_MONTH_30_360 + (d2 - d1);
+    f64::from(days) / DAYS_30_360
 }
 
 /// European 30/360 day count convention
 fn calculate_30_360_eu(start: NaiveDate, end: NaiveDate) -> f64 {
-    let mut d1 = i32::try_from(start.day()).unwrap();
-    let m1 = i32::try_from(start.month()).unwrap();
+    let mut d1 = i32::try_from(start.day()).expect("Day fits in i32");
+    let m1 = i32::try_from(start.month()).expect("Month fits in i32");
     let y1 = start.year();
 
-    let mut d2 = i32::try_from(end.day()).unwrap();
-    let m2 = i32::try_from(end.month()).unwrap();
+    let mut d2 = i32::try_from(end.day()).expect("Day fits in i32");
+    let m2 = i32::try_from(end.month()).expect("Month fits in i32");
     let y2 = end.year();
 
     // European rules: Simply adjust any 31st to 30th
     if d1 == 31 {
-        d1 = 30;
+        d1 = DAYS_PER_MONTH_30_360;
     }
     if d2 == 31 {
-        d2 = 30;
+        d2 = DAYS_PER_MONTH_30_360;
     }
 
     // Calculate the day count
-    let days = (y2 - y1) * 360 + (m2 - m1) * 30 + (d2 - d1);
-    f64::from(days) / 360.0
+    let days = (y2 - y1) * DAYS_PER_YEAR_30_360 + (m2 - m1) * DAYS_PER_MONTH_30_360 + (d2 - d1);
+    f64::from(days) / DAYS_30_360
 }
 
 /// Actual/Actual day count convention
@@ -162,9 +179,9 @@ fn calculate_actual_actual(start: NaiveDate, end: NaiveDate) -> f64 {
     // Case 1: Same calendar year
     if start.year() == end.year() {
         let year_days = if is_leap_year(start.year()) {
-            366.0
+            DAYS_ACTUAL_366
         } else {
-            365.0
+            DAYS_ACTUAL_365
         };
         return days_diff as f64 / year_days;
     }
@@ -173,7 +190,7 @@ fn calculate_actual_actual(start: NaiveDate, end: NaiveDate) -> f64 {
     if days_diff <= 366 {
         // Check if Feb 29 is in the range
         let contains_leap_day = contains_feb_29(start, end);
-        let year_days = if contains_leap_day { 366.0 } else { 365.0 };
+        let year_days = if contains_leap_day { DAYS_ACTUAL_366 } else { DAYS_ACTUAL_365 };
         return days_diff as f64 / year_days;
     }
 
@@ -197,22 +214,24 @@ fn calculate_actual_actual(start: NaiveDate, end: NaiveDate) -> f64 {
 #[allow(clippy::cast_precision_loss)]
 fn calculate_actual_360(start: NaiveDate, end: NaiveDate) -> f64 {
     let days_diff = (end - start).num_days();
-    days_diff as f64 / 360.0
+    days_diff as f64 / DAYS_30_360
 }
 
 /// Actual/365 day count convention
 #[allow(clippy::cast_precision_loss)]
 fn calculate_actual_365(start: NaiveDate, end: NaiveDate) -> f64 {
     let days_diff = (end - start).num_days();
-    days_diff as f64 / 365.0
+    days_diff as f64 / DAYS_ACTUAL_365
 }
 
 /// Check if a year is a leap year
+#[inline]
 fn is_leap_year(year: i32) -> bool {
     (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 }
 
 /// Check if a date is the last day of its month
+#[inline]
 fn is_last_day_of_month(date: NaiveDate) -> bool {
     let next_day = date + chrono::Duration::days(1);
     next_day.month() != date.month()
@@ -244,7 +263,7 @@ mod tests {
         let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
         let days: Vec<i32> = dates
             .iter()
-            .map(|d| (*d - epoch).num_days().try_into().unwrap())
+            .map(|d| (*d - epoch).num_days().try_into().expect("Days fit in i32"))
             .collect();
         Series::new("date".into(), days)
             .cast(&DataType::Date)
@@ -264,7 +283,7 @@ mod tests {
         let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
-        assert_relative_eq!(values.get(0).unwrap(), 30.0 / 360.0, epsilon = 1e-10);
+        assert_relative_eq!(values.get(0).unwrap(), 30.0 / DAYS_30_360, epsilon = 1e-10);
     }
 
     #[test]
@@ -281,7 +300,7 @@ mod tests {
         let values = result.f64().unwrap();
 
         // Feb 28 -> 30, Mar 31 -> 30, so it's exactly 1 month
-        assert_relative_eq!(values.get(0).unwrap(), 30.0 / 360.0, epsilon = 1e-10);
+        assert_relative_eq!(values.get(0).unwrap(), 30.0 / DAYS_30_360, epsilon = 1e-10);
     }
 
     #[test]
@@ -298,7 +317,7 @@ mod tests {
         let values = result.f64().unwrap();
 
         // Feb 29 (last of Feb) -> 30, Mar 31 -> 30, so it's exactly 1 month
-        assert_relative_eq!(values.get(0).unwrap(), 30.0 / 360.0, epsilon = 1e-10);
+        assert_relative_eq!(values.get(0).unwrap(), 30.0 / DAYS_30_360, epsilon = 1e-10);
     }
 
     #[test]
@@ -315,7 +334,7 @@ mod tests {
         let values = result.f64().unwrap();
 
         // 181 days / 365 days
-        assert_relative_eq!(values.get(0).unwrap(), 181.0 / 365.0, epsilon = 1e-10);
+        assert_relative_eq!(values.get(0).unwrap(), 181.0 / DAYS_ACTUAL_365, epsilon = 1e-10);
     }
 
     #[test]
@@ -366,7 +385,7 @@ mod tests {
         let values = result.f64().unwrap();
 
         // 364 days / 360
-        assert_relative_eq!(values.get(0).unwrap(), 364.0 / 360.0, epsilon = 1e-10);
+        assert_relative_eq!(values.get(0).unwrap(), 364.0 / DAYS_30_360, epsilon = 1e-10);
     }
 
     #[test]
@@ -383,7 +402,7 @@ mod tests {
         let values = result.f64().unwrap();
 
         // 366 days / 365 (leap year but fixed denominator)
-        assert_relative_eq!(values.get(0).unwrap(), 366.0 / 365.0, epsilon = 1e-10);
+        assert_relative_eq!(values.get(0).unwrap(), 366.0 / DAYS_ACTUAL_365, epsilon = 1e-10);
     }
 
     #[test]
@@ -401,7 +420,7 @@ mod tests {
 
         // Jan 31 -> 30, Feb 28 stays 28
         // (28 - 30) + 30 * (2 - 1) = -2 + 30 = 28 days
-        assert_relative_eq!(values.get(0).unwrap(), 28.0 / 360.0, epsilon = 1e-10);
+        assert_relative_eq!(values.get(0).unwrap(), 28.0 / DAYS_30_360, epsilon = 1e-10);
     }
 
     #[test]
@@ -462,11 +481,11 @@ mod tests {
         let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
         let start_days: Vec<Option<i32>> = start
             .iter()
-            .map(|d| d.map(|date| (date - epoch).num_days().try_into().unwrap()))
+            .map(|d| d.map(|date| (date - epoch).num_days().try_into().expect("Days fit in i32")))
             .collect();
         let end_days: Vec<Option<i32>> = end
             .iter()
-            .map(|d| d.map(|date| (date - epoch).num_days().try_into().unwrap()))
+            .map(|d| d.map(|date| (date - epoch).num_days().try_into().expect("Days fit in i32")))
             .collect();
 
         let start_series = Series::new("start".into(), start_days)
@@ -554,7 +573,7 @@ mod excel_verification_tests {
         let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
         let days: Vec<i32> = dates
             .iter()
-            .map(|d| (*d - epoch).num_days().try_into().unwrap())
+            .map(|d| (*d - epoch).num_days().try_into().expect("Days fit in i32"))
             .collect();
         Series::new("date".into(), days)
             .cast(&DataType::Date)
@@ -586,7 +605,7 @@ mod excel_verification_tests {
                 NaiveDate::from_ymd_opt(2023, 12, 31).unwrap(),
                 0
             ),
-            360.0 / 360.0, // 360/360 = 1.0
+            DAYS_30_360 / DAYS_30_360, // 360/360 = 1.0
             epsilon = 1e-10
         );
 
@@ -750,7 +769,7 @@ mod excel_verification_tests {
                 NaiveDate::from_ymd_opt(2023, 12, 31).unwrap(),
                 4
             ),
-            359.0 / 360.0, // 359/360
+            359.0 / DAYS_30_360, // 359/360
             epsilon = 1e-10
         );
     }
@@ -851,11 +870,11 @@ mod excel_verification_tests {
         let end = NaiveDate::from_ymd_opt(2023, 6, 16).unwrap();
 
         // Each basis has a different "day fraction"
-        assert_relative_eq!(test_yearfrac(start, end, 0), 1.0 / 360.0, epsilon = 1e-10);
-        assert_relative_eq!(test_yearfrac(start, end, 1), 1.0 / 365.0, epsilon = 1e-10);
-        assert_relative_eq!(test_yearfrac(start, end, 2), 1.0 / 360.0, epsilon = 1e-10);
-        assert_relative_eq!(test_yearfrac(start, end, 3), 1.0 / 365.0, epsilon = 1e-10);
-        assert_relative_eq!(test_yearfrac(start, end, 4), 1.0 / 360.0, epsilon = 1e-10);
+        assert_relative_eq!(test_yearfrac(start, end, 0), 1.0 / DAYS_30_360, epsilon = 1e-10);
+        assert_relative_eq!(test_yearfrac(start, end, 1), 1.0 / DAYS_ACTUAL_365, epsilon = 1e-10);
+        assert_relative_eq!(test_yearfrac(start, end, 2), 1.0 / DAYS_30_360, epsilon = 1e-10);
+        assert_relative_eq!(test_yearfrac(start, end, 3), 1.0 / DAYS_ACTUAL_365, epsilon = 1e-10);
+        assert_relative_eq!(test_yearfrac(start, end, 4), 1.0 / DAYS_30_360, epsilon = 1e-10);
     }
 
     #[test]
