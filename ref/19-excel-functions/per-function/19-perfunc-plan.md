@@ -42,7 +42,14 @@ Break down the Excel documentation into key components:
    - Edge cases
    - Error conditions
 
-Search the web for any information you need to implement the function, espcially regarding edge cases and special cases.
+**Research Sources (in order of priority):**
+1. Microsoft Excel documentation (primary)
+2. Excel help forums and StackOverflow for edge cases
+3. Financial textbooks for formula verification
+4. Other Excel-compatible software documentation
+5. Financial calculator manuals for cross-verification
+
+Search the web for any information you need to implement the function, especially regarding edge cases and special cases.
 
 ### Step 3: Make a plan for the implementation
 
@@ -59,6 +66,9 @@ Look through other implementations of functions in @src/excel/ to get a sense of
 - Consider using `#[inline]` for small helper functions
 - Use iterator patterns with `collect::<Float64Chunked>()` for better Polars integration
 - Add `#[allow(clippy::useless_conversion)]` if clippy complains about necessary `.into_iter()` calls on Polars types
+- For functions used in actuarial projections, add basic benchmarks
+- Test with large datasets (1M+ rows) if likely to be used at scale
+- Profile memory usage for functions that process date ranges
 
 **IMPORTANT: Two-Function Design Pattern for Polars Integration**
 
@@ -77,12 +87,17 @@ When implementing Excel functions for Polars, you MUST follow a two-function des
 
 2. **Pure Calculation Function**: This function takes Rust primitives and performs the actual calculation:
    ```rust
-   fn calculate_function_name(param1: RustType1, param2: RustType2, ...) -> PolarsResult<ReturnType>
+   fn calculate_function_name(param1: RustType1, param2: RustType2, ...) -> ReturnType
    ```
    This function should:
    - Take primitive Rust types (e.g., `NaiveDate`, `f64`, `i32`, `String`, `bool`)
    - Contain the pure implementation logic
    - Return primitive results (not wrapped in Result unless the function can fail)
+
+**Return Type Guidelines for Calculation Functions:**
+- Return `T` directly if the function cannot fail mathematically
+- Return `PolarsResult<T>` only if Excel would return an error (#NUM!, #VALUE!, etc.)
+- Use `Option<T>` for null propagation, not for error conditions
 
 See `yearfrac.rs` for a good example of this pattern where `year_frac` handles the Polars interface and `calculate_year_frac` does the actual calculation.
 
@@ -176,6 +191,11 @@ See `yearfrac.rs` for a good example of this pattern where `year_frac` handles t
    ```
 
    Include comments in your code to explain any special handling for Excel-specific behavior, known quirks, bugs, limitations, or edge cases.
+
+**Error Handling Standards:**
+- Use descriptive error messages that include parameter names
+- Match Excel's error types where possible (#NUM!, #VALUE!, #DIV/0!)
+- Include the invalid value in the error message when helpful
    
    For functions that can return negative values (like YEARFRAC when start > end), handle this explicitly:
    ```rust
@@ -198,7 +218,24 @@ See `yearfrac.rs` for a good example of this pattern where `year_frac` handles t
    }
    ```
 
-4. Write Comprehensive Tests:
+### Step 5: Write Comprehensive Tests:
+
+**Excel Verification Strategy:**
+- Copy-paste actual Excel formulas and results for test cases
+- Test with Excel Online when possible for verification
+- Use financial calculators as secondary verification sources
+- Include edge cases Excel users commonly encounter
+- Test with both positive and negative parameters where applicable
+- Search the web at https://github.com/handsontable/hyperformula/blob/master/test/interpreter/function-{{FUNCTION_NAME}}.spec.ts for test cases and values to use in our tests. eg for YEARFRAC, search for
+https://github.com/handsontable/hyperformula/blob/master/test/interpreter/function-yearfrac.spec.ts. Don't copy the tests, but use the inputs and expected outputs to create our tests.
+
+**Required Test Categories:**
+- Mathematical edge cases (zero, negative, infinity)
+- Real-world financial scenarios (typical use cases)
+- Excel compatibility verification (known Excel outputs)
+- Performance stress tests (large datasets)
+- Cross-function integration tests (when functions work together)
+
    Create test code with the following structure:
 
    ```rust
@@ -297,21 +334,34 @@ See `yearfrac.rs` for a good example of this pattern where `year_frac` handles t
    - Different input types (if applicable)
    - Error conditions
 
-5. Update Learnings Document:
-   Provide content to be added to the file "ref/19-excel-functions/per-function/19-learnings.md" using this format:
+### Step 5.5: Verify Build and Basic Quality
 
-   ```markdown
-   ## function_name
+1. Run `cargo fmt` to ensure consistent formatting
+2. Run `cargo clippy --pedantic` to catch warnings and errors
+3. Run `cargo test` but only for the function you are implementing.
 
-   - Insight 1
-   - Insight 2
-   - Tip for future implementations
-   ```
+### Step 6: Integration and Documentation
 
-   Include information on:
-   - Challenges faced during implementation
-   - Unexpected behavior of the Excel function
-   - Useful resources or documentation
-   - Tips for handling similar functions in the future
+1. Update `src/excel/mod.rs` to export your new function
+2. Add comprehensive doc comments following existing patterns
+3. Mark function as complete in the tracking list
 
-Please format each section of your output clearly, using appropriate code blocks and markdown formatting. Your final output should consist only of these four sections and should not duplicate or rehash any of the work you did in the implementation planning section.
+### Step 7: Update Learnings Document:
+  Provide universal learnings to be added to the file "ref/19-excel-functions/per-function/19-learnings.md". 
+   
+   These should be generic insights that apply to ALL Excel function implementations, not function-specific notes. Format each learning as a single bullet point that captures one critical insight:
+
+    - **Learning title**: Detailed explanation of a universal principle that applies to implementing any Excel function
+    
+   Focus on:
+   - Universal patterns discovered during implementation
+   - Generic Excel behaviors that affect all functions
+   - Implementation techniques that apply broadly
+   - Testing strategies that work across functions
+   - Common pitfalls to avoid in any Excel function implementation
+
+   Each bullet point should be a standalone learning that future implementers can apply to hundreds of different Excel functions.
+
+   - If you don't have any learnings to add, it's ok to not add anything. 
+   - You can modify / update existing learnings
+

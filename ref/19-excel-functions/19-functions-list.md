@@ -92,7 +92,7 @@ Use the checkboxes to track implementation progress for each function.
 - [ ] DAY - [Documentation](https://support.microsoft.com/en-us/office/day-function-8a7d1cbb-6c7d-4ba1-8aea-25c134d03101)
 - [ ] DAYS - [Documentation](https://support.microsoft.com/en-us/office/days-function-57740535-d549-4395-8728-0f07bff0b9df)
 - [ ] DAYS360 - [Documentation](https://support.microsoft.com/en-us/office/days360-function-b9a509fd-49ef-407e-94df-0cbda5718c2a)
-- [ ] EDATE - [Documentation](https://support.microsoft.com/en-us/office/edate-function-3c920eb2-6e66-44e7-a1f5-753ae47ee4c5)
+- [x] EDATE - [Documentation](https://support.microsoft.com/en-us/office/edate-function-3c920eb2-6e66-44e7-a1f5-753ae47ee4c5) ✅ COMPLETE
 - [ ] EOMONTH - [Documentation](https://support.microsoft.com/en-us/office/eomonth-function-7314ffa1-2bc9-4005-9d66-f49db127d628)
 - [ ] HOUR - [Documentation](https://support.microsoft.com/en-us/office/hour-function-a3afa879-86cb-4339-b1b5-2dd2d7310ac7)
 - [ ] ISOWEEKNUM - [Documentation](https://support.microsoft.com/en-us/office/isoweeknum-function-1c2d0afe-d25b-4ab1-8894-8d0520e90e0e)
@@ -110,7 +110,7 @@ Use the checkboxes to track implementation progress for each function.
 - [ ] WORKDAY - [Documentation](https://support.microsoft.com/en-us/office/workday-function-f764a5b7-05fc-4494-9486-60d494efbf33)
 - [ ] WORKDAY.INTL - [Documentation](https://support.microsoft.com/en-us/office/workday-intl-function-a378391c-9ba7-4678-8a39-39611a9bf81d)
 - [ ] YEAR - [Documentation](https://support.microsoft.com/en-us/office/year-function-c64f017a-1354-490d-981f-578e8ec8d3b9)
-- [ ] YEARFRAC - [Documentation](https://support.microsoft.com/en-us/office/yearfrac-function-3844141e-c76d-4143-82b6-208454ddc6a8)
+- [x] YEARFRAC - [Documentation](https://support.microsoft.com/en-us/office/yearfrac-function-3844141e-c76d-4143-82b6-208454ddc6a8) ✅ COMPLETE
 
 ## Engineering functions
 **Suggested Rust filename:** `engineering.rs`
@@ -194,29 +194,29 @@ Use the checkboxes to track implementation progress for each function.
 - [ ] DOLLARFR - [Documentation](https://support.microsoft.com/en-us/office/dollarfr-function-0835d163-3023-4b33-9824-3042c5d4f495)
 - [ ] DURATION - [Documentation](https://support.microsoft.com/en-us/office/duration-function-b254ea57-eadc-4602-a86a-c8e369334038)
 - [ ] EFFECT - [Documentation](https://support.microsoft.com/en-us/office/effect-function-910d4e4c-79e2-4009-95e6-507e04f11bc4)
-- [ ] FV - [Documentation](https://support.microsoft.com/en-us/office/fv-function-2eef9f44-a084-4c61-bdd8-4fe4bb1b71b3)
+- [x] FV - [Documentation](https://support.microsoft.com/en-us/office/fv-function-2eef9f44-a084-4c61-bdd8-4fe4bb1b71b3) ✅ COMPLETE
 - [ ] FVSCHEDULE - [Documentation](https://support.microsoft.com/en-us/office/fvschedule-function-bec29522-bd87-4082-bab9-a241f3fb251d)
 - [ ] INTRATE - [Documentation](https://support.microsoft.com/en-us/office/intrate-function-5cb34dde-a221-4cb6-b3eb-0b9e55e1316f)
 - [ ] IPMT - [Documentation](https://support.microsoft.com/en-us/office/ipmt-function-5cce0ad6-8402-4a41-8d29-61a0b054cb6f)
-- [ ] IRR - [Documentation](https://support.microsoft.com/en-us/office/irr-function-64925eaa-9988-495b-b290-3ad0c163c1bc)
+- [x] IRR - [Documentation](https://support.microsoft.com/en-us/office/irr-function-64925eaa-9988-495b-b290-3ad0c163c1bc) ✅ COMPLETE
 - [ ] ISPMT - [Documentation](https://support.microsoft.com/en-us/office/ispmt-function-fa58adb6-9d39-4ce0-8f43-75399cea56cc)
 - [ ] MDURATION - [Documentation](https://support.microsoft.com/en-us/office/mduration-function-b3786a69-4f20-469a-94ad-33e5b90a763c)
 - [ ] MIRR - [Documentation](https://support.microsoft.com/en-us/office/mirr-function-b020f038-7492-4fb4-93c1-35c345b53524)
 - [ ] NOMINAL - [Documentation](https://support.microsoft.com/en-us/office/nominal-function-7f1ae29b-6b92-435e-b950-ad8b190ddd2b)
 - [ ] NPER - [Documentation](https://support.microsoft.com/en-us/office/nper-function-240535b5-6653-4d2d-bfcf-b6a38151d815)
-- [ ] NPV - [Documentation](https://support.microsoft.com/en-us/office/npv-function-8672cb67-2576-4d07-b67b-ac28acf2a568)
+- [x] NPV - [Documentation](https://support.microsoft.com/en-us/office/npv-function-8672cb67-2576-4d07-b67b-ac28acf2a568) ✅ COMPLETE
 - [ ] ODDFPRICE - [Documentation](https://support.microsoft.com/en-us/office/oddfprice-function-d7d664a8-34df-4233-8d2b-922bcf6a69e1)
 - [ ] ODDFYIELD - [Documentation](https://support.microsoft.com/en-us/office/oddfyield-function-66bc8b7b-6501-4c93-9ce9-2375ef47cc80)
 - [ ] ODDLPRICE - [Documentation](https://support.microsoft.com/en-us/office/oddlprice-function-fb657749-d200-4902-afaf-ed5445027fc4)
 - [ ] ODDLYIELD - [Documentation](https://support.microsoft.com/en-us/office/oddlyield-function-c873d088-cf40-435f-8d41-c8232fee9238)
 - [ ] PDURATION - [Documentation](https://support.microsoft.com/en-us/office/pduration-function-44f33460-5be5-4c90-b857-22308892adaf)
-- [ ] PMT - [Documentation](https://support.microsoft.com/en-us/office/pmt-function-0214da64-9a63-4996-bc20-214433fa6441)
+- [x] PMT - [Documentation](https://support.microsoft.com/en-us/office/pmt-function-0214da64-9a63-4996-bc20-214433fa6441) ✅ COMPLETE
 - [ ] PPMT - [Documentation](https://support.microsoft.com/en-us/office/ppmt-function-c370d9e3-7749-4ca4-beea-b06c6ac95e1b)
 - [ ] PRICE - [Documentation](https://support.microsoft.com/en-us/office/price-function-3ea9deac-8dfa-436f-a7c8-17ea02c21b0a)
 - [ ] PRICEDISC - [Documentation](https://support.microsoft.com/en-us/office/pricedisc-function-d06ad7c1-380e-4be7-9fd9-75e3079acfd3)
 - [ ] PRICEMAT - [Documentation](https://support.microsoft.com/en-us/office/pricemat-function-52c3b4da-bc3e-4e00-9a4f-2b357deecf31)
-- [ ] PV - [Documentation](https://support.microsoft.com/en-us/office/pv-function-23879d31-0e02-4ef6-be9c-079e6956a5ce)
-- [ ] RATE - [Documentation](https://support.microsoft.com/en-us/office/rate-function-9f665657-4a7a-4bb7-a030-83fc59e748ce)
+- [x] PV - [Documentation](https://support.microsoft.com/en-us/office/pv-function-23879d31-0e02-4ef6-be9c-079e6956a5ce) ✅ COMPLETE
+- [x] RATE - [Documentation](https://support.microsoft.com/en-us/office/rate-function-9f665657-4a7a-4bb7-a030-83fc59e748ce) ✅ COMPLETE
 - [ ] RECEIVED - [Documentation](https://support.microsoft.com/en-us/office/received-function-7a3f8b93-6611-4f81-8576-828312c9b5e5)
 - [ ] RRI - [Documentation](https://support.microsoft.com/en-us/office/rri-function-6f5822d8-7ef1-4233-944c-79e8172930f4)
 - [ ] SLN - [Documentation](https://support.microsoft.com/en-us/office/sln-function-cdb666e5-c1c6-40a7-806a-e695edc2f1c8)
