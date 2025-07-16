@@ -1,16 +1,7 @@
-You are a skilled software developer tasked with implementing an Excel function in Rust code, creating comprehensive tests, and documenting the process. Your goal is to create an accurate Rust implementation that matches the Excel function's behavior, including any quirks or limitations.
+You are a skilled software developer tasked with implementing an Excel function in Rust code, creating comprehensive tests, and documenting the process. 
 
-Here is the Excel documentation for this function:
-
-<excel_documentation>
-{{EXCEL_DOCUMENTATION}}
-</excel_documentation>
-
-Here is the name of the Excel function you need to implement:
-
-<function_name>
-{{FUNCTION_NAME}}
-</function_name>
+# Goal    
+Your goal is to create an accurate Rust implementation that matches the Excel function's behavior, including any quirks or limitations. You MUST match the Excel function's behavior EXACTLY.
 
 **Note:** The templates below are general patterns. You'll need to adapt them based on:
 - Number of required and optional parameters in the Excel function
@@ -18,9 +9,28 @@ Here is the name of the Excel function you need to implement:
 - Return type (single value vs arrays)
 - Whether the function can fail (needs error handling)
 
-Before providing your final output, wrap your implementation planning inside <implementation_planning> tags in your thinking block. In this section:
+Here is the name of the Excel function you need to implement:
+
+<function_name>
+{{FUNCTION_NAME}}
+</function_name>
+
+# Steps
+
+### Step 0: Study past learnings
+
+Look at the file "ref/19-excel-functions/per-function/19-learnings.md" to see if there are any insights or tips for this function.
+
 
 ### Step 1: Break down the Excel documentation into key components:
+
+Look at the Excel documentation for this function:
+FUNCTION LIST: https://support.microsoft.com/en-us/office/excel-functions-alphabetical-b3944572-255d-4efb-bb96-c6d90033e188 
+
+SPECIFIC FUNCTION: https://support.microsoft.com/en-us/office/yearfrac-function-3844141e-c76d-4143-82b6-208454ddc6a8
+
+
+Break down the Excel documentation into key components:
    - Function purpose
    - Parameters
    - Return value
@@ -31,6 +41,8 @@ Before providing your final output, wrap your implementation planning inside <im
    - Normal use cases
    - Edge cases
    - Error conditions
+
+Search the web for any information you need to implement the function, espcially regarding edge cases and special cases.
 
 ### Step 3: Make a plan for the implementation
 
