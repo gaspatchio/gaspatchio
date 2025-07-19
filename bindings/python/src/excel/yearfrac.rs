@@ -8,6 +8,9 @@ fn same_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
 }
 
 #[polars_expr(output_type_func = same_output_type)]
-pub fn year_frac(inputs: &[Series], kwargs: gaspatchio_core_lib::excel::YearFracKwargs) -> PolarsResult<Series> {
-    gaspatchio_core_lib::excel::year_frac(inputs, &kwargs)
+pub fn yearfrac(
+    inputs: &[Series],
+    kwargs: gaspatchio_core_lib::excel::YearFracKwargs,
+) -> PolarsResult<Series> {
+    gaspatchio_core_lib::excel::yearfrac(inputs, &kwargs)
 }

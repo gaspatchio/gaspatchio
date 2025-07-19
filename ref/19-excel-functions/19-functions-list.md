@@ -87,13 +87,13 @@ Use the checkboxes to track implementation progress for each function.
 
 ### Functions to Implement
 - [ ] DATE - [Documentation](https://support.microsoft.com/en-us/office/date-function-e36c0c8c-4104-49da-ab83-82328b832349)
-- [ ] DATEDIF - [Documentation](https://support.microsoft.com/en-us/office/datedif-function-25dba1a4-2812-480b-84dd-8b32a451b35c)
+- [x] DATEDIF - [Documentation](https://support.microsoft.com/en-us/office/datedif-function-25dba1a4-2812-480b-84dd-8b32a451b35c) ✅ COMPLETE
 - [ ] DATEVALUE - [Documentation](https://support.microsoft.com/en-us/office/datevalue-function-df8b07d4-7761-4a93-bc33-b7471bbff252)
 - [ ] DAY - [Documentation](https://support.microsoft.com/en-us/office/day-function-8a7d1cbb-6c7d-4ba1-8aea-25c134d03101)
 - [ ] DAYS - [Documentation](https://support.microsoft.com/en-us/office/days-function-57740535-d549-4395-8728-0f07bff0b9df)
-- [ ] DAYS360 - [Documentation](https://support.microsoft.com/en-us/office/days360-function-b9a509fd-49ef-407e-94df-0cbda5718c2a)
+- [x] DAYS360 - [Documentation](https://support.microsoft.com/en-us/office/days360-function-b9a509fd-49ef-407e-94df-0cbda5718c2a) ✅ COMPLETE
 - [x] EDATE - [Documentation](https://support.microsoft.com/en-us/office/edate-function-3c920eb2-6e66-44e7-a1f5-753ae47ee4c5) ✅ COMPLETE
-- [ ] EOMONTH - [Documentation](https://support.microsoft.com/en-us/office/eomonth-function-7314ffa1-2bc9-4005-9d66-f49db127d628)
+- [x] EOMONTH - [Documentation](https://support.microsoft.com/en-us/office/eomonth-function-7314ffa1-2bc9-4005-9d66-f49db127d628) ✅ COMPLETE
 - [ ] HOUR - [Documentation](https://support.microsoft.com/en-us/office/hour-function-a3afa879-86cb-4339-b1b5-2dd2d7310ac7)
 - [ ] ISOWEEKNUM - [Documentation](https://support.microsoft.com/en-us/office/isoweeknum-function-1c2d0afe-d25b-4ab1-8894-8d0520e90e0e)
 - [ ] MINUTE - [Documentation](https://support.microsoft.com/en-us/office/minute-function-af728df0-05c4-4b07-9eed-a84801a60589)
@@ -175,7 +175,7 @@ Use the checkboxes to track implementation progress for each function.
 **Suggested Rust filename:** `financial.rs`
 
 ### Functions to Implement
-- [ ] ACCRINT - [Documentation](https://support.microsoft.com/en-us/office/accrint-function-fe45d089-6722-4fb3-9379-e1f911d8dc74)
+- [x] ACCRINT - [Documentation](https://support.microsoft.com/en-us/office/accrint-function-fe45d089-6722-4fb3-9379-e1f911d8dc74)
 - [ ] ACCRINTM - [Documentation](https://support.microsoft.com/en-us/office/accrintm-function-f62f01f9-5754-4cc4-805b-0e70199328a7)
 - [ ] AMORDEGRC - [Documentation](https://support.microsoft.com/en-us/office/amordegrc-function-a14d0ca1-64a4-42eb-9b3d-b0dededf9e51)
 - [ ] AMORLINC - [Documentation](https://support.microsoft.com/en-us/office/amorlinc-function-7d417b45-f7a5-4dbe-a0b3-f65cc7b36d81)
@@ -197,13 +197,13 @@ Use the checkboxes to track implementation progress for each function.
 - [x] FV - [Documentation](https://support.microsoft.com/en-us/office/fv-function-2eef9f44-a084-4c61-bdd8-4fe4bb1b71b3) ✅ COMPLETE
 - [ ] FVSCHEDULE - [Documentation](https://support.microsoft.com/en-us/office/fvschedule-function-bec29522-bd87-4082-bab9-a241f3fb251d)
 - [ ] INTRATE - [Documentation](https://support.microsoft.com/en-us/office/intrate-function-5cb34dde-a221-4cb6-b3eb-0b9e55e1316f)
-- [ ] IPMT - [Documentation](https://support.microsoft.com/en-us/office/ipmt-function-5cce0ad6-8402-4a41-8d29-61a0b054cb6f)
+- [x] IPMT - [Documentation](https://support.microsoft.com/en-us/office/ipmt-function-5cce0ad6-8402-4a41-8d29-61a0b054cb6f) ✅ COMPLETE
 - [x] IRR - [Documentation](https://support.microsoft.com/en-us/office/irr-function-64925eaa-9988-495b-b290-3ad0c163c1bc) ✅ COMPLETE
 - [ ] ISPMT - [Documentation](https://support.microsoft.com/en-us/office/ispmt-function-fa58adb6-9d39-4ce0-8f43-75399cea56cc)
 - [ ] MDURATION - [Documentation](https://support.microsoft.com/en-us/office/mduration-function-b3786a69-4f20-469a-94ad-33e5b90a763c)
 - [ ] MIRR - [Documentation](https://support.microsoft.com/en-us/office/mirr-function-b020f038-7492-4fb4-93c1-35c345b53524)
 - [ ] NOMINAL - [Documentation](https://support.microsoft.com/en-us/office/nominal-function-7f1ae29b-6b92-435e-b950-ad8b190ddd2b)
-- [ ] NPER - [Documentation](https://support.microsoft.com/en-us/office/nper-function-240535b5-6653-4d2d-bfcf-b6a38151d815)
+- [x] NPER - [Documentation](https://support.microsoft.com/en-us/office/nper-function-240535b5-6653-4d2d-bfcf-b6a38151d815) ✅ COMPLETE
 - [x] NPV - [Documentation](https://support.microsoft.com/en-us/office/npv-function-8672cb67-2576-4d07-b67b-ac28acf2a568) ✅ COMPLETE
 - [ ] ODDFPRICE - [Documentation](https://support.microsoft.com/en-us/office/oddfprice-function-d7d664a8-34df-4233-8d2b-922bcf6a69e1)
 - [ ] ODDFYIELD - [Documentation](https://support.microsoft.com/en-us/office/oddfyield-function-66bc8b7b-6501-4c93-9ce9-2375ef47cc80)
@@ -211,8 +211,8 @@ Use the checkboxes to track implementation progress for each function.
 - [ ] ODDLYIELD - [Documentation](https://support.microsoft.com/en-us/office/oddlyield-function-c873d088-cf40-435f-8d41-c8232fee9238)
 - [ ] PDURATION - [Documentation](https://support.microsoft.com/en-us/office/pduration-function-44f33460-5be5-4c90-b857-22308892adaf)
 - [x] PMT - [Documentation](https://support.microsoft.com/en-us/office/pmt-function-0214da64-9a63-4996-bc20-214433fa6441) ✅ COMPLETE
-- [ ] PPMT - [Documentation](https://support.microsoft.com/en-us/office/ppmt-function-c370d9e3-7749-4ca4-beea-b06c6ac95e1b)
-- [ ] PRICE - [Documentation](https://support.microsoft.com/en-us/office/price-function-3ea9deac-8dfa-436f-a7c8-17ea02c21b0a)
+- [x] PPMT - [Documentation](https://support.microsoft.com/en-us/office/ppmt-function-c370d9e3-7749-4ca4-beea-b06c6ac95e1b) ✅ COMPLETE
+- [x] PRICE - [Documentation](https://support.microsoft.com/en-us/office/price-function-3ea9deac-8dfa-436f-a7c8-17ea02c21b0a)
 - [ ] PRICEDISC - [Documentation](https://support.microsoft.com/en-us/office/pricedisc-function-d06ad7c1-380e-4be7-9fd9-75e3079acfd3)
 - [ ] PRICEMAT - [Documentation](https://support.microsoft.com/en-us/office/pricemat-function-52c3b4da-bc3e-4e00-9a4f-2b357deecf31)
 - [x] PV - [Documentation](https://support.microsoft.com/en-us/office/pv-function-23879d31-0e02-4ef6-be9c-079e6956a5ce) ✅ COMPLETE
@@ -225,8 +225,8 @@ Use the checkboxes to track implementation progress for each function.
 - [ ] TBILLPRICE - [Documentation](https://support.microsoft.com/en-us/office/tbillprice-function-eacae992-c29d-4912-9b26-995c47b3595e)
 - [ ] TBILLYIELD - [Documentation](https://support.microsoft.com/en-us/office/tbillyield-function-6d381232-f4b0-4cd2-8895-2fc586eab9fc)
 - [ ] VDB - [Documentation](https://support.microsoft.com/en-us/office/vdb-function-dde4e207-f3fa-488d-91d0-d5d2d2badef5)
-- [ ] XIRR - [Documentation](https://support.microsoft.com/en-us/office/xirr-function-de1242ec-6477-445b-b11b-a303ad9adc9d)
-- [ ] XNPV - [Documentation](https://support.microsoft.com/en-us/office/xnpv-function-1b42bbf6-370f-4532-a0eb-d67c16b664b7)
+- [x] XIRR - [Documentation](https://support.microsoft.com/en-us/office/xirr-function-de1242ec-6477-445b-b11b-a303ad9adc9d)
+- [x] XNPV - [Documentation](https://support.microsoft.com/en-us/office/xnpv-function-1b42bbf6-370f-4532-a0eb-d67c16b664b7)
 - [ ] YIELD - [Documentation](https://support.microsoft.com/en-us/office/yield-function-f5f5ca43-c4bd-434f-8bd2-307951d3ef13)
 - [ ] YIELDDISC - [Documentation](https://support.microsoft.com/en-us/office/yielddisc-function-a9dbdbae-7dae-46de-b995-615faffaaed7)
 - [ ] YIELDMAT - [Documentation](https://support.microsoft.com/en-us/office/yieldmat-function-ba7d1809-0d33-4bcb-96c7-6c56ec62ef6f)
@@ -296,7 +296,7 @@ Use the checkboxes to track implementation progress for each function.
 - [ ] FILTER - [Documentation](https://support.microsoft.com/en-us/office/filter-function-f4f7cb66-82eb-4767-8f7c-4877ad80c759)
 - [ ] FORMULATEXT - [Documentation](https://support.microsoft.com/en-us/office/formulatext-function-0a786771-54fd-4ae2-96ee-09cda35439c8)
 - [ ] GETPIVOTDATA - [Documentation](https://support.microsoft.com/en-us/office/getpivotdata-function-8c083b99-5922-4ca0-af5e-3af55960761f)
-- [ ] HLOOKUP - [Documentation](https://support.microsoft.com/en-us/office/hlookup-function-a3034eec-b719-4ba3-bb65-e1ad662ed95f)
+- [x] HLOOKUP - [Documentation](https://support.microsoft.com/en-us/office/hlookup-function-a3034eec-b719-4ba3-bb65-e1ad662ed95f)
 - [ ] HSTACK - [Documentation](https://support.microsoft.com/en-us/office/hstack-function-98c4ab61-077b-48c7-b9f6-f98f007e5e90)
 - [ ] HYPERLINK - [Documentation](https://support.microsoft.com/en-us/office/hyperlink-function-333c7ce6-c5ae-4164-9c47-7b0a4f9b0c52)
 - [ ] IMAGE - [Documentation](https://support.microsoft.com/en-us/office/image-function-7e112975-5e52-4a88-b6bb-53806b42af8f)
@@ -316,7 +316,7 @@ Use the checkboxes to track implementation progress for each function.
 - [ ] TOROW - [Documentation](https://support.microsoft.com/en-us/office/torow-function-b90d0964-a7d9-44b7-816b-fabe7ac78e1e)
 - [ ] TRANSPOSE - [Documentation](https://support.microsoft.com/en-us/office/transpose-function-ed144278-46f7-4368-a9e7-a47b19b0a4e5)
 - [ ] UNIQUE - [Documentation](https://support.microsoft.com/en-us/office/unique-function-c5ab87fd-30a3-4ce9-9d1a-40204fb85cc3)
-- [ ] VLOOKUP - [Documentation](https://support.microsoft.com/en-us/office/vlookup-function-0bbc8083-26fe-4963-8ab8-93a18ad188a1)
+- [x] VLOOKUP - [Documentation](https://support.microsoft.com/en-us/office/vlookup-function-0bbc8083-26fe-4963-8ab8-93a18ad188a1)
 - [ ] VSTACK - [Documentation](https://support.microsoft.com/en-us/office/vstack-function-a4b86897-be0f-4fc2-9761-7909d5382b3a)
 - [ ] WRAPCOLS - [Documentation](https://support.microsoft.com/en-us/office/wrapcols-function-d5f70017-9fbd-4bb2-8df6-04d82019b7f6)
 - [ ] WRAPROWS - [Documentation](https://support.microsoft.com/en-us/office/wraprows-function-05c1222f-8ef5-4a9e-abb2-83fb59a76cf9)

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 LIB = Path(_internal.__file__)
 
 
-def year_frac(start_date: IntoExprColumn, end_date: IntoExprColumn, basis: int = 1) -> pl.Expr:
+def yearfrac(start_date: IntoExprColumn, end_date: IntoExprColumn, basis: int = 1) -> pl.Expr:
     """Calculate the year fraction between two dates using Excel's YEARFRAC function.
 
     Args:
@@ -59,7 +59,7 @@ def year_frac(start_date: IntoExprColumn, end_date: IntoExprColumn, basis: int =
     return register_plugin_function(
         args=[start_date, end_date],
         plugin_path=LIB,
-        function_name="year_frac",
+        function_name="yearfrac",
         is_elementwise=True,
         kwargs={"basis": basis},
     )

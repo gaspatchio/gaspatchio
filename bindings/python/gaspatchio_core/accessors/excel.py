@@ -21,12 +21,21 @@ if TYPE_CHECKING:
 
 # Define Excel basis constants
 BasisType = Union[
+    Literal[
+        0,
+        1,
+        2,
+        3,
+        4,
+        "us_nasd_30_360",
+        "act/act",
+        "actual/360",
+        "actual/365",
+        "european_30_360",
+    ],
     int,
     str,
-    Literal[0, 1, 2, 3, 4],
-    Literal["us_nasd_30_360", "act/act", "actual/360", "actual/365", "european_30_360"],
 ]
-
 
 
 @register_accessor("excel", kind="frame")
@@ -39,14 +48,11 @@ class ExcelFrameAccessor(BaseFrameAccessor):
 
     def __init__(self, frame: "ActuarialFrame"):
         """Initializes the accessor with the parent ActuarialFrame.
-        
+
         Internal initialization method for the Excel frame accessor.
         """
         super().__init__(frame)
         # Placeholder for any frame-level excel methods
-
-
-
 
 
 @register_accessor("excel", kind="column")
@@ -59,30 +65,29 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
     def __init__(self, proxy: "ColumnProxy | ExpressionProxy"):
         """Initializes the accessor with the parent proxy.
-        
+
         Internal initialization method for the Excel column accessor.
         """
         super().__init__(proxy)
-        self._proxy: "ColumnProxy | ExpressionProxy" = proxy
+        self._proxy: ColumnProxy | ExpressionProxy = proxy
 
     def _get_polars_expr(self) -> pl.Expr:
         """Helper to get the underlying Polars expression from the proxy.
-        
+
         Internal helper method that extracts the Polars expression from
         the column or expression proxy for further processing.
         """
         if hasattr(self._proxy, "_expr") and isinstance(self._proxy._expr, pl.Expr):
             return self._proxy._expr
-        elif hasattr(self._proxy, "name") and isinstance(self._proxy.name, str):
+        if hasattr(self._proxy, "name") and isinstance(self._proxy.name, str):
             return pl.col(self._proxy.name)
-        else:
-            raise TypeError(
-                f"ExcelColumnAccessor expected ColumnProxy or ExpressionProxy, got {type(self._proxy).__name__}"
-            )
+        raise TypeError(
+            f"ExcelColumnAccessor expected ColumnProxy or ExpressionProxy, got {type(self._proxy).__name__}"
+        )
 
     def _get_parent_frame(self) -> "ActuarialFrame":
         """Helper to get the parent ActuarialFrame, raising error if absent.
-        
+
         Internal helper method that retrieves the parent ActuarialFrame
         context, which is required for many Excel operations.
         """
@@ -94,7 +99,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
     def from_excel_serial(self, epoch: str = "1900") -> "ExpressionProxy":
         """Converts Excel serial numbers (integers or floats) to Polars Date.
-        
+
         Follows logic similar to openpyxl for compatibility. This method handles
         Excel's date serialization system, including the notorious Excel 1900
         leap year bug where Excel incorrectly treats 1900 as a leap year.
@@ -108,38 +113,40 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         Args:
             epoch: The epoch system used by Excel ('1900' or '1904').
                    Defaults to '1900'.
-                   
+
                    - 1900 Epoch (WINDOWS_1900_EPOCH = 1899-12-30):
-                     Serial 1 is 1900-01-01. Excel's serial 60 (phantom 1900-02-29) 
-                     is mapped to 1900-03-01. Serials > 60 are adjusted by -1 day 
+                     Serial 1 is 1900-01-01. Excel's serial 60 (phantom 1900-02-29)
+                     is mapped to 1900-03-01. Serials > 60 are adjusted by -1 day
                      before adding to epoch.
                    - 1904 Epoch (MAC_1904_EPOCH = 1904-01-01):
                      Serial 1 is 1904-01-01. Days to add from epoch are serial - 1.
 
         Returns:
             An ExpressionProxy representing the converted date column.
-            
+
         Raises:
             ValueError: If an invalid epoch is provided.
-            
+
         Examples:
             ```python
             from gaspatchio_core import ActuarialFrame
-            
+
             # Excel serial numbers for some dates
             data = {
                 "policy_id": ["P001", "P002", "P003"],
                 "excel_date_serial": [44197, 44562, 44927],  # Excel serial numbers
             }
             af = ActuarialFrame(data)
-            
+
             # Convert Excel serial numbers to proper dates
             af_with_dates = af.with_columns(
-                actual_date=af["excel_date_serial"].excel.from_excel_serial(epoch="1900")
+                actual_date=af["excel_date_serial"].excel.from_excel_serial(
+                    epoch="1900"
+                )
             )
             print(af_with_dates.collect())
             ```
-            
+
             ```text
             shape: (3, 3)
             ┌───────────┬────────────────────┬─────────────┐
@@ -287,6 +294,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             │ P003      ┆ 2022-03-01 ┆ 2022-09-01 ┆ 0.501370   │
             └───────────┴────────────┴────────────┴────────────┘
             ```
+
         """
         parent_frame = self._get_parent_frame()
         start_expr = self._get_polars_expr()
@@ -294,7 +302,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
         # Check if we're dealing with list columns
         schema = parent_frame._df.collect_schema()
-        
+
         start_is_list = False
         if hasattr(self._proxy, "name") and self._proxy.name in schema:
             col_dtype = schema[self._proxy.name]
@@ -306,7 +314,9 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             end_col_name = end_expr.meta.output_name()
             if end_col_name in schema:
                 col_dtype = schema[end_col_name]
-                if isinstance(col_dtype, pl.List) and isinstance(col_dtype.inner, pl.Date):
+                if isinstance(col_dtype, pl.List) and isinstance(
+                    col_dtype.inner, pl.Date
+                ):
                     end_is_list = True
 
         # Convert basis to integer if it's a string
@@ -346,18 +356,16 @@ class ExcelColumnAccessor(BaseColumnAccessor):
                 "calculate yearfrac, then group_by().agg() to re-create the list structure."
             )
 
-        # Import the year_frac function from the functions module
-        from ..functions.excel import year_frac
+        # Import the yearfrac function from the functions module
+        from ..functions.excel import yearfrac
 
         # Ensure both expressions are cast to Date type for the Rust function
         start_date_expr = start_expr.cast(pl.Date, strict=False)
         end_date_expr = end_expr.cast(pl.Date, strict=False)
 
         # Call the Rust implementation via the plugin
-        result_expr = year_frac(start_date_expr, end_date_expr, basis=basis_int)
+        result_expr = yearfrac(start_date_expr, end_date_expr, basis=basis_int)
 
         from ..column.expression_proxy import ExpressionProxy
 
         return ExpressionProxy(result_expr, parent_frame)
-
-

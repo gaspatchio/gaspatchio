@@ -53,14 +53,21 @@ python-source = ""
 
 # Linting, formatting, type checking
 [tool.ruff] 
-select = ["ALL"]
 line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
 extend-ignore = [
     "D203",
     "D212",   # allow either one-line or two-line docstring summaries
     "D213",   # allow either one-line or two-line docstring summaries
     "ANN001", # sometimes self/cls isn't annotated
+    "COM812", # conflicts with formatter
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gaspatchio_core"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]
 docstring-code-format = true # format code in docstrings too

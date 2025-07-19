@@ -363,5 +363,5 @@ https://github.com/handsontable/hyperformula/blob/master/test/interpreter/functi
    Each bullet point should be a standalone learning that future implementers can apply to hundreds of different Excel functions.
 
    - If you don't have any learnings to add, it's ok to not add anything. 
-   - You can modify / update existing learnings
+   - You can modify / update /delete existing learnings
 
