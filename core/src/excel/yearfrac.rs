@@ -35,7 +35,7 @@ pub struct YearFracKwargs {
 ///
 /// # Errors
 /// Returns an error if an unsupported basis is provided or if series processing fails.
-pub fn year_frac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Series> {
+pub fn yearfrac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Series> {
     let start_date_series = &inputs[0];
     let end_date_series = &inputs[1];
 
@@ -56,7 +56,6 @@ pub fn year_frac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Ser
     let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).expect("Valid epoch date");
 
     // Use binary_elementwise pattern for vectorized operation
-    #[allow(clippy::useless_conversion)]
     let result_ca = start_dates
         .into_iter()
         .zip(end_dates.into_iter())
@@ -67,7 +66,7 @@ pub fn year_frac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Ser
                     let start_date = epoch + chrono::Duration::days(i64::from(start_days));
                     let end_date = epoch + chrono::Duration::days(i64::from(end_days));
 
-                    Some(calculate_year_frac(start_date, end_date, basis))
+                    Some(calculate_yearfrac(start_date, end_date, basis))
                 }
                 _ => None,
             }
@@ -79,7 +78,7 @@ pub fn year_frac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Ser
 
 /// Calculate year fraction for a single pair of dates
 #[inline]
-fn calculate_year_frac(start_date: NaiveDate, end_date: NaiveDate, basis: i32) -> f64 {
+fn calculate_yearfrac(start_date: NaiveDate, end_date: NaiveDate, basis: i32) -> f64 {
     // Check if we need to return a negative value
     let is_negative = start_date > end_date;
 
@@ -283,7 +282,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(0) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         assert_relative_eq!(values.get(0).unwrap(), 30.0 / DAYS_30_360, epsilon = 1e-10);
@@ -299,7 +298,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(0) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // Feb 28 -> 30, Mar 31 -> 30, so it's exactly 1 month
@@ -316,7 +315,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(0) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // Feb 29 (last of Feb) -> 30, Mar 31 -> 30, so it's exactly 1 month
@@ -333,7 +332,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(1) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // 181 days / 365 days
@@ -354,7 +353,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(1) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // 182 days / 366 days (leap year)
@@ -371,7 +370,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(1) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // 29 days / 366 (contains Feb 29)
@@ -388,7 +387,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(2) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // 364 days / 360
@@ -405,7 +404,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(3) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // 366 days / 365 (leap year but fixed denominator)
@@ -426,7 +425,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(4) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // Jan 31 -> 30, Feb 28 stays 28
@@ -448,8 +447,8 @@ mod tests {
 
         let kwargs = YearFracKwargs { basis: Some(0) };
 
-        let result1 = year_frac(&[start_series1, end_series1], &kwargs).unwrap();
-        let result2 = year_frac(&[start_series2, end_series2], &kwargs).unwrap();
+        let result1 = yearfrac(&[start_series1, end_series1], &kwargs).unwrap();
+        let result2 = yearfrac(&[start_series2, end_series2], &kwargs).unwrap();
 
         let values1 = result1.f64().unwrap();
         let values2 = result2.f64().unwrap();
@@ -475,7 +474,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(5) };
-        let result = year_frac(&[start_series, end_series], &kwargs);
+        let result = yearfrac(&[start_series, end_series], &kwargs);
 
         assert!(result.is_err());
     }
@@ -521,7 +520,7 @@ mod tests {
             .unwrap();
 
         let kwargs = YearFracKwargs { basis: Some(0) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // First value should be calculated, second should be null
@@ -536,7 +535,7 @@ mod tests {
         let dates = create_date_series(vec![date]);
 
         let kwargs = YearFracKwargs { basis: Some(0) };
-        let result = year_frac(&[dates.clone(), dates], &kwargs).unwrap();
+        let result = yearfrac(&[dates.clone(), dates], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         assert_relative_eq!(values.get(0).unwrap(), 0.0, epsilon = 1e-10);
@@ -552,7 +551,7 @@ mod tests {
         let end_series = create_date_series(end);
 
         let kwargs = YearFracKwargs { basis: Some(1) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         let values = result.f64().unwrap();
 
         // The period from 2019-01-01 to 2021-01-01 is exactly 2 years (731 days)
@@ -609,7 +608,7 @@ mod excel_verification_tests {
         let start_series = create_date_series(vec![start]);
         let end_series = create_date_series(vec![end]);
         let kwargs = YearFracKwargs { basis: Some(basis) };
-        let result = year_frac(&[start_series, end_series], &kwargs).unwrap();
+        let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
         result.f64().unwrap().get(0).unwrap()
     }
 

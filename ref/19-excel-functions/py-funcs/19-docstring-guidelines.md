@@ -25,7 +25,9 @@ You need to provide a scalar and vector example if that makes sense in relation 
 
 ## Guidelines and tips
 - No need to mention " (List Shimming) " at all.
-- Avoid using pl.col where we could reference by af[''] instead. BAD: pl.col("policy_id") GOOD: af["policy_id"]
+- Avoid using pl.col where we could reference by af[''] instead. 
+BAD: pl.col("policy_id") 
+GOOD: af["policy_id"]
 - Don't bother explaining that it mirrors polars behavior
 - Keep "When to use" highly practical and domain specific for actuaries.
 - "When to use" can have 1-4 items, depending on how many actuarial use cases there are
