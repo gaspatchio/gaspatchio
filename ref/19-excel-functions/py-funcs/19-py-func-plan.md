@@ -13,18 +13,49 @@ Here is the name of the Excel function you need to integrate:
 
 # Steps
 
-### Step 0: Study past learnings
+### Step 1: Break down the Excel documentation into key components:
+
+Look at the Excel documentation for {{FUNCTION_NAME}}:
+FUNCTION LIST: https://support.microsoft.com/en-us/office/excel-functions-alphabetical-b3944572-255d-4efb-bb96-c6d90033e188 
+
+SPECIFIC FUNCTION: https://support.microsoft.com/en-us/office/yearfrac-function-3844141e-c76d-4143-82b6-208454ddc6a8
+
+
+Break down the Excel documentation into key components:
+   - Function purpose
+   - Parameters
+   - Return value
+   - Special cases
+
+
+### Step 2: Analyze the Excel function's behavior in different scenarios:
+   - Normal use cases
+   - Edge cases
+   - Error conditions
+
+**Research Sources (in order of priority):**
+1. Microsoft Excel documentation (primary)
+2. Excel help forums and StackOverflow for edge cases
+3. Financial textbooks for formula verification
+4. Other Excel-compatible software documentation
+5. Financial calculator manuals for cross-verification
+
+**Search the web** for any information you need to implement the function, especially regarding edge cases and special cases.
+
+In particular in the section we're looking for how the function can be called with scalars and vectors and the combinations. Many paramaters can be called as a scalar AND/OR vectors, the job of the python code is to marshall that data into the right format so the rust bindings (which are always vector / vector) will work. 
+
+### Step 3: Study past learnings
 
 Look at the file "ref/19-excel-functions/py-funcs/19-pylearnings.md" to see if there are any insights or tips for this function.
 
-### Step 1: Analyze the Rust implementation
+### Step 4: Analyze the Rust implementation
 
 1. **Locate the Rust function**: Check `gaspatchio_core_lib::excel::function_name` exists
 2. **Identify the kwargs structure**: Look for `gaspatchio_core_lib::excel::FunctionNameKwargs` 
 3. **Understand the signature**: Note the expected input types and return type
 4. **Check existing patterns**: Look at similar functions like `yearfrac.rs` in `src/excel/`
 
-### Step 2: Create the PyO3 Rust binding
+### Step 5: Create the PyO3 Rust binding
 
 Create the Python-Rust bridge in `src/excel/function_name.rs`:
 
@@ -52,14 +83,14 @@ pub fn function_name(
 - Import the correct kwargs type from `gaspatchio_core_lib::excel::`
 - The binding is just a thin wrapper that calls the core Rust function
 
-### Step 3: Update Rust module exports
+### Step 6: Update Rust module exports
 
 Add to `src/excel/mod.rs`:
 ```rust
 pub mod function_name;
 ```
 
-### Step 4: Create Python function wrapper
+### Step 7: Create Python function wrapper
 
 Create `gaspatchio_core/functions/excel/function_name.py`:
 
@@ -111,7 +142,7 @@ def function_name(
 
 **Critical Naming Rule**: The `function_name` in `register_plugin_function` must match the Rust binding function name exactly.
 
-### Step 5: Update Python module exports
+### Step 8: Update Python module exports
 
 Add to `gaspatchio_core/functions/excel/__init__.py`:
 ```python
@@ -130,7 +161,7 @@ __all__ = [
 ]
 ```
 
-### Step 6: Create Excel accessor method with comprehensive docstring
+### Step 9: Create Excel accessor method with comprehensive docstring
 
 ⚠️ **CRITICAL**: Read `ref/19-excel-functions/py-funcs/19-docstring-guidelines.md` for complete docstring requirements before writing the accessor method.
 
@@ -246,11 +277,11 @@ def function_name(
     return ExpressionProxy(result_expr, parent_frame)
 ```
 
-### Step 7: Create and validate docstring examples
+### Step 10: Create and validate docstring examples
 
 **CRITICAL**: All docstring examples MUST be executable and produce exact output shown. This step ensures your documentation is accurate and tested.
 
-#### 7.1: Write docstring examples locally
+#### 10.1: Write docstring examples locally
 
 Create a temporary test file to develop your examples:
 
@@ -298,7 +329,7 @@ if __name__ == "__main__":
 EOF
 ```
 
-#### 7.2: Build and test the integration
+#### 10.2: Build and test the integration
 
 ```bash
 # Rebuild Rust extensions  
@@ -316,7 +347,7 @@ print('Smoke test passed:', result.collect())
 "
 ```
 
-#### 7.3: Execute and capture example outputs
+#### 10.3: Execute and capture example outputs
 
 ```bash
 # Run your examples and capture exact output
@@ -327,7 +358,7 @@ uv run ruff check test_function_examples.py
 uv run ruff format test_function_examples.py --check
 ```
 
-#### 7.4: Test docstring examples with pytest
+#### 10.4: Test docstring examples with pytest
 
 ```bash
 # Test that docstring examples are valid Python and execute correctly
@@ -345,7 +376,7 @@ uv run pytest gaspatchio_core/accessors/excel.py --doctest-modules --accept
 uv run pytest --doctest-modules -k "function_name" -v
 ```
 
-#### 7.5: Validate docstring structure
+#### 10.5: Validate docstring structure
 
 Check that your docstring follows the required structure:
 
@@ -372,7 +403,7 @@ print('Actuarial terms found:', found_terms)
 "
 ```
 
-#### 7.6: Final docstring checklist
+#### 10.6: Final docstring checklist
 
 Before proceeding, verify:
 
@@ -390,7 +421,7 @@ Before proceeding, verify:
 rm test_function_examples.py
 ```
 
-### Step 8: Create comprehensive Python tests
+### Step 11: Create comprehensive Python tests
 
 Create test files in `tests/accessors/`:
 
@@ -448,7 +479,7 @@ def test_function_name_example():
     pass
 ```
 
-### Step 9: Verify complete integration
+### Step 12: Verify complete integration
 
 Run the full test suite to ensure no regressions:
 
@@ -469,14 +500,13 @@ uv run pytest --doctest-modules --doctest-glob="*.pyi" -v
 uv run pytest --doctest-modules -k "function_name" -v
 
 # Type checking
-uv run mypy gaspatchio_core
-uv run pyright gaspatchio_core
+#uv run mypy gaspatchio_core
 
 # Stub validation
 uv run python -m mypy.stubtest gaspatchio_core
 ```
 
-### Step 10: Update documentation
+### Step 13: Update documentation
 
 1. **Type stubs**: If needed, add type hints to `gaspatchio_core/accessors/excel.pyi`
 2. **Function list**: Update any function inventory documentation
@@ -586,5 +616,3 @@ uv run pytest gaspatchio_core/accessors/excel.py --doctest-modules --accept
 - Verify all imports are included in the example
 - Test imports work in isolation
 - Ensure proper import order (stdlib, third-party, local)
-
-This workflow ensures complete, consistent integration of Excel functions from Rust into Python with proper testing and documentation.

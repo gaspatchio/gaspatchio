@@ -2,12 +2,11 @@
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
-fn same_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = &input_fields[0];
-    Ok(field.clone())
+fn yearfrac_output_type(_input_fields: &[Field]) -> PolarsResult<Field> {
+    Ok(Field::new("year_frac".into(), DataType::Float64))
 }
 
-#[polars_expr(output_type_func = same_output_type)]
+#[polars_expr(output_type_func = yearfrac_output_type)]
 pub fn yearfrac(
     inputs: &[Series],
     kwargs: gaspatchio_core_lib::excel::YearFracKwargs,

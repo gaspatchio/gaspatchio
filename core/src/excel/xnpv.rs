@@ -230,6 +230,7 @@ pub fn calculate_xnpv(rate: f64, cash_flows: &[f64], dates: &[NaiveDate]) -> Pol
 
 /// Calculate the present value of a single cash flow
 /// Used when processing row-by-row in the Polars interface
+#[allow(dead_code)]
 #[inline]
 fn calculate_single_cash_flow_pv(
     rate: f64,

@@ -332,7 +332,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
                 "actual/365": 3,
                 "actual_365": 3,
                 "european_30_360": 4,
-                "30E/360": 4,
+                "30e/360": 4,  # lowercase e for consistency
             }
             basis_lower = basis.lower()
             if basis_lower not in basis_map:
@@ -348,12 +348,17 @@ class ExcelColumnAccessor(BaseColumnAccessor):
                     f"Invalid basis {basis_int}. Must be an integer between 0 and 4."
                 )
 
-        # Handle list operations - for now, not supported
+        # Handle list operations - not currently supported
+        # Note: Excel 365 supports dynamic arrays, but implementing this in Polars
+        # requires complex explode/group_by patterns that are better handled at 
+        # the user level for now.
         if start_is_list or end_is_list:
             raise NotImplementedError(
                 "yearfrac with list columns is not yet supported. "
-                "As a workaround, consider using explode() to flatten the list, "
-                "calculate yearfrac, then group_by().agg() to re-create the list structure."
+                "Excel 365 supports this via dynamic arrays, but the Polars implementation "
+                "requires explode/group_by patterns. "
+                "As a workaround, use explode() to flatten the list, calculate yearfrac, "
+                "then group_by().agg() to re-create the list structure."
             )
 
         # Import the yearfrac function from the functions module

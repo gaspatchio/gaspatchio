@@ -14,8 +14,12 @@ const FREQUENCY_QUARTERLY: i32 = 4;
 
 // Constants for basis values
 const BASIS_30_360_US: i32 = 0;
+// Unused basis constants - kept for completeness
+#[allow(dead_code)]
 const BASIS_ACTUAL_ACTUAL: i32 = 1;
+#[allow(dead_code)]
 const BASIS_ACTUAL_360: i32 = 2;
+#[allow(dead_code)]
 const BASIS_ACTUAL_365: i32 = 3;
 const BASIS_30_360_EU: i32 = 4;
 
@@ -381,6 +385,7 @@ mod tests {
     use super::*;
     use approx::assert_relative_eq;
 
+    #[allow(dead_code)]
     fn create_date_series(dates: Vec<NaiveDate>) -> Series {
         let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
         let days: Vec<i32> = dates
@@ -783,6 +788,7 @@ mod excel_verification_tests {
     use super::*;
     use approx::assert_relative_eq;
 
+    #[allow(dead_code)]
     fn create_date_series(dates: Vec<NaiveDate>) -> Series {
         let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
         let days: Vec<i32> = dates

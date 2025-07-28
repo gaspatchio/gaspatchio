@@ -1066,7 +1066,7 @@ mod tests {
             // Value found in map
         }
 
-        let result = table.lookup_series(&[&age_series, &gender_series])?;
+        let _result = table.lookup_series(&[&age_series, &gender_series])?;
         Ok(())
     }
 
@@ -2084,7 +2084,7 @@ mod tests {
             // Time sequential approach (simulate by using small threshold)
             let start = Instant::now();
             let _result1 = table.lookup_series(&[&age_vector, &gender_vector])?;
-            let sequential_time = start.elapsed();
+            let _sequential_time = start.elapsed();
 
             // For this test, we can't easily force parallel vs sequential without modifying the code
             // But we can at least see the current performance characteristics
@@ -2177,7 +2177,7 @@ mod tests {
         let result = table.lookup_series(&[&age_series, &product_series, &duration_series])?;
         let result_f64 = result.f64()?;
         for i in 0..result.len() {
-            let val = result_f64.get(i).unwrap();
+            let _val = result_f64.get(i).unwrap();
         }
 
         // Debug: manually check hash computation for first lookup
@@ -2247,13 +2247,13 @@ mod tests {
         let result = table.lookup_series(&[&age_series, &product_series, &duration_series])?;
         let result_f64 = result.f64()?;
         for i in 0..result.len() {
-            let val = result_f64.get(i).unwrap();
+            let _val = result_f64.get(i).unwrap();
         }
 
         // Debug: show the codec mismatch
         // Check what happens when we encode integer with String codec
         let duration_av = duration_series.get(0)?; // Int64(1)
-        let duration_hash = table.codecs[2].encode(duration_av); // String codec encoding Int64 input
+        let _duration_hash = table.codecs[2].encode(duration_av); // String codec encoding Int64 input
                                                                  // This should fail because the String codec doesn't handle Int64 properly
                                                                  // The encode method returns 0u64 for unhandled cases, which won't match
 
