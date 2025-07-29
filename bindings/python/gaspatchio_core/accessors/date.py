@@ -391,7 +391,7 @@ class DateFrameAccessor(BaseFrameAccessor):
                 )
             max_age = projection_end_value
             # Ensure issue_age_column exists or handle error
-            if issue_age_column not in self._frame._df.columns:
+            if issue_age_column not in self._frame._df.collect_schema().names():
                 raise pl.ColumnNotFoundError(
                     f"Required column '{issue_age_column}' not found for 'maximum_age' projection."
                 )
@@ -472,7 +472,7 @@ class DateFrameAccessor(BaseFrameAccessor):
         # No temporary columns were created in this approach, so no dropping needed
 
         # Update frame's internal state (schema, column order might need refresh)
-        self._frame._schema = self._frame._df.schema
+        self._frame._schema = self._frame._df.collect_schema()
         # Be careful modifying column order directly, might be better to recalculate
         # For now, just add new columns if they weren't already tracked
         if (

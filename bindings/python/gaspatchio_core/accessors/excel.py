@@ -206,7 +206,9 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         return ExpressionProxy(date_expr, parent_frame)
 
     def yearfrac(
-        self, end_date_expr: "IntoExprColumn", basis: BasisType = "act/act"
+        self, 
+        end_date_expr: "IntoExprColumn", 
+        basis: BasisType = "act/act"
     ) -> "ExpressionProxy":
         """Calculate the year fraction between two dates, similar to Excel's YEARFRAC.
 
@@ -295,82 +297,63 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             └───────────┴────────────┴────────────┴────────────┘
             ```
 
-        """
-        parent_frame = self._get_parent_frame()
-        start_expr = self._get_polars_expr()
-        end_expr = parent_frame._convert_to_expr(end_date_expr)
-
-        # Check if we're dealing with list columns
-        schema = parent_frame._df.collect_schema()
-
-        start_is_list = False
-        if hasattr(self._proxy, "name") and self._proxy.name in schema:
-            col_dtype = schema[self._proxy.name]
-            if isinstance(col_dtype, pl.List) and isinstance(col_dtype.inner, pl.Date):
-                start_is_list = True
-
-        end_is_list = False
-        if end_expr.meta.is_column():
-            end_col_name = end_expr.meta.output_name()
-            if end_col_name in schema:
-                col_dtype = schema[end_col_name]
-                if isinstance(col_dtype, pl.List) and isinstance(
-                    col_dtype.inner, pl.Date
-                ):
-                    end_is_list = True
-
-        # Convert basis to integer if it's a string
-        if isinstance(basis, str):
-            # Map string basis to integer
-            basis_map = {
-                "us_nasd_30_360": 0,
-                "30/360": 0,
-                "act/act": 1,
-                "actual/actual": 1,
-                "actual/360": 2,
-                "actual_360": 2,
-                "actual/365": 3,
-                "actual_365": 3,
-                "european_30_360": 4,
-                "30e/360": 4,  # lowercase e for consistency
+        
+        List Column Workaround::
+        
+            For actuarial projections stored as list columns (e.g., monthly projection dates),
+            use the explode/group_by pattern:
+            
+            ```python
+            # Example with monthly projection dates
+            projection_data = {
+                "policy_id": ["P001", "P002"],
+                "projection_dates": [
+                    [datetime.date(2024, i, 1) for i in range(1, 13)],  # 12 monthly dates
+                    [datetime.date(2024, i, 15) for i in range(1, 13)]
+                ],
+                "maturity_date": [
+                    datetime.date(2024, 12, 31),
+                    datetime.date(2025, 1, 1)
+                ]
             }
-            basis_lower = basis.lower()
-            if basis_lower not in basis_map:
-                raise ValueError(
-                    f"Invalid basis '{basis}'. Valid values are: 0-4 or "
-                    f"{', '.join(sorted(set(basis_map.keys())))}"
+            af_proj = ActuarialFrame(projection_data)
+            
+            # Calculate yearfrac for each projection date using explode/group_by
+            result = (
+                af_proj.lazy()
+                .with_row_index("_idx")
+                .explode("projection_dates")
+                .with_columns(
+                    pl.col("projection_dates").excel.yearfrac(pl.col("maturity_date"))
+                    .alias("years_to_maturity")
                 )
-            basis_int = basis_map[basis_lower]
-        else:
-            basis_int = int(basis)
-            if basis_int not in range(5):
-                raise ValueError(
-                    f"Invalid basis {basis_int}. Must be an integer between 0 and 4."
-                )
-
-        # Handle list operations - not currently supported
-        # Note: Excel 365 supports dynamic arrays, but implementing this in Polars
-        # requires complex explode/group_by patterns that are better handled at 
-        # the user level for now.
-        if start_is_list or end_is_list:
-            raise NotImplementedError(
-                "yearfrac with list columns is not yet supported. "
-                "Excel 365 supports this via dynamic arrays, but the Polars implementation "
-                "requires explode/group_by patterns. "
-                "As a workaround, use explode() to flatten the list, calculate yearfrac, "
-                "then group_by().agg() to re-create the list structure."
+                .group_by("_idx")
+                .agg([
+                    pl.col("policy_id").first(),
+                    pl.col("years_to_maturity"),
+                    pl.col("maturity_date").first()
+                ])
+                .drop("_idx")
+                .collect()
             )
-
-        # Import the yearfrac function from the functions module
-        from ..functions.excel import yearfrac
-
-        # Ensure both expressions are cast to Date type for the Rust function
-        start_date_expr = start_expr.cast(pl.Date, strict=False)
-        end_date_expr = end_expr.cast(pl.Date, strict=False)
-
-        # Call the Rust implementation via the plugin
-        result_expr = yearfrac(start_date_expr, end_date_expr, basis=basis_int)
-
+            ```
+            
+            Note: List columns are not directly supported due to Polars plugin limitations.
+            Excel 365 achieves this with dynamic arrays, but we require explicit data
+            transformation.
+            
+        """
+        # Import the yearfrac function from the accessor functions module
+        from .excel_functions.yearfrac import yearfrac
+        
+        # Get the start expression from the proxy
+        start_expr = self._get_polars_expr()
+        
+        # Use the standard yearfrac implementation
+        result_expr = yearfrac(start_expr, end_date_expr, basis=basis)
+        
+        # Return wrapped in ExpressionProxy
         from ..column.expression_proxy import ExpressionProxy
-
+        parent_frame = self._get_parent_frame()
+        
         return ExpressionProxy(result_expr, parent_frame)

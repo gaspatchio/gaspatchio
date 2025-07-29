@@ -1,19 +1,42 @@
-# Step 11: Create Python Tests
+# Step 9: Create Python Tests
 
 ## Input
 - Function behavior analysis from Steps 1-2
-- Validated examples from Step 10
+- Validated examples from Step 8
 - Edge cases and error conditions identified
 
 ## Task
 Create comprehensive Python tests for the Excel function.
 
+### Testing Philosophy
+Focus on testing the Python-Rust interface, NOT the Excel calculation logic:
+- **Type marshalling**: Ensure dates, strings, integers work correctly
+- **Parameter validation**: Test invalid inputs raise appropriate errors
+- **Null handling**: Verify null propagation works
+- **Integration**: Test with ActuarialFrame
+- **DO NOT** test the actual Excel calculation logic (that's tested in Rust)
+
 ### Actions
 
-#### 1. Add to `tests/accessors/test_excel.py`
+#### 1. Create `tests/accessors/excel_functions/test_{{function_name}}.py`
+
+**Important**: Tests now go in their own file in the `excel_functions` subdirectory to match the source structure.
 
 Basic functionality test:
 ```python
+"""ABOUTME: Tests for {{function_name}} Python-Rust interface - type marshalling and parameter validation.
+ABOUTME: Does not test Excel calculation logic which is handled by Rust tests."""
+
+import datetime
+from typing import Any
+
+import polars as pl
+import pytest
+
+from gaspatchio_core import ActuarialFrame
+from gaspatchio_core.accessors.excel_functions.{{function_name}} import {{function_name}}
+
+
 def test_{{function_name}}_basic():
     """Test basic {{function_name}} functionality."""
     af = ActuarialFrame({

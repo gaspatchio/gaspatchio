@@ -30,35 +30,38 @@ Based on research, Excel functions fall into categories regarding dynamic array 
 ### YEARFRAC Implementation
 
 #### Supported Combinations ✅
-1. **scalar, scalar** (column to column)
+1. **column, column** (regular columns - vectorized operation)
    ```python
    af["start_date"].excel.yearfrac(af["end_date"])
    ```
 
-2. **scalar, literal** (column to literal date)  
+2. **column, literal** (column to literal date - broadcasting)  
    ```python
    af["start_date"].excel.yearfrac(datetime.date(2021, 1, 1))
    ```
 
-3. **vector, vector** (column arrays to column arrays)
+3. **element-wise operations** (standard vectorized behavior)
    ```python
-   af["start_dates"].excel.yearfrac(af["end_dates"])  # Same length arrays
+   # These all work - they're regular column operations, not list columns
+   af["col1"].excel.yearfrac(af["col2"])  # Element-wise on matching rows
    ```
 
 #### Not Yet Supported ⚠️
-4. **vector, scalar** (list column to scalar/column)
+4. **list column operations** (pl.List type columns)
    ```python
-   af["start_list"].excel.yearfrac(af["end_date"])  # Raises NotImplementedError
+   # If start_dates is List[Date] type:
+   af["start_dates_list"].excel.yearfrac(af["end_date"])  # Raises NotImplementedError
    ```
 
-5. **scalar, vector** (scalar/column to list column)
+5. **array column operations** (pl.Array type columns)
    ```python
-   af["start_date"].excel.yearfrac(af["end_list"])  # Raises NotImplementedError
+   # If dates_array is Array[Date, 3] type:
+   af["dates_array"].excel.yearfrac(af["end_date"])  # Limited support
    ```
 
-6. **vector, vector** (both list columns)
+6. **mixed list/array operations**
    ```python
-   af["start_list"].excel.yearfrac(af["end_list"])  # Raises NotImplementedError
+   af["list_col"].excel.yearfrac(af["array_col"])  # Raises NotImplementedError
    ```
 
 ### Implementation Challenges

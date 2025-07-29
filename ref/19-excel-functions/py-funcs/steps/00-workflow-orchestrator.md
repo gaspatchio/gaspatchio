@@ -6,6 +6,19 @@ This workflow chains together all the steps needed to integrate an Excel functio
 - The Rust function must already be implemented in `gaspatchio_core_lib::excel`
 - You have the function name to integrate
 
+## Architecture Overview
+
+The Python Excel function integration follows this architecture:
+1. **Function Implementation**: Created in `gaspatchio_core/accessors/excel_functions/{{function_name}}.py`
+   - Contains ALL business logic (parameter validation, type conversion)
+   - Handles the Rust plugin hookup via `register_plugin_function`
+2. **Accessor Method**: Added to `gaspatchio_core/accessors/excel.py`
+   - Acts as a thin shim that delegates to the function implementation
+   - Provides the fluent API (e.g., `af["col"].excel.function_name()`)
+3. **No Module Exports**: Functions are NOT exported at the module level
+   - Only accessible through the Excel accessor API
+   - Keeps the namespace clean and organized
+
 ## Workflow Steps
 
 Each step takes input from previous steps and produces output for the next:
@@ -34,33 +47,32 @@ Each step takes input from previous steps and produces output for the next:
    - Input: Function name
    - Output: Module export line
 
-7. **[07-create-python-wrapper.md](07-create-python-wrapper.md)**
+7. **[07-create-python-implementation.md](07-create-python-implementation.md)**
    - Input: Function analysis and Rust details
-   - Output: Python wrapper code
+   - Output: Python function implementation AND accessor method
 
-8. **[08-update-python-exports.md](08-update-python-exports.md)**
-   - Input: Function name
-   - Output: Python export updates
+8. **[08-validate-docstring-examples.md](08-validate-docstring-examples.md)**
+   - Input: Accessor method from Step 7
+   - Output: Validation report
 
-9. **[09-create-excel-accessor.md](09-create-excel-accessor.md)**
-   - Input: All previous analysis
-   - Output: Excel accessor method with docstring
+9. **[09-create-python-tests.md](09-create-python-tests.md)**
+   - Input: Function behavior and examples
+   - Output: Test implementations
 
-10. **[10-validate-docstring-examples.md](10-validate-docstring-examples.md)**
-    - Input: Accessor method from Step 9
-    - Output: Validation report
-
-11. **[11-create-python-tests.md](11-create-python-tests.md)**
-    - Input: Function behavior and examples
-    - Output: Test implementations
-
-12. **[12-run-full-test-suite.md](12-run-full-test-suite.md)**
+10. **[10-run-full-test-suite.md](10-run-full-test-suite.md)**
     - Input: All implementation
     - Output: Test results summary
 
-13. **[13-update-documentation.md](13-update-documentation.md)**
+11. **[11-update-documentation.md](11-update-documentation.md)**
     - Input: Completed implementation
     - Output: Documentation updates
+
+## Changes from Previous Version
+
+This workflow has been streamlined from 13 steps to 11 steps:
+- **Merged Steps 7 & 9**: Creating the function implementation and accessor method are now done together in Step 7
+- **Removed Step 8**: Module export updates are no longer needed with the new architecture
+- **Renumbered Steps**: Subsequent steps have been renumbered accordingly
 
 ## How to Use This Workflow
 
@@ -68,6 +80,7 @@ Each step takes input from previous steps and produces output for the next:
 2. Work through each step in order
 3. Each step produces output that feeds into the next
 4. Save intermediate outputs for debugging/review
+   - we're going to be multithreading so you'll need to create a folder UNIQUE to this workflow, then use that on the way through the steps. eg {FUNCTION_NAME}-output/
 5. If a step fails, fix issues before proceeding
 
 ## Example Usage
@@ -107,7 +120,7 @@ export FUNCTION_NAME="yearfrac"
 
 Before considering the integration complete:
 
-- [ ] All 13 steps completed successfully
+- [ ] All 11 steps completed successfully
 - [ ] Tests pass without warnings
 - [ ] Docstring examples execute correctly
 - [ ] Type stubs are accurate
