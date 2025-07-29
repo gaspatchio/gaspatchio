@@ -689,3 +689,145 @@ Once yearfrac is working, create a pattern for other Excel functions:
 2. [pyo3-polars Plugin Guide](https://github.com/pola-rs/pyo3-polars)
 3. [Excel 365 Dynamic Arrays](https://support.microsoft.com/en-us/office/dynamic-array-formulas-and-spilled-array-behavior-205c6b06-03ba-4151-89a1-87a7eb36e531)
 4. gaspatchio internal docs: `ref/19-excel-functions/py-funcs/19-scalar-vector-research.md`
+
+## Issue: Broadcasting Behavior Mismatch Between Polars DataFrames and Rust Implementation
+
+### Background
+
+The current Rust implementation of `yearfrac` with list support assumes a distinction between "scalar" columns (length 1) and "vector" columns (length > 1) for broadcasting operations. However, this assumption conflicts with how Polars DataFrames handle scalar values.
+
+### The Problem
+
+When creating a DataFrame with scalar values, Polars automatically broadcasts them to match the DataFrame's row count:
+
+```python
+# Python code - what we write:
+af = ActuarialFrame({
+    "policy_id": [1, 2],
+    "valuation_date": datetime.date(2024, 1, 1),  # Intended as scalar
+    "projection_dates": [
+        [date(2024, 1, 1), date(2024, 2, 1), ...],  # List for policy 1
+        [date(2024, 1, 1), date(2024, 2, 1), ...]   # List for policy 2
+    ]
+})
+
+# What Polars actually creates:
+# valuation_date column: [date(2024, 1, 1), date(2024, 1, 1)]  # Length 2, not 1!
+```
+
+### Current Rust Implementation Expectation
+
+The broadcasting functions in Rust explicitly check for scalar columns with exactly one value:
+
+```rust
+fn yearfrac_broadcast_start(
+    start_series: &Series,  // Expected: Scalar Date with len() == 1
+    end_series: &Series,    // List<Date>
+    basis: i32
+) -> PolarsResult<Series> {
+    let start_date_ca = start_series.date()?;
+    if start_date_ca.len() != 1 {
+        return Err(PolarsError::ComputeError(
+            "Scalar start date must have exactly one value".into()
+        ));
+    }
+    // ... broadcasting logic
+}
+```
+
+### The Excel Model We're Trying to Emulate
+
+In Excel, broadcasting happens naturally with cell references:
+- `=YEARFRAC($A$1, B1:B10)` - Single cell A1 broadcasts to each element in B1:B10
+- `=YEARFRAC(A1:A10, $B$1)` - Each element in A1:A10 pairs with single cell B1
+
+### Actuarial Use Cases Affected
+
+This issue impacts common actuarial patterns:
+
+1. **Valuation Date to Projection Dates**: Calculate time from a single valuation date to multiple monthly projection dates
+2. **Issue Dates to Maturity Date**: Calculate time from various policy issue dates to a common maturity date
+3. **Fixed Reference Date Calculations**: Any calculation involving a fixed reference date and varying dates
+
+### Proposed Solution
+
+The Rust implementation should recognize Polars' broadcasting behavior and handle "repeated scalar" columns appropriately. Options include:
+
+1. **Detect Repeated Values**: Instead of checking `len() == 1`, check if all values in the column are identical:
+   ```rust
+   fn is_broadcasted_scalar(series: &Series) -> bool {
+       if series.len() <= 1 {
+           return true;
+       }
+       // Check if all values are the same
+       let first = series.get(0);
+       series.iter().all(|val| val == first)
+   }
+   ```
+
+2. **Accept Any Length for Broadcasting**: Remove the length check entirely and use the first value for broadcasting:
+   ```rust
+   fn yearfrac_broadcast_start(
+       start_series: &Series,  // Use first value for broadcasting
+       end_series: &Series,    // List<Date>
+       basis: i32
+   ) -> PolarsResult<Series> {
+       let start_date_ca = start_series.date()?;
+       let start_date_opt = start_date_ca.get(0);  // Just use first value
+       // ... rest of implementation
+   }
+   ```
+
+3. **Support Both Patterns**: Check for either true scalars (len=1) OR repeated values:
+   ```rust
+   if start_date_ca.len() != 1 && !is_uniform_column(start_date_ca) {
+       return Err(PolarsError::ComputeError(
+           "Broadcasting requires either a scalar or uniform column".into()
+       ));
+   }
+   ```
+
+### Test Cases to Add
+
+Once the Rust implementation is updated, these test patterns should work:
+
+```python
+# Test 1: DataFrame-created "scalar" (actually broadcasted)
+af = ActuarialFrame({
+    "id": [1, 2, 3],
+    "val_date": date(2024, 1, 1),  # Creates [date, date, date]
+    "proj_dates": [[date(2024, i, 1) for i in range(1, 13)] for _ in range(3)]
+})
+result = af["val_date"].excel.yearfrac(af["proj_dates"])  # Should broadcast
+
+# Test 2: Explicit repeated values
+af = ActuarialFrame({
+    "id": [1, 2, 3],
+    "val_date": [date(2024, 1, 1)] * 3,  # Explicitly repeated
+    "proj_dates": [[date(2024, i, 1) for i in range(1, 13)] for _ in range(3)]
+})
+result = af["val_date"].excel.yearfrac(af["proj_dates"])  # Should broadcast
+
+# Test 3: True varying values should not broadcast
+af = ActuarialFrame({
+    "id": [1, 2, 3],
+    "val_date": [date(2024, 1, 1), date(2024, 2, 1), date(2024, 3, 1)],  # Different values
+    "proj_dates": [[date(2024, i, 1) for i in range(1, 13)] for _ in range(3)]
+})
+# This should NOT use broadcasting logic - each row uses its own val_date
+```
+
+### Impact on Other Excel Functions
+
+This pattern will need to be applied consistently across all Excel functions that support broadcasting:
+- PV, FV, NPV, XNPV (present/future value calculations with varying dates)
+- PMT, PPMT, IPMT (payment calculations with varying periods)
+- Any function where scalar/vector combinations make sense
+
+### Recommendation
+
+Implement Option 2 (Accept Any Length for Broadcasting) as it:
+- Aligns with Polars' natural DataFrame behavior
+- Simplifies the user experience (no need to worry about "true" scalars)
+- Matches user intent when they provide a single value to the DataFrame constructor
+- Is backwards compatible with any existing code

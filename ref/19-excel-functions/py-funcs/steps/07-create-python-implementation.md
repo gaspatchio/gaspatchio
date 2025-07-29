@@ -6,7 +6,7 @@
 - Docstring requirements from guidelines
 
 ## Task
-Create both the Python function implementation and the Excel accessor method with proper scalar/vector/list handling.
+Create both the Python function implementation and the Excel accessor method. The Python layer is now a simple passthrough - Rust handles all scalar/vector/list logic.
 
 ### Pre-requisites
 ⚠️ **CRITICAL**: Read these files first:
@@ -44,34 +44,31 @@ def {{function_name}}(
 ) -> pl.Expr:
     """{{Brief description from Step 1 analysis}}.
     
-    This is the low-level function that provides Excel {{FUNCTION_NAME}} functionality.
-    It handles all business logic including parameter validation and type conversion,
-    then calls the Rust implementation.
-    
-    Note: List columns are not yet supported. Excel 365 supports dynamic arrays
-    with functions like {{FUNCTION_NAME}}, but Polars plugin functions have limitations
-    with list operations. Use explode/group_by patterns as a workaround.
+    This function provides Excel {{FUNCTION_NAME}} functionality through a Rust implementation.
+    It supports scalar dates, list columns of dates, and broadcasting between scalar
+    and list columns (matching Excel 365's dynamic array behavior).
     
     Args:
-        param1: {{Description from analysis}}
-        param2: {{Description from analysis}}
+        param1: {{Description from analysis}} (Date or List[Date])
+        param2: {{Description from analysis}} (Date or List[Date])
         optional_param: {{Description from analysis}}
         
     Returns:
-        A Polars expression representing {{return description}}
+        Polars expression with the {{return description}}
     """
-    # Business logic: parameter validation and type conversion
+    param1 = to_polars_expression(param1)
+    param2 = to_polars_expression(param2)
+    
+    # Validate optional parameters if needed
     # Example: validate optional_param is within valid range
     # if optional_param not in valid_range:
     #     raise ValueError(f"Invalid optional_param: {optional_param}")
     
-    param1 = to_polars_expression(param1)
-    param2 = to_polars_expression(param2)
-    
-    # Cast to appropriate types for Rust function
-    # Example for date functions:
-    # param1 = param1.cast(pl.Date, strict=False)
-    # param2 = param2.cast(pl.Date, strict=False)
+    # Don't cast if already the right type (Date or List[Date])
+    # The Rust function handles both scalar and list types
+    # Only cast if you need to ensure the type
+    # param1_expr = param1.cast(pl.Date, strict=False) if needed
+    # param2_expr = param2.cast(pl.Date, strict=False) if needed
 
     return register_plugin_function(
         args=[param1, param2],
@@ -96,13 +93,13 @@ def {{function_name}}(
     
     {{Detailed explanation paragraph with actuarial context}}
     
-    Supports Excel 365's dynamic array behavior with some limitations:
+    Supports Excel 365's dynamic array behavior:
     - ✅ scalar, scalar (column to column)
     - ✅ scalar, literal (column to literal value)  
     - ✅ vector, vector (element-wise operations on columns)
     - ✅ scalar broadcasting (column * 2, literal * column)
-    - ❌ list column operations (pl.List type) - use explode() workaround
-    - ❌ array column operations (pl.Array type) - limited support
+    - ✅ list column operations (pl.List type) - native Rust support
+    - ✅ scalar/list broadcasting (scalar date to list of dates)
     
     !!! note "When to use"
         *   **{{Use Case 1}}**: {{Specific actuarial scenario}}
@@ -130,9 +127,8 @@ def {{function_name}}(
         If the operation requires an ActuarialFrame context that is not available.
     ValueError
         If invalid parameters are provided to the Excel function.
-    NotImplementedError
-        If list columns are provided. Excel 365 supports this via dynamic
-        arrays, but the Polars implementation requires explode/group_by patterns.
+    ValueError
+        If invalid parameters are provided to the Excel function.
         
     Examples
     --------
@@ -160,21 +156,16 @@ def {{function_name}}(
         {{EXACT output from execution}}
         ```
         
-    **List Column Workaround**::
+    **List Column Example: {{Projection Use Case}}**::
     
-        For Excel-like dynamic array behavior with list columns:
+        Excel-like dynamic array behavior with list columns:
         
         ```python
-        # Instead of: af["list_col"].excel.{{function_name}}(param2)
-        # Use explode/group_by pattern:
-        result = (
-            af.explode("list_col")
-            .with_columns(
-                result=pl.col("list_col").excel.{{function_name}}(param2)
-            )
-            .group_by("id")
-            .agg(pl.col("result"))
-        )
+        {{Complete example with list columns}}
+        ```
+        
+        ```
+        {{EXACT output from execution}}
         ```
     """
     # Import the function from the excel_functions module
@@ -183,38 +174,8 @@ def {{function_name}}(
     # Get the start expression from the proxy (self is the first parameter)
     start_expr = self._get_polars_expr()
     
-    # Check for list columns if relevant for this function
-    # NOTE: Only add this check if the function could reasonably receive list inputs
-    parent_frame = self._get_parent_frame()
-    schema = parent_frame._df.collect_schema()
-    
-    # Check if self is a list column
-    start_is_list = False
-    if hasattr(self._proxy, "name") and self._proxy.name in schema:
-        col_dtype = schema[self._proxy.name]
-        if isinstance(col_dtype, pl.List):
-            start_is_list = True
-    
-    # Check if param2 is a list column
-    param2_expr = parent_frame._convert_to_expr(param2)
-    param2_is_list = False
-    if param2_expr.meta.is_column():
-        param2_col_name = param2_expr.meta.output_name()
-        if param2_col_name in schema:
-            col_dtype = schema[param2_col_name]
-            if isinstance(col_dtype, pl.List):
-                param2_is_list = True
-    
-    # Raise helpful error for list columns
-    if start_is_list or param2_is_list:
-        raise NotImplementedError(
-            f"{{function_name}} with list columns is not yet supported. "
-            f"Excel 365 supports this via dynamic arrays (requires + operator: "
-            f"={{FUNCTION_NAME}}(+A1:A5, +B1:B5)), but the Polars implementation "
-            f"requires explode/group_by patterns. "
-            f"As a workaround, use explode() to flatten the list, calculate {{function_name}}, "
-            f"then group_by().agg() to re-create the list structure."
-        )
+    # No need to check for list columns - Rust handles all type combinations
+    # including scalar/scalar, list/list, and scalar/list broadcasting
     
     # Delegate to the function, passing all parameters
     result_expr = {{function_name}}(start_expr, param2, optional_param=optional_param)
@@ -236,77 +197,57 @@ def {{function_name}}(
 Regular column operations are "vectorized" - they operate element-wise on all rows.
 This is different from list/array columns where each cell contains multiple values.
 
-### 1. **Understand Excel 365 Behavior**
-- Excel 365 supports dynamic arrays that "spill" results
-- Some functions like YEARFRAC are "spill-resistant" and need the `+` operator
-- Example: `=YEARFRAC(+A1:A5, +B1:B5)` works with arrays
+### 1. **Rust Handles All Type Combinations**
+As of the latest implementation, the Rust layer handles:
+- Scalar vs Scalar (regular column operations)
+- List vs List (pairwise operations on lists)
+- Scalar vs List (broadcasting scalar to each list element)
+- List vs Scalar (broadcasting scalar to each list element)
+
+The Python layer should be a simple passthrough!
 
 ### 2. **Current Support Matrix**
-Your implementation should support:
+Your implementation automatically supports:
 - ✅ **scalar, scalar**: Regular column operations (e.g., `col1.yearfrac(col2)`)
 - ✅ **scalar, literal**: Column with literal values (e.g., `col.yearfrac(date(2024,1,1))`)
 - ✅ **vector operations**: Element-wise operations on regular columns
 - ✅ **broadcasting**: Scalar values broadcast across columns automatically
-- ❌ **pl.List columns**: Variable-length lists per row - defer to explode() workaround
-- ❌ **pl.Array columns**: Fixed-size arrays per row - limited Polars support
+- ✅ **pl.List columns**: Variable-length lists per row - handled by Rust
+- ✅ **scalar/list broadcasting**: Excel-like broadcasting behavior
 
-### 3. **List Detection Pattern**
-Only include list detection if the function could reasonably receive list inputs:
-```python
-# Check schema for list columns
-schema = parent_frame._df.collect_schema()
-if isinstance(schema[col_name], pl.List):
-    # Handle list column case
-```
+### 3. **No List Detection Needed**
+The Python layer no longer needs to detect or handle list columns specially.
+The Rust implementation uses the Polars type system to determine the appropriate
+processing path.
 
-### 4. **Error Message Template**
-For unsupported list operations:
-```python
-raise NotImplementedError(
-    f"{{function_name}} with list columns is not yet supported. "
-    f"Excel 365 supports this via dynamic arrays (requires + operator: "
-    f"={{FUNCTION_NAME}}(+A1:A5, +B1:B5)), but the Polars implementation "
-    f"requires explode/group_by patterns. "
-    f"As a workaround, use explode() to flatten the list, calculate {{function_name}}, "
-    f"then group_by().agg() to re-create the list structure."
-)
-```
-
-### 5. **When to Skip List Checks**
-Skip list detection for functions that:
-- Only work with scalar values by definition
-- Have no meaningful list interpretation
-- Are purely element-wise with no aggregation
-
-### 6. **Parameter Validation Order**
-1. Convert inputs to expressions
-2. Validate parameter ranges/types
-3. Check for list columns (if applicable)
-4. Cast to required types
-5. Call Rust implementation
+### 4. **Parameter Validation Order**
+1. Convert inputs to expressions using `to_polars_expression`
+2. Validate parameter ranges/types if needed
+3. Call Rust implementation (it handles all type combinations)
+4. Return the result expression
 
 ## Architecture Summary
 
 1. **Function Implementation** (`excel_functions/{{function_name}}.py`):
-   - Contains ALL business logic (validation, type conversion)
+   - Simple passthrough to Rust implementation
+   - Handles parameter validation for Python-specific constraints
    - Handles the Rust plugin registration
    - Self-contained module
-   - Does NOT handle list detection (leave to accessor)
+   - Rust handles all type detection and processing
 
 2. **Accessor Method** (`excel.py`):
    - Thin shim that delegates to the function
-   - Contains list detection logic (when applicable)
-   - Provides helpful error messages
+   - No list detection needed (Rust handles it)
    - Contains comprehensive documentation
    - Provides the fluent API
 
 ## Key Requirements
-- Function file must handle all parameter validation
-- Accessor method handles list detection when relevant
-- Error messages must mention Excel 365 dynamic arrays
-- Provide explode/group_by workaround in error messages
+- Function file handles Python-specific parameter validation
+- Rust handles all type detection and list/scalar logic
+- Documentation should mention Excel 365 dynamic array support
 - Examples must be executable and produce shown output
 - Use realistic actuarial data (policies, premiums, dates)
+- Include examples with list columns to showcase native support
 
 ## Next Step
 This output feeds into Step 8: Validate Docstring Examples

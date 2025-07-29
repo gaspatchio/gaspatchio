@@ -10,11 +10,21 @@ This workflow chains together all the steps needed to implement an Excel functio
 ## Architecture Overview
 
 The Rust Excel function implementation follows this architecture:
-1. **Pure Calculation Function**: Core logic using Rust primitives
-2. **Polars Interface Function**: Handles Series/DataFrame integration
-3. **Kwargs Structure**: Manages optional parameters
-4. **Comprehensive Tests**: Unit, integration, and Excel compatibility tests
-5. **Module Integration**: Export in `src/excel/mod.rs`
+1. **Output Type Detection Function**: Determines output type based on input types (scalar/list)
+2. **Pure Calculation Function**: Core logic using Rust primitives
+3. **Polars Interface Function**: Handles Series/DataFrame integration with type branching
+4. **List Processing Functions**: Separate handlers for list×list, scalar×list scenarios
+5. **Kwargs Structure**: Manages optional parameters
+6. **Comprehensive Tests**: Unit, integration, Excel compatibility, and list operation tests
+7. **Module Integration**: Export in `src/excel/mod.rs`
+
+## Key Architectural Change: Native List Support
+
+Excel functions now support native list column processing to handle actuarial projections:
+- **List columns**: Contains vectors of values (e.g., 120 monthly projection values)
+- **Broadcasting**: Scalar values broadcast to match list dimensions (Excel dynamic array behavior)
+- **Type detection**: Functions determine output type based on input types
+- **Performance**: Native Rust processing without Python overhead
 
 ## Workflow Steps
 
@@ -22,27 +32,28 @@ Each step takes input from previous steps and produces output for the next:
 
 1. **[01-study-past-learnings.md](01-study-past-learnings.md)**
    - Input: Function name
-   - Output: Relevant insights and tips
+   - Output: Relevant insights and tips (including list handling patterns)
 
 2. **[02-analyze-excel-documentation.md](02-analyze-excel-documentation.md)**
    - Input: Function name
    - Output: Structured function specification (YAML)
+   - Note: Include Excel 365 dynamic array behavior
 
 3. **[03-research-excel-behavior.md](03-research-excel-behavior.md)**
    - Input: Function specification from Step 2
-   - Output: Edge cases and behavior patterns (YAML)
+   - Output: Edge cases and behavior patterns (including array operations)
 
 4. **[04-create-implementation-plan.md](04-create-implementation-plan.md)**
    - Input: Analysis from Steps 1-3
-   - Output: Detailed implementation plan (YAML)
+   - Output: Detailed implementation plan with list support strategy
 
 5. **[05-implement-rust-function.md](05-implement-rust-function.md)**
    - Input: Implementation plan from Step 4
-   - Output: Rust implementation code
+   - Output: Rust implementation with list column support
 
 6. **[06-write-comprehensive-tests.md](06-write-comprehensive-tests.md)**
    - Input: Implementation and behavior analysis
-   - Output: Test implementation code
+   - Output: Tests including list operations and broadcasting
 
 7. **[07-verify-build-quality.md](07-verify-build-quality.md)**
    - Input: Implementation and tests
@@ -54,7 +65,7 @@ Each step takes input from previous steps and produces output for the next:
 
 9. **[09-update-learnings.md](09-update-learnings.md)**
    - Input: Implementation experience
-   - Output: Universal learnings for future implementations
+   - Output: Universal learnings including list patterns
 
 ## Performance Considerations
 
@@ -63,14 +74,21 @@ Throughout the workflow, keep in mind:
 - Create expensive objects once outside loops
 - Use `#[inline]` for small helper functions
 - Use iterator patterns with `collect::<Float64Chunked>()`
-- Add benchmarks for functions used in actuarial projections
-- Test with large datasets (1M+ rows)
+- Pre-allocate list builders with capacity hints
+- Avoid unnecessary array conversions in list processing
+- Test with large datasets (1M+ rows) and deep lists (120+ elements)
 
-## Two-Function Design Pattern
+## Function Design Pattern
 
 All implementations MUST follow this pattern:
-1. **Polars Interface**: `pub fn function_name(inputs: &[Series], kwargs: &KwargsType) -> PolarsResult<Series>`
-2. **Pure Calculation**: `fn calculate_function_name(params...) -> ReturnType`
+
+1. **Output Type Function**: `pub fn function_name_output_type(input_fields: &[Field]) -> PolarsResult<Field>`
+2. **Polars Interface**: `pub fn function_name(inputs: &[Series], kwargs: &KwargsType) -> PolarsResult<Series>`
+3. **Pure Calculation**: `fn calculate_function_name(params...) -> ReturnType`
+4. **List Handlers**: 
+   - `fn function_name_list_columns(start: &Series, end: &Series, ...) -> PolarsResult<Series>`
+   - `fn function_name_broadcast_start(start: &Series, end: &Series, ...) -> PolarsResult<Series>`
+   - `fn function_name_broadcast_end(start: &Series, end: &Series, ...) -> PolarsResult<Series>`
 
 ## How to Use This Workflow
 
@@ -107,23 +125,27 @@ Add to `.gitignore`:
 rust-functions-outputs/
 ```
 
-## Multithreading Considerations
+## List Column Considerations
 
-Since we'll be processing multiple functions in parallel:
-- Each function gets its own output directory
-- Use thread-safe file operations
-- Avoid modifying shared files (like mod.rs) concurrently
-- Batch module export updates at the end
+When implementing functions with list support:
+- Check if the function makes sense with array operations (most financial functions do)
+- Design output type detection to handle all combinations: scalar×scalar, list×list, scalar×list, list×scalar
+- Use Polars' broadcasting behavior (first value used for repeated scalars)
+- Ensure backward compatibility for scalar operations
+- Add comprehensive tests for list operations
 
 ## Quality Checklist
 
 Before considering the implementation complete:
 
 - [ ] All 9 steps completed successfully
+- [ ] Output type function correctly detects scalar/list combinations
+- [ ] List processing functions handle all scenarios
+- [ ] Broadcasting behavior matches Excel 365
 - [ ] cargo fmt passes
 - [ ] cargo clippy --pedantic passes
-- [ ] All tests pass
+- [ ] All tests pass (including list tests)
 - [ ] Excel compatibility verified
 - [ ] Documentation complete
-- [ ] Performance benchmarked (if applicable)
-- [ ] Learnings documented
+- [ ] Performance benchmarked with list columns
+- [ ] Learnings documented (including list patterns)

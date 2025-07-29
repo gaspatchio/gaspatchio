@@ -21,10 +21,15 @@ Analyze the existing Rust implementation to understand the interface.
    - Input types expected
    - Return type
    - Error handling approach
+   - Check if it handles list columns (look for DataType::List patterns)
 
 4. Check existing patterns:
    - Compare with similar functions like `yearfrac.rs`
    - Note any special handling
+   - Look for list handling patterns:
+     - Output type detection for List inputs
+     - Branching based on scalar vs list types
+     - Broadcasting logic for scalar/list combinations
 
 ## Output
 Create a Rust analysis document:
@@ -46,12 +51,21 @@ function_signature:
   inputs: "&[Series]"
   kwargs: "&{{FunctionName}}Kwargs"
   return_type: "PolarsResult<Series>"
+list_support:
+  handles_lists: true/false
+  output_type_function: "{{function_name}}_output_type"
+  supported_patterns:
+    - "scalar, scalar"
+    - "list, list"
+    - "scalar, list (broadcasting)"
+    - "list, scalar (broadcasting)"
 implementation_notes:
   - "Uses pattern X for handling Y"
   - "Special case for null values"
+  - "List handling via match on DataType"
 similar_functions:
   - name: "yearfrac"
-    pattern_to_copy: "Date handling approach"
+    pattern_to_copy: "List handling and broadcasting approach"
 ```
 
 ## Next Step

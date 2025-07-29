@@ -20,12 +20,20 @@ The complete Rust binding file:
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
+// For functions that don't support lists, use same_output_type:
 fn same_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     Ok(field.clone())
 }
 
+// For functions that support lists, import from core:
+use gaspatchio_core_lib::excel::{{function_name}}_output_type;
+
+// Use the appropriate output type function based on list support:
+// For simple functions without list support:
 #[polars_expr(output_type_func = same_output_type)]
+// For functions with list support:
+// #[polars_expr(output_type_func = {{function_name}}_output_type)]
 pub fn {{function_name}}(
     inputs: &[Series],
     kwargs: gaspatchio_core_lib::excel::{{FunctionName}}Kwargs,
@@ -37,7 +45,9 @@ pub fn {{function_name}}(
 ### Validation Checklist
 - [ ] Function name matches exactly (snake_case)
 - [ ] Kwargs type imported correctly
-- [ ] Output type function appropriate for this function
+- [ ] Output type function appropriate for this function:
+  - Use `same_output_type` for simple scalar functions
+  - Use `{{function_name}}_output_type` if Rust handles lists
 - [ ] No additional logic (thin wrapper only)
 
 ## Next Step

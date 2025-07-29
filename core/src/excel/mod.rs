@@ -1,37 +1,9 @@
-pub mod accrint;
-pub mod datedif;
-pub mod days360;
-pub mod edate;
-pub mod eomonth;
-pub mod fv;
-pub mod ipmt;
-pub mod irr;
-pub mod nper;
-pub mod npv;
-pub mod pmt;
-pub mod ppmt;
-pub mod price;
-pub mod pv;
-pub mod rate;
-pub mod xirr;
-pub mod xnpv;
+// ABOUTME: Excel module exports and organization
+// ABOUTME: Provides Excel-compatible financial and date functions
+
 pub mod yearfrac;
 
-pub use accrint::{accrint, AccrintKwargs};
-pub use datedif::{datedif, DatedifKwargs};
-pub use days360::{days360, Days360Kwargs};
-pub use edate::{edate, EdateKwargs};
-pub use eomonth::{eomonth, EomontKwargs};
-pub use fv::{fv, FVKwargs};
-pub use ipmt::{ipmt, IpmtKwargs};
-pub use irr::{irr, IrrKwargs};
-pub use nper::{nper, NperKwargs};
-pub use npv::{npv, NPVKwargs};
-pub use pmt::{pmt, PmtKwargs};
-pub use ppmt::{ppmt, PpmtKwargs};
-pub use price::{price, PriceKwargs};
-pub use pv::{pv, PVKwargs};
-pub use rate::{rate, RateKwargs};
-pub use xirr::{xirr, XirrKwargs};
-pub use xnpv::{xnpv, XNPVKwargs};
-pub use yearfrac::{yearfrac, YearFracKwargs};
+pub use yearfrac::{yearfrac, yearfrac_output_type, YearFracKwargs};
+
+#[cfg(test)]
+mod yearfrac_tests;

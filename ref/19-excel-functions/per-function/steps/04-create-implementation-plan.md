@@ -14,23 +14,32 @@ Make a detailed plan for the Rust implementation based on all previous analysis.
    ```bash
    ls src/excel/
    # Look at similar functions for patterns
+   # Check yearfrac.rs for list handling reference
    ```
 
 2. **Determine data types**:
    - Map Excel types to Rust types
    - Consider Polars Series types
-   - Plan type conversions
+   - Plan type conversions for both scalar and list variants
+   - Identify which parameters support list operations
 
 3. **Design the implementation**:
+   - Output type detection function
    - Kwargs structure for optional parameters
-   - Function signatures
+   - Function signatures (main + list handlers)
    - Helper functions needed
    - Constants to define
 
-4. **Plan error handling**:
+4. **Plan list support**:
+   - Determine if function benefits from array operations
+   - Design branching logic for scalar/list combinations
+   - Plan broadcasting behavior for mixed inputs
+   - Consider memory pre-allocation strategies
+
+5. **Plan error handling**:
    - Map Excel errors to Rust errors
-   - Validation strategy
-   - Null handling approach
+   - Validation strategy for both scalar and list inputs
+   - Null handling approach at element and list levels
 
 ## Output Format
 
@@ -40,17 +49,38 @@ Create `rust-functions-outputs/{{FUNCTION_NAME}}-output/04-implementation-plan.y
 function_name: {{FUNCTION_NAME}}
 file_path: "src/excel/{{function_name}}.rs"
 
+# List support configuration
+list_support:
+  enabled: true  # Most financial functions should support lists
+  supports_broadcasting: true  # Can mix scalar and list inputs
+  list_parameters:  # Which parameters can be lists
+    - param1
+    - param2
+  scalar_only_parameters:  # Parameters that must remain scalar
+    - basis  # Example: options/flags typically scalar
+
 rust_types:
-  # Map each parameter to Rust types
+  # Map each parameter to Rust types (both scalar and list)
   param1:
     excel_type: "number|date|text|logical"
     rust_type: "f64|NaiveDate|String|bool"
-    polars_type: "Float64Chunked|Int32Chunked|StringChunked|BooleanChunked"
-    extraction: ".f64()?|.date()?|.str()?|.bool()?"
+    polars_scalar_type: "Float64Chunked|Int32Chunked|StringChunked|BooleanChunked"
+    polars_list_type: "ListChunked"  # When used in lists
+    extraction_scalar: ".f64()?|.date()?|.str()?|.bool()?"
+    extraction_list: ".list()?"
     
 return_type:
   rust_type: "f64|String|bool|NaiveDate"
-  polars_type: "Float64Chunked|StringChunked|BooleanChunked|Int32Chunked"
+  polars_scalar_type: "Float64Chunked|StringChunked|BooleanChunked|Int32Chunked"
+  polars_list_type: "ListChunked"  # When returning lists
+  
+output_type_function:
+  name: "{{function_name}}_output_type"
+  logic: |
+    - Check input field types
+    - If any inputs are lists, determine output list type
+    - Handle broadcasting scenarios
+    - Return appropriate Field with correct DataType
   
 kwargs_structure:
   name: "{{FunctionName}}Kwargs"
@@ -59,6 +89,7 @@ kwargs_structure:
       type: "Option<i32>"
       default: "None"
       validation: "Must be between 0 and 4"
+      list_behavior: "Applied to all elements"  # How it works with lists
       
 constants:
   - name: "CONSTANT_NAME"
@@ -70,169 +101,193 @@ helper_functions:
   - name: "helper_function_name"
     signature: "fn helper_function_name(param: Type) -> ReturnType"
     purpose: "What this helper does"
+  - name: "process_{{function_name}}_list_pair"
+    signature: "fn process_{{function_name}}_list_pair(list1: &Series, list2: &Series) -> PolarsResult<Series>"
+    purpose: "Process paired elements from two lists"
+    
+implementation_functions:
+  - name: "{{function_name}}"
+    type: "main_interface"
+    purpose: "Entry point with type branching"
+    logic:
+      - "Validate inputs"
+      - "Branch based on input types"
+      - "Call appropriate handler"
+      
+  - name: "{{function_name}}_scalar_columns"
+    type: "scalar_handler"
+    purpose: "Handle traditional scalar operations"
+    
+  - name: "{{function_name}}_list_columns"
+    type: "list_handler"
+    purpose: "Handle list×list operations"
+    
+  - name: "{{function_name}}_broadcast_first"
+    type: "broadcast_handler"
+    purpose: "Broadcast scalar first parameter with list second"
+    
+  - name: "{{function_name}}_broadcast_second"
+    type: "broadcast_handler"
+    purpose: "Broadcast scalar second parameter with list first"
     
 implementation_steps:
-  - step: "Validate inputs"
+  - step: "Output type detection"
     details:
-      - "Check parameter count"
-      - "Validate optional parameter range"
-  - step: "Extract and convert parameters"
+      - "Implement output_type function"
+      - "Handle all input type combinations"
+      - "Ensure correct list output types"
+      
+  - step: "Main function branching"
     details:
-      - "Get typed arrays from Series"
-      - "Handle type conversions"
-  - step: "Implement core algorithm"
+      - "Check input types"
+      - "Route to appropriate handler"
+      - "Preserve backward compatibility"
+      
+  - step: "Scalar implementation"
     details:
-      - "Specific calculation steps"
-      - "Handle special cases"
-  - step: "Handle edge cases"
+      - "Extract existing logic if refactoring"
+      - "Maintain exact Excel behavior"
+      
+  - step: "List implementation"
     details:
-      - "Zero handling"
-      - "Negative handling"
-      - "Error conditions"
+      - "Use ListChunked builders"
+      - "Process row by row"
+      - "Handle nested nulls properly"
+      
+  - step: "Broadcasting implementation"
+    details:
+      - "Use first value for scalar broadcasting"
+      - "Apply to each list element"
+      - "Handle Polars DataFrame scalar behavior"
       
 error_mapping:
   "#VALUE!": "PolarsError::ComputeError for type mismatches"
   "#NUM!": "PolarsError::ComputeError for out of range values"
   "#DIV/0!": "PolarsError::ComputeError for division by zero"
+  "List length mismatch": "PolarsError::ComputeError when list×list have different lengths"
   
 challenges:
-  - challenge: "Complex algorithm"
-    approach: "Break into smaller functions"
-  - challenge: "Performance with large datasets"
-    approach: "Use iterator pattern, avoid allocations"
+  - challenge: "Complex algorithm with lists"
+    approach: "Separate list processing logic clearly"
+  - challenge: "Memory efficiency with large lists"
+    approach: "Pre-allocate builders, avoid intermediate allocations"
+  - challenge: "Null handling at multiple levels"
+    approach: "Handle list-level nulls and element-level nulls separately"
     
 similar_functions:
-  - function: "existing_function"
-    reusable_code:
-      - "Date conversion logic"
-      - "Error handling pattern"
+  - function: "yearfrac"
+    reusable_patterns:
+      - "Output type detection pattern"
+      - "List builder usage"
+      - "Broadcasting implementation"
+      - "Type branching structure"
       
 test_categories:
-  - "Normal use cases"
-  - "Edge cases (zero, negative)"
+  - "Normal scalar use cases"
+  - "List×list operations"
+  - "Broadcasting (scalar×list)"
+  - "Null handling (list and element level)"
+  - "Edge cases (empty lists, single element)"
   - "Error conditions"
   - "Excel compatibility"
-  - "Performance benchmarks"
+  - "Performance with large lists"
+  - "Property-based tests for list operations"
 ```
 
 ## Example Output
 
-For YEARFRAC:
+For PMT with list support:
 
 ```yaml
-function_name: YEARFRAC
-file_path: "src/excel/yearfrac.rs"
+function_name: PMT
+file_path: "src/excel/pmt.rs"
+
+list_support:
+  enabled: true
+  supports_broadcasting: true
+  list_parameters:
+    - rate
+    - nper
+    - pv
+    - fv
+  scalar_only_parameters:
+    - type  # Payment timing is typically consistent
 
 rust_types:
-  start_date:
-    excel_type: "date"
-    rust_type: "NaiveDate"
-    polars_type: "Int32Chunked"
-    extraction: ".date()?"
-  end_date:
-    excel_type: "date"
-    rust_type: "NaiveDate"
-    polars_type: "Int32Chunked"
-    extraction: ".date()?"
-  basis:
+  rate:
     excel_type: "number"
-    rust_type: "i32"
-    polars_type: "Int32Chunked"
-    extraction: ".i32()?"
+    rust_type: "f64"
+    polars_scalar_type: "Float64Chunked"
+    polars_list_type: "ListChunked"
+    extraction_scalar: ".f64()?"
+    extraction_list: ".list()?"
+  nper:
+    excel_type: "number"
+    rust_type: "f64"
+    polars_scalar_type: "Float64Chunked"
+    polars_list_type: "ListChunked"
+    extraction_scalar: ".f64()?"
+    extraction_list: ".list()?"
+  pv:
+    excel_type: "number"
+    rust_type: "f64"
+    polars_scalar_type: "Float64Chunked"
+    polars_list_type: "ListChunked"
+    extraction_scalar: ".f64()?"
+    extraction_list: ".list()?"
     
 return_type:
   rust_type: "f64"
-  polars_type: "Float64Chunked"
+  polars_scalar_type: "Float64Chunked"
+  polars_list_type: "ListChunked"
   
-kwargs_structure:
-  name: "YearFracKwargs"
-  fields:
-    - name: "basis"
-      type: "Option<i32>"
-      default: "None"
-      validation: "Must be 0, 1, 2, 3, or 4"
-      
-constants:
-  - name: "DAYS_PER_YEAR_360"
-    type: "f64"
-    value: "360.0"
-    purpose: "Days in 360-day year"
-  - name: "DAYS_PER_YEAR_365"
-    type: "f64"
-    value: "365.0"
-    purpose: "Days in 365-day year"
-    
-helper_functions:
-  - name: "days_360_us"
-    signature: "fn days_360_us(start: NaiveDate, end: NaiveDate) -> i32"
-    purpose: "Calculate days using US 30/360 convention"
-  - name: "days_360_eu"
-    signature: "fn days_360_eu(start: NaiveDate, end: NaiveDate) -> i32"
-    purpose: "Calculate days using European 30/360 convention"
-    
-implementation_steps:
-  - step: "Extract and validate parameters"
-    details:
-      - "Get date arrays from first two Series"
-      - "Get basis from kwargs, default to 0"
-      - "Validate basis is 0-4"
-  - step: "Handle date ordering"
-    details:
-      - "Check if start > end for negative result"
-      - "Normalize dates for calculation"
-  - step: "Calculate based on basis"
-    details:
-      - "Switch on basis value"
-      - "Apply appropriate day count convention"
-      - "Divide by year basis"
-  - step: "Apply sign based on date order"
-    details:
-      - "Negate if original start > end"
-      
-error_mapping:
-  "#NUM!": "Basis value not in range 0-4"
-  "#VALUE!": "Invalid date values"
+output_type_function:
+  name: "pmt_output_type"
+  logic: |
+    - Check if any of rate, nper, pv, fv are lists
+    - If yes, return List(Float64)
+    - Otherwise return Float64
   
-challenges:
-  - challenge: "Complex day count conventions"
-    approach: "Implement separate helper for each convention"
-  - challenge: "1900 leap year bug"
-    approach: "Document behavior, match Excel exactly"
-  - challenge: "Month-end handling for 30/360"
-    approach: "Implement Excel's specific rules"
-    
-similar_functions:
-  - function: "DAYS360"
-    reusable_code:
-      - "30/360 day count logic"
-      - "Month-end adjustment rules"
+implementation_functions:
+  - name: "pmt"
+    type: "main_interface"
+    logic:
+      - "Extract rate, nper, pv series"
+      - "Check optional fv, type parameters"
+      - "Branch on input types"
       
-test_categories:
-  - "All 5 basis values"
-  - "Same year vs different years"
-  - "Leap year handling"
-  - "Start > end (negative results)"
-  - "Month-end special cases"
-  - "1900 dates (leap year bug)"
-  - "Large date ranges"
+  - name: "pmt_scalar_columns"
+    type: "scalar_handler"
+    purpose: "Original PMT logic for scalars"
+    
+  - name: "pmt_list_columns"
+    type: "list_handler"
+    purpose: "Process lists of payment parameters"
+    note: "Common for projecting payment schedules"
+    
+  - name: "pmt_broadcast_rate"
+    type: "broadcast_handler"
+    purpose: "Fixed rate, varying terms/amounts"
+    
+# ... rest of plan
 ```
 
-## Implementation Patterns
+## Implementation Patterns for Lists
 
-1. **Two-function pattern**: Always separate Polars interface from calculation
-2. **Iterator pattern**: Use `.into_iter()` with `.collect::<ChunkedArray>()`
-3. **Null propagation**: Match on `(Some(a), Some(b))` pattern
-4. **Constants**: Define at module level for performance
-5. **Helper functions**: Keep pure and testable
+1. **Output Type Detection**: Always implement to handle all type combinations
+2. **Main Function Pattern**: Type checking and branching to handlers
+3. **List Builder Pattern**: Pre-allocate with estimated capacity
+4. **Broadcasting Pattern**: Use first value, apply to all list elements
+5. **Null Handling**: List-level (entire row) vs element-level (within list)
 
-## Performance Checklist
+## Performance Checklist for Lists
 
-- [ ] Constants defined outside functions
-- [ ] No unnecessary allocations in loops
-- [ ] `#[inline]` on small helpers
-- [ ] Iterator chains instead of loops where possible
-- [ ] Appropriate chunked array types
+- [ ] Pre-allocate list builders with reasonable capacity
+- [ ] Avoid converting between Series and arrays repeatedly
+- [ ] Use iterator chains where possible
+- [ ] Consider chunking for very large lists
+- [ ] Test with realistic actuarial data (120-element lists)
 
 ## Next Step
 
-Use this plan to implement the Rust function in Step 5.
+Use this plan to implement the Rust function with list support in Step 5.

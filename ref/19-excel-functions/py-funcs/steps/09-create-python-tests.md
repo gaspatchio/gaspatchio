@@ -14,6 +14,8 @@ Focus on testing the Python-Rust interface, NOT the Excel calculation logic:
 - **Parameter validation**: Test invalid inputs raise appropriate errors
 - **Null handling**: Verify null propagation works
 - **Integration**: Test with ActuarialFrame
+- **List columns**: Test that list columns work seamlessly (Rust handles the logic)
+- **Broadcasting**: Test scalar/list combinations work as expected
 - **DO NOT** test the actual Excel calculation logic (that's tested in Rust)
 
 ### Actions
@@ -56,6 +58,54 @@ def test_{{function_name}}_basic():
             assert result[i] is None
         else:
             assert abs(result[i] - expected_val) < 1e-10
+
+
+def test_{{function_name}}_with_list_columns():
+    """Test {{function_name}} with list columns (Rust handles the logic)."""
+    # For date functions, use list of dates
+    # For numeric functions, use list of numbers
+    af = ActuarialFrame({
+        "param1_list": [
+            [{{list_values1}}],  # List for row 1
+            [{{list_values2}}],  # List for row 2
+        ],
+        "param2_list": [
+            [{{list_values3}}],  # List for row 1
+            [{{list_values4}}],  # List for row 2
+        ],
+    })
+    
+    result_af = af.with_columns(
+        af["param1_list"].excel.{{function_name}}(af["param2_list"]).alias("result_list")
+    )
+    result = result_af.collect()["result_list"]
+    
+    # Verify the result is a list column
+    assert isinstance(result[0], list)
+    assert len(result[0]) == len(af.collect()["param1_list"][0])
+    
+    # Rust handles the calculation, we just verify structure
+
+
+def test_{{function_name}}_broadcasting():
+    """Test {{function_name}} with scalar/list broadcasting."""
+    # Test scalar param1 with list param2
+    af = ActuarialFrame({
+        "scalar_param": {{scalar_value}},  # Will be broadcast to match DataFrame rows
+        "list_param": [
+            [{{list_values1}}],
+            [{{list_values2}}],
+        ],
+    })
+    
+    result_af = af.with_columns(
+        af["scalar_param"].excel.{{function_name}}(af["list_param"]).alias("result")
+    )
+    result = result_af.collect()["result"]
+    
+    # Result should be a list column (scalar broadcast to each element)
+    assert isinstance(result[0], list)
+    assert len(result[0]) == len(af.collect()["list_param"][0])
 ```
 
 Edge cases test:
@@ -108,24 +158,34 @@ Test implementation summary:
 function_name: {{FUNCTION_NAME}}
 tests_created:
   basic_functionality:
-    file: "tests/accessors/test_excel.py"
+    file: "tests/accessors/excel_functions/test_{{function_name}}.py"
     test_name: "test_{{function_name}}_basic"
     covers: "Normal use cases"
+  list_columns:
+    file: "tests/accessors/excel_functions/test_{{function_name}}.py"
+    test_name: "test_{{function_name}}_with_list_columns"
+    covers: "List column support (Rust handles logic)"
+  broadcasting:
+    file: "tests/accessors/excel_functions/test_{{function_name}}.py"
+    test_name: "test_{{function_name}}_broadcasting"
+    covers: "Scalar/list broadcasting behavior"
   edge_cases:
-    file: "tests/accessors/test_excel.py"
+    file: "tests/accessors/excel_functions/test_{{function_name}}.py"
     test_name: "test_{{function_name}}_edge_cases"
     covers: "Edge cases from behavior analysis"
   null_handling:
-    file: "tests/accessors/test_excel.py"
+    file: "tests/accessors/excel_functions/test_{{function_name}}.py"
     test_name: "test_{{function_name}}_null_handling"
     covers: "Null propagation"
   docstring_example:
     file: "tests/examples/test_accessors.py"
     test_name: "test_{{function_name}}_example"
     covers: "Docstring example validation"
-test_cases_count: 4
+test_cases_count: 6
 coverage_areas:
   - "Basic calculations"
+  - "List column operations"
+  - "Broadcasting behavior"
   - "Edge cases"
   - "Null handling"
   - "Documentation examples"
