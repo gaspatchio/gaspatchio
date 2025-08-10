@@ -18,6 +18,26 @@ The Rust Excel function implementation follows this architecture:
 6. **Comprehensive Tests**: Unit, integration, Excel compatibility, and list operation tests
 7. **Module Integration**: Export in `src/excel/mod.rs`
 
+## File Organization Pattern
+
+**CRITICAL**: Follow clean separation of concerns with these file types:
+
+- **Implementation File**: `src/excel/{function_name}.rs`
+  - Contains ONLY implementation code
+  - No `#[cfg(test)]` modules or test functions
+  - Example: `yearfrac.rs`
+
+- **Test File**: `src/excel/{function_name}_tests.rs`
+  - Contains ALL tests for the function
+  - Uses `#[cfg(test)]` at the module level
+  - Imports implementation via `use super::super::{function_name}::*;`
+  - Example: `yearfrac_tests.rs`
+
+- **Module Export**: `src/excel/mod.rs`
+  - `pub mod {function_name};` for implementation
+  - `#[cfg(test)] mod {function_name}_tests;` for tests
+  - Public exports for both function and output type
+
 ## Key Architectural Change: Native List Support
 
 Excel functions now support native list column processing to handle actuarial projections:
@@ -49,19 +69,19 @@ Each step takes input from previous steps and produces output for the next:
 
 5. **[05-implement-rust-function.md](05-implement-rust-function.md)**
    - Input: Implementation plan from Step 4
-   - Output: Rust implementation with list column support
+   - Output: Rust implementation file with list column support (implementation only)
 
 6. **[06-write-comprehensive-tests.md](06-write-comprehensive-tests.md)**
    - Input: Implementation and behavior analysis
-   - Output: Tests including list operations and broadcasting
+   - Output: Separate test file with comprehensive coverage including list operations and broadcasting
 
 7. **[07-verify-build-quality.md](07-verify-build-quality.md)**
    - Input: Implementation and tests
    - Output: Quality check report
 
 8. **[08-update-module-exports.md](08-update-module-exports.md)**
-   - Input: Function name
-   - Output: Updated mod.rs
+   - Input: Function name and implementation file
+   - Output: Updated mod.rs with both implementation and test module references
 
 9. **[09-update-learnings.md](09-update-learnings.md)**
    - Input: Implementation experience

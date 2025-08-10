@@ -12,6 +12,8 @@ Add the new module to Rust exports.
 2. Add the module declaration in alphabetical order
 
 ## Output
+Save the module export line to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/06-rust-export.txt`
+
 The line to add to `src/excel/mod.rs`:
 
 ```rust

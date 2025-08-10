@@ -32,7 +32,7 @@ Analyze the existing Rust implementation to understand the interface.
      - Broadcasting logic for scalar/list combinations
 
 ## Output
-Create a Rust analysis document:
+Save the Rust analysis to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/04-rust-analysis.yaml`
 
 ```yaml
 function_name: {{FUNCTION_NAME}}

@@ -9,29 +9,38 @@ Add the new function to the Excel module exports.
 ## Process
 
 1. **Update src/excel/mod.rs**:
-   - Add module declaration
-   - Add public export
+   - Add implementation module declaration
+   - Add test module declaration (with #[cfg(test)])
+   - Add public exports
    - Maintain alphabetical order
 
-2. **Verify the export**:
+2. **Verify the exports**:
    - Check compilation
    - Ensure function is accessible
+   - Ensure tests can be run
 
 ## Implementation Steps
 
-1. **Add module declaration**:
+1. **Add implementation module declaration**:
    ```rust
-   // In src/excel/mod.rs
-   mod {{function_name}};
+   // In src/excel/mod.rs - add to module declarations section
+   pub mod {{function_name}};
    ```
 
-2. **Add public export**:
+2. **Add test module declaration**:
+   ```rust
+   // In src/excel/mod.rs - add after implementation module
+   #[cfg(test)]
+   mod {{function_name}}_tests;
+   ```
+
+3. **Add public exports**:
    ```rust
    // In the public exports section
-   pub use {{function_name}}::{{function_name}};
+   pub use {{function_name}}::{{{function_name}}, {{function_name}}_output_type};
    ```
 
-3. **Export Kwargs if needed**:
+4. **Export Kwargs if needed**:
    ```rust
    // If function has kwargs
    pub use {{function_name}}::{{FunctionName}}Kwargs;
@@ -46,21 +55,29 @@ Create `rust-functions-outputs/{{FUNCTION_NAME}}-output/08-module-updates.md`:
 
 ## Added to src/excel/mod.rs:
 
-### Module declaration:
+### Implementation module declaration:
 ```rust
-mod {{function_name}};
+pub mod {{function_name}};
+```
+
+### Test module declaration:
+```rust
+#[cfg(test)]
+mod {{function_name}}_tests;
 ```
 
 ### Public exports:
 ```rust
-pub use {{function_name}}::{{function_name}};
+pub use {{function_name}}::{{{function_name}}, {{function_name}}_output_type};
 pub use {{function_name}}::{{FunctionName}}Kwargs;
 ```
 
 ## Verification:
-- [ ] Module compiles successfully
-- [ ] Function is exported
+- [ ] Implementation module compiles successfully
+- [ ] Test module compiles successfully
+- [ ] Function and output type are exported
 - [ ] Kwargs struct is exported (if applicable)
+- [ ] Tests can be run with `cargo test {{function_name}}`
 - [ ] Alphabetical order maintained
 ```
 
@@ -70,19 +87,31 @@ pub use {{function_name}}::{{FunctionName}}Kwargs;
 // ABOUTME: This module contains Excel function implementations for Polars
 // ABOUTME: Each function provides exact Excel compatibility including edge cases
 
-// Module declarations (alphabetical)
-mod abs;
-mod average;
-mod {{function_name}};  // New addition
-mod sum;
-mod yearfrac;
+// Implementation module declarations (alphabetical)
+pub mod abs;
+pub mod average;
+pub mod {{function_name}};  // New addition
+pub mod sum;
+pub mod yearfrac;
 
 // Public exports (alphabetical)
-pub use abs::abs;
-pub use average::{average, AverageKwargs};
-pub use {{function_name}}::{{{function_name}}, {{FunctionName}}Kwargs};  // New addition
-pub use sum::sum;
-pub use yearfrac::{yearfrac, YearFracKwargs};
+pub use abs::{abs, abs_output_type};
+pub use average::{average, average_output_type, AverageKwargs};
+pub use {{function_name}}::{{{function_name}}, {{function_name}}_output_type, {{FunctionName}}Kwargs};  // New addition
+pub use sum::{sum, sum_output_type};
+pub use yearfrac::{yearfrac, yearfrac_output_type, YearFracKwargs};
+
+// Test module declarations (alphabetical)
+#[cfg(test)]
+mod abs_tests;
+#[cfg(test)]
+mod average_tests;
+#[cfg(test)]
+mod {{function_name}}_tests;  // New addition
+#[cfg(test)]
+mod sum_tests;
+#[cfg(test)]
+mod yearfrac_tests;
 ```
 
 ## Multithreading Considerations
@@ -101,11 +130,15 @@ Instead of editing mod.rs directly, create a batch file:
 Create `rust-functions-outputs/{{FUNCTION_NAME}}-output/08-mod-rs-additions.txt`:
 
 ```
-// Add to module declarations section:
-mod {{function_name}};
+// Add to implementation module declarations section:
+pub mod {{function_name}};
 
 // Add to public exports section:
-pub use {{function_name}}::{{{function_name}}, {{FunctionName}}Kwargs};
+pub use {{function_name}}::{{{function_name}}, {{function_name}}_output_type, {{FunctionName}}Kwargs};
+
+// Add to test module declarations section:
+#[cfg(test)]
+mod {{function_name}}_tests;
 ```
 
 Then batch process all additions at once:
@@ -124,8 +157,11 @@ cargo check
 cargo doc --no-deps --open
 # Look for your function in the documentation
 
-# Run a quick test
-cargo test {{function_name}}::tests::test --lib
+# Run the function's tests
+cargo test {{function_name}} --lib
+
+# Run tests in the specific test module
+cargo test {{function_name}}_tests --lib
 ```
 
 ## Common Issues

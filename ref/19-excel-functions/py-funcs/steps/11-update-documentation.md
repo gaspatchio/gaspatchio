@@ -36,7 +36,7 @@ Check that docstring includes:
 - [ ] "When to use" section with 2-4 cases
 
 ## Output
-Documentation updates summary:
+Save documentation updates summary to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/11-documentation-summary.yaml`
 
 ```yaml
 function_name: {{FUNCTION_NAME}}

@@ -12,7 +12,7 @@ Create the Python-Rust bridge file.
 2. Follow the standard pattern for Excel function bindings
 
 ## Output
-The complete Rust binding file:
+Save the complete Rust binding to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/05-rust-binding.rs`
 
 ```rust
 // File: src/excel/{{function_name}}.rs

@@ -13,7 +13,7 @@ Check for any existing insights or tips for this function in past learnings.
 3. Extract relevant patterns, gotchas, or implementation tips
 
 ## Output
-Create a learnings summary:
+Save the learnings summary to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/03-learnings-summary.yaml`
 
 ```yaml
 function_name: {{FUNCTION_NAME}}

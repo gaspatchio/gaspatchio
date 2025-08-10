@@ -10,7 +10,7 @@ Create and validate executable docstring examples.
 ### Actions
 
 #### 1. Create Test File
-Create `test_{{function_name}}_examples.py`:
+Create test file at: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/08-test-examples.py`:
 
 ```python
 # Test file for developing docstring examples
@@ -65,7 +65,7 @@ uv run pytest gaspatchio_core/accessors/excel.py --doctest-modules --accept
 ```
 
 ## Output
-Validation report:
+Save validation report to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/08-validation-report.yaml`
 
 ```yaml
 function_name: {{FUNCTION_NAME}}

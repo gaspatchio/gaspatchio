@@ -27,7 +27,7 @@ Analyze the Excel function's behavior in different scenarios, focusing on scalar
    - Rounding behavior
 
 ## Output
-Create a behavior analysis document:
+Save the behavior analysis to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/02-behavior-analysis.yaml`
 
 ```yaml
 function_name: {{FUNCTION_NAME}}

@@ -9,12 +9,14 @@ Write the actual Rust implementation following the extended pattern with list su
 
 ## Process
 
-1. **Create the Rust file**:
+1. **Create the implementation file (implementation only)**:
    ```bash
    touch src/excel/{{function_name}}.rs
    ```
+   
+   **IMPORTANT**: This file contains ONLY the implementation - no tests! Tests go in a separate file.
 
-2. **Write the implementation**:
+2. **Write the implementation (no tests in this file)**:
    - Start with imports and constants
    - Define Kwargs structure
    - Implement output type function
@@ -22,12 +24,27 @@ Write the actual Rust implementation following the extended pattern with list su
    - Implement Polars interface with branching
    - Implement list handler functions
    - Add documentation
+   - **DO NOT** include any `#[cfg(test)]` modules or test functions
 
 3. **Follow the extended pattern**:
    - Output type detection for scalar/list inputs
    - Main interface branches on input types
    - Separate handlers for each scenario
    - Broadcasting support for mixed inputs
+
+## File Organization Pattern
+
+Following the established pattern from yearfrac.rs:
+
+- **Implementation file**: `src/excel/{{function_name}}.rs` - Contains ONLY implementation code
+- **Test file**: `src/excel/{{function_name}}_tests.rs` - Contains ONLY tests (created in Step 6)
+- **Module exports**: `src/excel/mod.rs` - References both files appropriately
+
+This separation ensures:
+- Clean separation of concerns
+- Better maintainability
+- Easier to navigate implementation vs tests
+- Follows Rust idiomatic patterns
 
 ## Output Format
 
@@ -558,18 +575,15 @@ if let Ok(slice) = values.cont_slice() {
 4. **Special behaviors**: Document Excel quirks inline
 5. **List operations**: Explain broadcasting behavior
 
-## Testing Considerations
+## Implementation Notes
 
-When implementing, consider these test scenarios:
-1. Scalar operations (backward compatibility)
-2. List×List with same lengths
-3. List×List with different lengths (should error)
-4. Scalar×List broadcasting
-5. List×Scalar broadcasting
-6. Empty lists
-7. Lists with nulls
-8. Single-element lists
-9. Large lists (120+ elements for actuarial)
+Focus solely on the implementation logic:
+1. Ensure all public functions are properly documented
+2. Handle all input type combinations correctly
+3. Implement proper error handling with descriptive messages
+4. Use efficient algorithms and memory management
+5. Follow Rust idioms and the established patterns from yearfrac.rs
+6. Remember: NO tests in this file - they go in the separate test file
 
 ## Next Step
 

@@ -11,7 +11,16 @@ Create thorough test coverage for the implemented function including list operat
 
 ## Process
 
-1. **Create test structure**:
+1. **Create separate test file**:
+   ```bash
+   touch src/excel/{{function_name}}_tests.rs
+   ```
+   
+   **IMPORTANT**: Tests go in their own dedicated file, NOT in the implementation file!
+
+2. **Structure the test file**:
+   - Use `#[cfg(test)]` at the module level
+   - Import the implementation functions using `use super::*;`
    - Test calculation function directly
    - Test output type detection
    - Test Polars interface (scalar and list)
@@ -19,31 +28,50 @@ Create thorough test coverage for the implemented function including list operat
    - Test Excel compatibility
    - Test list operations and broadcasting
 
-2. **Use test values from research**:
+3. **Use test values from research**:
    - HyperFormula test cases
    - Excel verified outputs
    - Edge cases discovered
    - Actuarial projection patterns
 
-3. **Follow testing patterns**:
+4. **Follow testing patterns**:
    - Use approx for floating point
    - Test null propagation at all levels
    - Verify error messages
    - Use property-based tests for lists
 
+## File Organization Pattern
+
+Following the established pattern from yearfrac_tests.rs:
+
+- **Test file**: `src/excel/{{function_name}}_tests.rs` - Contains ALL tests for the function
+- **Module structure**: Use `#[cfg(test)]` at the top level, then organized test modules
+- **Import pattern**: Use `use super::*;` to access implementation functions
+- **Reference**: See `yearfrac_tests.rs` for the exact pattern to follow
+
+This separation ensures:
+- Clean separation between implementation and tests
+- Easy to run tests independently
+- Better organization for large test suites
+- Follows established Rust testing patterns
+
 ## Output Format
 
-Create `rust-functions-outputs/{{FUNCTION_NAME}}-output/06-tests.rs` to append to the implementation:
+Create the complete test file `src/excel/{{function_name}}_tests.rs`:
 
 ```rust
+// ABOUTME: Tests for the Excel {{FUNCTION_NAME}} function implementation
+// ABOUTME: Comprehensive test coverage including scalar, list, and broadcasting operations  
+
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::super::{{function_name}}::*;  // Import implementation functions
     use approx::assert_relative_eq;
+    use polars::prelude::*;
     
     // Test categories:
     // 1. Calculation function tests
-    // 2. Output type detection tests
+    // 2. Output type detection tests  
     // 3. Scalar operation tests
     // 4. List operation tests
     // 5. Broadcasting tests
@@ -54,12 +82,17 @@ mod tests {
 }
 ```
 
+Also create `rust-functions-outputs/{{FUNCTION_NAME}}-output/06-tests.rs` for reference.
+
 ## Complete Test Template with List Support
 
 ```rust
+// ABOUTME: Tests for the Excel {{FUNCTION_NAME}} function implementation
+// ABOUTME: Comprehensive test coverage including scalar, list, and broadcasting operations
+
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::super::{{function_name}}::*;  // Import from implementation module
     use approx::assert_relative_eq;
     use chrono::NaiveDate;  // If using dates
     use polars::prelude::*;

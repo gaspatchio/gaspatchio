@@ -19,7 +19,7 @@ Break down the Excel documentation for {{FUNCTION_NAME}} into key components.
    - Default values for optional parameters
 
 ## Output
-Create a structured analysis in the following format:
+Save the structured analysis to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/01-excel-analysis.yaml`
 
 ```yaml
 function_name: {{FUNCTION_NAME}}

@@ -56,3 +56,5 @@ docs/_build/
 **/.claude/settings.local.json
 **/.claude/history*
 **/.claude/tmp/
+/core/rust-functions-outputs
+/bindings/python/pyfuncs-outputs

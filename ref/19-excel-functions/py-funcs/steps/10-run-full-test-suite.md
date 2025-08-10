@@ -35,7 +35,7 @@ uv run python -m mypy.stubtest gaspatchio_core
 ```
 
 ## Output
-Test results summary:
+Save test results summary to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/10-test-results.yaml`
 
 ```yaml
 function_name: {{FUNCTION_NAME}}

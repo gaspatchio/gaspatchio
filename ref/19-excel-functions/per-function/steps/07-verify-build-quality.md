@@ -23,7 +23,11 @@ Run the following commands and fix any issues:
 
 3. **Run tests for your function**:
    ```bash
+   # Run all tests for the function
    cargo test {{function_name}} --lib
+   
+   # Run tests in the specific test file
+   cargo test {{function_name}}_tests --lib
    ```
 
 4. **Check for common issues**:

@@ -15,7 +15,9 @@ Create both the Python function implementation and the Excel accessor method. Th
 
 ### Part A: Create Function Implementation
 
-Create `gaspatchio_core/accessors/excel_functions/{{function_name}}.py`:
+Save the function implementation to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/07a-function-implementation.py`
+
+This will eventually be created as `gaspatchio_core/accessors/excel_functions/{{function_name}}.py`:
 
 ```python
 # File: gaspatchio_core/accessors/excel_functions/{{function_name}}.py
@@ -81,7 +83,9 @@ def {{function_name}}(
 
 ### Part B: Add Accessor Method
 
-Add to `ExcelColumnAccessor` class in `gaspatchio_core/accessors/excel.py`:
+Save the accessor method to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/07b-accessor-method.py`
+
+This will be added to `ExcelColumnAccessor` class in `gaspatchio_core/accessors/excel.py`:
 
 ```python
 def {{function_name}}(

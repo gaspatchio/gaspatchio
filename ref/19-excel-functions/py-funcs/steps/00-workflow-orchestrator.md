@@ -80,7 +80,9 @@ This workflow has been streamlined from 13 steps to 11 steps:
 2. Work through each step in order
 3. Each step produces output that feeds into the next
 4. Save intermediate outputs for debugging/review
-   - we're going to be multithreading so you'll need to create a folder UNIQUE to this workflow, then use that on the way through the steps. eg {FUNCTION_NAME}-output/
+   - we're going to be multithreading so you'll need to create a folder UNIQUE to this workflow
+   - All outputs should go to: `pyfuncs-outputs/{function_name}_output/`
+   - This allows safe git ignore of the entire `pyfuncs-outputs` folder
 5. If a step fails, fix issues before proceeding
 
 ## Example Usage
@@ -89,14 +91,17 @@ This workflow has been streamlined from 13 steps to 11 steps:
 # Set your function name
 export FUNCTION_NAME="yearfrac"
 
+# Create output directory
+mkdir -p pyfuncs-outputs/${FUNCTION_NAME}_output
+
 # Work through each step, saving outputs
 # Step 1: Analyze Excel docs
 # ... follow instructions in 01-analyze-excel-docs.md
-# Save output to: outputs/01-excel-analysis.yaml
+# Save output to: pyfuncs-outputs/${FUNCTION_NAME}_output/01-excel-analysis.yaml
 
 # Step 2: Analyze behavior  
 # ... use output from step 1
-# Save output to: outputs/02-behavior-analysis.yaml
+# Save output to: pyfuncs-outputs/${FUNCTION_NAME}_output/02-behavior-analysis.yaml
 
 # Continue through all steps...
 ```

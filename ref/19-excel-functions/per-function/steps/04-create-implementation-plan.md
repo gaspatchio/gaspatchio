@@ -1,4 +1,4 @@
-# Step 4: Create Implementation Plan
+ # Step 4: Create Implementation Plan
 
 Make a detailed plan for the Rust implementation based on all previous analysis.
 
@@ -47,7 +47,19 @@ Create `rust-functions-outputs/{{FUNCTION_NAME}}-output/04-implementation-plan.y
 
 ```yaml
 function_name: {{FUNCTION_NAME}}
-file_path: "src/excel/{{function_name}}.rs"
+implementation_file: "src/excel/{{function_name}}.rs"  # Implementation ONLY
+test_file: "src/excel/{{function_name}}_tests.rs"      # Tests ONLY
+
+# File organization
+file_organization:
+  implementation_contains:
+    - "Implementation functions only"
+    - "No #[cfg(test)] modules"
+    - "Documentation and examples"
+  test_file_contains:
+    - "All test functions and modules"
+    - "#[cfg(test)] at module level"
+    - "Imports from implementation: use super::super::{function_name}::*;"
 
 # List support configuration
 list_support:

@@ -20,7 +20,11 @@ Focus on testing the Python-Rust interface, NOT the Excel calculation logic:
 
 ### Actions
 
-#### 1. Create `tests/accessors/excel_functions/test_{{function_name}}.py`
+#### 1. Create Test Implementation
+
+Save test implementation to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/09-test-implementation.py`
+
+This will eventually be created as `tests/accessors/excel_functions/test_{{function_name}}.py`
 
 **Important**: Tests now go in their own file in the `excel_functions` subdirectory to match the source structure.
 
@@ -152,7 +156,7 @@ def test_{{function_name}}_example():
 ```
 
 ## Output
-Test implementation summary:
+Save test summary to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/09-test-summary.yaml`
 
 ```yaml
 function_name: {{FUNCTION_NAME}}
