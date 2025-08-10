@@ -74,13 +74,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Rust rules for this project - apply to all rust (*rs) files
 
-@.claude/docs/cargo.md
-@.claude/docs/documentation.md
-@.claude/docs/error-handling.md
-@.claude/docs/observability.md
-@.claude/docs/ownership.md
-@.claude/docs/performance.md
-@.claude/docs/polars.md
-@.claude/docs/safety.md
-@.claude/docs/testing.md
-@.claude/docs/type-system.md
+@prompts/rust/core.md
+@prompts/rust/cargo.md
+@prompts/rust/documentation.md
+@prompts/rust/error-handling.md
+@prompts/rust/observability.md
+@prompts/rust/ownership.md
+@prompts/rust/performance.md
+@prompts/rust/polars.md
+@prompts/rust/safety.md
+@prompts/rust/testing.md
+@prompts/rust/type-system.md

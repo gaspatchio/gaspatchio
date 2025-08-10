@@ -104,9 +104,7 @@ The Python bindings wrap the Rust core library via PyO3:
 4. Use `gspio` CLI to validate changes with real models
 5. Check parent `CLAUDE.md` for broader project guidelines
 
-
-
-@.claude/docs/python-general.md
-@.claude/docs/typing.md
-@.claude/docs/style.md
-@.claude/docs/uv.md
+@prompts/python/core.md
+@prompts/python/style.md
+@prompts/python/typing.md
+@prompts/python/uv.md

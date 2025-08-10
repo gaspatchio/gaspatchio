@@ -1,5 +1,0 @@
-- Typing rules
-    - **Every new function, method, or class must have explicit type hints** (no implicit `Any`).  
-    - Functions must declare a non-`Any` return type; prefer `| None` over `Optional[T]` for union with `None`.  
-    - Wrap third-party “untyped” calls in a small typed helper instead of sprinkling `Any`.  
-    - Use `@dataclass(slots=True)` or `pydantic.BaseModel` for structured data instead of ad-hoc dicts.  

@@ -130,30 +130,28 @@ fn yearfrac_list_scalar(
             if let Ok(dates) = s.as_ref().date() {
                 let result_ca = dates
                     .into_iter()
-                    .map(|date_opt| {
-                        match (date_opt, scalar_date) {
-                            (Some(list_days), Some(scalar_days)) => {
-                                let list_date = epoch + chrono::Duration::days(i64::from(list_days));
-                                let scalar_date = epoch + chrono::Duration::days(i64::from(scalar_days));
-                                
-                                let yearfrac = if reverse_args {
-                                    calculate_yearfrac(scalar_date, list_date, basis)
-                                } else {
-                                    calculate_yearfrac(list_date, scalar_date, basis)
-                                };
-                                Some(yearfrac)
-                            }
-                            _ => None,
+                    .map(|date_opt| match (date_opt, scalar_date) {
+                        (Some(list_days), Some(scalar_days)) => {
+                            let list_date = epoch + chrono::Duration::days(i64::from(list_days));
+                            let scalar_date = epoch + chrono::Duration::days(i64::from(scalar_days));
+                            let yearfrac = if reverse_args {
+                                calculate_yearfrac(scalar_date, list_date, basis)
+                            } else {
+                                calculate_yearfrac(list_date, scalar_date, basis)
+                            };
+                            Some(yearfrac)
                         }
+                        _ => None,
                     })
                     .collect::<Float64Chunked>();
                 result_ca.into_series()
             } else {
-                // Return null series if date conversion fails
-                Float64Chunked::new("".into(), &[None]).into_series()
+                let len = s.as_ref().len();
+                let nulls = Float64Chunked::full_null("".into(), len);
+                nulls.into_series()
             }
         });
-    
+
     Ok(result.into_series())
 }
 
@@ -322,7 +320,7 @@ fn calculate_actual_actual(start: NaiveDate, end: NaiveDate) -> f64 {
         return days_diff as f64 / year_days;
     }
 
-    // Case 3: Multi-year span - use average year length
+    // Case 3: Multi-year span - use average year length (matches existing tests)
     let start_year = start.year();
     let end_year = end.year();
 
