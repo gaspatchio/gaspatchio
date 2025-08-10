@@ -60,3 +60,7 @@ docs/_build/
 /bindings/python/pyfuncs-outputs
 /bindings/python/AGENT.md
 /bindings/python/CLAUDE.md
+/bindings/python/prompts
+/core/AGENT.md
+/core/CLAUDE.md
+/core/prompts
