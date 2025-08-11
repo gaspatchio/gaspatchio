@@ -2,9 +2,10 @@
 FROM debian:bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Base tools
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update && apt-get install -y --no-install-recommends \
     bash curl ca-certificates git \
     build-essential pkg-config libssl-dev \
     xz-utils zstd patchelf cmake \
@@ -12,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Optional: timezone/locale support for consistent tests
 ENV TZ=UTC
-RUN apt-get update && apt-get install -y --no-install-recommends tzdata locales \
+RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update && apt-get install -y --no-install-recommends tzdata locales \
  && rm -rf /var/lib/apt/lists/*
 RUN locale-gen en_US.UTF-8 || true
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
