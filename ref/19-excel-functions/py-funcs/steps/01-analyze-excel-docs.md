@@ -1,5 +1,6 @@
 # Step 1: Analyze Excel Documentation
 
+
 ## Input
 - `FUNCTION_NAME`: The name of the Excel function to integrate
 
@@ -10,6 +11,7 @@ Break down the Excel documentation for {{FUNCTION_NAME}} into key components.
 1. Look at the Excel documentation:
    - FUNCTION LIST: https://support.microsoft.com/en-us/office/excel-functions-alphabetical-b3944572-255d-4efb-bb96-c6d90033e188
    - SPECIFIC FUNCTION: Search for the function in the list above
+   - Capture both numeric and named variants for parameters like basis (e.g., 0-4 and accepted strings)
 
 2. Extract and document:
    - Function purpose

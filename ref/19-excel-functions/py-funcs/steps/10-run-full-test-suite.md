@@ -1,4 +1,5 @@
-# Step 12: Run Full Test Suite
+# Step 10: Run Full Test Suite
+
 
 ## Input
 - All implementation from Steps 1-11
@@ -12,11 +13,14 @@ Verify complete integration with no regressions.
 Run the following test commands in sequence:
 
 ```bash
+# 0. Rebuild Python bindings in develop mode (fastest during iteration)
+uvx maturin develop -m gaspatchio-core/bindings/python/Cargo.toml && uv sync
+
 # 1. Run all tests
 uv run pytest
 
-# 2. Run specific function tests
-uv run pytest tests/accessors/test_excel.py -k {{function_name}} -v
+# 2. Run specific function tests (adjust path if tests live per-function)
+uv run pytest tests/accessors -k {{function_name}} -v
 
 # 3. CRITICAL: Test docstring examples are valid and executable
 uv run pytest --doctest-modules gaspatchio_core/accessors/excel.py -v
@@ -74,4 +78,4 @@ issues_to_fix:
 - Type stubs are valid
 
 ## Next Step
-This output feeds into Step 13: Update Documentation
+This output feeds into Step 11: Update Documentation

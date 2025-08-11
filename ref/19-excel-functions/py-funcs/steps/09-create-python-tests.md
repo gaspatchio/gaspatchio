@@ -1,5 +1,6 @@
 # Step 9: Create Python Tests
 
+
 ## Input
 - Function behavior analysis from Steps 1-2
 - Validated examples from Step 8
@@ -14,8 +15,8 @@ Focus on testing the Python-Rust interface, NOT the Excel calculation logic:
 - **Parameter validation**: Test invalid inputs raise appropriate errors
 - **Null handling**: Verify null propagation works
 - **Integration**: Test with ActuarialFrame
-- **List columns**: Test that list columns work seamlessly (Rust handles the logic)
-- **Broadcasting**: Test scalar/list combinations work as expected
+- **List columns**: If not supported by the plugin, ensure docs/tests show the recommended workaround pattern (e.g., explode/group_by) instead of direct list inputs
+- **Broadcasting**: Test scalar/column broadcasting works as expected
 - **DO NOT** test the actual Excel calculation logic (that's tested in Rust)
 
 ### Actions
@@ -79,16 +80,21 @@ def test_{{function_name}}_with_list_columns():
         ],
     })
     
-    result_af = af.with_columns(
-        af["param1_list"].excel.{{function_name}}(af["param2_list"]).alias("result_list")
+    # If list columns are not supported directly by the plugin, use explode/group_by pattern
+    lf = (
+        af.lazy()
+        .with_row_index("_idx")
+        .explode(["param1_list", "param2_list"])
+        .with_columns(
+            pl.col("param1_list").excel.{{function_name}}(pl.col("param2_list")).alias("result")
+        )
+        .group_by("_idx")
+        .agg(pl.col("result"))
+        .drop("_idx")
     )
-    result = result_af.collect()["result_list"]
-    
-    # Verify the result is a list column
+    result_af = lf.collect()
+    result = result_af["result"]
     assert isinstance(result[0], list)
-    assert len(result[0]) == len(af.collect()["param1_list"][0])
-    
-    # Rust handles the calculation, we just verify structure
 
 
 def test_{{function_name}}_broadcasting():
@@ -113,6 +119,7 @@ def test_{{function_name}}_broadcasting():
 ```
 
 Edge cases test:
+
 ```python
 def test_{{function_name}}_edge_cases():
     """Test edge cases and error conditions."""
@@ -125,6 +132,7 @@ def test_{{function_name}}_edge_cases():
 ```
 
 Null handling test:
+
 ```python
 def test_{{function_name}}_null_handling():
     """Test null value propagation."""

@@ -2,6 +2,7 @@
 // ABOUTME: Calculates year fractions between dates using various day count conventions
 
 #![allow(clippy::unused_unit)]
+#![allow(clippy::useless_conversion)]
 use chrono::{Datelike, NaiveDate};
 use polars::prelude::*;
 use serde::Deserialize;
@@ -88,7 +89,6 @@ fn yearfrac_scalar(
     end_dates: &DateChunked,
     basis: i32,
 ) -> PolarsResult<Series> {
-
     // Create epoch date once
     let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).expect("Valid epoch date");
 
@@ -122,35 +122,34 @@ fn yearfrac_list_scalar(
 ) -> PolarsResult<Series> {
     let list_ca = list_series.list()?;
     let scalar_date = scalar_series.date()?.get(0);
-    
+
     let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).expect("Valid epoch date");
-    
-    let result: ListChunked = list_ca
-        .apply_amortized(|s| {
-            if let Ok(dates) = s.as_ref().date() {
-                let result_ca = dates
-                    .into_iter()
-                    .map(|date_opt| match (date_opt, scalar_date) {
-                        (Some(list_days), Some(scalar_days)) => {
-                            let list_date = epoch + chrono::Duration::days(i64::from(list_days));
-                            let scalar_date = epoch + chrono::Duration::days(i64::from(scalar_days));
-                            let yearfrac = if reverse_args {
-                                calculate_yearfrac(scalar_date, list_date, basis)
-                            } else {
-                                calculate_yearfrac(list_date, scalar_date, basis)
-                            };
-                            Some(yearfrac)
-                        }
-                        _ => None,
-                    })
-                    .collect::<Float64Chunked>();
-                result_ca.into_series()
-            } else {
-                let len = s.as_ref().len();
-                let nulls = Float64Chunked::full_null("".into(), len);
-                nulls.into_series()
-            }
-        });
+
+    let result: ListChunked = list_ca.apply_amortized(|s| {
+        if let Ok(dates) = s.as_ref().date() {
+            let result_ca = dates
+                .into_iter()
+                .map(|date_opt| match (date_opt, scalar_date) {
+                    (Some(list_days), Some(scalar_days)) => {
+                        let list_date = epoch + chrono::Duration::days(i64::from(list_days));
+                        let scalar_date = epoch + chrono::Duration::days(i64::from(scalar_days));
+                        let yearfrac = if reverse_args {
+                            calculate_yearfrac(scalar_date, list_date, basis)
+                        } else {
+                            calculate_yearfrac(list_date, scalar_date, basis)
+                        };
+                        Some(yearfrac)
+                    }
+                    _ => None,
+                })
+                .collect::<Float64Chunked>();
+            result_ca.into_series()
+        } else {
+            let len = s.as_ref().len();
+            let nulls = Float64Chunked::full_null("".into(), len);
+            nulls.into_series()
+        }
+    });
 
     Ok(result.into_series())
 }
@@ -163,40 +162,36 @@ fn yearfrac_list_list(
 ) -> PolarsResult<Series> {
     let start_list = start_series.list()?;
     let end_list = end_series.list()?;
-    
+
     let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).expect("Valid epoch date");
-    
+
     let result: ListChunked = start_list
         .into_iter()
-        .zip(end_list.into_iter())
-        .map(|(start_opt, end_opt)| {
-            match (start_opt, end_opt) {
-                (Some(start_s), Some(end_s)) => {
-                    let start_dates = start_s.date().ok()?;
-                    let end_dates = end_s.date().ok()?;
-                    
-                    let result_ca = start_dates
-                        .into_iter()
-                        .zip(end_dates.into_iter())
-                        .map(|(start_d, end_d)| {
-                            match (start_d, end_d) {
-                                (Some(start_days), Some(end_days)) => {
-                                    let start_date = epoch + chrono::Duration::days(i64::from(start_days));
-                                    let end_date = epoch + chrono::Duration::days(i64::from(end_days));
-                                    Some(calculate_yearfrac(start_date, end_date, basis))
-                                }
-                                _ => None,
-                            }
-                        })
-                        .collect::<Float64Chunked>();
-                    
-                    Some(result_ca.into_series())
-                }
-                _ => None,
+        .zip(end_list)
+        .map(|(start_opt, end_opt)| match (start_opt, end_opt) {
+            (Some(start_s), Some(end_s)) => {
+                let start_dates = start_s.date().ok()?;
+                let end_dates = end_s.date().ok()?;
+
+                let result_ca = start_dates
+                    .into_iter()
+                    .zip(end_dates.into_iter())
+                    .map(|(start_d, end_d)| match (start_d, end_d) {
+                        (Some(start_days), Some(end_days)) => {
+                            let start_date = epoch + chrono::Duration::days(i64::from(start_days));
+                            let end_date = epoch + chrono::Duration::days(i64::from(end_days));
+                            Some(calculate_yearfrac(start_date, end_date, basis))
+                        }
+                        _ => None,
+                    })
+                    .collect::<Float64Chunked>();
+
+                Some(result_ca.into_series())
             }
+            _ => None,
         })
         .collect();
-    
+
     Ok(result.into_series())
 }
 
@@ -384,14 +379,13 @@ fn contains_feb_29(start: NaiveDate, end: NaiveDate) -> bool {
 pub fn yearfrac_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
     let start_type = &input_fields[0].dtype;
     let end_type = &input_fields[1].dtype;
-    
+
     match (start_type, end_type) {
-        (DataType::Date, DataType::Date) => {
-            Ok(Field::new("year_frac".into(), DataType::Float64))
-        }
-        (DataType::List(_), _) | (_, DataType::List(_)) => {
-            Ok(Field::new("year_frac".into(), DataType::List(Box::new(DataType::Float64))))
-        }
+        (DataType::Date, DataType::Date) => Ok(Field::new("year_frac".into(), DataType::Float64)),
+        (DataType::List(_), _) | (_, DataType::List(_)) => Ok(Field::new(
+            "year_frac".into(),
+            DataType::List(Box::new(DataType::Float64)),
+        )),
         _ => Ok(Field::new("year_frac".into(), DataType::Float64)),
     }
 }

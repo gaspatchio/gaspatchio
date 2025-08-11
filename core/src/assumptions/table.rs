@@ -566,7 +566,7 @@ impl AssumptionTable {
         series: &Series,
         row_idx: usize,
         element_idx: usize,
-    ) -> PolarsResult<AnyValue> {
+    ) -> PolarsResult<AnyValue<'_>> {
         let list_ca = series.list()?;
         if row_idx >= list_ca.len() {
             return Ok(AnyValue::Null);
@@ -585,7 +585,7 @@ impl AssumptionTable {
         }
     }
 
-    fn extract_scalar(&self, series: &Series, idx: usize) -> PolarsResult<AnyValue> {
+    fn extract_scalar(&self, series: &Series, idx: usize) -> PolarsResult<AnyValue<'_>> {
         if idx >= series.len() {
             Ok(AnyValue::Null)
         } else {
@@ -1355,9 +1355,8 @@ mod tests {
 
         // Verify a few specific values
         let result_f64 = result.f64()?;
-        for i in 0..10 {
+        for (i, expected) in expected_values.iter().take(10).enumerate() {
             let actual = result_f64.get(i).unwrap();
-            let expected = expected_values[i];
             assert!(
                 (actual - expected).abs() < 1e-10,
                 "Fast path failed at index {}: expected {}, got {}",
@@ -1368,9 +1367,14 @@ mod tests {
         }
 
         // Verify last few values
-        for i in (large_size - 10)..large_size {
+        for (offset, expected) in expected_values
+            .iter()
+            .enumerate()
+            .take(large_size)
+            .skip(large_size - 10)
+        {
+            let i = offset;
             let actual = result_f64.get(i).unwrap();
-            let expected = expected_values[i];
             assert!(
                 (actual - expected).abs() < 1e-10,
                 "Fast path failed at index {}: expected {}, got {}",
@@ -2254,8 +2258,8 @@ mod tests {
         // Check what happens when we encode integer with String codec
         let duration_av = duration_series.get(0)?; // Int64(1)
         let _duration_hash = table.codecs[2].encode(duration_av); // String codec encoding Int64 input
-                                                                 // This should fail because the String codec doesn't handle Int64 properly
-                                                                 // The encode method returns 0u64 for unhandled cases, which won't match
+                                                                  // This should fail because the String codec doesn't handle Int64 properly
+                                                                  // The encode method returns 0u64 for unhandled cases, which won't match
 
         Ok(())
     }

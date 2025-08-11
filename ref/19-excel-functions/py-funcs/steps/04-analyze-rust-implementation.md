@@ -1,5 +1,6 @@
 # Step 4: Analyze Rust Implementation
 
+
 ## Input
 - Function analysis from Steps 1-3
 - Access to Rust codebase
@@ -10,7 +11,7 @@ Analyze the existing Rust implementation to understand the interface.
 ### Actions
 1. Locate the Rust function:
    - Check `gaspatchio_core_lib::excel::{{function_name}}`
-   - Find the file in `src/excel/{{function_name}}.rs`
+   - Core implementation lives under the core crate (not the bindings)
 
 2. Identify the kwargs structure:
    - Look for `{{FunctionName}}Kwargs` struct
@@ -24,12 +25,9 @@ Analyze the existing Rust implementation to understand the interface.
    - Check if it handles list columns (look for DataType::List patterns)
 
 4. Check existing patterns:
-   - Compare with similar functions like `yearfrac.rs`
+   - Compare with similar functions like `yearfrac.rs` (bindings: `bindings/python/src/excel/yearfrac.rs`)
    - Note any special handling
-   - Look for list handling patterns:
-     - Output type detection for List inputs
-     - Branching based on scalar vs list types
-     - Broadcasting logic for scalar/list combinations
+   - Output type handling is done via a local shim in bindings that delegates to core
 
 ## Output
 Save the Rust analysis to: `pyfuncs-outputs/{{FUNCTION_NAME}}_output/04-rust-analysis.yaml`

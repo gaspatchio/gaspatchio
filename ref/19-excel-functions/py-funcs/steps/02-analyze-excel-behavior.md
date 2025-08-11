@@ -1,5 +1,6 @@
 # Step 2: Analyze Excel Behavior
 
+
 ## Input
 - Output from Step 1: Structured function analysis (YAML format)
 
@@ -18,6 +19,7 @@ Analyze the Excel function's behavior in different scenarios, focusing on scalar
    - etc with the other params
    - What combinations are valid?
    - How does Excel handle mismatched lengths?
+   - Are list columns supported by our Polars plugin? If not, document the DataFrame-level workaround pattern (e.g., explode/group_by) for this function
 
 3. Test cases to investigate:
    - Normal use cases

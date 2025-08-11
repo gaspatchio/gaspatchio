@@ -110,7 +110,8 @@ mkdir -p pyfuncs-outputs/${FUNCTION_NAME}_output
 
 ### Symbol Not Found Errors
 - Ensure function name matches exactly between Rust and Python
-- Run `maturin build && uv sync` after Rust changes
+- Reinstall bindings in develop mode after Rust changes:
+  - `uvx maturin develop -m gaspatchio-core/bindings/python/Cargo.toml && uv sync`
 
 ### Docstring Test Failures
 - Use exact output from execution
@@ -120,6 +121,7 @@ mkdir -p pyfuncs-outputs/${FUNCTION_NAME}_output
 ### Type Errors
 - Check kwargs mapping between Rust and Python
 - Verify parameter types match
+- For Polars plugin output types, prefer a local output_type shim in the bindings crate that delegates to the core implementation (the macro requires a local function item)
 
 ## Quality Checklist
 

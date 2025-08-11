@@ -56,7 +56,7 @@ def {{function_name}}(
         optional_param: {{Description from analysis}}
         
     Returns:
-        Polars expression with the {{return description}}
+        pl.Expr: Expression evaluating to the {{return description}} (Float64)
     """
     param1 = to_polars_expression(param1)
     param2 = to_polars_expression(param2)
@@ -177,6 +177,7 @@ def {{function_name}}(
     
     # Get the start expression from the proxy (self is the first parameter)
     start_expr = self._get_polars_expr()
+    parent_frame = self._get_parent_frame()
     
     # No need to check for list columns - Rust handles all type combinations
     # including scalar/scalar, list/list, and scalar/list broadcasting
@@ -201,14 +202,8 @@ def {{function_name}}(
 Regular column operations are "vectorized" - they operate element-wise on all rows.
 This is different from list/array columns where each cell contains multiple values.
 
-### 1. **Rust Handles All Type Combinations**
-As of the latest implementation, the Rust layer handles:
-- Scalar vs Scalar (regular column operations)
-- List vs List (pairwise operations on lists)
-- Scalar vs List (broadcasting scalar to each list element)
-- List vs Scalar (broadcasting scalar to each list element)
-
-The Python layer should be a simple passthrough!
+### 1. **Type Combination Handling**
+Rust core handles scalar/column broadcasting. If list columns are not supported for a given function by the plugin API, document a recommended DataFrame-level pattern (e.g., explode/group_by) here.
 
 ### 2. **Current Support Matrix**
 Your implementation automatically supports:

@@ -1,4 +1,4 @@
-# Step 10: Validate Docstring Examples
+# Step 8: Validate Docstring Examples
 
 ## Input
 - Excel accessor method with docstring from Step 9
@@ -36,16 +36,17 @@ if __name__ == "__main__":
 ```
 
 #### 2. Build and Test
+
 ```bash
-# Rebuild Rust extensions  
-maturin build && uv sync
+# Rebuild Rust extensions in develop mode for fast iteration
+uvx maturin develop -m gaspatchio-core/bindings/python/Cargo.toml && uv sync
 
 # Test examples work
-uv run python test_{{function_name}}_examples.py
+uv run python pyfuncs-outputs/{{FUNCTION_NAME}}_output/08-test-examples.py
 
 # Verify linting
-uv run ruff check test_{{function_name}}_examples.py
-uv run ruff format test_{{function_name}}_examples.py --check
+uv run ruff check pyfuncs-outputs/{{FUNCTION_NAME}}_output/08-test-examples.py
+uv run ruff format pyfuncs-outputs/{{FUNCTION_NAME}}_output/08-test-examples.py --check
 ```
 
 #### 3. Capture Exact Output
@@ -56,6 +57,7 @@ Run examples and copy EXACT output to docstring, including:
 - All rows
 
 #### 4. Test Docstring
+
 ```bash
 # Test docstring examples execute
 uv run pytest --doctest-modules gaspatchio_core/accessors/excel.py -k "{{function_name}}" -v
@@ -82,9 +84,10 @@ final_status: ready/needs_fixes
 ```
 
 ### Cleanup
+
 ```bash
 rm test_{{function_name}}_examples.py
 ```
 
 ## Next Step
-This output feeds into Step 11: Create Python Tests
+This output feeds into Step 9: Create Python Tests

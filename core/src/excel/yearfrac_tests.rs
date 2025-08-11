@@ -216,12 +216,12 @@ fn test_negative_yearfrac() {
 #[test]
 fn test_null_handling() {
     // Create series with null values
-    let start = vec![
+    let start = [
         Some(NaiveDate::from_ymd_opt(2023, 1, 1).unwrap()),
         None,
         Some(NaiveDate::from_ymd_opt(2023, 3, 1).unwrap()),
     ];
-    let end = vec![
+    let end = [
         Some(NaiveDate::from_ymd_opt(2023, 7, 1).unwrap()),
         Some(NaiveDate::from_ymd_opt(2023, 8, 1).unwrap()),
         None,

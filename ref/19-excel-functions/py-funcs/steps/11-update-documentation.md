@@ -1,4 +1,4 @@
-# Step 13: Update Documentation
+# Step 11: Update Documentation
 
 ## Input
 - Completed implementation from Steps 1-12
