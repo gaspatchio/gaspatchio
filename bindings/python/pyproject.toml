@@ -104,6 +104,7 @@ addopts = [
     "gaspatchio_core.examples.docstrings.pytest_plugin",
     "-m",
     "not benchmark",
+    "--ignore=pyfuncs-outputs",
 ]
 markers = [
     "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",

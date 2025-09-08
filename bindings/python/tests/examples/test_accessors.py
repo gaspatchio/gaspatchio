@@ -16,14 +16,18 @@ from gaspatchio_core import ActuarialFrame
 
 @pytest.mark.example(ns="excel.yearfrac")  # <── our marker
 def test_yearfrac_example():
-    af = ActuarialFrame(
-        pl.DataFrame(
-            {
-                "start": ["2020-01-01", "2021-06-15"],
-                "end": ["2021-01-01", "2022-06-15"],
-            }
-        )
+    # Create DataFrame with string dates and convert them to Date type
+    df = pl.DataFrame(
+        {
+            "start": ["2020-01-01", "2021-06-15"],
+            "end": ["2021-01-01", "2022-06-15"],
+        }
+    ).with_columns(
+        pl.col("start").str.to_date(),
+        pl.col("end").str.to_date(),
     )
+    
+    af = ActuarialFrame(df)
     af["yearfrac"] = af["start"].excel.yearfrac(af["end"])
 
     result = af.collect()

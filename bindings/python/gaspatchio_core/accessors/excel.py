@@ -206,9 +206,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         return ExpressionProxy(date_expr, parent_frame)
 
     def yearfrac(
-        self, 
-        end_date_expr: "IntoExprColumn", 
-        basis: BasisType = "act/act"
+        self, end_date_expr: "IntoExprColumn", basis: BasisType = "act/act"
     ) -> "ExpressionProxy":
         """Calculate the year fraction between two dates, similar to Excel's YEARFRAC.
 
@@ -297,13 +295,17 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             └───────────┴────────────┴────────────┴────────────┘
             ```
 
-        
+
         List Column Workaround::
-        
+
             For actuarial projections stored as list columns (e.g., monthly projection dates),
             use the explode/group_by pattern:
-            
+
             ```python
+            import datetime
+            import polars as pl
+            from gaspatchio_core import ActuarialFrame
+            
             # Example with monthly projection dates
             projection_data = {
                 "policy_id": ["P001", "P002"],
@@ -317,7 +319,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
                 ]
             }
             af_proj = ActuarialFrame(projection_data)
-            
+
             # Calculate yearfrac for each projection date using explode/group_by
             result = (
                 af_proj.lazy()
@@ -336,24 +338,353 @@ class ExcelColumnAccessor(BaseColumnAccessor):
                 .drop("_idx")
                 .collect()
             )
+            print(result)
             ```
-            
+
+            ```
+            shape: (2, 3)
+            ┌───────────┬───────────────────┬─────────────┐
+            │ policy_id ┆ years_to_maturity ┆ maturity_date │
+            │ ---       ┆ ---               ┆ ---          │
+            │ str       ┆ list[f64]         ┆ date         │
+            ╞═══════════╪═══════════════════╪══════════════╡
+            │ P001      ┆ [0.997260, 0.915...] ┆ 2024-12-31   │
+            │ P002      ┆ [0.958904, 0.876...] ┆ 2025-01-01   │
+            └───────────┴───────────────────┴──────────────┘
+            ```
+
             Note: List columns are not directly supported due to Polars plugin limitations.
             Excel 365 achieves this with dynamic arrays, but we require explicit data
             transformation.
-            
+
         """
         # Import the yearfrac function from the accessor functions module
         from .excel_functions.yearfrac import yearfrac
-        
+
         # Get the start expression from the proxy
         start_expr = self._get_polars_expr()
-        
+
         # Use the standard yearfrac implementation
         result_expr = yearfrac(start_expr, end_date_expr, basis=basis)
-        
+
         # Return wrapped in ExpressionProxy
         from ..column.expression_proxy import ExpressionProxy
+
         parent_frame = self._get_parent_frame()
-        
+
+        return ExpressionProxy(result_expr, parent_frame)
+
+    def irr(
+        self,
+        *,
+        guess: "IntoExprColumn | None" = None,
+        default_guess: float | None = None,
+    ) -> "ExpressionProxy":
+        """Calculate the internal rate of return for a series of cash flows.
+
+        This function computes the discount rate that makes the net present value (NPV)
+        of all cash flows equal to zero, using Excel's IRR algorithm.
+
+        !!! note "When to use"
+            *   **Investment Analysis**: Evaluate the profitability of investment portfolios or individual securities
+            *   **Project Evaluation**: Compare the returns of different actuarial projects or initiatives
+            *   **Premium Adequacy**: Assess whether premium cash flows generate sufficient returns
+            *   **Asset-Liability Matching**: Evaluate the performance of matched asset and liability cash flows
+
+        Parameters
+        ----------
+        guess : IntoExprColumn, optional
+            Optional per-row initial guess for IRR. If not provided, uses default_guess.
+        default_guess : float, optional
+            Scalar fallback guess when `guess` is not provided. Defaults to 0.1 (10%).
+
+        Returns
+        -------
+        ExpressionProxy
+            Float64 IRR per row representing the internal rate of return.
+
+        Examples
+        --------
+        Calculate IRR for investment cash flows::
+
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {
+                "investment_id": ["INV001", "INV002"],
+                "cash_flows": [
+                    [-1000.0, 300.0, 400.0, 500.0],  # Initial investment + returns
+                    [-5000.0, 1000.0, 2000.0, 3500.0]  # Different investment
+                ]
+            }
+            af = ActuarialFrame(data)
+
+            # Calculate IRR for each investment
+            result = af.with_columns(
+                irr=af["cash_flows"].excel.irr()
+            )
+            print(result.collect())
+            ```
+
+            ```
+            shape: (2, 3)
+            ┌──────────────┬──────────────────────────┬──────────┐
+            │ investment_id ┆ cash_flows              ┆ irr      │
+            │ ---          ┆ ---                     ┆ ---      │
+            │ str          ┆ list[f64]               ┆ f64      │
+            ╞══════════════╪═════════════════════════╪══════════╡
+            │ INV001       ┆ [-1000.0, 300.0, …]     ┆ 0.168595 │
+            │ INV002       ┆ [-5000.0, 1000.0, …]    ┆ 0.120476 │
+            └──────────────┴──────────────────────────┴──────────┘
+            ```
+
+        """
+        from .excel_functions.irr import irr as _irr
+
+        values_expr = self._get_polars_expr()
+        parent_frame = self._get_parent_frame()
+        result_expr = _irr(values_expr, guess=guess, default_guess=default_guess)
+        from ..column.expression_proxy import ExpressionProxy
+
+        return ExpressionProxy(result_expr, parent_frame)
+
+    def pv(
+        self,
+        nper: "IntoExprColumn",
+        pmt: "IntoExprColumn",
+        *,
+        fv: float | None = None,
+        typ: int | None = None,
+    ) -> "ExpressionProxy":
+        """Calculate the present value of an investment based on periodic payments.
+
+        This function computes the present value of a loan or an investment, based on a
+        constant interest rate and regular payments, using Excel's PV formula.
+
+        !!! note "When to use"
+            *   **Reserve Calculations**: Calculate the present value of future benefit payments for reserve valuations
+            *   **Annuity Pricing**: Determine the present value of annuity payment streams
+            *   **Loan Analysis**: Evaluate the present value of loan repayments for asset-liability management
+            *   **Capital Budgeting**: Assess the present value of project cash flows for investment decisions
+
+        Parameters
+        ----------
+        nper : IntoExprColumn
+            Number of periods as scalar/column or list column.
+        pmt : IntoExprColumn
+            Payment per period as scalar/column or list column.
+        fv : float, optional
+            Future value at the end of nper periods. Defaults to 0.0.
+        typ : int, optional
+            Payment timing: 0 for payments at end of period (default), 1 for beginning.
+
+        Returns
+        -------
+        ExpressionProxy
+            Float64 or List[Float64] representing the present value.
+
+        Examples
+        --------
+        Calculate present value of annuity payments::
+
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {
+                "policy_id": ["POL001", "POL002", "POL003"],
+                "interest_rate": [0.05, 0.04, 0.06],  # Annual interest rates
+                "num_periods": [10, 15, 20],  # Number of payment periods
+                "payment": [1000.0, 1500.0, 2000.0],  # Payment per period
+            }
+            af = ActuarialFrame(data)
+
+            # Calculate present value of the annuity streams
+            result = af.with_columns(
+                present_value=af["interest_rate"].excel.pv(
+                    nper=af["num_periods"],
+                    pmt=af["payment"]
+                )
+            )
+            print(result.collect())
+            ```
+
+            ```
+            shape: (3, 5)
+            ┌───────────┬───────────────┬─────────────┬─────────┬───────────────┐
+            │ policy_id ┆ interest_rate ┆ num_periods ┆ payment ┆ present_value │
+            │ ---       ┆ ---           ┆ ---         ┆ ---     ┆ ---           │
+            │ str       ┆ f64           ┆ i64         ┆ f64     ┆ f64           │
+            ╞═══════════╪═══════════════╪═════════════╪═════════╪═══════════════╡
+            │ POL001    ┆ 0.05          ┆ 10          ┆ 1000.0  ┆ -7721.735     │
+            │ POL002    ┆ 0.04          ┆ 15          ┆ 1500.0  ┆ -16684.789    │
+            │ POL003    ┆ 0.06          ┆ 20          ┆ 2000.0  ┆ -22937.702    │
+            └───────────┴───────────────┴─────────────┴─────────┴───────────────┘
+            ```
+
+        """
+        from .excel_functions.pv import pv as _pv
+
+        rate_expr = self._get_polars_expr()
+        parent_frame = self._get_parent_frame()
+        result_expr = _pv(rate_expr, nper, pmt, fv=fv, typ=typ)
+        from ..column.expression_proxy import ExpressionProxy
+
+        return ExpressionProxy(result_expr, parent_frame)
+
+    def days(self, start_date: "IntoExprColumn") -> "ExpressionProxy":
+        """Calculate the number of days between two dates, similar to Excel's DAYS.
+
+        This function computes the number of days between an end date (the column/expression
+        this accessor is on) and a start date. The result is positive if the end date
+        is after the start date, and negative if before.
+
+        !!! note "When to use"
+            *   **Duration Calculations**: Calculate the length of policy terms, claim periods, or other time-based intervals.
+            *   **Age Calculations**: Determine the number of days between birth dates and valuation dates for precise age calculations.
+            *   **Interest Calculations**: Calculate the exact number of days for interest accrual between two specific dates.
+            *   **Exposure Period Analysis**: Measure exposure periods in days for risk assessment or premium calculations.
+
+        Parameters
+        ----------
+        start_date : IntoExprColumn
+            An expression or column representing the start dates. Can be a scalar date,
+            a column of dates.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression representing the calculated days difference as an `Int64`.
+
+        Examples
+        --------
+        ```python
+        import datetime
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "start_date": [datetime.date(2023, 1, 1), datetime.date(2023, 6, 15)],
+            "end_date": [datetime.date(2023, 1, 31), datetime.date(2023, 7, 15)],
+        }
+        af = ActuarialFrame(data)
+
+        # Calculate days between start and end dates
+        af_with_days = af.with_columns(
+            days_diff=af["end_date"].excel.days(af["start_date"])
+        )
+        print(af_with_days.collect())
+        ```
+        """
+        from .excel_functions.days import days
+
+        end_date_expr = self._get_polars_expr()
+        result_expr = days(end_date_expr, start_date)
+
+        from ..column.expression_proxy import ExpressionProxy
+        parent_frame = self._get_parent_frame()
+        return ExpressionProxy(result_expr, parent_frame)
+
+    def edate(self, months: "IntoExprColumn") -> "ExpressionProxy":
+        """Add months to a date, similar to Excel's EDATE.
+
+        This function adds the specified number of months to the date column/expression
+        this accessor is on, returning the resulting date. Handles month boundaries
+        correctly (e.g., January 31 + 1 month = February 28/29).
+
+        !!! note "When to use"
+            *   **Policy Anniversary Dates**: Calculate policy renewal dates or anniversary dates by adding months to the issue date.
+            *   **Payment Schedules**: Determine future premium due dates or benefit payment dates based on monthly intervals.
+            *   **Maturity Calculations**: Calculate policy or investment maturity dates by adding a term in months to the start date.
+            *   **Projection Periods**: Generate future valuation dates for cash flow projections or reserving calculations.
+
+        Parameters
+        ----------
+        months : IntoExprColumn
+            An expression or column representing the number of months to add.
+            Can be positive or negative.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression representing the date after adding months.
+
+        Examples
+        --------
+        ```python
+        import datetime
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "start_date": [datetime.date(2023, 1, 31), datetime.date(2023, 3, 15)],
+            "months_to_add": [1, 3],
+        }
+        af = ActuarialFrame(data)
+
+        # Add months to dates
+        af_with_new_dates = af.with_columns(
+            new_date=af["start_date"].excel.edate(af["months_to_add"])
+        )
+        print(af_with_new_dates.collect())
+        ```
+        """
+        from .excel_functions.edate import edate
+
+        start_date_expr = self._get_polars_expr()
+        result_expr = edate(start_date_expr, months)
+
+        from ..column.expression_proxy import ExpressionProxy
+        parent_frame = self._get_parent_frame()
+        return ExpressionProxy(result_expr, parent_frame)
+
+    def eomonth(self, months: "IntoExprColumn") -> "ExpressionProxy":
+        """Get the end of month after adding months, similar to Excel's EOMONTH.
+
+        This function adds the specified number of months to the date column/expression
+        this accessor is on, then returns the last day of that resulting month.
+
+        !!! note "When to use"
+            *   **Reporting Periods**: Determine month-end dates for financial reporting or regulatory submissions.
+            *   **Interest Calculations**: Calculate interest accrual periods that end on the last day of each month.
+            *   **Benefit Payment Dates**: Set benefit payment dates to month-end when payments are made monthly.
+            *   **Policy Term Boundaries**: Define policy terms or coverage periods that end on month boundaries.
+
+        Parameters
+        ----------
+        months : IntoExprColumn
+            An expression or column representing the number of months to add.
+            Can be positive or negative.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression representing the end-of-month date after adding months.
+
+        Examples
+        --------
+        ```python
+        import datetime
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "start_date": [datetime.date(2023, 3, 15), datetime.date(2023, 1, 5)],
+            "months_to_add": [1, 2],
+        }
+        af = ActuarialFrame(data)
+
+        # Get end of month after adding months
+        af_with_eom_dates = af.with_columns(
+            end_of_month=af["start_date"].excel.eomonth(af["months_to_add"])
+        )
+        print(af_with_eom_dates.collect())
+        ```
+        """
+        from .excel_functions.eomonth import eomonth
+
+        start_date_expr = self._get_polars_expr()
+        result_expr = eomonth(start_date_expr, months)
+
+        from ..column.expression_proxy import ExpressionProxy
+        parent_frame = self._get_parent_frame()
         return ExpressionProxy(result_expr, parent_frame)

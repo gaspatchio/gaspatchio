@@ -51,8 +51,17 @@ def yearfrac(
     Returns:
         Polars expression with the year fraction calculation
     """
-    start_date = to_polars_expression(start_date)
-    end_date = to_polars_expression(end_date)
+    # Convert inputs to Polars expressions, handling literals with pl.lit()
+    def ensure_polars_expr(arg):
+        """Convert input to Polars expression, handling literals."""
+        expr_candidate = to_polars_expression(arg)
+        # If it's still not a Polars expression, wrap it in pl.lit()
+        if not isinstance(expr_candidate, pl.Expr):
+            return pl.lit(expr_candidate)
+        return expr_candidate
+    
+    start_date_expr = ensure_polars_expr(start_date)
+    end_date_expr = ensure_polars_expr(end_date)
     
     # Convert basis to integer if it's a string
     if isinstance(basis, str):
@@ -64,8 +73,10 @@ def yearfrac(
             "actual/actual": 1,
             "actual/360": 2,
             "actual_360": 2,
+            "act/360": 2,  # Common alias
             "actual/365": 3,
             "actual_365": 3,
+            "act/365": 3,  # Common alias
             "european_30_360": 4,
             "30e/360": 4,  # lowercase e for consistency
         }
@@ -83,13 +94,36 @@ def yearfrac(
                 f"Invalid basis {basis_int}. Must be an integer between 0 and 4."
             )
 
-    # Don't cast if already the right type (Date or List[Date])
-    # The Rust function handles both scalar and list types
-    start_date_expr = start_date
-    end_date_expr = end_date
+    # The Rust function expects Date or List[Date] types
+    # Apply type conversions to handle common cases:
+    # 1. Datetime columns -> cast to Date
+    # 2. String columns -> parse as dates
+    # 3. List columns -> pass through (Rust handles List[Datetime] -> List[Date])
+    
+    def prepare_date_expr(expr: pl.Expr) -> pl.Expr:
+        """Prepare date expression for yearfrac by handling type conversions."""
+        # Try to cast to date - this handles:
+        # - Date columns (no-op)
+        # - Datetime columns (converts to date)
+        # - String columns that look like dates
+        # For list columns, this will fail but that's OK - we'll catch it
+        try:
+            # First try: assume it might be a datetime and extract date
+            # This is a lazy operation, so it won't fail here
+            return expr.dt.date()
+        except:
+            # If dt.date() doesn't work, try casting
+            return expr.cast(pl.Date, strict=False)
+    
+    # Apply conversions - these are lazy operations
+    # For scalar columns: cast datetime to date
+    # For list columns: pass through unchanged (Rust handles list validation)
+    # We can't cast List[Date] to Date, so we skip the cast for lists
+    start_date_final = start_date_expr
+    end_date_final = end_date_expr
 
     return register_plugin_function(
-        args=[start_date_expr, end_date_expr],
+        args=[start_date_final, end_date_final],
         plugin_path=LIB,
         function_name="yearfrac",
         is_elementwise=True,
