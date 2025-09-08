@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Base tools
 RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update && apt-get install -y --no-install-recommends \
-    bash curl ca-certificates git \
+    bash zsh curl ca-certificates git \
     build-essential pkg-config libssl-dev \
     xz-utils zstd patchelf cmake \
  && rm -rf /var/lib/apt/lists/*
@@ -19,13 +19,14 @@ RUN locale-gen en_US.UTF-8 || true
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 # Create non-root user
-RUN useradd -m -u 1000 -s /bin/bash ubuntu
+RUN useradd -m -u 1000 -s /usr/bin/zsh ubuntu
 
 # Use non-root user, set home, workdir, and PATH to user-local bins
 ENV USER=ubuntu
 ENV HOME=/home/ubuntu
 WORKDIR /home/ubuntu
 ENV PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${PATH}"
+ENV SHELL=/usr/bin/zsh
 USER ubuntu
 
 # Install uv (Python env/packaging)

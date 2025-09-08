@@ -3,5 +3,6 @@
     "dockerfile": "Dockerfile",
     "context": "."
   },
-  "terminals": []
+  "terminals": [],
+  "install": "uv sync"
 }
