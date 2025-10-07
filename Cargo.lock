@@ -952,7 +952,7 @@ dependencies = [
 
 [[package]]
 name = "gaspatchio_core_python"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "arc-swap",
  "env_logger",

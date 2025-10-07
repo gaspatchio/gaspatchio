@@ -485,6 +485,13 @@ class DateFrameAccessor(BaseFrameAccessor):
         if output_column not in self._frame._column_order:
             self._frame._column_order.append(output_column)
 
+        # Ensure attribute-eligible columns set is refreshed for attribute access
+        try:
+            self._frame._refresh_attr_columns_set()
+        except Exception:
+            # Safe to ignore; attribute access will still work via bracket notation
+            pass
+
         return self._frame  # Return the modified frame
 
 

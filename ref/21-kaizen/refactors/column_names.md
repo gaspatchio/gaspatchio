@@ -326,3 +326,63 @@ If issues arise:
 - Update `ActuarialFrame` stubs to include accessor overloads, `__getattr__`, and `__setattr__`
 
 This plan provides a senior engineer with complete context and implementation strategy for adding pandas-style column attribute access to ActuarialFrame while maintaining backward compatibility and following established best practices.
+
+---
+
+## Appendix: Optional IntelliSense for `af.<column>` via Protocol stubs
+
+This is OFF by default. If you want VS Code to suggest concrete column names after typing `af.`, you can opt into a typing-only Protocol stub. Runtime behavior is unchanged; this only affects editor IntelliSense.
+
+### What it does
+- Generates a `.pyi` Protocol that lists your columns as attributes, each typed as `ColumnProxy`.
+- Casting your frame to this Protocol makes Pylance/pyright show those attribute names on `af.`. Methods on `af.age.` etc come from existing `ColumnProxy` stubs.
+
+### Generator script
+Path: `bindings/python/scripts/gen_frame_schema_stubs.py`
+
+Usage (zsh):
+```bash
+python bindings/python/scripts/gen_frame_schema_stubs.py \
+  --columns age premium duration \
+  --class-name ActuarialFrameSchema \
+  --out-dir .gaspatchio \
+  --filename af_schema.pyi
+```
+
+This writes `.gaspatchio/af_schema.pyi` with content like:
+```python
+from typing import Protocol
+from gaspatchio_core.column import ColumnProxy
+
+class ActuarialFrameSchema(Protocol):
+    age: ColumnProxy
+    premium: ColumnProxy
+    duration: ColumnProxy
+```
+
+### Editor configuration (pyright/pylance)
+Add a `pyrightconfig.json` at your project root (or update your existing one):
+```json
+{
+  "typeCheckingMode": "basic",
+  "stubPath": ".gaspatchio",
+  "extraPaths": ["bindings/python"],
+  "useLibraryCodeForTypes": true
+}
+```
+
+### Enabling completions in code
+Use a typing-only cast helper so the editor understands `af` implements the Protocol:
+```python
+from gaspatchio_core.typing_helpers import cast_frame_schema
+from .gaspatchio.af_schema import ActuarialFrameSchema
+
+af = cast_frame_schema(af, ActuarialFrameSchema)
+# Now: `af.` suggests age, premium, duration; `af.age.` suggests ColumnProxy methods (ceil, dt, str, ...)
+```
+
+### Notes & caveats
+- Only valid Python identifiers are included (no spaces, no leading digits/underscores, not Python keywords). Use `af["..."]` for the rest.
+- Regenerate whenever your schema changes (add/remove/rename columns). You can hook the script into your build/test flow.
+- This is purely a typing aid. It does not change runtime behavior or performance.
+- Even without this Protocol, `af.<column>.` methods complete if your editor respects the `__getattr__ -> ColumnProxy` stub.
