@@ -32,6 +32,25 @@ Based on analysis of pandas and Polars implementations:
    - Document limitations
    - Keep bracket notation as primary method
 
+## Decisions and Constraints
+
+The following policies are confirmed and in-scope for implementation:
+
+- **Identifier policy**: Strict. Attribute access must satisfy `str.isidentifier()` and must not be a Python keyword (`keyword.iskeyword(name)`).
+- **Underscore names**: Disallowed via attribute (including leading underscore or dunder). Use bracket notation only.
+- **Conflict resolution**: Accessors win. If an attribute name matches a registered accessor, the accessor is returned. Class methods/properties continue to have precedence over columns. Columns are only returned if there is no conflict.
+- **Non-identifier column names**: Strict. No sanitization or mapping. Use bracket notation only.
+- **Column attribute caching**: Disabled. Do not cache `ColumnProxy` on instances to avoid staleness after rename/drop.
+- **Autocomplete (`__dir__`)**: Include valid-identifier, non-underscore column names; exclude underscores and non-identifiers. Keep accessor names included. Refresh on schema/order changes.
+- **Performance**: Maintain an internal set for O(1) membership tests of attribute-eligible column names (kept in sync with `_column_order`).
+- **Error messages**: Use the messages specified in this doc (see Error Handling Strategy).
+- **Assignment via attribute**: In scope. Implement attribute-style assignment for eligible identifiers (see Section “Attribute Assignment Semantics”).
+- **Feature flag**: None. This behavior is the default.
+- **Type stubs**: Update `.pyi` stubs to reflect dynamic `__getattr__` and `__setattr__` behavior, plus accessor overloads.
+- **Edge cases**: Unicode identifiers allowed; dunder names disallowed via attribute; reserved names like `columns` and accessors remain properties/methods; bracket notation always works.
+- **Autocomplete staleness**: `__dir__` should reflect current eligible columns based on tracked state.
+- **Tests location**: Place tests under `bindings/python/tests`.
+
 ## Implementation Plan
 
 ### Phase 1: Core Implementation
@@ -48,15 +67,21 @@ def __getattr__(self, name: str) -> Any:
 **New implementation order**:
 1. Check for registered frame accessors (existing logic)
 2. Validate Python identifier (`name.isidentifier()`)
-3. Check for method/attribute conflicts (`hasattr(type(self), name)`)
-4. Check if name exists in columns (`name in self.columns`)
-5. Return `self[name]` if found (delegates to `__getitem__`)
-6. Provide helpful error message if not found
+3. Reject Python keywords (`keyword.iskeyword(name)`)
+4. Disallow underscore/dunder names (`name.startswith("_")`)
+5. Check for method/attribute conflicts (`hasattr(type(self), name)` or reserved names)
+6. Check if name exists in attribute-eligible set (`name in self._attr_columns_set`)
+7. Return `self[name]` if found (delegates to `__getitem__`)
+8. Provide helpful error message if not found
 
 #### 1.2 Error Handling Strategy
 - **Invalid identifiers**: `"'{name}' is not a valid attribute name"`
 - **Method conflicts**: `"'{name}' conflicts with existing method/attribute"`
 - **Column not found**: `"'{type(self).__name__}' object has no attribute '{name}'. If '{name}' is a column name, use af['{name}'] instead."`
+
+Additional conditions:
+- **Keyword names**: `"'{name}' is a Python keyword; use af['{name}'] instead"`
+- **Underscore/dunder names**: `"'{name}' is not available via attribute access; use af['{name}']"`
 
 #### 1.3 Precedence Order
 1. **Accessors** (date, excel, finance) - highest priority
@@ -64,18 +89,53 @@ def __getattr__(self, name: str) -> Any:
 3. **Valid column names** (Python identifiers only)
 4. **Error for invalid/not found**
 
+#### 1.4 Implement `__setattr__` for Attribute-Style Column Assignment
+
+Enable `af.new_col = expr` for eligible identifiers. This does not cache proxies or shadow internal state.
+
+Rules:
+1. If the name targets known internal/private attributes or existing class attributes/properties/accessors, defer to `object.__setattr__` (or raise, if property denies assignment). Reserved names cannot be overridden.
+2. If the name fails identifier checks (`not isidentifier`, `iskeyword`, startswith underscore), raise `AttributeError` instructing to use bracket assignment: `af['name'] = value`.
+3. If the name matches a registered accessor, raise `AttributeError` to avoid collisions: instruct to use bracket assignment instead.
+4. Otherwise, treat as column assignment and delegate to `__setitem__`: `self[name] = value`.
+
+Pseudo-code:
+```python
+def __setattr__(self, name: str, value: Any) -> None:
+    # 1) Existing attributes/accessors/properties: normal behavior
+    if name.startswith("_") or hasattr(type(self), name) or name in _ACCESSOR_REGISTRY:
+        return object.__setattr__(self, name, value)
+
+    # 2) Enforce identifier policy for column assignment
+    if (not name.isidentifier()) or keyword.iskeyword(name) or name.startswith("_"):
+        raise AttributeError(
+            f"'{name}' is not a valid attribute name; use af['{name}'] = ..."
+        )
+
+    # 3) Column assignment via bracket semantics
+    self[name] = value
+```
+
+Notes:
+- Attempting to override reserved names like `columns`, `date`, `excel`, `finance` should not result in a column assignment.
+- Attribute deletion (`del af.col`) is out of scope for now; use explicit column APIs.
+
 ### Phase 2: Testing Strategy
 
 #### 2.1 Unit Tests
-**File**: `tests/test_column_attribute_access.py`
+**Location**: `bindings/python/tests/`
 
 **Test cases**:
 - Basic attribute access functionality
+- Basic attribute assignment (`af.col = expr`) and type coverage
 - Invalid Python identifiers (spaces, numbers, special chars)
+- Python keywords rejection
+- Underscore/dunder names rejection
 - Method name conflicts (count, mean, sum)
 - Accessor precedence (date, excel, finance)
 - Nonexistent attributes
 - Edge cases (empty column names, unicode, keywords)
+- `__dir__` autocomplete includes only eligible columns and accessors
 
 #### 2.2 Integration Tests
 - Test with real actuarial models
@@ -97,6 +157,7 @@ def __getattr__(self, name: str) -> Any:
 
 **Content changes**:
 - Add examples showing both `af.column_name` and `af["column_name"]`
+- Add examples for attribute assignment: `af.new_col = af["a"] + 1`
 - Document limitations and gotchas
 - Recommend bracket notation for programmatic access
 - Show error scenarios and solutions
@@ -115,8 +176,8 @@ def __getattr__(self, name: str) -> Any:
 - Memory usage analysis
 
 #### 4.2 Optimization Opportunities
-- Cache column name validation results
-- Optimize `name in self.columns` lookup
+- Maintain `self._attr_columns_set` (eligible names) for O(1) membership
+- Optimize `name in self.columns` lookup when needed
 - Consider lazy evaluation strategies
 
 ## Technical Specifications
@@ -141,7 +202,7 @@ elif not name.isidentifier():
     raise AttributeError(f"'{name}' is not a valid attribute name")
 elif hasattr(type(self), name):
     raise AttributeError(f"'{name}' conflicts with existing method/attribute")
-elif name in self.columns:
+elif name in self._attr_columns_set:
     return self[name]
 else:
     raise AttributeError(helpful_message)
@@ -156,7 +217,7 @@ else:
 ### 4.2 Performance Impact
 - **Risk**: Medium - `__getattr__` overhead on attribute access
 - **Mitigation**: Benchmark and optimize hot paths
-- **Fallback**: Feature flag for disable if needed
+- **Fallback**: N/A (feature is default; rely on documentation and toggling usage)
 
 ### 4.3 User Confusion
 - **Risk**: Medium - method vs column conflicts
@@ -174,6 +235,7 @@ else:
 - [ ] Invalid identifiers properly rejected with clear errors
 - [ ] Method conflicts handled correctly (methods take precedence)
 - [ ] Accessors continue to work unchanged
+- [ ] `af.new_col = expr` creates/updates columns for eligible identifiers
 - [ ] Performance impact < 5% on typical operations
 
 ### 5.2 Quality Requirements
@@ -192,6 +254,7 @@ else:
 
 ### Week 1: Core Implementation
 - Modify `__getattr__` method
+- Implement `__setattr__` for attribute-style assignment
 - Basic functionality working
 - Initial test suite
 
@@ -214,7 +277,7 @@ else:
 
 If issues arise:
 1. **Immediate**: Comment out column access logic in `__getattr__`
-2. **Short-term**: Feature flag to disable new functionality  
+2. **Short-term**: Temporarily disable attribute assignment by reverting `__setattr__`
 3. **Long-term**: Full revert with lessons learned
 
 ## Questions for Stakeholders
@@ -248,14 +311,18 @@ If issues arise:
 
 ### Core Implementation
 - `gaspatchio_core/frame/base.py` - Modified `__getattr__` method
+  and implemented `__setattr__` for attribute assignment
 
 ### Testing
-- `tests/test_column_attribute_access.py` - New comprehensive test suite
-- `tests/performance/test_column_access_perf.py` - Performance benchmarks
+- `bindings/python/tests/test_column_attribute_access.py` - Comprehensive suite (access + assignment)
+- `bindings/python/tests/performance/test_column_access_perf.py` - Performance benchmarks
 
 ### Documentation
 - Update class docstrings throughout codebase
 - Update README and user guides
 - Add migration examples
+ 
+### Type Stubs
+- Update `ActuarialFrame` stubs to include accessor overloads, `__getattr__`, and `__setattr__`
 
 This plan provides a senior engineer with complete context and implementation strategy for adding pandas-style column attribute access to ActuarialFrame while maintaining backward compatibility and following established best practices.
