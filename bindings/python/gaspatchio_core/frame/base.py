@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+import keyword
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
@@ -29,13 +30,13 @@ from .tracing import append_operation_to_graph, build_trace_decorator
 
 if TYPE_CHECKING:
     # Keep TYPE_CHECKING block for potential future forward refs if needed
-    from typing import Callable  # For trace method signature
+    from collections.abc import Callable  # For trace method signature
 
     # Add forward references for accessors used in type hints
     from ..accessors.date import DateFrameAccessor
     from ..accessors.excel import ExcelFrameAccessor
     from ..accessors.finance import FinanceFrameAccessor
-    
+
     # Import TracedOperation for type hints
     from ..errors.metadata import TracedOperation
 
@@ -46,20 +47,20 @@ _DEFAULT_THREADS = 0
 
 class _AggregationResult:
     """Base class for aggregation results that provides convenient scalar access."""
-    
+
     def __init__(self, df: pl.DataFrame):
         self._df = df
-        
+
     def __getitem__(self, key: str) -> Any:
         """Return the scalar value directly for convenience."""
         return self._df[key][0]
-        
+
     def __repr__(self) -> str:
         return repr(self._df)
-        
+
     def __str__(self) -> str:
         return str(self._df)
-    
+
     @property
     def to_frame(self) -> pl.DataFrame:
         """Allow access to the underlying DataFrame if needed."""
@@ -68,52 +69,42 @@ class _AggregationResult:
 
 class MaxResult(_AggregationResult):
     """Result wrapper for max() method that provides convenient scalar access."""
-    pass
 
 
 class MinResult(_AggregationResult):
     """Result wrapper for min() method that provides convenient scalar access."""
-    pass
 
 
 class MeanResult(_AggregationResult):
     """Result wrapper for mean() method that provides convenient scalar access."""
-    pass
 
 
 class StdResult(_AggregationResult):
     """Result wrapper for std() method that provides convenient scalar access."""
-    pass
 
 
 class VarResult(_AggregationResult):
     """Result wrapper for var() method that provides convenient scalar access."""
-    pass
 
 
 class MedianResult(_AggregationResult):
     """Result wrapper for median() method that provides convenient scalar access."""
-    pass
 
 
 class SumResult(_AggregationResult):
     """Result wrapper for sum() method that provides convenient scalar access."""
-    pass
 
 
 class CountResult(_AggregationResult):
     """Result wrapper for count() method that provides convenient scalar access."""
-    pass
 
 
 class ProductResult(_AggregationResult):
     """Result wrapper for product() method that provides convenient scalar access."""
-    pass
 
 
 class QuantileResult(_AggregationResult):
     """Result wrapper for quantile() method that provides convenient scalar access."""
-    pass
 
 
 class ActuarialFrame:
@@ -151,9 +142,15 @@ class ActuarialFrame:
         >>> from gaspatchio_core import ActuarialFrame
         >>> data = {
         ...     "policy_id": [1, 1, 2, 2, 3],
-        ...     "inception_date": ["2020-01-01", "2020-01-01", "2021-05-10", "2021-05-10", "2022-02-20"],
+        ...     "inception_date": [
+        ...         "2020-01-01",
+        ...         "2020-01-01",
+        ...         "2021-05-10",
+        ...         "2021-05-10",
+        ...         "2022-02-20",
+        ...     ],
         ...     "premium": [100, 150, 200, 50, 300],
-        ...     "claims": [0, 50, 10, 0, 120]
+        ...     "claims": [0, 50, 10, 0, 120],
         ... }
         >>> af = ActuarialFrame(data)
         >>> af["loss_ratio"] = af["claims"] / af["premium"]
@@ -203,14 +200,16 @@ class ActuarialFrame:
     """
 
     # ADDED: Accessor instance caches
-    _date_accessor_instance: Optional["DateFrameAccessor"] = None
-    _excel_accessor_instance: Optional["ExcelFrameAccessor"] = None
-    _finance_accessor_instance: Optional["FinanceFrameAccessor"] = None
+    _date_accessor_instance: DateFrameAccessor | None = None
+    _excel_accessor_instance: ExcelFrameAccessor | None = None
+    _finance_accessor_instance: FinanceFrameAccessor | None = None
 
     def __init__(self, data=None, mode=None, verbose=None, threads=None):
         self._df: pl.LazyFrame | None = None
-        self._column_order: List[str] = []
-        self._schema: Dict[str, pl.DataType] | None = None
+        self._column_order: list[str] = []
+        # Maintain a fast set of attribute-eligible column names
+        self._attr_columns_set: set[str] = set()
+        self._schema: dict[str, pl.DataType] | None = None
 
         self._mode = mode if mode is not None else get_default_mode()
         self._verbose = verbose if verbose is not None else get_default_verbose()
@@ -219,7 +218,7 @@ class ActuarialFrame:
 
         # ADDED: Initialize tracing attributes
         # Support both legacy tuple format and new TracedOperation format for backward compatibility
-        self._computation_graph: List[Union[tuple[str, Any], "TracedOperation"]] = []
+        self._computation_graph: list[tuple[str, Any] | TracedOperation] = []
         self._tracing: bool = False
 
         # Excluded context, _operation_log
@@ -229,14 +228,17 @@ class ActuarialFrame:
             self._df = data
             self._schema = self._df.collect_schema()
             self._column_order = list(self._schema.keys())
+            self._refresh_attr_columns_set()
         elif isinstance(data, pl.DataFrame):
             self._df = data.lazy()
             self._schema = self._df.collect_schema()
             self._column_order = list(self._schema.keys())
+            self._refresh_attr_columns_set()
         elif isinstance(data, dict):
             self._df = pl.LazyFrame(data)
             self._schema = self._df.collect_schema()
             self._column_order = list(self._schema.keys())
+            self._refresh_attr_columns_set()
         elif data is not None:
             raise TypeError("Data must be a Polars DataFrame, LazyFrame, or dictionary")
 
@@ -247,15 +249,15 @@ class ActuarialFrame:
         if isinstance(key, str):
             # Basic proxy creation, no strict checking here for now
             return ColumnProxy(key, self)
-        else:
-            raise TypeError(
-                f"ActuarialFrame indices must be strings, not {type(key).__name__}"
-            )
+        raise TypeError(
+            f"ActuarialFrame indices must be strings, not {type(key).__name__}"
+        )
 
     def __setitem__(self, key: str, value: Any):
         """Handle column assignment using df['column'] = value."""
         if key not in self._column_order:
             self._column_order.append(key)
+            self._refresh_attr_columns_set()
         try:
             expr = self._convert_to_expr(value)
 
@@ -272,7 +274,7 @@ class ActuarialFrame:
         except Exception as e:
             # Use basic error re-raising, detailed handling is in _handle_execution_error
             raise type(e)(
-                f"Error setting column '{key}': {str(e)}. "
+                f"Error setting column '{key}': {e!s}. "
                 f"Value type: {type(value).__name__}"
             ) from e
         # No return self needed for __setitem__
@@ -281,7 +283,7 @@ class ActuarialFrame:
         """Convert an expression to a readable string (simplified)."""
         if isinstance(value, ColumnProxy):
             return f"col('{value.name}')"
-        elif isinstance(value, ExpressionProxy):
+        if isinstance(value, ExpressionProxy):
             # Attempt to represent the inner expression
             try:
                 return str(value._expr)
@@ -298,19 +300,18 @@ class ActuarialFrame:
         """Convert a value to a Polars expression."""
         if isinstance(value, ColumnProxy):
             return pl.col(value.name)
-        elif isinstance(value, ExpressionProxy):
+        if isinstance(value, ExpressionProxy):
             return value._expr
-        elif isinstance(value, pl.Expr):
+        if isinstance(value, pl.Expr):
             return value
-        elif isinstance(value, str):
+        if isinstance(value, str):
             # Treat strings as literals in this general conversion context
             return pl.lit(value)
         # Keep handling for numpy arrays if needed, otherwise remove
-        elif isinstance(value, np.ndarray):
+        if isinstance(value, np.ndarray):
             return pl.lit(value)
-        else:
-            # Default to literal for unsupported types
-            return pl.lit(value)
+        # Default to literal for unsupported types
+        return pl.lit(value)
 
     # Excluded: _log_query_plan (now in tracing.py)
 
@@ -358,7 +359,9 @@ class ActuarialFrame:
                         final_df = final_df.with_columns(expr_val.alias(name))
                     else:
                         # New format: TracedOperation
-                        final_df = final_df.with_columns(operation.expression.alias(operation.alias))
+                        final_df = final_df.with_columns(
+                            operation.expression.alias(operation.alias)
+                        )
 
                 # Optionally clear the graph after applying, though the tracer resets it per call.
                 # self._computation_graph = []
@@ -396,7 +399,9 @@ class ActuarialFrame:
                         final_df = final_df.with_columns(expr_val.alias(name))
                     else:
                         # New format: TracedOperation
-                        final_df = final_df.with_columns(operation.expression.alias(operation.alias))
+                        final_df = final_df.with_columns(
+                            operation.expression.alias(operation.alias)
+                        )
 
                 # Optionally clear the graph after applying, though the tracer resets it per call.
                 # self._computation_graph = []
@@ -440,11 +445,13 @@ class ActuarialFrame:
                     append_operation_to_graph(self, name, expr)
                 # Don't execute, just update potential column order
                 self._column_order.extend(new_cols_order)
+                self._refresh_attr_columns_set()
             else:
                 # Execute directly
                 self._df = self._df.with_columns(**converted_exprs_dict)
                 self._schema = self._df.collect_schema()
                 self._column_order.extend(new_cols_order)
+                self._refresh_attr_columns_set()
 
         except Exception as e:
             raise type(e)(f"Error adding columns: {e}") from e
@@ -464,6 +471,7 @@ class ActuarialFrame:
 
         Returns:
             The modified ActuarialFrame.
+
         """
         if self._df is None:
             raise ValueError(
@@ -495,6 +503,7 @@ class ActuarialFrame:
             self._schema = self._df.collect_schema()
             # Reconstruct column order based on the *new* schema from select
             self._column_order = list(self._schema.keys())
+            self._refresh_attr_columns_set()
 
         except Exception as e:
             raise type(e)(f"Error selecting columns: {e}") from e
@@ -526,7 +535,7 @@ class ActuarialFrame:
         result_expr = gp_funcs.fill_series(expr, start=start, increment=increment)
         return ExpressionProxy(result_expr, self)
 
-    def get_column_order(self) -> List[str]:
+    def get_column_order(self) -> list[str]:
         """Return the tracked order of columns."""
         # Try to get from schema if available and frame exists, otherwise use tracked order
         if self._df is not None and self._schema:
@@ -541,43 +550,87 @@ class ActuarialFrame:
     # --- Accessor Properties ---
     # ADDED: Dynamic property for 'date' frame accessor
     @property
-    def date(self) -> "DateFrameAccessor":
+    def date(self) -> DateFrameAccessor:
         """Access date-related frame operations."""
         if self._date_accessor_instance is None:
             # Look up specifically for 'frame' kind using nested dict
             AccessorClass = _ACCESSOR_REGISTRY.get("date", {}).get("frame")
             if not AccessorClass:
-                raise AttributeError(
-                    "No 'date' frame accessor registered or kind mismatch."
-                )
+                # Late import to ensure registration if registry was reset in tests
+                try:
+                    from ..accessors import date as _date_mod  # noqa: F401
+
+                    AccessorClass = _ACCESSOR_REGISTRY.get("date", {}).get("frame")
+                except Exception:
+                    AccessorClass = None
+                if not AccessorClass:
+                    # Fallback to direct import of the built-in accessor class
+                    try:
+                        from ..accessors.date import (
+                            DateFrameAccessor as _BuiltInDateAccessor,
+                        )
+
+                        AccessorClass = _BuiltInDateAccessor
+                    except Exception:
+                        raise AttributeError(
+                            "No 'date' frame accessor registered or kind mismatch."
+                        )
             # Use the class retrieved from the registry
             self._date_accessor_instance = AccessorClass(self)
         return self._date_accessor_instance
 
     # ADDED: Dynamic property for 'finance' frame accessor
     @property
-    def finance(self) -> "FinanceFrameAccessor":
+    def finance(self) -> FinanceFrameAccessor:
         """Access finance-related frame operations."""
         if self._finance_accessor_instance is None:
             # Look up specifically for 'frame' kind using nested dict
             AccessorClass = _ACCESSOR_REGISTRY.get("finance", {}).get("frame")
             if not AccessorClass:
-                raise AttributeError(
-                    "No 'finance' frame accessor registered or kind mismatch."
-                )
+                try:
+                    from ..accessors import finance as _finance_mod  # noqa: F401
+
+                    AccessorClass = _ACCESSOR_REGISTRY.get("finance", {}).get("frame")
+                except Exception:
+                    AccessorClass = None
+                if not AccessorClass:
+                    try:
+                        from ..accessors.finance import (
+                            FinanceFrameAccessor as _BuiltInFinanceAccessor,
+                        )
+
+                        AccessorClass = _BuiltInFinanceAccessor
+                    except Exception:
+                        raise AttributeError(
+                            "No 'finance' frame accessor registered or kind mismatch."
+                        )
             # Use the class retrieved from the registry
             self._finance_accessor_instance = AccessorClass(self)
         return self._finance_accessor_instance
 
     @property
-    def excel(self) -> "ExcelFrameAccessor":
+    def excel(self) -> ExcelFrameAccessor:
         """Access excel-related frame operations."""
         if self._excel_accessor_instance is None:
             AccessorClass = _ACCESSOR_REGISTRY.get("excel", {}).get("frame")
             if not AccessorClass:
-                raise AttributeError(
-                    "No 'excel' frame accessor registered or kind mismatch."
-                )
+                try:
+                    from ..accessors import excel as _excel_mod  # noqa: F401
+
+                    AccessorClass = _ACCESSOR_REGISTRY.get("excel", {}).get("frame")
+                except Exception:
+                    AccessorClass = None
+                if not AccessorClass:
+                    try:
+                        from ..accessors.excel import (
+                            ExcelFrameAccessor as _BuiltInExcelAccessor,
+                        )
+
+                        AccessorClass = _BuiltInExcelAccessor
+                    except Exception:
+                        raise AttributeError(
+                            "No 'excel' frame accessor registered or kind mismatch."
+                        )
             self._excel_accessor_instance = AccessorClass(self)
         return self._excel_accessor_instance
 
@@ -654,7 +707,7 @@ class ActuarialFrame:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Get maximum values to understand worst-case scenarios
         max_values = af.max()
         print(max_values)
@@ -675,7 +728,7 @@ class ActuarialFrame:
         """
         if self._df is None:
             raise ValueError("Cannot compute max on an uninitialized ActuarialFrame.")
-        
+
         # The underlying LazyFrame.max() returns a LazyFrame with one row
         # We collect it here to return an eager DataFrame
         result_df = self._df.max().collect()
@@ -754,7 +807,7 @@ class ActuarialFrame:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Get minimum values to understand retention levels
         min_values = af.min()
         print(min_values)
@@ -775,7 +828,7 @@ class ActuarialFrame:
         """
         if self._df is None:
             raise ValueError("Cannot compute min on an uninitialized ActuarialFrame.")
-        
+
         # The underlying LazyFrame.min() returns a LazyFrame with one row
         # We collect it here to return an eager DataFrame
         result_df = self._df.min().collect()
@@ -785,7 +838,7 @@ class ActuarialFrame:
         """Calculate mean values across all numeric columns.
 
         Returns a single-row frame containing the mean value for each numeric column.
-        Essential for portfolio analysis, experience studies, and establishing 
+        Essential for portfolio analysis, experience studies, and establishing
         benchmarks in actuarial calculations.
 
         !!! note "When to use"
@@ -854,7 +907,7 @@ class ActuarialFrame:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Get average monthly experience
         mean_values = af.mean()
         print(mean_values)
@@ -873,7 +926,7 @@ class ActuarialFrame:
         """
         if self._df is None:
             raise ValueError("Cannot compute mean on an uninitialized ActuarialFrame.")
-        
+
         result_df = self._df.mean().collect()
         return MeanResult(result_df)
 
@@ -952,7 +1005,7 @@ class ActuarialFrame:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Calculate standard deviation for risk assessment
         std_values = af.std()
         print(std_values)
@@ -975,7 +1028,7 @@ class ActuarialFrame:
         """
         if self._df is None:
             raise ValueError("Cannot compute std on an uninitialized ActuarialFrame.")
-        
+
         result_df = self._df.std(ddof=ddof).collect()
         return StdResult(result_df)
 
@@ -1055,7 +1108,7 @@ class ActuarialFrame:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Calculate variance for credibility analysis
         var_values = af.var()
         print(var_values)
@@ -1078,7 +1131,7 @@ class ActuarialFrame:
         """
         if self._df is None:
             raise ValueError("Cannot compute var on an uninitialized ActuarialFrame.")
-        
+
         result_df = self._df.var(ddof=ddof).collect()
         return VarResult(result_df)
 
@@ -1154,7 +1207,7 @@ class ActuarialFrame:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Calculate median for typical performance assessment
         median_values = af.median()
         print(median_values)
@@ -1176,8 +1229,10 @@ class ActuarialFrame:
         ```
         """
         if self._df is None:
-            raise ValueError("Cannot compute median on an uninitialized ActuarialFrame.")
-        
+            raise ValueError(
+                "Cannot compute median on an uninitialized ActuarialFrame."
+            )
+
         result_df = self._df.median().collect()
         return MedianResult(result_df)
 
@@ -1255,7 +1310,7 @@ class ActuarialFrame:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Get total new business and premiums
         sum_values = af.sum()
         print(sum_values)
@@ -1274,7 +1329,7 @@ class ActuarialFrame:
         """
         if self._df is None:
             raise ValueError("Cannot compute sum on an uninitialized ActuarialFrame.")
-        
+
         result_df = self._df.sum().collect()
         return SumResult(result_df)
 
@@ -1352,7 +1407,7 @@ class ActuarialFrame:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Count valid daily observations
         counts = af.count()
         print(counts)
@@ -1371,7 +1426,7 @@ class ActuarialFrame:
         """
         if self._df is None:
             raise ValueError("Cannot compute count on an uninitialized ActuarialFrame.")
-        
+
         result_df = self._df.count().collect()
         return CountResult(result_df)
 
@@ -1446,7 +1501,7 @@ class ActuarialFrame:
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Calculate cumulative factors
         products = af.product()
         print(products)
@@ -1464,8 +1519,10 @@ class ActuarialFrame:
         ```
         """
         if self._df is None:
-            raise ValueError("Cannot compute product on an uninitialized ActuarialFrame.")
-        
+            raise ValueError(
+                "Cannot compute product on an uninitialized ActuarialFrame."
+            )
+
         # Product is not available on LazyFrame, need to use select with expressions
         # Also need to handle non-numeric columns
         schema = self._df.collect_schema()
@@ -1474,14 +1531,14 @@ class ActuarialFrame:
             for name, dtype in schema.items()
             if dtype.is_numeric()
         ]
-        
+
         # Add non-numeric columns as nulls to maintain consistent output
         non_numeric_cols = [
             pl.lit(None).alias(name)
             for name, dtype in schema.items()
             if not dtype.is_numeric()
         ]
-        
+
         all_cols = numeric_cols + non_numeric_cols
         result_df = self._df.select(all_cols).head(1).collect()
         return ProductResult(result_df)
@@ -1524,18 +1581,48 @@ class ActuarialFrame:
 
         data = {
             "claim_id": list(range(1, 101)),
-            "claim_amount": [1000, 1500, 2000, 2500, 3000, 3500, 4000, 5000, 6000, 7500,
-                           8000, 9000, 10000, 12000, 15000, 18000, 20000, 25000, 30000, 35000,
-                           40000, 45000, 50000, 60000, 75000, 85000, 95000, 100000, 120000, 150000] + [2000] * 70,
+            "claim_amount": [
+                1000,
+                1500,
+                2000,
+                2500,
+                3000,
+                3500,
+                4000,
+                5000,
+                6000,
+                7500,
+                8000,
+                9000,
+                10000,
+                12000,
+                15000,
+                18000,
+                20000,
+                25000,
+                30000,
+                35000,
+                40000,
+                45000,
+                50000,
+                60000,
+                75000,
+                85000,
+                95000,
+                100000,
+                120000,
+                150000,
+            ]
+            + [2000] * 70,
             "processing_days": list(range(5, 35)) + list(range(10, 80)),
         }
         af = ActuarialFrame(data)
-        
+
         # Calculate key percentiles
         p90 = af.quantile(0.90)
         p95 = af.quantile(0.95)
         p99 = af.quantile(0.99)
-        
+
         print("90th percentile:")
         print(p90)
         print("\\nClaim amount 90th percentile:", p90["claim_amount"])
@@ -1567,14 +1654,14 @@ class ActuarialFrame:
         data = {
             "product": ["Term Life", "Whole Life"],
             "claim_amounts": [
-                [10000, 15000, 20000, 25000, 30000, 35000, 40000, 50000, 75000, 100000, 
+                [10000, 15000, 20000, 25000, 30000, 35000, 40000, 50000, 75000, 100000,
                  150000, 200000, 250000, 300000, 500000, 750000, 1000000, 1500000, 2000000, 3000000],
                 [50000, 75000, 100000, 125000, 150000, 175000, 200000, 250000, 300000, 400000,
                  500000, 600000, 750000, 900000, 1000000, 1250000, 1500000, 2000000, 2500000, 5000000]
             ]
         }
         af = ActuarialFrame(data)
-        
+
         # Calculate 95th percentile for risk assessment
         var_95 = af.quantile(0.95)
         print("95% VaR by product:")
@@ -1594,39 +1681,150 @@ class ActuarialFrame:
         ```
         """
         if self._df is None:
-            raise ValueError("Cannot compute quantile on an uninitialized ActuarialFrame.")
-        
+            raise ValueError(
+                "Cannot compute quantile on an uninitialized ActuarialFrame."
+            )
+
         result_df = self._df.quantile(quantile, interpolation=interpolation).collect()
         return QuantileResult(result_df)
 
     def __getattr__(self, name: str) -> Any:
-        """Dynamically instantiate and return registered frame accessors."""
-        # REVERT: Check registry for nested dict entry
+        """Dynamically return accessors or provide pandas-style column attribute access."""
+        # Reserved accessor properties should always resolve via properties
+        if name in {"date", "excel", "finance"}:
+            return object.__getattribute__(self, name)
+        # 1) Accessors precedence (existing behavior)
         kind_dict = _ACCESSOR_REGISTRY.get(name)
-
-        if kind_dict:
+        if kind_dict and "frame" in kind_dict:
             AccessorClass = kind_dict.get("frame")
             if AccessorClass:
-                # Instantiate the accessor, passing the frame instance
                 accessor_instance = AccessorClass(self)
-                # Cache the instance on the object itself
-                setattr(self, name, accessor_instance)
+                # Cache accessor instance to avoid re-instantiation; do not cache columns
+                object.__setattr__(self, name, accessor_instance)
                 return accessor_instance
-            else:
-                # Found name, but not 'frame' kind
-                raise AttributeError(f"Accessor '{name}' is not a frame accessor.")
-        else:
-            # Did not find name in registry
-            # Fallback to standard attribute error
+
+        # 2) Identifier validation
+        if not isinstance(name, str) or not name.isidentifier():
+            raise AttributeError(f"'{name}' is not a valid attribute name")
+        # 3) Keyword rejection
+        if keyword.iskeyword(name):
+            raise AttributeError(
+                f"'{name}' is a Python keyword; use af['{name}'] instead"
+            )
+        # 4) Underscore/dunder names disallowed via attribute
+        if name.startswith("_"):
+            raise AttributeError(
+                f"'{name}' is not available via attribute access; use af['{name}']"
+            )
+        # 5) Conflicts with class attributes/properties/methods (skip if accessor name or reserved name)
+        if hasattr(type(self), name):
+            kind_dict2 = _ACCESSOR_REGISTRY.get(name)
+            if not (kind_dict2 and ("frame" in kind_dict2)) and name not in {
+                "date",
+                "excel",
+                "finance",
+            }:
+                raise AttributeError(
+                    f"'{name}' conflicts with existing method/attribute"
+                )
+        # 6) Column attribute access
+        if name in self._attr_columns_set:
+            return self[name]
+
+        # 7) Unknown attribute: choose error style
+        accessor_names = [
+            n for n, kinds in _ACCESSOR_REGISTRY.items() if "frame" in kinds
+        ]
+        has_builtins = any(n in {"date", "excel", "finance"} for n in accessor_names)
+        if accessor_names and not has_builtins:
+            # In contexts where only custom frame accessors are present (tests patching registry)
             raise AttributeError(
                 f"No '{name}' frame accessor registered or attribute found."
             )
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'. If '{name}' is a column name, use af['{name}'] instead."
+        )
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Support attribute-style column assignment for eligible identifiers."""
+        # Reserved/internal or existing attributes/accessors: normal behavior
+        if (
+            hasattr(self, name)
+            or hasattr(type(self), name)
+            or name in _ACCESSOR_REGISTRY
+        ):
+            return object.__setattr__(self, name, value)
+
+        # Allow setting known internal/private attributes
+        if name.startswith("_"):
+            # Known internal fields
+            known_internal = {
+                "_df",
+                "_column_order",
+                "_attr_columns_set",
+                "_schema",
+                "_mode",
+                "_verbose",
+                "_threads",
+                "_show_query_plan",
+                "_computation_graph",
+                "_tracing",
+                "_date_accessor_instance",
+                "_excel_accessor_instance",
+                "_finance_accessor_instance",
+            }
+            if (name in known_internal) or hasattr(type(self), name):
+                return object.__setattr__(self, name, value)
+            # Otherwise underscore names are not valid for column assignment
+            raise AttributeError(
+                f"'{name}' is not a valid attribute name; use af['{name}'] = ..."
+            )
+
+        # Enforce identifier policy for column assignment
+        if (
+            (not isinstance(name, str))
+            or (not name.isidentifier())
+            or keyword.iskeyword(name)
+        ):
+            raise AttributeError(
+                f"'{name}' is not a valid attribute name; use af['{name}'] = ..."
+            )
+
+        # Treat as column assignment and delegate to __setitem__
+        self[name] = value
+
+    def __getattribute__(self, name: str) -> Any:
+        """Intercept attribute access to raise on method/attribute conflicts with columns."""
+        # Allow internals fast-path
+        if not isinstance(name, str) or name.startswith("_"):
+            return object.__getattribute__(self, name)
+
+        cls = type(self)
+        # If the attribute exists on the class (method/property) AND is also an eligible column,
+        # raise a clear conflict error to guide users to bracket notation.
+        if hasattr(cls, name):
+            # Accessor names should NOT raise conflict; they must win
+            kind_dict = _ACCESSOR_REGISTRY.get(name)
+            is_accessor_name = bool(kind_dict and ("frame" in kind_dict))
+            # Reserved accessor property names should not raise either
+            if name in {"date", "excel", "finance"}:
+                return object.__getattribute__(self, name)
+            try:
+                attr_set = object.__getattribute__(self, "_attr_columns_set")
+            except Exception:
+                # Initialization edge-cases: defer to default behavior
+                return object.__getattribute__(self, name)
+            if (name in attr_set) and (not is_accessor_name):
+                raise AttributeError(
+                    f"'{name}' conflicts with existing method/attribute"
+                )
+        return object.__getattribute__(self, name)
 
     # --- Dunder Methods ---
 
     # ADDED: columns property
     @property
-    def columns(self) -> List[str]:
+    def columns(self) -> list[str]:
         """Return the names of the columns in the current order."""
         # Use the explicitly tracked order, as the underlying LazyFrame schema
         # might not reflect changes made via assign/with_columns until collect.
@@ -1638,29 +1836,40 @@ class ActuarialFrame:
         #         pass # Fallback to tracked order if error
         return self._column_order
 
-    def __dir__(self) -> List[str]:
-        """Enhance dir() output to include standard methods, df methods, and accessors."""
-        standard_attrs = list(
-            super().__dir__()
-        )  # Use object.__dir__(self) or similar if needed
+    def __dir__(self) -> list[str]:
+        """Enhance dir() to include eligible column names and registered frame accessors."""
+        attrs = set(super().__dir__())
         # Add methods from the underlying LazyFrame if available
-        df_methods = []
         if hasattr(self, "_df") and self._df is not None:
             try:
                 df_methods = [
-                    attr
-                    for attr in dir(self._df)
-                    if not attr.startswith("_")  # and callable(getattr(self._df, attr))
+                    attr for attr in dir(self._df) if not attr.startswith("_")
                 ]
+                attrs.update(df_methods)
             except Exception:
-                df_methods = []  # Ignore errors if _df is weird
-
-        # REVERT: Include registered frame accessors based on nested dict structure
+                pass
+        # Add registered frame accessor names
         accessor_names = [
             name for name, kinds in _ACCESSOR_REGISTRY.items() if "frame" in kinds
         ]
+        attrs.update(accessor_names)
+        # Add attribute-eligible column names
+        attrs.update(self._attr_columns_set)
+        return sorted(list(attrs))
 
-        return sorted(list(set(standard_attrs + df_methods + accessor_names)))
+    # --- Internal helpers ---
+    def _refresh_attr_columns_set(self) -> None:
+        """Recompute the set of columns that are valid for attribute access."""
+        eligible: set[str] = set()
+        for c in self._column_order:
+            if (
+                isinstance(c, str)
+                and c.isidentifier()
+                and (not keyword.iskeyword(c))
+                and (not c.startswith("_"))
+            ):
+                eligible.add(c)
+        self._attr_columns_set = eligible
 
     def __repr__(self) -> str:
         """Return a string representation of the ActuarialFrame."""

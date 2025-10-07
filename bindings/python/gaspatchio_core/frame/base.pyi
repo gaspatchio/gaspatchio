@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
@@ -80,6 +78,8 @@ class ActuarialFrame:
     _date_accessor_instance: DateFrameAccessor | None
     _finance_accessor_instance: FinanceFrameAccessor | None
     _excel_accessor_instance: ExcelFrameAccessor | None
+    # ADDED: attribute-eligible column set
+    _attr_columns_set: set[str]
 
     def __init__(
         self,
@@ -94,8 +94,11 @@ class ActuarialFrame:
     def __setitem__(self, key: str, value: Any) -> None:
         """Handle column assignment using df['column'] = value."""
 
+    def __getattr__(self, name: str) -> Any: ...
+    def __setattr__(self, name: str, value: Any) -> None: ...
+    def __getattribute__(self, name: str) -> Any: ...
     def __dir__(self) -> list[str]:
-        """Provide basic list of attributes."""
+        """Provide enhanced list including accessors and eligible column names."""
 
     def _expr_to_str(self, value: Any) -> str:
         """Convert an expression to a readable string (simplified)."""
