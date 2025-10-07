@@ -101,6 +101,11 @@ class DocstringCodeExample(BaseModel):
                             code = problem.get("code", "UnknownCode")
                             message = problem.get("message", "Unknown error")
                             row = problem.get("location", {}).get("row", 0)
+
+                            if code in {"invalid-syntax", "syntax-error"}:
+                                code = "E999"
+                                message = f"SyntaxError: {message}"
+
                             issues.append(f"{code}: {message} at line {row}")
                         return issues  # Return parsed errors from stderr if they look like diagnostics
                     elif isinstance(error_json, dict) and error_json.get("message"):
@@ -125,6 +130,11 @@ class DocstringCodeExample(BaseModel):
                             code = problem.get("code", "UnknownCode")
                             message = problem.get("message", "Unknown error")
                             row = problem.get("location", {}).get("row", 0)
+
+                            if code in {"invalid-syntax", "syntax-error"}:
+                                code = "E999"
+                                message = f"SyntaxError: {message}"
+
                             # Add line number adjustment relative to snippet start if needed here
                             # For now, using Ruff's reported line number within the snippet
                             issues.append(f"{code}: {message} at line {row}")
@@ -140,7 +150,9 @@ class DocstringCodeExample(BaseModel):
             # If no specific issues parsed but non-zero exit code, add generic message
             if not issues and process.returncode != 0:
                 issues.append(
-                    f"Ruff CLI exited with code {process.returncode} but no issues parsed. stdout: {stdout[:100]}, stderr: {stderr[:100]}"
+                    "Ruff CLI exited with code "
+                    f"{process.returncode} but no issues parsed. "
+                    f"stdout: {stdout[:100]}, stderr: {stderr[:100]}"
                 )
 
         except subprocess.TimeoutExpired:
