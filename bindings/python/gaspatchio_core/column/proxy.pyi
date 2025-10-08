@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import builtins
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -22,7 +21,6 @@ if TYPE_CHECKING:
         ExprList as PolarsExprList,  # Alias for use in string hint
     )
 
-    from ..frame.base import ActuarialFrame  # For DtNamespaceProxy.__init__
     from .column_proxy import ColumnProxy  # For DtNamespaceProxy.__init__ parent type
 
     # Import local types carefully

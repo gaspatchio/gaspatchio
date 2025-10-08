@@ -14,3 +14,4 @@ pub fn irr(
 ) -> PolarsResult<Series> {
     gaspatchio_core_lib::excel::irr(inputs, &kwargs)
 }
+

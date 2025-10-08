@@ -91,7 +91,7 @@ config-settings = { "build-args" = "--profile=dev" }
 # Testing
 [tool.pytest.ini_options]
 addopts = [
-    "--gp-docstring-paths=gaspatchio_core/assumptions/column/namespaces/dt_proxy.py",
+    "--gp-docstring-paths=gaspatchio_core/column/namespaces/dt_proxy.py",
     "--gp-docstring-paths=gaspatchio_core/column/namespaces/string_proxy.py",
     "--gp-docstring-paths=gaspatchio_core/accessors/date.py",
     "--gp-docstring-paths=gaspatchio_core/accessors/excel.py",

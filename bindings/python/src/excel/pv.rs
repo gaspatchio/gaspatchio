@@ -11,3 +11,4 @@ fn pv_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
 pub fn pv(inputs: &[Series], kwargs: gaspatchio_core_lib::excel::PvKwargs) -> PolarsResult<Series> {
     gaspatchio_core_lib::excel::pv(inputs, &kwargs)
 }
+
