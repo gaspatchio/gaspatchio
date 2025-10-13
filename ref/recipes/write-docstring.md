@@ -22,24 +22,65 @@ Your examples are going to be linted using ruff and executed so they must be sel
 You need to provide a scalar and vector example if that makes sense in relation to the function. 
 
 ## Guidelines and tips 
-- No need to mention " (List Shimming) " at all. 
-- avoid using pl.col where we could refence by af[''] insead. 
+- No need to mention "(List Shimming)" at all. 
+- Prefer attribute access by default: use `af.column_name`.
+- Avoid `pl.col(...)` and avoid `af["column_name"]` unless attribute access is impossible (dynamic names, special chars).
 
-❌ BAD : 
+❌ BAD:
 ```python
 pl.col("policy_id")
 ```
 
-✅ GOOD: 
+❌ ALSO BAD (unless you truly need dynamic access):
 ```python
 af["policy_id"]
 ```
-- Don't bother explaining that it mirrors polars behavior
+
+✅ GOOD (default style):
+```python
+af.policy_id
+```
+- Favor assignment-style examples that add or replace columns, e.g. `af.new_col = af.old_col.method(...)`.
+- Use `.select(...)` only when you must produce multiple outputs at once or limit displayed columns; otherwise show `print(af.collect())`.
+- Keep examples minimal and domain-relevant; avoid unnecessary plumbing.
+- Don't bother explaining that behavior mirrors Polars.
 - Keep "When to use" highly practical and domain specific for actuaries. 
-- "When to use" can have 1-4 items, depending on how many actuarial use cases there are
+- "When to use" can have 1-4 items, depending on how many actuarial use cases there are.
 - "When to use" - don't overly explain obvious cases like dates, strings. 
-- "When to use" - do go into detail when the function is financial in nature.
-- "When to use" - doesn't need a preamble like "In actuarial data management..." or "Actuaries use `strip_suffix` when:...." or "In actuarial workflows, removing suffixes is useful for:..." just the heading then the list is fine. 
+- "When to use" - go into detail for financial functions.
+- "When to use" - no preamble. Just the heading and the list.
+
+### Style rules for examples
+- Always show a tiny `ActuarialFrame` with realistic insurance data.
+- Default to attribute access: `af.column`.
+- Default to assignment: `af.new = af.old.method(...)`.
+- End with a single `print(af.collect())` to display results.
+- For list operations, prefer vectorized list APIs (e.g., `list.eval`, `list.*`) over row-wise maps.
+
+### Templates
+Scalar template
+```python
+from gaspatchio_core.frame.base import ActuarialFrame
+
+data = {"policy_id": ["P1"], "x": [42]}
+af = ActuarialFrame(data)
+
+af.y = af.x.METHOD_HERE(...)
+
+print(af.collect())
+```
+
+Vector (list) template
+```python
+from gaspatchio_core.frame.base import ActuarialFrame
+
+data = {"policy_id": ["P1"], "xs": [[1, 2, 3]]}
+af = ActuarialFrame(data)
+
+af.ys = af.xs.list.METHOD_HERE(...)
+
+print(af.collect())
+```
 
 
 ### Exmaple
@@ -83,11 +124,10 @@ def floor(self) -> "ExpressionProxy":
         "age_decimal": [35.8, 42.2, 58.9, 67.1],
     }
     af = ActuarialFrame(data)
-    result = af.select(
-        af["policy_id"],
-        completed_age=af["age_decimal"].floor()
-    ).collect()
-    print(result)
+
+    af.completed_age = af.age_decimal.floor()
+
+    print(af.collect())
     ```
 
     ```text
@@ -122,9 +162,9 @@ def floor(self) -> "ExpressionProxy":
         ]
     }
     af = ActuarialFrame(data)
-    
-    af["completed_years"] = af["policy_duration"].floor()
-    
+
+    af.completed_years = af.policy_duration.floor()
+
     print(af.collect())
     ```
 

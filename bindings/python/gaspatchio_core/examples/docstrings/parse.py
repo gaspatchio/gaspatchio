@@ -363,7 +363,7 @@ class GaspatchioDocstringParser:
                     f"  Raw docstring found for {current_node_name} (len {len(raw_docstring)}), starts: '{raw_docstring[:100].replace('\n', '\\n')}'"
                 )
 
-                # For Python 3.8+, docstrings are ast.Constant. For older, ast.Str.
+                # For Python 3.8+, docstrings are ast.Constant.
                 # We need the line number of the docstring node itself.
                 docstring_node = None
                 if isinstance(
@@ -371,9 +371,7 @@ class GaspatchioDocstringParser:
                     (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef, ast.Module),
                 ):
                     if node.body and isinstance(node.body[0], ast.Expr):
-                        if isinstance(
-                            node.body[0].value, (ast.Constant, ast.Str)
-                        ):  # ast.Str for <3.8
+                        if isinstance(node.body[0].value, ast.Constant):
                             docstring_node = node.body[0].value
 
                 # docstring_start_line = docstring_node.lineno if docstring_node else node.lineno + 1

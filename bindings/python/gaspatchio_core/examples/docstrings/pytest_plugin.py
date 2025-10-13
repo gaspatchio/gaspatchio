@@ -82,6 +82,12 @@ def pytest_addoption(parser) -> None:  # type: ignore[no-untyped-def]
             "'strict' = fail tests on violations."
         ),
     )
+    group.addoption(
+        "--gp-run-examples",
+        action="store_true",
+        default=False,
+        help="Execute docstring examples and validate output.",
+    )
 
 
 def pytest_configure(config) -> None:  # type: ignore[no-untyped-def]
@@ -222,8 +228,9 @@ class DocstringExampleItem(pytest.Item):
                 for violation in style_violations:
                     print(f"  {violation}")  # noqa: T201
 
-        # Run runtime validation if there's expected output
-        if self.example.output is not None:
+        # Run runtime validation if enabled and there's expected output
+        run_examples = self.config.getoption("gp_run_examples", default=False)
+        if run_examples and self.example.output is not None:
             validator = GaspatchioEvalExample(update_examples_mode=False)
             runtime_issues = validator.run_custom_check(self.example)
             if runtime_issues:
