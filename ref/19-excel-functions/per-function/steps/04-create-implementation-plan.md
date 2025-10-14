@@ -80,6 +80,8 @@ rust_types:
     polars_list_type: "ListChunked"  # When used in lists
     extraction_scalar: ".f64()?|.date()?|.str()?|.bool()?"
     extraction_list: ".list()?"
+    requires_casting: true  # Set to true for numeric params to cast Int64->Float64
+    casting_note: "Use cast_to_float_if_needed() for numeric parameters"
     
 return_type:
   rust_type: "f64|String|bool|NaiveDate"
@@ -148,10 +150,17 @@ implementation_steps:
       - "Implement output_type function"
       - "Handle all input type combinations"
       - "Ensure correct list output types"
-      
+
+  - step: "Integer to Float casting (for numeric functions)"
+    details:
+      - "Add cast_to_float_if_needed() helper if function accepts numeric inputs"
+      - "Apply casting before type matching to accept Int64, Int32, etc."
+      - "Improves usability while maintaining performance"
+      - "See pv.rs and irr.rs for reference implementation"
+
   - step: "Main function branching"
     details:
-      - "Check input types"
+      - "Check input types (after casting if applicable)"
       - "Route to appropriate handler"
       - "Preserve backward compatibility"
       

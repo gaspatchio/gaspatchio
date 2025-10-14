@@ -90,19 +90,21 @@ class DateFrameAccessor(BaseFrameAccessor):
             ```python
             import datetime
             from gaspatchio_core import ActuarialFrame
+
             data = {
                 "policy_id": [1, 2],
                 "start_date": [datetime.date(2023, 1, 1), datetime.date(2023, 2, 15)],
                 "end_date": [datetime.date(2023, 3, 1), datetime.date(2023, 4, 15)],
             }
             af = ActuarialFrame(data)
-            # Create a monthly timeline
-            timeline_af = af.date.create_timeline("start_date", "end_date", freq="1mo", new_col_name="month_end")
+
+            timeline_af = af.date.create_timeline(af.start_date, af.end_date, freq="1mo", new_col_name="month_end")
+
             print(timeline_af.collect())
             ```
             
             ```text
-            shape: (5, 4)
+            shape: (4, 4)
             ┌───────────┬────────────┬────────────┬────────────┐
             │ policy_id ┆ start_date ┆ end_date   ┆ month_end  │
             │ ---       ┆ ---        ┆ ---        ┆ ---        │
@@ -112,7 +114,6 @@ class DateFrameAccessor(BaseFrameAccessor):
             │ 1         ┆ 2023-01-01 ┆ 2023-03-01 ┆ 2023-02-01 │
             │ 2         ┆ 2023-02-15 ┆ 2023-04-15 ┆ 2023-02-15 │
             │ 2         ┆ 2023-02-15 ┆ 2023-04-15 ┆ 2023-03-15 │
-            │ 2         ┆ 2023-02-15 ┆ 2023-04-15 ┆ 2023-04-15 │
             └───────────┴────────────┴────────────┴────────────┘
             ```
         """
@@ -192,39 +193,43 @@ class DateFrameAccessor(BaseFrameAccessor):
             ```python
             import datetime
             from gaspatchio_core import ActuarialFrame
+
             data = {
                 "event_date": [datetime.date(2023, 1, 15), datetime.date(2023, 6, 30)],
                 "term_months": [6, 12]
             }
             af = ActuarialFrame(data)
-            # Add 1 year to event_date
-            af_plus_1y = af.date.add_duration("event_date", "1Y", new_col_name="event_plus_1y")
+
+            af_plus_1y = af.date.add_duration(af.event_date, "1y", new_col_name="event_plus_1y")
+
             print(af_plus_1y.collect())
             ```
-            
+
             ```text
             shape: (2, 3)
-            ┌────────────┬─────────────┬─────────────────┐
-            │ event_date ┆ term_months ┆ event_plus_1y   │
-            │ ---        ┆ ---         ┆ ---             │
-            │ date       ┆ i64         ┆ date            │
-            ╞════════════╪═════════════╪═════════════════╡
-            │ 2023-01-15 ┆ 6           ┆ 2024-01-15      │
-            │ 2023-06-30 ┆ 12          ┆ 2024-06-30      │
-            └────────────┴─────────────┴─────────────────┘
+            ┌────────────┬─────────────┬───────────────┐
+            │ event_date ┆ term_months ┆ event_plus_1y │
+            │ ---        ┆ ---         ┆ ---           │
+            │ date       ┆ i64         ┆ date          │
+            ╞════════════╪═════════════╪═══════════════╡
+            │ 2023-01-15 ┆ 6           ┆ 2024-01-15    │
+            │ 2023-06-30 ┆ 12          ┆ 2024-06-30    │
+            └────────────┴─────────────┴───────────────┘
             ```
-            
+
             ```python
-            # Example with new column for clarity (using same data as above):
             import datetime
             from gaspatchio_core import ActuarialFrame
+
             data = {
                 "event_date": [datetime.date(2023, 1, 15), datetime.date(2023, 6, 30)],
                 "term_months": [6, 12]
             }
             af = ActuarialFrame(data)
-            af_minus_3m_new_col = af.date.add_duration("event_date", "-3MO", new_col_name="event_minus_3m")
-            print(af_minus_3m_new_col.collect())
+
+            af_minus_3m = af.date.add_duration(af.event_date, "-3mo", new_col_name="event_minus_3m")
+
+            print(af_minus_3m.collect())
             ```
             
             ```text
@@ -543,7 +548,9 @@ class DateColumnAccessor(BaseColumnAccessor):
         Examples:
             ```python
             import datetime
+            import polars as pl
             from gaspatchio_core import ActuarialFrame
+
             data = {
                 "event_timestamp": [
                     datetime.datetime(2023, 1, 15, 10, 30, 0),
@@ -552,13 +559,12 @@ class DateColumnAccessor(BaseColumnAccessor):
                 ]
             }
             af = ActuarialFrame(data)
-            # Convert to Year-Month
-            af_month = af.with_columns(
-                month=af["event_timestamp"].date.to_period(freq="1mo")
-            )
-            print(af_month.collect())
+
+            af.month = af.event_timestamp.dt.truncate("1mo").cast(pl.Date)
+
+            print(af.collect())
             ```
-            
+
             ```text
             shape: (3, 2)
             ┌─────────────────────┬────────────┐
@@ -571,11 +577,12 @@ class DateColumnAccessor(BaseColumnAccessor):
             │ 2023-02-05 08:00:00 ┆ 2023-02-01 │
             └─────────────────────┴────────────┘
             ```
-            
+
             ```python
-            # Convert to Year (using same data as previous example)
             import datetime
+            import polars as pl
             from gaspatchio_core import ActuarialFrame
+
             data = {
                 "event_timestamp": [
                     datetime.datetime(2023, 1, 15, 10, 30, 0),
@@ -584,10 +591,10 @@ class DateColumnAccessor(BaseColumnAccessor):
                 ]
             }
             af = ActuarialFrame(data)
-            af_year = af.with_columns(
-                year=af["event_timestamp"].date.to_period(freq="1y")
-            )
-            print(af_year.collect())
+
+            af.year = af.event_timestamp.dt.truncate("1y").cast(pl.Date)
+
+            print(af.collect())
             ```
             
             ```text

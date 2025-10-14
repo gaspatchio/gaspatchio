@@ -131,33 +131,28 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             ```python
             from gaspatchio_core import ActuarialFrame
 
-            # Excel serial numbers for some dates
             data = {
                 "policy_id": ["P001", "P002", "P003"],
-                "excel_date_serial": [44197, 44562, 44927],  # Excel serial numbers
+                "excel_date_serial": [44197, 44562, 44927],
             }
             af = ActuarialFrame(data)
 
-            # Convert Excel serial numbers to proper dates
-            af_with_dates = af.with_columns(
-                actual_date=af["excel_date_serial"].excel.from_excel_serial(
-                    epoch="1900"
-                )
-            )
-            print(af_with_dates.collect())
+            af.actual_date = af.excel_date_serial.excel.from_excel_serial(epoch="1900")
+
+            print(af.collect())
             ```
 
             ```text
             shape: (3, 3)
-            ┌───────────┬────────────────────┬─────────────┐
-            │ policy_id ┆ excel_date_serial  ┆ actual_date │
-            │ ---       ┆ ---                ┆ ---         │
-            │ str       ┆ i64                ┆ date        │
-            ╞═══════════╪════════════════════╪═════════════╡
-            │ P001      ┆ 44197              ┆ 2021-01-01  │
-            │ P002      ┆ 44562              ┆ 2021-12-31  │
-            │ P003      ┆ 44927              ┆ 2022-12-31  │
-            └───────────┴────────────────────┴─────────────┘
+            ┌───────────┬───────────────────┬─────────────┐
+            │ policy_id ┆ excel_date_serial ┆ actual_date │
+            │ ---       ┆ ---               ┆ ---         │
+            │ str       ┆ i64               ┆ date        │
+            ╞═══════════╪═══════════════════╪═════════════╡
+            │ P001      ┆ 44197             ┆ 2020-12-31  │
+            │ P002      ┆ 44562             ┆ 2021-12-31  │
+            │ P003      ┆ 44927             ┆ 2022-12-31  │
+            └───────────┴───────────────────┴─────────────┘
             ```
         """
         base_expr = self._get_polars_expr()
@@ -270,16 +265,14 @@ class ExcelColumnAccessor(BaseColumnAccessor):
                 "end_date": [
                     datetime.date(2021, 1, 1),
                     datetime.date(2022, 6, 15),
-                    datetime.date(2022, 9, 1), # Partial year
+                    datetime.date(2022, 9, 1),
                 ],
             }
             af = ActuarialFrame(data)
 
-            # Calculate year fraction using 'act/act'
-            af_with_term = af.with_columns(
-                term_years=af["start_date"].excel.yearfrac(af["end_date"], basis="act/act")
-            )
-            print(af_with_term.collect())
+            af.term_years = af.start_date.excel.yearfrac(af.end_date, basis="act/act")
+
+            print(af.collect())
             ```
 
             ```
@@ -289,9 +282,9 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             │ ---       ┆ ---        ┆ ---        ┆ ---        │
             │ str       ┆ date       ┆ date       ┆ f64        │
             ╞═══════════╪════════════╪════════════╪════════════╡
-            │ P001      ┆ 2020-01-01 ┆ 2021-01-01 ┆ 1.000000   │
-            │ P002      ┆ 2021-06-15 ┆ 2022-06-15 ┆ 1.000000   │
-            │ P003      ┆ 2022-03-01 ┆ 2022-09-01 ┆ 0.501370   │
+            │ P001      ┆ 2020-01-01 ┆ 2021-01-01 ┆ 1.0        │
+            │ P002      ┆ 2021-06-15 ┆ 2022-06-15 ┆ 1.0        │
+            │ P003      ┆ 2022-03-01 ┆ 2022-09-01 ┆ 0.50411    │
             └───────────┴────────────┴────────────┴────────────┘
             ```
 
@@ -305,7 +298,8 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             import datetime
             import polars as pl
             from gaspatchio_core import ActuarialFrame
-            
+            from gaspatchio_core.accessors.excel_functions.yearfrac import yearfrac
+
             # Example with monthly projection dates
             projection_data = {
                 "policy_id": ["P001", "P002"],
@@ -322,11 +316,12 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
             # Calculate yearfrac for each projection date using explode/group_by
             result = (
-                af_proj.lazy()
+                af_proj.collect()
+                .lazy()
                 .with_row_index("_idx")
                 .explode("projection_dates")
                 .with_columns(
-                    pl.col("projection_dates").excel.yearfrac(pl.col("maturity_date"))
+                    yearfrac(pl.col("projection_dates"), pl.col("maturity_date"), basis="act/act")
                     .alias("years_to_maturity")
                 )
                 .group_by("_idx")
@@ -343,14 +338,14 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
             ```
             shape: (2, 3)
-            ┌───────────┬───────────────────┬─────────────┐
-            │ policy_id ┆ years_to_maturity ┆ maturity_date │
-            │ ---       ┆ ---               ┆ ---          │
-            │ str       ┆ list[f64]         ┆ date         │
-            ╞═══════════╪═══════════════════╪══════════════╡
-            │ P001      ┆ [0.997260, 0.915...] ┆ 2024-12-31   │
-            │ P002      ┆ [0.958904, 0.876...] ┆ 2025-01-01   │
-            └───────────┴───────────────────┴──────────────┘
+            ┌───────────┬──────────────────────────────────┬───────────────┐
+            │ policy_id ┆ years_to_maturity                ┆ maturity_date │
+            │ ---       ┆ ---                              ┆ ---           │
+            │ str       ┆ list[f64]                        ┆ date          │
+            ╞═══════════╪══════════════════════════════════╪═══════════════╡
+            │ P001      ┆ [0.997268, 0.912568, … 0.081967] ┆ 2024-12-31    │
+            │ P002      ┆ [0.961749, 0.877049, … 0.046575] ┆ 2025-01-01    │
+            └───────────┴──────────────────────────────────┴───────────────┘
             ```
 
             Note: List columns are not directly supported due to Polars plugin limitations.
@@ -419,23 +414,21 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             }
             af = ActuarialFrame(data)
 
-            # Calculate IRR for each investment
-            result = af.with_columns(
-                irr=af["cash_flows"].excel.irr()
-            )
-            print(result.collect())
+            af.irr = af.cash_flows.excel.irr()
+
+            print(af.collect())
             ```
 
             ```
             shape: (2, 3)
-            ┌──────────────┬──────────────────────────┬──────────┐
-            │ investment_id ┆ cash_flows              ┆ irr      │
-            │ ---          ┆ ---                     ┆ ---      │
-            │ str          ┆ list[f64]               ┆ f64      │
-            ╞══════════════╪═════════════════════════╪══════════╡
-            │ INV001       ┆ [-1000.0, 300.0, …]     ┆ 0.168595 │
-            │ INV002       ┆ [-5000.0, 1000.0, …]    ┆ 0.120476 │
-            └──────────────┴──────────────────────────┴──────────┘
+            ┌───────────────┬─────────────────────────────┬──────────┐
+            │ investment_id ┆ cash_flows                  ┆ irr      │
+            │ ---           ┆ ---                         ┆ ---      │
+            │ str           ┆ list[f64]                   ┆ f64      │
+            ╞═══════════════╪═════════════════════════════╪══════════╡
+            │ INV001        ┆ [-1000.0, 300.0, … 500.0]   ┆ 0.088963 │
+            │ INV002        ┆ [-5000.0, 1000.0, … 3500.0] ┆ 0.117921 │
+            └───────────────┴─────────────────────────────┴──────────┘
             ```
 
         """
@@ -493,19 +486,14 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             data = {
                 "policy_id": ["POL001", "POL002", "POL003"],
                 "interest_rate": [0.05, 0.04, 0.06],  # Annual interest rates
-                "num_periods": [10, 15, 20],  # Number of payment periods
+                "num_periods": [10.0, 15.0, 20.0],  # Number of payment periods
                 "payment": [1000.0, 1500.0, 2000.0],  # Payment per period
             }
             af = ActuarialFrame(data)
 
-            # Calculate present value of the annuity streams
-            result = af.with_columns(
-                present_value=af["interest_rate"].excel.pv(
-                    nper=af["num_periods"],
-                    pmt=af["payment"]
-                )
-            )
-            print(result.collect())
+            af.present_value = af.interest_rate.excel.pv(nper=af.num_periods, pmt=af.payment)
+
+            print(af.collect())
             ```
 
             ```
@@ -513,11 +501,11 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             ┌───────────┬───────────────┬─────────────┬─────────┬───────────────┐
             │ policy_id ┆ interest_rate ┆ num_periods ┆ payment ┆ present_value │
             │ ---       ┆ ---           ┆ ---         ┆ ---     ┆ ---           │
-            │ str       ┆ f64           ┆ i64         ┆ f64     ┆ f64           │
+            │ str       ┆ f64           ┆ f64         ┆ f64     ┆ f64           │
             ╞═══════════╪═══════════════╪═════════════╪═════════╪═══════════════╡
-            │ POL001    ┆ 0.05          ┆ 10          ┆ 1000.0  ┆ -7721.735     │
-            │ POL002    ┆ 0.04          ┆ 15          ┆ 1500.0  ┆ -16684.789    │
-            │ POL003    ┆ 0.06          ┆ 20          ┆ 2000.0  ┆ -22937.702    │
+            │ POL001    ┆ 0.05          ┆ 10.0        ┆ 1000.0  ┆ -7721.734929  │
+            │ POL002    ┆ 0.04          ┆ 15.0        ┆ 1500.0  ┆ -16677.581148 │
+            │ POL003    ┆ 0.06          ┆ 20.0        ┆ 2000.0  ┆ -22939.842437 │
             └───────────┴───────────────┴─────────────┴─────────┴───────────────┘
             ```
 

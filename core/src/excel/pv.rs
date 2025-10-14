@@ -13,6 +13,24 @@ pub struct PvKwargs {
 
 const EPS: f64 = 1e-12;
 
+/// Helper function to cast numeric types to Float64 if needed
+/// Handles both scalar and list types (e.g., Int64 -> Float64, List[Int64] -> List[Float64])
+fn cast_to_float_if_needed(series: &Series) -> PolarsResult<Series> {
+    match series.dtype() {
+        DataType::Float64 => Ok(series.clone()),
+        DataType::List(inner) => {
+            // If it's a list of non-floats, cast the inner type
+            if inner.as_ref() != &DataType::Float64 {
+                series.cast(&DataType::List(Box::new(DataType::Float64)))
+            } else {
+                Ok(series.clone())
+            }
+        }
+        // Any other numeric type (Int64, Int32, Float32, etc.) -> cast to Float64
+        _ => series.cast(&DataType::Float64),
+    }
+}
+
 /// Returns the output type for the pv function
 pub fn pv_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
     let rate_t = &input_fields[0].dtype;
@@ -45,27 +63,33 @@ pub fn pv(inputs: &[Series], kwargs: &PvKwargs) -> PolarsResult<Series> {
         typ = 1;
     }
 
+    // Cast integer inputs to Float64 for better usability (matches IRR behavior)
+    // Handles both scalar (Int64 -> Float64) and list (List[Int64] -> List[Float64])
+    let rate_s = cast_to_float_if_needed(rate_s)?;
+    let nper_s = cast_to_float_if_needed(nper_s)?;
+    let pmt_s = cast_to_float_if_needed(pmt_s)?;
+
     match (rate_s.dtype(), nper_s.dtype(), pmt_s.dtype()) {
         (DataType::Float64, DataType::Float64, DataType::Float64) => {
             pv_scalar(rate_s.f64()?, nper_s.f64()?, pmt_s.f64()?, fv, typ)
         }
         // Any list present -> handle with list strategies
         (DataType::List(_), DataType::Float64, DataType::Float64) => {
-            pv_list_scalar(rate_s, nper_s, pmt_s, fv, typ, 0)
+            pv_list_scalar(&rate_s, &nper_s, &pmt_s, fv, typ, 0)
         }
         (DataType::Float64, DataType::List(_), DataType::Float64) => {
-            pv_list_scalar(nper_s, rate_s, pmt_s, fv, typ, 1)
+            pv_list_scalar(&nper_s, &rate_s, &pmt_s, fv, typ, 1)
         }
         (DataType::Float64, DataType::Float64, DataType::List(_)) => {
-            pv_list_scalar(pmt_s, rate_s, nper_s, fv, typ, 2)
+            pv_list_scalar(&pmt_s, &rate_s, &nper_s, fv, typ, 2)
         }
         (DataType::List(_), DataType::List(_), DataType::Float64)
         | (DataType::List(_), DataType::Float64, DataType::List(_))
         | (DataType::Float64, DataType::List(_), DataType::List(_)) => {
-            pv_two_lists(rate_s, nper_s, pmt_s, fv, typ)
+            pv_two_lists(&rate_s, &nper_s, &pmt_s, fv, typ)
         }
         (DataType::List(_), DataType::List(_), DataType::List(_)) => {
-            pv_three_lists(rate_s, nper_s, pmt_s, fv, typ)
+            pv_three_lists(&rate_s, &nper_s, &pmt_s, fv, typ)
         }
         _ => Err(PolarsError::ComputeError(
             format!(

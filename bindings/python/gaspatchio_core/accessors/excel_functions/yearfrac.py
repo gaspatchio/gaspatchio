@@ -37,23 +37,122 @@ def yearfrac(
     end_date: IntoExprColumn,
     basis: BasisType = 1,
 ) -> pl.Expr:
-    """Calculate the year fraction between two dates using Excel's YEARFRAC logic.
-    
-    This function provides Excel YEARFRAC functionality through a Rust implementation.
-    It supports scalar dates, list columns of dates, and broadcasting between scalar
-    and list columns (matching Excel 365's dynamic array behavior).
-    
-    Args:
-        start_date: Start date expression or column (Date or List[Date])
-        end_date: End date expression or column (Date or List[Date])
-        basis: Day count basis (0-4 or string name)
-        
-    Returns:
-        Polars expression with the year fraction calculation
+    """Calculate the year fraction between two dates, similar to Excel's YEARFRAC.
+
+    Calculates the fraction of a year represented by the number of whole days
+    between two dates, using a specified day count basis. Essential for financial
+    and actuarial calculations requiring precise time period measurements.
+
+    !!! note "When to use"
+        * **Premium Proration:** Calculate the portion of an annual premium for partial policy terms when policies start or end mid-year.
+        * **Exposure Calculation:** Determine fractional exposure periods for reserving, pricing, or IBNR calculations for policies not in force for a full year.
+        * **Investment Analysis:** Compute time-weighted returns or accrued interest for investments held for partial years.
+        * **Policy Lapse Studies:** Measure policy duration in fractional years for lapse and persistency analysis.
+        * **Benefit Accrual:** Calculate prorated benefits or reserves based on partial year periods.
+        * **Regulatory Reporting:** Prepare time-based metrics using industry-standard day count conventions for regulatory compliance.
+
+    Parameters
+    ----------
+    start_date : IntoExprColumn
+        The starting date of the period. Can be a scalar date, a column of dates,
+        or a list column of dates.
+    end_date : IntoExprColumn
+        The ending date of the period. Can be a scalar date, a column of dates,
+        or a list column of dates.
+    basis : int or str, optional
+        The day count basis to use. Defaults to 1 (Actual/Actual). Can be:
+
+        - `0` or `'us_nasd_30_360'`: US (NASD) 30/360 convention
+        - `1` or `'act/act'`: Actual/Actual convention (default)
+        - `2` or `'actual/360'`: Actual/360 convention
+        - `3` or `'actual/365'`: Actual/365 convention
+        - `4` or `'european_30_360'`: European 30/360 convention
+
+    Returns
+    -------
+    pl.Expr
+        A Polars expression containing the year fraction as Float64 (or List[Float64]
+        for list columns).
+
+    Examples
+    --------
+    **Scalar Example: Premium Proration**
+
+    ```python
+    import datetime
+    from gaspatchio_core import ActuarialFrame
+
+    data = {
+        "policy_id": ["P001", "P002", "P003"],
+        "policy_start": [
+            datetime.date(2023, 1, 1),
+            datetime.date(2023, 6, 15),
+            datetime.date(2023, 9, 1)
+        ],
+        "policy_end": [
+            datetime.date(2024, 1, 1),
+            datetime.date(2024, 6, 15),
+            datetime.date(2024, 3, 1)
+        ],
+        "annual_premium": [1200.0, 2400.0, 1800.0],
+    }
+    af = ActuarialFrame(data)
+
+    af.term_fraction = af.policy_start.excel.yearfrac(af.policy_end, basis="act/act")
+    af.prorated_premium = af.annual_premium * af.term_fraction
+
+    print(af.collect())
+    ```
+
+    ```text
+    shape: (3, 6)
+    ┌───────────┬──────────────┬────────────┬────────────────┬───────────────┬──────────────────┐
+    │ policy_id ┆ policy_start ┆ policy_end ┆ annual_premium ┆ term_fraction ┆ prorated_premium │
+    │ ---       ┆ ---          ┆ ---        ┆ ---            ┆ ---           ┆ ---              │
+    │ str       ┆ date         ┆ date       ┆ f64            ┆ f64           ┆ f64              │
+    ╞═══════════╪══════════════╪════════════╪════════════════╪═══════════════╪══════════════════╡
+    │ P001      ┆ 2023-01-01   ┆ 2024-01-01 ┆ 1200.0         ┆ 1.0           ┆ 1200.0           │
+    │ P002      ┆ 2023-06-15   ┆ 2024-06-15 ┆ 2400.0         ┆ 1.0           ┆ 2400.0           │
+    │ P003      ┆ 2023-09-01   ┆ 2024-03-01 ┆ 1800.0         ┆ 0.497268      ┆ 895.081967       │
+    └───────────┴──────────────┴────────────┴────────────────┴───────────────┴──────────────────┘
+    ```
+
+    **Vector Example: Monthly Exposure Calculation**
+
+    ```python
+    import datetime
+    from gaspatchio_core import ActuarialFrame
+
+    data = {
+        "policy_id": ["P001"],
+        "valuation_dates": [[
+            datetime.date(2024, 1, 1),
+            datetime.date(2024, 2, 1),
+            datetime.date(2024, 3, 1)
+        ]],
+        "issue_date": [datetime.date(2024, 1, 1)]
+    }
+    af = ActuarialFrame(data)
+
+    af.time_in_force = af.issue_date.excel.yearfrac(af.valuation_dates, basis=1)
+
+    print(af.collect())
+    ```
+
+    ```text
+    shape: (1, 4)
+    ┌───────────┬──────────────────────────────────────┬────────────┬───────────────────────────┐
+    │ policy_id ┆ valuation_dates                      ┆ issue_date ┆ time_in_force             │
+    │ ---       ┆ ---                                  ┆ ---        ┆ ---                       │
+    │ str       ┆ list[date]                           ┆ date       ┆ list[f64]                 │
+    ╞═══════════╪══════════════════════════════════════╪════════════╪═══════════════════════════╡
+    │ P001      ┆ [2024-01-01, 2024-02-01, 2024-03-01] ┆ 2024-01-01 ┆ [0.0, 0.084699, 0.163934] │
+    └───────────┴──────────────────────────────────────┴────────────┴───────────────────────────┘
+    ```
     """
     # Convert inputs to Polars expressions, handling literals with pl.lit()
     def ensure_polars_expr(arg):
-        """Convert input to Polars expression, handling literals."""
+        # Convert input to Polars expression, handling literals
         expr_candidate = to_polars_expression(arg)
         # If it's still not a Polars expression, wrap it in pl.lit()
         if not isinstance(expr_candidate, pl.Expr):
@@ -99,9 +198,9 @@ def yearfrac(
     # 1. Datetime columns -> cast to Date
     # 2. String columns -> parse as dates
     # 3. List columns -> pass through (Rust handles List[Datetime] -> List[Date])
-    
+
     def prepare_date_expr(expr: pl.Expr) -> pl.Expr:
-        """Prepare date expression for yearfrac by handling type conversions."""
+        # Prepare date expression for yearfrac by handling type conversions
         # Try to cast to date - this handles:
         # - Date columns (no-op)
         # - Datetime columns (converts to date)

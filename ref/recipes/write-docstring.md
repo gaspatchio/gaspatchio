@@ -41,7 +41,7 @@ af["policy_id"]
 af.policy_id
 ```
 - Favor assignment-style examples that add or replace columns, e.g. `af.new_col = af.old_col.method(...)`.
-- Use `.select(...)` only when you must produce multiple outputs at once or limit displayed columns; otherwise show `print(af.collect())`.
+- Use `.select(...)` ONLY when you must produce multiple outputs at once or limit displayed columns. When in doubt: assignment style is ALWAYS preferred. Otherwise show `print(af.collect())`.
 - Keep examples minimal and domain-relevant; avoid unnecessary plumbing.
 - Don't bother explaining that behavior mirrors Polars.
 - Keep "When to use" highly practical and domain specific for actuaries. 
@@ -56,11 +56,36 @@ af.policy_id
 - Default to assignment: `af.new = af.old.method(...)`.
 - End with a single `print(af.collect())` to display results.
 - For list operations, prefer vectorized list APIs (e.g., `list.eval`, `list.*`) over row-wise maps.
+- ❌ NEVER use `with pl.Config(...):` context managers in examples.
+- ❌ NEVER use any context managers that indent the example code - test framework cannot parse indented code blocks properly.
+
+### Generating Expected Output
+
+**CRITICAL**: Never guess at expected output formatting!
+
+1. Write your example code
+2. Run it: `uv run python -c "your code here"`
+3. Copy the EXACT output, including:
+   - Column widths (Polars auto-sizes to content)
+   - Table borders and spacing
+   - All data formatting
+4. Paste into the expected output block
+
+❌ BAD: Guessing column widths or using shortened output with `…`
+✅ GOOD: Running code and copying actual output character-for-character
+
+### List Column Examples
+
+When writing examples with list columns:
+- Keep setup simple - avoid unnecessary `.cast()` operations
+- Don't use `.with_columns()` for complex transformations in examples
+- Direct list column creation is sufficient: `"xs": [[1, 2, 3]]`
+- List shimming happens automatically - no need to explain or show the mechanism
 
 ### Templates
 Scalar template
 ```python
-from gaspatchio_core.frame.base import ActuarialFrame
+from gaspatchio_core import ActuarialFrame
 
 data = {"policy_id": ["P1"], "x": [42]}
 af = ActuarialFrame(data)
@@ -72,7 +97,7 @@ print(af.collect())
 
 Vector (list) template
 ```python
-from gaspatchio_core.frame.base import ActuarialFrame
+from gaspatchio_core import ActuarialFrame
 
 data = {"policy_id": ["P1"], "xs": [[1, 2, 3]]}
 af = ActuarialFrame(data)

@@ -503,6 +503,78 @@ fn helper_function(param: f64) -> f64 {
 }
 ```
 
+## Integer to Float Casting Pattern
+
+For numeric Excel functions that accept integer or float inputs, add automatic casting to improve usability.
+
+### Motivation
+
+Users naturally write integers for parameters like periods (`10` instead of `10.0`) or whole number payments (`1000` instead of `1000.0`). Polars is intentionally strict about types for performance, but we can provide a better user experience by casting integer inputs to Float64 at the function boundary.
+
+### Pattern
+
+Add a helper function at the start of the file:
+
+```rust
+/// Helper function to cast numeric types to Float64 if needed
+/// Handles both scalar and list types (e.g., Int64 -> Float64, List[Int64] -> List[Float64])
+fn cast_to_float_if_needed(series: &Series) -> PolarsResult<Series> {
+    match series.dtype() {
+        DataType::Float64 => Ok(series.clone()),
+        DataType::List(inner) => {
+            // If it's a list of non-floats, cast the inner type
+            if inner.as_ref() != &DataType::Float64 {
+                series.cast(&DataType::List(Box::new(DataType::Float64)))
+            } else {
+                Ok(series.clone())
+            }
+        }
+        // Any other numeric type (Int64, Int32, Float32, etc.) -> cast to Float64
+        _ => series.cast(&DataType::Float64),
+    }
+}
+```
+
+Then apply it to numeric inputs before type matching:
+
+```rust
+pub fn {{function_name}}(inputs: &[Series], kwargs: &{{FunctionName}}Kwargs) -> PolarsResult<Series> {
+    let rate_s = &inputs[0];
+    let nper_s = &inputs[1];
+    let pmt_s = &inputs[2];
+
+    // Cast integer inputs to Float64 for better usability
+    // Handles both scalar (Int64 -> Float64) and list (List[Int64] -> List[Float64])
+    let rate_s = cast_to_float_if_needed(rate_s)?;
+    let nper_s = cast_to_float_if_needed(nper_s)?;
+    let pmt_s = cast_to_float_if_needed(pmt_s)?;
+
+    match (rate_s.dtype(), nper_s.dtype(), pmt_s.dtype()) {
+        // ... rest of matching logic
+    }
+}
+```
+
+### When to Use
+
+Apply this pattern for:
+- ✅ **Financial functions** (PV, PMT, FV, NPV, etc.) - Users often use integer periods/payments
+- ✅ **Statistical functions** - Counts and indices are often integers
+- ✅ **Mathematical functions** - General numeric operations
+- ❌ **Date functions** - These work with Date types, not numeric
+- ❌ **Text functions** - These work with String types
+
+### Performance Considerations
+
+- **Minimal overhead**: Polars' `.cast()` is highly optimized
+- **No-op for Float64**: Returns clone when already correct type
+- **Community alignment**: Polars uses similar patterns (e.g., IRR already does this)
+- **Better than errors**: One-time cast vs user confusion and runtime errors
+
+### Reference Implementation
+
+See `src/excel/irr.rs` (line 129) and `src/excel/pv.rs` (lines 16-32) for working examples.
+
 ## Common Patterns
 
 ### Date Handling with Lists
