@@ -3342,7 +3342,6 @@ class _BaseProxy:
 
         ```python
         from gaspatchio_core import ActuarialFrame
-        import math
 
         data = {
             "policy_id": ["P001", "P002", "P003", "P004"],
