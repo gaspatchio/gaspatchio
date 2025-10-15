@@ -7,11 +7,13 @@ ActuarialFrame's lazy evaluation and tracing capabilities.
 
 The proxy supports operations on both scalar string columns and columns containing
 lists of strings (e.g., `List[String]`), applying operations element-wise
-in the latter case (shimming)."""
+in the latter case (shimming).
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -47,9 +49,9 @@ class StringNamespaceProxy:
         ```python
         from gaspatchio_core.frame.base import ActuarialFrame
 
-        data_for_class_doctest = { # Renamed to avoid conflict with other examples
+        data_for_class_doctest = {  # Renamed to avoid conflict with other examples
             "policy_holder_name": ["John Doe", "Jane Smith", "Robert Jones"],
-            "policy_type_codes": [["TERM", "WL"], ["UL"], ["TERM", "CI"]]
+            "policy_type_codes": [["TERM", "WL"], ["UL"], ["TERM", "CI"]],
         }
         af_scalar = ActuarialFrame(data_for_class_doctest)
         af_upper_names = af_scalar.select(
@@ -107,9 +109,7 @@ class StringNamespaceProxy:
         ```
     """
 
-    def __init__(
-        self, parent_proxy: "ProxyType", parent_af: Optional["ActuarialFrame"]
-    ):
+    def __init__(self, parent_proxy: ProxyType, parent_af: ActuarialFrame | None):
         """Initialize the StringNamespaceProxy.
 
         This constructor is not typically called directly by users. Instances are
@@ -121,6 +121,7 @@ class StringNamespaceProxy:
                           `.str` was accessed.
             parent_af: The parent ActuarialFrame, providing context such as the
                        underlying DataFrame/LazyFrame and schema.
+
         """
         self._parent_proxy = parent_proxy
         self._parent_af = parent_af
@@ -138,6 +139,7 @@ class StringNamespaceProxy:
 
         Raises:
             TypeError: If the parent proxy is not a ColumnProxy or ExpressionProxy.
+
         """
         from ..column_proxy import ColumnProxy
         from ..expression_proxy import ExpressionProxy
@@ -166,6 +168,7 @@ class StringNamespaceProxy:
         Returns:
             bool: True if the parent is a ColumnProxy for a List[String] column,
                   False otherwise or if type cannot be reliably determined.
+
         """
         from ..column_proxy import ColumnProxy
 
@@ -189,7 +192,7 @@ class StringNamespaceProxy:
 
     def _call_string_method(
         self, method_name: str, *args: Any, **kwargs: Any
-    ) -> "ExpressionProxy":
+    ) -> ExpressionProxy:
         """Core internal method to call a method on the Polars string namespace.
 
         This method handles the actual dispatch of a string operation to the underlying
@@ -213,6 +216,7 @@ class StringNamespaceProxy:
             AttributeError: If the method doesn't exist on Polars' str namespace
                             or if the base expression doesn't have a str namespace.
             Exception: Propagates exceptions from the underlying Polars call.
+
         """
         from ..dispatch import _unwrap, _wrap
 
@@ -222,7 +226,7 @@ class StringNamespaceProxy:
 
         if self._is_list_of_strings():
             try:
-                polars_element_str_namespace = getattr(pl.element(), "str")
+                polars_element_str_namespace = pl.element().str
                 element_method = getattr(polars_element_str_namespace, method_name)
                 shimming_expr = element_method(*unwrapped_args, **unwrapped_kwargs)
                 result_expr = base_expr.list.eval(shimming_expr)
@@ -237,7 +241,7 @@ class StringNamespaceProxy:
                     f"derived from '{self._parent_proxy}': {e}"
                 ) from e
         else:
-            polars_str_namespace = getattr(base_expr, "str")
+            polars_str_namespace = base_expr.str
             try:
                 actual_polars_method = getattr(polars_str_namespace, method_name)
             except AttributeError:
@@ -256,7 +260,7 @@ class StringNamespaceProxy:
     # --- Explicitly Proxied Methods ---
     def contains(
         self, pattern: str | pl.Expr, literal: bool = False, strict: bool = False
-    ) -> "ExpressionProxy":
+    ) -> ExpressionProxy:
         """Checks if strings in a column contain a specified pattern.
 
         This method searches for a pattern within string values, returning a boolean
@@ -301,12 +305,14 @@ class StringNamespaceProxy:
                     "Term Life Plan with ADB rider",
                     "Whole Life - Standard",
                     "Universal Life, includes ADB rider and Accidental Death Benefit (ADB)",
-                    "Term Life, no Accidental Death Benefit rider"
-                ]
+                    "Term Life, no Accidental Death Benefit rider",
+                ],
             }
             af = ActuarialFrame(data)
             af_with_adb_rider = af.select(
-                af["description"].str.contains("ADB rider", literal=True).alias("has_adb_rider")
+                af["description"]
+                .str.contains("ADB rider", literal=True)
+                .alias("has_adb_rider")
             )
             print(af_with_adb_rider.collect())
             ```
@@ -408,7 +414,7 @@ class StringNamespaceProxy:
             "contains", pattern=pattern, literal=literal, strict=strict
         )
 
-    def to_uppercase(self) -> "ExpressionProxy":
+    def to_uppercase(self) -> ExpressionProxy:
         """Converts all characters in string columns to uppercase.
 
         This function standardizes textual data by converting all characters in a
@@ -450,7 +456,7 @@ class StringNamespaceProxy:
 
             data = {
                 "policy_id": ["S3001", "S3002", "S3003", "S3004"],
-                "status_raw": ["active", "lapsed", "Active", "PENDING"]
+                "status_raw": ["active", "lapsed", "Active", "PENDING"],
             }
             af = ActuarialFrame(data)
             af_upper_status = af.select(
@@ -515,7 +521,7 @@ class StringNamespaceProxy:
         """
         return self._call_string_method("to_uppercase")
 
-    def to_lowercase(self) -> "ExpressionProxy":
+    def to_lowercase(self) -> ExpressionProxy:
         """Converts all characters in string columns to lowercase.
 
         This function standardizes textual data by converting all characters in a
@@ -551,7 +557,12 @@ class StringNamespaceProxy:
 
             data = {
                 "policy_id": ["POL001", "POL002", "POL003", "POL004"],
-                "occupation_raw": ["Engineer", "software DEVELOPER", "Teacher", "Project Manager"]
+                "occupation_raw": [
+                    "Engineer",
+                    "software DEVELOPER",
+                    "Teacher",
+                    "Project Manager",
+                ],
             }
             af = ActuarialFrame(data)
             af_lower_occupation = af.select(
@@ -580,42 +591,37 @@ class StringNamespaceProxy:
             Lowercasing them ensures they can be consistently mapped or analyzed.
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            from gaspatchio_core import ActuarialFrame
 
-            data_medical_codes = {
+            data = {
                 "claim_id": ["C001", "C002"],
-                "condition_codes_list": [
-                    ["DIAB_T2", "HBP", "ASTHMA"], # DIAB_T2 = Type 2 Diabetes, HBP = High Blood Pressure
-                    ["hbp", None, "copd"]         # COPD = Chronic Obstructive Pulmonary Disease
+                "condition_codes": [
+                    ["DIAB_T2", "HBP", "ASTHMA"],
+                    ["hbp", None, "COPD"]
                 ]
             }
-            af_codes = ActuarialFrame(data_medical_codes)
-            # Ensure the list column has the correct Polars type for the string operation
-            af_codes = af_codes.with_columns(
-                af_codes["condition_codes_list"].cast(pl.List(pl.String))
-            )
-            af_lower_codes = af_codes.select(
-                af_codes["condition_codes_list"].str.to_lowercase().alias("lower_condition_codes")
-            )
-            print(af_lower_codes.collect())
+            af = ActuarialFrame(data)
+
+            af.lower_codes = af.condition_codes.str.to_lowercase()
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (2, 1)
-            ┌─────────────────────────────────────┐
-            │ lower_condition_codes               │
-            │ ---                                 │
-            │ list[str]                           │
-            ╞═════════════════════════════════════╡
-            │ ["diab_t2", "hbp", "asthma"]        │
-            │ ["hbp", null, "copd"]               │
-            └─────────────────────────────────────┘
+            shape: (2, 3)
+            ┌──────────┬──────────────────────────────┬──────────────────────────────┐
+            │ claim_id ┆ condition_codes              ┆ lower_codes                  │
+            │ ---      ┆ ---                          ┆ ---                          │
+            │ str      ┆ list[str]                    ┆ list[str]                    │
+            ╞══════════╪══════════════════════════════╪══════════════════════════════╡
+            │ C001     ┆ ["DIAB_T2", "HBP", "ASTHMA"] ┆ ["diab_t2", "hbp", "asthma"] │
+            │ C002     ┆ ["hbp", null, "COPD"]        ┆ ["hbp", null, "copd"]        │
+            └──────────┴──────────────────────────────┴──────────────────────────────┘
             ```
         """
         return self._call_string_method("to_lowercase")
 
-    def n_chars(self) -> "ExpressionProxy":
+    def n_chars(self) -> ExpressionProxy:
         """Get the number of characters in each string.
 
         This function calculates the length of each string in a column, returning
@@ -654,12 +660,14 @@ class StringNamespaceProxy:
 
             data = {
                 "product_code": ["L-TERM-10", "L-WL-P", "ANN-SDA"],
-                "product_name": ["Term Life 10 Year", "Whole Life Par", "Single Deferred Annuity"]
+                "product_name": [
+                    "Term Life 10 Year",
+                    "Whole Life Par",
+                    "Single Deferred Annuity",
+                ],
             }
             af = ActuarialFrame(data)
-            af_len = af.select(
-                af["product_name"].str.n_chars().alias("name_length")
-            )
+            af_len = af.select(af["product_name"].str.n_chars().alias("name_length"))
             print(af_len.collect())
             ```
 
@@ -683,38 +691,34 @@ class StringNamespaceProxy:
             or for data validation.
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            from gaspatchio_core import ActuarialFrame
 
-            data_list = {
+            data = {
                 "policy_id": ["P001", "P002"],
                 "beneficiaries": [["John A. Doe", "Jane B. Smith"], ["Robert King", None, "Alice Wonderland"]]
             }
-            af_list_initial = ActuarialFrame(data_list)
-            af_list = af_list_initial.with_columns(
-                af_list_initial["beneficiaries"].cast(pl.List(pl.String))
-            )
-            af_bene_len = af_list.select(
-                af_list["beneficiaries"].str.n_chars().alias("beneficiary_name_lengths")
-            )
-            print(af_bene_len.collect())
+            af = ActuarialFrame(data)
+
+            af.name_lengths = af.beneficiaries.str.n_chars()
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (2, 1)
-            ┌──────────────────────────┐
-            │ beneficiary_name_lengths │
-            │ ---                      │
-            │ list[u32]                │
-            ╞══════════════════════════╡
-            │ [11, 13]                 │
-            │ [11, null, 16]           │
-            └──────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬───────────────────────────────────────────┬────────────────┐
+            │ policy_id ┆ beneficiaries                             ┆ name_lengths   │
+            │ ---       ┆ ---                                       ┆ ---            │
+            │ str       ┆ list[str]                                 ┆ list[u32]      │
+            ╞═══════════╪═══════════════════════════════════════════╪════════════════╡
+            │ P001      ┆ ["John A. Doe", "Jane B. Smith"]          ┆ [11, 13]       │
+            │ P002      ┆ ["Robert King", null, "Alice Wonderland"] ┆ [11, null, 16] │
+            └───────────┴───────────────────────────────────────────┴────────────────┘
             ```
         """
         return self._call_string_method("len_chars")
 
-    def len_chars(self) -> "ExpressionProxy":
+    def len_chars(self) -> ExpressionProxy:
         """Alias for `n_chars`. Get the number of characters in each string.
 
         Calculates the length of each string in a column, returning an integer
@@ -749,7 +753,7 @@ class StringNamespaceProxy:
 
             data = {
                 "policy_id_raw": ["POL1234", "POL567", "POL89012", None, "POL3456"],
-                "premium": [100.0, 150.0, 200.0, 50.0, 120.0]
+                "premium": [100.0, 150.0, 200.0, 50.0, 120.0],
             }
             af = ActuarialFrame(data)
 
@@ -781,43 +785,37 @@ class StringNamespaceProxy:
             the character length of each note to understand the verbosity or for display purposes.
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            from gaspatchio_core import ActuarialFrame
 
-            data_list = {
+            data = {
                 "policy_id": ["P7001", "P7002"],
-                "claim_notes_list": [
+                "claim_notes": [
                     ["Short note.", "This is a much longer note regarding the claim details.", None],
                     ["Urgent review needed!", "All clear."]
                 ]
             }
-            af_list_notes = ActuarialFrame(data_list)
-            # Ensure the list column has the correct Polars type
-            af_list_notes = af_list_notes.with_columns(
-                af_list_notes["claim_notes_list"].cast(pl.List(pl.String))
-            )
+            af = ActuarialFrame(data)
 
-            af_notes_len = af_list_notes.select(
-                af_list_notes["claim_notes_list"].str.len_chars().alias("note_char_lengths")
-            )
-            print(af_notes_len.collect())
+            af.note_lengths = af.claim_notes.str.len_chars()
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (2, 1)
-            ┌───────────────────────────┐
-            │ note_char_lengths         │
-            │ ---                       │
-            │ list[u32]                 │
-            ╞═══════════════════════════╡
-            │ [11, 53, null]            │
-            │ [20, 9]                   │
-            └───────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬──────────────────────────────────────────────────────────────────────────────────┬────────────────┐
+            │ policy_id ┆ claim_notes                                                                      ┆ note_lengths   │
+            │ ---       ┆ ---                                                                              ┆ ---            │
+            │ str       ┆ list[str]                                                                        ┆ list[u32]      │
+            ╞═══════════╪══════════════════════════════════════════════════════════════════════════════════╪════════════════╡
+            │ P7001     ┆ ["Short note.", "This is a much longer note regarding the claim details.", null] ┆ [11, 55, null] │
+            │ P7002     ┆ ["Urgent review needed!", "All clear."]                                          ┆ [21, 10]       │
+            └───────────┴──────────────────────────────────────────────────────────────────────────────────┴────────────────┘
             ```
         """
         return self._call_string_method("len_chars")
 
-    def len_bytes(self) -> "ExpressionProxy":
+    def len_bytes(self) -> ExpressionProxy:
         """Get the number of bytes in each string.
 
         Calculates the byte length of each string in a column. This is particularly
@@ -854,7 +852,12 @@ class StringNamespaceProxy:
 
             data = {
                 "client_id": ["C001", "C002", "C003", "C004"],
-                "client_name": ["René", "沐宸", "Zoë", "John Doe"] # French, Chinese, German, English names
+                "client_name": [
+                    "René",
+                    "沐宸",
+                    "Zoë",
+                    "John Doe",
+                ],  # French, Chinese, German, English names
             }
             af = ActuarialFrame(data)
             af_byte_len = af.select(
@@ -884,45 +887,37 @@ class StringNamespaceProxy:
             length of each comment.
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            from gaspatchio_core import ActuarialFrame
 
-            data_list_comments = {
+            data = {
                 "policy_id": ["P501", "P502"],
-                "comments_list": [
-                    ["Test € symbol", "Standard comment.", None], # Euro symbol is multi-byte
-                    ["Résumé", "日本語のコメント"] # French with accent, Japanese comment
+                "comments": [
+                    ["Test € symbol", "Standard comment.", None],
+                    ["Résumé", "日本語のコメント"]
                 ]
             }
-            af_comments = ActuarialFrame(data_list_comments)
-            # Ensure the list column has the correct Polars type
-            af_comments = af_comments.with_columns(
-                af_comments["comments_list"].cast(pl.List(pl.String))
-            )
+            af = ActuarialFrame(data)
 
-            af_comment_byte_len = af_comments.select(
-                af_comments["comments_list"].str.len_bytes().alias("comment_byte_lengths")
-            )
-            print(af_comment_byte_len.collect())
+            af.byte_lengths = af.comments.str.len_bytes()
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (2, 1)
-            ┌──────────────────────────┐
-            │ comment_byte_lengths     │
-            │ ---                      │
-            │ list[u32]                │
-            ╞══════════════════════════╡
-            │ [13, 17, null]           │
-            │ [7, 21]                  │
-            └──────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬──────────────────────────────────────────────┬────────────────┐
+            │ policy_id ┆ comments                                     ┆ byte_lengths   │
+            │ ---       ┆ ---                                          ┆ ---            │
+            │ str       ┆ list[str]                                    ┆ list[u32]      │
+            ╞═══════════╪══════════════════════════════════════════════╪════════════════╡
+            │ P501      ┆ ["Test € symbol", "Standard comment.", null] ┆ [15, 17, null] │
+            │ P502      ┆ ["Résumé", "日本語のコメント"]               ┆ [8, 24]        │
+            └───────────┴──────────────────────────────────────────────┴────────────────┘
             ```
         """
         return self._call_string_method("len_bytes")
 
-    def strip_chars(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy":
+    def strip_chars(self, characters: str | pl.Expr | None = None) -> ExpressionProxy:
         """Removes specified leading and trailing characters from strings.
 
         This is useful for cleaning data, such as removing unwanted prefixes,
@@ -954,142 +949,76 @@ class StringNamespaceProxy:
                 stripped from the strings.
 
         Examples:
-            **Scalar Example 1: Cleaning policy numbers by removing specific prefixes/suffixes and whitespace**
+            **Scalar Example: Cleaning Policy Numbers**
 
-            Policy numbers might be recorded with inconsistent characters (e.g., "ID-", "*", spaces).
-            We want to standardize them by removing these specific characters and any surrounding whitespace.
+            Policy numbers might be recorded with inconsistent characters that need to be removed.
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            from gaspatchio_core import ActuarialFrame
 
-            data_policy_nos = {
-                "raw_policy_id": [
-                    "ID-A123-XYZ*",
-                    " B456 ",
-                    "ID-C789*",
-                    "D012-XYZ",
-                    None,
-                    " ID-E345* ",
-                ],
-                "chars_to_remove_col": ["ID-*XYZ ", " ", "ID-*", "-XYZ", None, " *ID-"]
+            data = {
+                "policy_id": ["P001", "P002", "P003", "P004"],
+                "policy_number_raw": [" POL-123* ", "ID-456-", "*789*", " ABC-999 "],
             }
-            af = ActuarialFrame(data_policy_nos)
+            af = ActuarialFrame(data)
 
-            # Example 1a: Remove a fixed set of characters "ID-*XYZ " from policy IDs
-            af_cleaned_fixed = af.select(
-                af["raw_policy_id"].str.strip_chars("ID-*XYZ ").alias("cleaned_fixed_chars")
-            )
-            print("Cleaned with fixed characters 'ID-*XYZ ':")
-            print(af_cleaned_fixed.collect())
+            af.policy_number_clean = af.policy_number_raw.str.strip_chars(" *-")
 
-            # Example 1b: Remove characters specified in another column
-            # This dynamically strips characters based on the 'chars_to_remove_col' for each row.
-            af_cleaned_dynamic = af.select(
-                af["raw_policy_id"].str.strip_chars(pl.col("chars_to_remove_col")).alias("cleaned_dynamic_chars")
-            )
-            print("\\nCleaned with characters from 'chars_to_remove_col':")
-            print(af_cleaned_dynamic.collect())
-
-            # Example 1c: Remove only leading and trailing whitespace
-            af_trimmed_whitespace = af.select(
-                af["raw_policy_id"].str.strip_chars().alias("trimmed_whitespace_only") # characters=None
-            )
-            print("\\nCleaned with default whitespace stripping:")
-            print(af_trimmed_whitespace.collect())
+            print(af.collect())
             ```
 
             ```text
-            Cleaned with fixed characters 'ID-*XYZ ':
-            shape: (6, 1)
-            ┌─────────────────────┐
-            │ cleaned_fixed_chars │
-            │ ---                 │
-            │ str                 │
-            ╞═════════════════════╡
-            │ A123                │
-            │ B456                │
-            │ C789                │
-            │ D012                │
-            │ null                │
-            │ E345                │
-            └─────────────────────┘
-
-            Cleaned with characters from 'chars_to_remove_col':
-            shape: (6, 1)
-            ┌───────────────────────┐
-            │ cleaned_dynamic_chars │
-            │ ---                   │
-            │ str                   │
-            ╞═══════════════════════╡
-            │ A123                  │
-            │ B456                  │
-            │ C789                  │
-            │ D012                  │
-            │ null                  │
-            │ E345                  │
-            └───────────────────────┘
-
-            Cleaned with default whitespace stripping:
-            shape: (6, 1)
-            ┌───────────────────────────┐
-            │ trimmed_whitespace_only   │
-            │ ---                       │
-            │ str                       │
-            ╞═══════════════════════════╡
-            │ ID-A123-XYZ*              │
-            │ B456                      │
-            │ ID-C789*                  │
-            │ D012-XYZ                  │
-            │ null                      │
-            │ ID-E345*                  │
-            └───────────────────────────┘
+            shape: (4, 3)
+            ┌───────────┬───────────────────┬─────────────────────┐
+            │ policy_id ┆ policy_number_raw ┆ policy_number_clean │
+            │ ---       ┆ ---               ┆ ---                 │
+            │ str       ┆ str               ┆ str                 │
+            ╞═══════════╪═══════════════════╪═════════════════════╡
+            │ P001      ┆  POL-123*         ┆ POL-123             │
+            │ P002      ┆ ID-456-           ┆ ID-456              │
+            │ P003      ┆ *789*             ┆ 789                 │
+            │ P004      ┆  ABC-999          ┆ ABC-999             │
+            └───────────┴───────────────────┴─────────────────────┘
             ```
 
-            **Vector (List Shimming) Example: Cleaning lists of product add-on codes**
+            **Vector Example: Cleaning Lists of Rider Codes**
 
-            Product codes for add-ons might be stored in a list, with potential unwanted
-            characters like asterisks, hyphens, or spaces.
+            Product codes for riders might be stored in a list with unwanted characters.
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            from gaspatchio_core import ActuarialFrame
 
-            data_addons = {
+            data = {
                 "policy_id": ["P1001", "P1002"],
-                "addon_codes_raw": [
+                "rider_codes_raw": [
                     ["*RIDER_A- ", " -RIDER_B*", "BASE_PLAN"],
-                    [None, " *-RIDER_C- ", "\\tRIDER_D\\t*"]
+                    [None, " *-RIDER_C- ", "\tRIDER_D\t*"]
                 ]
             }
-            af_addons = ActuarialFrame(data_addons).with_columns(
-                pl.col("addon_codes_raw").cast(pl.List(pl.String))
-            )
+            af = ActuarialFrame(data)
 
-            # Strip asterisks, hyphens, spaces, and tabs from each code in the lists
-            af_cleaned_addons = af_addons.select(
-                af_addons["addon_codes_raw"].str.strip_chars(" *-#\\t").alias("cleaned_addon_codes") # Added '#' to demonstrate it's ignored if not present
-            )
-            print(af_cleaned_addons.collect())
+            af.rider_codes_clean = af.rider_codes_raw.str.strip_chars(" *-\t")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (2, 1)
-            ┌───────────────────────────────────┐
-            │ cleaned_addon_codes               │
-            │ ---                               │
-            │ list[str]                         │
-            ╞═══════════════════════════════════╡
-            │ ["RIDER_A", "RIDER_B", "BASE_PLA… │
-            │ [null, "RIDER_C", "RIDER_D"]      │
-            └───────────────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬───────────────────────────────────────────┬─────────────────────────────────────┐
+            │ policy_id ┆ rider_codes_raw                           ┆ rider_codes_clean                   │
+            │ ---       ┆ ---                                       ┆ ---                                 │
+            │ str       ┆ list[str]                                 ┆ list[str]                           │
+            ╞═══════════╪═══════════════════════════════════════════╪═════════════════════════════════════╡
+            │ P1001     ┆ ["*RIDER_A- ", " -RIDER_B*", "BASE_PLAN"] ┆ ["RIDER_A", "RIDER_B", "BASE_PLAN"] │
+            │ P1002     ┆ [null, " *-RIDER_C- ", "    RIDER_D *"]   ┆ [null, "RIDER_C", "RIDER_D"]        │
+            └───────────┴───────────────────────────────────────────┴─────────────────────────────────────┘
             ```
         """
         return self._call_string_method("strip_chars", characters=characters)
 
     def strip_chars_start(
-        self, characters: Optional[str | pl.Expr] = None
-    ) -> "ExpressionProxy":
+        self, characters: str | pl.Expr | None = None
+    ) -> ExpressionProxy:
         """Removes specified leading characters from strings.
 
         Useful for standardizing data by removing known prefixes or initial
@@ -1122,158 +1051,72 @@ class StringNamespaceProxy:
                 characters stripped from the strings.
 
         Examples:
-            **Scalar Example: Removing prefixes from legacy system IDs and leading whitespace**
+            **Scalar Example: Removing Leading Characters from Policy IDs**
 
-            Legacy system IDs might have prefixes like "LEG_", "OLD-", or be padded with spaces.
+            Legacy system IDs might have prefixes or leading whitespace that need cleaning.
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            from gaspatchio_core import ActuarialFrame
 
-            data_ids = {
-                "legacy_id": [
-                    "LEG_POL123",
-                    "  OLD-CLM456",
-                    "POL789",
-                    None,
-                    "LEG_ UW001", # Note the space after LEG_
-                    "  TRN999"
-                ],
-                "prefixes_to_strip": ["LEG_", "OLD-", "NONEXISTENT_", None, "LEG_ ", "  "]
+            data = {
+                "policy_id": ["P001", "P002", "P003", "P004"],
+                "legacy_id": ["TEMP-123", "  456", " *789", "TEMP-ABC"],
             }
-            af = ActuarialFrame(data_ids)
+            af = ActuarialFrame(data)
 
-            # Example 1a: Remove a fixed prefix "LEG_"
-            af_no_leg_prefix = af.select(
-                af["legacy_id"].str.strip_chars_start("LEG_").alias("id_no_leg_prefix")
-            )
-            print("Stripping fixed prefix 'LEG_':")
-            print(af_no_leg_prefix.collect())
+            af.clean_id = af.legacy_id.str.strip_chars_start(" TEMP-*")
 
-            # Example 1b: Remove leading whitespace only (characters=None)
-            af_trimmed_space = af.select(
-                af["legacy_id"].str.strip_chars_start().alias("id_trimmed_leading_space")
-            )
-            print("\\nStripping leading whitespace only:")
-            print(af_trimmed_space.collect())
-
-            # Example 1c: Remove prefixes defined in another column
-            # This will strip any character found in the corresponding 'prefixes_to_strip' string from the start.
-            af_dynamic_prefix = af.select(
-                af["legacy_id"].str.strip_chars_start(pl.col("prefixes_to_strip")).alias("id_dynamic_prefix_removed")
-            )
-            print("\\nStripping prefixes from 'prefixes_to_strip' column (character-wise from start):")
-            print(af_dynamic_prefix.collect())
+            print(af.collect())
             ```
 
             ```text
-            Stripping fixed prefix 'LEG_':
-            shape: (6, 1)
-            ┌────────────────────┐
-            │ id_no_leg_prefix   │
-            │ ---                │
-            │ str                │
-            ╞════════════════════╡
-            │ POL123             │
-            │   OLD-CLM456       │
-            │ POL789             │
-            │ null               │
-            │ UW001              │
-            │   TRN999           │
-            └────────────────────┘
-
-            Stripping leading whitespace only:
-            shape: (6, 1)
-            ┌───────────────────────────┐
-            │ id_trimmed_leading_space  │
-            │ ---                       │
-            │ str                       │
-            ╞═══════════════════════════╡
-            │ LEG_POL123                │
-            │ OLD-CLM456                │
-            │ POL789                    │
-            │ null                      │
-            │ LEG_ UW001                │
-            │ TRN999                    │
-            └───────────────────────────┘
-
-            Stripping prefixes from 'prefixes_to_strip' column (character-wise from start):
-            shape: (6, 1)
-            ┌─────────────────────────────┐
-            │ id_dynamic_prefix_removed   │
-            │ ---                         │
-            │ str                         │
-            ╞═════════════════════════════╡
-            │ POL123                      │
-            │   CLM456                    │
-            │ POL789                      │
-            │ null                        │
-            │ UW001                       │
-            │ TRN999                      │
-            └─────────────────────────────┘
+            shape: (4, 3)
+            ┌───────────┬───────────┬──────────┐
+            │ policy_id ┆ legacy_id ┆ clean_id │
+            │ ---       ┆ ---       ┆ ---      │
+            │ str       ┆ str       ┆ str      │
+            ╞═══════════╪═══════════╪══════════╡
+            │ P001      ┆ TEMP-123  ┆ 123      │
+            │ P002      ┆   456     ┆ 456      │
+            │ P003      ┆  *789     ┆ 789      │
+            │ P004      ┆ TEMP-ABC  ┆ ABC      │
+            └───────────┴───────────┴──────────┘
             ```
 
-            **Vector (List Shimming) Example: Cleaning lists of temporary transaction remarks**
-
-            Transaction remarks might be stored in lists, with some prefixed by "TEMP: " or spaces.
+            **Vector Example: Transaction Remarks**
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            from gaspatchio_core import ActuarialFrame
 
-            data_remarks = {
-                "policy_id": ["TRN01", "TRN02"],
-                "transaction_remarks_raw": [
+            data = {
+                "policy_id": ["P001", "P002"],
+                "remarks": [
                     ["TEMP: Initial assessment", "  Adjustment processed", "Final Review"],
-                    [None, "TEMP: Hold for now", "TEMP: Resolved", "Status: OK"]
-                ]
+                    ["TEMP: Hold for now", "TEMP: Resolved", "Status: OK"],
+                ],
             }
-            af_remarks = ActuarialFrame(data_remarks).with_columns(
-                pl.col("transaction_remarks_raw").cast(pl.List(pl.String))
-            )
+            af = ActuarialFrame(data)
 
-            # Example 2a: Strip fixed prefix "TEMP: " from each remark in the lists
-            af_cleaned_remarks_prefix = af_remarks.select(
-                af_remarks["transaction_remarks_raw"].str.strip_chars_start("TEMP: ").alias("cleaned_remarks_prefix")
-            )
-            print("Cleaned remarks (prefix 'TEMP: '):")
-            print(af_cleaned_remarks_prefix.collect())
+            af.clean_remarks = af.remarks.str.strip_chars_start("TEMP: ")
 
-            # Example 2b: Strip leading whitespace from list elements
-            af_cleaned_remarks_space = af_remarks.select(
-                af_remarks["transaction_remarks_raw"].str.strip_chars_start().alias("cleaned_remarks_space")
-            )
-            print("\\nCleaned remarks (leading whitespace):")
-            print(af_cleaned_remarks_space.collect())
+            print(af.collect())
             ```
 
             ```text
-            Cleaned remarks (prefix 'TEMP: '):
-            shape: (2, 1)
-            ┌────────────────────────────────────────────────────────────────────────────┐
-            │ cleaned_remarks_prefix                                                     │
-            │ ---                                                                        │
-            │ list[str]                                                                  │
-            ╞════════════════════════════════════════════════════════════════════════════╡
-            │ ["Initial assessment", "  Adjustment processed", "Final Review"]            │
-            │ [null, "Hold for now", "Resolved", "Status: OK"]                           │
-            └────────────────────────────────────────────────────────────────────────────┘
-
-            Cleaned remarks (leading whitespace):
-            shape: (2, 1)
-            ┌────────────────────────────────────────────────────────────────────────────┐
-            │ cleaned_remarks_space                                                      │
-            │ ---                                                                        │
-            │ list[str]                                                                  │
-            ╞════════════════════════════════════════════════════════════════════════════╡
-            │ ["TEMP: Initial assessment", "Adjustment processed", "Final Review"]       │
-            │ [null, "TEMP: Hold for now", "TEMP: Resolved", "Status: OK"]               │
-            └────────────────────────────────────────────────────────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬────────────────────────────────────────────────────────────────────────┬────────────────────────────────────────────────────────────────┐
+            │ policy_id ┆ remarks                                                                ┆ clean_remarks                                                  │
+            │ ---       ┆ ---                                                                    ┆ ---                                                            │
+            │ str       ┆ list[str]                                                              ┆ list[str]                                                      │
+            ╞═══════════╪════════════════════════════════════════════════════════════════════════╪════════════════════════════════════════════════════════════════╡
+            │ P001      ┆ ["TEMP: Initial assessment", "  Adjustment processed", "Final Review"] ┆ ["Initial assessment", "Adjustment processed", "Final Review"] │
+            │ P002      ┆ ["TEMP: Hold for now", "TEMP: Resolved", "Status: OK"]                 ┆ ["Hold for now", "Resolved", "Status: OK"]                     │
+            └───────────┴────────────────────────────────────────────────────────────────────────┴────────────────────────────────────────────────────────────────┘
             ```
         """
         return self._call_string_method("strip_chars_start", characters=characters)
 
-    def strip_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy":
+    def strip_prefix(self, prefix: str | pl.Expr) -> ExpressionProxy:
         """Remove a prefix from each string.
 
         The prefix is stripped whenever it occurs at the start of the string.
@@ -1296,70 +1139,68 @@ class StringNamespaceProxy:
             ExpressionProxy with the prefix removed.
 
         Examples:
-            **Scalar example – cleaning policy IDs**
+            **Scalar Example: Policy IDs**
 
             ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
-            with pl.Config(set_tbl_width_chars=100):
-                af = ActuarialFrame({"pol_id_raw": ["TEMP-001", "TEMP-002", "003", None]})
-                cleaned = af.select(
-                    af["pol_id_raw"].str.strip_prefix("TEMP-").alias("pol_id")
-                ).collect()
-                print(cleaned)
+            data = {
+                "policy_id": ["P001", "P002", "P003", "P004"],
+                "pol_id_raw": ["TEMP-001", "TEMP-002", "003", None],
+            }
+            af = ActuarialFrame(data)
+
+            af.pol_id_clean = af.pol_id_raw.str.strip_prefix("TEMP-")
+
+            print(af.collect())
             ```
             ```text
-            shape: (4, 1)
-            ┌────────┐
-            │ pol_id │
-            │ ---    │
-            │ str    │
-            ╞════════╡
-            │ 001    │
-            │ 002    │
-            │ 003    │
-            │ null   │
-            └────────┘
+            shape: (4, 3)
+            ┌───────────┬────────────┬──────────────┐
+            │ policy_id ┆ pol_id_raw ┆ pol_id_clean │
+            │ ---       ┆ ---        ┆ ---          │
+            │ str       ┆ str        ┆ str          │
+            ╞═══════════╪════════════╪══════════════╡
+            │ P001      ┆ TEMP-001   ┆ 001          │
+            │ P002      ┆ TEMP-002   ┆ 002          │
+            │ P003      ┆ 003        ┆ 003          │
+            │ P004      ┆ null       ┆ null         │
+            └───────────┴────────────┴──────────────┘
             ```
 
-            **Vector example – removing ``LEGACY-`` from feature codes**
+            **Vector Example: Feature Codes**
 
             ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
-            af = ActuarialFrame({
-                "policy_key": ["POLICY_A", "POLICY_B"],
-                "feature_codes_raw": [
+            data = {
+                "policy_id": ["P001", "P002"],
+                "feature_codes": [
                     ["LEGACY-RIDER1", "NEW_FEATURE_X", "LEGACY-BENEFIT2"],
-                    [None, "LEGACY-COVERAGE_Y", "STANDARD_Z"],
+                    ["LEGACY-COVERAGE_Y", "STANDARD_Z"],
                 ],
-            })
-            af = af.with_columns(
-                af["feature_codes_raw"].cast(pl.List(pl.String))
-            )
-            with pl.Config(set_tbl_width_chars=120, fmt_str_lengths=100):
-                cleaned = af.select(
-                    af["feature_codes_raw"].str.strip_prefix("LEGACY-").alias("cleaned_feature_codes")
-                ).collect()
-                print(cleaned)
+            }
+            af = ActuarialFrame(data)
+
+            af.clean_codes = af.feature_codes.str.strip_prefix("LEGACY-")
+
+            print(af.collect())
             ```
             ```text
-            shape: (2, 1)
-            ┌─────────────────────────────────────────┐
-            │ cleaned_feature_codes                   │
-            │ ---                                     │
-            │ list[str]                               │
-            ╞═════════════════════════════════════════╡
-            │ ["RIDER1", "NEW_FEATURE_X", "BENEFIT2"] │
-            │ [null, "COVERAGE_Y", "STANDARD_Z"]      │
-            └─────────────────────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬───────────────────────────────────────────────────────┬─────────────────────────────────────────┐
+            │ policy_id ┆ feature_codes                                         ┆ clean_codes                             │
+            │ ---       ┆ ---                                                   ┆ ---                                     │
+            │ str       ┆ list[str]                                             ┆ list[str]                               │
+            ╞═══════════╪═══════════════════════════════════════════════════════╪═════════════════════════════════════════╡
+            │ P001      ┆ ["LEGACY-RIDER1", "NEW_FEATURE_X", "LEGACY-BENEFIT2"] ┆ ["RIDER1", "NEW_FEATURE_X", "BENEFIT2"] │
+            │ P002      ┆ ["LEGACY-COVERAGE_Y", "STANDARD_Z"]                   ┆ ["COVERAGE_Y", "STANDARD_Z"]            │
+            └───────────┴───────────────────────────────────────────────────────┴─────────────────────────────────────────┘
             ```
         """
         return self._call_string_method("strip_prefix", prefix=prefix)
 
-    def remove_prefix(self, prefix: str | pl.Expr) -> "ExpressionProxy":
+    def remove_prefix(self, prefix: str | pl.Expr) -> ExpressionProxy:
         """Alias for `strip_prefix`. Remove a prefix from each string.
 
         The prefix is removed from the beginning of every string. Strings
@@ -1382,101 +1223,70 @@ class StringNamespaceProxy:
             ExpressionProxy: The expression with the prefix removed.
 
         Examples:
-            **Scalar example – clean temporary policy IDs**
+            **Scalar Example: Policy IDs**
 
             ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
             data = {
+                "policy_id": ["P001", "P002", "P003", "P004"],
                 "policy_id_raw": ["TMP-001", "TMP-002", "003", None],
-                "processing_prefix": ["TMP-", "TMP-", "TMP-", "TMP-"],
             }
+            af = ActuarialFrame(data)
 
-            with pl.Config(set_tbl_width_chars=100):
-                af_fixed = ActuarialFrame(data)
-                fixed = af_fixed.select(
-                    af_fixed["policy_id_raw"].str.remove_prefix("TMP-").alias("policy_id")
-                ).collect()
-                print(fixed)
+            af.policy_id_clean = af.policy_id_raw.str.remove_prefix("TMP-")
 
-                af_dynamic = ActuarialFrame(data)
-                dynamic = af_dynamic.select(
-                    af_dynamic["policy_id_raw"].str.remove_prefix(
-                        af_dynamic["processing_prefix"]
-                    ).alias("policy_id")
-                ).collect()
-                print()
-                print("Dynamic prefix removal:")
-                print(dynamic)
+            print(af.collect())
             ```
 
             ```text
-            shape: (4, 1)
-            ┌───────────┐
-            │ policy_id │
-            │ ---       │
-            │ str       │
-            ╞═══════════╡
-            │ 001       │
-            │ 002       │
-            │ 003       │
-            │ null      │
-            └───────────┘
-            Dynamic prefix removal:
-            shape: (4, 1)
-            ┌───────────┐
-            │ policy_id │
-            │ ---       │
-            │ str       │
-            ╞═══════════╡
-            │ 001       │
-            │ 002       │
-            │ 003       │
-            │ null      │
-            └───────────┘
+            shape: (4, 3)
+            ┌───────────┬───────────────┬─────────────────┐
+            │ policy_id ┆ policy_id_raw ┆ policy_id_clean │
+            │ ---       ┆ ---           ┆ ---             │
+            │ str       ┆ str           ┆ str             │
+            ╞═══════════╪═══════════════╪═════════════════╡
+            │ P001      ┆ TMP-001       ┆ 001             │
+            │ P002      ┆ TMP-002       ┆ 002             │
+            │ P003      ┆ 003           ┆ 003             │
+            │ P004      ┆ null          ┆ null            │
+            └───────────┴───────────────┴─────────────────┘
             ```
 
-            **Vector example – remove ``LEGACY-`` from feature codes**
+            **Vector Example: Feature Codes**
 
             ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
-            af_list = ActuarialFrame({
-                "policy_key": ["P1", "P2"],
-                "feature_codes_raw": [
+            data = {
+                "policy_id": ["P001", "P002"],
+                "feature_codes": [
                     ["LEGACY-RIDER1", "BENEFIT_A"],
-                    [None, "LEGACY-OPTION_B"],
+                    ["LEGACY-OPTION_B"],
                 ],
-            })
-            af_list = af_list.with_columns(
-                af_list["feature_codes_raw"].cast(pl.List(pl.String))
-            )
-            with pl.Config(set_tbl_width_chars=100, fmt_str_lengths=100):
-                result = af_list.select(
-                    af_list["feature_codes_raw"].str.remove_prefix("LEGACY-").alias(
-                        "feature_codes"
-                    )
-                ).collect()
-                print(result)
+            }
+            af = ActuarialFrame(data)
+
+            af.clean_codes = af.feature_codes.str.remove_prefix("LEGACY-")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (2, 1)
-            ┌─────────────────────────┐
-            │ feature_codes           │
-            │ ---                     │
-            │ list[str]               │
-            ╞═════════════════════════╡
-            │ ["RIDER1", "BENEFIT_A"] │
-            │ [null, "OPTION_B"]      │
-            └─────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬────────────────────────────────┬─────────────────────────┐
+            │ policy_id ┆ feature_codes                  ┆ clean_codes             │
+            │ ---       ┆ ---                            ┆ ---                     │
+            │ str       ┆ list[str]                      ┆ list[str]               │
+            ╞═══════════╪════════════════════════════════╪═════════════════════════╡
+            │ P001      ┆ ["LEGACY-RIDER1", "BENEFIT_A"] ┆ ["RIDER1", "BENEFIT_A"] │
+            │ P002      ┆ ["LEGACY-OPTION_B"]            ┆ ["OPTION_B"]            │
+            └───────────┴────────────────────────────────┴─────────────────────────┘
             ```
         """
         return self.strip_prefix(prefix=prefix)
 
-    def strip_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy":
+    def strip_suffix(self, suffix: str | pl.Expr) -> ExpressionProxy:
         """Remove a suffix from each string.
 
         If a string does not end with the given suffix, it is returned unchanged.
@@ -1494,70 +1304,75 @@ class StringNamespaceProxy:
             ExpressionProxy: The expression with the suffix removed.
 
         Examples:
-            **Scalar example – normalize plan names**
+            **Scalar Example: Plan Names**
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
             data = {
-                "plan_name_raw": ["Term Basic-OLD", "Income Protection-OLD", "Annuity Plus", None]
+                "policy_id": ["P001", "P002", "P003", "P004"],
+                "plan_name_raw": [
+                    "Term Basic-OLD",
+                    "Income Protection-OLD",
+                    "Annuity Plus",
+                    None,
+                ],
             }
             af = ActuarialFrame(data)
-            result = af.select(
-                af["plan_name_raw"].str.strip_suffix("-OLD").alias("plan_name")
-            )
-            print(result.collect())
+
+            af.plan_name = af.plan_name_raw.str.strip_suffix("-OLD")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (4, 1)
-            ┌───────────────────────┐
-            │ plan_name             │
-            │ ---                   │
-            │ str                   │
-            ╞═══════════════════════╡
-            │ Term Basic            │
-            │ Income Protection     │
-            │ Annuity Plus          │
-            │ null                  │
-            └───────────────────────┘
+            shape: (4, 3)
+            ┌───────────┬───────────────────────┬───────────────────┐
+            │ policy_id ┆ plan_name_raw         ┆ plan_name         │
+            │ ---       ┆ ---                   ┆ ---               │
+            │ str       ┆ str                   ┆ str               │
+            ╞═══════════╪═══════════════════════╪═══════════════════╡
+            │ P001      ┆ Term Basic-OLD        ┆ Term Basic        │
+            │ P002      ┆ Income Protection-OLD ┆ Income Protection │
+            │ P003      ┆ Annuity Plus          ┆ Annuity Plus      │
+            │ P004      ┆ null                  ┆ null              │
+            └───────────┴───────────────────────┴───────────────────┘
             ```
 
-            **Vector (list) example – clean trailing punctuation in claim notes**
+            **Vector Example: Claim Notes**
 
             ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
-            notes_data = {
-                "claim_id": ["C1", "C2"],
-                "notes": [["Approved.", "Paid."], [None, "In Review."]],
+            data = {
+                "policy_id": ["P001", "P002"],
+                "notes": [
+                    ["Approved.", "Paid."],
+                    ["In Review."],
+                ],
             }
-            af_list = ActuarialFrame(notes_data)
-            af_list = af_list.with_columns(
-                af_list["notes"].cast(pl.List(pl.String))
-            )
-            cleaned = af_list.select(
-                af_list["notes"].str.strip_suffix(".").alias("notes_cleaned")
-            )
-            print(cleaned.collect())
+            af = ActuarialFrame(data)
+
+            af.notes_clean = af.notes.str.strip_suffix(".")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (2, 1)
-            ┌────────────────────────┐
-            │ notes_cleaned          │
-            │ ---                    │
-            │ list[str]              │
-            ╞════════════════════════╡
-            │ ["Approved", "Paid"]    │
-            │ [null, "In Review"]     │
-            └────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬────────────────────────┬──────────────────────┐
+            │ policy_id ┆ notes                  ┆ notes_clean          │
+            │ ---       ┆ ---                    ┆ ---                  │
+            │ str       ┆ list[str]              ┆ list[str]            │
+            ╞═══════════╪════════════════════════╪══════════════════════╡
+            │ P001      ┆ ["Approved.", "Paid."] ┆ ["Approved", "Paid"] │
+            │ P002      ┆ ["In Review."]         ┆ ["In Review"]        │
+            └───────────┴────────────────────────┴──────────────────────┘
             ```
         """
         return self._call_string_method("strip_suffix", suffix=suffix)
 
-    def remove_suffix(self, suffix: str | pl.Expr) -> "ExpressionProxy":
+    def remove_suffix(self, suffix: str | pl.Expr) -> ExpressionProxy:
         """Alias for `strip_suffix`. Remove a suffix from each string.
 
         This method behaves identically to :py:meth:`strip_suffix`, removing the
@@ -1584,74 +1399,69 @@ class StringNamespaceProxy:
             ExpressionProxy: A new `ExpressionProxy` with the suffix removed.
 
         Examples:
-            **Scalar Example: Removing '-OLD' from policy codes**
-
-            Scenario: Historical policy codes may include a trailing ``-OLD``
-            suffix that should be dropped for reporting.
+            **Scalar Example: Policy Codes**
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
-            data = {"policy_code": ["TERM10-OLD", "WL-OLD", "ANN"]}
+            data = {
+                "policy_id": ["P001", "P002", "P003"],
+                "policy_code": ["TERM10-OLD", "WL-OLD", "ANN"],
+            }
             af = ActuarialFrame(data)
-            af_clean = af.select(
-                af["policy_code"].str.remove_suffix("-OLD").alias("code_clean")
-            )
-            print(af_clean.collect())
+
+            af.code_clean = af.policy_code.str.remove_suffix("-OLD")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (3, 1)
-            ┌─────────────┐
-            │ code_clean  │
-            │ ---         │
-            │ str         │
-            ╞═════════════╡
-            │ TERM10      │
-            │ WL          │
-            │ ANN         │
-            └─────────────┘
+            shape: (3, 3)
+            ┌───────────┬─────────────┬────────────┐
+            │ policy_id ┆ policy_code ┆ code_clean │
+            │ ---       ┆ ---         ┆ ---        │
+            │ str       ┆ str         ┆ str        │
+            ╞═══════════╪═════════════╪════════════╡
+            │ P001      ┆ TERM10-OLD  ┆ TERM10     │
+            │ P002      ┆ WL-OLD      ┆ WL         │
+            │ P003      ┆ ANN         ┆ ANN        │
+            └───────────┴─────────────┴────────────┘
             ```
 
-            **Vector (list) example: Removing trailing '*exp' from lists of
-            underwriting notes**
+            **Vector Example: Underwriting Notes**
 
             ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            from gaspatchio_core import ActuarialFrame
 
-            notes_data = {
-                "policy_id": [1, 2],
+            data = {
+                "policy_id": ["P001", "P002"],
                 "uw_notes": [
                     ["Declined*exp", "Check later*exp"],
-                    ["Approved", None],
+                    ["Approved"],
                 ],
             }
-            af_notes = ActuarialFrame(notes_data)
-            af_notes = af_notes.with_columns(
-                af_notes["uw_notes"].cast(pl.List(pl.String))
-            )
-            af_notes_clean = af_notes.select(
-                af_notes["uw_notes"].str.remove_suffix("*exp").alias("notes_clean")
-            )
-            print(af_notes_clean.collect())
+            af = ActuarialFrame(data)
+
+            af.notes_clean = af.uw_notes.str.remove_suffix("*exp")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (2, 1)
-            ┌────────────────────────────┐
-            │ notes_clean                │
-            │ ---                        │
-            │ list[str]                  │
-            ╞════════════════════════════╡
-            │ ["Declined", "Check later"] │
-            │ ["Approved", null]          │
-            └────────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬─────────────────────────────────────┬─────────────────────────────┐
+            │ policy_id ┆ uw_notes                            ┆ notes_clean                 │
+            │ ---       ┆ ---                                 ┆ ---                         │
+            │ str       ┆ list[str]                           ┆ list[str]                   │
+            ╞═══════════╪═════════════════════════════════════╪═════════════════════════════╡
+            │ P001      ┆ ["Declined*exp", "Check later*exp"] ┆ ["Declined", "Check later"] │
+            │ P002      ┆ ["Approved"]                        ┆ ["Approved"]                │
+            └───────────┴─────────────────────────────────────┴─────────────────────────────┘
             ```
         """
         return self.strip_suffix(suffix=suffix)
 
-    def zfill(self, length: int) -> "ExpressionProxy":
+    def zfill(self, length: int) -> ExpressionProxy:
         """Pad strings with leading zeros to a minimum width.
 
         Shorter values are padded on the left with zeros so each entry reaches
@@ -1671,74 +1481,72 @@ class StringNamespaceProxy:
         Returns:
             ExpressionProxy: Strings padded with leading zeros.
 
-        Examples
-        --------
-        Scalar example – Standardizing policy serial numbers::
+        Examples:
+            **Scalar Example: Policy Serial Numbers**
 
             ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
-            with pl.Config(fmt_str_lengths=100):
-                data = {"policy_serial": ["123", "45", "6789", None, "1"]}
-                af = ActuarialFrame(data)
-                result = af.select(
-                    af["policy_serial"].str.zfill(5).alias("zfilled_serial")
-                )
-                print(result.collect())
+            data = {
+                "policy_id": ["P001", "P002", "P003", "P004", "P005"],
+                "policy_serial": ["123", "45", "6789", None, "1"],
+            }
+            af = ActuarialFrame(data)
+
+            af.zfilled_serial = af.policy_serial.str.zfill(5)
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (5, 1)
-            ┌────────────────┐
-            │ zfilled_serial │
-            │ ---            │
-            │ str            │
-            ╞════════════════╡
-            │ 00123          │
-            │ 00045          │
-            │ 06789          │
-            │ null           │
-            │ 00001          │
-            └────────────────┘
+            shape: (5, 3)
+            ┌───────────┬───────────────┬────────────────┐
+            │ policy_id ┆ policy_serial ┆ zfilled_serial │
+            │ ---       ┆ ---           ┆ ---            │
+            │ str       ┆ str           ┆ str            │
+            ╞═══════════╪═══════════════╪════════════════╡
+            │ P001      ┆ 123           ┆ 00123          │
+            │ P002      ┆ 45            ┆ 00045          │
+            │ P003      ┆ 6789          ┆ 06789          │
+            │ P004      ┆ null          ┆ null           │
+            │ P005      ┆ 1             ┆ 00001          │
+            └───────────┴───────────────┴────────────────┘
             ```
 
-        Vector example – Padding numerical components in claim codes::
+            **Vector Example: Claim Item Codes**
 
             ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
-            with pl.Config(fmt_str_lengths=100):
-                data = {
-                    "claim_batch": ["B01", "B02"],
-                    "item_codes": [["A1", "B123", "C04"], [None, "D56"]],
-                }
-                af = ActuarialFrame(data)
-                af = af.with_columns(
-                    af["item_codes"].cast(pl.List(pl.String))
-                )
-                result = af.select(
-                    af["item_codes"].str.zfill(4).alias("zfilled_item_codes")
-                )
-                print(result.collect())
+            data = {
+                "policy_id": ["P001", "P002"],
+                "item_codes": [
+                    ["A1", "B123", "C04"],
+                    ["D56"],
+                ],
+            }
+            af = ActuarialFrame(data)
+
+            af.zfilled_codes = af.item_codes.str.zfill(4)
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (2, 1)
-            ┌──────────────────────────┐
-            │ zfilled_item_codes       │
-            │ ---                      │
-            │ list[str]                │
-            ╞══════════════════════════╡
-            │ ["00A1", "B123", "0C04"] │
-            │ [null, "0D56"]           │
-            └──────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬───────────────────────┬──────────────────────────┐
+            │ policy_id ┆ item_codes            ┆ zfilled_codes            │
+            │ ---       ┆ ---                   ┆ ---                      │
+            │ str       ┆ list[str]             ┆ list[str]                │
+            ╞═══════════╪═══════════════════════╪══════════════════════════╡
+            │ P001      ┆ ["A1", "B123", "C04"] ┆ ["00A1", "B123", "0C04"] │
+            │ P002      ┆ ["D56"]               ┆ ["0D56"]                 │
+            └───────────┴───────────────────────┴──────────────────────────┘
             ```
         """
         return self._call_string_method("zfill", length=length)
 
-    def ljust(self, width: int, fill_char: str = " ") -> "ExpressionProxy":
+    def ljust(self, width: int, fill_char: str = " ") -> ExpressionProxy:
         """Left-align strings by padding on the right.
 
         Strings shorter than ``width`` are padded on the right with ``fill_char``.
@@ -1760,70 +1568,66 @@ class StringNamespaceProxy:
                 end.
 
         Examples:
-            **Scalar example – fixed-width account codes**
+            **Scalar Example: Account Codes**
 
             ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
-            with pl.Config(fmt_str_lengths=100):
-                data = {"account_code": ["A1", "B123", None, "C"]}
-                af = ActuarialFrame(data)
-                af_ljust = af.select(
-                    af["account_code"].str.ljust(6, "-").alias("ljust_code")
-                )
-                print(af_ljust.collect())
+            data = {
+                "policy_id": ["P001", "P002", "P003", "P004"],
+                "account_code": ["A1", "B123", None, "C"],
+            }
+            af = ActuarialFrame(data)
+
+            af.ljust_code = af.account_code.str.ljust(6, "-")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (4, 1)
-            ┌────────────┐
-            │ ljust_code │
-            │ ---        │
-            │ str        │
-            ╞════════════╡
-            │ A1----     │
-            │ B123--     │
-            │ null       │
-            │ C-----     │
-            └────────────┘
+            shape: (4, 3)
+            ┌───────────┬──────────────┬────────────┐
+            │ policy_id ┆ account_code ┆ ljust_code │
+            │ ---       ┆ ---          ┆ ---        │
+            │ str       ┆ str          ┆ str        │
+            ╞═══════════╪══════════════╪════════════╡
+            │ P001      ┆ A1           ┆ A1----     │
+            │ P002      ┆ B123         ┆ B123--     │
+            │ P003      ┆ null         ┆ null       │
+            │ P004      ┆ C            ┆ C-----     │
+            └───────────┴──────────────┴────────────┘
             ```
 
-            **Vector example – padding elements in a list column**
+            **Vector Example: Sub Codes**
 
             ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
+            from gaspatchio_core import ActuarialFrame
 
-            with pl.Config(fmt_str_lengths=100):
-                data_list = {
-                    "batch_id": ["X01"],
-                    "sub_codes": [["S1", "LONGCODE", "S23"]],
-                }
-                af_list = ActuarialFrame(data_list)
-                af_list = af_list.with_columns(
-                    af_list["sub_codes"].cast(pl.List(pl.String))
-                )
-                af_list_ljust = af_list.select(
-                    af_list["sub_codes"].str.ljust(8, "X").alias("ljust_sub_codes")
-                )
-                print(af_list_ljust.collect())
+            data = {
+                "policy_id": ["P001"],
+                "sub_codes": [["S1", "LONGCODE", "S23"]],
+            }
+            af = ActuarialFrame(data)
+
+            af.ljust_sub_codes = af.sub_codes.str.ljust(8, "X")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (1, 1)
-            ┌──────────────────────────────────────┐
-            │ ljust_sub_codes                      │
-            │ ---                                  │
-            │ list[str]                            │
-            ╞══════════════════════════════════════╡
-            │ ["S1XXXXXX", "LONGCODE", "S23XXXXX"] │
-            └──────────────────────────────────────┘
+            shape: (1, 3)
+            ┌───────────┬───────────────────────────┬──────────────────────────────────────┐
+            │ policy_id ┆ sub_codes                 ┆ ljust_sub_codes                      │
+            │ ---       ┆ ---                       ┆ ---                                  │
+            │ str       ┆ list[str]                 ┆ list[str]                            │
+            ╞═══════════╪═══════════════════════════╪══════════════════════════════════════╡
+            │ P001      ┆ ["S1", "LONGCODE", "S23"] ┆ ["S1XXXXXX", "LONGCODE", "S23XXXXX"] │
+            └───────────┴───────────────────────────┴──────────────────────────────────────┘
             ```
         """
         return self._call_string_method("pad_end", length=width, fill_char=fill_char)
 
-    def pad_start(self, width: int, fill_char: str = " ") -> "ExpressionProxy":
+    def pad_start(self, width: int, fill_char: str = " ") -> ExpressionProxy:
         """Alias for `rjust`. Pads the start of strings (right-aligns content).
 
         Adds characters to the beginning of each string until it reaches the
@@ -1847,70 +1651,65 @@ class StringNamespaceProxy:
             start.
 
         Examples:
-            **Scalar Example: Align premium amounts in a report**
+            **Scalar Example: Premium Amounts**
+
             ```python
-            # Test with pl.Config to ensure consistent display
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
-            with pl.Config(fmt_str_lengths=100):
+            from gaspatchio_core import ActuarialFrame
 
-                data = {
-                    "premium_str": ["1200.5", "85.75", None]
-                }
-                af = ActuarialFrame(data)
-                result = af.select(
-                    af["premium_str"].str.pad_start(8, " ").alias("padded_premium")
-                )
-                print(result.collect())
+            data = {
+                "policy_id": ["P001", "P002", "P003"],
+                "premium_str": ["1200.5", "85.75", None],
+            }
+            af = ActuarialFrame(data)
+
+            af.padded_premium = af.premium_str.str.pad_start(8, " ")
+
+            print(af.collect())
             ```
 
-            ```
-            shape: (3, 1)
-            ┌────────────────┐
-            │ padded_premium │
-            │ ---            │
-            │ str            │
-            ╞════════════════╡
-            │    1200.5      │
-            │      85.75     │
-            │ null           │
-            └────────────────┘
+            ```text
+            shape: (3, 3)
+            ┌───────────┬─────────────┬────────────────┐
+            │ policy_id ┆ premium_str ┆ padded_premium │
+            │ ---       ┆ ---         ┆ ---            │
+            │ str       ┆ str         ┆ str            │
+            ╞═══════════╪═════════════╪════════════════╡
+            │ P001      ┆ 1200.5      ┆   1200.5       │
+            │ P002      ┆ 85.75       ┆    85.75       │
+            │ P003      ┆ null        ┆ null           │
+            └───────────┴─────────────┴────────────────┘
             ```
 
-            **Vector Example: Pad rider codes stored as a list**
+            **Vector Example: Rider Codes**
+
             ```python
-            # Test with pl.Config to ensure consistent display
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
-            with pl.Config(fmt_str_lengths=100):
+            from gaspatchio_core import ActuarialFrame
 
-                data_list = {
-                    "policy_id": ["P01"],
-                    "rider_codes": [["RID1", "LONGRID", "R2"]]
-                }
-                af_list = ActuarialFrame(data_list).with_columns(
-                    pl.col("rider_codes").cast(pl.List(pl.String))
-                )
-                result = af_list.select(
-                    af_list["rider_codes"].str.pad_start(8, "0").alias("padded_rider_codes")
-                )
-                print(result.collect())
+            data = {
+                "policy_id": ["P001"],
+                "rider_codes": [["RID1", "LONGRID", "R2"]],
+            }
+            af = ActuarialFrame(data)
+
+            af.padded_codes = af.rider_codes.str.pad_start(8, "0")
+
+            print(af.collect())
             ```
 
-            ```
-            shape: (1, 1)
-            ┌──────────────────────────────────────────┐
-            │ padded_rider_codes                       │
-            │ ---                                      │
-            │ list[str]                                │
-            ╞══════════════════════════════════════════╡
-            │ ["0000RID1", "0LONGRID", "000000R2"]     │
-            └──────────────────────────────────────────┘
+            ```text
+            shape: (1, 3)
+            ┌───────────┬───────────────────────────┬──────────────────────────────────────┐
+            │ policy_id ┆ rider_codes               ┆ padded_codes                         │
+            │ ---       ┆ ---                       ┆ ---                                  │
+            │ str       ┆ list[str]                 ┆ list[str]                            │
+            ╞═══════════╪═══════════════════════════╪══════════════════════════════════════╡
+            │ P001      ┆ ["RID1", "LONGRID", "R2"] ┆ ["0000RID1", "0LONGRID", "000000R2"] │
+            └───────────┴───────────────────────────┴──────────────────────────────────────┘
             ```
         """
         return self.rjust(width=width, fill_char=fill_char)
 
-    def rjust(self, width: int, fill_char: str = " ") -> "ExpressionProxy":
+    def rjust(self, width: int, fill_char: str = " ") -> ExpressionProxy:
         """Right-align strings by padding on the left.
 
         Strings shorter than ``width`` are padded on the left with ``fill_char``.
@@ -1932,66 +1731,65 @@ class StringNamespaceProxy:
                 start.
 
         Examples:
-            **Scalar example – formatting premium amounts**
-            ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            **Scalar Example: Premium Amounts**
 
-            data = {"premium_str": ["123.45", "7", None]}
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {
+                "policy_id": ["P001", "P002", "P003"],
+                "premium_str": ["123.45", "7", None],
+            }
             af = ActuarialFrame(data)
-            af_rjust = af.select(
-                af["premium_str"].str.rjust(8).alias("rjust_premium")
-            )
-            with pl.Config(fmt_str_lengths=100, tbl_width_chars=100):
-                print(af_rjust.collect())
+
+            af.rjust_premium = af.premium_str.str.rjust(8)
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (3, 1)
-            ┌───────────────┐
-            │ rjust_premium │
-            │ ---           │
-            │ str           │
-            ╞═══════════════╡
-            │   123.45      │
-            │        7      │
-            │ null          │
-            └───────────────┘
+            shape: (3, 3)
+            ┌───────────┬─────────────┬───────────────┐
+            │ policy_id ┆ premium_str ┆ rjust_premium │
+            │ ---       ┆ ---         ┆ ---           │
+            │ str       ┆ str         ┆ str           │
+            ╞═══════════╪═════════════╪═══════════════╡
+            │ P001      ┆ 123.45      ┆   123.45      │
+            │ P002      ┆ 7           ┆        7      │
+            │ P003      ┆ null        ┆ null          │
+            └───────────┴─────────────┴───────────────┘
             ```
 
-            **Vector example – aligning claim references**
-            ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+            **Vector Example: Claim References**
 
-            data_list = {
-                "batch_id": ["B100"],
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {
+                "policy_id": ["P001"],
                 "claim_refs": [["C1", "C234", "C56789"]],
             }
-            af_list = ActuarialFrame(data_list).with_columns(
-                pl.col("claim_refs").cast(pl.List(pl.String))
-            )
-            result = af_list.select(
-                af_list["claim_refs"].str.rjust(6, "0").alias("formatted_refs")
-            )
-            with pl.Config(fmt_str_lengths=100, tbl_width_chars=100):
-                print(result.collect())
+            af = ActuarialFrame(data)
+
+            af.formatted_refs = af.claim_refs.str.rjust(6, "0")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (1, 1)
-            ┌────────────────────────────────┐
-            │ formatted_refs                 │
-            │ ---                            │
-            │ list[str]                      │
-            ╞════════════════════════════════╡
-            │ ["0000C1", "00C234", "C56789"] │
-            └────────────────────────────────┘
+            shape: (1, 3)
+            ┌───────────┬──────────────────────────┬────────────────────────────────┐
+            │ policy_id ┆ claim_refs               ┆ formatted_refs                 │
+            │ ---       ┆ ---                      ┆ ---                            │
+            │ str       ┆ list[str]                ┆ list[str]                      │
+            ╞═══════════╪══════════════════════════╪════════════════════════════════╡
+            │ P001      ┆ ["C1", "C234", "C56789"] ┆ ["0000C1", "00C234", "C56789"] │
+            └───────────┴──────────────────────────┴────────────────────────────────┘
             ```
         """
         return self._call_string_method("pad_start", length=width, fill_char=fill_char)
 
-    def pad_end(self, width: int, fill_char: str = " ") -> "ExpressionProxy":
+    def pad_end(self, width: int, fill_char: str = " ") -> ExpressionProxy:
         """Left-align strings by padding on the right.
 
         Strings shorter than ``width`` are padded on the right with ``fill_char``.
@@ -2013,63 +1811,65 @@ class StringNamespaceProxy:
                 end.
 
         Examples:
-            **Scalar example – fixed-width policy codes**
-            ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
-            with pl.Config(fmt_str_lengths=100):
+            **Scalar Example: Policy Codes**
 
-                data = {"policy_code": ["L101", "L20", None]}
-                af = ActuarialFrame(data)
-                result = af.select(
-                    af["policy_code"].str.pad_end(6, "0").alias("fixed_length_code")
-                )
-                print(result.collect())
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {
+                "policy_id": ["P001", "P002", "P003"],
+                "policy_code": ["L101", "L20", None],
+            }
+            af = ActuarialFrame(data)
+
+            af.fixed_length_code = af.policy_code.str.pad_end(6, "0")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (3, 1)
-            ┌───────────────────┐
-            │ fixed_length_code │
-            │ ---               │
-            │ str               │
-            ╞═══════════════════╡
-            │ L10100            │
-            │ L20000            │
-            │ null              │
-            └───────────────────┘
+            shape: (3, 3)
+            ┌───────────┬─────────────┬───────────────────┐
+            │ policy_id ┆ policy_code ┆ fixed_length_code │
+            │ ---       ┆ ---         ┆ ---               │
+            │ str       ┆ str         ┆ str               │
+            ╞═══════════╪═════════════╪═══════════════════╡
+            │ P001      ┆ L101        ┆ L10100            │
+            │ P002      ┆ L20         ┆ L20000            │
+            │ P003      ┆ null        ┆ null              │
+            └───────────┴─────────────┴───────────────────┘
             ```
 
-            **Vector example – padding claim codes in a list**
-            ```python
-            import polars as pl
-            from gaspatchio_core.frame.base import ActuarialFrame
-            with pl.Config(fmt_str_lengths=100):
+            **Vector Example: Claim Codes**
 
-                data_list = {"batch_id": ["B200"], "claim_codes": [["A1", "XYZ", "C1234"]]}
-                af_list = ActuarialFrame(data_list).with_columns(
-                    pl.col("claim_codes").cast(pl.List(pl.String))
-                )
-                result = af_list.select(
-                    af_list["claim_codes"].str.pad_end(6, "_").alias("aligned_codes")
-                )
-                print(result.collect())
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {
+                "policy_id": ["P001"],
+                "claim_codes": [["A1", "XYZ", "C1234"]],
+            }
+            af = ActuarialFrame(data)
+
+            af.aligned_codes = af.claim_codes.str.pad_end(6, "_")
+
+            print(af.collect())
             ```
 
             ```text
-            shape: (1, 1)
-            ┌────────────────────────────────┐
-            │ aligned_codes                  │
-            │ ---                            │
-            │ list[str]                      │
-            ╞════════════════════════════════╡
-            │ ["A1____", "XYZ___", "C1234_"] │
-            └────────────────────────────────┘
+            shape: (1, 3)
+            ┌───────────┬────────────────────────┬────────────────────────────────┐
+            │ policy_id ┆ claim_codes            ┆ aligned_codes                  │
+            │ ---       ┆ ---                    ┆ ---                            │
+            │ str       ┆ list[str]              ┆ list[str]                      │
+            ╞═══════════╪════════════════════════╪════════════════════════════════╡
+            │ P001      ┆ ["A1", "XYZ", "C1234"] ┆ ["A1____", "XYZ___", "C1234_"] │
+            └───────────┴────────────────────────┴────────────────────────────────┘
             ```
         """
         return self.ljust(width=width, fill_char=fill_char)
 
-    def starts_with(self, prefix: str | pl.Expr) -> "ExpressionProxy":
+    def starts_with(self, prefix: str | pl.Expr) -> ExpressionProxy:
         """Check if strings in a column start with a given substring.
 
         This is useful for categorizing or flagging records based on prefixes in
@@ -2103,8 +1903,15 @@ class StringNamespaceProxy:
             from gaspatchio_core.frame.base import ActuarialFrame
 
             data_policies = {
-                "policy_no": ["TERM-1001", "WL-2002", "TERM-1003", None, "UL-3004", "TERM-1004"],
-                "issue_age": [25, 30, 28, 45, 35, 40]
+                "policy_no": [
+                    "TERM-1001",
+                    "WL-2002",
+                    "TERM-1003",
+                    None,
+                    "UL-3004",
+                    "TERM-1004",
+                ],
+                "issue_age": [25, 30, 28, 45, 35, 40],
             }
             af = ActuarialFrame(data_policies)
 
@@ -2170,7 +1977,7 @@ class StringNamespaceProxy:
         """
         return self._call_string_method("starts_with", prefix=prefix)
 
-    def ends_with(self, suffix: str | pl.Expr) -> "ExpressionProxy":
+    def ends_with(self, suffix: str | pl.Expr) -> ExpressionProxy:
         """Check if strings end with a specific substring.
 
         This method returns a boolean expression showing whether each string
@@ -2199,9 +2006,9 @@ class StringNamespaceProxy:
             ```python
             from gaspatchio_core.frame.base import ActuarialFrame
 
-            af = ActuarialFrame({
-                "policy_id": ["P100-US", "P101-CA", "P102-US", None, "P103-EU"]
-            })
+            af = ActuarialFrame(
+                {"policy_id": ["P100-US", "P101-CA", "P102-US", None, "P103-EU"]}
+            )
             result = af.select(
                 af["policy_id"].str.ends_with("-US").alias("is_us_policy")
             )
@@ -2262,7 +2069,7 @@ class StringNamespaceProxy:
         """
         return self._call_string_method("ends_with", suffix=suffix)
 
-    def __getattr__(self, name: str) -> Callable[..., "ExpressionProxy"]:
+    def __getattr__(self, name: str) -> Callable[..., ExpressionProxy]:
         """Dynamically handle calls to Polars string methods not explicitly defined.
 
         This allows the proxy to support any method available on Polars' str namespace
@@ -2279,13 +2086,14 @@ class StringNamespaceProxy:
             AttributeError: If the method does not exist on the Polars string namespace
                             (this is typically raised by `_call_string_method`), or if
                             a dunder method (e.g. `__repr__`) is accessed that isn't defined.
+
         """
         if name.startswith("__") and name.endswith("__"):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute '{name}'"
             )
 
-        def dynamic_method_caller(*args: Any, **kwargs: Any) -> "ExpressionProxy":
+        def dynamic_method_caller(*args: Any, **kwargs: Any) -> ExpressionProxy:
             return self._call_string_method(name, *args, **kwargs)
 
         return dynamic_method_caller
@@ -2294,15 +2102,15 @@ class StringNamespaceProxy:
 
     def strptime(
         self,
-        dtype: "PolarsTemporalType",
-        format: Optional[str] = None,
+        dtype: PolarsTemporalType,
+        format: str | None = None,
         *,
         strict: bool = True,
         exact: bool = True,
         cache: bool = True,
         ambiguous: str | pl.Expr = "raise",
         **kwargs: Any,  # Capture additional kwargs like time_unit, time_zone
-    ) -> "ExpressionProxy":
+    ) -> ExpressionProxy:
         """Convert string values to Date, Datetime, or Time.
 
         This method parses textual date or time information into Polars temporal
@@ -2340,17 +2148,19 @@ class StringNamespaceProxy:
 
             data = {
                 "policy_id": ["A100", "B200", "C300"],
-                "issue_date_str": [
-                    "2021-01-15",
-                    "20/02/2022",
-                    "2023-03-10 14:30:00"
-                ]
+                "issue_date_str": ["2021-01-15", "20/02/2022", "2023-03-10 14:30:00"],
             }
             af = ActuarialFrame(data)
             af_parsed_dates = af.select(
-                af["issue_date_str"].str.strptime(pl.Date, "%Y-%m-%d", strict=False).alias("issue_date_strict_fmt"),
-                af["issue_date_str"].str.strptime(pl.Date, "%d/%m/%Y", strict=False).alias("issue_date_dmy_fmt"),
-                af["issue_date_str"].str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False).alias("issue_datetime"),
+                af["issue_date_str"]
+                .str.strptime(pl.Date, "%Y-%m-%d", strict=False)
+                .alias("issue_date_strict_fmt"),
+                af["issue_date_str"]
+                .str.strptime(pl.Date, "%d/%m/%Y", strict=False)
+                .alias("issue_date_dmy_fmt"),
+                af["issue_date_str"]
+                .str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False)
+                .alias("issue_datetime"),
             )
             result = af_parsed_dates.collect()
             print(result)
@@ -2422,167 +2232,150 @@ class StringNamespaceProxy:
 
         return self._call_string_method("strptime", **kwargs_for_polars_strptime)
 
-    def extract(self, pattern: str, group_index: int = 1) -> "ExpressionProxy":
-        """Extract a capturing group from a regex pattern.
+    def extract(self, pattern: str, group_index: int = 1) -> ExpressionProxy:
+        r"""Extract a capturing group from a regex pattern.
 
-        This method returns the specified group from each string that matches
-        ``pattern``. It operates element-wise on list columns, making it ideal
-        for pulling identifiers or amounts embedded in free-text fields.
+        Return group ``group_index`` from each string that matches ``pattern``.
+        Works element-wise on ``List[String]`` columns.
 
         !!! note "When to use"
-            *   Retrieve policy or claim numbers from combined identifiers or
-                descriptive text
-            *   Capture monetary amounts from claim notes for validation
-            *   Isolate classification codes embedded within longer strings
+            * **Identifiers**: Pull policy/claim numbers from mixed strings.
+            * **Amounts**: Capture monetary values from notes for validation.
 
         Args:
-            pattern: The regex pattern with capturing groups.
-            group_index: The 1-based index of the group to extract.
+            pattern: Regex with the desired capturing group.
+            group_index: 1-based index of the group to extract.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` containing the extracted group.
+            ExpressionProxy
 
         Examples:
-            **Scalar Example: Extracting policy numbers from combined IDs**
-            ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
+        **Scalar example: extract policy number**
 
-            data = {
-                "full_id": ["POLICY-12345-AB", "CLAIM-67890-CD", "POLICY-ABCDE-FG"],
-            }
-            af = ActuarialFrame(data)
-            af_extracted = af.select(
-                af["full_id"].str.extract(r"POLICY-([A-Z0-9]+)-.*", group_index=1).alias("policy_num")
-            )
-            print(af_extracted.collect())
-            ```
+        ```python
+        from gaspatchio_core import ActuarialFrame
 
-            ```text
-            shape: (3, 1)
-            ┌────────────┐
-            │ policy_num │
-            │ ---        │
-            │ str        │
-            ╞════════════╡
-            │ 12345      │
-            │ null       │
-            │ ABCDE      │
-            └────────────┘
-            ```
+        data = {"policy_id": ["P1", "P2"], "raw": ["POL-12345-AB", "CLAIM-678-X"]}
+        af = ActuarialFrame(data)
 
-            **Vector Example: Extracting amounts from transaction descriptions**
-            ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            data_list = {
-                "policy_id": ["P001"],
-                "transactions": ["Premium paid: $100.50, Fee: $10.00, Adjustment: $-5.25"],
-            }
-            af_list = ActuarialFrame(data_list)
-            af_list = af_list.with_columns(
-                af_list["transactions"].str.split(", ").alias("transactions")
-            )
-            af_list_extracted = af_list.select(
-                af_list["transactions"].str.extract(r"\\$?([-+]?[0-9]+\\.[0-9]{2})", group_index=1).alias("amounts_str")
-            )
-            print(af_list_extracted.collect())
-            ```
+        af.policy_num = af.raw.str.extract(r"POL-([A-Z0-9]+)-", group_index=1)
 
-            ```text
-            shape: (1, 1)
-            ┌──────────────────────────────┐
-            │ amounts_str                  │
-            │ ---                          │
-            │ list[str]                    │
-            ╞══════════════════════════════╡
-            │ ["100.50", "10.00", "-5.25"] │
-            └──────────────────────────────┘
-            ```
+        print(af.select(af.policy_num).collect())
+        ```
+
+        ```text
+        shape: (2, 1)
+        ┌────────────┐
+        │ policy_num │
+        │ ---        │
+        │ str        │
+        ╞════════════╡
+        │ 12345      │
+        │ null       │
+        └────────────┘
+        ```
+
+        **Vector example: extract amounts from list of notes**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P1"],
+            "txn": [["Premium $100.50", "Fee $10.00", "Adj $-5.25"]],
+        }
+        af = ActuarialFrame(data)
+
+        af.amounts = af.txn.str.extract(r"\$?([-+]?[0-9]+\.[0-9]{2})", group_index=1)
+
+        print(af.select(af.amounts).collect())
+        ```
+
+        ```text
+        shape: (1, 1)
+        ┌──────────────────────────────┐
+        │ amounts                      │
+        │ ---                          │
+        │ list[str]                    │
+        ╞══════════════════════════════╡
+        │ ["100.50", "10.00", "-5.25"] │
+        └──────────────────────────────┘
+        ```
         """
         return self._call_string_method(
             "extract", pattern=pattern, group_index=group_index
         )
 
-    def extract_all(self, pattern: str) -> "ExpressionProxy":
+    def extract_all(self, pattern: str) -> ExpressionProxy:
         r"""Extract all non-overlapping regex matches as a list.
 
-        Mirrors Polars' `Expr.str.extract_all`. For `List[String]` columns, the
-        extraction is applied element-wise.
+        Works element-wise on ``List[String]`` columns.
 
         Args:
-            pattern: The regex pattern to search for.
+            pattern: Regex pattern to search for.
 
         Returns:
-            ExpressionProxy: An `ExpressionProxy` containing a list of all
-                matches for each row.
+            ExpressionProxy
 
         !!! note "When to use"
-            * Collect every monetary amount mentioned in claim notes for
-              validation against the claim ledger.
-            * Extract all policy reference numbers from free-text fields when
-              reconciling cross-policy transactions.
-            * Gather every ICD code from a medical report to determine claim
-              triggers.
-            * Capture all state abbreviations from an address string when
-              assessing geographical concentration risk.
+            * **Amounts**: Collect every currency amount from notes.
+            * **IDs**: Gather all reference numbers embedded in text.
 
         Examples:
-            **Scalar example – Extracting amounts from claim descriptions**
+        **Scalar example: amounts in claim descriptions**
 
-            ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
+        ```python
+        from gaspatchio_core import ActuarialFrame
 
-            data = {
-                "claim_id": ["C1", "C2"],
-                "details": ["Paid $150.00 and $25.50 fee", "Refunded $10.00"]
-            }
-            af = ActuarialFrame(data)
-            af_amounts = af.select(
-                af["details"].str.extract_all(r"\$([0-9]+\.[0-9]{2})").alias("amounts")
-            )
-            print(af_amounts.collect())
-            ```
+        data = {
+            "claim_id": ["C1", "C2"],
+            "details": ["Paid $150.00 and $25.50 fee", "Refunded $10.00"],
+        }
+        af = ActuarialFrame(data)
 
-            ```text
-            shape: (2, 1)
-            ┌───────────────────────┐
-            │ amounts               │
-            │ ---                   │
-            │ list[str]             │
-            ╞═══════════════════════╡
-            │ ["$150.00", "$25.50"] │
-            │ ["$10.00"]            │
-            └───────────────────────┘
-            ```
+        af.amounts = af.details.str.extract_all(r"\$[0-9]+\.[0-9]{2}")
 
-            **Vector example – Extracting policy numbers from lists of notes**
+        print(af.select(af.amounts).collect())
+        ```
 
-            ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
+        ```text
+        shape: (2, 1)
+        ┌───────────────────────┐
+        │ amounts               │
+        │ ---                   │
+        │ list[str]             │
+        ╞═══════════════════════╡
+        │ ["$150.00", "$25.50"] │
+        │ ["$10.00"]            │
+        └───────────────────────┘
+        ```
 
-            notes = {
-                "claim_id": ["C1"],
-                "notes": ["Policy 12345 reported, Adjustment for policy 98765"]
-            }
-            af = ActuarialFrame(notes)
-            af_list = af.with_columns(
-                af["notes"].str.split(", ").alias("notes")
-            )
-            result = af_list.select(
-                af_list["notes"].str.extract_all(r"[0-9]+").alias("policy_numbers")
-            )
-            print(result.collect())
-            ```
+        **Vector example: policy numbers from list of notes**
 
-            ```text
-            shape: (1, 1)
-            ┌────────────────────────┐
-            │ policy_numbers         │
-            │ ---                    │
-            │ list[list[str]]        │
-            ╞════════════════════════╡
-            │ [["12345"], ["98765"]] │
-            └────────────────────────┘
-            ```
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P1"],
+            "notes": [["Policy 12345 reported", "Adjustment for policy 98765"]],
+        }
+        af = ActuarialFrame(data)
+
+        af.policy_numbers = af.notes.str.extract_all(r"[0-9]+")
+
+        print(af.select(af.policy_numbers).collect())
+        ```
+
+        ```text
+        shape: (1, 1)
+        ┌────────────────────────┐
+        │ policy_numbers         │
+        │ ---                    │
+        │ list[list[str]]        │
+        ╞════════════════════════╡
+        │ [["12345"], ["98765"]] │
+        └────────────────────────┘
+        ```
         """
         return self._call_string_method("extract_all", pattern=pattern)
 
@@ -2592,107 +2385,90 @@ class StringNamespaceProxy:
         value: str | pl.Expr,
         literal: bool = False,
         n: int = 1,
-    ) -> "ExpressionProxy":
+    ) -> ExpressionProxy:
         """Replace occurrences of a pattern in each string.
 
-        This method searches every string in the column for a given substring or
-        regular expression pattern and replaces the first ``n`` matches with the
-        provided ``value``. When ``literal`` is ``True`` the ``pattern`` is
-        treated as a plain string; otherwise it is interpreted as a regex.
+        Search each string for a substring or regex and replace up to ``n``
+        matches with ``value``. If ``literal`` is ``True`` the ``pattern`` is
+        treated as plain text; otherwise it is interpreted as a regex.
 
         !!! note "When to use"
-            *   **Updating Legacy Codes:** Converting outdated product or policy
-                codes to a new standard so assumption tables align across
-                systems.
-            *   **Cleaning Free-Text Fields:** Removing or altering specific
-                phrases in underwriting or claim notes prior to text analysis.
-            *   **Normalizing Reference Data:** Adjusting naming conventions in
-                data feeds before merging them with internal models.
+            * **Normalize legacy codes**: Map outdated product/policy codes to
+              your current standard before joining to assumptions.
+            * **Clean underwriting/claim notes**: Remove boilerplate prefixes
+              or redact sensitive fragments prior to text analysis.
+            * **Harmonize reference data**: Align naming conventions across
+              multiple admin systems before aggregation.
 
         Args:
             pattern: Substring or regex pattern to search for. May also be a
                 Polars expression yielding the pattern.
             value: Replacement text. Can be a string or a Polars expression.
-            literal: If ``True``, ``pattern`` is treated as a literal string.
-            n: Maximum number of replacements per string. Defaults to ``1``.
+            literal: If ``True``, treat ``pattern`` as a literal string.
+            n: Maximum number of replacements per string (default ``1``).
 
         Returns:
-            ExpressionProxy: A new expression with the specified replacements
-            applied.
+            ExpressionProxy
+                Expression with the specified replacements applied.
 
         Examples:
-            **Scalar Example: Normalizing policy status descriptions**
+        --------
+        **Scalar example: normalize policy status**
 
-            Scenario: Some policy statuses contain the phrase ``"IN FORCE"``.
-            Replace it with ``"INFORCE"`` for consistency.
+        ```python
+        from gaspatchio_core import ActuarialFrame
 
-            ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
+        data = {
+            "policy_id": ["P1", "P2", "P3"],
+            "status_raw": ["IN FORCE", "LAPSED", "IN FORCE"],
+        }
+        af = ActuarialFrame(data)
 
-            data = {
-                "policy_id": ["P1", "P2", "P3"],
-                "status_raw": ["IN FORCE", "LAPSED", "IN FORCE"],
-            }
-            af = ActuarialFrame(data)
-            af_clean = af.select(
-                af["status_raw"].str.replace("IN FORCE", "INFORCE", literal=True).alias("status")
-            )
-            print(af_clean.collect())
-            ```
+        af.status = af.status_raw.str.replace("IN FORCE", "INFORCE", literal=True)
 
-            ```text
-            shape: (3, 1)
-            ┌─────────┐
-            │ status  │
-            │ ---     │
-            │ str     │
-            ╞═════════╡
-            │ INFORCE │
-            │ LAPSED  │
-            │ INFORCE │
-            └─────────┘
-            ```
+        print(af.collect())
+        ```
 
-            **Vector Example: Removing 'NOTE: ' from lists of claim notes**
+        ```text
+        shape: (3, 3)
+        ┌───────────┬────────────┬─────────┐
+        │ policy_id ┆ status_raw ┆ status  │
+        │ ---       ┆ ---        ┆ ---     │
+        │ str       ┆ str        ┆ str     │
+        ╞═══════════╪════════════╪═════════╡
+        │ P1        ┆ IN FORCE   ┆ INFORCE │
+        │ P2        ┆ LAPSED     ┆ LAPSED  │
+        │ P3        ┆ IN FORCE   ┆ INFORCE │
+        └───────────┴────────────┴─────────┘
+        ```
 
-            Scenario: Each policy has a list of claim notes and some entries
-            start with ``"NOTE: "``. Remove this prefix from each note.
+        **Vector example: remove "NOTE: " from claim notes**
 
-            ```python
-            from gaspatchio_core.frame.base import ActuarialFrame
-            import polars as pl
+        ```python
+        from gaspatchio_core import ActuarialFrame
 
-            notes_data = {
-                "policy_id": ["A1", "A2"],
-                "claim_notes_str": [
-                    "NOTE: Initial review,Payment authorised",
-                    "None,NOTE: Follow up required",
-                ],
-            }
-            af_notes = ActuarialFrame(notes_data)
-            af_notes = af_notes.with_columns(
-                af_notes["claim_notes_str"].str.split(",").alias("claim_notes").map_elements(
-                    lambda x: [None if item == "None" else item for item in x], return_dtype=pl.List(pl.String)
-                )
-            )
-            af_clean_notes = af_notes.select(
-                af_notes["claim_notes"].str.replace("NOTE: ", "", literal=True, n=1).alias("clean_notes")
-            )
-            result = af_clean_notes.collect()
-            print(result)
-            ```
+        data = {
+            "policy_id": ["A1", "A2"],
+            "claim_notes": [["NOTE: Initial review", "Payment authorised"], [None, "NOTE: Follow up required"]],
+        }
+        af = ActuarialFrame(data)
 
-            ```text
-            shape: (2, 1)
-            ┌──────────────────────────────────────────┐
-            │ clean_notes                               │
-            │ ---                                      │
-            │ list[str]                                │
-            ╞══════════════════════════════════════════╡
-            │ ["Initial review", "Payment authorised"] │
-            │ [null, "Follow up required"]             │
-            └──────────────────────────────────────────┘
-            ```
+        af.clean_notes = af.claim_notes.str.replace("NOTE: ", "", literal=True, n=1)
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬────────────────────────────────────────────────┬──────────────────────────────────────────┐
+        │ policy_id ┆ claim_notes                                    ┆ clean_notes                              │
+        │ ---       ┆ ---                                            ┆ ---                                      │
+        │ str       ┆ list[str]                                      ┆ list[str]                                │
+        ╞═══════════╪════════════════════════════════════════════════╪══════════════════════════════════════════╡
+        │ A1        ┆ ["NOTE: Initial review", "Payment authorised"] ┆ ["Initial review", "Payment authorised"] │
+        │ A2        ┆ [null, "NOTE: Follow up required"]             ┆ [null, "Follow up required"]             │
+        └───────────┴────────────────────────────────────────────────┴──────────────────────────────────────────┘
+        ```
         """
         return self._call_string_method(
             "replace", pattern=pattern, value=value, literal=literal, n=n
@@ -2700,15 +2476,15 @@ class StringNamespaceProxy:
 
     def replace_all(
         self, pattern: str | pl.Expr, value: str | pl.Expr, literal: bool = False
-    ) -> "ExpressionProxy":
+    ) -> ExpressionProxy:
         return self._call_string_method(
             "replace_all", pattern=pattern, value=value, literal=literal
         )
 
-    def split(self, by: str | pl.Expr, inclusive: bool = False) -> "ExpressionProxy":
+    def split(self, by: str | pl.Expr, inclusive: bool = False) -> ExpressionProxy:
         return self._call_string_method("split", by=by, inclusive=inclusive)
 
     def slice(
-        self, offset: int | pl.Expr, length: Optional[int | pl.Expr] = None
-    ) -> "ExpressionProxy":
+        self, offset: int | pl.Expr, length: int | pl.Expr | None = None
+    ) -> ExpressionProxy:
         return self._call_string_method("slice", offset=offset, length=length)

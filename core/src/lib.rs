@@ -1,4 +1,5 @@
 pub mod assumptions;
+pub mod excel;
 pub mod polars_functions;
 
 pub use assumptions::{

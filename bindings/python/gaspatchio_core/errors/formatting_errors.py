@@ -677,7 +677,7 @@ def _handle_compilation_error(frame: ActuarialFrame, e: Exception):
         enhanced_msg = f"""
 ❌ Query compilation failed during optimization
 
-Failed operation: {operation_name or "query optimization"}
+Failed operation: query optimization
 
 💡 Polars compilation error:
 {error_msg}

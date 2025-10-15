@@ -1,7 +1,7 @@
 """Accessors for Excel-related operations on ActuarialFrame columns/expressions."""
 
 import datetime
-from typing import TYPE_CHECKING, Dict, Literal, Union
+from typing import TYPE_CHECKING, Literal, Union
 
 import polars as pl
 
@@ -21,37 +21,21 @@ if TYPE_CHECKING:
 
 # Define Excel basis constants
 BasisType = Union[
+    Literal[
+        0,
+        1,
+        2,
+        3,
+        4,
+        "us_nasd_30_360",
+        "act/act",
+        "actual/360",
+        "actual/365",
+        "european_30_360",
+    ],
     int,
     str,
-    Literal[0, 1, 2, 3, 4],
-    Literal["us_nasd_30_360", "act/act", "actual/360", "actual/365", "european_30_360"],
 ]
-
-# Map between Excel's numeric basis and string representation
-BASIS_MAP: Dict[Union[int, str], str] = {
-    0: "us_nasd_30_360",
-    "0": "us_nasd_30_360",
-    "us_nasd_30_360": "us_nasd_30_360",
-    "30/360": "us_nasd_30_360",
-    "30/360 US": "us_nasd_30_360",
-    1: "act/act",
-    "1": "act/act",
-    "act/act": "act/act",
-    "actual/actual": "act/act",
-    2: "actual/360",
-    "2": "actual/360",
-    "actual/360": "actual/360",
-    "act/360": "actual/360",
-    3: "actual/365",
-    "3": "actual/365",
-    "actual/365": "actual/365",
-    "act/365": "actual/365",
-    4: "european_30_360",
-    "4": "european_30_360",
-    "european_30_360": "european_30_360",
-    "30E/360": "european_30_360",
-    "30/360 EU": "european_30_360",
-}
 
 
 @register_accessor("excel", kind="frame")
@@ -64,185 +48,11 @@ class ExcelFrameAccessor(BaseFrameAccessor):
 
     def __init__(self, frame: "ActuarialFrame"):
         """Initializes the accessor with the parent ActuarialFrame.
-        
+
         Internal initialization method for the Excel frame accessor.
         """
         super().__init__(frame)
         # Placeholder for any frame-level excel methods
-
-
-def _normalize_basis(basis: BasisType) -> str:
-    """Normalize basis to a standard string representation.
-    
-    Internal helper function that converts various basis representations
-    (integer or string) to a standardized string format.
-    """
-    if basis in BASIS_MAP:
-        return BASIS_MAP[basis]
-    raise ValueError(
-        f"Invalid basis '{basis}'. Valid values are: {', '.join(sorted(set(BASIS_MAP.values())))}"
-    )
-
-
-def _adjust_date_us_nasd_30_360(
-    year: int, month: int, day: int, is_start: bool, other_day: int = None
-) -> tuple[int, int, int]:
-    """Apply US NASD 30/360 date adjustments to a date's components.
-    
-    Internal helper function that implements the US NASD 30/360 day count
-    convention date adjustment rules.
-
-    Args:
-        year: Year component
-        month: Month component (1-12)
-        day: Day component (1-31)
-        is_start: True if this is the start date, False if end date
-        other_day: The other date's day value (start day if this is end date, or vice versa)
-                  Used for certain adjustment rules
-
-    Returns:
-        Tuple of (adjusted_year, adjusted_month, adjusted_day)
-    """
-    # Make a copy of the inputs to avoid modifying the originals
-    y, m, d = year, month, day
-
-    # Check if date is the last day of February
-    is_leap_year = y % 4 == 0 and (y % 100 != 0 or y % 400 == 0)
-    days_in_month = (
-        31
-        if m in (1, 3, 5, 7, 8, 10, 12)
-        else (30 if m != 2 else (29 if is_leap_year else 28))
-    )
-    is_last_day_of_month = d == days_in_month
-    is_feb_last_day = m == 2 and is_last_day_of_month
-
-    # End-of-February rule: If date is the last day of February, set day to 30
-    if is_feb_last_day:
-        d = 30
-
-    # Start date end-of-month rule: If start date is the last day of any month, set day to 30
-    if is_start and is_last_day_of_month:
-        d = 30
-
-    # End date end-of-month rules depend on start date's day
-    if not is_start and is_last_day_of_month:
-        # If we have the start day value and it's adjusted value is < 30,
-        # Excel's behavior is complex. For consistency with the formula,
-        # we just leave d = day (which is already the last day of the month)
-        if other_day is not None and other_day < 30:
-            # Excel might conceptually treat this as the 1st of next month,
-            # but the formula handles it correctly without adjustment
-            pass
-        elif d == 31:  # Last day of a 31-day month
-            d = 30
-
-    # 31-day adjustment: After above rules, if day is still 31, set it to 30
-    if d == 31:
-        d = 30
-
-    return y, m, d
-
-
-# Helper function for the core yearfrac calculation logic
-def _compute_yearfrac_value_exprs(
-    start_date_e: pl.Expr, end_date_e: pl.Expr, basis_str: str
-) -> pl.Expr:
-    """Computes year fraction between two date expressions based on basis.
-    
-    Internal helper function that handles the core yearfrac calculation logic
-    for different day count bases using Polars expressions.
-    """
-    # Ensure inputs are cast to Date, allowing Polars to attempt conversion
-    # strict=False allows for attempted conversion of various date-like inputs.
-    s_dt = start_date_e.cast(pl.Date, strict=False)
-    e_dt = end_date_e.cast(pl.Date, strict=False)
-
-    # Normalize the basis to a standard string
-    basis_str = _normalize_basis(basis_str)
-
-    if basis_str == "act/act":
-        # Excel's Actual/Actual typically involves more complex leap year logic.
-        # This is a simplified version using 365.25 days per year.
-        days_diff = (e_dt - s_dt).dt.total_days()
-        return days_diff / 365.25  # Simplified Act/Act
-
-    elif basis_str == "us_nasd_30_360":
-        # For US NASD 30/360 (Basis 0), we need to apply special date adjustments
-        # Extract year, month, day components
-        s_year = s_dt.dt.year()
-        s_month = s_dt.dt.month()
-        s_day = s_dt.dt.day()
-
-        e_year = e_dt.dt.year()
-        e_month = e_dt.dt.month()
-        e_day = e_dt.dt.day()
-
-        # Define a struct-based function to adjust dates according to NASD rules
-        # We'll use map_elements with return_dtype to process both dates
-
-        date_struct = pl.struct(
-            [
-                s_year.alias("s_year"),
-                s_month.alias("s_month"),
-                s_day.alias("s_day"),
-                e_year.alias("e_year"),
-                e_month.alias("e_month"),
-                e_day.alias("e_day"),
-            ]
-        )
-
-        return date_struct.map_elements(
-            lambda x: _apply_us_nasd_30_360(
-                x["s_year"],
-                x["s_month"],
-                x["s_day"],
-                x["e_year"],
-                x["e_month"],
-                x["e_day"],
-            ),
-            return_dtype=pl.Float64,
-        )
-
-    # elif basis_str == "actual/360": # Basis 2
-    #     days_diff = (e_dt - s_dt).dt.total_days()
-    #     return days_diff / 360.0
-    # elif basis_str == "actual/365": # Basis 3
-    #     days_diff = (e_dt - s_dt).dt.total_days()
-    #     return days_diff / 365.0
-    # TODO: Implement other bases like "30E/360"
-    else:
-        raise NotImplementedError(
-            f"Day count basis '{basis_str}' not yet implemented. Only 'act/act' (simplified) and 'us_nasd_30_360' are supported."
-        )
-
-
-def _apply_us_nasd_30_360(s_year, s_month, s_day, e_year, e_month, e_day):
-    """
-    Apply US NASD 30/360 calculation after adjusting the dates.
-
-    This implements the formula:
-    YEARFRAC = ((D2' + 30 × M2' + 360 × Y2') - (D1' + 30 × M1' + 360 × Y1')) / 360
-
-    Where the primed values are the adjusted day, month, and year values.
-    """
-    # Skip calculation for None values
-    if any(x is None for x in [s_year, s_month, s_day, e_year, e_month, e_day]):
-        return None
-
-    # Apply US NASD 30/360 adjustments to start date
-    s_year, s_month, s_day = _adjust_date_us_nasd_30_360(s_year, s_month, s_day, True)
-
-    # Apply US NASD 30/360 adjustments to end date (passing the adjusted start day)
-    e_year, e_month, e_day = _adjust_date_us_nasd_30_360(
-        e_year, e_month, e_day, False, s_day
-    )
-
-    # Calculate the 30/360 date difference as per the formula
-    start_value = s_day + 30 * s_month + 360 * s_year
-    end_value = e_day + 30 * e_month + 360 * e_year
-
-    # Return the year fraction
-    return (end_value - start_value) / 360.0
 
 
 @register_accessor("excel", kind="column")
@@ -255,30 +65,29 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
     def __init__(self, proxy: "ColumnProxy | ExpressionProxy"):
         """Initializes the accessor with the parent proxy.
-        
+
         Internal initialization method for the Excel column accessor.
         """
         super().__init__(proxy)
-        self._proxy: "ColumnProxy | ExpressionProxy" = proxy
+        self._proxy: ColumnProxy | ExpressionProxy = proxy
 
     def _get_polars_expr(self) -> pl.Expr:
         """Helper to get the underlying Polars expression from the proxy.
-        
+
         Internal helper method that extracts the Polars expression from
         the column or expression proxy for further processing.
         """
         if hasattr(self._proxy, "_expr") and isinstance(self._proxy._expr, pl.Expr):
             return self._proxy._expr
-        elif hasattr(self._proxy, "name") and isinstance(self._proxy.name, str):
+        if hasattr(self._proxy, "name") and isinstance(self._proxy.name, str):
             return pl.col(self._proxy.name)
-        else:
-            raise TypeError(
-                f"ExcelColumnAccessor expected ColumnProxy or ExpressionProxy, got {type(self._proxy).__name__}"
-            )
+        raise TypeError(
+            f"ExcelColumnAccessor expected ColumnProxy or ExpressionProxy, got {type(self._proxy).__name__}"
+        )
 
     def _get_parent_frame(self) -> "ActuarialFrame":
         """Helper to get the parent ActuarialFrame, raising error if absent.
-        
+
         Internal helper method that retrieves the parent ActuarialFrame
         context, which is required for many Excel operations.
         """
@@ -290,7 +99,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
     def from_excel_serial(self, epoch: str = "1900") -> "ExpressionProxy":
         """Converts Excel serial numbers (integers or floats) to Polars Date.
-        
+
         Follows logic similar to openpyxl for compatibility. This method handles
         Excel's date serialization system, including the notorious Excel 1900
         leap year bug where Excel incorrectly treats 1900 as a leap year.
@@ -304,49 +113,46 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         Args:
             epoch: The epoch system used by Excel ('1900' or '1904').
                    Defaults to '1900'.
-                   
+
                    - 1900 Epoch (WINDOWS_1900_EPOCH = 1899-12-30):
-                     Serial 1 is 1900-01-01. Excel's serial 60 (phantom 1900-02-29) 
-                     is mapped to 1900-03-01. Serials > 60 are adjusted by -1 day 
+                     Serial 1 is 1900-01-01. Excel's serial 60 (phantom 1900-02-29)
+                     is mapped to 1900-03-01. Serials > 60 are adjusted by -1 day
                      before adding to epoch.
                    - 1904 Epoch (MAC_1904_EPOCH = 1904-01-01):
                      Serial 1 is 1904-01-01. Days to add from epoch are serial - 1.
 
         Returns:
             An ExpressionProxy representing the converted date column.
-            
+
         Raises:
             ValueError: If an invalid epoch is provided.
-            
+
         Examples:
             ```python
             from gaspatchio_core import ActuarialFrame
-            
-            # Excel serial numbers for some dates
+
             data = {
                 "policy_id": ["P001", "P002", "P003"],
-                "excel_date_serial": [44197, 44562, 44927],  # Excel serial numbers
+                "excel_date_serial": [44197, 44562, 44927],
             }
             af = ActuarialFrame(data)
-            
-            # Convert Excel serial numbers to proper dates
-            af_with_dates = af.with_columns(
-                actual_date=af["excel_date_serial"].excel.from_excel_serial(epoch="1900")
-            )
-            print(af_with_dates.collect())
+
+            af.actual_date = af.excel_date_serial.excel.from_excel_serial(epoch="1900")
+
+            print(af.collect())
             ```
-            
+
             ```text
             shape: (3, 3)
-            ┌───────────┬────────────────────┬─────────────┐
-            │ policy_id ┆ excel_date_serial  ┆ actual_date │
-            │ ---       ┆ ---                ┆ ---         │
-            │ str       ┆ i64                ┆ date        │
-            ╞═══════════╪════════════════════╪═════════════╡
-            │ P001      ┆ 44197              ┆ 2021-01-01  │
-            │ P002      ┆ 44562              ┆ 2021-12-31  │
-            │ P003      ┆ 44927              ┆ 2022-12-31  │
-            └───────────┴────────────────────┴─────────────┘
+            ┌───────────┬───────────────────┬─────────────┐
+            │ policy_id ┆ excel_date_serial ┆ actual_date │
+            │ ---       ┆ ---               ┆ ---         │
+            │ str       ┆ i64               ┆ date        │
+            ╞═══════════╪═══════════════════╪═════════════╡
+            │ P001      ┆ 44197             ┆ 2020-12-31  │
+            │ P002      ┆ 44562             ┆ 2021-12-31  │
+            │ P003      ┆ 44927             ┆ 2022-12-31  │
+            └───────────┴───────────────────┴─────────────┘
             ```
         """
         base_expr = self._get_polars_expr()
@@ -401,9 +207,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
         This function computes the fraction of a year represented by the number of
         whole days between a start date (the column/expression this accessor is on)
-        and an end date. It uses a specified day count basis. The function can
-        operate on individual dates (scalars or columns) and also handles scenarios
-        where one of the date inputs is a list of dates within a column.
+        and an end date. It uses a specified day count basis.
 
         !!! note "When to use"
             *   **Premium Proration**: Calculate the portion of an annual premium that corresponds to a partial policy term, for example, if a policy starts or ends mid-year.
@@ -415,31 +219,25 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         ----------
         end_date_expr : IntoExprColumn
             An expression or column representing the end dates. Can be a scalar date,
-            a column of dates, or a column of `List[Date]` if the start date is a
-            scalar/column of dates (and vice-versa).
+            a column of dates.
         basis : int or str, optional
             The day count basis to use. Can be an integer (0-4) or a string name.
             Defaults to "act/act" (which is basis 1).
 
             Supported bases:
             - `0` or `'us_nasd_30_360'` (30/360 US NASD) - US (NASD) 30/360 convention
-            - `1` or `'act/act'` (Actual/Actual) - Simplified version (uses 365.25 days)
-            - `2` or `'actual_360'` (Actual/360) - Not Implemented
-            - `3` or `'actual_365'` (Actual/365 fixed) - Not Implemented
-            - `4` or `'european_30_360'` (30/360 European) - Not Implemented
+            - `1` or `'act/act'` (Actual/Actual) - Actual/Actual convention
+            - `2` or `'actual_360'` (Actual/360) - Actual/360 convention
+            - `3` or `'actual_365'` (Actual/365 fixed) - Actual/365 convention
+            - `4` or `'european_30_360'` (30/360 European) - European 30/360 convention
 
         Returns
         -------
         ExpressionProxy
             An expression representing the calculated year fraction as a `Float64`.
-            If one of the inputs was a `List[Date]`, the output will be a `List[Float64]`.
 
         Raises
         ------
-        NotImplementedError
-            If a `basis` other than the currently supported basis values is specified,
-            or if both start and end date expressions resolve to `List[Date]` columns
-            (which requires a more complex UDF or explode/aggregate pattern).
         TypeError
             If the underlying proxy for the start date is not a `ColumnProxy` or `ExpressionProxy`.
         RuntimeError
@@ -467,14 +265,14 @@ class ExcelColumnAccessor(BaseColumnAccessor):
                 "end_date": [
                     datetime.date(2021, 1, 1),
                     datetime.date(2022, 6, 15),
-                    datetime.date(2022, 9, 1), # Partial year
+                    datetime.date(2022, 9, 1),
                 ],
             }
             af = ActuarialFrame(data)
 
-            # Calculate year fraction using 'act/act' (simplified)
-            af_with_term = af["start_date"].excel.yearfrac(af["end_date"], basis="act/act")
-            print(af_with_term.collect())
+            af.term_years = af.start_date.excel.yearfrac(af.end_date, basis="act/act")
+
+            print(af.collect())
             ```
 
             ```
@@ -484,321 +282,397 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             │ ---       ┆ ---        ┆ ---        ┆ ---        │
             │ str       ┆ date       ┆ date       ┆ f64        │
             ╞═══════════╪════════════╪════════════╪════════════╡
-            │ P001      ┆ 2020-01-01 ┆ 2021-01-01 ┆ 1.002053   │
-            │ P002      ┆ 2021-06-15 ┆ 2022-06-15 ┆ 0.999316   │
-            │ P003      ┆ 2022-03-01 ┆ 2022-09-01 ┆ 0.503765   │
+            │ P001      ┆ 2020-01-01 ┆ 2021-01-01 ┆ 1.0        │
+            │ P002      ┆ 2021-06-15 ┆ 2022-06-15 ┆ 1.0        │
+            │ P003      ┆ 2022-03-01 ┆ 2022-09-01 ┆ 0.50411    │
             └───────────┴────────────┴────────────┴────────────┘
             ```
 
-        Fractional Exposure for Multiple Claim Events from a Single Policy Start (List Operation)::
 
-            Scenario: A policy has a single start date, but multiple claim event dates.
-            Calculate the time from policy start to each claim event as a year fraction.
+        List Column Workaround::
+
+            For actuarial projections stored as list columns (e.g., monthly projection dates),
+            use the explode/group_by pattern:
 
             ```python
             import datetime
             import polars as pl
             from gaspatchio_core import ActuarialFrame
+            from gaspatchio_core.accessors.excel_functions.yearfrac import yearfrac
 
-            data = {
-                "policy_id": ["PolicyA", "PolicyB"],
-                "policy_start_date": [datetime.date(2020, 1, 1), datetime.date(2021, 1, 1)],
-                "claim_event_dates": [
-                    [datetime.date(2020, 7, 1), datetime.date(2021, 3, 15)], # Events for PolicyA
-                    [datetime.date(2021, 2, 1)],                            # Event for PolicyB
+            # Example with monthly projection dates
+            projection_data = {
+                "policy_id": ["P001", "P002"],
+                "projection_dates": [
+                    [datetime.date(2024, i, 1) for i in range(1, 13)],  # 12 monthly dates
+                    [datetime.date(2024, i, 15) for i in range(1, 13)]
                 ],
+                "maturity_date": [
+                    datetime.date(2024, 12, 31),
+                    datetime.date(2025, 1, 1)
+                ]
             }
-            # Ensure claim_event_dates is typed as List[Date]
-            af = ActuarialFrame(data, schema_overrides={"claim_event_dates": pl.List(pl.Date)})
+            af_proj = ActuarialFrame(projection_data)
 
-            af_with_frac = af.with_columns(
-                time_to_event_years = af["policy_start_date"].excel.yearfrac(af["claim_event_dates"])
+            # Calculate yearfrac for each projection date using explode/group_by
+            result = (
+                af_proj.collect()
+                .lazy()
+                .with_row_index("_idx")
+                .explode("projection_dates")
+                .with_columns(
+                    yearfrac(pl.col("projection_dates"), pl.col("maturity_date"), basis="act/act")
+                    .alias("years_to_maturity")
+                )
+                .group_by("_idx")
+                .agg([
+                    pl.col("policy_id").first(),
+                    pl.col("years_to_maturity"),
+                    pl.col("maturity_date").first()
+                ])
+                .drop("_idx")
+                .collect()
             )
-            print(af_with_frac.collect())
+            print(result)
             ```
 
             ```
-            shape: (2, 4)
-            ┌───────────┬───────────────────┬───────────────────────────────────────────┬─────────────────────────────┐
-            │ policy_id ┆ policy_start_date ┆ claim_event_dates                         ┆ time_to_event_years         │
-            │ ---       ┆ ---               ┆ ---                                       ┆ ---                         │
-            │ str       ┆ date              ┆ list[date]                                ┆ list[f64]                   │
-            ╞═══════════╪═══════════════════╪═══════════════════════════════════════════╪═════════════════════════════╡
-            │ PolicyA   ┆ 2020-01-01        ┆ [2020-07-01, 2021-03-15]                  ┆ [0.50016, 1.200046]         │
-            │ PolicyB   ┆ 2021-01-01        ┆ [2021-02-01]                              ┆ [0.084873]                  │
-            └───────────┴───────────────────┴───────────────────────────────────────────┴─────────────────────────────┘
+            shape: (2, 3)
+            ┌───────────┬──────────────────────────────────┬───────────────┐
+            │ policy_id ┆ years_to_maturity                ┆ maturity_date │
+            │ ---       ┆ ---                              ┆ ---           │
+            │ str       ┆ list[f64]                        ┆ date          │
+            ╞═══════════╪══════════════════════════════════╪═══════════════╡
+            │ P001      ┆ [0.997268, 0.912568, … 0.081967] ┆ 2024-12-31    │
+            │ P002      ┆ [0.961749, 0.877049, … 0.046575] ┆ 2025-01-01    │
+            └───────────┴──────────────────────────────────┴───────────────┘
             ```
+
+            Note: List columns are not directly supported due to Polars plugin limitations.
+            Excel 365 achieves this with dynamic arrays, but we require explicit data
+            transformation.
+
         """
-        parent_frame = self._get_parent_frame()
-        start_expr_polars = self._get_polars_expr()
-        end_expr_polars = parent_frame._convert_to_expr(end_date_expr)
+        # Import the yearfrac function from the accessor functions module
+        from .excel_functions.yearfrac import yearfrac
 
-        # Heuristic to check if inputs directly refer to list columns in the schema.
-        # Use collect_schema() to avoid PerformanceWarning
-        schema = parent_frame._df.collect_schema()
+        # Get the start expression from the proxy
+        start_expr = self._get_polars_expr()
 
-        start_is_list_col = False
-        if hasattr(self._proxy, "name") and self._proxy.name in schema:
-            col_dtype = schema[self._proxy.name]
-            if isinstance(col_dtype, pl.List) and isinstance(col_dtype.inner, pl.Date):
-                start_is_list_col = True
+        # Use the standard yearfrac implementation
+        result_expr = yearfrac(start_expr, end_date_expr, basis=basis)
 
-        end_is_list_col = False
-        if end_expr_polars.meta.is_column():  # Check if it's a simple column expression
-            end_col_name = end_expr_polars.meta.output_name()
-            if end_col_name in schema:
-                col_dtype = schema[end_col_name]
-                if isinstance(col_dtype, pl.List) and isinstance(
-                    col_dtype.inner, pl.Date
-                ):
-                    end_is_list_col = True
-
-        # Normalize basis to a standard string representation
-        try:
-            normalized_basis = _normalize_basis(basis)
-        except ValueError as e:
-            raise ValueError(f"Invalid basis: {e}")
-
-        final_year_frac_expr: pl.Expr
-
-        if start_is_list_col and not end_is_list_col:
-            # Start is List[Date], End is Date-like (scalar or column of dates)
-            # For list columns with scalar values, we use map_elements which is more flexible
-            if isinstance(end_date_expr, (datetime.date, datetime.datetime)):
-                # For Python date/datetime objects, we can use a direct approach
-                struct_expr = pl.struct([start_expr_polars.alias("start_list")])
-                if normalized_basis == "us_nasd_30_360":
-                    # Special handling for 30/360 basis
-                    final_year_frac_expr = struct_expr.map_elements(
-                        lambda x: [
-                            None
-                            if date is None
-                            else _compute_30_360_yearfrac(
-                                date.year,
-                                date.month,
-                                date.day,
-                                end_date_expr.year,
-                                end_date_expr.month,
-                                end_date_expr.day,
-                            )
-                            for date in x["start_list"]
-                        ],
-                        return_dtype=pl.List(pl.Float64),
-                    )
-                else:
-                    # Use the simple approach for act/act
-                    final_year_frac_expr = struct_expr.map_elements(
-                        lambda x: [
-                            None
-                            if date is None
-                            else (end_date_expr - date).days / 365.25
-                            for date in x["start_list"]
-                        ],
-                        return_dtype=pl.List(pl.Float64),
-                    )
-            else:
-                # For column references or expressions, we need to use struct with both values
-                struct_expr = pl.struct(
-                    [
-                        start_expr_polars.alias("start_list"),
-                        end_expr_polars.alias("end_date"),
-                    ]
-                )
-                if normalized_basis == "us_nasd_30_360":
-                    # Special handling for 30/360 basis
-                    final_year_frac_expr = struct_expr.map_elements(
-                        lambda x: [
-                            None
-                            if date is None or x["end_date"] is None
-                            else _compute_30_360_yearfrac(
-                                date.year,
-                                date.month,
-                                date.day,
-                                x["end_date"].year,
-                                x["end_date"].month,
-                                x["end_date"].day,
-                            )
-                            for date in x["start_list"]
-                        ],
-                        return_dtype=pl.List(pl.Float64),
-                    )
-                else:
-                    # Use the simple approach for act/act
-                    final_year_frac_expr = struct_expr.map_elements(
-                        lambda x: [
-                            None
-                            if date is None or x["end_date"] is None
-                            else (x["end_date"] - date).days / 365.25
-                            for date in x["start_list"]
-                        ],
-                        return_dtype=pl.List(pl.Float64),
-                    )
-        elif not start_is_list_col and end_is_list_col:
-            # Start is Date-like, End is List[Date]
-            if isinstance(end_date_expr, (datetime.date, datetime.datetime)):
-                # For Python date/datetime objects, we can use a direct approach
-                struct_expr = pl.struct([end_expr_polars.alias("end_list")])
-
-                # We need to get the date from the polars expression
-                # We can't access .year/.month/.day on a Polars expression directly
-                # Instead, we'll use map_elements where we have direct access to the actual dates
-
-                if normalized_basis == "us_nasd_30_360":
-                    # Special handling for 30/360 basis
-                    # If start_expr_polars is a literal date, extract it
-                    if hasattr(self._proxy, "_parent") and hasattr(self._proxy, "name"):
-                        # Get the value from the actual column
-                        start_col_name = self._proxy.name
-                        start_date_val = parent_frame.collect()[start_col_name][0]
-
-                        final_year_frac_expr = struct_expr.map_elements(
-                            lambda x: [
-                                None
-                                if date is None
-                                else _compute_30_360_yearfrac(
-                                    start_date_val.year,
-                                    start_date_val.month,
-                                    start_date_val.day,
-                                    date.year,
-                                    date.month,
-                                    date.day,
-                                )
-                                for date in x["end_list"]
-                            ],
-                            return_dtype=pl.List(pl.Float64),
-                        )
-                    else:
-                        # Generic fallback
-                        final_year_frac_expr = struct_expr.map_elements(
-                            lambda x: [
-                                None
-                                if date is None
-                                else 0.0  # This would need to be fixed
-                                for date in x["end_list"]
-                            ],
-                            return_dtype=pl.List(pl.Float64),
-                        )
-                else:
-                    # Use the simple approach for act/act with real dates
-                    if hasattr(self._proxy, "_parent") and hasattr(self._proxy, "name"):
-                        # Get the value from the actual column
-                        start_col_name = self._proxy.name
-                        start_date_val = parent_frame.collect()[start_col_name][0]
-
-                        final_year_frac_expr = struct_expr.map_elements(
-                            lambda x: [
-                                None
-                                if date is None
-                                else (date - start_date_val).days / 365.25
-                                for date in x["end_list"]
-                            ],
-                            return_dtype=pl.List(pl.Float64),
-                        )
-                    else:
-                        # Generic fallback
-                        final_year_frac_expr = struct_expr.map_elements(
-                            lambda x: [
-                                None
-                                if date is None
-                                else 0.0  # This would need to be fixed
-                                for date in x["end_list"]
-                            ],
-                            return_dtype=pl.List(pl.Float64),
-                        )
-            else:
-                # For column references or expressions, we need to use struct with both values
-                struct_expr = pl.struct(
-                    [
-                        start_expr_polars.alias("start_date"),
-                        end_expr_polars.alias("end_list"),
-                    ]
-                )
-                if normalized_basis == "us_nasd_30_360":
-                    # Special handling for 30/360 basis
-                    final_year_frac_expr = struct_expr.map_elements(
-                        lambda x: [
-                            None
-                            if date is None or x["start_date"] is None
-                            else _compute_30_360_yearfrac(
-                                x["start_date"].year,
-                                x["start_date"].month,
-                                x["start_date"].day,
-                                date.year,
-                                date.month,
-                                date.day,
-                            )
-                            for date in x["end_list"]
-                        ],
-                        return_dtype=pl.List(pl.Float64),
-                    )
-                else:
-                    # Use the simple approach for act/act
-                    final_year_frac_expr = struct_expr.map_elements(
-                        lambda x: [
-                            None
-                            if date is None or x["start_date"] is None
-                            else (date - x["start_date"]).days / 365.25
-                            for date in x["end_list"]
-                        ],
-                        return_dtype=pl.List(pl.Float64),
-                    )
-        elif start_is_list_col and end_is_list_col:
-            # Both are List[Date] columns. This requires element-wise zipping of items within lists.
-            raise NotImplementedError(
-                "Calculating yearfrac where both start and end dates are list columns "
-                "(requiring pairing elements from each list like a zip) is not directly supported "
-                "by this accessor. Consider using `pl.struct().map_elements()` for such custom list operations."
-            )
-        else:
-            # Default case: treat as scalar/simple column operations.
-            # This handles Date vs Date. If an unhandled List vs List case (e.g., from complex expressions
-            # not caught by the schema check) slips through, Polars will likely error during the
-            # _compute_yearfrac_value_exprs call due to mismatched types/shapes.
-            final_year_frac_expr = _compute_yearfrac_value_exprs(
-                start_expr_polars, end_expr_polars, normalized_basis
-            )
-
+        # Return wrapped in ExpressionProxy
         from ..column.expression_proxy import ExpressionProxy
 
-        # Do not apply a final cast here, as we need to preserve the List type for list operations
-        # and only cast the inner type to Float64 if necessary.
-        # We'll let Polars handle the casting based on the result structure.
-        return ExpressionProxy(final_year_frac_expr, parent_frame)
+        parent_frame = self._get_parent_frame()
 
+        return ExpressionProxy(result_expr, parent_frame)
 
-def _compute_30_360_yearfrac(s_year, s_month, s_day, e_year, e_month, e_day):
-    """
-    Compute the 30/360 US NASD year fraction between two dates.
+    def irr(
+        self,
+        *,
+        guess: "IntoExprColumn | None" = None,
+        default_guess: float | None = None,
+    ) -> "ExpressionProxy":
+        """Calculate the internal rate of return for a series of cash flows.
 
-    This is a helper function that applies the US NASD 30/360 rules to date components
-    and computes the resulting year fraction.
+        This function computes the discount rate that makes the net present value (NPV)
+        of all cash flows equal to zero, using Excel's IRR algorithm.
 
-    Args:
-        s_year: Start date year
-        s_month: Start date month (1-12)
-        s_day: Start date day (1-31)
-        e_year: End date year
-        e_month: End date month (1-12)
-        e_day: End date day (1-31)
+        !!! note "When to use"
+            *   **Investment Analysis**: Evaluate the profitability of investment portfolios or individual securities
+            *   **Project Evaluation**: Compare the returns of different actuarial projects or initiatives
+            *   **Premium Adequacy**: Assess whether premium cash flows generate sufficient returns
+            *   **Asset-Liability Matching**: Evaluate the performance of matched asset and liability cash flows
 
-    Returns:
-        The year fraction as a float, or None if any inputs are None
-    """
-    # Skip calculation for None values
-    if any(x is None for x in [s_year, s_month, s_day, e_year, e_month, e_day]):
-        return None
+        Parameters
+        ----------
+        guess : IntoExprColumn, optional
+            Optional per-row initial guess for IRR. If not provided, uses default_guess.
+        default_guess : float, optional
+            Scalar fallback guess when `guess` is not provided. Defaults to 0.1 (10%).
 
-    # Apply US NASD 30/360 adjustments to start date
-    s_year, s_month, s_day = _adjust_date_us_nasd_30_360(s_year, s_month, s_day, True)
+        Returns
+        -------
+        ExpressionProxy
+            Float64 IRR per row representing the internal rate of return.
 
-    # Apply US NASD 30/360 adjustments to end date (passing the adjusted start day)
-    e_year, e_month, e_day = _adjust_date_us_nasd_30_360(
-        e_year, e_month, e_day, False, s_day
-    )
+        Examples
+        --------
+        Calculate IRR for investment cash flows::
 
-    # Calculate the 30/360 date difference as per the formula
-    start_value = s_day + 30 * s_month + 360 * s_year
-    end_value = e_day + 30 * e_month + 360 * e_year
+            ```python
+            from gaspatchio_core import ActuarialFrame
 
-    # Return the year fraction
-    return (end_value - start_value) / 360.0
+            data = {
+                "investment_id": ["INV001", "INV002"],
+                "cash_flows": [
+                    [-1000.0, 300.0, 400.0, 500.0],  # Initial investment + returns
+                    [-5000.0, 1000.0, 2000.0, 3500.0]  # Different investment
+                ]
+            }
+            af = ActuarialFrame(data)
+
+            af.irr = af.cash_flows.excel.irr()
+
+            print(af.collect())
+            ```
+
+            ```
+            shape: (2, 3)
+            ┌───────────────┬─────────────────────────────┬──────────┐
+            │ investment_id ┆ cash_flows                  ┆ irr      │
+            │ ---           ┆ ---                         ┆ ---      │
+            │ str           ┆ list[f64]                   ┆ f64      │
+            ╞═══════════════╪═════════════════════════════╪══════════╡
+            │ INV001        ┆ [-1000.0, 300.0, … 500.0]   ┆ 0.088963 │
+            │ INV002        ┆ [-5000.0, 1000.0, … 3500.0] ┆ 0.117921 │
+            └───────────────┴─────────────────────────────┴──────────┘
+            ```
+
+        """
+        from .excel_functions.irr import irr as _irr
+
+        values_expr = self._get_polars_expr()
+        parent_frame = self._get_parent_frame()
+        result_expr = _irr(values_expr, guess=guess, default_guess=default_guess)
+        from ..column.expression_proxy import ExpressionProxy
+
+        return ExpressionProxy(result_expr, parent_frame)
+
+    def pv(
+        self,
+        nper: "IntoExprColumn",
+        pmt: "IntoExprColumn",
+        *,
+        fv: float | None = None,
+        typ: int | None = None,
+    ) -> "ExpressionProxy":
+        """Calculate the present value of an investment based on periodic payments.
+
+        This function computes the present value of a loan or an investment, based on a
+        constant interest rate and regular payments, using Excel's PV formula.
+
+        !!! note "When to use"
+            *   **Reserve Calculations**: Calculate the present value of future benefit payments for reserve valuations
+            *   **Annuity Pricing**: Determine the present value of annuity payment streams
+            *   **Loan Analysis**: Evaluate the present value of loan repayments for asset-liability management
+            *   **Capital Budgeting**: Assess the present value of project cash flows for investment decisions
+
+        Parameters
+        ----------
+        nper : IntoExprColumn
+            Number of periods as scalar/column or list column.
+        pmt : IntoExprColumn
+            Payment per period as scalar/column or list column.
+        fv : float, optional
+            Future value at the end of nper periods. Defaults to 0.0.
+        typ : int, optional
+            Payment timing: 0 for payments at end of period (default), 1 for beginning.
+
+        Returns
+        -------
+        ExpressionProxy
+            Float64 or List[Float64] representing the present value.
+
+        Examples
+        --------
+        Calculate present value of annuity payments::
+
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {
+                "policy_id": ["POL001", "POL002", "POL003"],
+                "interest_rate": [0.05, 0.04, 0.06],  # Annual interest rates
+                "num_periods": [10.0, 15.0, 20.0],  # Number of payment periods
+                "payment": [1000.0, 1500.0, 2000.0],  # Payment per period
+            }
+            af = ActuarialFrame(data)
+
+            af.present_value = af.interest_rate.excel.pv(nper=af.num_periods, pmt=af.payment)
+
+            print(af.collect())
+            ```
+
+            ```
+            shape: (3, 5)
+            ┌───────────┬───────────────┬─────────────┬─────────┬───────────────┐
+            │ policy_id ┆ interest_rate ┆ num_periods ┆ payment ┆ present_value │
+            │ ---       ┆ ---           ┆ ---         ┆ ---     ┆ ---           │
+            │ str       ┆ f64           ┆ f64         ┆ f64     ┆ f64           │
+            ╞═══════════╪═══════════════╪═════════════╪═════════╪═══════════════╡
+            │ POL001    ┆ 0.05          ┆ 10.0        ┆ 1000.0  ┆ -7721.734929  │
+            │ POL002    ┆ 0.04          ┆ 15.0        ┆ 1500.0  ┆ -16677.581148 │
+            │ POL003    ┆ 0.06          ┆ 20.0        ┆ 2000.0  ┆ -22939.842437 │
+            └───────────┴───────────────┴─────────────┴─────────┴───────────────┘
+            ```
+
+        """
+        from .excel_functions.pv import pv as _pv
+
+        rate_expr = self._get_polars_expr()
+        parent_frame = self._get_parent_frame()
+        result_expr = _pv(rate_expr, nper, pmt, fv=fv, typ=typ)
+        from ..column.expression_proxy import ExpressionProxy
+
+        return ExpressionProxy(result_expr, parent_frame)
+
+    def days(self, start_date: "IntoExprColumn") -> "ExpressionProxy":
+        """Calculate the number of days between two dates, similar to Excel's DAYS.
+
+        This function computes the number of days between an end date (the column/expression
+        this accessor is on) and a start date. The result is positive if the end date
+        is after the start date, and negative if before.
+
+        !!! note "When to use"
+            *   **Duration Calculations**: Calculate the length of policy terms, claim periods, or other time-based intervals.
+            *   **Age Calculations**: Determine the number of days between birth dates and valuation dates for precise age calculations.
+            *   **Interest Calculations**: Calculate the exact number of days for interest accrual between two specific dates.
+            *   **Exposure Period Analysis**: Measure exposure periods in days for risk assessment or premium calculations.
+
+        Parameters
+        ----------
+        start_date : IntoExprColumn
+            An expression or column representing the start dates. Can be a scalar date,
+            a column of dates.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression representing the calculated days difference as an `Int64`.
+
+        Examples
+        --------
+        ```python
+        import datetime
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "start_date": [datetime.date(2023, 1, 1), datetime.date(2023, 6, 15)],
+            "end_date": [datetime.date(2023, 1, 31), datetime.date(2023, 7, 15)],
+        }
+        af = ActuarialFrame(data)
+
+        # Calculate days between start and end dates
+        af_with_days = af.with_columns(
+            days_diff=af["end_date"].excel.days(af["start_date"])
+        )
+        print(af_with_days.collect())
+        ```
+        """
+        from .excel_functions.days import days
+
+        end_date_expr = self._get_polars_expr()
+        result_expr = days(end_date_expr, start_date)
+
+        from ..column.expression_proxy import ExpressionProxy
+        parent_frame = self._get_parent_frame()
+        return ExpressionProxy(result_expr, parent_frame)
+
+    def edate(self, months: "IntoExprColumn") -> "ExpressionProxy":
+        """Add months to a date, similar to Excel's EDATE.
+
+        This function adds the specified number of months to the date column/expression
+        this accessor is on, returning the resulting date. Handles month boundaries
+        correctly (e.g., January 31 + 1 month = February 28/29).
+
+        !!! note "When to use"
+            *   **Policy Anniversary Dates**: Calculate policy renewal dates or anniversary dates by adding months to the issue date.
+            *   **Payment Schedules**: Determine future premium due dates or benefit payment dates based on monthly intervals.
+            *   **Maturity Calculations**: Calculate policy or investment maturity dates by adding a term in months to the start date.
+            *   **Projection Periods**: Generate future valuation dates for cash flow projections or reserving calculations.
+
+        Parameters
+        ----------
+        months : IntoExprColumn
+            An expression or column representing the number of months to add.
+            Can be positive or negative.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression representing the date after adding months.
+
+        Examples
+        --------
+        ```python
+        import datetime
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "start_date": [datetime.date(2023, 1, 31), datetime.date(2023, 3, 15)],
+            "months_to_add": [1, 3],
+        }
+        af = ActuarialFrame(data)
+
+        # Add months to dates
+        af_with_new_dates = af.with_columns(
+            new_date=af["start_date"].excel.edate(af["months_to_add"])
+        )
+        print(af_with_new_dates.collect())
+        ```
+        """
+        from .excel_functions.edate import edate
+
+        start_date_expr = self._get_polars_expr()
+        result_expr = edate(start_date_expr, months)
+
+        from ..column.expression_proxy import ExpressionProxy
+        parent_frame = self._get_parent_frame()
+        return ExpressionProxy(result_expr, parent_frame)
+
+    def eomonth(self, months: "IntoExprColumn") -> "ExpressionProxy":
+        """Get the end of month after adding months, similar to Excel's EOMONTH.
+
+        This function adds the specified number of months to the date column/expression
+        this accessor is on, then returns the last day of that resulting month.
+
+        !!! note "When to use"
+            *   **Reporting Periods**: Determine month-end dates for financial reporting or regulatory submissions.
+            *   **Interest Calculations**: Calculate interest accrual periods that end on the last day of each month.
+            *   **Benefit Payment Dates**: Set benefit payment dates to month-end when payments are made monthly.
+            *   **Policy Term Boundaries**: Define policy terms or coverage periods that end on month boundaries.
+
+        Parameters
+        ----------
+        months : IntoExprColumn
+            An expression or column representing the number of months to add.
+            Can be positive or negative.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression representing the end-of-month date after adding months.
+
+        Examples
+        --------
+        ```python
+        import datetime
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "start_date": [datetime.date(2023, 3, 15), datetime.date(2023, 1, 5)],
+            "months_to_add": [1, 2],
+        }
+        af = ActuarialFrame(data)
+
+        # Get end of month after adding months
+        af_with_eom_dates = af.with_columns(
+            end_of_month=af["start_date"].excel.eomonth(af["months_to_add"])
+        )
+        print(af_with_eom_dates.collect())
+        ```
+        """
+        from .excel_functions.eomonth import eomonth
+
+        start_date_expr = self._get_polars_expr()
+        result_expr = eomonth(start_date_expr, months)
+
+        from ..column.expression_proxy import ExpressionProxy
+        parent_frame = self._get_parent_frame()
+        return ExpressionProxy(result_expr, parent_frame)

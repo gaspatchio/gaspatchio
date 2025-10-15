@@ -1,6 +1,5 @@
 # functions/__init__.py
 
-# Import and re-export wrapper functions from submodules
 from .vector import (
     fill_series,
     floor,

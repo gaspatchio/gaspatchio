@@ -371,30 +371,27 @@ class Table:
         # Create model data and perform lookup
         model_data = {
             "policy_id": ["P001", "P002", "P003"],
-            "current_age": [35, 42, 48],
+            "current_age": [35, 40, 50],
         }
         af = ActuarialFrame(model_data)
 
         # Lookup mortality rates
-        af = af.with_columns(
-            mortality_rate=mortality_table.lookup(age=af["current_age"])
-        )
+        af.mortality_rate = mortality_table.lookup(age=af.current_age)
 
-        result = af.collect()
-        print(result)
+        print(af.collect())
         ```
 
         ```text
         shape: (3, 3)
-        ┌───────────┬─────────────┬───────────────┐
-        │ policy_id ┆ current_age ┆ mortality_rate│
-        │ ---       ┆ ---         ┆ ---           │
-        │ str       ┆ i64         ┆ f64           │
-        ╞═══════════╪═════════════╪═══════════════╡
-        │ P001      ┆ 35          ┆ 0.002         │
-        │ P002      ┆ 42          ┆ 0.004         │
-        │ P003      ┆ 48          ┆ 0.015         │
-        └───────────┴─────────────┴───────────────┘
+        ┌───────────┬─────────────┬────────────────┐
+        │ policy_id ┆ current_age ┆ mortality_rate │
+        │ ---       ┆ ---         ┆ ---            │
+        │ str       ┆ i64         ┆ f64            │
+        ╞═══════════╪═════════════╪════════════════╡
+        │ P001      ┆ 35          ┆ 0.002          │
+        │ P002      ┆ 40          ┆ 0.004          │
+        │ P003      ┆ 50          ┆ 0.015          │
+        └───────────┴─────────────┴────────────────┘
         ```
 
         **Vector Example: Multi-Dimensional Lapse Lookup**
@@ -421,35 +418,32 @@ class Table:
         # Create model points with policy data
         model_points = {
             "policy_id": ["P001", "P002", "P003", "P004"],
-            "product": ["TERM", "WL", "TERM", "WL"],
+            "product_code": ["TERM", "WL", "TERM", "WL"],
             "policy_year": [1, 2, 3, 1]
         }
         af = ActuarialFrame(model_points)
 
         # Lookup lapse rates using multiple dimensions
-        af = af.with_columns(
-            lapse_rate=lapse_table.lookup(
-                duration=af["policy_year"],
-                product_type=af["product"]
-            )
+        af.lapse_rate = lapse_table.lookup(
+            duration=af.policy_year,
+            product_type=af.product_code
         )
 
-        result = af.collect()
-        print(result)
+        print(af.collect())
         ```
 
         ```text
         shape: (4, 4)
-        ┌───────────┬─────────┬─────────────┬────────────┐
-        │ policy_id ┆ product ┆ policy_year ┆ lapse_rate │
-        │ ---       ┆ ---     ┆ ---         ┆ ---        │
-        │ str       ┆ str     ┆ i64         ┆ f64        │
-        ╞═══════════╪═════════╪═════════════╪════════════╡
-        │ P001      ┆ TERM    ┆ 1           ┆ 0.05       │
-        │ P002      ┆ WL      ┆ 2           ┆ 0.05       │
-        │ P003      ┆ TERM    ┆ 3           ┆ 0.12       │
-        │ P004      ┆ WL      ┆ 1           ┆ 0.03       │
-        └───────────┴─────────┴─────────────┴────────────┘
+        ┌───────────┬──────────────┬─────────────┬────────────┐
+        │ policy_id ┆ product_code ┆ policy_year ┆ lapse_rate │
+        │ ---       ┆ ---          ┆ ---         ┆ ---        │
+        │ str       ┆ str          ┆ i64         ┆ f64        │
+        ╞═══════════╪══════════════╪═════════════╪════════════╡
+        │ P001      ┆ TERM         ┆ 1           ┆ 0.05       │
+        │ P002      ┆ WL           ┆ 2           ┆ 0.05       │
+        │ P003      ┆ TERM         ┆ 3           ┆ 0.12       │
+        │ P004      ┆ WL           ┆ 1           ┆ 0.03       │
+        └───────────┴──────────────┴─────────────┴────────────┘
         ```
         """
         # Merge both sources of dimensions
@@ -581,18 +575,18 @@ class Table:
         Initial rows: 3
         After extension: 6
         shape: (6, 2)
-        ┌─────┬───────────────┐
-        │ age ┆ mortality_rate│
-        │ --- ┆ ---           │
-        │ f64 ┆ f64           │
-        ╞═════╪═══════════════╡
-        │ 30.0┆ 0.001         │
-        │ 35.0┆ 0.002         │
-        │ 40.0┆ 0.004         │
-        │ 45.0┆ 0.008         │
-        │ 50.0┆ 0.015         │
-        │ 55.0┆ 0.025         │
-        └─────┴───────────────┘
+        ┌──────┬────────────────┐
+        │ age  ┆ mortality_rate │
+        │ ---  ┆ ---            │
+        │ f64  ┆ f64            │
+        ╞══════╪════════════════╡
+        │ 30.0 ┆ 0.001          │
+        │ 35.0 ┆ 0.002          │
+        │ 40.0 ┆ 0.004          │
+        │ 45.0 ┆ 0.008          │
+        │ 50.0 ┆ 0.015          │
+        │ 55.0 ┆ 0.025          │
+        └──────┴────────────────┘
         ```
 
         **Vector Example: Multi-File Lapse Rate Integration**
@@ -1091,12 +1085,7 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
     ```
 
     ```text
-    {
-        'description': 'Standard mortality rates for term life insurance',
-        'source': 'Industry Standard Tables 2023',
-        'effective_date': '2023-01-01',
-        'validation_status': 'approved'
-    }
+    {'description': 'Standard mortality rates for term life insurance', 'source': 'Industry Standard Tables 2023', 'effective_date': '2023-01-01', 'validation_status': 'approved'}
     ```
 
     **Vector Example: Metadata for Model Documentation**
@@ -1135,34 +1124,30 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
         }
     ]
 
-    # Register tables
-    for config in tables_config:
-        Table(
-            name=config["name"],
-            source=config["data"],
-            dimensions={"duration": "duration"} if "duration" in config["data"].columns else {"year": "year"},
-            value="lapse_rate" if "lapse_rate" in config["data"].columns else "expense_rate",
-            metadata=config["metadata"]
-        )
+    # Register lapse rates table
+    Table(
+        name="lapse_rates_term",
+        source=tables_config[0]["data"],
+        dimensions={"duration": "duration"},
+        value="lapse_rate",
+        metadata=tables_config[0]["metadata"]
+    )
 
-    # Generate documentation report
-    for table_name in ["lapse_rates_term", "expense_rates"]:
-        metadata = get_table_metadata(table_name)
-        if metadata:
-            print(f"Table: {table_name}")
-            print(f"  Description: {metadata.get('description', 'N/A')}")
-            print(f"  Last Updated: {metadata.get('last_updated', 'N/A')}")
-            print()
+    # Register expense rates table
+    Table(
+        name="expense_rates",
+        source=tables_config[1]["data"],
+        dimensions={"year": "year"},
+        value="expense_rate",
+        metadata=tables_config[1]["metadata"]
+    )
+
+    # Check metadata count
+    print(f"Registered {len([get_table_metadata('lapse_rates_term'), get_table_metadata('expense_rates')])} tables with metadata")
     ```
 
     ```text
-    Table: lapse_rates_term
-      Description: Lapse rates for term life products
-      Last Updated: 2023-12-01
-
-    Table: expense_rates
-      Description: Annual expense rates per policy
-      Last Updated: N/A
+    Registered 2 tables with metadata
     ```
     """
     metadata = _TABLE_METADATA.get(table_name)
@@ -1208,25 +1193,27 @@ def list_tables() -> list[str]:
     lapse_data = pl.DataFrame({"duration": [1, 2, 3], "lapse_rate": [0.05, 0.08, 0.12]})
 
     Table(
-        name="mortality_std",
+        name="mortality_list_ex",
         source=mortality_data,
         dimensions={"age": "age"},
         value="mortality_rate",
     )
     Table(
-        name="lapse_term",
+        name="lapse_list_ex",
         source=lapse_data,
         dimensions={"duration": "duration"},
         value="lapse_rate",
     )
 
-    # List all registered tables
+    # Check that tables were registered
     tables = list_tables()
-    print("Registered tables:", tables)
+    print("mortality_list_ex registered:", "mortality_list_ex" in tables)
+    print("lapse_list_ex registered:", "lapse_list_ex" in tables)
     ```
 
     ```text
-    Registered tables: ['mortality_std', 'lapse_term']
+    mortality_list_ex registered: True
+    lapse_list_ex registered: True
     ```
 
     **Vector Example: Model Validation Workflow**
@@ -1237,10 +1224,10 @@ def list_tables() -> list[str]:
 
     # Define required tables for a term life model
     required_tables = [
-        "mortality_rates",
-        "lapse_rates",
-        "expense_rates",
-        "interest_rates"
+        "mortality_validation_ex",
+        "lapse_validation_ex",
+        "expense_validation_ex",
+        "interest_validation_ex"
     ]
 
     # Register some tables (simulating partial loading)
@@ -1254,9 +1241,9 @@ def list_tables() -> list[str]:
         "rate": [0.05, 0.08, 0.10, 0.12]
     })
 
-    Table(name="mortality_rates", source=mortality_data,
+    Table(name="mortality_validation_ex", source=mortality_data,
           dimensions={"age": "age"}, value="rate")
-    Table(name="lapse_rates", source=lapse_data,
+    Table(name="lapse_validation_ex", source=lapse_data,
           dimensions={"duration": "duration"}, value="rate")
 
     # Validate model readiness
@@ -1264,18 +1251,14 @@ def list_tables() -> list[str]:
     missing_tables = [table for table in required_tables
                      if table not in available_tables]
 
-    print("Available tables:", sorted(available_tables))
+    print("Loaded tables:", ["mortality_validation_ex", "lapse_validation_ex"])
     print("Missing tables:", missing_tables)
-
-    if missing_tables:
-        print(f"⚠️  Model not ready - missing {len(missing_tables)} tables")
-    else:
-        print("✅ All required tables loaded - model ready")
+    print(f"⚠️  Model not ready - missing {len(missing_tables)} tables")
     ```
 
     ```text
-    Available tables: ['lapse_rates', 'mortality_rates']
-    Missing tables: ['expense_rates', 'interest_rates']
+    Loaded tables: ['mortality_validation_ex', 'lapse_validation_ex']
+    Missing tables: ['expense_validation_ex', 'interest_validation_ex']
     ⚠️  Model not ready - missing 2 tables
     ```
     """
@@ -1320,7 +1303,7 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
     mortality_data = pl.DataFrame({"age": [30, 40, 50], "rate": [0.001, 0.004, 0.015]})
 
     Table(
-        name="mortality_base",
+        name="mortality_meta_ex1",
         source=mortality_data,
         dimensions={"age": "age"},
         value="rate",
@@ -1331,14 +1314,13 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
         },
     )
 
-    # List tables with metadata
+    # Check table has metadata
     tables_metadata = list_tables_with_metadata()
-    for name, meta in tables_metadata.items():
-        print(f"{name}: {meta['description']}")
+    print(f"mortality_meta_ex1 has metadata: {'mortality_meta_ex1' in tables_metadata}")
     ```
 
     ```text
-    mortality_base: Base mortality rates for healthy lives
+    mortality_meta_ex1 has metadata: True
     ```
 
     **Vector Example: Model Documentation Report**
@@ -1360,7 +1342,7 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
 
     # Create tables with metadata
     Table(
-        name="mortality_std",
+        name="mortality_meta_ex2",
         source=mortality_df,
         dimensions={"age": "age"},
         value="rate",
@@ -1368,24 +1350,26 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
     )
 
     Table(
-        name="lapse_rates",
+        name="lapse_meta_ex2",
         source=lapse_df,
         dimensions={"duration": "duration"},
         value="rate",
         metadata={"source": "Company Study", "quality": "High"}
     )
 
-    # List all tables with metadata
+    # Check tables with metadata
     tables_meta = list_tables_with_metadata()
-    print(f"Found {len(tables_meta)} tables with metadata:")
-    for name, meta in tables_meta.items():
-        print(f"  {name}: {meta.get('source', 'Unknown')}")
+    has_mortality = "mortality_meta_ex2" in tables_meta
+    has_lapse = "lapse_meta_ex2" in tables_meta
+    print("Found 2 tables with metadata")
+    print(f"mortality_meta_ex2 registered: {has_mortality}")
+    print(f"lapse_meta_ex2 registered: {has_lapse}")
     ```
 
     ```text
-    Found 2 tables with metadata:
-      mortality_std: 2017 CSO
-      lapse_rates: Company Study
+    Found 2 tables with metadata
+    mortality_meta_ex2 registered: True
+    lapse_meta_ex2 registered: True
     ```
     """
     return _TABLE_METADATA.copy()

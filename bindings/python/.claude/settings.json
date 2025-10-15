@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run prompts/python/hooks/python-on-save.py",
+            "blocking": true,
+            "blocking_failure_message": "\u274c Python linting/type checking failed! Fix the issues above before continuing."
+          }
+        ]
+      }
+    ]
+  }
+}

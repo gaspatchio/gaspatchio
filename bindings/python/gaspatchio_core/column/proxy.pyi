@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import builtins
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -22,7 +21,6 @@ if TYPE_CHECKING:
         ExprList as PolarsExprList,  # Alias for use in string hint
     )
 
-    from ..frame.base import ActuarialFrame  # For DtNamespaceProxy.__init__
     from .column_proxy import ColumnProxy  # For DtNamespaceProxy.__init__ parent type
 
     # Import local types carefully
@@ -147,16 +145,16 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 1)
-        ┌───────────────┐
-        │ gross_premium │
-        │ ---           │
-        │ f64           │
-        ╞═══════════════╡
-        │ 1150.0        │
-        │ 1440.0        │
-        │ 880.0         │
-        └───────────────┘
+        shape: (3, 3)
+        ┌──────────────┬────────────────┬───────────────┐
+        │ base_premium ┆ loading_factor ┆ gross_premium │
+        │ ---          ┆ ---            ┆ ---           │
+        │ f64          ┆ f64            ┆ f64           │
+        ╞══════════════╪════════════════╪═══════════════╡
+        │ 1000.0       ┆ 1.15           ┆ 1150.0        │
+        │ 1200.0       ┆ 1.2            ┆ 1440.0        │
+        │ 800.0        ┆ 1.1            ┆ 880.0         │
+        └──────────────┴────────────────┴───────────────┘
         ```
 
         **Vector Example: Multiple Derived Calculations**
@@ -178,16 +176,16 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 2)
-        ┌──────────────┬──────────┐
-        │ premium_rate ┆ age_band │
-        │ ---          ┆ ---      │
-        │ f64          ┆ i64      │
-        ╞══════════════╪══════════╡
-        │ 12.0         ┆ 30       │
-        │ 11.2         ┆ 40       │
-        │ 9.0          ┆ 50       │
-        └──────────────┴──────────┘
+        shape: (3, 5)
+        ┌─────────────┬─────────┬─────┬──────────────────┬────────────┐
+        │ sum_assured ┆ premium ┆ age ┆ premium_per_1000 ┆ age_decade │
+        │ ---         ┆ ---     ┆ --- ┆ ---              ┆ ---        │
+        │ f64         ┆ f64     ┆ i64 ┆ f64              ┆ i64        │
+        ╞═════════════╪═════════╪═════╪══════════════════╪════════════╡
+        │ 100000.0    ┆ 1200.0  ┆ 35  ┆ 12.0             ┆ 30         │
+        │ 250000.0    ┆ 2800.0  ┆ 45  ┆ 11.2             ┆ 40         │
+        │ 500000.0    ┆ 4500.0  ┆ 55  ┆ 9.0              ┆ 50         │
+        └─────────────┴─────────┴─────┴──────────────────┴────────────┘
         ```
         """
     def clip(self, lower_bound: float, upper_bound: float) -> ExpressionProxy:
@@ -544,14 +542,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (1, 1)
-        ┌─────────────┐
-        │ avg_premium │
-        │ ---         │
-        │ f64         │
-        ╞═════════════╡
-        │ 1320.0      │
-        └─────────────┘
+        shape: (5, 3)
+        ┌───────────┬─────────┬─────────────┐
+        │ policy_id ┆ premium ┆ avg_premium │
+        │ ---       ┆ ---     ┆ ---         │
+        │ i64       ┆ f64     ┆ f64         │
+        ╞═══════════╪═════════╪═════════════╡
+        │ 1         ┆ 1200.0  ┆ 1320.0      │
+        │ 2         ┆ 1500.0  ┆ 1320.0      │
+        │ 3         ┆ 800.0   ┆ 1320.0      │
+        │ 4         ┆ 2000.0  ┆ 1320.0      │
+        │ 5         ┆ 1100.0  ┆ 1320.0      │
+        └───────────┴─────────┴─────────────┘
         ```
 
         **Vector Example: Average Premium by Policy Type**
@@ -571,16 +573,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬─────────────┐
-        │ policy_type ┆ avg_premium │
-        │ ---         ┆ ---         │
-        │ str         ┆ f64         │
-        ╞═════════════╪═════════════╡
-        │ TERM        ┆ 1350.0      │
-        │ WHOLE       ┆ 1400.0      │
-        │ UL          ┆ 1100.0      │
-        └─────────────┴─────────────┘
+        shape: (5, 3)
+        ┌─────────────┬─────────┬─────────────┐
+        │ policy_type ┆ premium ┆ avg_premium │
+        │ ---         ┆ ---     ┆ ---         │
+        │ str         ┆ f64     ┆ f64         │
+        ╞═════════════╪═════════╪═════════════╡
+        │ TERM        ┆ 1200.0  ┆ 1320.0      │
+        │ TERM        ┆ 1500.0  ┆ 1320.0      │
+        │ WHOLE       ┆ 800.0   ┆ 1320.0      │
+        │ WHOLE       ┆ 2000.0  ┆ 1320.0      │
+        │ UL          ┆ 1100.0  ┆ 1320.0      │
+        └─────────────┴─────────┴─────────────┘
         ```
         """
     def min(self) -> ExpressionProxy:
@@ -631,14 +635,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (1, 1)
-        ┌───────────┐
-        │ min_claim │
-        │ ---       │
-        │ f64       │
-        ╞═══════════╡
-        │ 150.0     │
-        └───────────┘
+        shape: (5, 3)
+        ┌──────────┬──────────────┬───────────┐
+        │ claim_id ┆ claim_amount ┆ min_claim │
+        │ ---      ┆ ---          ┆ ---       │
+        │ i64      ┆ f64          ┆ f64       │
+        ╞══════════╪══════════════╪═══════════╡
+        │ 1        ┆ 1200.0       ┆ 150.0     │
+        │ 2        ┆ 500.0        ┆ 150.0     │
+        │ 3        ┆ 2800.0       ┆ 150.0     │
+        │ 4        ┆ 150.0        ┆ 150.0     │
+        │ 5        ┆ 3500.0       ┆ 150.0     │
+        └──────────┴──────────────┴───────────┘
         ```
 
         **Vector Example: Minimum Premium by Policy Type**
@@ -658,16 +666,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬─────────────┐
-        │ policy_type ┆ min_premium │
-        │ ---         ┆ ---         │
-        │ str         ┆ f64         │
-        ╞═════════════╪═════════════╡
-        │ TERM        ┆ 800.0       │
-        │ WHOLE       ┆ 1500.0      │
-        │ UL          ┆ 1100.0      │
-        └─────────────┴─────────────┘
+        shape: (5, 3)
+        ┌─────────────┬─────────┬─────────────┐
+        │ policy_type ┆ premium ┆ min_premium │
+        │ ---         ┆ ---     ┆ ---         │
+        │ str         ┆ f64     ┆ f64         │
+        ╞═════════════╪═════════╪═════════════╡
+        │ TERM        ┆ 1200.0  ┆ 800.0       │
+        │ TERM        ┆ 800.0   ┆ 800.0       │
+        │ WHOLE       ┆ 1500.0  ┆ 800.0       │
+        │ WHOLE       ┆ 2000.0  ┆ 800.0       │
+        │ UL          ┆ 1100.0  ┆ 800.0       │
+        └─────────────┴─────────┴─────────────┘
         ```
         """
     def max(self) -> ExpressionProxy:
@@ -718,14 +728,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (1, 1)
-        ┌───────────┐
-        │ max_claim │
-        │ ---       │
-        │ f64       │
-        ╞═══════════╡
-        │ 3500.0    │
-        └───────────┘
+        shape: (5, 3)
+        ┌──────────┬──────────────┬───────────┐
+        │ claim_id ┆ claim_amount ┆ max_claim │
+        │ ---      ┆ ---          ┆ ---       │
+        │ i64      ┆ f64          ┆ f64       │
+        ╞══════════╪══════════════╪═══════════╡
+        │ 1        ┆ 1200.0       ┆ 3500.0    │
+        │ 2        ┆ 500.0        ┆ 3500.0    │
+        │ 3        ┆ 2800.0       ┆ 3500.0    │
+        │ 4        ┆ 150.0        ┆ 3500.0    │
+        │ 5        ┆ 3500.0       ┆ 3500.0    │
+        └──────────┴──────────────┴───────────┘
         ```
 
         **Vector Example: Maximum Premium by Policy Type**
@@ -745,16 +759,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬─────────────┐
-        │ policy_type ┆ max_premium │
-        │ ---         ┆ ---         │
-        │ str         ┆ f64         │
-        ╞═════════════╪═════════════╡
-        │ TERM        ┆ 1200.0      │
-        │ WHOLE       ┆ 2000.0      │
-        │ UL          ┆ 1100.0      │
-        └─────────────┴─────────────┘
+        shape: (5, 3)
+        ┌─────────────┬─────────┬─────────────┐
+        │ policy_type ┆ premium ┆ max_premium │
+        │ ---         ┆ ---     ┆ ---         │
+        │ str         ┆ f64     ┆ f64         │
+        ╞═════════════╪═════════╪═════════════╡
+        │ TERM        ┆ 1200.0  ┆ 2000.0      │
+        │ TERM        ┆ 800.0   ┆ 2000.0      │
+        │ WHOLE       ┆ 1500.0  ┆ 2000.0      │
+        │ WHOLE       ┆ 2000.0  ┆ 2000.0      │
+        │ UL          ┆ 1100.0  ┆ 2000.0      │
+        └─────────────┴─────────┴─────────────┘
         ```
         """
     def count(self) -> ExpressionProxy:
@@ -805,14 +821,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (1, 1)
-        ┌──────────────┐
-        │ valid_claims │
-        │ ---          │
-        │ u32          │
-        ╞══════════════╡
-        │ 3            │
-        └──────────────┘
+        shape: (5, 3)
+        ┌──────────┬──────────────┬──────────────┐
+        │ claim_id ┆ claim_amount ┆ valid_claims │
+        │ ---      ┆ ---          ┆ ---          │
+        │ i64      ┆ f64          ┆ u32          │
+        ╞══════════╪══════════════╪══════════════╡
+        │ 1        ┆ 1200.0       ┆ 3            │
+        │ 2        ┆ null         ┆ 3            │
+        │ 3        ┆ 2800.0       ┆ 3            │
+        │ 4        ┆ 150.0        ┆ 3            │
+        │ 5        ┆ null         ┆ 3            │
+        └──────────┴──────────────┴──────────────┘
         ```
 
         **Vector Example: Policy Count by Product Type**
@@ -832,16 +852,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬──────────────┐
-        │ policy_type ┆ policy_count │
-        │ ---         ┆ ---          │
-        │ str         ┆ u32          │
-        ╞═════════════╪══════════════╡
-        │ TERM        ┆ 2            │
-        │ WHOLE       ┆ 1            │
-        │ UL          ┆ 1            │
-        └─────────────┴──────────────┘
+        shape: (5, 3)
+        ┌─────────────┬───────────┬──────────────┐
+        │ policy_type ┆ policy_id ┆ policy_count │
+        │ ---         ┆ ---       ┆ ---          │
+        │ str         ┆ str       ┆ u32          │
+        ╞═════════════╪═══════════╪══════════════╡
+        │ TERM        ┆ P001      ┆ 4            │
+        │ TERM        ┆ P002      ┆ 4            │
+        │ WHOLE       ┆ null      ┆ 4            │
+        │ WHOLE       ┆ P004      ┆ 4            │
+        │ UL          ┆ P005      ┆ 4            │
+        └─────────────┴───────────┴──────────────┘
         ```
         """
     def is_null(self) -> ExpressionProxy:
@@ -921,16 +943,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬──────────────────────────┐
-        │ policy_type ┆ missing_beneficiary_count │
-        │ ---         ┆ ---                      │
-        │ str         ┆ u32                      │
-        ╞═════════════╪══════════════════════════╡
-        │ TERM        ┆ 1                        │
-        │ WHOLE       ┆ 1                        │
-        │ UL          ┆ 0                        │
-        └─────────────┴──────────────────────────┘
+        shape: (5, 3)
+        ┌─────────────┬─────────────┬───────────────────────────┐
+        │ policy_type ┆ beneficiary ┆ missing_beneficiary_count │
+        │ ---         ┆ ---         ┆ ---                       │
+        │ str         ┆ str         ┆ u32                       │
+        ╞═════════════╪═════════════╪═══════════════════════════╡
+        │ TERM        ┆ John Doe    ┆ 2                         │
+        │ TERM        ┆ null        ┆ 2                         │
+        │ WHOLE       ┆ Jane Smith  ┆ 2                         │
+        │ WHOLE       ┆ null        ┆ 2                         │
+        │ UL          ┆ Bob Wilson  ┆ 2                         │
+        └─────────────┴─────────────┴───────────────────────────┘
         ```
         """
     def fill_null(
@@ -1097,39 +1121,38 @@ class _BaseProxy:
         │ ---          │
         │ str          │
         ╞══════════════╡
-        │ UL           │
-        │ WHOLE        │
         │ TERM         │
+        │ WHOLE        │
+        │ UL           │
         └──────────────┘
         ```
 
-        **Vector Example: Unique Ages by Policy Type**
+        **Vector Example: Unique Values in List Column**
 
         ```python
         from gaspatchio_core import ActuarialFrame
 
         data = {
-            "policy_type": ["TERM", "TERM", "WHOLE", "WHOLE", "UL", "UL"],
-            "age": [35, 42, 35, 58, 42, 67],
+            "policy_id": ["P001", "P002"],
+            "monthly_premiums": [[1200.0, 1200.0, 1250.0, 1250.0], [1100.0, 1150.0, 1100.0, 1200.0]],
         }
         af = ActuarialFrame(data)
-        result = af.with_columns(
-            af["age"].unique().alias("unique_ages")
-        ).collect()
-        print(result)
+
+        af.unique_premiums = af.monthly_premiums.list.unique()
+
+        print(af.collect())
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬─────────────┐
-        │ policy_type ┆ unique_ages │
-        │ ---         ┆ ---         │
-        │ str         ┆ list[i64]   │
-        ╞═════════════╪═════════════╡
-        │ TERM        ┆ [35, 42]    │
-        │ WHOLE       ┆ [35, 58]    │
-        │ UL          ┆ [42, 67]    │
-        └─────────────┴─────────────┘
+        shape: (2, 3)
+        ┌───────────┬────────────────────────────┬──────────────────────────┐
+        │ policy_id ┆ monthly_premiums           ┆ unique_premiums          │
+        │ ---       ┆ ---                        ┆ ---                      │
+        │ str       ┆ list[f64]                  ┆ list[f64]                │
+        ╞═══════════╪════════════════════════════╪══════════════════════════╡
+        │ P001      ┆ [1200.0, 1200.0, … 1250.0] ┆ [1200.0, 1250.0]         │
+        │ P002      ┆ [1100.0, 1150.0, … 1200.0] ┆ [1100.0, 1150.0, 1200.0] │
+        └───────────┴────────────────────────────┴──────────────────────────┘
         ```
         """
     def sort(self, *, descending: bool = False) -> ExpressionProxy:
@@ -1214,16 +1237,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬─────────────┐
-        │ policy_type ┆ sorted_ages │
-        │ ---         ┆ ---         │
-        │ str         ┆ list[i64]   │
-        ╞═════════════╪═════════════╡
-        │ TERM        ┆ [32, 45]    │
-        │ WHOLE       ┆ [41, 58]    │
-        │ UL          ┆ [62]        │
-        └─────────────┴─────────────┘
+        shape: (5, 3)
+        ┌─────────────┬─────┬─────────────┐
+        │ policy_type ┆ age ┆ sorted_ages │
+        │ ---         ┆ --- ┆ ---         │
+        │ str         ┆ i64 ┆ i64         │
+        ╞═════════════╪═════╪═════════════╡
+        │ TERM        ┆ 45  ┆ 32          │
+        │ TERM        ┆ 32  ┆ 41          │
+        │ WHOLE       ┆ 58  ┆ 45          │
+        │ WHOLE       ┆ 41  ┆ 58          │
+        │ UL          ┆ 62  ┆ 62          │
+        └─────────────┴─────┴─────────────┘
         ```
         """
     def head(self, n: int = 5) -> ExpressionProxy:
@@ -1290,33 +1315,32 @@ class _BaseProxy:
         └────────────┘
         ```
 
-        **Vector Example: First 2 Ages by Policy Type**
+        **Vector Example: First 3 Premium Payments**
 
         ```python
         from gaspatchio_core import ActuarialFrame
 
         data = {
-            "policy_type": ["TERM", "TERM", "TERM", "WHOLE", "WHOLE", "UL"],
-            "age": [35, 42, 28, 45, 58, 33],
+            "policy_id": ["P001", "P002"],
+            "monthly_payments": [[1200.0, 1200.0, 1250.0, 1250.0, 1300.0], [1100.0, 1150.0, 1100.0, 1200.0, 1250.0]],
         }
         af = ActuarialFrame(data)
-        result = af.with_columns(
-            af["age"].head(2).alias("first_ages")
-        ).collect()
-        print(result)
+
+        af.first_payments = af.monthly_payments.list.head(3)
+
+        print(af.collect())
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬─────────────┐
-        │ policy_type ┆ first_ages  │
-        │ ---         ┆ ---         │
-        │ str         ┆ list[i64]   │
-        ╞═════════════╪═════════════╡
-        │ TERM        ┆ [35, 42]    │
-        │ WHOLE       ┆ [45, 58]    │
-        │ UL          ┆ [33]        │
-        └─────────────┴─────────────┘
+        shape: (2, 3)
+        ┌───────────┬────────────────────────────┬──────────────────────────┐
+        │ policy_id ┆ monthly_payments           ┆ first_payments           │
+        │ ---       ┆ ---                        ┆ ---                      │
+        │ str       ┆ list[f64]                  ┆ list[f64]                │
+        ╞═══════════╪════════════════════════════╪══════════════════════════╡
+        │ P001      ┆ [1200.0, 1200.0, … 1300.0] ┆ [1200.0, 1200.0, 1250.0] │
+        │ P002      ┆ [1100.0, 1150.0, … 1250.0] ┆ [1100.0, 1150.0, 1100.0] │
+        └───────────┴────────────────────────────┴──────────────────────────┘
         ```
         """
     def tail(self, n: int = 5) -> ExpressionProxy:
@@ -1381,33 +1405,32 @@ class _BaseProxy:
         └───────────────┘
         ```
 
-        **Vector Example: Last 2 Ages by Policy Type**
+        **Vector Example: Last 3 Premium Payments**
 
         ```python
         from gaspatchio_core import ActuarialFrame
 
         data = {
-            "policy_type": ["TERM", "TERM", "TERM", "WHOLE", "WHOLE", "UL"],
-            "age": [35, 42, 28, 45, 58, 33],
+            "policy_id": ["P001", "P002"],
+            "monthly_payments": [[1200.0, 1200.0, 1250.0, 1250.0, 1300.0], [1100.0, 1150.0, 1100.0, 1200.0, 1250.0]],
         }
         af = ActuarialFrame(data)
-        result = af.with_columns(
-            af["age"].tail(2).alias("last_ages")
-        ).collect()
-        print(result)
+
+        af.last_payments = af.monthly_payments.list.tail(3)
+
+        print(af.collect())
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬───────────┐
-        │ policy_type ┆ last_ages │
-        │ ---         ┆ ---       │
-        │ str         ┆ list[i64] │
-        ╞═════════════╪═══════════╡
-        │ TERM        ┆ [42, 28]  │
-        │ WHOLE       ┆ [45, 58]  │
-        │ UL          ┆ [33]      │
-        └─────────────┴───────────┘
+        shape: (2, 3)
+        ┌───────────┬────────────────────────────┬──────────────────────────┐
+        │ policy_id ┆ monthly_payments           ┆ last_payments            │
+        │ ---       ┆ ---                        ┆ ---                      │
+        │ str       ┆ list[f64]                  ┆ list[f64]                │
+        ╞═══════════╪════════════════════════════╪══════════════════════════╡
+        │ P001      ┆ [1200.0, 1200.0, … 1300.0] ┆ [1250.0, 1250.0, 1300.0] │
+        │ P002      ┆ [1100.0, 1150.0, … 1250.0] ┆ [1100.0, 1200.0, 1250.0] │
+        └───────────┴────────────────────────────┴──────────────────────────┘
         ```
         """
     def filter(self, predicate: ExpressionProxy | pl.Expr) -> ExpressionProxy:
@@ -1474,33 +1497,33 @@ class _BaseProxy:
         └─────────────┘
         ```
 
-        **Vector Example: Filter Ages by Criteria within Policy Types**
+        **Vector Example: Filter High Premium Payments**
 
         ```python
         from gaspatchio_core import ActuarialFrame
+        import polars as pl
 
         data = {
-            "policy_type": ["TERM", "TERM", "TERM", "WHOLE", "WHOLE", "UL"],
-            "age": [35, 42, 28, 45, 58, 33],
+            "policy_id": ["P001", "P002"],
+            "monthly_payments": [[1200.0, 1100.0, 1250.0, 1050.0, 1300.0], [1100.0, 1150.0, 1300.0, 1200.0, 1050.0]],
         }
         af = ActuarialFrame(data)
-        result = af.with_columns(
-            af["age"].filter(af["age"] >= 40).alias("senior_ages")
-        ).collect()
-        print(result)
+
+        af.high_payments = af.monthly_payments.list.eval(pl.when(pl.element() >= 1200).then(pl.element())).list.drop_nulls()
+
+        print(af.collect())
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬─────────────┐
-        │ policy_type ┆ senior_ages │
-        │ ---         ┆ ---         │
-        │ str         ┆ list[i64]   │
-        ╞═════════════╪═════════════╡
-        │ TERM        ┆ [42]        │
-        │ WHOLE       ┆ [45, 58]    │
-        │ UL          ┆ []          │
-        └─────────────┴─────────────┘
+        shape: (2, 3)
+        ┌───────────┬────────────────────────────┬──────────────────────────┐
+        │ policy_id ┆ monthly_payments           ┆ high_payments            │
+        │ ---       ┆ ---                        ┆ ---                      │
+        │ str       ┆ list[f64]                  ┆ list[f64]                │
+        ╞═══════════╪════════════════════════════╪══════════════════════════╡
+        │ P001      ┆ [1200.0, 1100.0, … 1300.0] ┆ [1200.0, 1250.0, 1300.0] │
+        │ P002      ┆ [1100.0, 1150.0, … 1050.0] ┆ [1300.0, 1200.0]         │
+        └───────────┴────────────────────────────┴──────────────────────────┘
         ```
         """
     def shift(self, n: int = 1, *, fill_value: any = None) -> ExpressionProxy:
@@ -2016,16 +2039,18 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 2)
-        ┌─────────────┬──────────────────┐
-        │ policy_type ┆ avg_abs_variance │
-        │ ---         ┆ ---              │
-        │ str         ┆ f64              │
-        ╞═════════════╪══════════════════╡
-        │ TERM        ┆ 0.035            │
-        │ WHOLE       ┆ 0.035            │
-        │ UL          ┆ 0.08             │
-        └─────────────┴──────────────────┘
+        shape: (5, 3)
+        ┌─────────────┬────────────────────┬──────────────────┐
+        │ policy_type ┆ actual_vs_expected ┆ avg_abs_variance │
+        │ ---         ┆ ---                ┆ ---              │
+        │ str         ┆ f64                ┆ f64              │
+        ╞═════════════╪════════════════════╪══════════════════╡
+        │ TERM        ┆ 0.05               ┆ 0.044            │
+        │ WHOLE       ┆ -0.03              ┆ 0.044            │
+        │ UL          ┆ 0.08               ┆ 0.044            │
+        │ TERM        ┆ -0.02              ┆ 0.044            │
+        │ WHOLE       ┆ 0.04               ┆ 0.044            │
+        └─────────────┴────────────────────┴──────────────────┘
         ```
         """
     def sign(self) -> ExpressionProxy:
@@ -2105,15 +2130,17 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (2, 2)
-        ┌──────────────────┬───────┐
-        │ return_direction ┆ count │
-        │ ---              ┆ ---   │
-        │ f64              ┆ u32   │
-        ╞══════════════════╪═══════╡
-        │ -1.0             ┆ 1     │
-        │ 1.0              ┆ 3     │
-        └──────────────────┴───────┘
+        shape: (4, 4)
+        ┌─────────────┬───────────────┬──────────────────┬───────┐
+        │ asset_class ┆ annual_return ┆ return_direction ┆ count │
+        │ ---         ┆ ---           ┆ ---              ┆ ---   │
+        │ str         ┆ f64           ┆ f64              ┆ u32   │
+        ╞═════════════╪═══════════════╪══════════════════╪═══════╡
+        │ Bonds       ┆ 0.035         ┆ 1.0              ┆ 4     │
+        │ Equities    ┆ -0.12         ┆ -1.0             ┆ 4     │
+        │ Real Estate ┆ 0.08          ┆ 1.0              ┆ 4     │
+        │ Cash        ┆ 0.002         ┆ 1.0              ┆ 4     │
+        └─────────────┴───────────────┴──────────────────┴───────┘
         ```
         """
     def floor(self) -> ExpressionProxy:
@@ -2389,7 +2416,96 @@ class _BaseProxy:
         └────────────────┴──────────┴─────────────┴────────────────────┘
         ```
         """
-    def round_sig_figs(self, sig_figs: int) -> ExpressionProxy: ...
+    def round_sig_figs(self, sig_figs: int) -> ExpressionProxy:
+        """Round numeric values to a specified number of significant figures.
+
+        Rounds values to the specified number of significant digits, preserving
+        the most meaningful digits regardless of decimal position. Essential for
+        maintaining appropriate precision in actuarial calculations and financial
+        reporting while ensuring consistency across different magnitude values.
+
+        !!! note "When to use"
+            * **Financial Reporting:** Round monetary values, reserve calculations,
+              and capital requirements to appropriate significant figures for
+              regulatory reports and financial statements.
+            * **Mortality Tables:** Present mortality rates, survival probabilities,
+              and life expectancies with consistent precision across age ranges.
+            * **Statistical Analysis:** Display confidence intervals, standard errors,
+              and statistical estimates with appropriate precision for actuarial studies.
+            * **Pricing Calculations:** Round premium rates, loading factors, and
+              policy values to significant figures for consistent presentation.
+
+        Parameters
+        ----------
+        sig_figs : int
+            Number of significant figures to retain. Must be positive.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression containing values rounded to the specified number of
+            significant figures.
+
+        Examples
+        --------
+        **Scalar Example: Round Claim Amounts**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003"],
+            "claim_amount": [1234567.89, 0.00123456, 98765.4321],
+        }
+        af = ActuarialFrame(data)
+
+        af.rounded_3sf = af.claim_amount.round_sig_figs(3)
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (3, 3)
+        ┌───────────┬──────────────┬─────────────┐
+        │ policy_id ┆ claim_amount ┆ rounded_3sf │
+        │ ---       ┆ ---          ┆ ---         │
+        │ str       ┆ f64          ┆ f64         │
+        ╞═══════════╪══════════════╪═════════════╡
+        │ P001      ┆ 1.2346e6     ┆ 1.23e6      │
+        │ P002      ┆ 0.001235     ┆ 0.00123     │
+        │ P003      ┆ 98765.4321   ┆ 98800.0     │
+        └───────────┴──────────────┴─────────────┘
+        ```
+
+        **Vector Example: Round Mortality Rates**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "monthly_mortality_q": [[0.000123, 0.000145, 0.000167, 0.000189], [0.00234, 0.00256, 0.00278, 0.00301]],
+        }
+        af = ActuarialFrame(data)
+
+        af.rounded_q = af.monthly_mortality_q.list.eval(pl.element().round_sig_figs(2))
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬─────────────────────────────────┬───────────────────────────────┐
+        │ policy_id ┆ monthly_mortality_q             ┆ rounded_q                     │
+        │ ---       ┆ ---                             ┆ ---                           │
+        │ str       ┆ list[f64]                       ┆ list[f64]                     │
+        ╞═══════════╪═════════════════════════════════╪═══════════════════════════════╡
+        │ P001      ┆ [0.000123, 0.000145, … 0.00018… ┆ [0.00012, 0.00015, … 0.00019] │
+        │ P002      ┆ [0.00234, 0.00256, … 0.00301]   ┆ [0.0023, 0.0026, … 0.003]     │
+        └───────────┴─────────────────────────────────┴───────────────────────────────┘
+        ```
+        """
     def exp(self) -> ExpressionProxy:
         """Compute the exponential function (e^x) of numeric values.
 
@@ -2687,7 +2803,90 @@ class _BaseProxy:
         └────────────┴──────────────┘
         ```
         """
-    def log1p(self) -> ExpressionProxy: ...
+    def log1p(self) -> ExpressionProxy:
+        """Compute the natural logarithm of (1 + x) with improved numerical precision.
+
+        Calculates ln(1 + x) using a numerically stable algorithm, avoiding precision
+        loss for small values near zero. Essential for actuarial calculations involving
+        small interest rates, returns, or growth rates where standard logarithm functions
+        would lose significant digits due to floating-point arithmetic limitations.
+
+        !!! note "When to use"
+            * **Interest Rate Calculations:** Convert small nominal rates to continuously
+              compounded rates without precision loss in low-rate environments.
+            * **Return Calculations:** Calculate log returns from small percentage changes
+              in asset values, policy values, or investment performance metrics.
+            * **Discount Rate Analysis:** Transform small discount rates for present value
+              calculations requiring high numerical accuracy.
+            * **Growth Rate Modeling:** Analyze small population growth rates, policy
+              persistence changes, or incremental risk factor adjustments.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression containing ln(1 + x) computed with numerical stability
+            for values near zero.
+
+        Examples
+        --------
+        **Scalar Example: Log Returns from Small Changes**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003"],
+            "excess_return": [0.05, 0.12, -0.03],
+        }
+        af = ActuarialFrame(data)
+
+        af.log_return = af.excess_return.log1p()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (3, 3)
+        ┌───────────┬───────────────┬────────────┐
+        │ policy_id ┆ excess_return ┆ log_return │
+        │ ---       ┆ ---           ┆ ---        │
+        │ str       ┆ f64           ┆ f64        │
+        ╞═══════════╪═══════════════╪════════════╡
+        │ P001      ┆ 0.05          ┆ 0.04879    │
+        │ P002      ┆ 0.12          ┆ 0.113329   │
+        │ P003      ┆ -0.03         ┆ -0.030459  │
+        └───────────┴───────────────┴────────────┘
+        ```
+
+        **Vector Example: Continuously Compounded Returns**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "monthly_returns": [[0.01, 0.015, 0.02, -0.005], [0.008, 0.012, -0.003, 0.018]],
+        }
+        af = ActuarialFrame(data)
+
+        af.log_returns = af.monthly_returns.list.eval(pl.element().log1p())
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬─────────────────────────┬─────────────────────────────────┐
+        │ policy_id ┆ monthly_returns         ┆ log_returns                     │
+        │ ---       ┆ ---                     ┆ ---                             │
+        │ str       ┆ list[f64]               ┆ list[f64]                       │
+        ╞═══════════╪═════════════════════════╪═════════════════════════════════╡
+        │ P001      ┆ [0.01, 0.015, … -0.005] ┆ [0.00995, 0.014889, … -0.00501… │
+        │ P002      ┆ [0.008, 0.012, … 0.018] ┆ [0.007968, 0.011929, … 0.01784… │
+        └───────────┴─────────────────────────┴─────────────────────────────────┘
+        ```
+        """
     def ln(self) -> ExpressionProxy:
         """Compute the natural logarithm (base e) of numeric values.
 
@@ -2741,7 +2940,7 @@ class _BaseProxy:
         │ str    ┆ f64             │
         ╞════════╪═════════════════╡
         │ Q1     ┆ 0.024693        │
-        │ Q2     ┆ 0.029558        │
+        │ Q2     ┆ 0.029559        │
         │ Q3     ┆ 0.034401        │
         │ Q4     ┆ 0.019803        │
         └────────┴─────────────────┘
@@ -2766,19 +2965,101 @@ class _BaseProxy:
 
         ```text
         shape: (4, 2)
-        ┌──────────────┬───────────┐
+        ┌────────────────┬───────────┐
         │ claim_severity ┆ ln_amount │
-        │ ---          ┆ ---       │
-        │ str          ┆ f64       │
-        ╞══════════════╪═══════════╡
-        │ Small        ┆ 6.214608  │
-        │ Medium       ┆ 8.517193  │
-        │ Large        ┆ 10.819778 │
-        │ Catastrophic ┆ 13.122363 │
-        └──────────────┴───────────┘
+        │ ---            ┆ ---       │
+        │ str            ┆ f64       │
+        ╞════════════════╪═══════════╡
+        │ Small          ┆ 6.214608  │
+        │ Medium         ┆ 8.517193  │
+        │ Large          ┆ 10.819778 │
+        │ Catastrophic   ┆ 13.122363 │
+        └────────────────┴───────────┘
         ```
         """
-    def log10(self) -> ExpressionProxy: ...
+    def log10(self) -> ExpressionProxy:
+        """Compute the base-10 logarithm of numeric values.
+
+        Calculates the common logarithm (log base 10) of each value, useful for
+        analyzing data that spans orders of magnitude and for converting values
+        to logarithmic scales. Essential in actuarial work for handling highly
+        skewed distributions and displaying large-range data on comprehensible scales.
+
+        !!! note "When to use"
+            * **Data Visualization:** Transform claim amounts, policy values, or
+              exposure data spanning multiple orders of magnitude for clearer charts.
+            * **Magnitude Analysis:** Analyze data by orders of magnitude for portfolio
+              segmentation, premium banding, or risk classification schemes.
+            * **Statistical Modeling:** Apply log-scale transformations to highly skewed
+              distributions like catastrophic claims or large loss data.
+            * **Richter-Style Scales:** Create logarithmic scales for internal risk
+              ratings, severity classifications, or standardized reporting metrics.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression containing the base-10 logarithm of each value.
+
+        Examples
+        --------
+        **Scalar Example: Claim Magnitude Analysis**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003"],
+            "claim_amount": [100.0, 1000.0, 10000.0],
+        }
+        af = ActuarialFrame(data)
+
+        af.log10_amount = af.claim_amount.log10()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (3, 3)
+        ┌───────────┬──────────────┬──────────────┐
+        │ policy_id ┆ claim_amount ┆ log10_amount │
+        │ ---       ┆ ---          ┆ ---          │
+        │ str       ┆ f64          ┆ f64          │
+        ╞═══════════╪══════════════╪══════════════╡
+        │ P001      ┆ 100.0        ┆ 2.0          │
+        │ P002      ┆ 1000.0       ┆ 3.0          │
+        │ P003      ┆ 10000.0      ┆ 4.0          │
+        └───────────┴──────────────┴──────────────┘
+        ```
+
+        **Vector Example: Policy Value Orders of Magnitude**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "monthly_values": [[1000.0, 5000.0, 10000.0, 50000.0], [500.0, 2500.0, 12500.0, 62500.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.log10_values = af.monthly_values.list.eval(pl.element().log10())
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬─────────────────────────────┬───────────────────────────────┐
+        │ policy_id ┆ monthly_values              ┆ log10_values                  │
+        │ ---       ┆ ---                         ┆ ---                           │
+        │ str       ┆ list[f64]                   ┆ list[f64]                     │
+        ╞═══════════╪═════════════════════════════╪═══════════════════════════════╡
+        │ P001      ┆ [1000.0, 5000.0, … 50000.0] ┆ [3.0, 3.69897, … 4.69897]     │
+        │ P002      ┆ [500.0, 2500.0, … 62500.0]  ┆ [2.69897, 3.39794, … 4.79588] │
+        └───────────┴─────────────────────────────┴───────────────────────────────┘
+        ```
+        """
     def sqrt(self) -> ExpressionProxy:
         """Compute the square root of numeric values.
 
@@ -2869,12 +3150,499 @@ class _BaseProxy:
         └──────┴────────────┘
         ```
         """
-    def cbrt(self) -> ExpressionProxy: ...
-    def gamma(self) -> ExpressionProxy: ...
-    def is_nan(self) -> ExpressionProxy: ...
-    def is_finite(self) -> ExpressionProxy: ...
-    def is_infinite(self) -> ExpressionProxy: ...
-    def is_not_nan(self) -> ExpressionProxy: ...
+    def cbrt(self) -> ExpressionProxy:
+        """Compute the cube root of numeric values.
+
+        Calculates the cube root (third root) of each value, useful for inverse
+        transformations and specific actuarial calculations. Unlike square root,
+        cube root is defined for negative numbers, preserving the sign of the input.
+
+        !!! note "When to use"
+            * **Volume Calculations:** Transform cubic measures back to linear
+              scale for dimensional analysis in specialized insurance calculations.
+            * **Statistical Transformations:** Apply cube root transformation to
+              moderately skewed distributions for improved normality.
+            * **Index Construction:** Create cube-root weighted indices or scoring
+              systems that moderately compress large values.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression containing the cube root of each input value.
+            Preserves sign for negative values.
+
+        Examples
+        --------
+        **Scalar Example: Cube Root Transformation**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003"],
+            "volume": [8.0, 27.0, 64.0],
+        }
+        af = ActuarialFrame(data)
+
+        af.side_length = af.volume.cbrt()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (3, 3)
+        ┌───────────┬────────┬─────────────┐
+        │ policy_id ┆ volume ┆ side_length │
+        │ ---       ┆ ---    ┆ ---         │
+        │ str       ┆ f64    ┆ f64         │
+        ╞═══════════╪════════╪═════════════╡
+        │ P001      ┆ 8.0    ┆ 2.0         │
+        │ P002      ┆ 27.0   ┆ 3.0         │
+        │ P003      ┆ 64.0   ┆ 4.0         │
+        └───────────┴────────┴─────────────┘
+        ```
+
+        **Vector Example: Cube Root of Risk Scores**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "risk_cubed": [[1000.0, 8000.0, 27000.0, 64000.0], [125.0, 343.0, 729.0, 1331.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.risk_score = af.risk_cubed.list.eval(pl.element().cbrt())
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬──────────────────────────────┬──────────────────────────┐
+        │ policy_id ┆ risk_cubed                   ┆ risk_score               │
+        │ ---       ┆ ---                          ┆ ---                      │
+        │ str       ┆ list[f64]                    ┆ list[f64]                │
+        ╞═══════════╪══════════════════════════════╪══════════════════════════╡
+        │ P001      ┆ [1000.0, 8000.0, … 64000.0]  ┆ [10.0, 20.0, … 40.0]     │
+        │ P002      ┆ [125.0, 343.0, … 1331.0]     ┆ [5.0, 7.0, … 11.0]       │
+        └───────────┴──────────────────────────────┴──────────────────────────┘
+        ```
+        """
+    def gamma(self) -> ExpressionProxy:
+        """Compute the gamma function of numeric values.
+
+        Calculates the gamma function Γ(x), a generalization of factorial to
+        continuous values. Essential for advanced statistical distributions and
+        actuarial mathematics involving mortality modeling and risk distributions.
+
+        !!! note "When to use"
+            * **Statistical Distributions:** Calculate parameters for gamma, beta,
+              and other distributions used in loss modeling and survival analysis.
+            * **Mortality Models:** Apply gamma-related functions in Gompertz-Makeham
+              and other parametric mortality law calculations.
+            * **Risk Modeling:** Use in calculating distribution moments and tail
+              risk measures for heavy-tailed loss distributions.
+            * **Bayesian Analysis:** Compute prior and posterior distributions
+              involving gamma priors for rate parameters.
+
+        Returns
+        -------
+        ExpressionProxy
+            An expression containing Γ(x) for each input value x.
+            Returns NaN for non-positive integers.
+
+        Examples
+        --------
+        **Scalar Example: Gamma Function Values**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "param_id": ["P1", "P2", "P3", "P4"],
+            "x": [1.0, 2.0, 3.0, 4.5],
+        }
+        af = ActuarialFrame(data)
+
+        af.gamma_x = af.x.gamma()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (4, 3)
+        ┌──────────┬─────┬──────────┐
+        │ param_id ┆ x   ┆ gamma_x  │
+        │ ---      ┆ --- ┆ ---      │
+        │ str      ┆ f64 ┆ f64      │
+        ╞══════════╪═════╪══════════╡
+        │ P1       ┆ 1.0 ┆ 1.0      │
+        │ P2       ┆ 2.0 ┆ 1.0      │
+        │ P3       ┆ 3.0 ┆ 2.0      │
+        │ P4       ┆ 4.5 ┆ 11.63172 │
+        └──────────┴─────┴──────────┘
+        ```
+
+        **Vector Example: Gamma Distribution Normalizing Constants**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+
+        data = {
+            "distribution_id": ["D1", "D2"],
+            "shape_params": [[1.0, 2.0, 3.0, 4.0], [0.5, 1.5, 2.5, 3.5]],
+        }
+        af = ActuarialFrame(data)
+
+        af.normalizing_const = af.shape_params.list.eval(pl.element().gamma())
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌─────────────────┬─────────────────────┬──────────────────────────────┐
+        │ distribution_id ┆ shape_params        ┆ normalizing_const            │
+        │ ---             ┆ ---                 ┆ ---                          │
+        │ str             ┆ list[f64]           ┆ list[f64]                    │
+        ╞═════════════════╪═════════════════════╪══════════════════════════════╡
+        │ D1              ┆ [1.0, 2.0, … 4.0]   ┆ [1.0, 1.0, … 6.0]            │
+        │ D2              ┆ [0.5, 1.5, … 3.5]   ┆ [1.772454, 0.886227, … 3.32… │
+        └─────────────────┴─────────────────────┴──────────────────────────────┘
+        ```
+        """
+    def is_nan(self) -> ExpressionProxy:
+        """Check which values are NaN (Not a Number) in this expression or column.
+
+        Returns a boolean expression indicating which values are NaN, typically
+        resulting from invalid mathematical operations like 0/0 or sqrt(-1).
+        Essential for data quality checks and handling computational edge cases.
+
+        !!! note "When to use"
+            * **Data Quality:** Identify invalid calculation results from mathematical
+              operations in premium, reserve, or benefit calculations.
+            * **Error Detection:** Find computational errors in model runs, such as
+              division by zero or invalid log/sqrt operations.
+            * **Data Cleaning:** Filter or flag records with NaN values before
+              analysis or reporting to ensure data integrity.
+
+        Returns
+        -------
+        ExpressionProxy
+            A boolean expression where True indicates NaN values and False
+            indicates valid numbers or null values.
+
+        Examples
+        --------
+        **Scalar Example: Detect Invalid Calculations**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004"],
+            "calculation": [1.5, float('nan'), 2.3, float('inf')],
+        }
+        af = ActuarialFrame(data)
+
+        af.has_nan = af.calculation.is_nan()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (4, 3)
+        ┌───────────┬─────────────┬─────────┐
+        │ policy_id ┆ calculation ┆ has_nan │
+        │ ---       ┆ ---         ┆ ---     │
+        │ str       ┆ f64         ┆ bool    │
+        ╞═══════════╪═════════════╪═════════╡
+        │ P001      ┆ 1.5         ┆ false   │
+        │ P002      ┆ NaN         ┆ true    │
+        │ P003      ┆ 2.3         ┆ false   │
+        │ P004      ┆ inf         ┆ false   │
+        └───────────┴─────────────┴─────────┘
+        ```
+
+        **Vector Example: Flag Invalid Mortality Rates**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "mortality_q": [[0.001, 0.002, float('nan'), 0.003], [0.004, 0.005, 0.006, float('nan')]],
+        }
+        af = ActuarialFrame(data)
+
+        af.invalid_q = af.mortality_q.list.eval(pl.element().is_nan())
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬─────────────────────────┬───────────────────────────────┐
+        │ policy_id ┆ mortality_q             ┆ invalid_q                     │
+        │ ---       ┆ ---                     ┆ ---                           │
+        │ str       ┆ list[f64]               ┆ list[bool]                    │
+        ╞═══════════╪═════════════════════════╪═══════════════════════════════╡
+        │ P001      ┆ [0.001, 0.002, … 0.003] ┆ [false, false, … false]       │
+        │ P002      ┆ [0.004, 0.005, … NaN]   ┆ [false, false, … true]        │
+        └───────────┴─────────────────────────┴───────────────────────────────┘
+        ```
+        """
+    def is_finite(self) -> ExpressionProxy:
+        """Check which values are finite numbers in this expression or column.
+
+        Returns a boolean expression indicating which values are finite (neither
+        NaN nor infinite). Essential for validating calculation results and
+        ensuring numerical stability in actuarial computations.
+
+        !!! note "When to use"
+            * **Validation:** Ensure calculation results are within valid numerical
+              ranges before using in reserves, premiums, or benefit calculations.
+            * **Data Quality:** Filter records with valid finite values for statistical
+              analysis and model fitting procedures.
+            * **Numerical Stability:** Identify and handle overflow or underflow
+              conditions in iterative calculations and model projections.
+
+        Returns
+        -------
+        ExpressionProxy
+            A boolean expression where True indicates finite values and False
+            indicates NaN, infinity, or null values.
+
+        Examples
+        --------
+        **Scalar Example: Validate Calculation Results**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004"],
+            "result": [1200.5, float('inf'), float('nan'), 1500.0],
+        }
+        af = ActuarialFrame(data)
+
+        af.is_valid = af.result.is_finite()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (4, 3)
+        ┌───────────┬────────┬──────────┐
+        │ policy_id ┆ result ┆ is_valid │
+        │ ---       ┆ ---    ┆ ---      │
+        │ str       ┆ f64    ┆ bool     │
+        ╞═══════════╪════════╪══════════╡
+        │ P001      ┆ 1200.5 ┆ true     │
+        │ P002      ┆ inf    ┆ false    │
+        │ P003      ┆ NaN    ┆ false    │
+        │ P004      ┆ 1500.0 ┆ true     │
+        └───────────┴────────┴──────────┘
+        ```
+
+        **Vector Example: Validate Projection Results**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "reserves": [[1000.0, 1100.0, float('inf'), 1300.0], [2000.0, float('nan'), 2200.0, 2300.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.valid_reserves = af.reserves.list.eval(pl.element().is_finite())
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬───────────────────────────┬─────────────────────────────┐
+        │ policy_id ┆ reserves                  ┆ valid_reserves              │
+        │ ---       ┆ ---                       ┆ ---                         │
+        │ str       ┆ list[f64]                 ┆ list[bool]                  │
+        ╞═══════════╪═══════════════════════════╪═════════════════════════════╡
+        │ P001      ┆ [1000.0, 1100.0, … 1300.… ┆ [true, true, … true]        │
+        │ P002      ┆ [2000.0, NaN, … 2300.0]   ┆ [true, false, … true]       │
+        └───────────┴───────────────────────────┴─────────────────────────────┘
+        ```
+        """
+    def is_infinite(self) -> ExpressionProxy:
+        """Check which values are infinite in this expression or column.
+
+        Returns a boolean expression indicating which values are positive or
+        negative infinity, typically resulting from overflow or division by zero.
+        Essential for detecting numerical instability in actuarial calculations.
+
+        !!! note "When to use"
+            * **Overflow Detection:** Identify calculations that have overflowed
+              in exponential growth models or compound interest calculations.
+            * **Division Checks:** Find division by zero errors in rate calculations,
+              ratios, or normalized metrics.
+            * **Model Validation:** Detect numerical instability in iterative
+              algorithms or projection models.
+
+        Returns
+        -------
+        ExpressionProxy
+            A boolean expression where True indicates infinite values (positive
+            or negative) and False indicates finite numbers, NaN, or null.
+
+        Examples
+        --------
+        **Scalar Example: Detect Overflow**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004"],
+            "growth_factor": [1.5, float('inf'), 2.0, float('-inf')],
+        }
+        af = ActuarialFrame(data)
+
+        af.has_overflow = af.growth_factor.is_infinite()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (4, 3)
+        ┌───────────┬───────────────┬──────────────┐
+        │ policy_id ┆ growth_factor ┆ has_overflow │
+        │ ---       ┆ ---           ┆ ---          │
+        │ str       ┆ f64           ┆ bool         │
+        ╞═══════════╪═══════════════╪══════════════╡
+        │ P001      ┆ 1.5           ┆ false        │
+        │ P002      ┆ inf           ┆ true         │
+        │ P003      ┆ 2.0           ┆ false        │
+        │ P004      ┆ -inf          ┆ true         │
+        └───────────┴───────────────┴──────────────┘
+        ```
+
+        **Vector Example: Check Discount Factors**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "discount_factors": [[0.95, 0.90, 0.85, 0.80], [1.0, 0.0, float('inf'), 0.75]],
+        }
+        af = ActuarialFrame(data)
+
+        af.invalid_discount = af.discount_factors.list.eval(pl.element().is_infinite())
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬───────────────────────────┬─────────────────────────────┐
+        │ policy_id ┆ discount_factors          ┆ invalid_discount            │
+        │ ---       ┆ ---                       ┆ ---                         │
+        │ str       ┆ list[f64]                 ┆ list[bool]                  │
+        ╞═══════════╪═══════════════════════════╪═════════════════════════════╡
+        │ P001      ┆ [0.95, 0.9, … 0.8]        ┆ [false, false, … false]     │
+        │ P002      ┆ [1.0, 0.0, … 0.75]        ┆ [false, false, … false]     │
+        └───────────┴───────────────────────────┴─────────────────────────────┘
+        ```
+        """
+    def is_not_nan(self) -> ExpressionProxy:
+        """Check which values are not NaN (Not a Number) in this expression or column.
+
+        Returns a boolean expression indicating which values are valid numbers or
+        null (but not NaN). Complement of is_nan, useful for filtering valid
+        computational results in actuarial calculations.
+
+        !!! note "When to use"
+            * **Valid Data Selection:** Filter records with valid calculation results
+              for downstream analysis and reporting.
+            * **Quality Assurance:** Identify successfully computed values in model
+              projections and reserve calculations.
+            * **Data Processing:** Select records without computational errors for
+              aggregation and statistical analysis.
+
+        Returns
+        -------
+        ExpressionProxy
+            A boolean expression where True indicates non-NaN values (including
+            null, finite numbers, and infinity) and False indicates NaN.
+
+        Examples
+        --------
+        **Scalar Example: Filter Valid Calculations**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004"],
+            "premium": [1200.0, float('nan'), 1500.0, 1800.0],
+        }
+        af = ActuarialFrame(data)
+
+        af.valid_premium = af.premium.is_not_nan()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (4, 3)
+        ┌───────────┬─────────┬───────────────┐
+        │ policy_id ┆ premium ┆ valid_premium │
+        │ ---       ┆ ---     ┆ ---           │
+        │ str       ┆ f64     ┆ bool          │
+        ╞═══════════╪═════════╪═══════════════╡
+        │ P001      ┆ 1200.0  ┆ true          │
+        │ P002      ┆ NaN     ┆ false         │
+        │ P003      ┆ 1500.0  ┆ true          │
+        │ P004      ┆ 1800.0  ┆ true          │
+        └───────────┴─────────┴───────────────┘
+        ```
+
+        **Vector Example: Count Valid Projections**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+        import polars as pl
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "monthly_benefits": [[100.0, 105.0, float('nan'), 115.0], [200.0, 210.0, 220.0, float('nan')]],
+        }
+        af = ActuarialFrame(data)
+
+        af.valid_months = af.monthly_benefits.list.eval(pl.element().is_not_nan()).list.sum()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬──────────────────────────┬──────────────┐
+        │ policy_id ┆ monthly_benefits         ┆ valid_months │
+        │ ---       ┆ ---                      ┆ ---          │
+        │ str       ┆ list[f64]                ┆ u32          │
+        ╞═══════════╪══════════════════════════╪══════════════╡
+        │ P001      ┆ [100.0, 105.0, … 115.0]  ┆ 3            │
+        │ P002      ┆ [200.0, 210.0, … NaN]    ┆ 3            │
+        └───────────┴──────────────────────────┴──────────────┘
+        ```
+        """
     def is_not_null(self) -> ExpressionProxy:
         """Check which values are not null (not missing) in this expression or column.
 
@@ -2924,15 +3692,17 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (2, 3)
-        ┌───────────┬─────────────┬─────────┐
-        │ policy_id ┆ beneficiary ┆ premium │
-        │ ---       ┆ ---         ┆ ---     │
-        │ str       ┆ str         ┆ f64     │
-        ╞═══════════╪═════════════╪═════════╡
-        │ P001      ┆ John Doe    ┆ 1200.0  │
-        │ P004      ┆ Bob Wilson  ┆ 1800.0  │
-        └───────────┴─────────────┴─────────┘
+        shape: (4, 4)
+        ┌───────────┬─────────────┬─────────┬─────────────────┐
+        │ policy_id ┆ beneficiary ┆ premium ┆ complete_record │
+        │ ---       ┆ ---         ┆ ---     ┆ ---             │
+        │ str       ┆ str         ┆ f64     ┆ bool            │
+        ╞═══════════╪═════════════╪═════════╪═════════════════╡
+        │ P001      ┆ John Doe    ┆ 1200.0  ┆ true            │
+        │ P002      ┆ null        ┆ 1500.0  ┆ false           │
+        │ P003      ┆ Jane Smith  ┆ null    ┆ false           │
+        │ P004      ┆ Bob Wilson  ┆ 1800.0  ┆ true            │
+        └───────────┴─────────────┴─────────┴─────────────────┘
         ```
 
         **Vector Example: Data Completeness by Policy Type**
@@ -2953,15 +3723,17 @@ class _BaseProxy:
         ```
 
         ```text
-        shape: (3, 3)
-        ┌─────────────┬────────────────┬───────────────┐
-        │ policy_type ┆ total_policies ┆ complete_exams │
-        │ ---         ┆ ---            ┆ ---           │
-        │ str         ┆ u32            ┆ u32           │
-        ╞═════════════╪════════════════╪═══════════════╡
-        │ TERM        ┆ 2              ┆ 1             │
-        │ WHOLE       ┆ 2              ┆ 1             │
-        │ UL          ┆ 1              ┆ 1             │
-        └─────────────┴────────────────┴───────────────┘
+        shape: (5, 4)
+        ┌─────────────┬──────────────┬────────────────┬────────────────┐
+        │ policy_type ┆ medical_exam ┆ total_policies ┆ complete_exams │
+        │ ---         ┆ ---          ┆ ---            ┆ ---            │
+        │ str         ┆ str          ┆ u32            ┆ u32            │
+        ╞═════════════╪══════════════╪════════════════╪════════════════╡
+        │ TERM        ┆ Complete     ┆ 5              ┆ 3              │
+        │ TERM        ┆ null         ┆ 5              ┆ 3              │
+        │ WHOLE       ┆ Complete     ┆ 5              ┆ 3              │
+        │ WHOLE       ┆ null         ┆ 5              ┆ 3              │
+        │ UL          ┆ Complete     ┆ 5              ┆ 3              │
+        └─────────────┴──────────────┴────────────────┴────────────────┘
         ```
         """

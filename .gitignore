@@ -52,4 +52,15 @@ docs/_build/
 /bindings/python/jobs/my-model/docs
 /bindings/python/.hypothesis
 /bindings/python/tests/.hypothesis
-.claude
+# Claude Code – keep shared config, ditch personal/state
+**/.claude/settings.local.json
+**/.claude/history*
+**/.claude/tmp/
+/core/rust-functions-outputs
+/bindings/python/pyfuncs-outputs
+/bindings/python/AGENT.md
+/bindings/python/CLAUDE.md
+/bindings/python/prompts
+/core/AGENT.md
+/core/CLAUDE.md
+/core/prompts

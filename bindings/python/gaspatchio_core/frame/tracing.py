@@ -198,9 +198,31 @@ def _infer_expression_type(expr: Any, frame_instance: ActuarialFrame) -> Any:
             dummy_data = {}
             for col_name, dtype in type_map.items():
                 if isinstance(dtype, pl.List):
-                    # For list types, create an empty list of the right type
+                    # For list types, create a list with one dummy element of the right type
                     inner_type = dtype.inner if hasattr(dtype, "inner") else pl.Float64
-                    dummy_data[col_name] = [[]]
+                    # Create appropriate dummy value based on inner type
+                    if inner_type == pl.Date:
+                        import datetime
+                        dummy_data[col_name] = [[datetime.date(2020, 1, 1)]]
+                    elif inner_type == pl.Float64 or inner_type == pl.Float32:
+                        dummy_data[col_name] = [[0.0]]
+                    elif inner_type in [pl.Int64, pl.Int32, pl.Int16, pl.Int8, 
+                                        pl.UInt64, pl.UInt32, pl.UInt16, pl.UInt8]:
+                        dummy_data[col_name] = [[0]]
+                    elif inner_type == pl.Utf8:
+                        dummy_data[col_name] = [[""]]
+                    elif inner_type == pl.Boolean:
+                        dummy_data[col_name] = [[False]]
+                    elif inner_type == pl.Datetime:
+                        import datetime
+                        dummy_data[col_name] = [[datetime.datetime(2020, 1, 1)]]
+                    elif inner_type == pl.Time:
+                        dummy_data[col_name] = [[pl.time(0, 0, 0)]]
+                    elif inner_type == pl.Duration:
+                        dummy_data[col_name] = [[pl.duration(days=0)]]
+                    else:
+                        # Default to empty list if we don't know the type
+                        dummy_data[col_name] = [[]]
                 # Numeric types
                 elif dtype == pl.Float64 or dtype == pl.Float32:
                     dummy_data[col_name] = [0.0]
@@ -223,9 +245,11 @@ def _infer_expression_type(expr: Any, frame_instance: ActuarialFrame) -> Any:
                     dummy_data[col_name] = [False]
                 # Temporal types
                 elif dtype == pl.Date:
-                    dummy_data[col_name] = [pl.date(2020, 1, 1)]
+                    import datetime
+                    dummy_data[col_name] = [datetime.date(2020, 1, 1)]
                 elif dtype == pl.Datetime:
-                    dummy_data[col_name] = [pl.datetime(2020, 1, 1)]
+                    import datetime
+                    dummy_data[col_name] = [datetime.datetime(2020, 1, 1)]
                 elif dtype == pl.Time:
                     dummy_data[col_name] = [pl.time(0, 0, 0)]
                 elif dtype == pl.Duration:

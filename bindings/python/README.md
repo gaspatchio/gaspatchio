@@ -177,22 +177,85 @@ uv run pytest
 uv run -- python -m mypy.stubtest gaspatchio_core
 ```
 
-## Documentation
+## Documentation & Docstring Validation
 
-We use standard doctest to generate great docs and tests for the python bindings.
+We use a custom docstring validation system to ensure high-quality documentation with executable examples.
 
-you can run these (and they also run as a part of the test suite) with:
+### Docstring Example Validation
 
+The test suite automatically validates docstring code examples for:
+- **Syntax errors** (via Ruff linting)
+- **Code style** (optional, via custom style rules)
+- **Runtime correctness** (optional, validates output matches expected)
+
+### Running Docstring Tests
+
+#### Basic Linting (Default)
+
+Runs syntax checks on all docstring examples:
 ```bash
-uv run pytest --doctest-modules --doctest-glob="*.pyi" 
+uv run pytest
 ```
 
-we're also using pytest-accept to generate outputs once we have the right tests in place. 
+#### Style Checking
 
-> The "test" here actually means we're checking that the output matches◊ the expected output.
-there's no 'assert' as such, that should be in the regular pytest tests. 
+Detect old bracket notation (`af["column"]`) and suggest modern attribute notation (`af.column`):
 
-If you want to force the examples to have the output you expect, you can use:
 ```bash
-uv run pytest gaspatchio_core/accessors/excel.py --doctest-modules --doctest-glob="*.pyi" --accept
+# Show style warnings (doesn't fail tests)
+uv run pytest gaspatchio_core/column/namespaces/dt_proxy.py --gp-style-check=warn -s
+
+# Fail tests on style violations
+uv run pytest gaspatchio_core/accessors/excel.py --gp-style-check=strict
+
+# Check specific file
+uv run pytest gaspatchio_core/accessors/date.py --gp-style-check=warn -s
+```
+
+**Note:** Use `-s` flag with `warn` mode to see warnings in real-time.
+
+#### Runtime Validation
+
+Execute docstring examples and validate output:
+
+```bash
+# Run code and check output matches expected
+uv run pytest gaspatchio_core/column/namespaces/dt_proxy.py --gp-run-examples
+
+# Combine with style checking
+uv run pytest gaspatchio_core/accessors/excel.py --gp-style-check=warn --gp-run-examples -s
+```
+
+### Style Rules
+
+Current style rules enforced:
+
+- **GP001**: Prefer attribute notation (`af.column`) over bracket notation (`af["column"]`)
+  - Only applies when column name is a valid Python identifier
+  - Helps with code readability and IntelliSense support
+
+### Testing Specific Files
+
+```bash
+# Single file with all checks
+uv run pytest gaspatchio_core/column/namespaces/dt_proxy.py --gp-style-check=strict --gp-run-examples
+
+# Multiple files
+uv run pytest gaspatchio_core/accessors/date.py gaspatchio_core/accessors/excel.py --gp-style-check=warn -s
+
+# Specific example
+uv run pytest gaspatchio_core/column/namespaces/dt_proxy.py::dt_proxy.DtNamespaceProxy.year-ex0 --gp-style-check=strict
+```
+
+### Docstring Configuration
+
+Files to validate are configured in `pyproject.toml`:
+
+```toml
+[tool.pytest.ini_options]
+addopts = [
+    "--gp-docstring-paths=gaspatchio_core/column/namespaces/dt_proxy.py",
+    "--gp-docstring-paths=gaspatchio_core/accessors/excel.py",
+    # ... more paths
+]
 ```

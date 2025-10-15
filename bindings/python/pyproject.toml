@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio"
-version = "0.0.18"
+version = "0.0.23"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
@@ -9,8 +9,8 @@ dependencies = [
     "logfire>=3.4.0",
     "loguru>=0.7.3",
     "numpy>=1.24.0,<2.2",
-    "polars>=1.27.0",
-    "polars-u64-idx>=1.27.0",
+    "polars==1.27.1",
+    "polars-u64-idx==1.27.1",
     "rich>=13.9.4",
     "typer>=0.15.1",
     "pyarrow>=15.0.0",
@@ -35,10 +35,10 @@ dev = [
 ]
 
 [project.optional-dependencies]
-pandas = ["polars-u64-idx>=1.27.0"]
-numpy = ["polars-u64-idx>=1.27.0"]
-pyarrow = ["polars-u64-idx>=1.27.0"]
-excel = ["polars-u64-idx>=1.27.0"]
+pandas = ["polars-u64-idx==1.27.1"]
+numpy = ["polars-u64-idx==1.27.1"]
+pyarrow = ["polars-u64-idx==1.27.1"]
+excel = ["polars-u64-idx==1.27.1"]
 recipes = ["marimo>=0.10.0"]
 
 # Build System
@@ -53,14 +53,21 @@ python-source = ""
 
 # Linting, formatting, type checking
 [tool.ruff] 
-select = ["ALL"]
 line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
 extend-ignore = [
     "D203",
     "D212",   # allow either one-line or two-line docstring summaries
     "D213",   # allow either one-line or two-line docstring summaries
     "ANN001", # sometimes self/cls isn't annotated
+    "COM812", # conflicts with formatter
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gaspatchio_core"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]
 docstring-code-format = true # format code in docstrings too
@@ -84,19 +91,18 @@ config-settings = { "build-args" = "--profile=dev" }
 # Testing
 [tool.pytest.ini_options]
 addopts = [
-    "--gp-docstring-paths=gaspatchio_core/assumptions/column/namespaces/dt_proxy.py",
+    "--gp-docstring-paths=gaspatchio_core/column/namespaces/dt_proxy.py",
     "--gp-docstring-paths=gaspatchio_core/column/namespaces/string_proxy.py",
     "--gp-docstring-paths=gaspatchio_core/accessors/date.py",
     "--gp-docstring-paths=gaspatchio_core/accessors/excel.py",
-    "--gp-docstring-paths=gaspatchio_core/assumptions/api.py",
     "--gp-docstring-paths=gaspatchio_core/column/proxy.pyi",
-    "--gp-docstring-paths=gaspatchio_core/__init__.py",
-    "--gp-docstring-paths=gaspatchio_core/__init__.pyi",
     "--gp-docstring-paths=gaspatchio_core/assumptions/_api.py",
+    "--gp-docstring-paths=gaspatchio_core/accessors/excel_functions/*.py",
     "-p",
     "gaspatchio_core.examples.docstrings.pytest_plugin",
     "-m",
     "not benchmark",
+    "--ignore=pyfuncs-outputs",
 ]
 markers = [
     "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",
