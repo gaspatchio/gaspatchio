@@ -883,17 +883,32 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         at_period : Get value at arbitrary period offset
 
         """
+        from gaspatchio_core.column.column_proxy import ColumnProxy
+        from gaspatchio_core.column.dispatch import (
+            ColumnTypeDetector,  # type: ignore[attr-defined]
+        )
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
-
-        # For list columns: prepend fill_value and slice to original length
-        # This creates the effect of shifting back one period (t-1)
-        shifted_expr = pl.concat_list([pl.lit([fill_value]), base_expr]).list.slice(
-            0, base_expr.list.len()
-        )
-
         parent_af = self._get_parent_frame()
+
+        # Determine if this is a list column
+        detector = ColumnTypeDetector(parent_af)
+        is_list = False
+
+        if isinstance(self._proxy, ColumnProxy):
+            is_list = detector.is_list_column(self._proxy.name)
+
+        if is_list:
+            # For list columns: prepend fill_value and slice to original length
+            # This creates the effect of shifting back one period (t-1)
+            shifted_expr = pl.concat_list([pl.lit([fill_value]), base_expr]).list.slice(
+                0, base_expr.list.len()
+            )
+        else:
+            # For scalar columns: use shift(1) to get previous period value
+            shifted_expr = base_expr.shift(1, fill_value=fill_value)
+
         return ExpressionProxy(shifted_expr, parent_af)
 
     def next_period(self, fill_value=0) -> ExpressionProxy:
@@ -975,15 +990,30 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         at_period : Get value at arbitrary period offset
 
         """
+        from gaspatchio_core.column.column_proxy import ColumnProxy
+        from gaspatchio_core.column.dispatch import (
+            ColumnTypeDetector,  # type: ignore[attr-defined]
+        )
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
-
-        # For list columns: append fill_value and slice from position 1
-        # This creates the effect of shifting forward one period (t+1)
-        shifted_expr = pl.concat_list([base_expr, pl.lit([fill_value])]).list.slice(
-            1, base_expr.list.len()
-        )
-
         parent_af = self._get_parent_frame()
+
+        # Determine if this is a list column
+        detector = ColumnTypeDetector(parent_af)
+        is_list = False
+
+        if isinstance(self._proxy, ColumnProxy):
+            is_list = detector.is_list_column(self._proxy.name)
+
+        if is_list:
+            # For list columns: append fill_value and slice from position 1
+            # This creates the effect of shifting forward one period (t+1)
+            shifted_expr = pl.concat_list([base_expr, pl.lit([fill_value])]).list.slice(
+                1, base_expr.list.len()
+            )
+        else:
+            # For scalar columns: use shift(-1) to get next period value
+            shifted_expr = base_expr.shift(-1, fill_value=fill_value)
+
         return ExpressionProxy(shifted_expr, parent_af)
