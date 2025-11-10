@@ -1,11 +1,11 @@
 # ABOUTME: Projection accessor for actuarial projection operations.
-# ABOUTME: Methods: cumulative survival, discount, period overrides.
+# ABOUTME: Methods: cumulative survival, period overrides, time-shifting.
 
 """Projection accessor for actuarial operations on time-series."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import polars as pl
 
@@ -53,21 +53,6 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         # Terminal value - use Polars
         af.maturity_benefit = af.face_amount.list.last()
-        ```
-
-        Discount factors from interest rates:
-
-        ```python
-        from gaspatchio_core import ActuarialFrame
-
-        data = {"interest_rate": [[0.05, 0.05, 0.05]]}
-        af = ActuarialFrame(data)
-
-        # Complex cumulative discount - use projection method
-        af.v = af.interest_rate.projection.cumulative_discount()
-
-        # Simple multiplication - use operators
-        af.pv_cashflow = af.net_cashflow * af.v
         ```
 
         Premium holiday modeling:
@@ -316,203 +301,6 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
                 survival_expr = survival_expr.shift(1, fill_value=start_at)
 
         return ExpressionProxy(survival_expr, parent_af)
-
-    def cumulative_discount(
-        self,
-        mode: Literal["compound", "simple"] = "compound",
-        start_at: float | None = 1.0,
-    ) -> ExpressionProxy:
-        """Convert interest rates to cumulative discount factors.
-
-        Transforms period-by-period interest rates into cumulative discount factors
-        (also known as present value factors or v^t) using compound or simple interest.
-        Essential for calculating present values of future cashflows in actuarial
-        projections, reserve valuations, and pricing models.
-
-        For list columns, applies element-wise cumulative product within each list.
-        For scalar columns, applies cumulative product across rows (use `.over()` for
-        grouping by policy).
-
-        !!! note "When to use"
-            * **Present Value Calculations:** Discount future cashflows (premiums,
-                benefits, expenses) to their present value for pricing and reserving.
-            * **Policy Valuations:** Calculate actuarial present values (APVs) of
-                expected future payments for statutory and GAAP reserves.
-            * **Pricing Models:** Determine profit margins and premium rates by
-                discounting projected profits to policy issue date.
-            * **Capital Modeling:** Project discounted cashflows for economic capital,
-                embedded value, and risk-based capital calculations.
-
-        Parameters
-        ----------
-        mode : str, optional
-            Discount mode: "compound" for compound interest (default) or "simple"
-            for simple interest
-        start_at : float, optional
-            Initial discount factor to prepend at t=0. Shifts results to give
-            beginning-of-period values (standard actuarial practice). Common values:
-            - 1.0 (default): Beginning-of-period, v^0=1.0 [1.0, v^1, v^2, ...]
-            - None: End-of-period discount [v^1, v^2, ...]
-            - Other: Custom initial discount factor
-
-        Returns
-        -------
-            Cumulative discount factors
-
-        Raises
-        ------
-            RuntimeError: If proxy not associated with an ActuarialFrame
-            ValueError: If mode is not "compound" or "simple"
-
-        Examples
-        --------
-        **Vector Example: Beginning-of-Period Discount**
-
-        ```python
-        from gaspatchio_core import ActuarialFrame
-
-        data = {"rate": [[0.05, 0.05, 0.05]]}
-        af = ActuarialFrame(data)
-
-        af.v = af.rate.projection.cumulative_discount()
-
-        print(af.collect())
-        ```
-
-        ```text
-        shape: (1, 2)
-        ┌────────────────────┬───────────────────────────┐
-        │ rate               ┆ v                         │
-        │ ---                ┆ ---                       │
-        │ list[f64]          ┆ list[f64]                 │
-        ╞════════════════════╪═══════════════════════════╡
-        │ [0.05, 0.05, 0.05] ┆ [1.0, 0.952381, 0.907029] │
-        └────────────────────┴───────────────────────────┘
-        ```
-
-        **Vector Example: Present Value Calculation**
-
-        ```python
-        from gaspatchio_core import ActuarialFrame
-
-        data = {
-            "cashflow": [[1000, 1000, 1000]],
-            "rate": [[0.05, 0.05, 0.05]],
-        }
-        af = ActuarialFrame(data)
-
-        af.v = af.rate.projection.cumulative_discount()
-        af.pv = af.cashflow * af.v
-
-        print(af.collect())
-        ```
-
-        ```text
-        shape: (1, 4)
-        ┌────────────────────┬────────────────────┬──────────────────────┬────────┐
-        │ cashflow           ┆ rate               ┆ v                    ┆ pv     │
-        │ ---                ┆ ---                ┆ ---                  ┆ ---    │
-        │ list[i64]          ┆ list[f64]          ┆ list[f64]            ┆ list[… │
-        ╞════════════════════╪════════════════════╪══════════════════════╪════════╡
-        │ [1000, 1000, 1000] ┆ [0.05, 0.05, 0.05] ┆ [0.952381, 0.907029, ┆ [952.3 │
-        │                    ┆                    ┆ 0.863838]            ┆ 80952… │
-        └────────────────────┴────────────────────┴──────────────────────┴────────┘
-        ```
-
-        **Vector Example: Simple Interest Mode**
-
-        ```python
-        from gaspatchio_core import ActuarialFrame
-
-        data = {"interest_rate": [[0.05, 0.05, 0.05]]}
-        af = ActuarialFrame(data)
-
-        af.v_simple = af.interest_rate.projection.cumulative_discount(mode="simple")
-
-        print(af.collect())
-        ```
-
-        ```text
-        shape: (1, 2)
-        ┌────────────────────┬───────────────────────────┐
-        │ interest_rate      ┆ v_simple                  │
-        │ ---                ┆ ---                       │
-        │ list[f64]          ┆ list[f64]                 │
-        ╞════════════════════╪═══════════════════════════╡
-        │ [0.05, 0.05, 0.05] ┆ [1.0, 0.952381, 0.909091] │
-        └────────────────────┴───────────────────────────┘
-        ```
-
-        """
-        from gaspatchio_core.column.column_proxy import ColumnProxy
-        from gaspatchio_core.column.dispatch import (
-            ColumnTypeDetector,  # type: ignore[attr-defined]
-        )
-        from gaspatchio_core.column.expression_proxy import ExpressionProxy
-
-        # Validate mode
-        if mode not in ("compound", "simple"):
-            msg = f"mode must be 'compound' or 'simple', got '{mode}'"
-            raise ValueError(msg)
-
-        # Get base expression and parent frame
-        base_expr = self._get_polars_expr()
-        parent_af = self._get_parent_frame()
-
-        # Determine if this is a list column
-        detector = ColumnTypeDetector(parent_af)
-        is_list = False
-
-        if isinstance(self._proxy, ColumnProxy):
-            is_list = detector.is_list_column(self._proxy.name)
-
-        # Apply appropriate calculation based on mode
-        if mode == "compound":
-            if is_list:
-                # For list columns, apply element-wise cumulative discount.
-                # This computes discount[t] = v[0] * v[1] * ... * v[t]
-                # where v[i] = 1/(1+r[i]).
-                discount_expr = base_expr.list.eval((1 / (1 + pl.element())).cum_prod())
-
-                # Apply start_at shift if requested (for list columns)
-                if start_at is not None:
-                    # Prepend start_at value and drop last element to maintain length
-                    # This gives beginning-of-period values: [start_at, v^1, v^2, ...]
-                    list_len = discount_expr.list.len()
-                    discount_expr = pl.concat_list(
-                        [pl.lit([start_at]), discount_expr]
-                    ).list.slice(0, list_len)
-            else:
-                # For scalar columns, apply cumulative product of discount factors.
-                discount_expr = (1 / (1 + base_expr)).cum_prod()
-
-                # Apply start_at shift if requested (for scalar columns)
-                if start_at is not None:
-                    discount_expr = discount_expr.shift(1, fill_value=start_at)
-        elif is_list:
-            # For list columns with simple interest.
-            # This computes discount[t] = 1 / (1 + r * t) using period indices.
-            # Inside list.eval, use element-wise index which starts at 0
-            discount_expr = base_expr.list.eval(
-                1 / (1 + pl.element() * (pl.element().cum_count() - 1))
-            )
-
-            # Apply start_at shift if requested (for list columns)
-            if start_at is not None:
-                list_len = discount_expr.list.len()
-                discount_expr = pl.concat_list(
-                    [pl.lit([start_at]), discount_expr]
-                ).list.slice(0, list_len)
-        else:
-            # For scalar columns with simple interest, use cum_count for period indices.
-            # Assumes first rate is at period 0.
-            discount_expr = 1 / (1 + base_expr * (pl.cum_count().over(pl.all()) - 1))
-
-            # Apply start_at shift if requested (for scalar columns)
-            if start_at is not None:
-                discount_expr = discount_expr.shift(1, fill_value=start_at)
-
-        return ExpressionProxy(discount_expr, parent_af)
 
     def with_period(self, period: int, value: float | str) -> ExpressionProxy:
         """Override value at a specific period (zero-indexed).

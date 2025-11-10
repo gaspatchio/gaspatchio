@@ -283,7 +283,8 @@ class ActuarialFrame:
             # MODIFIED: Integrate tracing
             if self._tracing:
                 append_operation_to_graph(self, key, expr)
-                # Don't execute the operation yet in tracing mode
+                # ALSO apply to _df immediately for models that access _df directly
+                self._df = self._df.with_columns(expr.alias(key))
             else:
                 # Execute directly if not tracing
                 self._df = self._df.with_columns(expr.alias(key))
@@ -1952,6 +1953,24 @@ class ActuarialFrame:
             from .tracing import (
                 create_list_broadcast_traced_operations,  # type: ignore[attr-defined]
             )
+
+            # CRITICAL: Apply pending operations before list broadcasting
+            # List broadcasting needs the actual schema to determine which columns are lists
+            # But in debug mode, columns may only exist in the computation graph
+            if self._computation_graph:
+                logger.trace(
+                    f"Debug mode: Applying {len(self._computation_graph)} pending "
+                    f"operation(s) before list broadcasting for '{key}'"
+                )
+                # Apply all pending operations to the LazyFrame
+                for op in self._computation_graph:
+                    # Skip string expressions (already applied)
+                    if isinstance(op.expression, str):
+                        continue
+                    self._df = self._df.with_columns(op.expression.alias(op.alias))
+
+                # Note: We keep operations in the graph for collect() to use
+                # but they're already in _df so collect() will skip re-applying them
 
             # Capture source location from user code
             source_metadata = None

@@ -1,5 +1,5 @@
 # ABOUTME: Tests for the ProjectionColumnAccessor.
-# ABOUTME: Validates cumulative survival, discount, and period override methods.
+# ABOUTME: Validates cumulative survival and period override methods.
 # ruff: noqa: S101, PLR2004, ANN201, ERA001
 # type: ignore[attr-defined]
 
@@ -137,86 +137,6 @@ class TestCumulativeSurvival:
             assert pytest.approx(m, abs=1e-9) == a
 
 
-class TestCumulativeDiscount:
-    """Tests for cumulative_discount() method."""
-
-    def test_compound_discount_basic(self):
-        """Test compound discount with list column."""
-        data = {"rate": [[0.05, 0.05, 0.05]]}
-        af = ActuarialFrame(data)
-
-        af.v = af.rate.projection.cumulative_discount(start_at=None)
-
-        result = af.collect()
-        v = result["v"][0]
-
-        # v[0] = 1 / 1.05 = 0.952381
-        # v[1] = 1 / (1.05 * 1.05) = 0.907029
-        # v[2] = 1 / (1.05^3) = 0.863838
-        assert len(v) == 3
-        assert pytest.approx(v[0], abs=1e-6) == 1 / 1.05
-        assert pytest.approx(v[1], abs=1e-6) == 1 / (1.05**2)
-        assert pytest.approx(v[2], abs=1e-6) == 1 / (1.05**3)
-
-    def test_simple_discount(self):
-        """Test simple discount mode."""
-        data = {"rate": [[0.05, 0.05, 0.05]]}
-        af = ActuarialFrame(data)
-
-        af.v = af.rate.projection.cumulative_discount(mode="simple", start_at=None)
-
-        result = af.collect()
-        v = result["v"][0]
-
-        # Simple: v[t] = 1 / (1 + r * t)
-        # v[0] = 1 / (1 + 0.05 * 0) = 1.0
-        # v[1] = 1 / (1 + 0.05 * 1) = 0.952381
-        # v[2] = 1 / (1 + 0.05 * 2) = 0.909091
-        assert len(v) == 3
-        assert pytest.approx(v[0], abs=1e-6) == 1.0
-        assert pytest.approx(v[1], abs=1e-6) == 1 / 1.05
-        assert pytest.approx(v[2], abs=1e-6) == 1 / 1.10
-
-    def test_invalid_mode(self):
-        """Test that invalid mode raises ValueError."""
-        data = {"rate": [[0.05, 0.05]]}
-        af = ActuarialFrame(data)
-
-        with pytest.raises(ValueError, match="mode must be 'compound' or 'simple'"):
-            af.v = af.rate.projection.cumulative_discount(mode="invalid")
-
-    def test_use_in_present_value(self):
-        """Test discount factors in present value calculation."""
-        data = {
-            "cashflow": [[1000, -500, 750]],
-            "rate": [[0.05, 0.05, 0.05]],
-        }
-        af = ActuarialFrame(data)
-
-        # Calculate discount factors
-        af.v = af.rate.projection.cumulative_discount(start_at=None)
-
-        # Calculate present value (formula IS code)
-        af.pv = af.cashflow * af.v
-
-        # Sum to get total PV
-        af.total_pv = af.pv.list.sum()
-
-        result = af.collect()
-        pv = result["pv"][0]
-        total_pv = result["total_pv"][0]
-
-        # Verify individual PVs
-        assert len(pv) == 3
-        assert pytest.approx(pv[0], abs=1e-2) == 1000 / 1.05
-        assert pytest.approx(pv[1], abs=1e-2) == -500 / (1.05**2)
-        assert pytest.approx(pv[2], abs=1e-2) == 750 / (1.05**3)
-
-        # Verify total
-        expected_total = 1000 / 1.05 - 500 / (1.05**2) + 750 / (1.05**3)
-        assert pytest.approx(total_pv, abs=1e-2) == expected_total
-
-
 class TestWithPeriod:
     """Tests for with_period() method."""
 
@@ -304,60 +224,6 @@ class TestWithPeriods:
         benefit_schedule = result["benefit_schedule"][0]
 
         assert benefit_schedule.to_list() == [1000, 1000, 1500, 1000, 2000]
-
-
-class TestCompleteProjection:
-    """Integration test for complete actuarial projection."""
-
-    def test_full_projection_workflow(self):
-        """Test complete projection with survival, discount, and cashflows."""
-        data = {
-            "face_amount": [100000],
-            "qx": [[0.001, 0.002, 0.003]],
-            "annual_premium": [500],
-            "interest_rate": [[0.05, 0.05, 0.05]],
-        }
-        af = ActuarialFrame(data)
-
-        # Calculate cumulative factors
-        af.survival_to_t = af.qx.projection.cumulative_survival(start_at=None)
-        af.v = af.interest_rate.projection.cumulative_discount(start_at=None)
-
-        # Cashflows (formula IS the code)
-        af.death_benefit = af.face_amount * af.qx * af.survival_to_t
-        af.premium = af.annual_premium * af.survival_to_t
-        af.net_cashflow = af.premium - af.death_benefit
-
-        # Present value
-        af.pv_cashflow = af.net_cashflow * af.v
-
-        # Total present value
-        af.total_pv = af.pv_cashflow.list.sum()
-
-        result = af.collect()
-
-        # Verify we got results
-        assert "survival_to_t" in result.columns
-        assert "v" in result.columns
-        assert "death_benefit" in result.columns
-        assert "premium" in result.columns
-        assert "net_cashflow" in result.columns
-        assert "pv_cashflow" in result.columns
-        assert "total_pv" in result.columns
-
-        # Verify calculations make sense
-        survival = result["survival_to_t"][0]
-        assert len(survival) == 3
-        assert all(0 < s < 1 for s in survival)  # All survival probs between 0 and 1
-        assert survival[0] > survival[1] > survival[2]  # Decreasing over time
-
-        v = result["v"][0]
-        assert len(v) == 3
-        assert all(0 < discount < 1 for discount in v)  # All discount factors < 1
-        assert v[0] > v[1] > v[2]  # Decreasing over time
-
-        total_pv = result["total_pv"][0]
-        assert isinstance(total_pv, float)
 
 
 class TestPreviousPeriod:
