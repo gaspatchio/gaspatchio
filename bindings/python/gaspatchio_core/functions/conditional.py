@@ -458,6 +458,9 @@ def when(condition: Any) -> ConditionalProxy:  # noqa: ANN401
     Provides intuitive if/elif/else logic for actuarial calculations. Automatically
     handles both scalar columns and list columns (projections) with proper broadcasting.
 
+    **Supported in both debug and optimize modes** - conditionals with list columns
+    work seamlessly in either execution mode.
+
     !!! note "When to use"
         * **Age-Based Pricing:** Apply different premium rates, mortality factors,
             or underwriting classes based on policyholder age brackets.

@@ -1064,3 +1064,19 @@ Expected: See 7 commits (or fewer if some were combined):
 - Design discussion: `~/Projects/gaspatchio/gaspatchio-core/bindings/python/ref/22-api-design/22-brainstorm.md`
 - Existing projection accessor: `gaspatchio_core/accessors/projection.py`
 - Existing tests: `tests/accessors/test_projection.py`
+
+---
+
+## Related Work
+
+### Task 5: List Broadcasting in Debug Mode (Completed 2025-11-11)
+
+After implementing the time-shifting API, we completed Task 5 to enable list broadcasting
+conditionals in debug/tracing mode. Previously, when-then-otherwise expressions with list
+columns would fail with NotImplementedError in debug mode.
+
+The solution uses eager execution: the explode/re-aggregate pattern executes immediately
+in debug mode and captures a TracedOperation for the computation graph. This enables
+step-by-step debugging of actuarial models with projection periods.
+
+See: `docs/plans/2025-11-11-task5-list-broadcasting-tracing.md`

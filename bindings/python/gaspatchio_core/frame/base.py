@@ -1919,13 +1919,27 @@ class ActuarialFrame:
     ) -> None:
         """Apply list broadcasting for conditional expressions.
 
+        This method handles when-then-otherwise conditionals that involve list columns.
+        It uses the explode/re-aggregate pattern to apply element-wise conditionals.
+
+        Behavior by mode:
+        - **Debug mode**: Executes the pattern eagerly and captures a TracedOperation
+          in the computation graph for debugging and visualization. The operation
+          includes metadata about the list columns, conditional expression, and
+          source location.
+        - **Optimize mode**: Executes the pattern directly without tracing overhead.
+
         Args:
             key: Name of the column to create
-            metadata: Metadata dictionary with list_columns and conditional_expr
+            metadata: Dictionary with:
+                - list_columns (set[str]): List columns to explode
+                - conditional_expr (pl.Expr): Conditional expression to apply
 
-        In tracing mode (debug), this executes the pattern eagerly and captures
-        the operation in the computation graph. In optimize mode, it just applies
-        the transformation directly.
+        Example:
+            >>> af = ActuarialFrame({"month": [[0, 1, 2]], "amt": [[100, 200, 300]]})
+            >>> af.adjusted = when(af.month == 0).then(0.0).otherwise(af.amt)
+            >>> # In debug mode: captures operation + executes
+            >>> # In optimize mode: just executes
 
         """
         # Extract metadata
