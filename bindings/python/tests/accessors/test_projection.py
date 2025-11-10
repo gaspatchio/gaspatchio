@@ -418,3 +418,39 @@ class TestPreviousPeriod:
         assert prev_2[0] == 0
         assert prev_2[1] == 5
         assert prev_2[2] == 8
+
+
+class TestNextPeriod:
+    """Tests for next_period() method."""
+
+    def test_list_column_basic(self):
+        """Test next_period with list column and default fill."""
+        data = {"value": [[100, 110, 120]]}
+        af = ActuarialFrame(data)
+
+        af.value_next = af.value.projection.next_period()
+
+        result = af.collect()
+        value_next = result["value_next"][0]
+
+        # Should shift forward one period with fill_value=0
+        # [100, 110, 120] -> [110, 120, 0]
+        assert len(value_next) == 3
+        assert value_next[0] == 110
+        assert value_next[1] == 120
+        assert value_next[2] == 0
+
+    def test_custom_fill_value(self):
+        """Test next_period with custom fill value."""
+        data = {"projected": [[1000, 1100, 1200]]}
+        af = ActuarialFrame(data)
+
+        af.projected_next = af.projected.projection.next_period(fill_value=None)
+
+        result = af.collect()
+        projected_next = result["projected_next"][0]
+
+        # [1000, 1100, 1200] -> [1100, 1200, None]
+        assert projected_next[0] == 1100
+        assert projected_next[1] == 1200
+        assert projected_next[2] is None

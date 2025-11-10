@@ -895,3 +895,95 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         parent_af = self._get_parent_frame()
         return ExpressionProxy(shifted_expr, parent_af)
+
+    def next_period(self, fill_value=0) -> ExpressionProxy:
+        """Get value from next period (t+1).
+
+        Equivalent to shifting forward one period. Less common than
+        `previous_period()` but useful for certain actuarial calculations
+        requiring forward-looking values.
+
+        For list columns, shifts values within each list. For scalar columns,
+        shifts across rows (use `.over()` for grouping).
+
+        Parameters
+        ----------
+        fill_value : scalar, optional
+            Value to use for last period where no next value exists.
+            Default is 0.
+
+        Returns
+        -------
+        ExpressionProxy
+            Expression with values shifted from next period
+
+        Examples
+        --------
+        **Basic Usage: Next Period Values**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {"interest_rate": [[0.05, 0.06, 0.07]]}
+        af = ActuarialFrame(data)
+
+        af.rate_next = af.interest_rate.projection.next_period()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌────────────────────┬───────────────────┐
+        │ interest_rate      ┆ rate_next         │
+        │ ---                ┆ ---               │
+        │ list[f64]          ┆ list[f64]         │
+        ╞════════════════════╪═══════════════════╡
+        │ [0.05, 0.06, 0.07] ┆ [0.06, 0.07, 0.0] │
+        └────────────────────┴───────────────────┘
+        ```
+
+        **Forward-Looking Calculation Example**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {"cashflow": [[1000, 1100, 1200]]}
+        af = ActuarialFrame(data)
+
+        # Compare current period to next period
+        af.cf_next = af.cashflow.projection.next_period()
+        af.cf_growth = af.cf_next - af.cashflow
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌──────────────────┬─────────────────┬──────────────────┐
+        │ cashflow         ┆ cf_next         ┆ cf_growth        │
+        │ ---              ┆ ---             ┆ ---              │
+        │ list[i64]        ┆ list[i64]       ┆ list[i64]        │
+        ╞══════════════════╪═════════════════╪══════════════════╡
+        │ [1000, 1100, ...] ┆ [1100, 1200, 0] ┆ [100, 100, -...] │
+        └──────────────────┴─────────────────┴──────────────────┘
+        ```
+
+        See Also
+        --------
+        previous_period : Get value from previous period (t-1)
+        at_period : Get value at arbitrary period offset
+
+        """
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        base_expr = self._get_polars_expr()
+
+        # For list columns: append fill_value and slice from position 1
+        # This creates the effect of shifting forward one period (t+1)
+        shifted_expr = pl.concat_list([base_expr, pl.lit([fill_value])]).list.slice(
+            1, base_expr.list.len()
+        )
+
+        parent_af = self._get_parent_frame()
+        return ExpressionProxy(shifted_expr, parent_af)
