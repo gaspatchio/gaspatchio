@@ -259,6 +259,15 @@ class ActuarialFrame:
             self._column_order.append(key)
             self._refresh_attr_columns_set()
         try:
+            # Check for list broadcast metadata BEFORE converting to expr
+            if (
+                hasattr(value, "_list_broadcast_metadata")
+                and value._list_broadcast_metadata is not None
+            ):
+                metadata = value._list_broadcast_metadata
+                self._apply_conditional_list_broadcasting(key, metadata)
+                return
+
             expr = self._convert_to_expr(value)
 
             # MODIFIED: Integrate tracing
@@ -725,6 +734,7 @@ class ActuarialFrame:
         └───────────┴─────────────┴─────────────────────────────────────┴─────────────────────────────────────┘
         Max policy year: 2
         ```
+
         """
         if self._df is None:
             raise ValueError("Cannot compute max on an uninitialized ActuarialFrame.")
@@ -825,6 +835,7 @@ class ActuarialFrame:
         └───────────┴─────────────┴─────────────────────────────────────┴─────────────────────────────────────┘
         Min retention level: [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500]
         ```
+
         """
         if self._df is None:
             raise ValueError("Cannot compute min on an uninitialized ActuarialFrame.")
@@ -923,6 +934,7 @@ class ActuarialFrame:
         │ 1.5         ┆ [0.0, 250.0, 1500.0, … 0.0]   ┆ [1.5, 0.5, 2.5, … 0.5]       │
         └─────────────┴───────────────────────────────┴──────────────────────────────┘
         ```
+
         """
         if self._df is None:
             raise ValueError("Cannot compute mean on an uninitialized ActuarialFrame.")
@@ -1025,6 +1037,7 @@ class ActuarialFrame:
         Term Life claims volatility: 1443.38
         Whole Life claims volatility: 1443.38
         ```
+
         """
         if self._df is None:
             raise ValueError("Cannot compute std on an uninitialized ActuarialFrame.")
@@ -1128,6 +1141,7 @@ class ActuarialFrame:
         North region lapse variance: 0.000007
         South region lapse variance: 0.000003
         ```
+
         """
         if self._df is None:
             raise ValueError("Cannot compute var on an uninitialized ActuarialFrame.")
@@ -1227,6 +1241,7 @@ class ActuarialFrame:
         Agent A001 median sales: 5.0
         Agent A002 median sales: 15.0
         ```
+
         """
         if self._df is None:
             raise ValueError(
@@ -1326,6 +1341,7 @@ class ActuarialFrame:
         │ [215, 235, 200, 250, … 240, 225, 280] ┆ [322500, 352500, 300000, … 420000]    │
         └───────────────────────────────────────┴───────────────────────────────────────┘
         ```
+
         """
         if self._df is None:
             raise ValueError("Cannot compute sum on an uninitialized ActuarialFrame.")
@@ -1423,6 +1439,7 @@ class ActuarialFrame:
         │ 2     ┆ 2            ┆ 2            │
         └───────┴──────────────┴──────────────┘
         ```
+
         """
         if self._df is None:
             raise ValueError("Cannot compute count on an uninitialized ActuarialFrame.")
@@ -1517,6 +1534,7 @@ class ActuarialFrame:
         │ null     ┆ [0.9952, 0.9940] ┆ [0.9994, 0.9988] │
         └──────────┴──────────────────┴──────────────────┘
         ```
+
         """
         if self._df is None:
             raise ValueError(
@@ -1679,6 +1697,7 @@ class ActuarialFrame:
         │ null       ┆ [2000000.0, 2500000.0]           │
         └────────────┴──────────────────────────────────┘
         ```
+
         """
         if self._df is None:
             raise ValueError(
@@ -1870,6 +1889,83 @@ class ActuarialFrame:
             ):
                 eligible.add(c)
         self._attr_columns_set = eligible
+
+    def _apply_conditional_list_broadcasting(
+        self, key: str, metadata: dict[str, Any]
+    ) -> None:
+        """Apply list broadcasting for conditional expressions.
+
+        Args:
+            key: Name of the column to create
+            metadata: Metadata dictionary with list_columns and conditional_expr
+
+        Raises:
+            NotImplementedError: If tracing mode is enabled (not yet supported)
+
+        """
+        if self._tracing:
+            msg = (
+                f"List broadcasting for column '{key}' not yet supported in tracing mode. "
+                "Use optimize mode (.optimize()) instead. "
+                "Full tracing support coming in Task 5."
+            )
+            raise NotImplementedError(msg)
+
+        # Extract metadata
+        list_columns = metadata["list_columns"]
+        conditional_expr = metadata["conditional_expr"]
+
+        # Build and execute
+        self._df = self._build_list_broadcasting_df(key, conditional_expr, list_columns)
+
+    def _build_list_broadcasting_df(
+        self, result_col: str, conditional_expr: pl.Expr, list_columns: set[str]
+    ) -> pl.LazyFrame:
+        """Build DataFrame with list broadcasting using explode/re-aggregate pattern.
+
+        Args:
+            result_col: Name of the result column
+            conditional_expr: The conditional expression to apply
+            list_columns: Set of list column names to explode
+
+        Returns:
+            LazyFrame with the result column added as a list
+
+        """
+        if self._df is None:
+            msg = "Cannot apply list broadcasting to uninitialized ActuarialFrame"
+            raise ValueError(msg)
+
+        # Get schema to determine which columns to aggregate
+        schema = self._df.collect_schema()
+
+        # Convert set to list for explode
+        list_cols_to_explode = list(list_columns)
+
+        # Build aggregation expressions:
+        # - List columns (including result): aggregate into list
+        # - Scalar columns: take first value
+        agg_exprs = []
+        for col_name in schema.keys():
+            if col_name in list_columns:
+                # Already a list column - keep as list
+                agg_exprs.append(pl.col(col_name))
+            else:
+                # Scalar column - take first value to maintain scalar type
+                agg_exprs.append(pl.col(col_name).first())
+
+        # Add the result column as a list
+        agg_exprs.append(pl.col(result_col))
+
+        # Build explode/re-aggregate pipeline
+        return (
+            self._df.with_row_index("_row_id")
+            .explode(list_cols_to_explode)
+            .with_columns(**{result_col: conditional_expr})
+            .group_by("_row_id", maintain_order=True)
+            .agg(agg_exprs)
+            .drop("_row_id")
+        )
 
     def __repr__(self) -> str:
         """Return a string representation of the ActuarialFrame."""

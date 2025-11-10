@@ -145,12 +145,12 @@ class TestWhenListBroadcasting:
         result = af.collect()
 
         # Policy 1: month 12 should have 88
-        maturity_1 = result["pols_maturity"][0]
+        maturity_1 = result["pols_maturity"][0].to_list()
         expected_1 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 88]
         assert maturity_1 == expected_1  # noqa: S101
 
         # Policy 2: month 24 should have 76
-        maturity_2 = result["pols_maturity"][1]
+        maturity_2 = result["pols_maturity"][1].to_list()
         expected_2 = [0] * 24 + [76]
         assert maturity_2 == expected_2  # noqa: S101
 
@@ -168,7 +168,7 @@ class TestWhenListBroadcasting:
 
         result = af.collect()
         # 2*12=24 but month only goes to 5, so none should match
-        assert result["is_maturity"][0] == [0, 0, 0, 0, 0, 0]  # noqa: S101
+        assert result["is_maturity"][0].to_list() == [0, 0, 0, 0, 0, 0]  # noqa: S101
 
 
 class TestWhenErrorHandling:
