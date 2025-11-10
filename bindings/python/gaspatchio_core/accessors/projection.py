@@ -773,7 +773,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         return temp_proxy
 
-    def previous_period(self, fill_value=0) -> ExpressionProxy:
+    def previous_period(self, fill_value=0.0) -> ExpressionProxy:
         """Get value from previous period (t-1).
 
         Equivalent to shifting back one period. Most common case for
@@ -921,7 +921,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         return ExpressionProxy(shifted_expr, parent_af)
 
-    def next_period(self, fill_value=0) -> ExpressionProxy:
+    def next_period(self, fill_value=0.0) -> ExpressionProxy:
         """Get value from next period (t+1).
 
         Equivalent to shifting forward one period. Less common than
@@ -1039,7 +1039,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         return ExpressionProxy(shifted_expr, parent_af)
 
     def at_period(
-        self, relative_period: int, fill_value: float | None = 0
+        self, relative_period: int, fill_value: float | None = 0.0
     ) -> ExpressionProxy:
         """Get value at relative period offset.
 
