@@ -358,3 +358,63 @@ class TestCompleteProjection:
 
         total_pv = result["total_pv"][0]
         assert isinstance(total_pv, float)
+
+
+class TestPreviousPeriod:
+    """Tests for previous_period() method."""
+
+    def test_list_column_basic(self):
+        """Test previous_period with list column and default fill."""
+        data = {"value": [[100, 110, 120]]}
+        af = ActuarialFrame(data)
+
+        af.value_prev = af.value.projection.previous_period()
+
+        result = af.collect()
+        value_prev = result["value_prev"][0]
+
+        # Should shift back one period with fill_value=0
+        # [100, 110, 120] -> [0, 100, 110]
+        assert len(value_prev) == 3
+        assert value_prev[0] == 0
+        assert value_prev[1] == 100
+        assert value_prev[2] == 110
+
+    def test_custom_fill_value(self):
+        """Test previous_period with custom fill value."""
+        data = {"reserve": [[1000, 1100, 1200]]}
+        af = ActuarialFrame(data)
+
+        af.reserve_prev = af.reserve.projection.previous_period(fill_value=500)
+
+        result = af.collect()
+        reserve_prev = result["reserve_prev"][0]
+
+        # [1000, 1100, 1200] -> [500, 1000, 1100]
+        assert reserve_prev[0] == 500
+        assert reserve_prev[1] == 1000
+        assert reserve_prev[2] == 1100
+
+    def test_multiple_policies(self):
+        """Test previous_period with multiple policies."""
+        data = {
+            "policy_id": [1, 2],
+            "pols_death": [[10, 15, 20], [5, 8, 12]],
+        }
+        af = ActuarialFrame(data)
+
+        af.pols_death_prev = af.pols_death.projection.previous_period()
+
+        result = af.collect()
+
+        # Policy 1: [10, 15, 20] -> [0, 10, 15]
+        prev_1 = result["pols_death_prev"][0]
+        assert prev_1[0] == 0
+        assert prev_1[1] == 10
+        assert prev_1[2] == 15
+
+        # Policy 2: [5, 8, 12] -> [0, 5, 8]
+        prev_2 = result["pols_death_prev"][1]
+        assert prev_2[0] == 0
+        assert prev_2[1] == 5
+        assert prev_2[2] == 8

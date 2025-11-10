@@ -772,3 +772,126 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             temp_accessor = ProjectionColumnAccessor(temp_proxy)
 
         return temp_proxy
+
+    def previous_period(self, fill_value=0) -> ExpressionProxy:
+        """Get value from previous period (t-1).
+
+        Equivalent to shifting back one period. Most common case for
+        actuarial projections when referencing prior period values.
+
+        For list columns, shifts values within each list. For scalar columns,
+        shifts across rows (use `.over()` for grouping).
+
+        Parameters
+        ----------
+        fill_value : scalar, optional
+            Value to use for first period where no previous value exists.
+            Default is 0.
+
+        Returns
+        -------
+        ExpressionProxy
+            Expression with values shifted from previous period
+
+        Examples
+        --------
+        **Basic Usage: Previous Period Values**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {"pols_death": [[10, 15, 20]]}
+        af = ActuarialFrame(data)
+
+        af.pols_death_prev = af.pols_death.projection.previous_period()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌──────────────┬──────────────────┐
+        │ pols_death   ┆ pols_death_prev  │
+        │ ---          ┆ ---              │
+        │ list[i64]    ┆ list[i64]        │
+        ╞══════════════╪══════════════════╡
+        │ [10, 15, 20] ┆ [0, 10, 15]      │
+        └──────────────┴──────────────────┘
+        ```
+
+        **Custom Fill Value: Reserve Calculations**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {"reserve": [[1000, 1100, 1200]]}
+        af = ActuarialFrame(data)
+
+        # Use None to get null for missing values
+        af.reserve_prev = af.reserve.projection.previous_period(fill_value=None)
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌──────────────────┬──────────────────┐
+        │ reserve          ┆ reserve_prev     │
+        │ ---              ┆ ---              │
+        │ list[i64]        ┆ list[i64]        │
+        ╞══════════════════╪══════════════════╡
+        │ [1000, 1100, ...] ┆ [null, 1000, ...] │
+        └──────────────────┴──────────────────┘
+        ```
+
+        **Actuarial Formula: Inforce Rollforward**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "pols_if_after_death": [[1000, 990, 975]],
+            "pols_lapse": [[5, 8, 10]],
+        }
+        af = ActuarialFrame(data)
+
+        # Calculate beginning-of-period inforce using previous period values
+        # pols_if_bop(t) = pols_if_after_death(t-1) - pols_lapse(t-1)
+        af.pols_if_prev = af.pols_if_after_death.projection.previous_period(
+            fill_value=1000
+        )
+        af.pols_lapse_prev = af.pols_lapse.projection.previous_period()
+        af.pols_if_bop = af.pols_if_prev - af.pols_lapse_prev
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 4)
+        ┌─────────────────────┬─────────────┬────────────────┬─────────────┐
+        │ pols_if_after_death ┆ pols_lapse  ┆ pols_if_prev   ┆ pols_if_bop │
+        │ ---                 ┆ ---         ┆ ---            ┆ ---         │
+        │ list[i64]           ┆ list[i64]   ┆ list[i64]      ┆ list[i64]   │
+        ╞═════════════════════╪═════════════╪════════════════╪═════════════╡
+        │ [1000, 990, 975]    ┆ [5, 8, 10]  ┆ [1000, 1000... ┆ [1000, 995..│
+        └─────────────────────┴─────────────┴────────────────┴─────────────┘
+        ```
+
+        See Also
+        --------
+        next_period : Get value from next period (t+1)
+        at_period : Get value at arbitrary period offset
+
+        """
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        base_expr = self._get_polars_expr()
+
+        # For list columns: prepend fill_value and slice to original length
+        # This creates the effect of shifting back one period (t-1)
+        shifted_expr = pl.concat_list([pl.lit([fill_value]), base_expr]).list.slice(
+            0, base_expr.list.len()
+        )
+
+        parent_af = self._get_parent_frame()
+        return ExpressionProxy(shifted_expr, parent_af)
