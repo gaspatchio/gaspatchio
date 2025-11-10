@@ -107,33 +107,105 @@ class ConditionalProxy:
             ExpressionProxy wrapping the final Polars
             when/then/otherwise expression
 
+        Raises:
+            NotImplementedError: If list broadcasting is detected but not
+                yet fully implemented
+
         """
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         # Convert otherwise value to expression
-        if self._parent is not None:
-            otherwise_expr = self._parent._convert_to_expr(value)  # noqa: SLF001
-        elif isinstance(value, ExpressionProxy):
-            otherwise_expr = value._expr  # noqa: SLF001
-        elif isinstance(value, pl.Expr):
-            otherwise_expr = value
+        otherwise_expr = self._convert_value_to_expr(value)
+
+        # Detect if we need list broadcasting
+        list_columns = self._detect_list_columns(otherwise_expr)
+
+        # Build expression based on detection
+        if list_columns:
+            # Use explode/re-aggregate pattern for list broadcasting
+            expr = self._build_list_broadcasting_expr(otherwise_expr, list_columns)
         else:
-            otherwise_expr = pl.lit(value)
+            # Scalar path - build simple when/then/otherwise
+            expr = self._build_scalar_conditional(otherwise_expr)
 
-        # Build the Polars when/then/otherwise chain (scalar only for now)
-        # Start with first condition/value pair
+        return ExpressionProxy(expr, self._parent)
+
+    def _convert_value_to_expr(self, value: Any) -> pl.Expr:  # noqa: ANN401
+        """Convert a value to a Polars expression."""
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        if self._parent is not None:
+            return self._parent._convert_to_expr(value)  # noqa: SLF001
+        if isinstance(value, ExpressionProxy):
+            return value._expr  # noqa: SLF001
+        if isinstance(value, pl.Expr):
+            return value
+        return pl.lit(value)
+
+    def _detect_list_columns(self, otherwise_expr: pl.Expr) -> set[str]:
+        """Detect list columns in the conditional expressions."""
+        if self._parent is None:
+            return set()
+
+        # Import at runtime to avoid circular imports
+        from gaspatchio_core.column import dispatch
+
+        detector = dispatch.ColumnTypeDetector(self._parent)  # type: ignore[attr-defined]
+        list_columns: set[str] = set()
+
+        # Check all expressions for list columns
+        all_exprs = self._conditions + self._values + [otherwise_expr]
+
+        for expr in all_exprs:
+            col_names = self._extract_column_names(expr)
+            for col_name in col_names:
+                if detector.is_list_column(col_name):
+                    list_columns.add(col_name)
+
+        return list_columns
+
+    def _extract_column_names(self, expr: pl.Expr) -> list[str]:
+        """Extract column names from an expression, returning empty list on failure."""
+        try:
+            return expr.meta.root_names()
+        except (AttributeError, RuntimeError):
+            # meta.root_names() may fail for some expressions
+            return []
+
+    def _build_scalar_conditional(self, otherwise_expr: pl.Expr) -> pl.Expr:
+        """Build a scalar when/then/otherwise expression."""
         expr = pl.when(self._conditions[0]).then(self._values[0])
-
-        # Add any additional when/then pairs
         for condition, then_value in zip(
             self._conditions[1:], self._values[1:], strict=False
         ):
             expr = expr.when(condition).then(then_value)
+        return expr.otherwise(otherwise_expr)
 
-        # Complete with otherwise
-        expr = expr.otherwise(otherwise_expr)
+    def _build_list_broadcasting_expr(
+        self, otherwise_expr: pl.Expr, list_columns: set[str]
+    ) -> pl.Expr:
+        """Build expression for list broadcasting (not yet implemented).
 
-        return ExpressionProxy(expr, self._parent)
+        This method will eventually implement the explode/re-aggregate pattern
+        for list broadcasting. For now, it raises NotImplementedError with a
+        clear message about which list columns were detected.
+
+        Args:
+            otherwise_expr: The otherwise value expression
+            list_columns: Set of list column names detected in the expressions
+
+        Raises:
+            NotImplementedError: Always - list broadcasting not yet implemented
+
+        """
+        msg = (
+            "List broadcasting in conditionals is not yet fully implemented. "
+            "Polars does not automatically broadcast scalars in conditional "
+            "expressions when list columns are involved. "
+            f"List columns detected: {sorted(list_columns)}. "
+            "Full implementation with explode/re-aggregate pattern is planned."
+        )
+        raise NotImplementedError(msg)
 
     def __repr__(self) -> str:
         """Provide helpful error message for incomplete conditionals."""
