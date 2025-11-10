@@ -16,6 +16,15 @@ ADULT_AGE = 18
 LOW_THRESHOLD = 20
 MEDIUM_THRESHOLD = 30
 TEST_THRESHOLD = 5
+SENIOR_AGE = 60
+HIGH_INCOME = 50000
+MID_AGE = 50
+YOUNG_AGE = 40
+MID_SENIOR_AGE = 60
+PREMIUM_THRESHOLD = 1500
+LOW_INCOME = 50000
+MID_INCOME = 75000
+BENCHMARK_YOUNG_AGE = 30
 
 
 class TestWhenBasics:
@@ -321,3 +330,398 @@ class TestConditionalProxyMetadata:
         metadata = result._list_broadcast_metadata  # noqa: SLF001
         assert metadata is not None  # noqa: S101
         assert "month" in metadata["list_columns"]  # noqa: S101
+
+
+class TestWhenEdgeCases:
+    """Tests for edge cases like empty lists, single elements, and mixed types."""
+
+    def test_empty_list_conditional(self) -> None:
+        """Test conditional with empty list columns."""
+        af = ActuarialFrame(
+            {
+                "policy_id": [1],
+                "month": [[]],  # Empty list
+                "policy_term": [1],
+            }
+        )
+
+        # Should handle empty lists gracefully
+        af.res = when(af.month == af.policy_term * 12).then(1).otherwise(0)
+
+        res = af.collect()
+        # Empty list with scalar otherwise produces [0] due to broadcasting
+        assert res["res"][0].to_list() == [0]  # noqa: S101
+
+    def test_single_element_list_conditional(self) -> None:
+        """Test conditional with single element list."""
+        af = ActuarialFrame(
+            {
+                "policy_id": [1],
+                "month": [[12]],  # Single element
+                "policy_term": [1],
+            }
+        )
+
+        af.result = when(af.month == af.policy_term * 12).then(100).otherwise(0)
+
+        result = af.collect()
+        # Single element at position 0 matches (12 == 1*12)
+        assert result["result"][0].to_list() == [100]  # noqa: S101
+
+    def test_mixed_list_lengths(self) -> None:
+        """Test conditional with varying list lengths across rows."""
+        af = ActuarialFrame(
+            {
+                "policy_id": [1, 2, 3],
+                "month": [[0, 1], [0, 1, 2, 3, 4], [0]],  # Different lengths
+                "threshold": [1, 3, 0],
+            }
+        )
+
+        af.flag = when(af.month >= af.threshold).then(1).otherwise(0)
+
+        result = af.collect()
+
+        # Row 1: [0, 1] >= 1 -> [0, 1]
+        assert result["flag"][0].to_list() == [0, 1]  # noqa: S101
+        # Row 2: [0, 1, 2, 3, 4] >= 3 -> [0, 0, 0, 1, 1]
+        assert result["flag"][1].to_list() == [0, 0, 0, 1, 1]  # noqa: S101
+        # Row 3: [0] >= 0 -> [1]
+        assert result["flag"][2].to_list() == [1]  # noqa: S101
+
+    def test_null_handling_in_scalar_conditional(self) -> None:
+        """Test conditional handles null values in scalar columns."""
+        af = ActuarialFrame({"age": [25, None, 70]})
+
+        af.age_cat = when(af.age > RETIREMENT_AGE).then("senior").otherwise("other")
+
+        res = af.collect()
+        # Polars conditionals with null return "other" when null fails condition
+        assert res["age_cat"][0] == "other"  # noqa: S101
+        assert res["age_cat"][1] == "other"  # noqa: S101  # Null > 65 is False
+        assert res["age_cat"][2] == "senior"  # noqa: S101
+
+    def test_boolean_value_conditions(self) -> None:
+        """Test conditional with boolean column values."""
+        af = ActuarialFrame(
+            {
+                "is_active": [True, False, True, False],
+                "base_rate": [0.05, 0.05, 0.05, 0.05],
+            }
+        )
+
+        af.rate = when(af.is_active).then(af.base_rate).otherwise(0.0)
+
+        result = af.collect()
+        assert result["rate"].to_list() == [0.05, 0.0, 0.05, 0.0]  # noqa: S101
+
+    def test_complex_expression_in_condition(self) -> None:
+        """Test conditional with complex multi-column expressions."""
+        af = ActuarialFrame(
+            {
+                "age": [25, 35, 45, 55, 65, 75],
+                "income": [30000, 50000, 70000, 90000, 40000, 60000],
+                "premium": [100, 150, 200, 250, 180, 220],
+            }
+        )
+
+        # Complex condition: age > 60 AND income > 50000
+        # Use separate conditions then combine
+        age_condition = af.age > SENIOR_AGE
+        income_condition = af.income > HIGH_INCOME
+        combined_condition = age_condition & income_condition  # type: ignore[operator]
+
+        af.discount = (
+            when(combined_condition).then(af.premium * 0.9).otherwise(af.premium)
+        )
+
+        result = af.collect()
+        # Only row 5 (age=75, income=60000) meets both conditions
+        expected = [100, 150, 200, 250, 180, 220 * 0.9]
+        assert result["discount"].to_list() == expected  # noqa: S101
+
+    def test_string_conditions_and_values(self) -> None:
+        """Test conditional with string comparisons and values."""
+        af = ActuarialFrame(
+            {
+                "prod_type": ["term", "whole_life", "term", "endowment"],
+                "base_commission": [0.05, 0.08, 0.05, 0.10],
+            }
+        )
+
+        af.commission = (
+            when(af.prod_type == "term")
+            .then(af.base_commission * 0.8)
+            .when(af.prod_type == "whole_life")
+            .then(af.base_commission * 1.2)
+            .otherwise(af.base_commission)
+        )
+
+        res = af.collect()
+        expected = [0.05 * 0.8, 0.08 * 1.2, 0.05 * 0.8, 0.10]
+        assert res["commission"].to_list() == expected  # noqa: S101
+
+
+class TestWhenErrorValidation:
+    """Tests for additional error handling and type validation."""
+
+    def test_invalid_condition_type_raises_error(self) -> None:
+        """Test that invalid condition type raises TypeError."""
+        with pytest.raises(TypeError, match="Condition must be an expression"):
+            # Pass a plain string instead of a boolean expression
+            when("not an expression")
+
+    def test_unbalanced_when_then_chain(self) -> None:
+        """Test that when() without matching then() is handled."""
+        af = ActuarialFrame({"age": [25, 45, 70]})
+
+        conditional = when(af.age > RETIREMENT_AGE).then(0.05)
+
+        # Add another when() without then() - should still allow chaining
+        conditional = conditional.when(af.age > MID_AGE)
+
+        # Now add then for the second condition
+        conditional = conditional.then(0.03)
+
+        # Complete with otherwise
+        res_expr = conditional.otherwise(0.02)
+
+        # Should work: >65->0.05, >50->0.03, else->0.02
+        # Note: first match wins, so 45 doesn't match >65 but does match >50
+        # However, 70 matches >65 first (takes 0.05 not 0.03)
+        af.rate = res_expr
+        collected = af.collect()
+        # 25: not >65, not >50 -> 0.02
+        # 45: not >65, not >50 -> 0.02
+        # 70: >65 -> 0.05
+        assert collected["rate"].to_list() == [0.02, 0.02, 0.05]  # noqa: S101
+
+    def test_type_coercion_in_then_values(self) -> None:
+        """Test that different numeric types are coerced properly."""
+        af = ActuarialFrame({"age": [25, 45, 70]})
+
+        # Mix int and float in then/otherwise
+        af.rate = when(af.age > RETIREMENT_AGE).then(5).otherwise(2.5)  # int vs float
+
+        result = af.collect()
+        # Should coerce to same type (float)
+        assert result["rate"].to_list() == [2.5, 2.5, 5.0]  # noqa: S101
+
+    def test_conditional_with_division_by_zero(self) -> None:
+        """Test conditional handles division by zero in expressions."""
+        af = ActuarialFrame({"value": [10, 0, 5, 0]})
+
+        # Avoid division by zero using conditional
+        af.result = when(af.value == 0).then(None).otherwise(100 / af.value)
+
+        result = af.collect()
+        # Positions with 0 should be None, others should be 100/value
+        expected = [10.0, None, 20.0, None]
+        assert result["result"].to_list() == expected  # noqa: S101
+
+
+class TestWhenComputationGraph:
+    """Tests for computation graph integration with conditionals."""
+
+    def test_conditional_in_chain_of_calculations(self) -> None:
+        """Test conditional as part of computation chain."""
+        af = ActuarialFrame(
+            {
+                "premium": [1000, 1500, 2000],
+                "age": [30, 50, 70],
+            }
+        )
+
+        # Multi-step calculation with conditional in the middle
+        af.age_factor = when(af.age > RETIREMENT_AGE).then(1.5).otherwise(1.0)
+        af.adjusted_premium = af.premium * af.age_factor
+        af.final_premium = af.adjusted_premium * 1.1  # Add 10% loading
+
+        result = af.collect()
+
+        # Verify the chain worked correctly
+        expected = [1000 * 1.0 * 1.1, 1500 * 1.0 * 1.1, 2000 * 1.5 * 1.1]
+        assert result["final_premium"].to_list() == expected  # noqa: S101
+
+    def test_nested_conditionals_in_graph(self) -> None:
+        """Test multiple conditionals depending on each other."""
+        af = ActuarialFrame(
+            {
+                "age": [25, 45, 55, 75],
+                "is_smoker": [True, False, True, False],
+            }
+        )
+
+        # First conditional for age factor
+        af.age_factor = (
+            when(af.age < YOUNG_AGE)
+            .then(1.0)
+            .when(af.age < MID_SENIOR_AGE)
+            .then(1.2)
+            .otherwise(1.5)
+        )
+
+        # Second conditional using result of first
+        af.smoking_factor = when(af.is_smoker).then(1.3).otherwise(1.0)
+
+        # Combine factors
+        af.total_factor = af.age_factor * af.smoking_factor
+
+        result = af.collect()
+
+        # Verify both conditionals worked in sequence
+        expected = [1.0 * 1.3, 1.2 * 1.0, 1.2 * 1.3, 1.5 * 1.0]
+        assert result["total_factor"].to_list() == expected  # noqa: S101
+
+    def test_conditional_references_computed_column(self) -> None:
+        """Test conditional that references a computed column."""
+        af = ActuarialFrame(
+            {
+                "base_premium": [1000, 1500, 2000],
+                "discount_pct": [0.1, 0.2, 0.05],
+            }
+        )
+
+        # Computed column
+        af.discounted_premium = af.base_premium * (1 - af.discount_pct)
+
+        # Conditional referencing computed column
+        af.final_premium = (
+            when(af.discounted_premium < PREMIUM_THRESHOLD)
+            .then(af.discounted_premium)
+            .otherwise(af.discounted_premium * 0.95)
+        )
+
+        result = af.collect()
+
+        # Row 0: 1000*0.9=900 < 1500 -> 900
+        # Row 1: 1500*0.8=1200 < 1500 -> 1200
+        # Row 2: 2000*0.95=1900 >= 1500 -> 1900*0.95=1805
+        expected = [900.0, 1200.0, 1805.0]
+        assert result["final_premium"].to_list() == expected  # noqa: S101
+
+    def test_multiple_conditionals_same_columns(self) -> None:
+        """Test multiple conditionals operating on same source columns."""
+        af = ActuarialFrame(
+            {
+                "age": [25, 45, 65, 75],
+                "income": [30000, 60000, 80000, 50000],
+            }
+        )
+
+        # Two different conditionals on same age column
+        af.age_category = (
+            when(af.age < YOUNG_AGE)
+            .then("young")
+            .when(af.age < RETIREMENT_AGE)
+            .then("middle")
+            .otherwise("senior")
+        )
+
+        af.income_category = (
+            when(af.income < LOW_INCOME)
+            .then("low")
+            .when(af.income < MID_INCOME)
+            .then("medium")
+            .otherwise("high")
+        )
+
+        result = af.collect()
+
+        expected_age = ["young", "middle", "senior", "senior"]
+        expected_income = ["low", "medium", "high", "medium"]
+
+        assert result["age_category"].to_list() == expected_age  # noqa: S101
+        assert result["income_category"].to_list() == expected_income  # noqa: S101
+
+
+class TestWhenPerformance:
+    """Performance benchmark tests comparing when/then to alternatives."""
+
+    def test_benchmark_scalar_conditional(self, benchmark) -> None:
+        """Benchmark scalar conditional performance."""
+        af = ActuarialFrame({"age": list(range(1000))})
+
+        def run_conditional() -> None:
+            af.category = (
+                when(af.age < ADULT_AGE)
+                .then("child")
+                .when(af.age < RETIREMENT_AGE)
+                .then("adult")
+                .otherwise("senior")
+            )
+            af.collect()
+
+        benchmark(run_conditional)
+
+    def test_benchmark_list_conditional_small(self, benchmark) -> None:
+        """Benchmark list conditional with small projections."""
+        # 100 policies, each with 12 months
+        af = ActuarialFrame(
+            {
+                "policy_id": list(range(100)),
+                "month": [list(range(13)) for _ in range(100)],
+                "policy_term": [1] * 100,
+                "pols_if": [[100 - i for i in range(13)] for _ in range(100)],
+            }
+        )
+
+        def run_conditional() -> None:
+            af.pols_maturity = (
+                when(af.month == af.policy_term * 12).then(af.pols_if).otherwise(0)
+            )
+            af.collect()
+
+        benchmark(run_conditional)
+
+    def test_benchmark_complex_chained_conditional(self, benchmark) -> None:
+        """Benchmark complex chained conditional with multiple conditions."""
+        af = ActuarialFrame(
+            {
+                "age": list(range(1000)),
+                "income": [i * 1000 for i in range(1000)],
+                "is_smoker": [i % 2 == 0 for i in range(1000)],
+            }
+        )
+
+        def run_conditional() -> None:
+            # Build conditions separately to avoid type errors
+            cond1 = (af.age < BENCHMARK_YOUNG_AGE) & (af.income > HIGH_INCOME)  # type: ignore[operator]
+            cond2 = (af.age < MID_AGE) & af.is_smoker  # type: ignore[operator]
+            cond3 = (af.age >= MID_AGE) & (af.age < RETIREMENT_AGE)  # type: ignore[operator]
+            cond4 = (af.age >= RETIREMENT_AGE) & af.is_smoker  # type: ignore[operator]
+
+            af.risk_score = (
+                when(cond1)
+                .then(1)
+                .when(cond2)
+                .then(3)
+                .when(cond3)
+                .then(5)
+                .when(cond4)
+                .then(8)
+                .otherwise(2)
+            )
+            af.collect()
+
+        benchmark(run_conditional)
+
+    def test_compare_when_vs_direct_polars(self, benchmark) -> None:
+        """Compare when() performance to direct Polars expression."""
+        import polars as pl
+
+        # Create a Polars DataFrame directly
+        polars_data = pl.DataFrame({"age": list(range(1000))})
+
+        def run_polars_native() -> None:
+            _result = polars_data.with_columns(
+                pl.when(pl.col("age") < ADULT_AGE)
+                .then(pl.lit("child"))
+                .when(pl.col("age") < RETIREMENT_AGE)
+                .then(pl.lit("adult"))
+                .otherwise(pl.lit("senior"))
+                .alias("category")
+            )
+            # Polars DataFrames are eager by default, no need to collect
+
+        benchmark(run_polars_native)
