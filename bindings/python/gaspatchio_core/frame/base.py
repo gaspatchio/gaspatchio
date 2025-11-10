@@ -1974,7 +1974,32 @@ class ActuarialFrame:
             )
 
         # Execute the pattern (both modes reach here now)
-        self._df = self._build_list_broadcasting_df(key, conditional_expr, list_columns)
+        new_df = self._build_list_broadcasting_df(key, conditional_expr, list_columns)
+
+        # In tracing mode, materialize immediately then convert back to lazy
+        # This prevents nested lazy operations that Polars can't optimize
+        if self._tracing:
+            try:
+                # Disable optimizations that might cause schema inference issues
+                self._df = new_df.collect(
+                    type_coercion=False,
+                    predicate_pushdown=False,
+                    projection_pushdown=False,
+                ).lazy()
+                logger.trace(
+                    f"Debug mode: Materialized list broadcasting for '{key}' "
+                    "to prevent nested lazy operations"
+                )
+            except Exception as e:
+                # If collection fails (e.g., schema inference error),
+                # fall back to keeping it lazy and hope for the best
+                logger.warning(
+                    f"Debug mode: Could not materialize list broadcasting for '{key}': {e}. "
+                    "Keeping as lazy frame."
+                )
+                self._df = new_df
+        else:
+            self._df = new_df
 
     def _build_list_broadcasting_df(
         self, result_col: str, conditional_expr: pl.Expr, list_columns: set[str]
@@ -1997,22 +2022,34 @@ class ActuarialFrame:
         # Get schema to determine which columns to aggregate
         schema = self._df.collect_schema()
 
+        # Filter list_columns to only include columns that exist and are actually lists
+        valid_list_cols = {
+            col
+            for col in list_columns
+            if col in schema and isinstance(schema[col], pl.List)
+        }
+
         # Convert set to list for explode
-        list_cols_to_explode = list(list_columns)
+        list_cols_to_explode = list(valid_list_cols)
 
         # Build aggregation expressions:
-        # - List columns (including result): aggregate into list
-        # - Scalar columns: take first value
+        # After exploding, columns that were exploded become scalar and need re-aggregation
+        # - Columns in valid_list_cols: were exploded, now scalar -> aggregate back to list
+        # - Other list columns in schema: weren't exploded, still list -> take first (which is the whole list)
+        # - Scalar columns: weren't exploded, still scalar -> take first
         agg_exprs = []
         for col_name in schema.keys():
-            if col_name in list_columns:
-                # Already a list column - keep as list
+            if col_name in valid_list_cols:
+                # Was exploded, now scalar - aggregate back to list
                 agg_exprs.append(pl.col(col_name))
+            elif isinstance(schema[col_name], pl.List):
+                # Is a list column but wasn't exploded - take first to keep as-is
+                agg_exprs.append(pl.col(col_name).first())
             else:
                 # Scalar column - take first value to maintain scalar type
                 agg_exprs.append(pl.col(col_name).first())
 
-        # Add the result column as a list
+        # Add the result column as a list (it was created as scalar after explode)
         agg_exprs.append(pl.col(result_col))
 
         # Build explode/re-aggregate pipeline

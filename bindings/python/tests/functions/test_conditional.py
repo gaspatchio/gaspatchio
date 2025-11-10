@@ -179,8 +179,12 @@ class TestWhenListBroadcasting:
         # 2*12=24 but month only goes to 5, so none should match
         assert result["is_maturity"][0].to_list() == [0, 0, 0, 0, 0, 0]  # noqa: S101
 
-    def test_tracing_mode_raises_error(self) -> None:
-        """Test that list broadcasting in tracing mode raises informative error."""
+    def test_tracing_mode_works(self) -> None:
+        """Test that list broadcasting works in tracing mode (Task 5).
+
+        This test was previously expecting NotImplementedError, but as of Task 5
+        list broadcasting now works in debug/tracing mode with eager execution.
+        """
         # Save current mode
         from gaspatchio_core import get_default_mode, set_default_mode
 
@@ -192,7 +196,7 @@ class TestWhenListBroadcasting:
 
             af = ActuarialFrame(
                 {
-                    "month": [[0, 1, 2]],
+                    "month": [[0, 12, 24]],
                     "policy_term": [1],
                 }
             )
@@ -201,15 +205,21 @@ class TestWhenListBroadcasting:
             # but for direct assignment we need to set it)
             af._tracing = True  # noqa: SLF001
 
-            # Try list broadcasting conditional - should raise NotImplementedError
-            with pytest.raises(
-                NotImplementedError,
-                match=(
-                    "List broadcasting for column 'result' not yet supported "
-                    "in tracing mode"
-                ),
-            ):
-                af.result = when(af.month == af.policy_term * 12).then(1).otherwise(0)
+            # List broadcasting conditional now works in tracing mode!
+            af.result = when(af.month == af.policy_term * 12).then(1).otherwise(0)
+
+            # Verify operation was captured in computation graph
+            assert len(af._computation_graph) > 0  # noqa: SLF001, S101
+            assert any(  # noqa: S101
+                getattr(op, "alias", None) == "result"
+                for op in af._computation_graph  # noqa: SLF001
+            )
+
+            # Verify results are correct
+            # month values: [0, 12, 24], policy_term * 12 = 12
+            # Result: [0, 1, 0] (only month=12 matches)
+            result_data = af.collect()
+            assert result_data["result"][0].to_list() == [0, 1, 0]  # noqa: S101
 
         finally:
             # Restore original mode
