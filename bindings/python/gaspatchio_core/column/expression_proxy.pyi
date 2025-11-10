@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     # Keep local types
     from ..accessors.date import DateColumnAccessor
     from ..accessors.finance import FinanceColumnAccessor
+    from ..accessors.projection import ProjectionColumnAccessor
     from ..frame.base import ActuarialFrame
 
     # Keep ExpressionProxy for self-reference if needed, though return types are in base
@@ -30,6 +31,7 @@ class ExpressionProxy(_BaseProxy):
     _parent: Optional[ActuarialFrame]
     _date_accessor_instance_expr: Optional[DateColumnAccessor]
     _finance_accessor_instance_expr: Optional[FinanceColumnAccessor]
+    _projection_accessor_instance_expr: Optional[ProjectionColumnAccessor]
     _dynamic_accessor_cache: Dict[str, Any]
     _list_broadcast_metadata: Optional[Dict[str, Any]]
 
@@ -43,6 +45,8 @@ class ExpressionProxy(_BaseProxy):
     def date(self) -> "DateColumnAccessor": ...
     @property
     def finance(self) -> "FinanceColumnAccessor": ...
+    @property
+    def projection(self) -> "ProjectionColumnAccessor": ...
 
     # REMOVED: Operator Overloads (inherited)
     # REMOVED: Common Autopatched Methods/Namespaces (inherited)
