@@ -42,12 +42,93 @@ class ConditionalProxy:
     def then(self, value: Any) -> ConditionalProxy:  # noqa: ANN401
         """Specify value when condition is true.
 
+        Defines the result value for when the preceding condition evaluates to true.
+        Must be followed by either another `.when()` for chained conditions or
+        `.otherwise()` to complete the expression. Works with scalar values, column
+        references, or computed expressions.
+
         Args:
-            value: Value to return when condition matches
-                   (literal, column, or expression)
+            value: Value to return when condition matches. Can be a literal value
+                (number, string, etc.), a column reference (af.column_name), or a
+                computed expression (af.premium * 1.1). For list columns, values
+                are applied element-wise with automatic broadcasting.
 
         Returns:
             Self for chaining more .when() or final .otherwise()
+
+        Examples:
+        --------
+        **Scalar Example: Multi-Tier Premium Rates**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame, when
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004", "P005"],
+            "age": [25, 42, 55, 68, 73],
+        }
+        af = ActuarialFrame(data)
+
+        af.premium_rate = (
+            when(af.age < 35)
+            .then(0.0015)
+            .when(af.age < 50)
+            .then(0.0025)
+            .when(af.age < 65)
+            .then(0.0040)
+            .otherwise(0.0065)
+        )
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (5, 3)
+        ┌───────────┬─────┬──────────────┐
+        │ policy_id ┆ age ┆ premium_rate │
+        │ ---       ┆ --- ┆ ---          │
+        │ str       ┆ i64 ┆ f64          │
+        ╞═══════════╪═════╪══════════════╡
+        │ P001      ┆ 25  ┆ 0.0015       │
+        │ P002      ┆ 42  ┆ 0.0025       │
+        │ P003      ┆ 55  ┆ 0.004        │
+        │ P004      ┆ 68  ┆ 0.0065       │
+        │ P005      ┆ 73  ┆ 0.0065       │
+        └───────────┴─────┴──────────────┘
+        ```
+
+        **Vector Example: Premium Holiday**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame, when
+
+        data = {
+            "policy_id": ["P001"],
+            "month": [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]],
+            "premium_holiday_month": [6],
+            "base_premium": [100.0],
+        }
+        af = ActuarialFrame(data)
+
+        af.premium_due = (
+            when(af.month == af.premium_holiday_month)
+            .then(0.0)
+            .otherwise(af.base_premium)
+        )
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 5)
+        ┌───────────┬──────────────┬──────────┬─────────────────────────┐
+        │ policy_id ┆ month        ┆ base...  ┆ premium_due             │
+        │ ---       ┆ ---          ┆ ---      ┆ ---                     │
+        │ str       ┆ list[i64]    ┆ f64      ┆ list[f64]               │
+        ╞═══════════╪══════════════╪══════════╪═════════════════════════╡
+        │ P001      ┆ [0, 1, … 12] ┆ 100.0    ┆ [100.0, 100.0, … 100.0] │
+        └───────────┴──────────────┴──────────┴─────────────────────────┘
+        ```
 
         """
         # Convert value to expression
@@ -161,23 +242,88 @@ class ConditionalProxy:
         return list_columns
 
     def otherwise(self, value: Any) -> ExpressionProxy:  # noqa: ANN401
-        """Complete chain with default value.
+        """Complete conditional chain with default value.
 
-        This is required - raises error if ConditionalProxy is used
-        without calling this.
-        Implements list broadcasting using explode/re-aggregate pattern
-        when needed.
+        Finalizes the conditional expression by providing the value to use when none
+        of the preceding conditions evaluate to true. This method is required - a
+        conditional expression cannot be used without calling `.otherwise()`.
+        Automatically detects and handles list broadcasting for projection
+        calculations.
+
+        !!! note "When to use"
+            * **Default Rate:** Provide standard rate when age doesn't match
+                any premium tiers or risk categories.
+            * **Zero After Event:** Set cash flows to zero for all months after
+                maturity, surrender, or death events occur.
+            * **Fallback Values:** Apply baseline commission rates, default
+                mortality assumptions, or standard policy terms when special
+                conditions aren't met.
+            * **Maintain Status Quo:** Keep existing premium, benefit, or reserve
+                values unchanged when update conditions don't apply.
 
         Args:
-            value: Default value when no conditions match
+            value: Default value when no conditions match. Can be a literal value,
+                column reference, or computed expression. For list columns, this
+                value is broadcast element-wise across all list elements.
 
         Returns:
-            ExpressionProxy wrapping the final Polars
-            when/then/otherwise expression
+            ExpressionProxy wrapping the complete conditional expression, ready
+            for assignment to a column.
 
-        Raises:
-            NotImplementedError: If list broadcasting is detected but not
-                yet fully implemented
+        Examples:
+        --------
+        **Scalar Example: Underwriting Classification**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame, when
+
+        data = {
+            "policy_id": ["P001", "P002", "P003", "P004", "P005", "P006"],
+            "age": [25, 42, 55, 68, 73, 45],
+            "sum_assured": [100000, 250000, 500000, 150000, 300000, 600000],
+        }
+        af = ActuarialFrame(data)
+
+        af.underwriting_class = (
+            when(af.sum_assured > 500000)
+            .then("refer_underwriting")
+            .when(af.age > 65)
+            .then("senior_standard")
+            .when(af.age < 35)
+            .then("young_preferred")
+            .otherwise("standard")
+        )
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (6, 4)
+        ┌───────────┬─────┬─────────────┬────────────────────┐
+        │ policy_id ┆ age ┆ sum_assured ┆ underwriting_class │
+        │ ---       ┆ --- ┆ ---         ┆ ---                │
+        │ str       ┆ i64 ┆ i64         ┆ str                │
+        ╞═══════════╪═════╪═════════════╪════════════════════╡
+        │ P001      ┆ 25  ┆ 100000      ┆ young_preferred    │
+        │ P002      ┆ 42  ┆ 250000      ┆ standard           │
+        │ P003      ┆ 55  ┆ 500000      ┆ standard           │
+        │ P004      ┆ 68  ┆ 150000      ┆ senior_standard    │
+        │ P005      ┆ 73  ┆ 300000      ┆ senior_standard    │
+        │ P006      ┆ 45  ┆ 600000      ┆ refer_underwriting │
+        └───────────┴─────┴─────────────┴────────────────────┘
+        ```
+
+        **List Broadcasting Behavior**
+
+        The `.otherwise()` method automatically detects when list columns are involved
+        and applies the default value element-wise. If the otherwise value is a scalar
+        (like `0` or `100.0`), it's broadcast to match the length of each list. If
+        the otherwise value is itself a list column, elements are matched one-to-one.
+
+        This enables patterns like:
+        - Zeroing cash flows after maturity: `.otherwise(0)`
+        - Maintaining baseline premiums: `.otherwise(af.base_premium)`
+        - Default growth rates: `.otherwise(0.03)` broadcasts to all months
 
         """
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
@@ -308,8 +454,23 @@ class ConditionalProxy:
 def when(condition: Any) -> ConditionalProxy:  # noqa: ANN401
     """Start a conditional expression chain.
 
-    Like Excel's IF() function but with method chaining for multiple conditions.
-    Automatically handles list vs scalar broadcasting for actuarial projections.
+    Excel-style IF() function with method chaining for multiple conditions.
+    Provides intuitive if/elif/else logic for actuarial calculations. Automatically
+    handles both scalar columns and list columns (projections) with proper broadcasting.
+
+    !!! note "When to use"
+        * **Age-Based Pricing:** Apply different premium rates, mortality factors,
+            or underwriting classes based on policyholder age brackets.
+        * **Maturity Events:** Identify when policies mature by comparing projection
+            month against policy term, zeroing cash flows after maturity.
+        * **Premium Holidays:** Suspend premium collection for specific months or
+            conditions, such as grace periods or payment holidays.
+        * **Commission Schedules:** Calculate tiered commission rates based on
+            policy value, product type, or sales channel.
+        * **Benefit Triggers:** Activate guaranteed minimum benefits, death benefits,
+            or surrender values when specific conditions are met.
+        * **Underwriting Rules:** Implement automated underwriting decisions based on
+            sum assured, age, and other risk factors.
 
     Args:
         condition: Boolean expression (e.g., af.age > 65)
@@ -318,22 +479,93 @@ def when(condition: Any) -> ConditionalProxy:  # noqa: ANN401
         ConditionalProxy for chaining .then() and .otherwise()
 
     Examples:
-        Simple scalar conditional:
+    --------
+    **Scalar Example: Age-Based Rate Classification**
 
-        >>> from gaspatchio_core import ActuarialFrame, when
-        >>> af = ActuarialFrame({"age": [25, 45, 70]})
-        >>> af.rate = when(af.age > 65).then(0.05).otherwise(0.02)
-        >>> print(af.collect())
-        shape: (3, 2)
-        ┌─────┬──────┐
-        │ age ┆ rate │
-        │ --- ┆ ---  │
-        │ i64 ┆ f64  │
-        ╞═════╪══════╡
-        │ 25  ┆ 0.02 │
-        │ 45  ┆ 0.02 │
-        │ 70  ┆ 0.05 │
-        └─────┴──────┘
+    ```python
+    from gaspatchio_core import ActuarialFrame, when
+
+    data = {
+        "policy_id": ["P001", "P002", "P003", "P004"],
+        "age": [35, 55, 68, 72],
+    }
+    af = ActuarialFrame(data)
+
+    af.rate_class = when(af.age > 65).then("senior").otherwise("standard")
+
+    print(af.collect())
+    ```
+
+    ```text
+    shape: (4, 3)
+    ┌───────────┬─────┬────────────┐
+    │ policy_id ┆ age ┆ rate_class │
+    │ ---       ┆ --- ┆ ---        │
+    │ str       ┆ i64 ┆ str        │
+    ╞═══════════╪═════╪════════════╡
+    │ P001      ┆ 35  ┆ standard   │
+    │ P002      ┆ 55  ┆ standard   │
+    │ P003      ┆ 68  ┆ senior     │
+    │ P004      ┆ 72  ┆ senior     │
+    └───────────┴─────┴────────────┘
+    ```
+
+    **Vector Example: Maturity Detection with List Broadcasting**
+
+    ```python
+    from gaspatchio_core import ActuarialFrame, when
+
+    data = {
+        "policy_id": ["P001", "P002"],
+        "month": [
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+            [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+                13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24
+            ]
+        ],
+        "policy_term_years": [1, 2],
+        "pols_if": [
+            [1000, 998, 996, 994, 992, 990, 988, 986, 984, 982, 980, 978, 976],
+            [
+                1000, 998, 996, 994, 992, 990, 988, 986, 984, 982, 980, 978,
+                976, 974, 972, 970, 968, 966, 964, 962, 960, 958, 956, 954, 952
+            ]
+        ],
+    }
+    af = ActuarialFrame(data)
+
+    af.pols_maturity = (
+        when(af.month == af.policy_term_years * 12)
+        .then(af.pols_if)
+        .otherwise(0)
+    )
+
+    print(af.collect())
+    ```
+
+    ```text
+    shape: (2, 5)
+    ┌───────────┬──────────────┬──────────┬───────────────┐
+    │ policy_id ┆ month        ┆ pols_if  ┆ pols_maturity │
+    │ ---       ┆ ---          ┆ ---      ┆ ---           │
+    │ str       ┆ list[i64]    ┆ list[... ┆ list[i64]     │
+    ╞═══════════╪══════════════╪══════════╪═══════════════╡
+    │ P001      ┆ [0, 1, … 12] ┆ [1000... ┆ [0, 0, … 976] │
+    │ P002      ┆ [0, 1, … 24] ┆ [1000... ┆ [0, 0, … 952] │
+    └───────────┴──────────────┴──────────┴───────────────┘
+    ```
+
+    **List Broadcasting Behavior**
+
+    When list columns are involved, the framework automatically broadcasts scalar
+    values across all elements in the list. In the maturity example above:
+
+    - `af.month` is a list column (projection months 0-12 and 0-24)
+    - `af.policy_term_years * 12` broadcasts the scalar calculation to each month
+    - The condition is evaluated element-wise within each list
+    - `af.pols_if` (then value) and `0` (otherwise value) are applied element-wise
+    - Result: maturity value appears only at the matching month, zeros elsewhere
 
     """
     # Extract parent ActuarialFrame from condition if possible
