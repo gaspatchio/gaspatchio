@@ -6,6 +6,8 @@ Covers scalar conditionals, list broadcasting, error handling,
 and computation graph integration.
 """
 
+import pytest
+
 from gaspatchio_core import ActuarialFrame, when
 
 # Test constants
@@ -13,6 +15,7 @@ RETIREMENT_AGE = 65
 ADULT_AGE = 18
 LOW_THRESHOLD = 20
 MEDIUM_THRESHOLD = 30
+TEST_THRESHOLD = 5
 
 
 class TestWhenBasics:
@@ -166,3 +169,31 @@ class TestWhenListBroadcasting:
         result = af.collect()
         # 2*12=24 but month only goes to 5, so none should match
         assert result["is_maturity"][0] == [0, 0, 0, 0, 0, 0]  # noqa: S101
+
+
+class TestWhenErrorHandling:
+    """Tests for error handling and validation."""
+
+    def test_missing_otherwise_raises_error(self) -> None:
+        """Test that ConditionalProxy cannot be used without .otherwise()."""
+        af = ActuarialFrame({"age": [25, 45, 70]})
+
+        # Create incomplete conditional
+        incomplete = when(af.age > RETIREMENT_AGE).then(0.05)
+
+        # Should raise TypeError when trying to use it
+        with pytest.raises(
+            TypeError,
+            match="cannot create expression literal for value of type ConditionalProxy",
+        ):
+            # Trigger _to_expr via _convert_to_expr
+            af._convert_to_expr(incomplete)  # noqa: SLF001
+
+    def test_repr_shows_incomplete_state(self) -> None:
+        """Test ConditionalProxy repr shows helpful message."""
+        af = ActuarialFrame({"value": [10]})
+        proxy = when(af.value > TEST_THRESHOLD).then(100)
+
+        repr_str = repr(proxy)
+        assert "incomplete" in repr_str.lower()  # noqa: S101
+        assert "otherwise" in repr_str.lower()  # noqa: S101
