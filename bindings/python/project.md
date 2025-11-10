@@ -73,6 +73,29 @@ The Python bindings wrap the Rust core library via PyO3:
   - `af["column"].dt.year_frac(...)` - Date functions via accessor
   - Chain operations before execution for optimization
 
+### Time-Shifting Operations
+
+The projection accessor provides actuarial-friendly methods for accessing values from other time periods:
+
+```python
+# Previous period (t-1) - most common case
+af.reserve_prev = af.reserve.projection.previous_period()
+af.pols_death_prev = af.pols_death.projection.previous_period(fill_value=0)
+
+# Next period (t+1) - for forward-looking calculations
+af.rate_next = af.interest_rate.projection.next_period()
+
+# Arbitrary period offsets using mathematical t notation
+af.reserve_t2 = af.reserve.projection.at_period(-2)  # t-2 (two periods ago)
+af.projected = af.value.projection.at_period(3)      # t+3 (three periods ahead)
+```
+
+**Design Philosophy:**
+- Use mathematical `t-1`, `t-2` notation (negative = prior, positive = future)
+- Default `fill_value=0` for missing boundary values
+- Methods make time-shifting transparent and auditable
+- Replaces confusing `.shift()` with actuarial-friendly API
+
 - **Assumption Tables**: Table/TableBuilder for rate lookups
   - Multiple join strategies (age/duration, select/ultimate)
   - Efficient batch lookups via Polars joins
