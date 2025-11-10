@@ -782,6 +782,16 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         For list columns, shifts values within each list. For scalar columns,
         shifts across rows (use `.over()` for grouping).
 
+        !!! note "When to use"
+            * **Inforce Rollforward:** Calculate beginning-of-period inforce values
+                using ending inforce from the previous period in life insurance models.
+            * **Reserve Calculations:** Access prior period reserves for reserve
+                rollforward formulas and cash flow testing.
+            * **Period Comparisons:** Compare current period values against previous
+                period for variance analysis and experience studies.
+            * **Dependent Calculations:** Reference lagged values in formulas where
+                current period depends on prior period results.
+
         Parameters
         ----------
         fill_value : scalar, optional
@@ -921,6 +931,16 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         For list columns, shifts values within each list. For scalar columns,
         shifts across rows (use `.over()` for grouping).
 
+        !!! note "When to use"
+            * **Forward-Looking Calculations:** Access next period values for
+                calculations that require looking ahead in the projection timeline.
+            * **Period-Over-Period Growth:** Calculate growth rates or changes by
+                comparing current values to next period values.
+            * **Validation Checks:** Verify that projected values follow expected
+                patterns by comparing current and next period results.
+            * **Timing Adjustments:** Reference future period values when modeling
+                payment or benefit timing that leads the valuation period.
+
         Parameters
         ----------
         fill_value : scalar, optional
@@ -1033,6 +1053,16 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         For list columns, shifts values within each list. For scalar columns,
         shifts across rows (use `.over()` for grouping).
+
+        !!! note "When to use"
+            * **Multi-Period Lag Analysis:** Access values from multiple periods back
+                (t-2, t-3) for trend analysis and smoothing calculations.
+            * **Reserve Rollforward:** Reference reserves from specific prior periods
+                in complex reserve formulas requiring multiple lag periods.
+            * **Experience Studies:** Compare values across multiple time periods to
+                analyze experience trends and validate assumptions.
+            * **Flexible Time-Shifting:** Use when previous_period() and next_period()
+                don't provide the specific offset needed for your calculation.
 
         Parameters
         ----------
