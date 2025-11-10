@@ -26,6 +26,9 @@ from .errors import PerformanceWarning as PerformanceWarning
 from .frame import ActuarialFrame as ActuarialFrame
 from .frame import run_model as run_model
 
+# Functions
+from .functions.conditional import when as when
+
 # Utility functions
 from .util import execution_mode as execution_mode
 from .util import get_default_mode as get_default_mode
@@ -87,6 +90,8 @@ __all__: list[str] = [
     "set_default_mode",
     # Errors
     "PerformanceWarning",
+    # Functions
+    "when",
     # Modules (for direct function access)
     "functions",
 ]
