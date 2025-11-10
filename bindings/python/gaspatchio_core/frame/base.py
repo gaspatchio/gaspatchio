@@ -378,6 +378,13 @@ class ActuarialFrame:
                         final_df = final_df.with_columns(expr_val.alias(name))
                     else:
                         # New format: TracedOperation
+                        # Skip if expression is a string (description only, already executed eagerly)
+                        # This happens for list broadcasting operations in debug mode
+                        if isinstance(operation.expression, str):
+                            logger.trace(
+                                f"Skipping '{operation.alias}' - already executed eagerly"
+                            )
+                            continue
                         final_df = final_df.with_columns(
                             operation.expression.alias(operation.alias)
                         )
@@ -418,6 +425,13 @@ class ActuarialFrame:
                         final_df = final_df.with_columns(expr_val.alias(name))
                     else:
                         # New format: TracedOperation
+                        # Skip if expression is a string (description only, already executed eagerly)
+                        # This happens for list broadcasting operations in debug mode
+                        if isinstance(operation.expression, str):
+                            logger.trace(
+                                f"Skipping '{operation.alias}' - already executed eagerly"
+                            )
+                            continue
                         final_df = final_df.with_columns(
                             operation.expression.alias(operation.alias)
                         )
