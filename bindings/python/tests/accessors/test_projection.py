@@ -454,3 +454,86 @@ class TestNextPeriod:
         assert projected_next[0] == 1100
         assert projected_next[1] == 1200
         assert projected_next[2] is None
+
+
+class TestAtPeriod:
+    """Tests for at_period() method."""
+
+    def test_negative_offset_t_minus_1(self):
+        """Test at_period(-1) equivalent to previous_period()."""
+        data = {"value": [[100, 110, 120]]}
+        af = ActuarialFrame(data)
+
+        af.value_t1 = af.value.projection.at_period(-1)
+
+        result = af.collect()
+        value_t1 = result["value_t1"][0]
+
+        # at_period(-1) should match previous_period()
+        # [100, 110, 120] -> [0, 100, 110]
+        assert value_t1[0] == 0
+        assert value_t1[1] == 100
+        assert value_t1[2] == 110
+
+    def test_negative_offset_t_minus_2(self):
+        """Test at_period(-2) for two periods back."""
+        data = {"reserve": [[1000, 1100, 1200, 1300]]}
+        af = ActuarialFrame(data)
+
+        af.reserve_t2 = af.reserve.projection.at_period(-2)
+
+        result = af.collect()
+        reserve_t2 = result["reserve_t2"][0]
+
+        # [1000, 1100, 1200, 1300] -> [0, 0, 1000, 1100]
+        assert reserve_t2[0] == 0
+        assert reserve_t2[1] == 0
+        assert reserve_t2[2] == 1000
+        assert reserve_t2[3] == 1100
+
+    def test_positive_offset_t_plus_1(self):
+        """Test at_period(1) equivalent to next_period()."""
+        data = {"value": [[100, 110, 120]]}
+        af = ActuarialFrame(data)
+
+        af.value_tp1 = af.value.projection.at_period(1)
+
+        result = af.collect()
+        value_tp1 = result["value_tp1"][0]
+
+        # at_period(1) should match next_period()
+        # [100, 110, 120] -> [110, 120, 0]
+        assert value_tp1[0] == 110
+        assert value_tp1[1] == 120
+        assert value_tp1[2] == 0
+
+    def test_positive_offset_t_plus_2(self):
+        """Test at_period(2) for two periods ahead."""
+        data = {"cashflow": [[1000, 1100, 1200, 1300]]}
+        af = ActuarialFrame(data)
+
+        af.cf_tp2 = af.cashflow.projection.at_period(2)
+
+        result = af.collect()
+        cf_tp2 = result["cf_tp2"][0]
+
+        # [1000, 1100, 1200, 1300] -> [1200, 1300, 0, 0]
+        assert cf_tp2[0] == 1200
+        assert cf_tp2[1] == 1300
+        assert cf_tp2[2] == 0
+        assert cf_tp2[3] == 0
+
+    def test_custom_fill_value(self):
+        """Test at_period with custom fill value."""
+        data = {"value": [[100, 110, 120]]}
+        af = ActuarialFrame(data)
+
+        af.value_t1 = af.value.projection.at_period(-1, fill_value=999)
+
+        result = af.collect()
+        value_t1 = result["value_t1"][0]
+
+        # [100, 110, 120] -> [999, 100, 110]
+        assert value_t1[0] == 999
+        assert value_t1[1] == 100
+        assert value_t1[2] == 110

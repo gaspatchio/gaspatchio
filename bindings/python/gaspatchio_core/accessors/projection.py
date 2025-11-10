@@ -1017,3 +1017,194 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             shifted_expr = base_expr.shift(-1, fill_value=fill_value)
 
         return ExpressionProxy(shifted_expr, parent_af)
+
+    def at_period(self, relative_period: int, fill_value=0) -> ExpressionProxy:
+        """Get value at relative period offset.
+
+        Access values from other time periods using mathematical t notation.
+        Negative values reference prior periods (t-1, t-2), positive values
+        reference future periods (t+1, t+2).
+
+        This method provides flexible time-shifting for arbitrary period offsets,
+        complementing the convenience methods `previous_period()` (t-1) and
+        `next_period()` (t+1).
+
+        For list columns, shifts values within each list. For scalar columns,
+        shifts across rows (use `.over()` for grouping).
+
+        Parameters
+        ----------
+        relative_period : int
+            Period offset from current time using mathematical notation:
+            - Negative values: prior periods (e.g., -1 for t-1, -2 for t-2)
+            - Positive values: future periods (e.g., 1 for t+1, 2 for t+2)
+            - Zero: current period (no shift)
+        fill_value : scalar, optional
+            Value to use for missing entries at boundaries. Default is 0.
+
+        Returns
+        -------
+        ExpressionProxy
+            Expression with values from specified relative period
+
+        Examples
+        --------
+        **Previous Period: t-1**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {"reserve": [[1000, 1100, 1200]]}
+        af = ActuarialFrame(data)
+
+        # at_period(-1) is equivalent to previous_period()
+        af.reserve_t1 = af.reserve.projection.at_period(-1)
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌──────────────────┬──────────────────┐
+        │ reserve          ┆ reserve_t1       │
+        │ ---              ┆ ---              │
+        │ list[i64]        ┆ list[i64]        │
+        ╞══════════════════╪══════════════════╡
+        │ [1000, 1100, ...] ┆ [0, 1000, 1100]  │
+        └──────────────────┴──────────────────┘
+        ```
+
+        **Two Periods Back: t-2**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {"value": [[100, 110, 120, 130, 140]]}
+        af = ActuarialFrame(data)
+
+        af.value_t2 = af.value.projection.at_period(-2)
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌───────────────────────┬──────────────────────┐
+        │ value                 ┆ value_t2             │
+        │ ---                   ┆ ---                  │
+        │ list[i64]             ┆ list[i64]            │
+        ╞═══════════════════════╪══════════════════════╡
+        │ [100, 110, 120, 13... ┆ [0, 0, 100, 110, 120]│
+        └───────────────────────┴──────────────────────┘
+        ```
+
+        **Next Period: t+1**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {"cashflow": [[1000, 1100, 1200]]}
+        af = ActuarialFrame(data)
+
+        # at_period(1) is equivalent to next_period()
+        af.cf_tp1 = af.cashflow.projection.at_period(1)
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌──────────────────┬─────────────────┐
+        │ cashflow         ┆ cf_tp1          │
+        │ ---              ┆ ---             │
+        │ list[i64]        ┆ list[i64]       │
+        ╞══════════════════╪═════════════════╡
+        │ [1000, 1100, ...] ┆ [1100, 1200, 0] │
+        └──────────────────┴─────────────────┘
+        ```
+
+        **Reserve Rollforward Formula**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "reserve": [[0, 950, 1900, 2850]],
+            "premium": [[1000, 1000, 1000, 1000]],
+            "interest": [[50, 52, 55, 58]],
+            "benefit": [[100, 102, 105, 108]],
+        }
+        af = ActuarialFrame(data)
+
+        # Reserve rollforward formula:
+        # Reserve(t) = Reserve(t-1) + Premium(t) + Interest(t) - Benefit(t)
+        af.reserve_t1 = af.reserve.projection.at_period(-1)
+        af.reserve_calc = af.reserve_t1 + af.premium + af.interest - af.benefit
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 6)
+        ┌─────────────────┬─────────────┬─────────┬─────────┬──────────┬──────────────┐
+        │ reserve         ┆ premium     ┆ intere.. ┆ benefit ┆ reserve..┆ reserve_calc │
+        │ ---             ┆ ---         ┆ ---     ┆ ---     ┆ ---      ┆ ---          │
+        │ list[i64]       ┆ list[i64]   ┆ list..  ┆ list..  ┆ list[i64]┆ list[i64]    │
+        ╞═════════════════╪═════════════╪═════════╪═════════╪══════════╪══════════════╡
+        │ [0, 950, 19...┆ [1000, 10...┆ [50, 52...┆ [100, ...┆ [0, 0, 9...┆ [950, 19...│
+        └─────────────────┴─────────────┴─────────┴─────────┴──────────┴──────────────┘
+        ```
+
+        See Also
+        --------
+        previous_period : Convenience method for t-1
+        next_period : Convenience method for t+1
+
+        """
+        from gaspatchio_core.column.column_proxy import ColumnProxy
+        from gaspatchio_core.column.dispatch import (
+            ColumnTypeDetector,  # type: ignore[attr-defined]
+        )
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        base_expr = self._get_polars_expr()
+        parent_af = self._get_parent_frame()
+
+        # Determine if this is a list column
+        detector = ColumnTypeDetector(parent_af)
+        is_list = False
+
+        if isinstance(self._proxy, ColumnProxy):
+            is_list = detector.is_list_column(self._proxy.name)
+
+        if is_list:
+            # For list columns, we need to handle positive and negative offsets
+            if relative_period < 0:
+                # Negative offset (prior periods): prepend fill_values and slice
+                # For t-1: prepend 1 fill_value
+                # For t-2: prepend 2 fill_values, etc.
+                n_fills = abs(relative_period)
+                fill_list = pl.lit([fill_value] * n_fills)
+                shifted_expr = pl.concat_list([fill_list, base_expr]).list.slice(
+                    0, base_expr.list.len()
+                )
+            elif relative_period > 0:
+                # Positive offset (future): append fill_values, slice from offset
+                # For t+1: slice from position 1
+                # For t+2: slice from position 2, etc.
+                n_fills = relative_period
+                fill_list = pl.lit([fill_value] * n_fills)
+                shifted_expr = pl.concat_list([base_expr, fill_list]).list.slice(
+                    relative_period, base_expr.list.len()
+                )
+            else:
+                # Zero offset: no shift
+                shifted_expr = base_expr
+        else:
+            # For scalar columns: negate relative_period
+            # (Polars uses opposite convention)
+            # at_period(-1) means t-1 (prior), which needs shift(1)
+            # at_period(1) means t+1 (future), which needs shift(-1)
+            shifted_expr = base_expr.shift(-relative_period, fill_value=fill_value)
+
+        return ExpressionProxy(shifted_expr, parent_af)
