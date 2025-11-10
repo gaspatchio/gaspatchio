@@ -1018,7 +1018,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         return ExpressionProxy(shifted_expr, parent_af)
 
-    def at_period(self, relative_period: int, fill_value=0) -> ExpressionProxy:
+    def at_period(
+        self, relative_period: int, fill_value: float | None = 0
+    ) -> ExpressionProxy:
         """Get value at relative period offset.
 
         Access values from other time periods using mathematical t notation.

@@ -537,3 +537,49 @@ class TestAtPeriod:
         assert value_t1[0] == 999
         assert value_t1[1] == 100
         assert value_t1[2] == 110
+
+    def test_zero_offset(self):
+        """Test at_period(0) returns original values unchanged."""
+        data = {"value": [[100, 110, 120]]}
+        af = ActuarialFrame(data)
+
+        af.value_t0 = af.value.projection.at_period(0)
+
+        result = af.collect()
+        value_t0 = result["value_t0"][0]
+
+        # at_period(0) should return the same values
+        # [100, 110, 120] -> [100, 110, 120]
+        assert value_t0[0] == 100
+        assert value_t0[1] == 110
+        assert value_t0[2] == 120
+
+    def test_scalar_column_with_grouping(self):
+        """Test at_period with scalar columns using .over() grouping."""
+        import polars as pl
+
+        data = {
+            "policy_id": [1, 1, 1, 2, 2, 2],
+            "period": [0, 1, 2, 0, 1, 2],
+            "value": [100, 110, 120, 200, 220, 240],
+        }
+        af = ActuarialFrame(data)
+
+        # Use .over() to apply at_period within each policy group
+        af.value_prev = af.value.projection.at_period(-1, fill_value=0).over(
+            "policy_id"
+        )
+
+        result = af.collect()
+
+        # Policy 1: [100, 110, 120] -> [0, 100, 110]
+        policy_1_values = result.filter(pl.col("policy_id") == 1)["value_prev"]
+        assert policy_1_values[0] == 0
+        assert policy_1_values[1] == 100
+        assert policy_1_values[2] == 110
+
+        # Policy 2: [200, 220, 240] -> [0, 200, 220]
+        policy_2_values = result.filter(pl.col("policy_id") == 2)["value_prev"]
+        assert policy_2_values[0] == 0
+        assert policy_2_values[1] == 200
+        assert policy_2_values[2] == 220
