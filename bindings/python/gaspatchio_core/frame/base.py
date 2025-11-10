@@ -1,3 +1,9 @@
+# ABOUTME: Core ActuarialFrame implementation for actuarial modeling
+# ABOUTME: Main DataFrame wrapper with computation graph and tracing support
+# ruff: noqa: D100, TC001, TD002, TD003, FIX002, ANN204, ANN401, E501, PLR0913, C901, PLR0912, PLR0915, ANN001, ANN201, D102, D101, SLF001, TID252, D107, TRY003, EM101, EM102, ERA001, ANN202, PGH003, BLE001, FBT001, FBT002, T201, D401, TRY300, B904, N806, D301, RET503, S110, C414, SIM118, PLR2004
+# type: ignore[return-value, attr-defined, arg-type, assignment, override, misc]
+"""Core ActuarialFrame implementation for actuarial modeling."""
+
 from __future__ import annotations
 
 import keyword
@@ -5,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
+from loguru import logger
 
 # Import types
 from gaspatchio_core.typing import IntoExprColumn
@@ -26,7 +33,10 @@ from ..functions import vector as gp_funcs
 from ..util import get_default_mode, get_default_verbose
 
 # ADDED: Import tracing components
-from .tracing import append_operation_to_graph, build_trace_decorator
+from .tracing import (
+    append_operation_to_graph,
+    build_trace_decorator,
+)
 
 if TYPE_CHECKING:
     # Keep TYPE_CHECKING block for potential future forward refs if needed
@@ -1899,23 +1909,57 @@ class ActuarialFrame:
             key: Name of the column to create
             metadata: Metadata dictionary with list_columns and conditional_expr
 
-        Raises:
-            NotImplementedError: If tracing mode is enabled (not yet supported)
+        In tracing mode (debug), this executes the pattern eagerly and captures
+        the operation in the computation graph. In optimize mode, it just applies
+        the transformation directly.
 
         """
-        if self._tracing:
-            msg = (
-                f"List broadcasting for column '{key}' not yet supported in tracing mode. "
-                "Use optimize mode (.optimize()) instead. "
-                "Full tracing support coming in Task 5."
-            )
-            raise NotImplementedError(msg)
-
         # Extract metadata
         list_columns = metadata["list_columns"]
         conditional_expr = metadata["conditional_expr"]
 
-        # Build and execute
+        # In tracing mode: execute eagerly AND capture operation
+        if self._tracing:
+            from ..errors.metadata import capture_source_context
+            from .tracing import (
+                create_list_broadcast_traced_operations,  # type: ignore[attr-defined]
+            )
+
+            # Capture source location from user code
+            source_metadata = None
+            for depth in range(2, 10):
+                temp_metadata = capture_source_context(depth=depth)
+                if not any(
+                    internal in temp_metadata.file_name
+                    for internal in [
+                        "gaspatchio_core/frame/",
+                        "gaspatchio_core/column/",
+                        "gaspatchio_core/functions/",
+                        "<frozen",
+                        "site-packages/",
+                    ]
+                ):
+                    source_metadata = temp_metadata
+                    break
+
+            # Create traced operations for this list broadcasting
+            traced_ops = create_list_broadcast_traced_operations(
+                frame_instance=self,
+                result_col=key,
+                list_columns=list_columns,
+                conditional_expr=conditional_expr,
+                metadata=source_metadata,
+            )
+
+            # Append to computation graph
+            self._computation_graph.extend(traced_ops)
+
+            logger.trace(
+                f"Debug mode: Executing list broadcasting for '{key}' eagerly "
+                f"and captured {len(traced_ops)} operation(s)"
+            )
+
+        # Execute the pattern (both modes reach here now)
         self._df = self._build_list_broadcasting_df(key, conditional_expr, list_columns)
 
     def _build_list_broadcasting_df(
