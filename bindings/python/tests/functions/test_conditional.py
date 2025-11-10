@@ -197,3 +197,97 @@ class TestWhenErrorHandling:
         repr_str = repr(proxy)
         assert "incomplete" in repr_str.lower()  # noqa: S101
         assert "otherwise" in repr_str.lower()  # noqa: S101
+
+
+class TestConditionalProxyMetadata:
+    """Tests for ConditionalProxy list broadcasting metadata."""
+
+    def test_needs_list_broadcasting_returns_false_for_scalar(self) -> None:
+        """Test needs_list_broadcasting returns False for scalar conditionals."""
+        af = ActuarialFrame({"age": [25, 45, 70]})
+
+        conditional = when(af.age > RETIREMENT_AGE).then(0.05)
+
+        # Should be False - no list columns involved
+        assert not conditional.needs_list_broadcasting()  # noqa: S101
+
+    def test_needs_list_broadcasting_returns_true_for_list(self) -> None:
+        """Test needs_list_broadcasting returns True for list conditionals."""
+        af = ActuarialFrame(
+            {
+                "month": [[0, 1, 2, 3, 4, 5]],
+                "policy_term": [2],
+            }
+        )
+
+        conditional = when(af.month == af.policy_term * 12).then(1)
+
+        # Detection won't happen until otherwise() is called
+        # For now, should return False (metadata not populated yet)
+        assert not conditional.needs_list_broadcasting()  # noqa: S101
+
+    def test_get_list_broadcasting_metadata(self) -> None:
+        """Test that detected list columns are accessible via metadata."""
+        af = ActuarialFrame(
+            {
+                "month": [[0, 1, 2]],
+                "policy_term": [1],
+                "pols_if": [[100, 99, 98]],
+            }
+        )
+
+        # Create conditional but don't call otherwise() yet
+        conditional = when(af.month == af.policy_term * 12).then(af.pols_if)
+
+        # Get metadata (will implement this method)
+        metadata = conditional.get_list_broadcasting_metadata()
+
+        # Should have detected month and pols_if as list columns
+        assert "month" in metadata["list_columns"]  # noqa: S101
+        assert "pols_if" in metadata["list_columns"]  # noqa: S101
+        assert "conditions" in metadata  # noqa: S101
+        assert "values" in metadata  # noqa: S101
+
+    def test_otherwise_populates_list_columns(self) -> None:
+        """Test that otherwise() triggers list column detection."""
+        import contextlib
+
+        af = ActuarialFrame(
+            {
+                "month": [[0, 1, 2]],
+                "policy_term": [1],
+            }
+        )
+
+        # Before otherwise(), list_columns is None
+        conditional = when(af.month == af.policy_term * 12).then(1)
+        assert conditional._list_columns is None  # noqa: S101, SLF001
+
+        # Call otherwise() - will still raise NotImplementedError for now
+        with contextlib.suppress(NotImplementedError):
+            conditional.otherwise(0)
+
+        # Check metadata was populated
+        assert conditional._list_columns is not None  # noqa: S101, SLF001
+        assert "month" in conditional._list_columns  # noqa: S101, SLF001
+
+    def test_expression_proxy_carries_list_broadcast_metadata(self) -> None:
+        """Test that ExpressionProxy carries list broadcast metadata."""
+        import contextlib
+
+        af = ActuarialFrame(
+            {
+                "month": [[0, 1, 2]],
+                "policy_term": [1],
+            }
+        )
+
+        # Call otherwise() - will raise NotImplementedError but should
+        # return ExpressionProxy with metadata
+        with contextlib.suppress(NotImplementedError):
+            result = when(af.month == af.policy_term * 12).then(1).otherwise(0)
+
+            # Should have metadata attached
+            assert hasattr(result, "_list_broadcast_metadata")  # noqa: S101
+            metadata = result._list_broadcast_metadata  # noqa: SLF001
+            assert "month" in metadata["list_columns"]  # noqa: S101

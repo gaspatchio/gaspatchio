@@ -1,7 +1,11 @@
+"""Accessor modules for ActuarialFrame and column operations."""
+
 from . import (
     base,
     date,
     excel,
-    finance,  # Add import for finance
+    finance,
+    projection,
 )
-# Import other accessors like finance here when they are moved
+
+__all__ = ["base", "date", "excel", "finance", "projection"]

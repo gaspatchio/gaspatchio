@@ -36,6 +36,8 @@ class ConditionalProxy:
         self._conditions: list[pl.Expr] = [condition_expr]
         self._values: list[pl.Expr] = []
         self._parent = parent
+        self._list_columns: set[str] | None = None
+        self._otherwise_expr: pl.Expr | None = None
 
     def then(self, value: Any) -> ConditionalProxy:  # noqa: ANN401
         """Specify value when condition is true.
@@ -92,6 +94,72 @@ class ConditionalProxy:
         self._conditions.append(condition_expr)
         return self
 
+    def needs_list_broadcasting(self) -> bool:
+        """Check if this conditional requires list broadcasting.
+
+        Returns:
+            True if any columns involved are list columns, False otherwise
+
+        """
+        if self._parent is None:
+            return False
+
+        # Detection hasn't happened yet - return False for now
+        # Will be populated during otherwise()
+        if self._list_columns is None:
+            return False
+
+        return len(self._list_columns) > 0
+
+    def get_list_broadcasting_metadata(self) -> dict[str, Any]:
+        """Get metadata needed for DataFrame-level list broadcasting.
+
+        Returns:
+            Dictionary containing:
+            - conditions: List of condition expressions
+            - values: List of then-value expressions
+            - otherwise_expr: The otherwise value expression (if set)
+            - list_columns: Set of detected list column names
+
+        """
+        # Detect list columns on-demand if not already done
+        if self._list_columns is None:
+            self._list_columns = self._detect_list_columns_from_current_state()
+
+        return {
+            "conditions": self._conditions,
+            "values": self._values,
+            "otherwise_expr": self._otherwise_expr,
+            "list_columns": self._list_columns,
+        }
+
+    def _detect_list_columns_from_current_state(self) -> set[str]:
+        """Detect list columns from conditions and values so far.
+
+        Returns:
+            Set of list column names detected in expressions
+
+        """
+        if self._parent is None:
+            return set()
+
+        from gaspatchio_core.column import dispatch
+
+        detector = dispatch.ColumnTypeDetector(self._parent)  # type: ignore[attr-defined]
+
+        list_columns = set()
+
+        # Check all expressions so far
+        all_exprs = self._conditions + self._values
+
+        for expr in all_exprs:
+            col_names = self._extract_column_names(expr)
+            for col_name in col_names:
+                if detector.is_list_column(col_name):
+                    list_columns.add(col_name)
+
+        return list_columns
+
     def otherwise(self, value: Any) -> ExpressionProxy:  # noqa: ANN401
         """Complete chain with default value.
 
@@ -116,18 +184,25 @@ class ConditionalProxy:
 
         # Convert otherwise value to expression
         otherwise_expr = self._convert_value_to_expr(value)
+        self._otherwise_expr = otherwise_expr
 
-        # Detect if we need list broadcasting
-        list_columns = self._detect_list_columns(otherwise_expr)
+        # Detect if we need list broadcasting and store in _list_columns
+        self._list_columns = self._detect_list_columns(otherwise_expr)
 
         # Build expression based on detection
-        if list_columns:
-            # Use explode/re-aggregate pattern for list broadcasting
-            expr = self._build_list_broadcasting_expr(otherwise_expr, list_columns)
-        else:
-            # Scalar path - build simple when/then/otherwise
+        if self._list_columns:
+            # Build scalar conditional (will be used after explode)
             expr = self._build_scalar_conditional(otherwise_expr)
 
+            # Create ExpressionProxy with metadata
+            result = ExpressionProxy(expr, self._parent)
+            result._list_broadcast_metadata = {  # noqa: SLF001
+                "list_columns": self._list_columns,
+                "conditional_expr": expr,
+            }
+            return result
+        # Scalar path - build simple when/then/otherwise
+        expr = self._build_scalar_conditional(otherwise_expr)
         return ExpressionProxy(expr, self._parent)
 
     def _convert_value_to_expr(self, value: Any) -> pl.Expr:  # noqa: ANN401

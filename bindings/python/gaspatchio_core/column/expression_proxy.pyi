@@ -31,6 +31,7 @@ class ExpressionProxy(_BaseProxy):
     _date_accessor_instance_expr: Optional[DateColumnAccessor]
     _finance_accessor_instance_expr: Optional[FinanceColumnAccessor]
     _dynamic_accessor_cache: Dict[str, Any]
+    _list_broadcast_metadata: Optional[Dict[str, Any]]
 
     # Keep specific methods
     def __init__(self, expr: pl.Expr, parent: Optional[ActuarialFrame]) -> None: ...
