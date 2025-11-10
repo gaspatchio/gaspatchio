@@ -170,6 +170,42 @@ class TestWhenListBroadcasting:
         # 2*12=24 but month only goes to 5, so none should match
         assert result["is_maturity"][0].to_list() == [0, 0, 0, 0, 0, 0]  # noqa: S101
 
+    def test_tracing_mode_raises_error(self) -> None:
+        """Test that list broadcasting in tracing mode raises informative error."""
+        # Save current mode
+        from gaspatchio_core import get_default_mode, set_default_mode
+
+        original_mode = get_default_mode()
+
+        try:
+            # Set to debug mode to enable tracing
+            set_default_mode("debug")
+
+            af = ActuarialFrame(
+                {
+                    "month": [[0, 1, 2]],
+                    "policy_term": [1],
+                }
+            )
+
+            # Manually enable tracing (debug mode enables it in decorator,
+            # but for direct assignment we need to set it)
+            af._tracing = True  # noqa: SLF001
+
+            # Try list broadcasting conditional - should raise NotImplementedError
+            with pytest.raises(
+                NotImplementedError,
+                match=(
+                    "List broadcasting for column 'result' not yet supported "
+                    "in tracing mode"
+                ),
+            ):
+                af.result = when(af.month == af.policy_term * 12).then(1).otherwise(0)
+
+        finally:
+            # Restore original mode
+            set_default_mode(original_mode)
+
 
 class TestWhenErrorHandling:
     """Tests for error handling and validation."""
@@ -250,8 +286,6 @@ class TestConditionalProxyMetadata:
 
     def test_otherwise_populates_list_columns(self) -> None:
         """Test that otherwise() triggers list column detection."""
-        import contextlib
-
         af = ActuarialFrame(
             {
                 "month": [[0, 1, 2]],
@@ -263,9 +297,8 @@ class TestConditionalProxyMetadata:
         conditional = when(af.month == af.policy_term * 12).then(1)
         assert conditional._list_columns is None  # noqa: S101, SLF001
 
-        # Call otherwise() - will still raise NotImplementedError for now
-        with contextlib.suppress(NotImplementedError):
-            conditional.otherwise(0)
+        # Call otherwise() - should now work with list broadcasting
+        conditional.otherwise(0)
 
         # Check metadata was populated
         assert conditional._list_columns is not None  # noqa: S101, SLF001
@@ -273,8 +306,6 @@ class TestConditionalProxyMetadata:
 
     def test_expression_proxy_carries_list_broadcast_metadata(self) -> None:
         """Test that ExpressionProxy carries list broadcast metadata."""
-        import contextlib
-
         af = ActuarialFrame(
             {
                 "month": [[0, 1, 2]],
@@ -282,12 +313,11 @@ class TestConditionalProxyMetadata:
             }
         )
 
-        # Call otherwise() - will raise NotImplementedError but should
-        # return ExpressionProxy with metadata
-        with contextlib.suppress(NotImplementedError):
-            result = when(af.month == af.policy_term * 12).then(1).otherwise(0)
+        # Call otherwise() - should now work and return ExpressionProxy with metadata
+        result = when(af.month == af.policy_term * 12).then(1).otherwise(0)
 
-            # Should have metadata attached
-            assert hasattr(result, "_list_broadcast_metadata")  # noqa: S101
-            metadata = result._list_broadcast_metadata  # noqa: SLF001
-            assert "month" in metadata["list_columns"]  # noqa: S101
+        # Should have metadata attached
+        assert hasattr(result, "_list_broadcast_metadata")  # noqa: S101
+        metadata = result._list_broadcast_metadata  # noqa: SLF001
+        assert metadata is not None  # noqa: S101
+        assert "month" in metadata["list_columns"]  # noqa: S101
