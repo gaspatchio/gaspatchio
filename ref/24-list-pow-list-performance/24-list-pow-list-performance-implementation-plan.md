@@ -2650,7 +2650,7 @@ Execute Phases 1 and 2 in parallel (separate branches), merge when both complete
 
 ## APPENDIX: Phase 2 Integration Analysis (2025-11-12)
 
-### Status: Phase 2 Integration **DEFERRED** 
+### Status: Phase 2 Integration **DEFERRED**
 
 **Decision:** Keep `list_conditional` Rust plugin available for direct use, but do NOT integrate into `when/then/otherwise` API.
 
@@ -2667,6 +2667,7 @@ Execute Phases 1 and 2 in parallel (separate branches), merge when both complete
 2. Extract comparison operator and operands from condition expression
 3. Call `list_conditional` plugin instead of building standard Polars conditional
 4. Signal completion via `_list_broadcast_metadata`
+5. Added `_comparison_metadata` to ExpressionProxy/ColumnProxy for operator tracking
 
 **Result:** Created **double-wrapping bug** - plugin output wrapped by EXPLODE pattern.
 
@@ -2881,6 +2882,97 @@ result = af.collect()
 
 ---
 
+### Alternative Approaches Investigated
+
+#### Approach A: Unwrap `list.eval()` Expressions ❌ IMPOSSIBLE
+
+**Investigation:** Can we extract the inner lambda from `list.eval()` expressions to reuse for scalar context?
+
+**Result:** ❌ **Technically impossible** with current Polars architecture.
+
+**Evidence:**
+1. **Expression becomes opaque after wrapping:**
+   ```python
+   # Before wrapping
+   inner_expr = pl.element().shift(1, fill_value=0.0)
+   # Expression tree shows: function(shift_and_fill) with full details
+
+   # After wrapping
+   wrapped_expr = pl.col("x").list.eval(inner_expr)
+   # Expression tree shows: anonymous_function(eval) - details LOST
+   ```
+
+2. **No reverse operation exists:**
+   - Polars passes expression to Rust via `_pyexpr.list_eval()`
+   - Inner expression becomes opaque Rust function
+   - No Python/Rust API to extract it back
+   - Serialization fails with "opaque function" error
+
+3. **Key difference between contexts:**
+   - `pl.element()` has `root_names == ['']` (empty string)
+   - `pl.col("name")` has `root_names == ['name']`
+   - Cannot convert after construction - no public API for tree manipulation
+
+**Conclusion:** Cannot unwrap `list.eval()` expressions after construction. Must use builder pattern instead.
+
+**Related Files:**
+- `INVESTIGATION_UNWRAP_LIST_EVAL.md` - Detailed technical findings
+- `test_unwrap_investigation.py` - Proof that unwrapping is impossible
+
+---
+
+#### Approach B: ProjectionBuilder Pattern ✅ VIABLE (Not Used)
+
+**Alternative:** Store builder functions instead of expressions.
+
+**Implementation:**
+```python
+class ProjectionBuilder:
+    def __init__(self, builder_fn):
+        self.builder_fn = builder_fn
+
+    def for_list_context(self, col_name: str) -> pl.Expr:
+        return pl.col(col_name).list.eval(self.builder_fn(pl.element()))
+
+    def for_scalar_context(self, col_name: str) -> pl.Expr:
+        return self.builder_fn(pl.col(col_name))
+
+# Usage
+builder = ProjectionBuilder(lambda e: e.shift(1, fill_value=0.0))
+list_expr = builder.for_list_context("pols_if")    # For list columns
+scalar_expr = builder.for_scalar_context("pols_if")  # For scalar/exploded
+```
+
+**Benefits:**
+- Single projection definition works for both contexts
+- No expression unwrapping needed
+- Clean, maintainable code
+
+**Why Not Used:**
+- Breaking change to projection accessor API
+- Would require all calling code to explicitly choose context
+- Current `list.eval()` approach sufficient for our use case
+- Optimization focus shifted to Rust plugins (more effective)
+
+**Migration Required:**
+```python
+# Old API
+expr = af.pols_if.projection.previous_period()
+
+# New API
+builder = af.pols_if.projection.previous_period()
+expr = builder.for_list_context("pols_if")
+```
+
+**Verdict:** ✅ Technically viable but ❌ not worth API breaking change for marginal benefit.
+
+**Related Files:**
+- `INVESTIGATION_SUMMARY.md` - Executive summary of builder approach
+- `test_element_substitution.py` - Working examples of builder pattern
+- `example_projection_builder.py` - Prototype implementation
+
+---
+
 ### Lessons Learned
 
 1. **Measure before optimizing:** Profiling showed conditionals aren't the bottleneck
@@ -2888,6 +2980,9 @@ result = af.collect()
 3. **Metadata matters:** Poor metadata design creates tight coupling
 4. **Complexity cost:** Three-layer coordination is expensive
 5. **Keep it simple:** Direct function calls > complex auto-detection
+6. **Polars internals:** Once expressions enter Polars Rust core, they become opaque
+7. **API stability matters:** Builder pattern works but breaking changes have cost
+8. **Focus optimization:** Rust plugins for bottlenecks > architectural refactors
 
 **Rule of Thumb:** If integration requires changing 3+ layers, question the architecture.
 

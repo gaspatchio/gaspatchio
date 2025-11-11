@@ -71,6 +71,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Benchmarks in `/benches` track performance with different data sizes
 - Performance results documented in `benches/perf_results.md`
 
+#### Polars Plugin Performance Guidelines
+
+**CRITICAL: Do NOT Add Internal Parallelization to Plugins**
+
+Polars expressions are **automatically parallelized at the engine level**. Adding Rayon or other parallelization inside plugin functions causes:
+- Double parallelization (competing thread pools)
+- Severe performance degradation in `group_by` operations
+- Window function (`.over()`) bottlenecks
+- Thread contention and resource competition
+
+**Polars Maintainer Guidance:** "Expressions should not do their own parallelism, but polars engine should."
+
+**Best Practices for Plugin Implementation:**
+
+1. **Use High-Level Apply Functions** (preferred over iterators)
+   - `apply_generic` - Generic transformation with type preservation
+   - `binary_elementwise` - Binary operations on primitive types
+   - `binary_elementwise_values` - Binary operations with automatic null handling
+   - These functions monomorphize for optimal iteration and computation
+
+2. **For List Operations: Use `amortized_iter()`**
+   - Reduces allocations by reusing Series containers
+   - Example: `list_chunked.amortized_iter()` for efficient list traversal
+   - Recent Polars optimizations (PR #20964) improved `amortized_iter()` by 9%
+   - Your plugins automatically benefit from future Polars performance improvements
+
+3. **Let Polars Handle Configuration**
+   - Users control parallelism via `pl.Config.set_num_threads()`
+   - Engine automatically adjusts chunk sizes for optimal throughput
+   - Plugins remain simple and work correctly in all execution contexts
+
+4. **When Rayon IS Appropriate** (rare cases only)
+   - Standalone utilities that don't integrate with Polars expressions
+   - Single-element transformations that are extremely CPU-intensive (e.g., complex set operations)
+   - When plugin documentation explicitly recommends it
+
+5. **Micro-Optimizations to Avoid**
+   - Pre-allocating with `Vec::with_capacity()` often slower than `.collect()` due to compiler optimizations
+   - Manual loop unrolling (LLVM already does this)
+   - Custom SIMD implementations (use Polars' vectorized operations instead)
+
+**Benchmarking Notes:**
+- Isolated plugin benchmarks don't reflect real-world performance
+- Test plugins in realistic query contexts: `group_by`, `over`, multiple concurrent expressions
+- Linear scaling across data sizes indicates correct implementation
+- Performance regressions in composed queries indicate parallelization conflicts
+
+**Reference Implementation:** See `polars_functions/list_pow.rs` for example of optimal plugin pattern
+
 
 ### Rust rules for this project - apply to all rust (*rs) files
 

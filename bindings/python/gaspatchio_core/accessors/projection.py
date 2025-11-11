@@ -698,16 +698,22 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             is_list = detector.is_list_column(self._proxy.name)
 
         if is_list:
-            # For list columns: prepend fill_value and slice to original length
-            # This creates the effect of shifting back one period (t-1)
-            shifted_expr = pl.concat_list([pl.lit([fill_value]), base_expr]).list.slice(
-                0, base_expr.list.len()
+            # For list columns: use list.eval with shift to operate element-wise
+            # This applies shift(1, fill_value) to each element within the list
+            # More efficient and compatible than concat_list approach
+            shifted_expr = base_expr.list.eval(
+                pl.element().shift(1, fill_value=fill_value)
             )
         else:
             # For scalar columns: use shift(1) to get previous period value
             shifted_expr = base_expr.shift(1, fill_value=fill_value)
 
-        return ExpressionProxy(shifted_expr, parent_af)
+        result = ExpressionProxy(shifted_expr, parent_af)
+
+        # Tag as element-wise to prevent incorrect list broadcasting
+        result._list_broadcast_metadata = {"element_wise": True}  # noqa: SLF001
+
+        return result
 
     def next_period(self, fill_value=0.0) -> ExpressionProxy:
         """Get value from next period (t+1).
@@ -815,16 +821,22 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             is_list = detector.is_list_column(self._proxy.name)
 
         if is_list:
-            # For list columns: append fill_value and slice from position 1
-            # This creates the effect of shifting forward one period (t+1)
-            shifted_expr = pl.concat_list([base_expr, pl.lit([fill_value])]).list.slice(
-                1, base_expr.list.len()
+            # For list columns: use list.eval with shift to operate element-wise
+            # This applies shift(-1, fill_value) to each element within the list
+            # More efficient and compatible than concat_list approach
+            shifted_expr = base_expr.list.eval(
+                pl.element().shift(-1, fill_value=fill_value)
             )
         else:
             # For scalar columns: use shift(-1) to get next period value
             shifted_expr = base_expr.shift(-1, fill_value=fill_value)
 
-        return ExpressionProxy(shifted_expr, parent_af)
+        result = ExpressionProxy(shifted_expr, parent_af)
+
+        # Tag as element-wise to prevent incorrect list broadcasting
+        result._list_broadcast_metadata = {"element_wise": True}  # noqa: SLF001
+
+        return result
 
     def at_period(
         self, relative_period: int, fill_value: float | None = 0.0
@@ -998,28 +1010,18 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             is_list = detector.is_list_column(self._proxy.name)
 
         if is_list:
-            # For list columns, we need to handle positive and negative offsets
-            if relative_period < 0:
-                # Negative offset (prior periods): prepend fill_values and slice
-                # For t-1: prepend 1 fill_value
-                # For t-2: prepend 2 fill_values, etc.
-                n_fills = abs(relative_period)
-                fill_list = pl.lit([fill_value] * n_fills)
-                shifted_expr = pl.concat_list([fill_list, base_expr]).list.slice(
-                    0, base_expr.list.len()
-                )
-            elif relative_period > 0:
-                # Positive offset (future): append fill_values, slice from offset
-                # For t+1: slice from position 1
-                # For t+2: slice from position 2, etc.
-                n_fills = relative_period
-                fill_list = pl.lit([fill_value] * n_fills)
-                shifted_expr = pl.concat_list([base_expr, fill_list]).list.slice(
-                    relative_period, base_expr.list.len()
-                )
-            else:
+            # For list columns: use list.eval with shift to operate element-wise
+            # This applies shift(-relative_period, fill_value) within the list
+            # Note: Polars shift convention is opposite, so negate relative_period
+            # at_period(-1) means t-1 (prior), which needs shift(1)
+            # at_period(1) means t+1 (future), which needs shift(-1)
+            if relative_period == 0:
                 # Zero offset: no shift
                 shifted_expr = base_expr
+            else:
+                shifted_expr = base_expr.list.eval(
+                    pl.element().shift(-relative_period, fill_value=fill_value)
+                )
         else:
             # For scalar columns: negate relative_period
             # (Polars uses opposite convention)
@@ -1027,4 +1029,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             # at_period(1) means t+1 (future), which needs shift(-1)
             shifted_expr = base_expr.shift(-relative_period, fill_value=fill_value)
 
-        return ExpressionProxy(shifted_expr, parent_af)
+        result = ExpressionProxy(shifted_expr, parent_af)
+
+        # Tag as element-wise to prevent incorrect list broadcasting
+        result._list_broadcast_metadata = {"element_wise": True}  # noqa: SLF001
+
+        return result

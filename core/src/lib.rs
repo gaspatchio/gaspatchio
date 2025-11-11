@@ -8,3 +8,4 @@ pub use assumptions::{
     AssumptionTableRegistry,
 };
 pub use polars_functions::vector::FillSeriesKwargs;
+pub use polars_functions::ConditionalKwargs;
