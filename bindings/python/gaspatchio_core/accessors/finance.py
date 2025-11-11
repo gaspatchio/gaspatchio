@@ -243,6 +243,9 @@ class FinanceColumnAccessor(BaseColumnAccessor):
             Discount factors v^t
 
         """
+        # Import ColumnTypeDetector using getattr to avoid type-checking issues
+        import gaspatchio_core.column.dispatch as dispatch_module
+        from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
@@ -258,13 +261,62 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         # Convert periods to expression
         periods_expr = parent_frame._convert_to_expr(periods)  # noqa: SLF001
 
+        # Detect if this is a list column
+        # Use getattr since ColumnTypeDetector is not in dispatch.__all__
+        ColumnTypeDetector = dispatch_module.ColumnTypeDetector  # type: ignore[attr-defined]  # noqa: N806
+        detector = ColumnTypeDetector(parent_frame)
+        is_list = False
+
+        if isinstance(self._proxy, ColumnProxy):
+            is_list = detector.is_list_column(self._proxy.name)
+
         if method == "spot":
             # Spot discounting: (1 + rate)^(-periods)
-            discount_expr = (1 + base_expr).pow(-periods_expr)
+            if is_list:
+                # For list columns: zip the two lists into list of structs
+                # then use list.eval for element-wise computation
+                # First create a struct with both lists as aliased fields
+                struct_expr = pl.struct(
+                    [
+                        base_expr.alias("rate"),
+                        periods_expr.alias("period"),
+                    ]
+                )
+
+                # Zip the lists using map_elements to create list of structs
+                zipped_expr = struct_expr.map_elements(
+                    lambda s: [
+                        {"rate": r, "period": p}
+                        for r, p in zip(s["rate"], s["period"], strict=False)
+                    ],
+                    return_dtype=pl.List(
+                        pl.Struct({"rate": pl.Float64, "period": pl.Float64})
+                    ),
+                )
+
+                # Apply element-wise computation using list.eval
+                discount_expr = zipped_expr.list.eval(
+                    (1 + pl.element().struct.field("rate")).pow(
+                        -pl.element().struct.field("period")
+                    )
+                )
+            else:
+                # For scalar columns: direct expression
+                discount_expr = (1 + base_expr).pow(-periods_expr)
         elif method == "forward":
-            # Forward discounting - implement in next task
-            msg = "Forward discounting not yet implemented"
-            raise NotImplementedError(msg)
+            # Forward discounting: cumulative product of (1+r[i])^(-1)
+            if is_list:
+                # For list columns: v[t] = cumulative product of (1+r[i])^(-1)
+                # v[0]=1, v[1]=(1+r[0])^(-1), v[2]=(1+r[0])^(-1)*(1+r[1])^(-1)
+                # Algorithm: prepend 1.0, cum_prod, take first n elements
+                v_per_period = base_expr.list.eval(1 / (1 + pl.element()))
+                v_with_init = pl.concat_list([pl.lit([1.0]), v_per_period])
+                v_cum = v_with_init.list.eval(pl.element().cum_prod())
+                # Take first n elements where n = length of original list
+                discount_expr = v_cum.list.head(base_expr.list.len())
+            else:
+                # For scalar columns: cumulative product across rows
+                discount_expr = (1 / (1 + base_expr)).cum_prod()
         else:
             msg = f"method must be 'spot' or 'forward', got '{method}'"
             raise ValueError(msg)
