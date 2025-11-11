@@ -122,6 +122,9 @@ class FinanceColumnAccessor(BaseColumnAccessor):
             Monthly interest rate with same structure as input (scalar/list)
 
         """
+        # Import ColumnTypeDetector using getattr to avoid type-checking issues
+        import gaspatchio_core.column.dispatch as dispatch_module
+        from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
@@ -134,12 +137,30 @@ class FinanceColumnAccessor(BaseColumnAccessor):
             )
             raise RuntimeError(msg)
 
-        # Compound conversion: (1 + annual)^(1/12) - 1
+        # Detect if this is a list column
+        # Use getattr since ColumnTypeDetector is not in dispatch.__all__
+        ColumnTypeDetector = dispatch_module.ColumnTypeDetector  # type: ignore[attr-defined]  # noqa: N806
+        detector = ColumnTypeDetector(parent_frame)
+        is_list = False
+
+        if isinstance(self._proxy, ColumnProxy):
+            is_list = detector.is_list_column(self._proxy.name)
+
+        # Build the conversion expression
         if method == "compound":
-            monthly_expr = ((1 + base_expr).pow(1 / 12)) - 1
+            if is_list:
+                # For list columns: apply element-wise using list.eval
+                monthly_expr = base_expr.list.eval(((1 + pl.element()).pow(1 / 12)) - 1)
+            else:
+                # For scalar columns: direct expression
+                monthly_expr = ((1 + base_expr).pow(1 / 12)) - 1
         elif method == "simple":
-            # Simple conversion: annual / 12
-            monthly_expr = base_expr / 12
+            if is_list:
+                # For list columns: apply element-wise using list.eval
+                monthly_expr = base_expr.list.eval(pl.element() / 12)
+            else:
+                # For scalar columns: direct expression
+                monthly_expr = base_expr / 12
         else:
             msg = f"method must be 'compound' or 'simple', got '{method}'"
             raise ValueError(msg)
