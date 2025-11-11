@@ -47,3 +47,11 @@ harness = false
 [[bench]]
 name = "assumption_table_lookup_benchmark"
 harness = false
+
+[[bench]]
+name = "list_pow"
+harness = false
+
+[[bench]]
+name = "list_conditional"
+harness = false
