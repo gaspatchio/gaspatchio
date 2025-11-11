@@ -2915,9 +2915,7 @@ result = af.collect()
 
 **Conclusion:** Cannot unwrap `list.eval()` expressions after construction. Must use builder pattern instead.
 
-**Related Files:**
-- `INVESTIGATION_UNWRAP_LIST_EVAL.md` - Detailed technical findings
-- `test_unwrap_investigation.py` - Proof that unwrapping is impossible
+**Key Learning:** Polars `list.eval()` creates an opaque Rust function that cannot be inspected or extracted from Python. Any approach requiring expression introspection or transformation after `list.eval()` is fundamentally incompatible with Polars architecture.
 
 ---
 
@@ -2966,10 +2964,7 @@ expr = builder.for_list_context("pols_if")
 
 **Verdict:** ✅ Technically viable but ❌ not worth API breaking change for marginal benefit.
 
-**Related Files:**
-- `INVESTIGATION_SUMMARY.md` - Executive summary of builder approach
-- `test_element_substitution.py` - Working examples of builder pattern
-- `example_projection_builder.py` - Prototype implementation
+**Key Learning:** When expressions need to work in both list and scalar contexts, store the transformation logic (lambda) rather than the expression itself. Builder pattern allows generating context-appropriate expressions on demand without breaking Polars' expression encapsulation.
 
 ---
 
