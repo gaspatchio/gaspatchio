@@ -72,3 +72,28 @@ class TestToMonthlyList:
         assert monthly_rates[1] == pytest.approx(0.0040741238, rel=1e-6)  # noqa: S101
         assert monthly_rates[2] == pytest.approx(0.0048675506, rel=1e-6)  # noqa: S101
         assert monthly_rates[3] == pytest.approx(0.0048675506, rel=1e-6)  # noqa: S101
+
+
+class TestDiscountFactorScalar:
+    """Tests for discount_factor() calculation on scalar columns."""
+
+    def test_spot_discounting_scalar(self) -> None:
+        """Test spot method on scalar columns.
+
+        Formula: (1 + rate)^(-periods)
+        (1.05)^(-1) ≈ 0.952380952
+        (1.06)^(-2) ≈ 0.889996441
+        (1.04)^(-3) ≈ 0.888996359
+        """
+        af = ActuarialFrame({"rate": [0.05, 0.06, 0.04], "years": [1, 2, 3]})
+
+        af["discount_factor"] = af["rate"].finance.discount_factor(  # type: ignore[attr-defined]
+            periods=af["years"], method="spot"
+        )
+
+        result = af.collect()
+        factors = result["discount_factor"].to_list()
+
+        assert factors[0] == pytest.approx(0.952380952, rel=1e-6)  # noqa: S101
+        assert factors[1] == pytest.approx(0.889996441, rel=1e-6)  # noqa: S101
+        assert factors[2] == pytest.approx(0.888996359, rel=1e-6)  # noqa: S101

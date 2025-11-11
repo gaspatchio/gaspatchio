@@ -217,3 +217,56 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         )  # Or handle error appropriately
 
         return ExpressionProxy(discounted_expr, parent_frame)
+
+    def discount_factor(
+        self,
+        periods: IntoExprColumn | str,
+        method: Literal["spot", "forward"] = "spot",
+    ) -> ExpressionProxy:
+        """Calculate discount factors from interest rates.
+
+        Converts interest rates to discount factors (v^t) using spot or forward
+        rate methodology.
+
+        Parameters
+        ----------
+        periods : str or ExpressionProxy
+            Time periods for discounting (column name or expression).
+        method : {"spot", "forward"}, default "spot"
+            Discounting method:
+            - "spot": v[t] = (1 + rate)^(-t) - Single rate applied to all periods
+            - "forward": v[t] = cumulative product of (1 + r[i])^(-1) for varying rates
+
+        Returns
+        -------
+        ExpressionProxy
+            Discount factors v^t
+
+        """
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        base_expr = self._get_polars_expr()
+        parent_frame = self._proxy._parent  # noqa: SLF001
+
+        if parent_frame is None:
+            msg = (
+                "discount_factor() requires the expression to be part of an "
+                "ActuarialFrame context."
+            )
+            raise RuntimeError(msg)
+
+        # Convert periods to expression
+        periods_expr = parent_frame._convert_to_expr(periods)  # noqa: SLF001
+
+        if method == "spot":
+            # Spot discounting: (1 + rate)^(-periods)
+            discount_expr = (1 + base_expr).pow(-periods_expr)
+        elif method == "forward":
+            # Forward discounting - implement in next task
+            msg = "Forward discounting not yet implemented"
+            raise NotImplementedError(msg)
+        else:
+            msg = f"method must be 'spot' or 'forward', got '{method}'"
+            raise ValueError(msg)
+
+        return ExpressionProxy(discount_expr, parent_frame)
