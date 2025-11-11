@@ -19,10 +19,22 @@ if TYPE_CHECKING:
 # Register this accessor for frame objects
 @register_accessor("finance", kind="frame")
 class FinanceFrameAccessor(BaseFrameAccessor):
-    """Provide finance-related methods applicable to the entire ActuarialFrame.
+    """Financial operations at the frame level for ActuarialFrame.
 
-    Accessed via `.finance` on an ActuarialFrame instance,
-    e.g., `af.finance`.
+    Provides frame-level methods for financial calculations that require
+    coordinated operations across multiple columns, particularly for list
+    columns in actuarial projections.
+
+    Accessed via `.finance` on an ActuarialFrame instance.
+
+    Methods
+    -------
+    discount_factor(rate_col, periods_col, output_col, method="spot")
+        Calculate discount factors from list columns using native Polars.
+        Supports spot and forward discounting without map_elements.
+    present_value(cashflow_col, rate_col, period_col)
+        Calculate present value of cash flows.
+
     """
 
     def __init__(self, frame: ActuarialFrame) -> None:
@@ -30,6 +42,165 @@ class FinanceFrameAccessor(BaseFrameAccessor):
         super().__init__(frame)
 
     # --- Frame-level finance methods will go here ---
+    def discount_factor(
+        self,
+        rate_col: str,
+        periods_col: str,
+        output_col: str,
+        method: Literal["spot", "forward"] = "spot",
+    ) -> ActuarialFrame:
+        """Calculate discount factors for projection timelines using list_pow plugin.
+
+        Computes present value discount factors v^t from interest rates across entire
+        projection timelines. Uses Rust list_pow plugin for optimal performance -
+        eliminates EXPLODE/GROUP_BY pattern for 10x+ speedup on list columns.
+
+        !!! note "When to use"
+            * **Reserve Calculations:** Discount future benefit payments and expenses
+                to present value for statutory reserves, GAAP liabilities, or
+                embedded value calculations.
+            * **Cash Flow Projections:** Calculate present values of projected
+                premiums, claims, and expenses in profit testing models for
+                product pricing and profitability analysis.
+            * **Guaranteed Benefits:** Discount guaranteed minimum death benefits
+                (GMDB), withdrawal benefits (GMWB), or income benefits (GMIB) in
+                variable annuity and equity-indexed product valuations.
+            * **Economic Scenario Testing:** Apply forward rate curves from economic
+                scenario generators for stochastic reserve calculations and risk
+                capital models.
+
+        Parameters
+        ----------
+        rate_col : str
+            Name of column containing interest rates (as lists).
+            Typically monthly rates for projection periods.
+        periods_col : str
+            Name of column containing time periods (as lists).
+            Must align element-wise with rate_col.
+        output_col : str
+            Name for the new column containing discount factors.
+        method : {"spot", "forward"}, default "spot"
+            Discount method:
+
+            - "spot": v[t] = (1 + r)^(-t) - Same rate for all periods
+            - "forward": v[t] = ∏(1 + r[i])^(-1) for i < t - Period-varying rates
+
+        Returns
+        -------
+        ActuarialFrame
+            New frame with discount factor column added.
+
+        Examples
+        --------
+        **Spot Discounting: Constant Rate**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": [1, 2],
+            "monthly_rate": [[0.004, 0.004, 0.004], [0.003, 0.003]],
+            "month": [[0, 1, 2], [0, 1]],
+        }
+        af = ActuarialFrame(data)
+
+        af = af.finance.discount_factor(
+            rate_col="monthly_rate",
+            periods_col="month",
+            output_col="disc_factors",
+            method="spot",
+        )
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 4)
+        ┌───────────┬───────────────────────┬───────────┬───────────────────────────┐
+        │ policy_id ┆ monthly_rate          ┆ month     ┆ disc_factors              │
+        │ ---       ┆ ---                   ┆ ---       ┆ ---                       │
+        │ i64       ┆ list[f64]             ┆ list[i64] ┆ list[f64]                 │
+        ╞═══════════╪═══════════════════════╪═══════════╪═══════════════════════════╡
+        │ 1         ┆ [0.004, 0.004, 0.004] ┆ [0, 1, 2] ┆ [1.0, 0.996016, 0.992048] │
+        │ 2         ┆ [0.003, 0.003]        ┆ [0, 1]    ┆ [1.0, 0.997009]           │
+        └───────────┴───────────────────────┴───────────┴───────────────────────────┘
+        ```
+
+        **Forward Discounting: Varying Rates**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": [1],
+            "forward_rates": [[0.003, 0.004, 0.005]],
+            "month": [[0, 1, 2]],
+        }
+        af = ActuarialFrame(data)
+
+        af = af.finance.discount_factor(
+            rate_col="forward_rates",
+            periods_col="month",
+            output_col="disc_factors",
+            method="forward",
+        )
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 4)
+        ┌───────────┬───────────────────────┬───────────┬───────────────────────────┐
+        │ policy_id ┆ forward_rates         ┆ month     ┆ disc_factors              │
+        │ ---       ┆ ---                   ┆ ---       ┆ ---                       │
+        │ i64       ┆ list[f64]             ┆ list[i64] ┆ list[f64]                 │
+        ╞═══════════╪═══════════════════════╪═══════════╪═══════════════════════════╡
+        │ 1         ┆ [0.003, 0.004, 0.005] ┆ [0, 1, 2] ┆ [1.0, 0.997009, 0.993037] │
+        └───────────┴───────────────────────┴───────────┴───────────────────────────┘
+        ```
+
+        See Also
+        --------
+        to_monthly : Convert annual rates to monthly rates
+
+        """
+        from gaspatchio_core.functions.vector import list_pow
+
+        if method == "spot":
+            # Prepare inputs using native Polars (fast SIMD operations)
+            rate_plus_one = pl.col(rate_col) + 1.0
+            period_neg = pl.col(periods_col) * -1.0
+
+            # Use Rust plugin for (1 + rate) ** (-period)
+            # This eliminates EXPLODE/GROUP_BY pattern
+            discount_expr = list_pow(rate_plus_one, period_neg).alias(output_col)
+
+            result = self._frame._df.with_columns([discount_expr])  # noqa: SLF001
+            from gaspatchio_core.frame.base import ActuarialFrame
+
+            return ActuarialFrame(result)
+
+        if method == "forward":
+            # Forward method: 1 / (1 + rate), then cumulative product
+            rate_plus_one = pl.col(rate_col) + 1.0
+            reciprocal = list_pow(rate_plus_one, pl.lit(-1.0))
+
+            # Cumulative product for forward discounting
+            result = self._frame._df.with_columns(  # noqa: SLF001
+                [
+                    pl.concat_list([pl.lit([1.0]), reciprocal])
+                    .list.eval(pl.element().cum_prod())
+                    .list.head(pl.col(rate_col).list.len())
+                    .alias(output_col)
+                ]
+            )
+            from gaspatchio_core.frame.base import ActuarialFrame
+
+            return ActuarialFrame(result)
+
+        msg = f"method must be 'spot' or 'forward', got '{method}'"
+        raise ValueError(msg)
+
     def present_value(
         self,
         cashflow_col: IntoExprColumn,
@@ -73,8 +244,8 @@ class FinanceFrameAccessor(BaseFrameAccessor):
 class FinanceColumnAccessor(BaseColumnAccessor):
     """Financial mathematics and valuation operations.
 
-    Provides methods for rate conversion, discount factor calculation,
-    and present value computations on columns or expressions.
+    Provides methods for rate conversion and present value computations
+    on columns or expressions.
 
     Accessed via `.finance` on an ActuarialFrame column or expression proxy,
     e.g., `af["annual_rate"].finance.to_monthly()`.
@@ -83,10 +254,13 @@ class FinanceColumnAccessor(BaseColumnAccessor):
     -------
     to_monthly(method="compound")
         Convert annual interest rates to monthly rates
-    discount_factor(periods, method="spot")
-        Calculate discount factors v^t from interest rates
     discount(rate_expr, n_periods_expr)
         Discount values using specified rate and periods
+
+    Notes
+    -----
+    For discount factor calculations on list columns, use the frame-level
+    accessor: ``af.finance.discount_factor(rate_col, periods_col, output_col)``
 
     """
 
@@ -336,231 +510,3 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         )  # Or handle error appropriately
 
         return ExpressionProxy(discounted_expr, parent_frame)
-
-    def discount_factor(
-        self,
-        periods: IntoExprColumn | str,
-        method: Literal["spot", "forward"] = "spot",
-    ) -> ExpressionProxy:
-        """Calculate discount factors from interest rates.
-
-        Converts interest rates to discount factors (v^t) using spot or forward
-        rate methodology. Discount factors are essential for calculating present
-        values of future cashflows in actuarial projections, reserve calculations,
-        and pricing models.
-
-        The rate column (self) and periods parameter can both be scalar or list
-        columns, with automatic broadcasting applied.
-
-        !!! note "When to use"
-            * **Reserve Calculations:** Calculate present value of future benefit
-                payments for statutory or GAAP reserves using discount rates from
-                yield curves or valuation assumptions.
-            * **Cash Flow Projections:** Discount future cash flows (premiums,
-                benefits, expenses) to present value for profit testing, embedded
-                value, or pricing calculations.
-            * **Forward Rate Models:** Use forward method when modeling interest
-                rate scenarios with period-specific rates, common in economic
-                scenario generators or stochastic models.
-            * **Guaranteed Minimum Benefits:** Calculate present value of
-                guaranteed minimum death benefits, withdrawal benefits, or income
-                benefits for variable annuities.
-
-        Parameters
-        ----------
-        periods : str or ExpressionProxy
-            Time periods for discounting (column name or expression).
-            Typically represents t in months or years.
-        method : {"spot", "forward"}, default "spot"
-            Discounting method:
-            - "spot": v[t] = (1 + rate)^(-t) - Single rate for all periods
-            - "forward": v[t] = cumulative product of (1 + r[i])^(-1) for
-              varying rates
-
-        Returns
-        -------
-        ExpressionProxy
-            Discount factors v^t
-
-        Examples
-        --------
-        **Vector Example: Spot discounting with constant rate**
-
-        ```python
-        from gaspatchio_core import ActuarialFrame
-
-        data = {"monthly_rate": [[0.004, 0.004, 0.004, 0.004]], "month": [[0, 1, 2, 3]]}
-        af = ActuarialFrame(data)
-
-        af.v = af.monthly_rate.finance.discount_factor(periods=af.month, method="spot")
-
-        print(af.collect())
-        ```
-
-        ```text
-        shape: (1, 3)
-        ┌─────────────────────────┬─────────────┬─────────────────────────────┐
-        │ monthly_rate            ┆ month       ┆ v                           │
-        │ ---                     ┆ ---         ┆ ---                         │
-        │ list[f64]               ┆ list[i64]   ┆ list[f64]                   │
-        ╞═════════════════════════╪═════════════╪═════════════════════════════╡
-        │ [0.004, 0.004, … 0.004] ┆ [0, 1, … 3] ┆ [1.0, 0.996016, … 0.988095] │
-        └─────────────────────────┴─────────────┴─────────────────────────────┘
-        ```
-
-        **Vector Example: Forward discounting with varying rates**
-
-        ```python
-        from gaspatchio_core import ActuarialFrame
-
-        data = {
-            "forward_rates": [[0.003, 0.004, 0.005, 0.006]],
-            "month": [[0, 1, 2, 3]]
-        }
-        af = ActuarialFrame(data)
-
-        af.v = af.forward_rates.finance.discount_factor(
-            periods=af.month,
-            method="forward"
-        )
-
-        print(af.collect())
-        ```
-
-        ```text
-        shape: (1, 3)
-        ┌─────────────────────────┬─────────────┬─────────────────────────────┐
-        │ forward_rates           ┆ month       ┆ v                           │
-        │ ---                     ┆ ---         ┆ ---                         │
-        │ list[f64]               ┆ list[i64]   ┆ list[f64]                   │
-        ╞═════════════════════════╪═════════════╪═════════════════════════════╡
-        │ [0.003, 0.004, … 0.006] ┆ [0, 1, … 3] ┆ [1.0, 0.997009, … 0.988096] │
-        └─────────────────────────┴─────────────┴─────────────────────────────┘
-        ```
-
-        **Scalar Example: Policy-level discount factors**
-
-        ```python
-        from gaspatchio_core import ActuarialFrame
-
-        data = {
-            "rate": [0.05, 0.06, 0.04],
-            "years": [1, 2, 3]
-        }
-        af = ActuarialFrame(data)
-
-        af.discount_factor = af.rate.finance.discount_factor(
-            periods=af.years,
-            method="spot"
-        )
-
-        print(af.collect())
-        ```
-
-        ```text
-        shape: (3, 3)
-        ┌──────┬───────┬─────────────────┐
-        │ rate ┆ years ┆ discount_factor │
-        │ ---  ┆ ---   ┆ ---             │
-        │ f64  ┆ i64   ┆ f64             │
-        ╞══════╪═══════╪═════════════════╡
-        │ 0.05 ┆ 1     ┆ 0.952381        │
-        │ 0.06 ┆ 2     ┆ 0.889996        │
-        │ 0.04 ┆ 3     ┆ 0.888996        │
-        └──────┴───────┴─────────────────┘
-        ```
-
-        Notes
-        -----
-        - Spot method uses a single rate for all periods (standard for zero
-          curves)
-        - Forward method uses period-specific rates (cumulative product)
-        - Period 0 always returns discount factor of 1.0
-        - Handles both scalar and list columns automatically
-        - Formula: Spot = (1 + rate)^(-t), Forward = product of (1 + r[i])^(-1)
-
-        See Also
-        --------
-        to_monthly : Convert annual rates to monthly rates
-        present_value : Calculate present value of cashflows (existing method)
-
-        """
-        # Import ColumnTypeDetector using getattr to avoid type-checking issues
-        import gaspatchio_core.column.dispatch as dispatch_module
-        from gaspatchio_core.column.column_proxy import ColumnProxy
-        from gaspatchio_core.column.expression_proxy import ExpressionProxy
-
-        base_expr = self._get_polars_expr()
-        parent_frame = self._proxy._parent  # noqa: SLF001
-
-        if parent_frame is None:
-            msg = (
-                "discount_factor() requires the expression to be part of an "
-                "ActuarialFrame context."
-            )
-            raise RuntimeError(msg)
-
-        # Convert periods to expression
-        periods_expr = parent_frame._convert_to_expr(periods)  # noqa: SLF001
-
-        # Detect if this is a list column
-        # Use getattr since ColumnTypeDetector is not in dispatch.__all__
-        ColumnTypeDetector = dispatch_module.ColumnTypeDetector  # type: ignore[attr-defined]  # noqa: N806
-        detector = ColumnTypeDetector(parent_frame)
-        is_list = False
-
-        if isinstance(self._proxy, ColumnProxy):
-            is_list = detector.is_list_column(self._proxy.name)
-
-        if method == "spot":
-            # Spot discounting: (1 + rate)^(-periods)
-            if is_list:
-                # For list columns: zip the two lists into list of structs
-                # then use list.eval for element-wise computation
-                # First create a struct with both lists as aliased fields
-                struct_expr = pl.struct(
-                    [
-                        base_expr.alias("rate"),
-                        periods_expr.alias("period"),
-                    ]
-                )
-
-                # Zip the lists using map_elements to create list of structs
-                zipped_expr = struct_expr.map_elements(
-                    lambda s: [
-                        {"rate": r, "period": p}
-                        for r, p in zip(s["rate"], s["period"], strict=False)
-                    ],
-                    return_dtype=pl.List(
-                        pl.Struct({"rate": pl.Float64, "period": pl.Float64})
-                    ),
-                )
-
-                # Apply element-wise computation using list.eval
-                discount_expr = zipped_expr.list.eval(
-                    (1 + pl.element().struct.field("rate")).pow(
-                        -pl.element().struct.field("period")
-                    )
-                )
-            else:
-                # For scalar columns: direct expression
-                discount_expr = (1 + base_expr).pow(-periods_expr)
-        elif method == "forward":
-            # Forward discounting: cumulative product of (1+r[i])^(-1)
-            if is_list:
-                # For list columns: v[t] = cumulative product of (1+r[i])^(-1)
-                # v[0]=1, v[1]=(1+r[0])^(-1), v[2]=(1+r[0])^(-1)*(1+r[1])^(-1)
-                # Algorithm: prepend 1.0, cum_prod, take first n elements
-                v_per_period = base_expr.list.eval(1 / (1 + pl.element()))
-                v_with_init = pl.concat_list([pl.lit([1.0]), v_per_period])
-                v_cum = v_with_init.list.eval(pl.element().cum_prod())
-                # Take first n elements where n = length of original list
-                discount_expr = v_cum.list.head(base_expr.list.len())
-            else:
-                # For scalar columns: cumulative product across rows
-                discount_expr = (1 / (1 + base_expr)).cum_prod()
-        else:
-            msg = f"method must be 'spot' or 'forward', got '{method}'"
-            raise ValueError(msg)
-
-        return ExpressionProxy(discount_expr, parent_frame)

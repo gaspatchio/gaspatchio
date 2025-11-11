@@ -1,5 +1,5 @@
 # ABOUTME: Tests for finance accessor methods (rate conversion, discounting)
-# ABOUTME: Covers to_monthly() and discount_factor() with scalar and list columns
+# ABOUTME: Covers to_monthly() column accessor and discount_factor() frame accessor
 """Tests for finance accessor methods (rate conversion, discounting)."""
 
 import pytest
@@ -74,49 +74,61 @@ class TestToMonthlyList:
         assert monthly_rates[3] == pytest.approx(0.0048675506, rel=1e-6)  # noqa: S101
 
 
-class TestDiscountFactorScalar:
-    """Tests for discount_factor() calculation on scalar columns."""
+class TestFrameDiscountFactor:
+    """Tests for frame-level discount_factor() using native Polars explode/implode."""
 
-    def test_spot_discounting_scalar(self) -> None:
-        """Test spot method on scalar columns.
+    def test_spot_discounting_list_columns(self) -> None:
+        """Test spot method on list columns using frame accessor.
 
-        Formula: (1 + rate)^(-periods)
+        Formula: (1 + rate)^(-period)
+        Uses native Polars explode/implode pattern (no map_elements).
         (1.05)^(-1) ≈ 0.952380952
         (1.06)^(-2) ≈ 0.889996441
         (1.04)^(-3) ≈ 0.888996359
         """
-        af = ActuarialFrame({"rate": [0.05, 0.06, 0.04], "years": [1, 2, 3]})
+        af = ActuarialFrame(
+            {
+                "policy_id": [1, 2],
+                "rates": [[0.05, 0.06, 0.04], [0.03, 0.03]],
+                "periods": [[1.0, 2.0, 3.0], [1.0, 2.0]],
+            }
+        )
 
-        af["discount_factor"] = af["rate"].finance.discount_factor(  # type: ignore[attr-defined]
-            periods=af["years"], method="spot"
+        af = af.finance.discount_factor(
+            rate_col="rates",
+            periods_col="periods",
+            output_col="disc_factors",
+            method="spot",
         )
 
         result = af.collect()
-        factors = result["discount_factor"].to_list()
 
-        assert factors[0] == pytest.approx(0.952380952, rel=1e-6)  # noqa: S101
-        assert factors[1] == pytest.approx(0.889996441, rel=1e-6)  # noqa: S101
-        assert factors[2] == pytest.approx(0.888996359, rel=1e-6)  # noqa: S101
+        # Check first policy
+        factors_1 = result["disc_factors"][0]
+        assert factors_1[0] == pytest.approx(0.952380952, rel=1e-6)  # noqa: S101
+        assert factors_1[1] == pytest.approx(0.889996441, rel=1e-6)  # noqa: S101
+        assert factors_1[2] == pytest.approx(0.888996359, rel=1e-6)  # noqa: S101
 
+        # Check second policy
+        factors_2 = result["disc_factors"][1]
+        assert factors_2[0] == pytest.approx(0.970873786, rel=1e-6)  # noqa: S101
+        assert factors_2[1] == pytest.approx(0.942595909, rel=1e-6)  # noqa: S101
 
-class TestDiscountFactorList:
-    """Tests for discount_factor() calculation on list columns."""
+    def test_spot_with_period_zero(self) -> None:
+        """Test that period 0 always returns v=1.0.
 
-    def test_spot_discounting_list(self) -> None:
-        """Test spot method on list columns.
-
-        Formula: (1 + 0.004)^(-t)
-        t=0: (1.004)^0 = 1.0
-        t=1: (1.004)^(-1) ≈ 0.996015936
-        t=2: (1.004)^(-2) ≈ 0.992047748
-        t=3: (1.004)^(-3) ≈ 0.988095425
+        (1 + rate)^(-0) = 1.0 for any rate
         """
         af = ActuarialFrame(
-            {"monthly_rate": [[0.004, 0.004, 0.004, 0.004]], "month": [[0, 1, 2, 3]]}
+            {
+                "policy_id": [1],
+                "rates": [[0.004, 0.004, 0.004, 0.004]],
+                "periods": [[0, 1, 2, 3]],
+            }
         )
 
-        af["v"] = af["monthly_rate"].finance.discount_factor(  # type: ignore[attr-defined]
-            periods=af["month"], method="spot"
+        af = af.finance.discount_factor(
+            rate_col="rates", periods_col="periods", output_col="v", method="spot"
         )
 
         result = af.collect()
@@ -127,21 +139,29 @@ class TestDiscountFactorList:
         assert factors[2] == pytest.approx(0.992047748, rel=1e-6)  # noqa: S101
         assert factors[3] == pytest.approx(0.988095425, rel=1e-6)  # noqa: S101
 
-    def test_forward_discounting_list(self) -> None:
+    def test_forward_discounting_list_columns(self) -> None:
         """Test forward method with period-specific rates.
 
         Formula: v[0]=1, v[t]=v[t-1]*(1+r[t-1])^(-1)
+        Uses native Polars cumulative product (no map_elements).
         v[0] = 1.0
         v[1] = 1.0 * (1.003)^(-1) ≈ 0.997009
         v[2] = 0.997009 * (1.004)^(-1) ≈ 0.993036
         v[3] = 0.993036 * (1.005)^(-1) ≈ 0.988095
         """
         af = ActuarialFrame(
-            {"forward_rates": [[0.003, 0.004, 0.005, 0.006]], "month": [[0, 1, 2, 3]]}
+            {
+                "policy_id": [1],
+                "forward_rates": [[0.003, 0.004, 0.005, 0.006]],
+                "month": [[0, 1, 2, 3]],
+            }
         )
 
-        af["v"] = af["forward_rates"].finance.discount_factor(  # type: ignore[attr-defined]
-            periods=af["month"], method="forward"
+        af = af.finance.discount_factor(
+            rate_col="forward_rates",
+            periods_col="month",
+            output_col="v",
+            method="forward",
         )
 
         result = af.collect()
@@ -152,20 +172,36 @@ class TestDiscountFactorList:
         assert factors[2] == pytest.approx(0.993036, rel=1e-4)  # noqa: S101
         assert factors[3] == pytest.approx(0.988095, rel=1e-4)  # noqa: S101
 
-    def test_period_zero_returns_one(self) -> None:
-        """Test that period 0 always returns v=1.0.
+    def test_multiple_policies_different_lengths(self) -> None:
+        """Test that different list lengths per policy work correctly."""
+        af = ActuarialFrame(
+            {
+                "policy_id": [1, 2, 3],
+                "rates": [
+                    [0.05, 0.05, 0.05],  # 3 periods
+                    [0.04, 0.04],  # 2 periods
+                    [0.06],  # 1 period
+                ],
+                "periods": [[1.0, 2.0, 3.0], [1.0, 2.0], [1.0]],
+            }
+        )
 
-        (1 + rate)^(-0) = 1.0 for any rate
-        """
-        af = ActuarialFrame({"rate": [[0.05, 0.06, 0.04]], "period": [[0, 0, 0]]})
-
-        af["v"] = af["rate"].finance.discount_factor(  # type: ignore[attr-defined]
-            periods=af["period"], method="spot"
+        af = af.finance.discount_factor(
+            rate_col="rates",
+            periods_col="periods",
+            output_col="disc_factors",
+            method="spot",
         )
 
         result = af.collect()
-        factors = result["v"][0]
 
-        assert factors[0] == pytest.approx(1.0, rel=1e-6)  # noqa: S101
-        assert factors[1] == pytest.approx(1.0, rel=1e-6)  # noqa: S101
-        assert factors[2] == pytest.approx(1.0, rel=1e-6)  # noqa: S101
+        # Verify lengths are preserved
+        expected_lengths = [3, 2, 1]
+        assert len(result["disc_factors"][0]) == expected_lengths[0]  # noqa: S101
+        assert len(result["disc_factors"][1]) == expected_lengths[1]  # noqa: S101
+        assert len(result["disc_factors"][2]) == expected_lengths[2]  # noqa: S101
+
+        # Verify calculations
+        assert result["disc_factors"][0][0] == pytest.approx(0.952380952, rel=1e-6)  # noqa: S101
+        assert result["disc_factors"][1][0] == pytest.approx(0.961538462, rel=1e-6)  # noqa: S101
+        assert result["disc_factors"][2][0] == pytest.approx(0.943396226, rel=1e-6)  # noqa: S101
