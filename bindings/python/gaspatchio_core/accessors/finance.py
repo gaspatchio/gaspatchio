@@ -71,10 +71,23 @@ class FinanceFrameAccessor(BaseFrameAccessor):
 # Register this accessor for column/expression objects
 @register_accessor("finance", kind="column")
 class FinanceColumnAccessor(BaseColumnAccessor):
-    """Provide finance-related methods applicable to columns or expressions.
+    """Financial mathematics and valuation operations.
+
+    Provides methods for rate conversion, discount factor calculation,
+    and present value computations on columns or expressions.
 
     Accessed via `.finance` on an ActuarialFrame column or expression proxy,
-    e.g., `af["my_value_col"].finance`.
+    e.g., `af["annual_rate"].finance.to_monthly()`.
+
+    Methods
+    -------
+    to_monthly(method="compound")
+        Convert annual interest rates to monthly rates
+    discount_factor(periods, method="spot")
+        Calculate discount factors v^t from interest rates
+    discount(rate_expr, n_periods_expr)
+        Discount values using specified rate and periods
+
     """
 
     def __init__(self, proxy: ColumnProxy | ExpressionProxy) -> None:
