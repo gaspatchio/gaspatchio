@@ -332,23 +332,11 @@ class ConditionalProxy:
         otherwise_expr = self._convert_value_to_expr(value)
         self._otherwise_expr = otherwise_expr
 
-        # Detect if we need list broadcasting and store in _list_columns
-        self._list_columns = self._detect_list_columns(otherwise_expr)
-
-        # Build expression based on detection
-        if self._list_columns:
-            # Build scalar conditional (will be used after explode)
-            expr = self._build_scalar_conditional(otherwise_expr)
-
-            # Create ExpressionProxy with metadata
-            result = ExpressionProxy(expr, self._parent)
-            result._list_broadcast_metadata = {  # noqa: SLF001
-                "list_columns": self._list_columns,
-                "conditional_expr": expr,
-            }
-            return result
-        # Scalar path - build simple when/then/otherwise
+        # Build expression - now uses plugin internally for list columns
         expr = self._build_scalar_conditional(otherwise_expr)
+
+        # Return ExpressionProxy WITHOUT _list_broadcast_metadata
+        # The plugin already handled list operations - no EXPLODE needed!
         return ExpressionProxy(expr, self._parent)
 
     def _convert_value_to_expr(self, value: Any) -> pl.Expr:  # noqa: ANN401
@@ -394,13 +382,45 @@ class ConditionalProxy:
             return []
 
     def _build_scalar_conditional(self, otherwise_expr: pl.Expr) -> pl.Expr:
-        """Build a scalar when/then/otherwise expression."""
-        expr = pl.when(self._conditions[0]).then(self._values[0])
-        for condition, then_value in zip(
-            self._conditions[1:], self._values[1:], strict=False
-        ):
-            expr = expr.when(condition).then(then_value)
-        return expr.otherwise(otherwise_expr)
+        """Build conditional - uses list_conditional plugin for list columns."""
+        from gaspatchio_core.column.condition_expression import (
+            ConditionExpression,
+        )
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        # Only handle single condition for MVP
+        if len(self._conditions) > 1:
+            msg = (
+                "Multiple chained .when() not yet supported with "
+                "list_conditional plugin. Use separate conditionals "
+                "or combine with & operator."
+            )
+            raise NotImplementedError(msg)
+
+        condition = self._conditions[0]
+        then_val = self._values[0]
+
+        # Case 1: Direct comparison (ConditionExpression) - use plugin
+        if isinstance(condition, ConditionExpression):
+            from gaspatchio_core.functions.vector import list_conditional
+
+            return list_conditional(
+                left=condition.left,
+                right=condition.right,
+                then_val=then_val,
+                otherwise_val=otherwise_expr,
+                operator=condition.operator,
+            )
+
+        # Case 2: ExpressionProxy or pl.Expr - fall back to standard Polars
+        # Extract expression from proxy if needed
+        if isinstance(condition, ExpressionProxy):
+            condition_expr = condition._expr  # noqa: SLF001
+        else:
+            condition_expr = condition
+
+        # Standard Polars when/then/otherwise
+        return pl.when(condition_expr).then(then_val).otherwise(otherwise_expr)
 
     def _build_list_broadcasting_expr(
         self, otherwise_expr: pl.Expr, list_columns: set[str]
@@ -576,13 +596,18 @@ def when(condition: Any) -> ConditionalProxy:  # noqa: ANN401
 
     # Import here to avoid circular imports
     from gaspatchio_core.column.column_proxy import ColumnProxy
+    from gaspatchio_core.column.condition_expression import ConditionExpression
     from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
     # Try to get parent from condition
-    if isinstance(condition, (ColumnProxy, ExpressionProxy)):
+    if isinstance(condition, (ColumnProxy, ExpressionProxy, ConditionExpression)):
         parent = getattr(condition, "_parent", None)
 
-    # Convert condition to Polars expression
+    # Pass through ConditionExpression as-is (don't convert to pl.Expr!)
+    if isinstance(condition, ConditionExpression):
+        return ConditionalProxy(condition, parent)
+
+    # Convert other conditions to Polars expression
     if isinstance(condition, ExpressionProxy):
         condition_expr = condition._expr  # noqa: SLF001
     elif isinstance(condition, pl.Expr):

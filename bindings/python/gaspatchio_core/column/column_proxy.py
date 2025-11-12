@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
     from ..accessors.excel import ExcelColumnAccessor
     from ..accessors.finance import FinanceColumnAccessor
     from ..frame.base import ActuarialFrame
+    from .condition_expression import ConditionExpression
 
 # Import the registry for accessor lookup
 from ..frame.registry import _ACCESSOR_REGISTRY
@@ -23,11 +25,11 @@ class ColumnProxy:
     """Represents a column identifier within an ActuarialFrame, acting as a starting point for expressions."""
 
     # Cache for accessor instances
-    _date_accessor_instance: Optional["DateColumnAccessor"] = None
-    _excel_accessor_instance: Optional["ExcelColumnAccessor"] = None
-    _finance_accessor_instance: Optional["FinanceColumnAccessor"] = None
+    _date_accessor_instance: DateColumnAccessor | None = None
+    _excel_accessor_instance: ExcelColumnAccessor | None = None
+    _finance_accessor_instance: FinanceColumnAccessor | None = None
 
-    def __init__(self, name: str, parent: "ActuarialFrame"):
+    def __init__(self, name: str, parent: ActuarialFrame):
         """Initialize a ColumnProxy.
 
         Note: Users should not typically instantiate this directly.
@@ -52,74 +54,88 @@ class ColumnProxy:
     # --- Operator Overloads ---
     # Operators always produce an ExpressionProxy
 
-    def __add__(self, other: Any) -> "ExpressionProxy":
+    def __add__(self, other: Any) -> ExpressionProxy:
         """Addition operator."""
         # Use the dispatch system to handle list column shimming
         return self.add(other)
 
-    def __sub__(self, other: Any) -> "ExpressionProxy":
+    def __sub__(self, other: Any) -> ExpressionProxy:
         """Subtraction operator."""
         # Use the dispatch system to handle list column shimming
         return self.sub(other)
 
-    def __mul__(self, other: Any) -> "ExpressionProxy":
+    def __mul__(self, other: Any) -> ExpressionProxy:
         """Multiplication operator."""
         # Use the dispatch system to handle list column shimming
         return self.mul(other)
 
-    def __truediv__(self, other: Any) -> "ExpressionProxy":
+    def __truediv__(self, other: Any) -> ExpressionProxy:
         """True division operator."""
         # Use the dispatch system to handle list column shimming
         return self.truediv(other)
 
-    def __floordiv__(self, other: Any) -> "ExpressionProxy":
+    def __floordiv__(self, other: Any) -> ExpressionProxy:
         """Floor division operator."""
         # Use the dispatch system to handle list column shimming
         return self.floordiv(other)
 
-    def __mod__(self, other: Any) -> "ExpressionProxy":
+    def __mod__(self, other: Any) -> ExpressionProxy:
         """Modulo operator."""
         # Use the dispatch system to handle list column shimming
         return self.mod(other)
 
-    def __pow__(self, other: Any) -> "ExpressionProxy":
+    def __pow__(self, other: Any) -> ExpressionProxy:
         """Power operator."""
         # Use the dispatch system to handle list column shimming
         return self.pow(other)
 
     # Comparison operators
-    def __eq__(self, other: Any) -> "ExpressionProxy":  # type: ignore[override]
-        """Equality comparison."""
-        other_expr = self._parent._convert_to_expr(other)
-        return ExpressionProxy(self._to_expr() == other_expr, self._parent)
+    def __eq__(self, other: object) -> ConditionExpression:  # type: ignore[override]
+        """Equality comparison.
 
-    def __ne__(self, other: Any) -> "ExpressionProxy":  # type: ignore[override]
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._to_expr()
+        right_expr = self._parent._convert_to_expr(other)
+        comparison_expr = left_expr == right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="eq",
+            left=left_expr,
+            right=right_expr,
+        )
+
+    def __ne__(self, other: object) -> ExpressionProxy:  # type: ignore[override]
         """Inequality comparison."""
         other_expr = self._parent._convert_to_expr(other)
         return ExpressionProxy(self._to_expr() != other_expr, self._parent)
 
-    def __lt__(self, other: Any) -> "ExpressionProxy":
+    def __lt__(self, other: Any) -> ExpressionProxy:
         """Less than comparison."""
         other_expr = self._parent._convert_to_expr(other)
         return ExpressionProxy(self._to_expr() < other_expr, self._parent)
 
-    def __le__(self, other: Any) -> "ExpressionProxy":
+    def __le__(self, other: Any) -> ExpressionProxy:
         """Less than or equal comparison."""
         other_expr = self._parent._convert_to_expr(other)
         return ExpressionProxy(self._to_expr() <= other_expr, self._parent)
 
-    def __gt__(self, other: Any) -> "ExpressionProxy":
+    def __gt__(self, other: Any) -> ExpressionProxy:
         """Greater than comparison."""
         other_expr = self._parent._convert_to_expr(other)
         return ExpressionProxy(self._to_expr() > other_expr, self._parent)
 
-    def __ge__(self, other: Any) -> "ExpressionProxy":
+    def __ge__(self, other: Any) -> ExpressionProxy:
         """Greater than or equal comparison."""
         other_expr = self._parent._convert_to_expr(other)
         return ExpressionProxy(self._to_expr() >= other_expr, self._parent)
 
     # --- Reverse Operators ---
-    def __radd__(self, other: Any) -> "ExpressionProxy":
+    def __radd__(self, other: Any) -> ExpressionProxy:
         """Reverse addition operator."""
         # Convert other to a proxy and use dispatch system
         from .expression_proxy import ExpressionProxy
@@ -128,7 +144,7 @@ class ColumnProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.add(self)
 
-    def __rsub__(self, other: Any) -> "ExpressionProxy":
+    def __rsub__(self, other: Any) -> ExpressionProxy:
         """Reverse subtraction operator."""
         # Convert other to a proxy and use dispatch system
         from .expression_proxy import ExpressionProxy
@@ -137,7 +153,7 @@ class ColumnProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.sub(self)
 
-    def __rmul__(self, other: Any) -> "ExpressionProxy":
+    def __rmul__(self, other: Any) -> ExpressionProxy:
         """Reverse multiplication operator."""
         # Convert other to a proxy and use dispatch system
         from .expression_proxy import ExpressionProxy
@@ -146,7 +162,7 @@ class ColumnProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.mul(self)
 
-    def __rtruediv__(self, other: Any) -> "ExpressionProxy":
+    def __rtruediv__(self, other: Any) -> ExpressionProxy:
         """Reverse true division operator."""
         # Convert other to a proxy and use dispatch system
         from .expression_proxy import ExpressionProxy
@@ -155,7 +171,7 @@ class ColumnProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.truediv(self)
 
-    def __rfloordiv__(self, other: Any) -> "ExpressionProxy":
+    def __rfloordiv__(self, other: Any) -> ExpressionProxy:
         """Reverse floor division operator."""
         # Convert other to a proxy and use dispatch system
         from .expression_proxy import ExpressionProxy
@@ -164,7 +180,7 @@ class ColumnProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.floordiv(self)
 
-    def __rmod__(self, other: Any) -> "ExpressionProxy":
+    def __rmod__(self, other: Any) -> ExpressionProxy:
         """Reverse modulo operator."""
         # Convert other to a proxy and use dispatch system
         from .expression_proxy import ExpressionProxy
@@ -173,7 +189,7 @@ class ColumnProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.mod(self)
 
-    def __rpow__(self, other: Any) -> "ExpressionProxy":
+    def __rpow__(self, other: Any) -> ExpressionProxy:
         """Reverse power operator."""
         # Convert other to a proxy and use dispatch system
         from .expression_proxy import ExpressionProxy
@@ -195,6 +211,7 @@ class ColumnProxy:
 
         Returns:
             ExpressionProxy: Result of applying the function
+
         """
         # Directly call the (potentially monkey-patched) Polars method.
         # The telemetry wrapper should handle this transparently.
@@ -214,6 +231,7 @@ class ColumnProxy:
 
         Returns:
             ExpressionProxy: Result of applying the function
+
         """
         # Directly call the (potentially monkey-patched) Polars method.
         base_expr = self._to_expr()
@@ -225,7 +243,7 @@ class ColumnProxy:
     # They are explicitly defined here and use the accessor registry.
 
     @property
-    def date(self) -> "DateColumnAccessor":
+    def date(self) -> DateColumnAccessor:
         """Access date-related column operations."""
         if self._date_accessor_instance is None:
             # Look up specifically for 'column' kind using the registry
@@ -239,7 +257,7 @@ class ColumnProxy:
         return self._date_accessor_instance
 
     @property
-    def finance(self) -> "FinanceColumnAccessor":
+    def finance(self) -> FinanceColumnAccessor:
         """Access finance-related column operations."""
         if self._finance_accessor_instance is None:
             # Look up specifically for 'column' kind using the registry
@@ -253,7 +271,7 @@ class ColumnProxy:
         return self._finance_accessor_instance
 
     @property
-    def excel(self) -> "ExcelColumnAccessor":
+    def excel(self) -> ExcelColumnAccessor:
         """Access excel-related column operations."""
         if self._excel_accessor_instance is None:
             AccessorClass = _ACCESSOR_REGISTRY.get("excel", {}).get("column")
