@@ -802,16 +802,120 @@ except Exception as e:
 
 ---
 
+## MVP Implementation Results (2025-11-12)
+
+### What We Learned
+
+**✅ MVP Successfully Completed**
+
+The MVP implementation validated the core design approach and proved the concept works:
+
+1. **Query Plan Verification**
+   ```
+   WITH_COLUMNS:
+   [col("month").list_conditional([col("term"), 1.0, 0.0]).alias("result")]
+   ```
+   - **Zero EXPLODE operations** - Successfully eliminated!
+   - Plugin call visible in query plan
+   - Test passes with correct results: `[0.0, 0.0, 1.0, 0.0]`
+
+2. **Key Implementation Insights**
+
+   **Critical Discovery: `when()` must pass through `ConditionExpression` as-is**
+   - Original design didn't account for `when()` function converting conditions to `pl.Expr`
+   - **Fix:** Added `isinstance(condition, ConditionExpression)` check in `when()` to return `ConditionalProxy(condition, parent)` directly
+   - Without this, the metadata would be lost before reaching `_build_scalar_conditional()`
+
+3. **Type System Works Perfectly**
+   - `isinstance(condition, ConditionExpression)` detection in `_build_scalar_conditional()` works
+   - No metadata signaling needed - type-based routing is clean and explicit
+   - Graceful fallback to standard Polars for `ExpressionProxy` conditions
+
+4. **No Double-Wrapping Bug**
+   - Removing `_list_broadcast_metadata` setting in `otherwise()` successfully prevents double-wrapping
+   - Plugin returns `list[f64]` directly, no unwanted nesting
+   - ActuarialFrame.__setattr__() doesn't apply EXPLODE pattern
+
+5. **MVP Scope Was Right Size**
+   - Single `==` operator proved the concept
+   - Single condition restriction simplified initial implementation
+   - Clear path to expand to other operators now established
+
+### Implementation Commits
+
+**Commit:** `462677f` - feat(python): integrate list_conditional plugin into when/then/otherwise (MVP)
+
+**Files Modified:**
+- `gaspatchio_core/column/condition_expression.py` (new) - 62 lines
+- `gaspatchio_core/column/column_proxy.py` - Modified `__eq__()`
+- `gaspatchio_core/functions/conditional.py` - Modified `_build_scalar_conditional()`, `otherwise()`, `when()`
+- `tests/functions/test_conditional_plugin_mvp.py` (new) - MVP test
+
+**Lines of Code:** ~150 LOC for complete MVP
+
+### Next Steps for Full Implementation
+
+Based on MVP learnings, the full implementation path is clear:
+
+**Phase 1: All Comparison Operators** (straightforward, copy `__eq__()` pattern)
+- Implement `__ne__`, `__lt__`, `__le__`, `__gt__`, `__gte__` in `ColumnProxy`
+- Implement same 6 operators in `ExpressionProxy`
+- Add tests for each operator
+- Estimated: 2-3 hours
+
+**Phase 2: Binary Operations** (more complex, but design is solid)
+- Implement `__and__`, `__or__`, `__invert__` in `ConditionExpression`
+- These convert to boolean lists and return `ExpressionProxy` with `_is_boolean_list` flag
+- Update `_build_scalar_conditional()` to handle `_is_boolean_list` flag
+- Add tests for binary operations
+- Estimated: 3-4 hours
+
+**Phase 3: Edge Cases & Production** (validation and cleanup)
+- Remove single condition restriction (support chained `.when()`)
+- Comprehensive test suite
+- Performance benchmarking at 10K points
+- Documentation updates
+- Code review and merge
+- Estimated: 4-5 hours
+
+**Total Estimated Time:** 10-12 hours to complete full implementation
+
+### Confidence Level
+
+**Very High (95%+)**
+
+The MVP proved every critical assumption:
+- ✅ Type-based routing works
+- ✅ No double-wrapping bug
+- ✅ Plugin call succeeds
+- ✅ Zero EXPLODE in query plan
+- ✅ Correct numerical results
+- ✅ Clean, maintainable code
+
+The only unknowns remaining are:
+- Binary operations implementation details (design is solid, just needs coding)
+- Performance benchmarking numbers (expected to match predictions)
+
+---
+
 ## Conclusion
 
 This design solves the critical performance bottleneck by integrating the `list_conditional` Rust plugin into the `when/then/otherwise` API without falling into the double-wrapping trap that blocked the previous attempt.
 
 **Key Innovation:** Track operator metadata at comparison creation time, detect via type system, call plugin directly without metadata signaling.
 
-**Expected Outcome:**
+**MVP Results:**
+- ✅ Zero EXPLODE operations confirmed
+- ✅ Plugin integration works perfectly
+- ✅ Type-based routing validated
+- ✅ No double-wrapping bug
+- ✅ Clean, maintainable code
+
+**Expected Full Implementation Outcome:**
 - ✅ 90% speedup at all scales
 - ✅ Eliminate OOM issues
 - ✅ Zero API breaking changes
-- ✅ Clean, maintainable code
+- ✅ All 6 comparison operators
+- ✅ Binary operations (&, |, ~)
 
-**Ready for Implementation:** MVP → Full → Production
+**Status:** MVP Complete → Ready for Full Implementation → Production

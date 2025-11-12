@@ -3,6 +3,27 @@
 **Status:** Architecture Analysis Complete - Ready for Implementation
 **Related:** `22-brainstorm.md`, `22-intro.md`
 
+---
+
+## Recent Work: list_pow Performance Optimization (2025-11-11)
+
+**Related Plan:** See `../24-list-pow-list-performance/24-list-pow-list-performance-implementation-plan.md`
+
+**Completed:**
+- ✅ Rust core implementation of `list_pow` plugin (Tasks 1-4 complete)
+- ✅ Unit tests passing (3 tests: list**list, list**scalar, null handling)
+- ✅ Criterion benchmarks showing ~4ms for 1K rows × 240 elements
+- ✅ Ready for PyO3 wrapper integration
+
+**Impact on this plan:**
+- `cumulative_discount()` method (Phase 1, Task 5) will benefit from 69% speedup
+- Finance accessor's `discount_factor()` will use the Rust plugin
+- List operations will bypass EXPLODE/GROUP_BY pattern
+
+**Next:** PyO3 wrapper integration (Tasks 5-8 in ref 24)
+
+---
+
 ## Executive Summary
 
 This document provides a comprehensive implementation plan for the projection API design described in `22-brainstorm.md`. After analyzing the current codebase, we've determined that **the infrastructure is complete and ready** - we only need to create new accessor classes following the existing patterns.
