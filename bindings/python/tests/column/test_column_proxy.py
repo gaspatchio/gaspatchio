@@ -1,9 +1,12 @@
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import MagicMock
 
 import polars as pl
 import pytest
+
 from gaspatchio_core.column import ColumnProxy, ExpressionProxy
+from gaspatchio_core.column.condition_expression import ConditionExpression
 
 
 # Mock ActuarialFrame specific to ColumnProxy tests if needed, or reuse a common one
@@ -107,25 +110,30 @@ def test_column_proxy_pow_operator(col_proxy):
 
 
 @pytest.mark.parametrize(
-    "op, op_symbol",
+    "op, op_symbol, operator_name",
     [
-        (lambda a, b: a == b, "=="),
-        (lambda a, b: a != b, "!="),
-        (lambda a, b: a < b, "<"),
-        (lambda a, b: a <= b, "<="),
-        (lambda a, b: a > b, ">"),
-        (lambda a, b: a >= b, ">="),
+        (lambda a, b: a == b, "==", "eq"),
+        (lambda a, b: a != b, "!=", "ne"),
+        (lambda a, b: a < b, "<", "lt"),
+        (lambda a, b: a <= b, "<=", "lte"),
+        (lambda a, b: a > b, ">", "gt"),
+        (lambda a, b: a >= b, ">=", "gte"),
     ],
 )
-def test_column_proxy_comparison_operators(col_proxy, op, op_symbol):
+def test_column_proxy_comparison_operators(col_proxy, op, op_symbol, operator_name):
     other = "abc"
-    result_proxy = op(col_proxy, other)
-    assert isinstance(result_proxy, ExpressionProxy)
+    result = op(col_proxy, other)
+    # Comparison operators now return ConditionExpression for plugin integration
+    assert isinstance(result, ConditionExpression)
+    # Verify metadata is correct
+    assert result.operator == operator_name
+    assert result._parent is col_proxy._parent
+    # Verify the underlying expression is correct
     expected_expr_str_v1 = f'[(col("test_col")) {op_symbol} (String({other}))]'
     expected_expr_str_v2 = f'[(col("test_col")) {op_symbol} ("{other}")]'
     assert (
-        str(result_proxy._expr) == expected_expr_str_v1
-        or str(result_proxy._expr) == expected_expr_str_v2
+        str(result._expr) == expected_expr_str_v1
+        or str(result._expr) == expected_expr_str_v2
     )
 
 
