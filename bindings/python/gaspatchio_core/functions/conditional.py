@@ -412,7 +412,23 @@ class ConditionalProxy:
                 operator=condition.operator,
             )
 
-        # Case 2: ExpressionProxy or pl.Expr - fall back to standard Polars
+        # Case 2: Binary operation result (ExpressionProxy with boolean list)
+        if isinstance(condition, ExpressionProxy) and hasattr(
+            condition, "_is_boolean_list"
+        ):
+            from gaspatchio_core.functions.vector import list_conditional
+
+            # Binary ops already converted to boolean list (0.0/1.0)
+            # Use plugin to convert to conditional
+            return list_conditional(
+                left=condition._expr,  # noqa: SLF001
+                right=pl.lit(1.0),
+                then_val=then_val,
+                otherwise_val=otherwise_expr,
+                operator="eq",
+            )
+
+        # Case 3: ExpressionProxy or pl.Expr - fall back to standard Polars
         # Extract expression from proxy if needed
         if isinstance(condition, ExpressionProxy):
             condition_expr = condition._expr  # noqa: SLF001
