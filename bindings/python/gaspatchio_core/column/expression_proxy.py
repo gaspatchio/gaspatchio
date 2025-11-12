@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from ..accessors.date import DateColumnAccessor
     from ..accessors.finance import FinanceColumnAccessor
     from ..frame.base import ActuarialFrame
+    from .condition_expression import ConditionExpression
     # No forward reference needed for ColumnProxy as it's not directly used in signatures here
     # from .column_proxy import ColumnProxy
 
@@ -103,47 +104,131 @@ class ExpressionProxy:
         return self.pow(other)
 
     # Comparison operators
-    def __eq__(self, other: object) -> ExpressionProxy:  # type: ignore[override]
-        """Equality comparison."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr == other_expr, self._parent)
+    def __eq__(self, other: object) -> ConditionExpression:  # type: ignore[override]
+        """Equality comparison.
 
-    def __ne__(self, other: object) -> ExpressionProxy:  # type: ignore[override]
-        """Inequality comparison."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr != other_expr, self._parent)
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
 
-    def __lt__(self, other: Any) -> ExpressionProxy:
-        """Less than comparison."""
-        other_expr = (
+        left_expr = self._expr
+        right_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(self._expr < other_expr, self._parent)
+        comparison_expr = left_expr == right_expr
 
-    def __le__(self, other: Any) -> ExpressionProxy:
-        """Less than or equal comparison."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="eq",
+            left=left_expr,
+            right=right_expr,
         )
-        return ExpressionProxy(self._expr <= other_expr, self._parent)
 
-    def __gt__(self, other: Any) -> ExpressionProxy:
-        """Greater than comparison."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr > other_expr, self._parent)
+    def __ne__(self, other: object) -> ConditionExpression:  # type: ignore[override]
+        """Inequality comparison.
 
-    def __ge__(self, other: Any) -> ExpressionProxy:
-        """Greater than or equal comparison."""
-        other_expr = (
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(self._expr >= other_expr, self._parent)
+        comparison_expr = left_expr != right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="ne",
+            left=left_expr,
+            right=right_expr,
+        )
+
+    def __lt__(self, other: Any) -> ConditionExpression:
+        """Less than comparison.
+
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
+            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        )
+        comparison_expr = left_expr < right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="lt",
+            left=left_expr,
+            right=right_expr,
+        )
+
+    def __le__(self, other: Any) -> ConditionExpression:
+        """Less than or equal comparison.
+
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
+            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        )
+        comparison_expr = left_expr <= right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="lte",
+            left=left_expr,
+            right=right_expr,
+        )
+
+    def __gt__(self, other: Any) -> ConditionExpression:
+        """Greater than comparison.
+
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
+            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        )
+        comparison_expr = left_expr > right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="gt",
+            left=left_expr,
+            right=right_expr,
+        )
+
+    def __ge__(self, other: Any) -> ConditionExpression:
+        """Greater than or equal comparison.
+
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
+            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        )
+        comparison_expr = left_expr >= right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="gte",
+            left=left_expr,
+            right=right_expr,
+        )
 
     # --- Reverse Operators ---
     def __radd__(self, other: Any) -> ExpressionProxy:
