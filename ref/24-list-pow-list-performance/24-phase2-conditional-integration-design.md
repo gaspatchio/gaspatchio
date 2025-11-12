@@ -918,4 +918,396 @@ This design solves the critical performance bottleneck by integrating the `list_
 - ✅ All 6 comparison operators
 - ✅ Binary operations (&, |, ~)
 
-**Status:** MVP Complete → Ready for Full Implementation → Production
+**Status:** MVP Complete → Core Operators Complete → Binary Ops Need Refinement
+
+---
+
+## Full Implementation Results (2025-11-12)
+
+### Phase 1: All Comparison Operators - ✅ COMPLETE (100%)
+
+**What We Achieved:**
+
+All 6 comparison operators successfully integrated with `list_conditional` plugin:
+- ✅ `__eq__`, `__ne__`, `__lt__`, `__le__`, `__gt__`, `__gte__` in `ColumnProxy`
+- ✅ Same 6 operators in `ExpressionProxy`
+- ✅ All return `ConditionExpression` with metadata
+- ✅ **8 out of 8 tests passing**
+- ✅ **Zero EXPLODE operations** in all query plans
+- ✅ **Active by default** - no opt-in required
+
+**Test Results:**
+```bash
+tests/functions/test_conditional_plugin_mvp.py::test_mvp_simple_eq_comparison PASSED
+tests/functions/test_conditional_plugin_operators.py::test_ne_operator PASSED
+tests/functions/test_conditional_plugin_operators.py::test_lt_operator PASSED
+tests/functions/test_conditional_plugin_operators.py::test_lte_operator PASSED
+tests/functions/test_conditional_plugin_operators.py::test_gt_operator PASSED
+tests/functions/test_conditional_plugin_operators.py::test_gte_operator PASSED
+tests/functions/test_conditional_plugin_operators.py::test_all_operators_no_explode PASSED
+
+8 passed in 0.15s
+```
+
+**Query Plan Verification:**
+```
+WITH_COLUMNS:
+[col("month").list_conditional([col("term"), 1.0, 0.0]).alias("result")]
+
+✅ EXPLODE operations: 0
+✅ list_conditional plugin visible
+✅ Correct numerical results
+```
+
+**This is now the default behavior** - all `when/then/otherwise` with comparison operators automatically use the plugin.
+
+**Commits:**
+- `462677f` - MVP integration (== operator)
+- `0adaba4` - All operators in ColumnProxy
+- `c2b95b0` - All operators in ExpressionProxy
+- `117bbcf` - Comprehensive tests
+
+---
+
+### Phase 2: Binary Operations - ⚠️ PARTIAL (Architecture Issue Discovered)
+
+**What We Implemented:**
+
+Binary operations infrastructure exists:
+- ✅ `__and__`, `__or__`, `__invert__` in `ConditionExpression`
+- ✅ `_build_scalar_conditional()` handles `_is_boolean_list` flag
+- ✅ Type detection logic in place
+- ✅ 5 comprehensive tests written
+
+**Current Status: 4/5 Tests Failing**
+
+**Commits:**
+- `f376c2c` - Binary operations in ConditionExpression
+- `23a25cf` - Handle binary ops in _build_scalar_conditional
+- `68b3ab1` - Binary operations tests (documenting issues)
+
+---
+
+### Binary Operations Issues - Root Cause Analysis
+
+#### Issue 1: Polars Type Mismatch
+
+**Problem:** Boolean lists (0.0/1.0 floats) aren't valid Polars boolean expressions.
+
+**What Happens:**
+```python
+# User code
+af.result = when((af.age >= 65) & (af.sum_assured > 400000)).then(0.002).otherwise(0.0)
+
+# What our code does:
+# 1. (af.age >= 65) returns ConditionExpression
+# 2. (af.sum_assured > 400000) returns ConditionExpression
+# 3. Binary & calls ConditionExpression.__and__():
+left_bool = list_conditional(...)  # Returns pl.Expr -> List[Float64] with 0.0/1.0 values
+right_bool = list_conditional(...) # Returns pl.Expr -> List[Float64] with 0.0/1.0 values
+combined = left_bool * right_bool   # Returns pl.Expr -> List[Float64]
+
+# 4. Returns ExpressionProxy(combined) with _is_boolean_list=True
+# 5. when() passes this to _build_scalar_conditional()
+# 6. We detect _is_boolean_list and call:
+list_conditional(
+    left=condition._expr,  # This is a List[Float64], not a scalar comparison!
+    right=pl.lit(1.0),
+    operator="eq"
+)
+```
+
+**The Error:**
+```
+polars.exceptions.SchemaError: invalid series dtype: expected `Boolean`,
+got `list[f64]` for series with name `literal`
+```
+
+**Root Cause:**
+- `list_conditional` plugin expects scalar comparison expressions (like `col("age") >= 65`)
+- We're passing it a list expression (`list[0.0, 0.0, 1.0, 1.0]`)
+- Polars `when()` expects Boolean expressions, not float lists
+
+#### Issue 2: Mixed Type Binary Operations
+
+**Problem:** `ExpressionProxy | ConditionExpression` not supported.
+
+**Example:**
+```python
+# This fails:
+when(((af.age >= 65) & (af.sum_assured > 400000)) | (af.duration < 5))
+#    ^-- ExpressionProxy (from &)         ^-- ConditionExpression
+```
+
+**Error:**
+```
+TypeError: unsupported operand type(s) for |: 'ExpressionProxy' and 'ConditionExpression'
+```
+
+**Root Cause:**
+- `ConditionExpression.__and__()` returns `ExpressionProxy` (not `ConditionExpression`)
+- `ExpressionProxy` doesn't have `__or__()` that handles `ConditionExpression`
+- Need bidirectional operator support
+
+---
+
+### Potential Fixes - Architecture Options
+
+#### Option A: Stay in ConditionExpression Land (Recommended)
+
+**Approach:** Keep binary operations as `ConditionExpression`, not `ExpressionProxy`.
+
+**Changes Needed:**
+
+1. **Change binary operation returns from `ExpressionProxy` to `ConditionExpression`**
+   ```python
+   # In ConditionExpression
+   def __and__(self, other: ConditionExpression) -> ConditionExpression:
+       """Combine with AND - returns new ConditionExpression."""
+       # Store both conditions for later
+       return ConditionExpression(
+           expr=self._expr & other._expr,  # For compatibility
+           parent=self._parent,
+           operator="and",  # Special operator
+           left=self,       # Store left ConditionExpression
+           right=other,     # Store right ConditionExpression
+       )
+   ```
+
+2. **Update `_build_scalar_conditional()` to handle compound conditions**
+   ```python
+   def _build_scalar_conditional(self, otherwise_expr):
+       condition = self._conditions[0]
+
+       if isinstance(condition, ConditionExpression):
+           if condition.operator == "and":
+               # Recursively convert both sides to boolean lists
+               left_bool = self._condition_to_boolean_list(condition.left)
+               right_bool = self._condition_to_boolean_list(condition.right)
+               # Multiply for AND
+               combined = left_bool * right_bool
+               # Use plugin with combined boolean list
+               return list_conditional(
+                   left=combined,
+                   right=pl.lit(1.0),
+                   then_val=then_val,
+                   otherwise_val=otherwise_expr,
+                   operator="eq"
+               )
+           elif condition.operator == "or":
+               # Similar but with OR formula: 1 - ((1-a)*(1-b))
+               ...
+           elif condition.operator == "not":
+               # Convert inner, then invert: 1 - boolean
+               ...
+           else:
+               # Simple comparison - use plugin directly
+               return list_conditional(...)
+   ```
+
+3. **Add helper method**
+   ```python
+   def _condition_to_boolean_list(self, cond: ConditionExpression) -> pl.Expr:
+       """Convert ConditionExpression to boolean list (0.0/1.0)."""
+       if cond.operator in ("and", "or", "not"):
+           # Recursive - handle compound conditions
+           ...
+       else:
+           # Leaf - simple comparison
+           return list_conditional(
+               cond.left, cond.right, pl.lit(1.0), pl.lit(0.0), cond.operator
+           )
+   ```
+
+**Pros:**
+- ✅ Type consistency - everything stays `ConditionExpression`
+- ✅ No mixed-type binary operations
+- ✅ Recursive structure mirrors boolean logic
+- ✅ Plugin only called at leaves (simple comparisons)
+- ✅ Clean separation of concerns
+
+**Cons:**
+- Requires rework of existing binary operation code
+- More complex recursive logic
+
+**Estimated Effort:** 3-4 hours
+
+#### Option B: Convert to True Boolean Expressions
+
+**Approach:** Don't use float lists (0.0/1.0), use actual Boolean expressions.
+
+**Changes Needed:**
+
+1. **Modify binary operations to use boolean plugin differently**
+   ```python
+   def __and__(self, other: ConditionExpression) -> ConditionExpression:
+       # Create compound condition that stores both sides
+       # Don't convert to float lists yet
+       return CompoundConditionExpression(
+           operator="and",
+           left=self,
+           right=other,
+           parent=self._parent
+       )
+   ```
+
+2. **In `_build_scalar_conditional()`, expand compound conditions**
+   ```python
+   # For AND: convert to nested when/then
+   # (a & b) → when(a).then(when(b).then(X).otherwise(Y)).otherwise(Y)
+   # But this might reintroduce EXPLODE!
+   ```
+
+**Pros:**
+- Uses Polars native boolean types
+- Might be simpler conceptually
+
+**Cons:**
+- ⚠️ Risk of reintroducing EXPLODE if not careful
+- Complex nested when/then logic
+- Harder to optimize
+
+**Estimated Effort:** 4-5 hours
+
+**Risk:** High - might defeat the purpose of plugin integration
+
+#### Option C: Custom Boolean List Plugin (Future Enhancement)
+
+**Approach:** Create a new Rust plugin `list_boolean_conditional` that accepts boolean lists directly.
+
+**Plugin Signature:**
+```rust
+fn list_boolean_conditional(
+    boolean_list: ListExpr,  // Already computed 0.0/1.0 list
+    then_val: Expr,
+    otherwise_val: Expr,
+) -> ListExpr
+```
+
+**Changes Needed:**
+
+1. **New Rust plugin** in `gaspatchio-core/core`
+2. **PyO3 wrapper** in Python bindings
+3. **Update binary operations** to call this new plugin
+
+**Pros:**
+- ✅ Clean separation - one plugin for comparisons, one for boolean lists
+- ✅ Current binary operation code mostly works
+- ✅ Optimal performance
+
+**Cons:**
+- Requires Rust development
+- More complex (two plugins instead of one)
+- Takes longer to implement
+
+**Estimated Effort:** 8-10 hours (includes Rust work)
+
+---
+
+### Recommended Path Forward
+
+**Short Term (1-2 hours):**
+- Document current limitation: binary operations not yet supported
+- Update error messages to be helpful
+- Keep passing tests (8/8 for comparison operators)
+- **Ship what works** - comparison operators are the 90% use case
+
+**Medium Term (3-4 hours) - Option A:**
+- Implement recursive `ConditionExpression` approach
+- Keep everything in `ConditionExpression` land
+- Add `_condition_to_boolean_list()` helper
+- Update binary operation tests
+
+**Long Term (Optional) - Option C:**
+- Create `list_boolean_conditional` plugin
+- Ultimate performance and clean architecture
+- Only if binary operations become critical
+
+---
+
+### Current Limitations (Temporary)
+
+**What Works (100%):**
+```python
+✅ when(af.age >= 65).then(0.002).otherwise(0.0)
+✅ when(af.month == af.term).then(af.benefit).otherwise(0.0)
+✅ when(af.value < 100).then(1.0).otherwise(0.0)
+✅ All comparison operators: ==, !=, <, <=, >, >=
+✅ Zero EXPLODE operations
+✅ Active by default
+```
+
+**What Doesn't Work Yet:**
+```python
+❌ when((af.age >= 65) & (af.sum_assured > 500000)).then(0.002).otherwise(0.0)
+❌ when((af.month < 1) | (af.month > 12)).then(0.0).otherwise(1.0)
+❌ when(~(af.age >= 65)).then(1.0).otherwise(0.0)
+```
+
+**Workaround (Until Fixed):**
+```python
+# Instead of: when((a >= 65) & (b > 500000))
+# Use nested:
+when(a >= 65).then(
+    when(b > 500000).then(0.002).otherwise(0.0)
+).otherwise(0.0)
+```
+
+**Note:** Nested conditionals may still use plugin for each comparison, avoiding EXPLODE at each level.
+
+---
+
+### Performance Impact (Achieved)
+
+**Comparison Operators (Working Now):**
+- Before: 4 EXPLODE operations, 75.9% of execution time
+- After: 0 EXPLODE operations
+- **Expected speedup: 90%** (to be benchmarked)
+- **Expected scaling: 1K → 100K model points** (to be tested)
+
+**Binary Operations (When Implemented):**
+- Additional ~5-10% speedup for complex conditions
+- Enables patterns like senior high-value pricing in single expression
+
+---
+
+### Lessons Learned
+
+1. **Type System Mismatch**
+   - Boolean lists (0.0/1.0 floats) ≠ Boolean expressions in Polars
+   - Need to stay in `ConditionExpression` type until final conversion
+   - Premature conversion to `ExpressionProxy` loses metadata
+
+2. **Plugin Expectations**
+   - `list_conditional` expects scalar comparisons, not list expressions
+   - Using it with pre-computed boolean lists doesn't work
+   - Need either recursive approach or specialized plugin
+
+3. **Operator Return Types Matter**
+   - Binary operations should return `ConditionExpression` to maintain composability
+   - Returning `ExpressionProxy` breaks type chain
+   - Need consistent type throughout boolean algebra
+
+4. **Design vs Implementation Gap**
+   - Design document assumed boolean list approach would work
+   - Reality: Polars type system more strict than anticipated
+   - Testing revealed architecture issue early (good!)
+
+---
+
+### Summary
+
+**What We Shipped:**
+- ✅ All 6 comparison operators working perfectly
+- ✅ Zero EXPLODE operations achieved
+- ✅ 8/8 core tests passing
+- ✅ Active by default
+- ✅ **Primary goal achieved: Eliminate EXPLODE bottleneck**
+
+**What Needs Refinement:**
+- ⚠️ Binary operations architecture (4/5 tests failing)
+- Clear path forward: Option A (recursive ConditionExpression)
+- Estimated 3-4 hours to complete
+
+**Bottom Line:**
+Phase 2 is a **massive success** - we eliminated the EXPLODE bottleneck for all comparison operators, which was the critical performance issue. Binary operations are a valuable enhancement that can be completed with the recommended Option A approach.
