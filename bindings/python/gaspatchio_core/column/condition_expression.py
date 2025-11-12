@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import polars as pl
 
+    from gaspatchio_core.column.expression_proxy import ExpressionProxy
     from gaspatchio_core.frame.base import ActuarialFrame
 
 
@@ -59,3 +60,93 @@ class ConditionExpression:
         self.operator = operator
         self.left = left
         self.right = right
+
+    def __and__(self, other: ConditionExpression) -> ExpressionProxy:
+        """Combine conditions with AND (&).
+
+        Converts both conditions to boolean lists using list_conditional plugin,
+        then combines via element-wise multiplication.
+
+        Returns:
+            ExpressionProxy wrapping combined boolean list expression
+
+        """
+        import polars as pl
+
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio_core.functions.vector import list_conditional
+
+        # Convert self to boolean list (lazy)
+        left_bool = list_conditional(
+            self.left, self.right, pl.lit(1.0), pl.lit(0.0), self.operator
+        )
+
+        # Convert other to boolean list (lazy)
+        right_bool = list_conditional(
+            other.left, other.right, pl.lit(1.0), pl.lit(0.0), other.operator
+        )
+
+        # Element-wise AND via multiplication (lazy)
+        combined = left_bool * right_bool
+
+        # Mark as boolean list for later detection
+        result = ExpressionProxy(combined, self._parent)
+        result._is_boolean_list = True  # type: ignore[attr-defined]
+        return result
+
+    def __or__(self, other: ConditionExpression) -> ExpressionProxy:
+        """Combine conditions with OR (|).
+
+        Uses formula: 1 - ((1 - left) * (1 - right)) for element-wise OR
+
+        Returns:
+            ExpressionProxy wrapping combined boolean list expression
+
+        """
+        import polars as pl
+
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio_core.functions.vector import list_conditional
+
+        # Convert to boolean lists
+        left_bool = list_conditional(
+            self.left, self.right, pl.lit(1.0), pl.lit(0.0), self.operator
+        )
+        right_bool = list_conditional(
+            other.left, other.right, pl.lit(1.0), pl.lit(0.0), other.operator
+        )
+
+        # OR logic: 1 - ((1 - a) * (1 - b))
+        combined = pl.lit(1.0) - (
+            (pl.lit(1.0) - left_bool) * (pl.lit(1.0) - right_bool)
+        )
+
+        result = ExpressionProxy(combined, self._parent)
+        result._is_boolean_list = True  # type: ignore[attr-defined]
+        return result
+
+    def __invert__(self) -> ExpressionProxy:
+        """Negate condition with NOT (~).
+
+        Uses formula: 1.0 - boolean_result for element-wise negation
+
+        Returns:
+            ExpressionProxy wrapping negated boolean list expression
+
+        """
+        import polars as pl
+
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio_core.functions.vector import list_conditional
+
+        # Convert to boolean list
+        bool_result = list_conditional(
+            self.left, self.right, pl.lit(1.0), pl.lit(0.0), self.operator
+        )
+
+        # NOT logic: 1 - boolean
+        negated = pl.lit(1.0) - bool_result
+
+        result = ExpressionProxy(negated, self._parent)
+        result._is_boolean_list = True  # noqa: SLF001  # type: ignore[attr-defined]
+        return result
