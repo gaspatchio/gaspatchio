@@ -1,5 +1,9 @@
+"""Model runner utilities for actuarial model execution and profiling."""
+
+import contextlib
 import importlib.util
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -44,28 +48,35 @@ class ModelRunResult(BaseModel):
     error_context: dict[str, Any] | None = None  # For llm_context and enhanced_error
 
 
-def load_model_from_path(model_path, function_name="life_model"):
-    """Dynamically load a model function from a Python file"""
+def load_model_from_path(
+    model_path: Path | str, function_name: str = "life_model"
+) -> Callable[..., Any]:
+    """Dynamically load a model function from a Python file."""
     model_path = Path(model_path)
     if not model_path.exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
+        msg = f"Model file not found: {model_path}"
+        raise FileNotFoundError(msg)
 
     spec = importlib.util.spec_from_file_location("model_module", model_path)
+    if spec is None or spec.loader is None:
+        msg = f"Could not load module spec from {model_path}"
+        raise ImportError(msg)
+
     model_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(model_module)
 
     # Look specifically for the specified function name
     if hasattr(model_module, function_name) and callable(
-        getattr(model_module, function_name),
+        getattr(model_module, function_name)
     ):
-        model_func = getattr(model_module, function_name)
-        return model_func
-    raise ValueError(f"No function named '{function_name}' found in {model_path}")
+        return getattr(model_module, function_name)
+
+    msg = f"No function named '{function_name}' found in {model_path}"
+    raise ValueError(msg)
 
 
-def transpose_single_policy_result(result_df):
-    """
-    Transpose a single policy result so that vector columns are displayed as rows.
+def transpose_single_policy_result(result_df: pl.DataFrame) -> pl.DataFrame:
+    """Transpose a single policy result for vector column display.
 
     Args:
         result_df: A DataFrame containing a single row with vector columns
@@ -75,7 +86,8 @@ def transpose_single_policy_result(result_df):
 
     """
     if len(result_df) != 1:
-        raise ValueError("Transposition only works with a single policy result")
+        msg = "Transposition only works with a single policy result"
+        raise ValueError(msg)
 
     # Get the first (and only) row as a dictionary
     row = result_df.row(0, named=True)
@@ -119,10 +131,10 @@ def transpose_single_policy_result(result_df):
 def _execute_model_run(
     config: ModelRunConfig,
     data_lazy: pl.LazyFrame,
-    model_func: callable,
+    model_func: Callable[..., Any],
     policy_id: str | None = None,
 ) -> ModelRunResult:
-    """Internal helper to execute the model run logic."""
+    """Execute the model run logic."""
     start_time = time.time()
     errors = []
     result_df = pl.DataFrame()
@@ -149,33 +161,40 @@ def _execute_model_run(
 
     # 5. Run the model using ActuarialFrame and dsl_run_model
     logger.debug("Setting up ActuarialFrame in {} mode...", config.mode)
-    df = ActuarialFrame(data_lazy, mode=config.mode)
-    # df.show_query_plan(True)
+    actuarial_frame = ActuarialFrame(data_lazy, mode=config.mode)
 
     logger.debug("Running model function...")
     try:
-        dsl_run_model(model_func, df)
+        dsl_run_model(model_func, actuarial_frame)
 
-        # 6. Collect the result and profile
+        # 6. Collect result - profile() in debug, collect() in optimize
         logger.info("Collecting results...")
-        result_df, profile_info = df.profile()
-    except Exception as e:
+        if config.mode == "debug":
+            # Debug mode: Enable profiling for timing information
+            result_df, profile_info = actuarial_frame.profile()
+        else:
+            # Optimize mode: Fast collection without profiling
+            result_df = actuarial_frame.collect()
+            # Create empty profile to maintain interface
+            profile_info = pl.DataFrame(
+                {
+                    "node": [],
+                    "start": [],
+                    "end": [],
+                }
+            )
+    except Exception as e:  # noqa: BLE001
         # Import error handler
-        from gaspatchio_core.errors.formatting_errors import _handle_frame_error
-        from gaspatchio_core.errors.exception_utils import enhance_exception_with_location
-        
+        from gaspatchio_core.errors.exception_utils import (
+            enhance_exception_with_location,
+        )
+
         # Try to enhance the error if we're in debug mode
         if config.mode == "debug":
-            try:
-                # Enhance the exception with source location from its traceback
+            with contextlib.suppress(Exception):
+                # Enhance exception with source location
                 enhance_exception_with_location(e)
-                
-                # Try to enhance the error formatting
-                _handle_frame_error(df, e)
-            except Exception as enhanced_e:
-                # If enhancement succeeded, use the enhanced exception
-                e = enhanced_e
-        
+
         # Build error context
         error_context = {}
 
@@ -202,7 +221,7 @@ def _execute_model_run(
         )
 
     # Capture the column order from the ActuarialFrame
-    tracked_column_order = df.get_column_order()
+    tracked_column_order = actuarial_frame.get_column_order()
 
     # Reorder the result DataFrame to match the tracked column order
     if tracked_column_order and not result_df.is_empty():
@@ -211,7 +230,7 @@ def _execute_model_run(
         ordered_columns = [
             col for col in tracked_column_order if col in available_columns
         ]
-        # Add any columns that exist in result but not in tracked order (shouldn't happen, but safety)
+        # Add remaining columns not in tracked order (safety check)
         remaining_columns = [
             col for col in available_columns if col not in ordered_columns
         ]
@@ -219,7 +238,7 @@ def _execute_model_run(
 
         if final_column_order != available_columns:
             logger.debug(
-                f"Reordering columns from {available_columns} to {final_column_order}",
+                f"Reordering columns from {available_columns} to {final_column_order}"
             )
             result_df = result_df.select(final_column_order)
 
@@ -227,7 +246,8 @@ def _execute_model_run(
     total_time = end_time - start_time
     record_count = len(result_df) if not result_df.is_empty() else 0
     logger.success(
-        f"{run_description} finished in {total_time:.2f} seconds producing {record_count} result records.",
+        f"{run_description} finished in {total_time:.2f}s "
+        f"producing {record_count} result records."
     )
 
     metrics = RunMetrics(
@@ -246,7 +266,7 @@ def _execute_model_run(
 
 
 def run_model(config: ModelRunConfig) -> ModelRunResult:
-    """Loads model and points, runs the model for all policies, and returns the ModelRunResult."""
+    """Run actuarial model for all policies and return results."""
     logger.info(f"Starting full model run with config: {config.model_dump()}\n")
 
     # 1. Construct full paths
@@ -270,9 +290,10 @@ def run_model(config: ModelRunConfig) -> ModelRunResult:
 
 
 def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
-    """Loads model and points, runs the model for a single policy, and returns the ModelRunResult."""
+    """Run actuarial model for a single policy and return results."""
     logger.debug(
-        f"Starting single policy run for ID: {policy_id} with config: {config.model_dump()}\n",
+        f"Starting single policy run for ID: {policy_id} "
+        f"with config: {config.model_dump()}\n"
     )
 
     # 1. Construct full paths

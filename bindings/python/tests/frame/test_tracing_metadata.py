@@ -1,3 +1,8 @@
+# ABOUTME: Tests for the enhanced tracing system with metadata capture
+# ABOUTME: Tests cover metadata capture, performance characteristics, and graph storage
+# ruff: noqa: S101, PLR2004, ANN201, SLF001, ANN202, ANN204, D107, INP001, FBT001, FBT002, T201, E501, ARG002, SIM117
+# type: ignore[arg-type,invalid-argument-type]
+
 """
 Tests for the enhanced tracing system with metadata capture.
 
@@ -52,7 +57,7 @@ class TestAppendOperationToGraph:
         assert isinstance(operation, TracedOperation)
         assert operation.alias == "result"
         # Expression should be a Polars expression
-        assert hasattr(operation.expression, 'meta')  # It's a Polars expression
+        assert hasattr(operation.expression, "meta")  # It's a Polars expression
         assert operation.metadata is not None
         # Check that we captured some meaningful metadata (pytest may interfere with exact filenames)
         assert operation.metadata.file_name is not None
@@ -86,7 +91,7 @@ class TestAppendOperationToGraph:
             assert isinstance(operation, TracedOperation)
             assert operation.alias == f"op{i + 1}"
             # Check that expression is a Polars expression object
-            assert hasattr(operation.expression, 'meta')  # It's a Polars expression
+            assert hasattr(operation.expression, "meta")  # It's a Polars expression
             assert operation.metadata is not None
             assert operation.metadata.line_number > 0
 
@@ -95,7 +100,9 @@ class TestAppendOperationToGraph:
         frame = MockActuarialFrame(tracing=True)
 
         def inner_function():
-            append_operation_to_graph(frame, "nested", pl.col("x").filter(pl.col("y") > 0))
+            append_operation_to_graph(
+                frame, "nested", pl.col("x").filter(pl.col("y") > 0)
+            )
 
         def outer_function():
             inner_function()
@@ -143,7 +150,7 @@ class TestAppendOperationToGraph:
 
         # Check that logger.trace was called (might be called twice - once for type inference error)
         assert mock_logger.trace.call_count >= 1
-        
+
         # Find the call that logs the graph addition (not the type inference error)
         graph_addition_call = None
         for call in mock_logger.trace.call_args_list:
@@ -151,7 +158,7 @@ class TestAppendOperationToGraph:
             if "Graph: Added" in call_args:
                 graph_addition_call = call_args
                 break
-        
+
         assert graph_addition_call is not None
         assert "logged_op" in graph_addition_call
         # Should contain the actual expression representation
@@ -177,7 +184,9 @@ class TestAppendOperationToGraph:
 
         # Second call should be reasonably fast (not drastically slower)
         # This test is inherently flaky due to timing variance
-        assert second_call_time <= first_call_time * 10  # Very lenient to avoid flakiness
+        assert (
+            second_call_time <= first_call_time * 10
+        )  # Very lenient to avoid flakiness
 
     def test_circular_import_avoidance(self):
         """Test that the local imports don't cause circular import issues."""
@@ -382,15 +391,20 @@ class TestIntegrationScenarios:
             assert operation.metadata is not None
 
     def test_error_resilience(self):
-        """Test that the system is resilient to errors in metadata capture."""
+        """Test that metadata capture errors propagate correctly.
+
+        When capture_source_context raises an exception, the error should
+        propagate to help identify issues in the tracing infrastructure.
+        """
         frame = MockActuarialFrame(tracing=True)
 
         # Mock capture_source_context to raise an exception
+        # Patch at the import location (where it's used), not where it's defined
         with patch(
-            "gaspatchio_core.errors.metadata.capture_source_context",
+            "gaspatchio_core.frame.tracing.capture_source_context",
             side_effect=Exception("Metadata capture failed"),
         ):
-            # This should not crash the operation
+            # The exception should propagate since we want to know about failures
             with pytest.raises(Exception, match="Metadata capture failed"):
                 append_operation_to_graph(frame, "test", pl.col("x"))
 

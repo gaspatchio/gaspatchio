@@ -1,8 +1,9 @@
 """Defines the ExpressionProxy class."""
+# ruff: noqa: ANN204, ANN401, TID252, E501, ERA001, TRY003, EM102, PLR2004, TRY300, BLE001, D401, N806, EM101, C414
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
     from ..accessors.date import DateColumnAccessor
     from ..accessors.finance import FinanceColumnAccessor
     from ..frame.base import ActuarialFrame
+    from .condition_expression import ConditionExpression
     # No forward reference needed for ColumnProxy as it's not directly used in signatures here
     # from .column_proxy import ColumnProxy
 
@@ -22,17 +24,18 @@ class ExpressionProxy:
     """Represents a Polars expression derived from ActuarialFrame operations or ColumnProxy methods."""
 
     # Cache for accessor instances specific to ExpressionProxy
-    _date_accessor_instance_expr: Optional["DateColumnAccessor"] = None
-    _finance_accessor_instance_expr: Optional["FinanceColumnAccessor"] = None
-    _dynamic_accessor_cache: Dict[str, Any]  # Cache for dynamically created accessors
+    _date_accessor_instance_expr: DateColumnAccessor | None = None
+    _finance_accessor_instance_expr: FinanceColumnAccessor | None = None
+    _dynamic_accessor_cache: dict[str, Any]  # Cache for dynamically created accessors
 
-    def __init__(self, expr: pl.Expr, parent: Optional["ActuarialFrame"]):
+    def __init__(self, expr: pl.Expr, parent: ActuarialFrame | None):
         """Initialize an ExpressionProxy.
 
         Args:
             expr: The underlying Polars expression.
             parent: The originating ActuarialFrame, used for context.
                     Can be None if the expression is detached.
+
         """
         if not isinstance(expr, pl.Expr):
             raise TypeError(
@@ -41,6 +44,7 @@ class ExpressionProxy:
         self._expr = expr
         self._parent = parent
         self._dynamic_accessor_cache = {}  # Initialize cache per instance
+        self._list_broadcast_metadata: dict[str, Any] | None = None  # For conditionals
 
     def _to_expr(self) -> pl.Expr:
         """Return the underlying Polars expression."""
@@ -54,10 +58,9 @@ class ExpressionProxy:
             # Use a simple heuristic to avoid excessively long reprs
             if len(expr_repr) < 100:
                 return f"ExpressionProxy(expr={expr_repr})"
-            else:
-                # Fallback for complex expressions
-                output_name = self._expr.meta.output_name()
-                return f"ExpressionProxy(expr=[{output_name}])"
+            # Fallback for complex expressions
+            output_name = self._expr.meta.output_name()
+            return f"ExpressionProxy(expr=[{output_name}])"
         except Exception:
             # Broad catch just in case repr or meta fails
             return "ExpressionProxy(expr=[unknown])"
@@ -65,86 +68,170 @@ class ExpressionProxy:
     # --- Operator Overloads ---
     # Operators combine with other proxies or compatible types, returning a new ExpressionProxy
 
-    def __add__(self, other: Any) -> "ExpressionProxy":
+    def __add__(self, other: Any) -> ExpressionProxy:
         """Addition operator."""
         # Use the dispatch system to handle list column shimming
         return self.add(other)
 
-    def __sub__(self, other: Any) -> "ExpressionProxy":
+    def __sub__(self, other: Any) -> ExpressionProxy:
         """Subtraction operator."""
         # Use the dispatch system to handle list column shimming
         return self.sub(other)
 
-    def __mul__(self, other: Any) -> "ExpressionProxy":
+    def __mul__(self, other: Any) -> ExpressionProxy:
         """Multiplication operator."""
         # Use the dispatch system to handle list column shimming
         return self.mul(other)
 
-    def __truediv__(self, other: Any) -> "ExpressionProxy":
+    def __truediv__(self, other: Any) -> ExpressionProxy:
         """True division operator."""
         # Use the dispatch system to handle list column shimming
         return self.truediv(other)
 
-    def __floordiv__(self, other: Any) -> "ExpressionProxy":
+    def __floordiv__(self, other: Any) -> ExpressionProxy:
         """Floor division operator."""
         # Use the dispatch system to handle list column shimming
         return self.floordiv(other)
 
-    def __mod__(self, other: Any) -> "ExpressionProxy":
+    def __mod__(self, other: Any) -> ExpressionProxy:
         """Modulo operator."""
         # Use the dispatch system to handle list column shimming
         return self.mod(other)
 
-    def __pow__(self, other: Any) -> "ExpressionProxy":
+    def __pow__(self, other: Any) -> ExpressionProxy:
         """Power operator."""
         # Use the dispatch system to handle list column shimming
         return self.pow(other)
 
     # Comparison operators
-    def __eq__(self, other: Any) -> "ExpressionProxy":  # type: ignore[override]
-        """Equality comparison."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr == other_expr, self._parent)
+    def __eq__(self, other: object) -> ConditionExpression:  # type: ignore[override]
+        """Equality comparison.
 
-    def __ne__(self, other: Any) -> "ExpressionProxy":  # type: ignore[override]
-        """Inequality comparison."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr != other_expr, self._parent)
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
 
-    def __lt__(self, other: Any) -> "ExpressionProxy":
-        """Less than comparison."""
-        other_expr = (
+        left_expr = self._expr
+        right_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(self._expr < other_expr, self._parent)
+        comparison_expr = left_expr == right_expr
 
-    def __le__(self, other: Any) -> "ExpressionProxy":
-        """Less than or equal comparison."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="eq",
+            left=left_expr,
+            right=right_expr,
         )
-        return ExpressionProxy(self._expr <= other_expr, self._parent)
 
-    def __gt__(self, other: Any) -> "ExpressionProxy":
-        """Greater than comparison."""
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        return ExpressionProxy(self._expr > other_expr, self._parent)
+    def __ne__(self, other: object) -> ConditionExpression:  # type: ignore[override]
+        """Inequality comparison.
 
-    def __ge__(self, other: Any) -> "ExpressionProxy":
-        """Greater than or equal comparison."""
-        other_expr = (
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
             self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
         )
-        return ExpressionProxy(self._expr >= other_expr, self._parent)
+        comparison_expr = left_expr != right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="ne",
+            left=left_expr,
+            right=right_expr,
+        )
+
+    def __lt__(self, other: Any) -> ConditionExpression:
+        """Less than comparison.
+
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
+            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        )
+        comparison_expr = left_expr < right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="lt",
+            left=left_expr,
+            right=right_expr,
+        )
+
+    def __le__(self, other: Any) -> ConditionExpression:
+        """Less than or equal comparison.
+
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
+            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        )
+        comparison_expr = left_expr <= right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="lte",
+            left=left_expr,
+            right=right_expr,
+        )
+
+    def __gt__(self, other: Any) -> ConditionExpression:
+        """Greater than comparison.
+
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
+            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        )
+        comparison_expr = left_expr > right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="gt",
+            left=left_expr,
+            right=right_expr,
+        )
+
+    def __ge__(self, other: Any) -> ConditionExpression:
+        """Greater than or equal comparison.
+
+        Returns ConditionExpression with metadata for list_conditional plugin.
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
+        left_expr = self._expr
+        right_expr = (
+            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
+        )
+        comparison_expr = left_expr >= right_expr
+
+        return ConditionExpression(
+            expr=comparison_expr,
+            parent=self._parent,
+            operator="gte",
+            left=left_expr,
+            right=right_expr,
+        )
 
     # --- Reverse Operators ---
-    def __radd__(self, other: Any) -> "ExpressionProxy":
+    def __radd__(self, other: Any) -> ExpressionProxy:
         """Reverse addition operator."""
         # Convert other to a proxy and use dispatch system
         other_expr = (
@@ -153,7 +240,7 @@ class ExpressionProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.add(self)
 
-    def __rsub__(self, other: Any) -> "ExpressionProxy":
+    def __rsub__(self, other: Any) -> ExpressionProxy:
         """Reverse subtraction operator."""
         # Convert other to a proxy and use dispatch system
         other_expr = (
@@ -162,7 +249,7 @@ class ExpressionProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.sub(self)
 
-    def __rmul__(self, other: Any) -> "ExpressionProxy":
+    def __rmul__(self, other: Any) -> ExpressionProxy:
         """Reverse multiplication operator."""
         # Convert other to a proxy and use dispatch system
         other_expr = (
@@ -171,7 +258,7 @@ class ExpressionProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.mul(self)
 
-    def __rtruediv__(self, other: Any) -> "ExpressionProxy":
+    def __rtruediv__(self, other: Any) -> ExpressionProxy:
         """Reverse true division operator."""
         # Convert other to a proxy and use dispatch system
         other_expr = (
@@ -180,7 +267,7 @@ class ExpressionProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.truediv(self)
 
-    def __rfloordiv__(self, other: Any) -> "ExpressionProxy":
+    def __rfloordiv__(self, other: Any) -> ExpressionProxy:
         """Reverse floor division operator."""
         # Convert other to a proxy and use dispatch system
         other_expr = (
@@ -189,7 +276,7 @@ class ExpressionProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.floordiv(self)
 
-    def __rmod__(self, other: Any) -> "ExpressionProxy":
+    def __rmod__(self, other: Any) -> ExpressionProxy:
         """Reverse modulo operator."""
         # Convert other to a proxy and use dispatch system
         other_expr = (
@@ -198,7 +285,7 @@ class ExpressionProxy:
         other_proxy = ExpressionProxy(other_expr, self._parent)
         return other_proxy.mod(self)
 
-    def __rpow__(self, other: Any) -> "ExpressionProxy":
+    def __rpow__(self, other: Any) -> ExpressionProxy:
         """Reverse power operator."""
         # Convert other to a proxy and use dispatch system
         other_expr = (
@@ -212,7 +299,7 @@ class ExpressionProxy:
     # Others will be handled by the autopatcher.
 
     @property
-    def date(self) -> "DateColumnAccessor":
+    def date(self) -> DateColumnAccessor:
         """Access date-related expression operations."""
         if "date" not in self._dynamic_accessor_cache:
             AccessorClass = _ACCESSOR_REGISTRY.get("date", {}).get("column")
@@ -225,7 +312,7 @@ class ExpressionProxy:
         return self._dynamic_accessor_cache["date"]
 
     @property
-    def finance(self) -> "FinanceColumnAccessor":
+    def finance(self) -> FinanceColumnAccessor:
         """Access finance-related expression operations."""
         if "finance" not in self._dynamic_accessor_cache:
             AccessorClass = _ACCESSOR_REGISTRY.get("finance", {}).get("column")

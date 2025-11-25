@@ -2,7 +2,9 @@ from unittest.mock import MagicMock
 
 import polars as pl
 import pytest
+
 from gaspatchio_core.column import ColumnProxy, ExpressionProxy
+from gaspatchio_core.column.condition_expression import ConditionExpression
 
 
 # Mock ActuarialFrame specific to ExpressionProxy tests
@@ -102,22 +104,24 @@ def test_expression_proxy_pow_operator(expr_proxy):
 
 
 @pytest.mark.parametrize(
-    "op, op_symbol",
+    "op, op_symbol, operator_name",
     [
-        (lambda a, b: a == b, "=="),
-        (lambda a, b: a != b, "!="),
-        (lambda a, b: a < b, "<"),
-        (lambda a, b: a <= b, "<="),
-        (lambda a, b: a > b, ">"),
-        (lambda a, b: a >= b, ">="),
+        (lambda a, b: a == b, "==", "eq"),
+        (lambda a, b: a != b, "!=", "ne"),
+        (lambda a, b: a < b, "<", "lt"),
+        (lambda a, b: a <= b, "<=", "lte"),
+        (lambda a, b: a > b, ">", "gt"),
+        (lambda a, b: a >= b, ">=", "gte"),
     ],
 )
 def test_expression_proxy_comparison_operators(
-    expr_proxy, col_expr_proxy, op, op_symbol
+    expr_proxy, col_expr_proxy, op, op_symbol, operator_name
 ):
-    # Test op with literal
+    # Test op with literal - now returns ConditionExpression
     result_lit = op(expr_proxy, 0)
-    assert isinstance(result_lit, ExpressionProxy)
+    assert isinstance(result_lit, ConditionExpression)
+    assert result_lit.operator == operator_name
+    assert result_lit._parent is expr_proxy._parent
     assert (
         str(result_lit._expr)
         == f'[(dyn int: 10.alias("base_expr")) {op_symbol} (dyn int: 0)]'
@@ -125,7 +129,9 @@ def test_expression_proxy_comparison_operators(
 
     # Test op with another expression proxy
     result_expr = op(expr_proxy, col_expr_proxy)
-    assert isinstance(result_expr, ExpressionProxy)
+    assert isinstance(result_expr, ConditionExpression)
+    assert result_expr.operator == operator_name
+    assert result_expr._parent is expr_proxy._parent
     assert (
         str(result_expr._expr)
         == f'[(dyn int: 10.alias("base_expr")) {op_symbol} (col("some_col").alias("col_expr"))]'

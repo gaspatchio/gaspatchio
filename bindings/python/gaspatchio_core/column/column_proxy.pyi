@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from ..accessors.date import DateColumnAccessor
     from ..accessors.excel import ExcelColumnAccessor
     from ..accessors.finance import FinanceColumnAccessor
+    from ..accessors.projection import ProjectionColumnAccessor
     from ..frame.base import ActuarialFrame
     from .expression_proxy import ExpressionProxy
 
@@ -30,6 +31,7 @@ class ColumnProxy(_BaseProxy):
     _date_accessor_instance_col: Optional[DateColumnAccessor]
     _excel_accessor_instance_col: Optional[ExcelColumnAccessor]
     _finance_accessor_instance_col: Optional[FinanceColumnAccessor]
+    _projection_accessor_instance_col: Optional[ProjectionColumnAccessor]
     _dynamic_accessor_cache: Dict[str, Any]
 
     # Keep specific methods
@@ -47,6 +49,8 @@ class ColumnProxy(_BaseProxy):
     def finance(self) -> "FinanceColumnAccessor": ...
     @property
     def excel(self) -> "ExcelColumnAccessor": ...
+    @property
+    def projection(self) -> "ProjectionColumnAccessor": ...
 
     # REMOVED: Operator Overloads (inherited)
     # REMOVED: Common Autopatched Methods/Namespaces (inherited)

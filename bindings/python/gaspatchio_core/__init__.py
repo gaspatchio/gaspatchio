@@ -1,14 +1,7 @@
-"""
-Gaspatchio Core - Actuarial computation framework
-"""
+"""Gaspatchio Core - Actuarial computation framework."""
 
 # Import key components for easier access
 from __future__ import annotations
-
-from pathlib import Path
-from typing import TYPE_CHECKING
-
-import polars as pl
 
 from gaspatchio_core.telemetry import (
     configure_telemetry,
@@ -33,6 +26,7 @@ from .assumptions import (
 from .column import ColumnProxy, ExpressionProxy
 from .errors import PerformanceWarning
 from .frame import ActuarialFrame, run_model
+from .functions.conditional import when
 from .util import (
     execution_mode,  # Context manager
     get_default_mode,  # Getter
@@ -48,20 +42,21 @@ __all__ = [
     "ActuarialFrame",
     "ColumnProxy",
     "ExpressionProxy",
+    # Errors
+    "PerformanceWarning",
     # Assumptions API v2
     "Table",
     "TableBuilder",
+    # Utilities
+    "execution_mode",
+    # Functions
+    "functions",
+    "get_default_mode",
     "get_table_metadata",
     "list_tables",
     "list_tables_with_metadata",
     # Execution
     "run_model",
-    # Utilities
-    "execution_mode",
-    "get_default_mode",
     "set_default_mode",
-    # Errors
-    "PerformanceWarning",
-    # Modules (for direct function access)
-    "functions",
+    "when",
 ]
