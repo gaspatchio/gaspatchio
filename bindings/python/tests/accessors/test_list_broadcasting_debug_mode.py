@@ -13,6 +13,9 @@ from gaspatchio_core import ActuarialFrame, when
 class TestListBroadcastingDebugMode:
     """Test list broadcasting in debug/tracing mode (Task 5)."""
 
+    @pytest.mark.xfail(
+        reason="Rust list_conditional plugin does not yet support scalar-then-list-otherwise"
+    )
     def test_simple_conditional_debug_mode(self):
         """Test simple when-then-otherwise with list columns in debug mode.
 

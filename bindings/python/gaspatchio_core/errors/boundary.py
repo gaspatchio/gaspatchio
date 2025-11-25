@@ -1,3 +1,5 @@
+# ABOUTME: Error boundary detection using binary search replay
+# ABOUTME: Finds the exact operation that causes compilation or runtime errors
 """Error boundary detection using binary search replay."""
 
 from __future__ import annotations
@@ -8,7 +10,8 @@ import polars as pl
 from loguru import logger
 
 if TYPE_CHECKING:
-    from ..frame.base import ActuarialFrame
+    from gaspatchio_core.frame.base import ActuarialFrame
+
     from .metadata import TracedOperation
 
 
@@ -16,8 +19,7 @@ class ErrorBoundaryFinder:
     """Efficiently find the failing operation using binary search."""
 
     def __init__(self, af: ActuarialFrame, exception: Exception) -> None:
-        """
-        Initialize the error boundary finder.
+        """Initialize the error boundary finder.
 
         Args:
             af: The ActuarialFrame with failed computation
@@ -27,17 +29,22 @@ class ErrorBoundaryFinder:
         self.af = af
         self.exception = exception
         # Convert LazyFrame to DataFrame for binary search operations
-        if af._df is not None:
-            if hasattr(af._df, 'collect'):
+        if af._df is not None:  # noqa: SLF001
+            if hasattr(af._df, "collect"):  # noqa: SLF001
                 # It's a LazyFrame, collect it
                 try:
-                    self.original_df = af._df.collect()
-                except Exception:
-                    # If collection fails, create an empty DataFrame
-                    self.original_df = pl.DataFrame()
+                    self.original_df = af._df.collect()  # noqa: SLF001
+                except Exception:  # noqa: BLE001
+                    # If collection fails, try to reconstruct original data
+                    # using the stored schema (before computation graph ops)
+                    if hasattr(af, "_schema") and af._schema:  # noqa: SLF001
+                        # Create empty DataFrame with original schema columns
+                        self.original_df = pl.DataFrame(schema=af._schema)  # noqa: SLF001
+                    else:
+                        self.original_df = pl.DataFrame()
             else:
                 # It's already a DataFrame
-                self.original_df = af._df
+                self.original_df = af._df  # noqa: SLF001
         else:
             self.original_df = pl.DataFrame()
         self.exception_type = type(exception)
@@ -45,15 +52,14 @@ class ErrorBoundaryFinder:
     def find_failing_operation(
         self,
     ) -> tuple[int, TracedOperation | None, pl.DataFrame]:
-        """
-        Find the first operation that fails using binary search.
+        """Find the first operation that fails using binary search.
 
         Returns:
             Tuple of (failing_index, failing_operation, last_good_dataframe)
             If no failing operation found, returns (-1, None, original_df)
 
         """
-        operations = self.af._computation_graph
+        operations = self.af._computation_graph  # noqa: SLF001
 
         # Handle empty graph
         if not operations:
@@ -63,7 +69,7 @@ class ErrorBoundaryFinder:
         # Early termination: check if first operation fails
         try:
             self._apply_operations_up_to(0)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self._is_same_error_type(e):
                 logger.debug("First operation fails, returning index 0")
                 return 0, self._get_operation_at(0), self.original_df
@@ -71,12 +77,13 @@ class ErrorBoundaryFinder:
         # Early termination: check if all operations succeed
         try:
             final_df = self._apply_operations_up_to(len(operations) - 1)
-            logger.debug("All operations succeed, no failing operation found")
-            return -1, None, final_df
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if not self._is_same_error_type(e):
                 logger.debug(f"Different error type during full replay: {type(e)}")
                 return -1, None, self.original_df
+        else:
+            logger.debug("All operations succeed, no failing operation found")
+            return -1, None, final_df
 
         # Binary search for the failing operation
         return self._binary_search_failure()
@@ -84,14 +91,13 @@ class ErrorBoundaryFinder:
     def _binary_search_failure(
         self,
     ) -> tuple[int, TracedOperation | None, pl.DataFrame]:
-        """
-        Perform binary search to find the first failing operation.
+        """Perform binary search to find the first failing operation.
 
         Returns:
             Tuple of (failing_index, failing_operation, last_good_dataframe)
 
         """
-        operations = self.af._computation_graph
+        operations = self.af._computation_graph  # noqa: SLF001
         left, right = 0, len(operations) - 1
         last_good_df = self.original_df
         failing_index = -1
@@ -101,7 +107,7 @@ class ErrorBoundaryFinder:
         while left <= right:
             mid = (left + right) // 2
             logger.trace(
-                f"Binary search: testing operations 0-{mid} (left={left}, right={right})",
+                f"Binary search: ops 0-{mid} (left={left}, right={right})",
             )
 
             try:
@@ -110,13 +116,13 @@ class ErrorBoundaryFinder:
                 last_good_df = test_df
                 left = mid + 1
                 logger.trace(f"Operations 0-{mid} succeeded, searching right half")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self._is_same_error_type(e):
                     # Error at or before this point
                     failing_index = mid
                     right = mid - 1
                     logger.trace(
-                        f"Operations 0-{mid} failed with same error, searching left half",
+                        f"Ops 0-{mid} failed with same error, searching left",
                     )
                 else:
                     # Different error type, continue searching right
@@ -127,7 +133,7 @@ class ErrorBoundaryFinder:
                     )
                     left = mid + 1
                     logger.trace(
-                        f"Different error type at operations 0-{mid}, searching right half",
+                        f"Different error at ops 0-{mid}, searching right",
                     )
 
         # Refine to find exact failing operation
@@ -149,8 +155,7 @@ class ErrorBoundaryFinder:
         start_index: int,
         last_good_df: pl.DataFrame,
     ) -> int:
-        """
-        Find the exact failing operation starting from a known failing range.
+        """Find the exact failing operation starting from a known failing range.
 
         Args:
             start_index: Index where we know failure occurs
@@ -160,7 +165,7 @@ class ErrorBoundaryFinder:
             Exact index of failing operation
 
         """
-        operations = self.af._computation_graph
+        operations = self.af._computation_graph  # noqa: SLF001
         current_df = last_good_df.lazy()  # Convert to LazyFrame for operations
 
         # Apply operations one by one from the last good state
@@ -181,7 +186,7 @@ class ErrorBoundaryFinder:
                 _ = current_df.collect()
                 logger.trace(f"Operation {i} ({alias}) succeeded")
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self._is_same_error_type(e):
                     logger.debug(f"Exact failing operation found at index {i}")
                     return i
@@ -192,8 +197,7 @@ class ErrorBoundaryFinder:
         return start_index
 
     def _apply_operations_up_to(self, end_index: int) -> pl.DataFrame:
-        """
-        Apply operations from start to end_index (inclusive) efficiently.
+        """Apply operations from start to end_index (inclusive) efficiently.
 
         Args:
             end_index: Last operation index to apply (inclusive)
@@ -208,7 +212,7 @@ class ErrorBoundaryFinder:
         if end_index < 0:
             return self.original_df
 
-        operations = self.af._computation_graph
+        operations = self.af._computation_graph  # noqa: SLF001
         if end_index >= len(operations):
             end_index = len(operations) - 1
 
@@ -227,7 +231,7 @@ class ErrorBoundaryFinder:
         current_df = self.original_df.lazy()  # Convert to LazyFrame for operations
 
         # Apply operations sequentially
-        for i, operation in valid_operations:
+        for _, operation in valid_operations:
             # Handle both tuple and TracedOperation formats
             if isinstance(operation, tuple):
                 alias, expr = operation
@@ -241,8 +245,7 @@ class ErrorBoundaryFinder:
         return current_df.collect()
 
     def _get_operation_at(self, index: int) -> tuple[str, Any] | TracedOperation | None:
-        """
-        Get operation at specified index with bounds checking.
+        """Get operation at specified index with bounds checking.
 
         Args:
             index: Index of operation to retrieve
@@ -251,14 +254,13 @@ class ErrorBoundaryFinder:
             Operation at index, or None if index is out of bounds
 
         """
-        operations = self.af._computation_graph
+        operations = self.af._computation_graph  # noqa: SLF001
         if 0 <= index < len(operations):
             return operations[index]
         return None
 
     def _is_same_error_type(self, exception: Exception) -> bool:
-        """
-        Check if the given exception is the same type as the original error.
+        """Check if the given exception is the same type as the original error.
 
         Args:
             exception: Exception to check

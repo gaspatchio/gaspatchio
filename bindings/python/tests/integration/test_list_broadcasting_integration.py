@@ -162,7 +162,7 @@ def test_basic_term_pattern():
     print("  • No NotImplementedError thrown")
     print()
 
-    return True
+
 
 
 def test_optimize_mode_comparison():
@@ -243,7 +243,7 @@ def test_optimize_mode_comparison():
     print("=" * 80)
     print()
 
-    return True
+
 
 
 if __name__ == "__main__":

@@ -205,3 +205,62 @@ class TestFrameDiscountFactor:
         assert result["disc_factors"][0][0] == pytest.approx(0.952380952, rel=1e-6)  # noqa: S101
         assert result["disc_factors"][1][0] == pytest.approx(0.961538462, rel=1e-6)  # noqa: S101
         assert result["disc_factors"][2][0] == pytest.approx(0.943396226, rel=1e-6)  # noqa: S101
+
+
+class TestCompound:
+    """Tests for compound() growth factor calculation on columns."""
+
+    def test_compound_list_column_monthly(self) -> None:
+        """Test compound growth on list column with monthly periods.
+
+        Formula: (1 + rate)^(period / periods_per_year)
+        With 1% annual inflation and monthly periods:
+        month 0: (1.01)^(0/12) = 1.0
+        month 1: (1.01)^(1/12) ≈ 1.000829
+        month 6: (1.01)^(6/12) ≈ 1.004987
+        month 12: (1.01)^(12/12) = 1.01
+        """
+        af = ActuarialFrame(
+            {
+                "policy_id": [1],
+                "month": [[0, 1, 6, 12]],
+            }
+        )
+
+        af["inflation_factor"] = af["month"].finance.compound(  # type: ignore[attr-defined]
+            rate=0.01, periods_per_year=12
+        )
+
+        result = af.collect()
+        factors = result["inflation_factor"][0]
+
+        assert factors[0] == pytest.approx(1.0, rel=1e-6)  # noqa: S101
+        assert factors[1] == pytest.approx(1.000829, rel=1e-5)  # noqa: S101
+        assert factors[2] == pytest.approx(1.004987, rel=1e-5)  # noqa: S101
+        assert factors[3] == pytest.approx(1.01, rel=1e-6)  # noqa: S101
+
+    def test_compound_scalar_column(self) -> None:
+        """Test compound growth on scalar column.
+
+        Formula: (1 + rate)^(period / periods_per_year)
+        With 2% annual rate and quarterly periods:
+        period 0: (1.02)^(0/4) = 1.0
+        period 1: (1.02)^(1/4) ≈ 1.004963
+        period 4: (1.02)^(4/4) = 1.02
+        """
+        af = ActuarialFrame(
+            {
+                "quarter": [0, 1, 4],
+            }
+        )
+
+        af["growth_factor"] = af["quarter"].finance.compound(  # type: ignore[attr-defined]
+            rate=0.02, periods_per_year=4
+        )
+
+        result = af.collect()
+        factors = result["growth_factor"].to_list()
+
+        assert factors[0] == pytest.approx(1.0, rel=1e-6)  # noqa: S101
+        assert factors[1] == pytest.approx(1.004963, rel=1e-5)  # noqa: S101
+        assert factors[2] == pytest.approx(1.02, rel=1e-6)  # noqa: S101

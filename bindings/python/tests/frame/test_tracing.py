@@ -1,3 +1,10 @@
+# ABOUTME: Test tracing functionality for ActuarialFrame debug mode
+# ABOUTME: Verifies operation capture, log_query_plan calls, and mode switching
+# ruff: noqa: S101, PLR2004, ANN201, SLF001, ANN202, D100, INP001, ARG001, T201
+# type: ignore[attr-defined]
+
+"""Tests for ActuarialFrame tracing functionality."""
+
 from unittest.mock import Mock, patch
 
 import polars as pl
@@ -62,7 +69,9 @@ def test_trace_optimize_mode_capture(base_frame):
 
     # In optimize mode, operations are executed within the trace decorator
     # So the frame should have the new columns
-    expected_df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [2, 3, 4], "d": [8, 10, 12]})
+    expected_df = pl.DataFrame(
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": [2, 3, 4], "d": [8, 10, 12]}
+    )
     assert_frame_equal(base_frame.collect(), expected_df)
 
     # Check computation graph - operations were applied so graph should be empty
@@ -117,7 +126,7 @@ def test_trace_log_query_plan_called(mock_log_plan, base_frame):
         assert isinstance(captured_ops[0][1], pl.Expr)
 
     # Check that the df passed is the final one after applying ops
-    expected_final_df = pl.LazyFrame(DATA)
+    expected_final_df = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [2, 3, 4]})
     assert_frame_equal(final_df.collect(), expected_final_df.collect())
 
     set_default_verbose(False)  # Reset for other tests

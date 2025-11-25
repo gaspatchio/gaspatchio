@@ -275,6 +275,17 @@ class ActuarialFrame:
                 and value._list_broadcast_metadata is not None
             ):
                 metadata = value._list_broadcast_metadata
+                # element_wise: True means expression already handles element-wise ops
+                # (e.g., projection accessor using .list.eval())
+                if metadata.get("element_wise") and "list_columns" not in metadata:
+                    # Just apply expression directly - it handles element-wise already
+                    expr = self._convert_to_expr(value)
+                    if self._tracing:
+                        append_operation_to_graph(self, key, expr)
+                        self._df = self._df.with_columns(expr.alias(key))
+                    else:
+                        self._df = self._df.with_columns(expr.alias(key))
+                    return
                 self._apply_conditional_list_broadcasting(key, metadata)
                 return
 

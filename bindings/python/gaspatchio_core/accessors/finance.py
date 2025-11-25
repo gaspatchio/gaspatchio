@@ -38,7 +38,18 @@ class FinanceFrameAccessor(BaseFrameAccessor):
     """
 
     def __init__(self, frame: ActuarialFrame) -> None:
-        """Initialize the accessor with the parent ActuarialFrame."""
+        """Initialize the accessor with the parent ActuarialFrame.
+
+        Sets up the finance accessor with reference to the parent frame for
+        frame-level financial calculations including discount factors and
+        present value computations across list columns.
+
+        Parameters
+        ----------
+        frame : ActuarialFrame
+            The parent ActuarialFrame instance to attach this accessor to.
+
+        """
         super().__init__(frame)
 
     # --- Frame-level finance methods will go here ---
@@ -209,17 +220,69 @@ class FinanceFrameAccessor(BaseFrameAccessor):
     ) -> ExpressionProxy:
         """Calculate the present value of cash flows.
 
-        Assumes cash flows occur at the end of each period.
+        Computes present value using the formula ``PV = CF / (1 + rate)^period``,
+        assuming cash flows occur at the end of each period. Essential for
+        discounting future cash flows in pricing, reserving, and valuation.
 
-        Formula: PV = CF / (1 + rate)^period
+        !!! note "When to use"
+            * **Reserve Calculations:** Discount future benefit payments and
+                expenses to calculate policy reserves under various standards.
+            * **Product Pricing:** Calculate present value of expected premiums
+                and claims to determine pricing margins and profitability.
+            * **Embedded Value:** Discount projected profits for embedded value
+                and value of in-force business calculations.
+            * **Cash Flow Testing:** Present value cash flows for asset adequacy
+                testing and scenario analysis.
 
-        Args:
-            cashflow_col: Column containing the cash flow amounts.
-            rate_col: Column with discount rate per period (e.g., 0.05 for 5%).
-            period_col: Column with period number (e.g., 1, 2, 3). Must be >= 1.
+        Parameters
+        ----------
+        cashflow_col : IntoExprColumn
+            Column containing the cash flow amounts to discount.
+        rate_col : IntoExprColumn
+            Column with discount rate per period (e.g., 0.05 for 5% annual).
+        period_col : IntoExprColumn
+            Column with period number (1, 2, 3...). Must be >= 1.
 
-        Returns:
-            An ExpressionProxy representing the present value for each cash flow.
+        Returns
+        -------
+        ExpressionProxy
+            Present value of each cash flow discounted to time zero.
+
+        Examples
+        --------
+        **Scalar Example: Discount policy cash flows**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "cashflow": [1000.0, 2000.0],
+            "rate": [0.05, 0.04],
+            "period": [1, 2],
+        }
+        af = ActuarialFrame(data)
+
+        af.pv = af.finance.present_value(af.cashflow, af.rate, af.period)
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 5)
+        ┌───────────┬──────────┬──────┬────────┬─────────────┐
+        │ policy_id ┆ cashflow ┆ rate ┆ period ┆ pv          │
+        │ ---       ┆ ---      ┆ ---  ┆ ---    ┆ ---         │
+        │ str       ┆ f64      ┆ f64  ┆ i64    ┆ f64         │
+        ╞═══════════╪══════════╪══════╪════════╪═════════════╡
+        │ P001      ┆ 1000.0   ┆ 0.05 ┆ 1      ┆ 952.380952  │
+        │ P002      ┆ 2000.0   ┆ 0.04 ┆ 2      ┆ 1849.112426 │
+        └───────────┴──────────┴──────┴────────┴─────────────┘
+        ```
+
+        See Also
+        --------
+        discount_factor : Calculate discount factors for projection timelines
 
         """
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
@@ -265,13 +328,40 @@ class FinanceColumnAccessor(BaseColumnAccessor):
     """
 
     def __init__(self, proxy: ColumnProxy | ExpressionProxy) -> None:
-        """Initialize the accessor with the parent proxy."""
+        """Initialize the accessor with the parent column or expression proxy.
+
+        Sets up the finance column accessor with reference to the parent proxy
+        for column-level financial calculations including rate conversions and
+        discounting operations.
+
+        Parameters
+        ----------
+        proxy : ColumnProxy | ExpressionProxy
+            The parent column or expression proxy to attach this accessor to.
+
+        """
         super().__init__(proxy)
         # Refine type hint for clarity
         self._proxy: ColumnProxy | ExpressionProxy = proxy
 
     def _get_polars_expr(self) -> pl.Expr:
-        """Get the underlying Polars expression from the proxy."""
+        """Get the underlying Polars expression from the proxy.
+
+        Extracts the raw Polars expression from either a ColumnProxy or
+        ExpressionProxy, enabling the accessor methods to build expressions
+        on top of the underlying column data.
+
+        Returns
+        -------
+        pl.Expr
+            The underlying Polars expression for the column or expression.
+
+        Raises
+        ------
+        TypeError
+            If the proxy is neither ColumnProxy nor ExpressionProxy.
+
+        """
         from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
@@ -460,21 +550,177 @@ class FinanceColumnAccessor(BaseColumnAccessor):
 
         return ExpressionProxy(monthly_expr, parent_frame)
 
+    def compound(
+        self,
+        rate: float,
+        periods_per_year: int,
+    ) -> ExpressionProxy:
+        """Calculate compound growth factor for periods.
+
+        Computes growth factors using the formula
+        ``(1 + rate)^(period / periods_per_year)``.
+        Commonly used for inflation adjustments, investment growth, or other
+        compound growth calculations in actuarial projections.
+
+        !!! note "When to use"
+            * **Inflation Adjustments:** Calculate inflation factors for expenses,
+                benefits, or premiums that grow with inflation over projection periods.
+            * **Investment Growth:** Model accumulation of funds under compound
+                interest assumptions.
+            * **Benefit Increases:** Calculate growth factors for benefits that
+                increase at a fixed compound rate.
+
+        Parameters
+        ----------
+        rate : float
+            Annual growth rate (e.g., 0.01 for 1% annual growth)
+        periods_per_year : int
+            Number of periods per year (e.g., 12 for monthly, 4 for quarterly)
+
+        Returns
+        -------
+        ExpressionProxy
+            Growth factors with same structure as input column (scalar or list)
+
+        Examples
+        --------
+        **List column example: Monthly inflation factors**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {"month": [[0, 1, 6, 12]]}
+        af = ActuarialFrame(data)
+
+        af.inflation_factor = af.month.finance.compound(rate=0.01, periods_per_year=12)
+
+        print(af.collect())
+        ```
+
+        **Scalar column example: Quarterly growth**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {"quarter": [0, 1, 4]}
+        af = ActuarialFrame(data)
+
+        af.growth_factor = af.quarter.finance.compound(rate=0.02, periods_per_year=4)
+
+        print(af.collect())
+        ```
+
+        See Also
+        --------
+        to_monthly : Convert annual rates to monthly rates
+        discount_factor : Calculate discount factors from interest rates
+
+        """
+        from gaspatchio_core.column.column_proxy import ColumnProxy
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        base_expr = self._get_polars_expr()
+        parent_frame = self._proxy._parent  # noqa: SLF001
+
+        if parent_frame is None:
+            msg = (
+                "compound() requires the expression to be part of an "
+                "ActuarialFrame context."
+            )
+            raise RuntimeError(msg)
+
+        # Detect if this is a list column
+        import gaspatchio_core.column.dispatch as dispatch_module
+
+        ColumnTypeDetector = dispatch_module.ColumnTypeDetector  # type: ignore[attr-defined]  # noqa: N806
+        detector = ColumnTypeDetector(parent_frame)
+        is_list = False
+
+        if isinstance(self._proxy, ColumnProxy):
+            is_list = detector.is_list_column(self._proxy.name)
+
+        # Build the compound growth expression: (1 + rate)^(period / periods_per_year)
+        if is_list:
+            # For list columns: apply element-wise using list.eval
+            compound_expr = base_expr.list.eval(
+                (1 + rate) ** (pl.element() / periods_per_year)
+            )
+        else:
+            # For scalar columns: direct expression
+            compound_expr = pl.lit(1 + rate) ** (base_expr / periods_per_year)
+
+        return ExpressionProxy(compound_expr, parent_frame)
+
     def discount(
         self, rate_expr: IntoExprColumn, n_periods_expr: IntoExprColumn
     ) -> ExpressionProxy:
         """Discount the value in the current column/expression.
 
-        Formula: Discounted Value = Value / (1 + rate)^n_periods
+        Computes discounted values using the formula
+        ``Discounted Value = Value / (1 + rate)^n_periods``. Useful for
+        converting future values to present values with flexible rate and
+        period inputs from other columns or expressions.
 
-        Args:
-            rate_expr: The discount rate per period (e.g., 0.05 for 5%).
-                       Can be a scalar, column name, or another expression.
-            n_periods_expr: The number of periods to discount over.
-                            Can be a scalar, column name, or another expression.
+        !!! note "When to use"
+            * **Future Value Discounting:** Convert guaranteed maturity
+                values, surrender values, or death benefits to present value.
+            * **Reserve Calculations:** Discount projected liabilities back
+                to valuation date for statutory or GAAP reserves.
+            * **Profit Testing:** Calculate present value of future profits
+                in pricing models and profitability analysis.
+            * **Investment Returns:** Discount expected investment income or
+                fund values in unit-linked or variable product models.
 
-        Returns:
-            An ExpressionProxy representing the discounted value.
+        Parameters
+        ----------
+        rate_expr : IntoExprColumn
+            The discount rate per period (e.g., 0.05 for 5% annual).
+            Can be a scalar, column reference, or expression.
+        n_periods_expr : IntoExprColumn
+            The number of periods to discount over. Can be a scalar,
+            column reference, or expression.
+
+        Returns
+        -------
+        ExpressionProxy
+            Discounted values with same structure as input column.
+
+        Examples
+        --------
+        **Scalar Example: Discount future values**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "future_value": [1050.0, 2080.0],
+            "rate": [0.05, 0.04],
+            "periods": [1, 2],
+        }
+        af = ActuarialFrame(data)
+
+        af.present_value = af.future_value.finance.discount(af.rate, af.periods)
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 5)
+        ┌───────────┬──────────────┬──────┬─────────┬───────────────┐
+        │ policy_id ┆ future_value ┆ rate ┆ periods ┆ present_value │
+        │ ---       ┆ ---          ┆ ---  ┆ ---     ┆ ---           │
+        │ str       ┆ f64          ┆ f64  ┆ i64     ┆ f64           │
+        ╞═══════════╪══════════════╪══════╪═════════╪═══════════════╡
+        │ P001      ┆ 1050.0       ┆ 0.05 ┆ 1       ┆ 1000.0        │
+        │ P002      ┆ 2080.0       ┆ 0.04 ┆ 2       ┆ 1923.076923   │
+        └───────────┴──────────────┴──────┴─────────┴───────────────┘
+        ```
+
+        See Also
+        --------
+        present_value : Calculate present value of cash flows at frame level
+        discount_factor : Calculate discount factors for projection timelines
 
         """
         from gaspatchio_core.column.expression_proxy import ExpressionProxy

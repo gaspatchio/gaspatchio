@@ -2,13 +2,14 @@ import datetime  # Added import
 
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal  # Added import
+
 from gaspatchio_core.column import ExpressionProxy
 from gaspatchio_core.column.dispatch import _NUMERIC_UNARY
 
 # Assuming ActuarialFrame is importable and can be instantiated with a LazyFrame
 # Adjust the import path if necessary
 from gaspatchio_core.frame import ActuarialFrame
-from polars.testing import assert_frame_equal  # Added import
 
 
 # Fixture for a sample ActuarialFrame - UPDATED with more columns
@@ -198,18 +199,21 @@ def test_list_shimming_non_unary_on_list_col(sample_af: ActuarialFrame):
 # --- Operator Tests ---
 
 
-def test_operators_work(sample_af: ActuarialFrame):
+def test_operators_work(sample_af: ActuarialFrame):  # noqa: ANN201
     """Briefly verify standard operators still work after autopatching."""
-    proxy_add = sample_af["scalar_int"] + sample_af["scalar_float"]
-    assert isinstance(proxy_add, ExpressionProxy)
-    assert str(proxy_add._expr) == '[(col("scalar_int")) + (col("scalar_float"))]'
+    from gaspatchio_core.column.condition_expression import ConditionExpression
 
+    proxy_add = sample_af["scalar_int"] + sample_af["scalar_float"]
+    assert isinstance(proxy_add, ExpressionProxy)  # noqa: S101
+    assert str(proxy_add._expr) == '[(col("scalar_int")) + (col("scalar_float"))]'  # noqa: S101, SLF001
+
+    # Comparison operations return ConditionExpression (for list_conditional support)
     proxy_eq = sample_af["str_col"] == "apple"
-    assert isinstance(proxy_eq, ExpressionProxy)
+    assert isinstance(proxy_eq, ConditionExpression)  # noqa: S101
     expected_expr_str_v1 = '[(col("str_col")) == (String(apple))]'
     expected_expr_str_v2 = '[(col("str_col")) == ("apple")]'
-    current_expr_str = str(proxy_eq._expr)
-    assert (
+    current_expr_str = str(proxy_eq._expr)  # noqa: SLF001
+    assert (  # noqa: S101
         current_expr_str == expected_expr_str_v1
         or current_expr_str == expected_expr_str_v2
     )
@@ -233,7 +237,7 @@ def test_nonexistent_attribute_raises_error(sample_af: ActuarialFrame):
     ):
         # Directly try getting attribute from the underlying Polars expression
         base_expr = pl.col("scalar_int")
-        _ = getattr(base_expr, "nonexistent_method")
+        _ = base_expr.nonexistent_method
 
 
 # --- __dir__ Tests ---
@@ -418,16 +422,17 @@ def test_vector_shim_unary_ops_moved(sample_af: ActuarialFrame):
 
 # --- Additional Delegation Nuance Tests --- START ---
 
-
 def test_delegation_non_expression_return(sample_af: ActuarialFrame):
     """Test delegated methods that return non-Expr types (e.g., bool, list)."""
     # Polars methods like is_unique(), is_duplicated() return Series.
+    from gaspatchio_core.column.condition_expression import ConditionExpression
     # Methods like .all(), .any() on boolean expressions return Python bool.
     # .to_list() returns a Python list.
 
     # Example: Check if all values in 'a' are > 0
     is_all_positive_proxy = sample_af["a"] > 0
-    assert isinstance(is_all_positive_proxy, ExpressionProxy)
+    # Comparison returns ConditionExpression for list_conditional support
+    assert isinstance(is_all_positive_proxy, ConditionExpression)
     # Calling .all() on the boolean ExpressionProxy should delegate and return a bool
     # Note: This requires the frame context to resolve the expression
     # We need to compute it.
