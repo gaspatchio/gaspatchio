@@ -690,12 +690,16 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
 
-        # Determine if this is a list column
+        # Determine if this is a list column/expression
         detector = ColumnTypeDetector(parent_af)
         is_list = False
 
         if isinstance(self._proxy, ColumnProxy):
+            # For ColumnProxy, check by column name
             is_list = detector.is_list_column(self._proxy.name)
+        elif isinstance(self._proxy, ExpressionProxy):
+            # For ExpressionProxy, infer output type from the expression
+            is_list = detector.is_expression_list_output(base_expr)
 
         if is_list:
             # For list columns: use list.eval with shift to operate element-wise
@@ -813,12 +817,16 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
 
-        # Determine if this is a list column
+        # Determine if this is a list column/expression
         detector = ColumnTypeDetector(parent_af)
         is_list = False
 
         if isinstance(self._proxy, ColumnProxy):
+            # For ColumnProxy, check by column name
             is_list = detector.is_list_column(self._proxy.name)
+        elif isinstance(self._proxy, ExpressionProxy):
+            # For ExpressionProxy, infer output type from the expression
+            is_list = detector.is_expression_list_output(base_expr)
 
         if is_list:
             # For list columns: use list.eval with shift to operate element-wise
@@ -1002,12 +1010,16 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
 
-        # Determine if this is a list column
+        # Determine if this is a list column/expression
         detector = ColumnTypeDetector(parent_af)
         is_list = False
 
         if isinstance(self._proxy, ColumnProxy):
+            # For ColumnProxy, check by column name
             is_list = detector.is_list_column(self._proxy.name)
+        elif isinstance(self._proxy, ExpressionProxy):
+            # For ExpressionProxy, infer output type from the expression
+            is_list = detector.is_expression_list_output(base_expr)
 
         if is_list:
             # For list columns: use list.eval with shift to operate element-wise

@@ -285,6 +285,85 @@ class TestPreviousPeriod:
         assert prev_2[1] == 5
         assert prev_2[2] == 8
 
+    def test_expression_proxy_intermediate_list(self):
+        """Test previous_period on ExpressionProxy derived from list operations.
+
+        This tests the scenario where previous_period is called on an intermediate
+        expression (not a materialized column), such as:
+            pols_death_temp = af.pols_if * af.mort_rate
+            pols_death_prev = pols_death_temp.projection.previous_period()
+
+        The bug was that previous_period() only checked for list type when the
+        proxy was a ColumnProxy, causing ExpressionProxy inputs to incorrectly
+        use the scalar shift path instead of list.eval.
+        """
+        data = {
+            "pols_if": [[1000.0, 990.0, 975.0]],
+            "mort_rate": [[0.01, 0.01, 0.01]],
+        }
+        af = ActuarialFrame(data)
+
+        # Create intermediate expression (ExpressionProxy, not ColumnProxy)
+        pols_death_temp = af.pols_if * af.mort_rate
+
+        # Apply previous_period on the ExpressionProxy
+        pols_death_prev = pols_death_temp.projection.previous_period()
+
+        # Assign and collect
+        af.pols_death_temp = pols_death_temp
+        af.pols_death_prev = pols_death_prev
+
+        result = af.collect()
+
+        # pols_death_temp = [10.0, 9.9, 9.75]
+        # pols_death_prev should be [0.0, 10.0, 9.9] (shifted with fill=0)
+        temp = result["pols_death_temp"][0].to_list()
+        prev = result["pols_death_prev"][0].to_list()
+
+        assert pytest.approx(temp, abs=1e-6) == [10.0, 9.9, 9.75]
+        assert pytest.approx(prev, abs=1e-6) == [0.0, 10.0, 9.9]
+
+    def test_expression_proxy_with_cumulative_survival(self):
+        """Test previous_period on expression chain with cumulative_survival.
+
+        This replicates the exact pattern from model_projection.py that failed:
+            pols_if = af.combined_decrement.projection.cumulative_survival()
+            pols_death_temp = pols_if * af.mort_rate_mth
+            pols_death_prev = pols_death_temp.projection.previous_period()
+        """
+        data = {
+            "combined_decrement": [[0.01, 0.02, 0.03]],
+            "mort_rate_mth": [[0.005, 0.006, 0.007]],
+        }
+        af = ActuarialFrame(data)
+
+        # Create cumulative survival (this creates an ExpressionProxy)
+        pols_if = af.combined_decrement.projection.cumulative_survival()
+
+        # Multiply by mortality rate (still an ExpressionProxy)
+        pols_death_temp = pols_if * af.mort_rate_mth
+
+        # Apply previous_period on the chain
+        pols_death_prev = pols_death_temp.projection.previous_period()
+
+        af.pols_if = pols_if
+        af.pols_death_temp = pols_death_temp
+        af.pols_death_prev = pols_death_prev
+
+        result = af.collect()
+
+        # Just verify we can collect without "fill value '0.0' is not supported" error
+        # and that the shift happened correctly
+        prev = result["pols_death_prev"][0].to_list()
+        temp = result["pols_death_temp"][0].to_list()
+
+        # prev[0] should be 0.0 (fill value)
+        assert prev[0] == 0.0
+        # prev[1] should be temp[0]
+        assert pytest.approx(prev[1], abs=1e-6) == temp[0]
+        # prev[2] should be temp[1]
+        assert pytest.approx(prev[2], abs=1e-6) == temp[1]
+
 
 class TestNextPeriod:
     """Tests for next_period() method."""

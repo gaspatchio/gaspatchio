@@ -472,6 +472,36 @@ class ColumnTypeDetector:
                 return True
         return False
 
+    def is_expression_list_output(self, expr: pl.Expr) -> bool:
+        """Check if a Polars expression produces a list output type.
+
+        Uses Polars schema inference to determine the output type of an expression.
+        This is useful for ExpressionProxy where we don't have a column name to check.
+
+        Args:
+            expr: The Polars expression to check
+
+        Returns:
+            True if the expression produces a list type, False otherwise
+
+        """
+        if not self.parent_af or self.parent_af._df is None:  # noqa: SLF001
+            return False
+
+        try:
+            # Use Polars' schema inference by applying the expression
+            result_schema = self.parent_af._df.select(  # noqa: SLF001
+                expr.alias("_type_check")
+            ).collect_schema()
+            dtype = result_schema.get("_type_check")
+            return isinstance(dtype, pl.List)
+        except Exception:  # noqa: BLE001
+            # If schema inference fails, fall back to checking if expression
+            # references list columns (heuristic)
+            expr_str = str(expr)
+            list_columns = self.get_all_list_columns()
+            return _expr_references_list_column(expr_str, list_columns)
+
     def _get_list_columns_from_graph(self) -> list[str]:
         """Get list columns from the computation graph."""
         graph = getattr(self.parent_af, "_computation_graph", None)
