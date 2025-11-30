@@ -65,6 +65,13 @@ extend-ignore = [
     "COM812", # conflicts with formatter
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",    # asserts are ok in tests
+    "ANN201",  # test functions don't need return type annotations
+    "PLR2004", # magic values are ok in tests
+]
+
 [tool.ruff.lint.isort]
 known-first-party = ["gaspatchio_core"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
