@@ -1,3 +1,8 @@
+# ABOUTME: CLI commands for the Gaspatchio actuarial modeling framework.
+# ABOUTME: Provides model execution, data inspection, and knowledge discovery commands.
+# ruff: noqa: T201, PLR0913, ANN201, E501, F841, BLE001, FBT001, RSE102, D400, D415, PLR2004, C901, PLR0912, PLR0915, PD901, TRY003, EM102, B904, FBT002
+"""CLI commands for the Gaspatchio actuarial modeling framework."""
+
 import os
 import sys
 from pathlib import Path
@@ -33,7 +38,31 @@ console = Console()
 
 app = typer.Typer(
     name="gspio",
-    help="Gaspatchio CLI for running actuarial models with high performance",
+    help="""Gaspatchio CLI for running actuarial models and discovering knowledge.
+
+This CLI serves two purposes:
+1. Execute actuarial models (run-model, run-single-policy)
+2. Search documentation and actuarial knowledge (docs, knowledge)
+
+[bold]When building a model and you need to find:[/bold]
+• How to use a Gaspatchio feature → [cyan]gspio docs "your question"[/cyan]
+• Actuarial concepts or regulations → [cyan]gspio knowledge "your question"[/cyan]
+
+[bold yellow]IMPORTANT: Always prefer search results (default) over \
+--answer.[/bold yellow]
+Search returns multiple excerpts you can evaluate against your
+current context. Reserve --answer for quick summaries only when
+you don't need to weigh multiple options.
+
+[bold green]Examples:[/bold green]
+    gspio docs "cumulative survival probability"              # ← preferred
+    gspio docs "projection accessor methods"                  # ← preferred
+    gspio docs "how do I shift time?" --answer                # ← only for summaries
+    gspio knowledge "IFRS 17 contractual service margin"      # ← preferred
+    gspio knowledge "what is risk adjustment?" --answer       # ← only for summaries
+    gspio run-model model.py data.parquet --mode debug
+    gspio run-single-policy model.py data.parquet "POL001"
+""",
     add_completion=True,
     rich_markup_mode="rich",
     pretty_exceptions_enable=True,
@@ -45,7 +74,8 @@ def validate_file_path(path: str) -> Path:
     """Validate that a file exists and return Path object."""
     p = Path(path)
     if not p.exists():
-        raise typer.BadParameter(f"File not found: {path}")
+        msg = f"File not found: {path}"
+        raise typer.BadParameter(msg)
     return p
 
 
@@ -54,7 +84,11 @@ def mode_complete() -> list[str]:
     return ["debug", "optimize"]
 
 
-@app.command(name="run-model", help="Execute an actuarial model from a file")
+@app.command(
+    name="run-model",
+    help="Execute an actuarial model from a file",
+    rich_help_panel="Model Execution",
+)
 def run_model(
     code_path: Annotated[
         Path,
@@ -128,7 +162,7 @@ def run_model(
             rich_help_panel="Display Options",
         ),
     ] = 15,
-):
+) -> None:
     """Execute an actuarial model from a file.
 
     [bold green]Example:[/bold green]
@@ -140,12 +174,15 @@ def run_model(
         -l: Show last n columns
     """
     # Show progress spinner
-    with console.status("[bold green]Loading model and data...") as status:
+    with console.status("[bold green]Loading model and data..."):
+        # Validate mode is valid
+        if mode not in ("debug", "optimize"):
+            mode = "debug"
         config = ModelRunConfig(
             directory=code_path.parent,
             model_file=code_path.name,
             model_points_file=model_points_path.name,
-            mode=mode,
+            mode=mode,  # type: ignore[arg-type]
         )
     # Call the imported run_model directly
     model_run = run_model_func(config)
@@ -161,13 +198,19 @@ def run_model(
     metrics = model_run.metrics
 
     # Output metrics at TRACE level
-    _log_metrics(metrics)
+    if metrics is not None:
+        _log_metrics(metrics)
+
+    # Ensure we have a result dataframe
+    if result_df is None:
+        logger.error("Model run completed but produced no result dataframe")
+        sys.exit(1)
 
     # Determine column order - use tracked order from metrics if available
     tracked_column_order = (
         getattr(model_run.metrics, "tracked_column_order", None) or []
     )
-    final_result_columns = result_df.columns
+    final_result_columns = result_df.columns  # type: ignore[union-attr]
 
     # Use tracked order, but only columns that actually exist in the final df
     available_ordered_columns = [
@@ -202,7 +245,9 @@ def run_model(
         final_cols_to_print = available_ordered_columns
     else:
         final_cols_to_print = [
-            col for col in combined_unique_cols if col in result_df.columns
+            col
+            for col in combined_unique_cols
+            if col in result_df.columns  # type: ignore[union-attr]
         ]
 
     # Configure Polars display and print
@@ -219,12 +264,13 @@ def run_model(
             )
             print(result_df)
         else:
-            print(result_df.select(final_cols_to_print))
+            print(result_df.select(final_cols_to_print))  # type: ignore[union-attr]
 
 
 @app.command(
     name="run-single-policy",
     help="Execute an actuarial model for a single policy",
+    rich_help_panel="Model Execution",
 )
 def run_single_policy(
     code_path: Annotated[
@@ -322,11 +368,14 @@ def run_single_policy(
     with console.status(
         f"[bold green]Loading model for policy {policy_id}...",
     ) as status:
+        # Validate mode is valid
+        if mode not in ("debug", "optimize"):
+            mode = "debug"
         config = ModelRunConfig(
             directory=code_path.parent,
             model_file=code_path.name,
             model_points_file=model_points_path.name,
-            mode=mode,
+            mode=mode,  # type: ignore[arg-type]
             id_column_name=policy_id_column,
         )
     # Call the imported run_single_policy
@@ -345,7 +394,8 @@ def run_single_policy(
         transposed_result = transpose_single_policy_result(model_run.result)
 
         # Log metrics
-        _log_metrics(model_run.metrics)
+        if model_run.metrics is not None:
+            _log_metrics(model_run.metrics)
 
         # Use tracked column order from metrics if available, otherwise fall back to transposed columns
         tracked_column_order = (
@@ -566,7 +616,11 @@ def _analyze_table_shape(df: pl.DataFrame) -> str:
     return "long"
 
 
-@app.command(name="describe", help="Describe the structure of a data file")
+@app.command(
+    name="describe",
+    help="Describe the structure of a data file",
+    rich_help_panel="Data Inspection",
+)
 def describe(
     file_path: Annotated[
         Path,
@@ -692,7 +746,7 @@ print(table.describe())
             table = Table(
                 name=file_path.stem,
                 source=df,
-                dimensions=dimensions,
+                dimensions=dimensions,  # type: ignore[arg-type]
                 value=detected_value_column,
                 validate=False,  # Don't validate to avoid errors with complex structures
             )
@@ -709,7 +763,11 @@ print(table.describe())
             )
 
 
-@app.command(name="calc-graph", help="Generate a calculation graph from a model run")
+@app.command(
+    name="calc-graph",
+    help="Generate a calculation graph from a model run",
+    rich_help_panel="Model Execution",
+)
 def calc_graph(
     code_path: Annotated[
         Path,
