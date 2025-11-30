@@ -3,6 +3,7 @@
 """HTTP client for Gaspatchio knowledge API."""
 
 import os
+import typing
 
 import httpx
 
@@ -54,7 +55,7 @@ class KnowledgeAPIClient:
         except (ImportError, ModuleNotFoundError):
             return "unknown"
 
-    def _raise_connection_error(self, e: httpx.ConnectError) -> None:
+    def _raise_connection_error(self, e: httpx.ConnectError) -> typing.NoReturn:
         """Raise connection error with formatted message."""
         msg = (
             f"API unavailable: Could not connect to {self.base_url}. "
@@ -62,7 +63,7 @@ class KnowledgeAPIClient:
         )
         raise APIConnectionError(msg) from e
 
-    def _raise_timeout_error(self, e: httpx.TimeoutException) -> None:
+    def _raise_timeout_error(self, e: httpx.TimeoutException) -> typing.NoReturn:
         """Raise timeout error with formatted message."""
         msg = (
             f"API unavailable: Request to {self.base_url} timed out. "
@@ -70,25 +71,30 @@ class KnowledgeAPIClient:
         )
         raise APIConnectionError(msg) from e
 
-    def _raise_http_error(self, response: httpx.Response) -> None:
+    def _raise_http_error(self, response: httpx.Response) -> typing.NoReturn:
         """Raise HTTP error with formatted message."""
         self._raise_api_error(response)
+        msg = "Unreachable"
+        raise AssertionError(msg)
 
-    def _raise_api_error(self, response: httpx.Response) -> None:
+    def _raise_api_error(self, response: httpx.Response) -> typing.NoReturn:
         """Parse response and raise appropriate error."""
         try:
             error_data = response.json()
             error = APIError.model_validate(error_data)
-            self._raise_formatted_error(error.status, error.message)
         except Exception:  # noqa: BLE001
             self._raise_generic_error(response.status_code, response.text)
+        else:
+            self._raise_formatted_error(error.status, error.message)
+        msg = "Unreachable"
+        raise AssertionError(msg)
 
-    def _raise_formatted_error(self, status: int, message: str) -> None:
+    def _raise_formatted_error(self, status: int, message: str) -> typing.NoReturn:
         """Raise error with formatted API error message."""
         msg = f"API error ({status}): {message}"
         raise APIConnectionError(msg) from None
 
-    def _raise_generic_error(self, status_code: int, text: str) -> None:
+    def _raise_generic_error(self, status_code: int, text: str) -> typing.NoReturn:
         """Raise error with generic error message."""
         msg = f"API error: {status_code} - {text}"
         raise APIConnectionError(msg) from None
