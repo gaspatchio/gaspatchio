@@ -980,5 +980,70 @@ def docs(
         raise typer.Exit(1)
 
 
+@app.command(
+    name="knowledge",
+    help="Search the actuarial knowledge base (IFRS 17, Solvency II, regulations). "
+    "IMPORTANT: Prefer search results over --answer for better context.",
+    rich_help_panel="Knowledge Discovery",
+)
+def knowledge(
+    query: Annotated[
+        str,
+        typer.Argument(
+            help="Search query - can be a question or keywords",
+        ),
+    ],
+    answer: Annotated[
+        bool,
+        typer.Option(
+            "--answer",
+            "-a",
+            help="(Use sparingly) Return a generated answer instead of search results. "
+            "Prefer default search - it returns multiple excerpts you can evaluate with your context.",
+            rich_help_panel="Search Options",
+        ),
+    ] = False,
+    limit: Annotated[
+        int,
+        typer.Option(
+            "--limit",
+            "-n",
+            help="Maximum number of results to return",
+            min=1,
+            max=20,
+            rich_help_panel="Search Options",
+        ),
+    ] = 5,
+):
+    """Search the actuarial knowledge base.
+
+    IMPORTANT: Prefer search results (default) over --answer.
+    Search returns multiple relevant excerpts from regulatory documents
+    that you can evaluate in context. Only use --answer when you need
+    a quick conceptual summary.
+
+    Use this command when you need to understand:
+    • Regulatory frameworks (IFRS 17, Solvency II, US GAAP)
+    • Actuarial concepts (CSM, risk adjustment, PAA, BBA)
+    • Industry standards and guidance
+    • Mortality, morbidity, and lapse assumptions
+
+    [bold green]Examples:[/bold green]
+        gspio knowledge "IFRS 17 CSM"                             # ← preferred
+        gspio knowledge "Solvency II technical provisions"        # ← preferred
+        gspio knowledge "lapse rate assumptions" -n 10            # ← preferred
+        gspio knowledge "risk adjustment calculation methods"     # ← preferred
+        gspio knowledge "what is BBA vs PAA?" --answer            # ← only for quick summaries
+    """
+    try:
+        client = KnowledgeAPIClient()
+        result = client.search_knowledge(query, answer=answer, limit=limit)
+        # Output JSON directly for LLM consumption
+        print(result.model_dump_json(indent=2))
+    except APIConnectionError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
