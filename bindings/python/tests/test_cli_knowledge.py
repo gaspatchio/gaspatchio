@@ -1,3 +1,5 @@
+# ABOUTME: Tests for gspio knowledge command.
+# ABOUTME: Tests CLI argument parsing, JSON output, and error handling.
 """Tests for gspio knowledge command."""
 
 import json
@@ -53,6 +55,24 @@ class TestKnowledgeCommand:
         output = json.loads(result.output)
         assert "results" in output
         assert output["results"][0]["page"] == 42
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_knowledge_with_limit_option(self, mock_client_class):
+        """Knowledge -n flag sets result limit."""
+        mock_client = MagicMock()
+        mock_client.search_knowledge.return_value = SearchResponse(
+            results=[],
+            query="test",
+            version="0.4.2",
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["knowledge", "test", "-n", "10"])
+
+        assert result.exit_code == 0
+        mock_client.search_knowledge.assert_called_once_with(
+            "test", answer=False, limit=10
+        )
 
     @patch("gaspatchio_core.cli.KnowledgeAPIClient")
     def test_knowledge_with_answer_flag(self, mock_client_class):
