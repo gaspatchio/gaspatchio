@@ -10,6 +10,7 @@ from typing import Annotated
 
 import polars as pl
 import typer
+from dotenv import load_dotenv
 from loguru import logger
 from rich.console import Console
 
@@ -25,6 +26,9 @@ from .runner import (
 from .runner import (
     run_single_policy as run_single_policy_func,
 )
+
+# Load .env file if present (before any env var reads)
+load_dotenv()
 
 # Set default logging level to INFO
 logger.remove()  # Remove default handler
@@ -976,14 +980,16 @@ def calc_graph(
 @app.command(
     name="docs",
     help="Search Gaspatchio framework documentation (API, accessors, examples). "
-    "IMPORTANT: Prefer search results over --answer for better context.",
+    "Use filters to narrow results. Run multiple searches to explore different angles.",
     rich_help_panel="Knowledge Discovery",
 )
 def docs(
     query: Annotated[
         str,
         typer.Argument(
-            help="Search query - can be a question or keywords",
+            help="Search query - natural language question or keywords. "
+            "Examples: 'cumulative survival', 'how to discount cash flows', "
+            "'projection.previous_period'",
         ),
     ],
     answer: Annotated[
@@ -991,9 +997,10 @@ def docs(
         typer.Option(
             "--answer",
             "-a",
-            help="(Use sparingly) Return a generated answer instead of search results. "
-            "Prefer default search - it returns multiple results you can evaluate with your context.",
-            rich_help_panel="Search Options",
+            help="(Use sparingly) Generate an answer using RAG instead of returning "
+            "search results. Prefer search results - they let you evaluate multiple "
+            "sources in your context.",
+            rich_help_panel="Output Mode",
         ),
     ] = False,
     limit: Annotated[
@@ -1001,36 +1008,94 @@ def docs(
         typer.Option(
             "--limit",
             "-n",
-            help="Maximum number of results to return",
+            help="Number of results to return (default: 10 for search, 5 for answer)",
             min=1,
-            max=20,
+            max=50,
             rich_help_panel="Search Options",
         ),
-    ] = 5,
+    ] = 10,
+    search_type: Annotated[
+        str,
+        typer.Option(
+            "--search-type",
+            "-s",
+            help="Search algorithm: 'hybrid' (semantic + keyword, best for most queries), "
+            "'semantic' (meaning-based, good for concepts), "
+            "'keyword' (exact matching, good for function names)",
+            rich_help_panel="Search Options",
+        ),
+    ] = "hybrid",
+    content_type: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--content-type",
+            "-t",
+            help="Filter by content type. Can specify multiple times. "
+            "Types: 'code_example' (working code), 'overview' (docstrings/descriptions), "
+            "'when_to_use' (usage guidance), 'parameters' (function signatures)",
+            rich_help_panel="Filters",
+        ),
+    ] = None,
 ):
     """Search Gaspatchio framework documentation.
 
-    IMPORTANT: Prefer search results (default) over --answer.
-    Search returns multiple relevant excerpts that you can evaluate
-    in context. Only use --answer when you need a quick summary and
-    don't have specific context requirements.
+    [bold cyan]SEARCH STRATEGY:[/bold cyan]
+    Run multiple targeted searches rather than one broad query.
+    Each search returns different relevant excerpts you can evaluate.
 
-    Use this command when you need to find:
-    • API methods on ActuarialFrame (e.g., "how to add a column")
-    • Accessor methods (.projection, .excel, .finance, .mortality)
-    • Code patterns and examples from working models
-    • Function signatures and parameters
+    [bold cyan]WHAT YOU CAN FIND:[/bold cyan]
+    • [green]API Methods[/green] - ActuarialFrame operations, column methods
+    • [green]Accessors[/green] - .projection, .excel, .finance, .mortality, .date
+    • [green]Code Examples[/green] - Working patterns from real models
+    • [green]Function Signatures[/green] - Parameters, return types, defaults
 
-    [bold green]Examples:[/bold green]
-        gspio docs "ActuarialFrame"                               # ← preferred
-        gspio docs "how do I shift values by one period?"         # ← preferred
-        gspio docs "projection accessor methods"                  # ← preferred
-        gspio docs "excel pv function" -n 10                      # ← preferred
-        gspio docs "what is when then otherwise?" --answer        # ← only for quick summaries
+    [bold cyan]CONTENT TYPES (-t filter):[/bold cyan]
+    • [yellow]code_example[/yellow] - Executable code snippets (use for implementation)
+    • [yellow]overview[/yellow] - Docstrings and descriptions (use for understanding)
+    • [yellow]when_to_use[/yellow] - Usage guidance (use for choosing methods)
+    • [yellow]parameters[/yellow] - Function signatures (use for API details)
+
+    [bold cyan]SEARCH TYPES (-s):[/bold cyan]
+    • [yellow]hybrid[/yellow] - Best for most queries (combines semantic + keyword)
+    • [yellow]semantic[/yellow] - When searching by concept/meaning
+    • [yellow]keyword[/yellow] - When searching for exact function/class names
+
+    [bold green]EXAMPLES:[/bold green]
+      [dim]# Find code examples for cumulative survival[/dim]
+      gspio docs "cumulative survival" -t code_example
+
+      [dim]# Search for all projection accessor methods[/dim]
+      gspio docs "projection accessor" -n 20
+
+      [dim]# Find exact function by name[/dim]
+      gspio docs "previous_period" -s keyword
+
+      [dim]# Get usage guidance for Excel functions[/dim]
+      gspio docs "excel pv npv" -t when_to_use
+
+      [dim]# Multiple searches to understand a feature[/dim]
+      gspio docs "time shifting" -t overview        # understand concept
+      gspio docs "time shifting" -t code_example    # see implementation
+
+      [dim]# Generate a summary answer (use sparingly)[/dim]
+      gspio docs "how do I discount cash flows?" --answer
     """
     try:
         client = KnowledgeAPIClient()
-        result = client.search_docs(query, answer=answer, limit=limit)
+        if answer:
+            result = client.answer_docs(
+                query,
+                limit=limit,
+                search_type=search_type,
+                content_type=content_type,
+            )
+        else:
+            result = client.search_docs(
+                query,
+                limit=limit,
+                search_type=search_type,
+                content_type=content_type,
+            )
         # Output JSON directly for LLM consumption
         print(result.model_dump_json(indent=2))
     except APIConnectionError as e:
@@ -1040,15 +1105,17 @@ def docs(
 
 @app.command(
     name="knowledge",
-    help="Search the actuarial knowledge base (IFRS 17, Solvency II, regulations). "
-    "IMPORTANT: Prefer search results over --answer for better context.",
+    help="Search actuarial knowledge base (IFRS 17, Solvency II, mortality, regulations). "
+    "Use filters to search by jurisdiction, document type, or tags.",
     rich_help_panel="Knowledge Discovery",
 )
 def knowledge(
     query: Annotated[
         str,
         typer.Argument(
-            help="Search query - can be a question or keywords",
+            help="Search query - natural language question or keywords. "
+            "Examples: 'CSM amortization', 'risk adjustment calculation', "
+            "'mortality improvement factors'",
         ),
     ],
     answer: Annotated[
@@ -1056,9 +1123,10 @@ def knowledge(
         typer.Option(
             "--answer",
             "-a",
-            help="(Use sparingly) Return a generated answer instead of search results. "
-            "Prefer default search - it returns multiple excerpts you can evaluate with your context.",
-            rich_help_panel="Search Options",
+            help="(Use sparingly) Generate an answer using RAG instead of returning "
+            "search results. Prefer search results - they let you evaluate multiple "
+            "regulatory sources in your context.",
+            rich_help_panel="Output Mode",
         ),
     ] = False,
     limit: Annotated[
@@ -1066,36 +1134,147 @@ def knowledge(
         typer.Option(
             "--limit",
             "-n",
-            help="Maximum number of results to return",
+            help="Number of results to return (default: 10 for search, 5 for answer)",
             min=1,
-            max=20,
+            max=50,
             rich_help_panel="Search Options",
         ),
-    ] = 5,
+    ] = 10,
+    search_type: Annotated[
+        str,
+        typer.Option(
+            "--search-type",
+            "-s",
+            help="Search algorithm: 'hybrid' (semantic + keyword, best for most queries), "
+            "'semantic' (meaning-based, good for concepts), "
+            "'keyword' (exact matching, good for specific terms)",
+            rich_help_panel="Search Options",
+        ),
+    ] = "hybrid",
+    retrieval_mode: Annotated[
+        str,
+        typer.Option(
+            "--retrieval-mode",
+            "-r",
+            help="How to retrieve content: 'chunks' (document sections, default), "
+            "'summaries' (document summaries), 'hierarchical' (parent-child chunks)",
+            rich_help_panel="Search Options",
+        ),
+    ] = "chunks",
+    tags: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--tag",
+            "-T",
+            help="Filter by tag. Can specify multiple times. "
+            "Common tags: 'IFRS17', 'SolvencyII', 'USGAAP', 'mortality', 'reserving', "
+            "'pricing', 'valuation', 'risk_adjustment'",
+            rich_help_panel="Filters",
+        ),
+    ] = None,
+    jurisdiction: Annotated[
+        str | None,
+        typer.Option(
+            "--jurisdiction",
+            "-j",
+            help="Filter by jurisdiction: 'international', 'EU', 'US', 'UK', 'AU', etc.",
+            rich_help_panel="Filters",
+        ),
+    ] = None,
+    doc_type: Annotated[
+        str | None,
+        typer.Option(
+            "--doc-type",
+            "-d",
+            help="Filter by document type: 'standard' (official standards), "
+            "'guidance' (implementation guides), 'educational' (learning materials), "
+            "'regulatory' (regulatory documents)",
+            rich_help_panel="Filters",
+        ),
+    ] = None,
 ):
     """Search the actuarial knowledge base.
 
-    IMPORTANT: Prefer search results (default) over --answer.
-    Search returns multiple relevant excerpts from regulatory documents
-    that you can evaluate in context. Only use --answer when you need
-    a quick conceptual summary.
+    [bold cyan]SEARCH STRATEGY:[/bold cyan]
+    Use filters to narrow results to relevant jurisdictions and document types.
+    Run multiple targeted searches to explore regulatory requirements from
+    different angles. Combine tag and jurisdiction filters for precision.
 
-    Use this command when you need to understand:
-    • Regulatory frameworks (IFRS 17, Solvency II, US GAAP)
-    • Actuarial concepts (CSM, risk adjustment, PAA, BBA)
-    • Industry standards and guidance
-    • Mortality, morbidity, and lapse assumptions
+    [bold cyan]KNOWLEDGE DOMAINS:[/bold cyan]
+    • [green]IFRS 17[/green] - Insurance contracts standard (CSM, BBA, PAA, VFA)
+    • [green]Solvency II[/green] - EU insurance regulation (SCR, MCR, technical provisions)
+    • [green]US GAAP[/green] - US accounting standards (LDTI, targeted improvements)
+    • [green]Mortality/Morbidity[/green] - Life tables, improvement factors, selection
+    • [green]Assumptions[/green] - Lapse, expense, inflation, discount rates
 
-    [bold green]Examples:[/bold green]
-        gspio knowledge "IFRS 17 CSM"                             # ← preferred
-        gspio knowledge "Solvency II technical provisions"        # ← preferred
-        gspio knowledge "lapse rate assumptions" -n 10            # ← preferred
-        gspio knowledge "risk adjustment calculation methods"     # ← preferred
-        gspio knowledge "what is BBA vs PAA?" --answer            # ← only for quick summaries
+    [bold cyan]TAGS (-T filter):[/bold cyan]
+    • [yellow]IFRS17[/yellow], [yellow]SolvencyII[/yellow], [yellow]USGAAP[/yellow] - Regulatory framework
+    • [yellow]mortality[/yellow], [yellow]morbidity[/yellow], [yellow]lapse[/yellow] - Decrement assumptions
+    • [yellow]reserving[/yellow], [yellow]pricing[/yellow], [yellow]valuation[/yellow] - Use case
+    • [yellow]risk_adjustment[/yellow], [yellow]CSM[/yellow], [yellow]discount_rates[/yellow] - Specific topics
+
+    [bold cyan]JURISDICTIONS (-j filter):[/bold cyan]
+    • [yellow]international[/yellow] - IASB/IAA standards
+    • [yellow]EU[/yellow] - European Union (EIOPA, Solvency II)
+    • [yellow]US[/yellow] - United States (FASB, state regulations)
+    • [yellow]UK[/yellow] - United Kingdom (PRA, FCA)
+
+    [bold cyan]DOCUMENT TYPES (-d filter):[/bold cyan]
+    • [yellow]standard[/yellow] - Official standards and regulations
+    • [yellow]guidance[/yellow] - Implementation and practice guides
+    • [yellow]educational[/yellow] - Learning materials and tutorials
+    • [yellow]regulatory[/yellow] - Regulatory communications and letters
+
+    [bold cyan]RETRIEVAL MODES (-r):[/bold cyan]
+    • [yellow]chunks[/yellow] - Document sections (default, most detail)
+    • [yellow]summaries[/yellow] - Document-level summaries (for overview)
+    • [yellow]hierarchical[/yellow] - Parent context with child details
+
+    [bold green]EXAMPLES:[/bold green]
+      [dim]# Search IFRS 17 CSM guidance[/dim]
+      gspio knowledge "CSM amortization" -T IFRS17
+
+      [dim]# Find EU-specific Solvency II requirements[/dim]
+      gspio knowledge "technical provisions" -j EU -T SolvencyII
+
+      [dim]# Search mortality tables and improvement factors[/dim]
+      gspio knowledge "mortality improvement" -T mortality -n 15
+
+      [dim]# Get official standards only[/dim]
+      gspio knowledge "risk adjustment" -d standard -T IFRS17
+
+      [dim]# Compare jurisdictions with multiple searches[/dim]
+      gspio knowledge "discount rates" -j EU     # EU approach
+      gspio knowledge "discount rates" -j US     # US approach
+
+      [dim]# Get document summaries for broad understanding[/dim]
+      gspio knowledge "IFRS 17 overview" -r summaries
+
+      [dim]# Generate a summary answer (use sparingly)[/dim]
+      gspio knowledge "what is the difference between BBA and PAA?" --answer
     """
     try:
         client = KnowledgeAPIClient()
-        result = client.search_knowledge(query, answer=answer, limit=limit)
+        if answer:
+            result = client.answer_knowledge(
+                query,
+                limit=limit,
+                search_type=search_type,
+                retrieval_mode=retrieval_mode,
+                tags=tags,
+                jurisdiction=jurisdiction,
+                doc_type=doc_type,
+            )
+        else:
+            result = client.search_knowledge(
+                query,
+                limit=limit,
+                search_type=search_type,
+                retrieval_mode=retrieval_mode,
+                tags=tags,
+                jurisdiction=jurisdiction,
+                doc_type=doc_type,
+            )
         # Output JSON directly for LLM consumption
         print(result.model_dump_json(indent=2))
     except APIConnectionError as e:

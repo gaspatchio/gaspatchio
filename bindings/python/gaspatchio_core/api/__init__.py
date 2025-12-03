@@ -4,19 +4,25 @@
 
 from .client import APIConnectionError, KnowledgeAPIClient
 from .models import (
-    AnswerResponse,
-    APIError,
-    SearchResponse,
-    SearchResult,
-    SourceReference,
+    DocResult,
+    DocsAnswerResponse,
+    DocsSearchResponse,
+    HTTPValidationError,
+    KnowledgeAnswerResponse,
+    KnowledgeResult,
+    KnowledgeSearchResponse,
+    ValidationErrorDetail,
 )
 
 __all__ = [
     "APIConnectionError",
-    "APIError",
-    "AnswerResponse",
+    "DocResult",
+    "DocsAnswerResponse",
+    "DocsSearchResponse",
+    "HTTPValidationError",
     "KnowledgeAPIClient",
-    "SearchResponse",
-    "SearchResult",
-    "SourceReference",
+    "KnowledgeAnswerResponse",
+    "KnowledgeResult",
+    "KnowledgeSearchResponse",
+    "ValidationErrorDetail",
 ]

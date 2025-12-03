@@ -239,6 +239,27 @@ This is the balance between convention (helpful methods) and control (transparen
   uv sync
   ```
 
+### Linter Behavior Note
+
+**IMPORTANT:** The on-save hook runs `ruff` which automatically removes unused imports. When adding a new library import, you MUST add both the import AND the code that uses it in a single edit. Otherwise the linter will strip the import before you can use it.
+
+**Bad** (import gets stripped):
+```python
+# Edit 1: Add import
+from loguru import logger  # <- Linter removes this!
+
+# Edit 2: Add usage
+logger.debug("message")  # <- Error: logger not defined
+```
+
+**Good** (import and usage together):
+```python
+# Single edit: Add import AND usage
+from loguru import logger
+
+logger.debug("message")  # <- Works!
+```
+
 ### Testing
 ```bash
 # Run all Python tests

@@ -7,7 +7,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from gaspatchio_core.api.client import APIConnectionError, KnowledgeAPIClient
-from gaspatchio_core.api.models import AnswerResponse, SearchResponse
+from gaspatchio_core.api.models import (
+    DocsAnswerResponse,
+    DocsSearchResponse,
+    KnowledgeAnswerResponse,
+    KnowledgeSearchResponse,
+)
 
 
 class TestKnowledgeAPIClient:
@@ -23,55 +28,65 @@ class TestKnowledgeAPIClient:
         """Client uses default URL when env var not set."""
         monkeypatch.delenv("GASPATCHIO_API_URL", raising=False)
         client = KnowledgeAPIClient()
-        assert client.base_url == "https://api.gaspatchio.com"
-
-    def test_client_includes_version_in_requests(self):
-        """Client includes gaspatchio version in all requests."""
-        client = KnowledgeAPIClient(version="0.4.2")
-        assert client.version == "0.4.2"
+        assert client.base_url == "https://gaspatchio-mix.fly.dev"
 
     @patch("httpx.Client.post")
-    def test_search_docs_returns_search_response(self, mock_post):
-        """search_docs returns SearchResponse on success."""
+    def test_search_docs_returns_docs_search_response(self, mock_post):
+        """search_docs returns DocsSearchResponse on success."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "results": [
                 {
                     "text": "test",
-                    "source": "file.py",
+                    "source_file": "file.py",
                     "content_type": "code",
                     "score": 0.9,
+                    "object_path": None,
+                    "has_code": True,
                 }
             ],
             "query": "test",
-            "version": "0.4.2",
+            "count": 1,
+            "search_type": "hybrid",
+            "took_ms": 42.0,
         }
         mock_post.return_value = mock_response
 
-        client = KnowledgeAPIClient(version="0.4.2")
+        client = KnowledgeAPIClient()
         result = client.search_docs("test query")
 
-        assert isinstance(result, SearchResponse)
+        assert isinstance(result, DocsSearchResponse)
         assert len(result.results) == 1
 
     @patch("httpx.Client.post")
-    def test_search_docs_with_answer_returns_answer_response(self, mock_post):
-        """search_docs with answer=True returns AnswerResponse."""
+    def test_answer_docs_returns_docs_answer_response(self, mock_post):
+        """answer_docs returns DocsAnswerResponse on success."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "answer": "The answer is...",
-            "sources": [{"source": "file.py", "score": 0.9}],
+            "sources": [
+                {
+                    "text": "source text",
+                    "source_file": "file.py",
+                    "content_type": "code",
+                    "score": 0.9,
+                    "object_path": None,
+                    "has_code": True,
+                }
+            ],
             "query": "test",
-            "version": "0.4.2",
+            "model": "claude-3-sonnet",
+            "tokens_used": 100,
+            "took_ms": 1000.0,
         }
         mock_post.return_value = mock_response
 
-        client = KnowledgeAPIClient(version="0.4.2")
-        result = client.search_docs("test query", answer=True)
+        client = KnowledgeAPIClient()
+        result = client.answer_docs("test query")
 
-        assert isinstance(result, AnswerResponse)
+        assert isinstance(result, DocsAnswerResponse)
         assert result.answer == "The answer is..."
 
     @patch("httpx.Client.post")
@@ -81,55 +96,71 @@ class TestKnowledgeAPIClient:
 
         mock_post.side_effect = httpx.ConnectError("Connection refused")
 
-        client = KnowledgeAPIClient(version="0.4.2")
+        client = KnowledgeAPIClient()
         with pytest.raises(APIConnectionError) as exc_info:
             client.search_docs("test query")
 
         assert "API unavailable" in str(exc_info.value)
 
     @patch("httpx.Client.post")
-    def test_search_knowledge_returns_search_response(self, mock_post):
-        """search_knowledge returns SearchResponse on success."""
+    def test_search_knowledge_returns_knowledge_search_response(self, mock_post):
+        """search_knowledge returns KnowledgeSearchResponse on success."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "results": [
                 {
                     "text": "IFRS 17...",
-                    "source": "ifrs17.pdf",
-                    "content_type": "regulatory",
                     "score": 0.88,
-                    "page": 42,
+                    "doc_id": "ifrs17",
+                    "tags": ["IFRS17"],
+                    "jurisdiction": "EU",
+                    "doc_type": "standard",
+                    "page_number": 42,
                 }
             ],
             "query": "CSM",
-            "version": "0.4.2",
+            "count": 1,
+            "search_type": "hybrid",
+            "retrieval_mode": "chunks",
+            "took_ms": 55.0,
         }
         mock_post.return_value = mock_response
 
-        client = KnowledgeAPIClient(version="0.4.2")
+        client = KnowledgeAPIClient()
         result = client.search_knowledge("CSM")
 
-        assert isinstance(result, SearchResponse)
-        assert result.results[0].page == 42
+        assert isinstance(result, KnowledgeSearchResponse)
+        assert result.results[0].page_number == 42
 
     @patch("httpx.Client.post")
-    def test_search_knowledge_with_answer_returns_answer_response(self, mock_post):
-        """search_knowledge with answer=True returns AnswerResponse."""
+    def test_answer_knowledge_returns_knowledge_answer_response(self, mock_post):
+        """answer_knowledge returns KnowledgeAnswerResponse on success."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "answer": "The Contractual Service Margin (CSM) is...",
-            "sources": [{"source": "ifrs17.pdf", "score": 0.9}],
+            "sources": [
+                {
+                    "text": "CSM definition",
+                    "score": 0.9,
+                    "doc_id": "ifrs17",
+                    "tags": ["IFRS17", "CSM"],
+                    "jurisdiction": "EU",
+                    "doc_type": "standard",
+                }
+            ],
             "query": "CSM",
-            "version": "0.4.2",
+            "model": "claude-3-sonnet",
+            "tokens_used": 150,
+            "took_ms": 1200.0,
         }
         mock_post.return_value = mock_response
 
-        client = KnowledgeAPIClient(version="0.4.2")
-        result = client.search_knowledge("CSM", answer=True)
+        client = KnowledgeAPIClient()
+        result = client.answer_knowledge("CSM")
 
-        assert isinstance(result, AnswerResponse)
+        assert isinstance(result, KnowledgeAnswerResponse)
         assert result.answer == "The Contractual Service Margin (CSM) is..."
 
     @patch("httpx.Client.post")
@@ -139,64 +170,99 @@ class TestKnowledgeAPIClient:
 
         mock_post.side_effect = httpx.TimeoutException("Request timed out")
 
-        client = KnowledgeAPIClient(version="0.4.2")
+        client = KnowledgeAPIClient()
         with pytest.raises(APIConnectionError) as exc_info:
             client.search_docs("test query")
 
         assert "timed out" in str(exc_info.value)
 
     @patch("httpx.Client.post")
-    def test_search_docs_raises_on_http_400_with_json_error(self, mock_post):
-        """search_docs raises APIConnectionError on HTTP 400 with APIError JSON."""
+    def test_search_docs_raises_on_http_422_validation_error(self, mock_post):
+        """search_docs raises APIConnectionError on HTTP 422 validation error."""
         mock_response = MagicMock()
-        mock_response.status_code = 400
+        mock_response.status_code = 422
         mock_response.json.return_value = {
-            "error": "bad_request",
-            "status": 400,
-            "message": "Invalid query parameter",
+            "detail": [
+                {
+                    "loc": ["body", "query"],
+                    "msg": "Field required",
+                    "type": "missing",
+                }
+            ]
         }
-        mock_response.text = "Bad Request"
+        mock_response.text = "Unprocessable Entity"
         mock_post.return_value = mock_response
 
-        client = KnowledgeAPIClient(version="0.4.2")
+        client = KnowledgeAPIClient()
         with pytest.raises(APIConnectionError) as exc_info:
             client.search_docs("test query")
 
-        assert "API error (400)" in str(exc_info.value)
-        assert "Invalid query parameter" in str(exc_info.value)
+        assert "API validation error" in str(exc_info.value)
+        assert "Field required" in str(exc_info.value)
 
     @patch("httpx.Client.post")
-    def test_search_docs_raises_on_http_500_with_json_error(self, mock_post):
-        """search_docs raises APIConnectionError on HTTP 500 with APIError JSON."""
+    def test_search_docs_raises_on_http_500_error(self, mock_post):
+        """search_docs raises APIConnectionError on HTTP 500."""
         mock_response = MagicMock()
         mock_response.status_code = 500
-        mock_response.json.return_value = {
-            "error": "internal_server_error",
-            "status": 500,
-            "message": "Internal server error",
-        }
+        mock_response.json.side_effect = Exception("Not JSON")
         mock_response.text = "Internal Server Error"
         mock_post.return_value = mock_response
 
-        client = KnowledgeAPIClient(version="0.4.2")
+        client = KnowledgeAPIClient()
         with pytest.raises(APIConnectionError) as exc_info:
             client.search_docs("test query")
 
-        assert "API error (500)" in str(exc_info.value)
-        assert "Internal server error" in str(exc_info.value)
+        assert "API error: 500" in str(exc_info.value)
 
     @patch("httpx.Client.post")
-    def test_search_docs_raises_on_http_error_with_non_json_response(self, mock_post):
-        """search_docs raises error on HTTP error with non-JSON response."""
+    def test_search_docs_with_content_type_filter(self, mock_post):
+        """search_docs passes content_type filter to API."""
         mock_response = MagicMock()
-        mock_response.status_code = 503
-        mock_response.json.side_effect = Exception("Not JSON")
-        mock_response.text = "Service temporarily unavailable"
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "results": [],
+            "query": "test",
+            "count": 0,
+            "search_type": "hybrid",
+            "took_ms": 10.0,
+        }
         mock_post.return_value = mock_response
 
-        client = KnowledgeAPIClient(version="0.4.2")
-        with pytest.raises(APIConnectionError) as exc_info:
-            client.search_docs("test query")
+        client = KnowledgeAPIClient()
+        client.search_docs("test", content_type=["code", "docstring"])
 
-        assert "API error: 503" in str(exc_info.value)
-        assert "Service temporarily unavailable" in str(exc_info.value)
+        # Verify the request payload
+        call_args = mock_post.call_args
+        payload = call_args.kwargs["json"]
+        assert payload["content_type"] == ["code", "docstring"]
+
+    @patch("httpx.Client.post")
+    def test_search_knowledge_with_filters(self, mock_post):
+        """search_knowledge passes filters to API."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "results": [],
+            "query": "test",
+            "count": 0,
+            "search_type": "hybrid",
+            "retrieval_mode": "chunks",
+            "took_ms": 10.0,
+        }
+        mock_post.return_value = mock_response
+
+        client = KnowledgeAPIClient()
+        client.search_knowledge(
+            "IFRS 17",
+            tags=["IFRS17"],
+            jurisdiction="EU",
+            doc_type="standard",
+        )
+
+        # Verify the request payload
+        call_args = mock_post.call_args
+        payload = call_args.kwargs["json"]
+        assert payload["tags"] == ["IFRS17"]
+        assert payload["jurisdiction"] == "EU"
+        assert payload["doc_type"] == "standard"

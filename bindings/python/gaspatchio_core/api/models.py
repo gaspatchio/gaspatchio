@@ -5,46 +5,84 @@
 from pydantic import BaseModel
 
 
-class SearchResult(BaseModel):
-    """A single search result from the knowledge API."""
+class DocResult(BaseModel):
+    """A single result from docs search."""
 
     text: str
-    source: str
+    score: float
     content_type: str
+    source_file: str
+    object_path: str | None
+    has_code: bool
+
+
+class KnowledgeResult(BaseModel):
+    """A single result from knowledge search."""
+
+    text: str
     score: float
-    # Optional fields that may be present depending on store
-    page: int | None = None
-    doc_type: str | None = None
-    object_path: str | None = None
+    doc_id: str
+    tags: list[str]
+    jurisdiction: str | None
+    doc_type: str | None
+    chunk_id: str | None = None
+    chunk_index: int | None = None
+    page_number: int | None = None
+    title: str | None = None
 
 
-class SourceReference(BaseModel):
-    """A source reference in an answer response."""
+class DocsSearchResponse(BaseModel):
+    """Response from docs search endpoint."""
 
-    source: str
-    score: float
-
-
-class SearchResponse(BaseModel):
-    """Response from a search query."""
-
-    results: list[SearchResult]
+    results: list[DocResult]
     query: str
-    version: str
+    count: int
+    search_type: str
+    took_ms: float
 
 
-class AnswerResponse(BaseModel):
-    """Response from a query with --answer flag."""
+class KnowledgeSearchResponse(BaseModel):
+    """Response from knowledge search endpoint."""
+
+    results: list[KnowledgeResult]
+    query: str
+    count: int
+    search_type: str
+    retrieval_mode: str
+    took_ms: float
+
+
+class DocsAnswerResponse(BaseModel):
+    """Response from docs answer endpoint."""
 
     answer: str
-    sources: list[SourceReference]
+    sources: list[DocResult]
     query: str
-    version: str
+    model: str
+    tokens_used: int
+    took_ms: float
 
 
-class APIError(BaseModel):
-    """Error response from the API."""
+class KnowledgeAnswerResponse(BaseModel):
+    """Response from knowledge answer endpoint."""
 
-    error: str
-    status: int
-    message: str
+    answer: str
+    sources: list[KnowledgeResult]
+    query: str
+    model: str
+    tokens_used: int
+    took_ms: float
+
+
+class ValidationErrorDetail(BaseModel):
+    """Detail of a validation error."""
+
+    loc: list[str | int]
+    msg: str
+    type: str
+
+
+class HTTPValidationError(BaseModel):
+    """Validation error response from the API."""
+
+    detail: list[ValidationErrorDetail]
