@@ -22,6 +22,8 @@ dependencies = [
     "markdown-it-py>=3.0.0",
     "docstring-parser>=0.16",
     "fastexcel>=0.14.0",
+    "httpx>=0.28.0",
+    "python-dotenv>=1.1.0",
 ]
 
 [dependency-groups]
@@ -63,6 +65,13 @@ extend-ignore = [
     "D213",   # allow either one-line or two-line docstring summaries
     "ANN001", # sometimes self/cls isn't annotated
     "COM812", # conflicts with formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",    # asserts are ok in tests
+    "ANN201",  # test functions don't need return type annotations
+    "PLR2004", # magic values are ok in tests
 ]
 
 [tool.ruff.lint.isort]

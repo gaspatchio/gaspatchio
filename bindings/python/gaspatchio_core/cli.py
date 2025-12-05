@@ -1,3 +1,8 @@
+# ABOUTME: CLI commands for the Gaspatchio actuarial modeling framework.
+# ABOUTME: Provides model execution, data inspection, and knowledge discovery commands.
+# ruff: noqa: T201, PLR0913, ANN201, E501, F841, BLE001, FBT001, RSE102, D400, D415, PLR2004, C901, PLR0912, PLR0915, PD901, TRY003, EM102, B904, FBT002
+"""CLI commands for the Gaspatchio actuarial modeling framework."""
+
 import os
 import sys
 from pathlib import Path
@@ -5,9 +10,11 @@ from typing import Annotated
 
 import polars as pl
 import typer
+from dotenv import load_dotenv
 from loguru import logger
 from rich.console import Console
 
+from .api import APIConnectionError, KnowledgeAPIClient
 from .runner import (  # Changed to relative import
     ModelRunConfig,
     RunMetrics,
@@ -19,6 +26,9 @@ from .runner import (
 from .runner import (
     run_single_policy as run_single_policy_func,
 )
+
+# Load .env file if present (before any env var reads)
+load_dotenv()
 
 # Set default logging level to INFO
 logger.remove()  # Remove default handler
@@ -32,7 +42,31 @@ console = Console()
 
 app = typer.Typer(
     name="gspio",
-    help="Gaspatchio CLI for running actuarial models with high performance",
+    help="""Gaspatchio CLI for running actuarial models and discovering knowledge.
+
+This CLI serves two purposes:
+1. Execute actuarial models (run-model, run-single-policy)
+2. Search documentation and actuarial knowledge (docs, knowledge)
+
+[bold]When building a model and you need to find:[/bold]
+• How to use a Gaspatchio feature → [cyan]gspio docs "your question"[/cyan]
+• Actuarial concepts or regulations → [cyan]gspio knowledge "your question"[/cyan]
+
+[bold yellow]IMPORTANT: Always prefer search results (default) over \
+--answer.[/bold yellow]
+Search returns multiple excerpts you can evaluate against your
+current context. Reserve --answer for quick summaries only when
+you don't need to weigh multiple options.
+
+[bold green]Examples:[/bold green]
+    gspio docs "cumulative survival probability"              # ← preferred
+    gspio docs "projection accessor methods"                  # ← preferred
+    gspio docs "how do I shift time?" --answer                # ← only for summaries
+    gspio knowledge "IFRS 17 contractual service margin"      # ← preferred
+    gspio knowledge "what is risk adjustment?" --answer       # ← only for summaries
+    gspio run-model model.py data.parquet --mode debug
+    gspio run-single-policy model.py data.parquet "POL001"
+""",
     add_completion=True,
     rich_markup_mode="rich",
     pretty_exceptions_enable=True,
@@ -44,7 +78,8 @@ def validate_file_path(path: str) -> Path:
     """Validate that a file exists and return Path object."""
     p = Path(path)
     if not p.exists():
-        raise typer.BadParameter(f"File not found: {path}")
+        msg = f"File not found: {path}"
+        raise typer.BadParameter(msg)
     return p
 
 
@@ -53,7 +88,11 @@ def mode_complete() -> list[str]:
     return ["debug", "optimize"]
 
 
-@app.command(name="run-model", help="Execute an actuarial model from a file")
+@app.command(
+    name="run-model",
+    help="Execute an actuarial model from a file",
+    rich_help_panel="Model Execution",
+)
 def run_model(
     code_path: Annotated[
         Path,
@@ -127,7 +166,7 @@ def run_model(
             rich_help_panel="Display Options",
         ),
     ] = 15,
-):
+) -> None:
     """Execute an actuarial model from a file.
 
     [bold green]Example:[/bold green]
@@ -139,12 +178,15 @@ def run_model(
         -l: Show last n columns
     """
     # Show progress spinner
-    with console.status("[bold green]Loading model and data...") as status:
+    with console.status("[bold green]Loading model and data..."):
+        # Validate mode is valid
+        if mode not in ("debug", "optimize"):
+            mode = "debug"
         config = ModelRunConfig(
             directory=code_path.parent,
             model_file=code_path.name,
             model_points_file=model_points_path.name,
-            mode=mode,
+            mode=mode,  # type: ignore[arg-type]
         )
     # Call the imported run_model directly
     model_run = run_model_func(config)
@@ -160,13 +202,19 @@ def run_model(
     metrics = model_run.metrics
 
     # Output metrics at TRACE level
-    _log_metrics(metrics)
+    if metrics is not None:
+        _log_metrics(metrics)
+
+    # Ensure we have a result dataframe
+    if result_df is None:
+        logger.error("Model run completed but produced no result dataframe")
+        sys.exit(1)
 
     # Determine column order - use tracked order from metrics if available
     tracked_column_order = (
         getattr(model_run.metrics, "tracked_column_order", None) or []
     )
-    final_result_columns = result_df.columns
+    final_result_columns = result_df.columns  # type: ignore[union-attr]
 
     # Use tracked order, but only columns that actually exist in the final df
     available_ordered_columns = [
@@ -201,7 +249,9 @@ def run_model(
         final_cols_to_print = available_ordered_columns
     else:
         final_cols_to_print = [
-            col for col in combined_unique_cols if col in result_df.columns
+            col
+            for col in combined_unique_cols
+            if col in result_df.columns  # type: ignore[union-attr]
         ]
 
     # Configure Polars display and print
@@ -218,12 +268,13 @@ def run_model(
             )
             print(result_df)
         else:
-            print(result_df.select(final_cols_to_print))
+            print(result_df.select(final_cols_to_print))  # type: ignore[union-attr]
 
 
 @app.command(
     name="run-single-policy",
     help="Execute an actuarial model for a single policy",
+    rich_help_panel="Model Execution",
 )
 def run_single_policy(
     code_path: Annotated[
@@ -321,11 +372,14 @@ def run_single_policy(
     with console.status(
         f"[bold green]Loading model for policy {policy_id}...",
     ) as status:
+        # Validate mode is valid
+        if mode not in ("debug", "optimize"):
+            mode = "debug"
         config = ModelRunConfig(
             directory=code_path.parent,
             model_file=code_path.name,
             model_points_file=model_points_path.name,
-            mode=mode,
+            mode=mode,  # type: ignore[arg-type]
             id_column_name=policy_id_column,
         )
     # Call the imported run_single_policy
@@ -344,7 +398,8 @@ def run_single_policy(
         transposed_result = transpose_single_policy_result(model_run.result)
 
         # Log metrics
-        _log_metrics(model_run.metrics)
+        if model_run.metrics is not None:
+            _log_metrics(model_run.metrics)
 
         # Use tracked column order from metrics if available, otherwise fall back to transposed columns
         tracked_column_order = (
@@ -565,7 +620,11 @@ def _analyze_table_shape(df: pl.DataFrame) -> str:
     return "long"
 
 
-@app.command(name="describe", help="Describe the structure of a data file")
+@app.command(
+    name="describe",
+    help="Describe the structure of a data file",
+    rich_help_panel="Data Inspection",
+)
 def describe(
     file_path: Annotated[
         Path,
@@ -691,7 +750,7 @@ print(table.describe())
             table = Table(
                 name=file_path.stem,
                 source=df,
-                dimensions=dimensions,
+                dimensions=dimensions,  # type: ignore[arg-type]
                 value=detected_value_column,
                 validate=False,  # Don't validate to avoid errors with complex structures
             )
@@ -708,7 +767,11 @@ print(table.describe())
             )
 
 
-@app.command(name="calc-graph", help="Generate a calculation graph from a model run")
+@app.command(
+    name="calc-graph",
+    help="Generate a calculation graph from a model run",
+    rich_help_panel="Model Execution",
+)
 def calc_graph(
     code_path: Annotated[
         Path,
@@ -769,24 +832,25 @@ def calc_graph(
     ] = None,
 ):
     """Generate a calculation graph from a model run.
-    
+
     This command runs the model in debug mode to capture the computation graph,
     then exports it as JSON for visualization and analysis.
-    
+
     [bold green]Example:[/bold green]
         gspio calc-graph model.py data.parquet
         gspio calc-graph model.py data.parquet -o graph.json
         gspio calc-graph model.py data.parquet -p "123" -o debug_graph.json
         gspio calc-graph model.py data.parquet -p "1" -f "col('year') == 1"
         gspio calc-graph model.py data.parquet -p "1" -f "(col('year') == 1) & (col('month') == 3)"
-    
+
     [bold]Output:[/bold]
         The generated JSON contains nodes (inputs and computed columns) and edges
         (dependencies between columns) that can be visualized with graph tools.
     """
-    
     # Show progress spinner
-    with console.status("[bold green]Running model in debug mode to capture graph...") as status:
+    with console.status(
+        "[bold green]Running model in debug mode to capture graph..."
+    ) as status:
         # Always use debug mode to capture the graph
         config = ModelRunConfig(
             directory=code_path.parent,
@@ -795,47 +859,47 @@ def calc_graph(
             mode="debug",  # Must be debug to capture graph
             id_column_name=policy_id_column,
         )
-        
+
         # Run appropriate function based on whether policy_id is provided
         if policy_id:
             console.print(f"[yellow]Running single policy: {policy_id}[/yellow]")
             model_run = run_single_policy_func(config, policy_id)
         else:
             model_run = run_model_func(config)
-    
+
     # Check if the model run failed
     if model_run.status == "error":
         console.print(f"[red]Error running model:[/red] {model_run.error_message}")
         raise typer.Exit(1)
-    
+
     # Store the result DataFrame for sample values
     result_df = model_run.result
-    
+
     # Export the calculation graph
     try:
         status.update("[bold green]Building calculation graph...")
         # For now, we need to re-run the model to capture the graph
         # This is a limitation of the current implementation
         # In the future, we should store the ActuarialFrame in ModelRunResult
-        
+
         # Create a new ActuarialFrame and re-run the model to capture the graph
         import polars as pl
+
         from .frame import ActuarialFrame
         from .runner import load_model_from_path
-        
+
         # Load the model function
         model_func = load_model_from_path(
-            config.directory / config.model_file,
-            config.model_function_name
+            config.directory / config.model_file, config.model_function_name
         )
-        
+
         # Load the data
         data_path = config.directory / config.model_points_file
         if data_path.suffix == ".parquet":
             df = pl.read_parquet(data_path)
         else:
             df = pl.read_csv(data_path)
-        
+
         # Filter for single policy if specified
         if policy_id:
             # Convert policy_id to appropriate type based on column dtype
@@ -848,44 +912,54 @@ def calc_graph(
             else:
                 policy_id_typed = str(policy_id)
             df = df.filter(pl.col(config.id_column_name) == policy_id_typed)
-        
+
         # Create ActuarialFrame in debug mode
         af = ActuarialFrame(df, mode="debug")
-        
+
         # Run the model through the trace decorator to capture operations
         from .frame import run_model as frame_run_model
+
         af = frame_run_model(model_func, af)
-        
+
         # Now export the graph with sample values from the already computed result
-        from .frame.graph import GraphExporter, GraphExportConfig
-        
+        from .frame.graph import GraphExportConfig, GraphExporter
+
         # Create export configuration
         export_config = GraphExportConfig(
             policy_id=policy_id,
             policy_id_column=config.id_column_name,
             filter_expr=filter_expr,
-            include_traces=True
+            include_traces=True,
         )
-        
+
         # Export using the new GraphExporter
         exporter = GraphExporter(af)
         json_graph = exporter.export(result_df, export_config)
-        
+
         # Save to file
         output_file.write_text(json_graph)
-        
+
         # Parse JSON to get statistics
         import json
+
         graph_data = json.loads(json_graph)
         num_nodes = len(graph_data.get("nodes", []))
-        num_inputs = len([n for n in graph_data.get("nodes", []) if n["type"] == "input"])
-        num_computed = len([n for n in graph_data.get("nodes", []) if n["type"] == "computed"])
+        num_inputs = len(
+            [n for n in graph_data.get("nodes", []) if n["type"] == "input"]
+        )
+        num_computed = len(
+            [n for n in graph_data.get("nodes", []) if n["type"] == "computed"]
+        )
         num_edges = len(graph_data.get("edges", []))
-        
-        console.print(f"\n[bold green]✓[/bold green] Calculation graph saved to: {output_file}")
-        console.print(f"  Nodes: {num_nodes} ({num_inputs} inputs, {num_computed} computed)")
+
+        console.print(
+            f"\n[bold green]✓[/bold green] Calculation graph saved to: {output_file}"
+        )
+        console.print(
+            f"  Nodes: {num_nodes} ({num_inputs} inputs, {num_computed} computed)"
+        )
         console.print(f"  Edges: {num_edges}")
-        
+
         # Show sample of the graph structure
         if num_computed > 0:
             console.print("\n[bold]Sample computed nodes:[/bold]")
@@ -893,13 +967,318 @@ def calc_graph(
                 if node["type"] == "computed":
                     deps = node["data"].get("dependencies", [])
                     console.print(f"  • {node['id']} ← {', '.join(deps)}")
-                    
+
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
     except Exception as e:
         console.print(f"[red]Unexpected error building graph:[/red] {e}")
         logger.exception("Failed to build calculation graph")
+        raise typer.Exit(1)
+
+
+@app.command(
+    name="docs",
+    help="Search Gaspatchio framework documentation (API, accessors, examples). "
+    "Use filters to narrow results. Run multiple searches to explore different angles.",
+    rich_help_panel="Knowledge Discovery",
+)
+def docs(
+    query: Annotated[
+        str,
+        typer.Argument(
+            help="Search query - natural language question or keywords. "
+            "Examples: 'cumulative survival', 'how to discount cash flows', "
+            "'projection.previous_period'",
+        ),
+    ],
+    answer: Annotated[
+        bool,
+        typer.Option(
+            "--answer",
+            "-a",
+            help="(Use sparingly) Generate an answer using RAG instead of returning "
+            "search results. Prefer search results - they let you evaluate multiple "
+            "sources in your context.",
+            rich_help_panel="Output Mode",
+        ),
+    ] = False,
+    limit: Annotated[
+        int,
+        typer.Option(
+            "--limit",
+            "-n",
+            help="Number of results to return (default: 10 for search, 5 for answer)",
+            min=1,
+            max=50,
+            rich_help_panel="Search Options",
+        ),
+    ] = 10,
+    search_type: Annotated[
+        str,
+        typer.Option(
+            "--search-type",
+            "-s",
+            help="Search algorithm: 'hybrid' (semantic + keyword, best for most queries), "
+            "'semantic' (meaning-based, good for concepts), "
+            "'keyword' (exact matching, good for function names)",
+            rich_help_panel="Search Options",
+        ),
+    ] = "hybrid",
+    content_type: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--content-type",
+            "-t",
+            help="Filter by content type. Can specify multiple times. "
+            "Types: 'code_example' (working code), 'overview' (docstrings/descriptions), "
+            "'when_to_use' (usage guidance), 'parameters' (function signatures)",
+            rich_help_panel="Filters",
+        ),
+    ] = None,
+):
+    """Search Gaspatchio framework documentation.
+
+    [bold cyan]SEARCH STRATEGY:[/bold cyan]
+    Run multiple targeted searches rather than one broad query.
+    Each search returns different relevant excerpts you can evaluate.
+
+    [bold cyan]WHAT YOU CAN FIND:[/bold cyan]
+    • [green]API Methods[/green] - ActuarialFrame operations, column methods
+    • [green]Accessors[/green] - .projection, .excel, .finance, .mortality, .date
+    • [green]Code Examples[/green] - Working patterns from real models
+    • [green]Function Signatures[/green] - Parameters, return types, defaults
+
+    [bold cyan]CONTENT TYPES (-t filter):[/bold cyan]
+    • [yellow]code_example[/yellow] - Executable code snippets (use for implementation)
+    • [yellow]overview[/yellow] - Docstrings and descriptions (use for understanding)
+    • [yellow]when_to_use[/yellow] - Usage guidance (use for choosing methods)
+    • [yellow]parameters[/yellow] - Function signatures (use for API details)
+
+    [bold cyan]SEARCH TYPES (-s):[/bold cyan]
+    • [yellow]hybrid[/yellow] - Best for most queries (combines semantic + keyword)
+    • [yellow]semantic[/yellow] - When searching by concept/meaning
+    • [yellow]keyword[/yellow] - When searching for exact function/class names
+
+    [bold green]EXAMPLES:[/bold green]
+      [dim]# Find code examples for cumulative survival[/dim]
+      gspio docs "cumulative survival" -t code_example
+
+      [dim]# Search for all projection accessor methods[/dim]
+      gspio docs "projection accessor" -n 20
+
+      [dim]# Find exact function by name[/dim]
+      gspio docs "previous_period" -s keyword
+
+      [dim]# Get usage guidance for Excel functions[/dim]
+      gspio docs "excel pv npv" -t when_to_use
+
+      [dim]# Multiple searches to understand a feature[/dim]
+      gspio docs "time shifting" -t overview        # understand concept
+      gspio docs "time shifting" -t code_example    # see implementation
+
+      [dim]# Generate a summary answer (use sparingly)[/dim]
+      gspio docs "how do I discount cash flows?" --answer
+    """
+    try:
+        client = KnowledgeAPIClient()
+        if answer:
+            result = client.answer_docs(
+                query,
+                limit=limit,
+                search_type=search_type,
+                content_type=content_type,
+            )
+        else:
+            result = client.search_docs(
+                query,
+                limit=limit,
+                search_type=search_type,
+                content_type=content_type,
+            )
+        # Output JSON directly for LLM consumption
+        print(result.model_dump_json(indent=2))
+    except APIConnectionError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command(
+    name="knowledge",
+    help="Search actuarial knowledge base (IFRS 17, Solvency II, mortality, regulations). "
+    "Use filters to search by jurisdiction, document type, or tags.",
+    rich_help_panel="Knowledge Discovery",
+)
+def knowledge(
+    query: Annotated[
+        str,
+        typer.Argument(
+            help="Search query - natural language question or keywords. "
+            "Examples: 'CSM amortization', 'risk adjustment calculation', "
+            "'mortality improvement factors'",
+        ),
+    ],
+    answer: Annotated[
+        bool,
+        typer.Option(
+            "--answer",
+            "-a",
+            help="(Use sparingly) Generate an answer using RAG instead of returning "
+            "search results. Prefer search results - they let you evaluate multiple "
+            "regulatory sources in your context.",
+            rich_help_panel="Output Mode",
+        ),
+    ] = False,
+    limit: Annotated[
+        int,
+        typer.Option(
+            "--limit",
+            "-n",
+            help="Number of results to return (default: 10 for search, 5 for answer)",
+            min=1,
+            max=50,
+            rich_help_panel="Search Options",
+        ),
+    ] = 10,
+    search_type: Annotated[
+        str,
+        typer.Option(
+            "--search-type",
+            "-s",
+            help="Search algorithm: 'hybrid' (semantic + keyword, best for most queries), "
+            "'semantic' (meaning-based, good for concepts), "
+            "'keyword' (exact matching, good for specific terms)",
+            rich_help_panel="Search Options",
+        ),
+    ] = "hybrid",
+    retrieval_mode: Annotated[
+        str,
+        typer.Option(
+            "--retrieval-mode",
+            "-r",
+            help="How to retrieve content: 'chunks' (document sections, default), "
+            "'summaries' (document summaries), 'hierarchical' (parent-child chunks)",
+            rich_help_panel="Search Options",
+        ),
+    ] = "chunks",
+    tags: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--tag",
+            "-T",
+            help="Filter by tag. Can specify multiple times. "
+            "Common tags: 'IFRS17', 'SolvencyII', 'USGAAP', 'mortality', 'reserving', "
+            "'pricing', 'valuation', 'risk_adjustment'",
+            rich_help_panel="Filters",
+        ),
+    ] = None,
+    jurisdiction: Annotated[
+        str | None,
+        typer.Option(
+            "--jurisdiction",
+            "-j",
+            help="Filter by jurisdiction: 'international', 'EU', 'US', 'UK', 'AU', etc.",
+            rich_help_panel="Filters",
+        ),
+    ] = None,
+    doc_type: Annotated[
+        str | None,
+        typer.Option(
+            "--doc-type",
+            "-d",
+            help="Filter by document type: 'standard' (official standards), "
+            "'guidance' (implementation guides), 'educational' (learning materials), "
+            "'regulatory' (regulatory documents)",
+            rich_help_panel="Filters",
+        ),
+    ] = None,
+):
+    """Search the actuarial knowledge base.
+
+    [bold cyan]SEARCH STRATEGY:[/bold cyan]
+    Use filters to narrow results to relevant jurisdictions and document types.
+    Run multiple targeted searches to explore regulatory requirements from
+    different angles. Combine tag and jurisdiction filters for precision.
+
+    [bold cyan]KNOWLEDGE DOMAINS:[/bold cyan]
+    • [green]IFRS 17[/green] - Insurance contracts standard (CSM, BBA, PAA, VFA)
+    • [green]Solvency II[/green] - EU insurance regulation (SCR, MCR, technical provisions)
+    • [green]US GAAP[/green] - US accounting standards (LDTI, targeted improvements)
+    • [green]Mortality/Morbidity[/green] - Life tables, improvement factors, selection
+    • [green]Assumptions[/green] - Lapse, expense, inflation, discount rates
+
+    [bold cyan]TAGS (-T filter):[/bold cyan]
+    • [yellow]IFRS17[/yellow], [yellow]SolvencyII[/yellow], [yellow]USGAAP[/yellow] - Regulatory framework
+    • [yellow]mortality[/yellow], [yellow]morbidity[/yellow], [yellow]lapse[/yellow] - Decrement assumptions
+    • [yellow]reserving[/yellow], [yellow]pricing[/yellow], [yellow]valuation[/yellow] - Use case
+    • [yellow]risk_adjustment[/yellow], [yellow]CSM[/yellow], [yellow]discount_rates[/yellow] - Specific topics
+
+    [bold cyan]JURISDICTIONS (-j filter):[/bold cyan]
+    • [yellow]international[/yellow] - IASB/IAA standards
+    • [yellow]EU[/yellow] - European Union (EIOPA, Solvency II)
+    • [yellow]US[/yellow] - United States (FASB, state regulations)
+    • [yellow]UK[/yellow] - United Kingdom (PRA, FCA)
+
+    [bold cyan]DOCUMENT TYPES (-d filter):[/bold cyan]
+    • [yellow]standard[/yellow] - Official standards and regulations
+    • [yellow]guidance[/yellow] - Implementation and practice guides
+    • [yellow]educational[/yellow] - Learning materials and tutorials
+    • [yellow]regulatory[/yellow] - Regulatory communications and letters
+
+    [bold cyan]RETRIEVAL MODES (-r):[/bold cyan]
+    • [yellow]chunks[/yellow] - Document sections (default, most detail)
+    • [yellow]summaries[/yellow] - Document-level summaries (for overview)
+    • [yellow]hierarchical[/yellow] - Parent context with child details
+
+    [bold green]EXAMPLES:[/bold green]
+      [dim]# Search IFRS 17 CSM guidance[/dim]
+      gspio knowledge "CSM amortization" -T IFRS17
+
+      [dim]# Find EU-specific Solvency II requirements[/dim]
+      gspio knowledge "technical provisions" -j EU -T SolvencyII
+
+      [dim]# Search mortality tables and improvement factors[/dim]
+      gspio knowledge "mortality improvement" -T mortality -n 15
+
+      [dim]# Get official standards only[/dim]
+      gspio knowledge "risk adjustment" -d standard -T IFRS17
+
+      [dim]# Compare jurisdictions with multiple searches[/dim]
+      gspio knowledge "discount rates" -j EU     # EU approach
+      gspio knowledge "discount rates" -j US     # US approach
+
+      [dim]# Get document summaries for broad understanding[/dim]
+      gspio knowledge "IFRS 17 overview" -r summaries
+
+      [dim]# Generate a summary answer (use sparingly)[/dim]
+      gspio knowledge "what is the difference between BBA and PAA?" --answer
+    """
+    try:
+        client = KnowledgeAPIClient()
+        if answer:
+            result = client.answer_knowledge(
+                query,
+                limit=limit,
+                search_type=search_type,
+                retrieval_mode=retrieval_mode,
+                tags=tags,
+                jurisdiction=jurisdiction,
+                doc_type=doc_type,
+            )
+        else:
+            result = client.search_knowledge(
+                query,
+                limit=limit,
+                search_type=search_type,
+                retrieval_mode=retrieval_mode,
+                tags=tags,
+                jurisdiction=jurisdiction,
+                doc_type=doc_type,
+            )
+        # Output JSON directly for LLM consumption
+        print(result.model_dump_json(indent=2))
+    except APIConnectionError as e:
+        console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
 
 
