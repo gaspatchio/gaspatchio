@@ -176,3 +176,10 @@ class TestWithScenariosPreservation:
             "sex",
             "scenario_id",
         }
+
+
+def test_import_from_top_level():
+    """with_scenarios should be importable from gaspatchio_core."""
+    from gaspatchio_core import with_scenarios
+
+    assert callable(with_scenarios)

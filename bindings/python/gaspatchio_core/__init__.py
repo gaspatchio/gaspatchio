@@ -27,6 +27,7 @@ from .column import ColumnProxy, ExpressionProxy
 from .errors import PerformanceWarning
 from .frame import ActuarialFrame, run_model
 from .functions.conditional import when
+from .scenarios import with_scenarios
 from .util import (
     execution_mode,  # Context manager
     get_default_mode,  # Getter
@@ -59,4 +60,6 @@ __all__ = [
     "run_model",
     "set_default_mode",
     "when",
+    # Scenarios
+    "with_scenarios",
 ]
