@@ -28,7 +28,8 @@ if TYPE_CHECKING:
     from gaspatchio_core.typing import IntoExprColumn
 
 # Get the path to the compiled extension from the imported module
-LIB = Path(_internal.__file__)
+# _internal.__file__ should always be set for our compiled extension
+LIB = Path(_internal.__file__)  # type: ignore[arg-type]
 
 
 def fill_series(expr: IntoExprColumn, start: int = 0, increment: int = 1) -> pl.Expr:
@@ -50,7 +51,7 @@ def fill_series(expr: IntoExprColumn, start: int = 0, increment: int = 1) -> pl.
     # Handle ExpressionProxy objects by extracting the underlying expression
     elif hasattr(expr, "_expr") and hasattr(expr, "_parent"):
         # This is likely an ExpressionProxy object
-        expr = expr._expr  # noqa: SLF001
+        expr = expr._expr  # type: ignore[assignment]  # noqa: SLF001
 
     return register_plugin_function(
         args=[expr],
@@ -80,7 +81,7 @@ def floor(expr: IntoExprColumn, divisor: int = 1, default: int = 0) -> pl.Expr:
     # Handle ExpressionProxy objects by extracting the underlying expression
     elif hasattr(expr, "_expr") and hasattr(expr, "_parent"):
         # This is likely an ExpressionProxy object
-        expr = expr._expr  # noqa: SLF001
+        expr = expr._expr  # type: ignore[assignment]  # noqa: SLF001
 
     return register_plugin_function(
         args=[expr],
@@ -106,7 +107,7 @@ def round(expr: IntoExprColumn, decimal_places: int = 0) -> pl.Expr:  # noqa: A0
     if hasattr(expr, "name") and hasattr(expr, "_parent"):
         expr = pl.col(expr.name)
     elif hasattr(expr, "_expr") and hasattr(expr, "_parent"):
-        expr = expr._expr  # noqa: SLF001
+        expr = expr._expr  # type: ignore[assignment]  # noqa: SLF001
 
     return register_plugin_function(
         args=[expr],
@@ -131,7 +132,7 @@ def round_to_int(expr: IntoExprColumn) -> pl.Expr:
     if hasattr(expr, "name") and hasattr(expr, "_parent"):
         expr = pl.col(expr.name)
     elif hasattr(expr, "_expr") and hasattr(expr, "_parent"):
-        expr = expr._expr  # noqa: SLF001
+        expr = expr._expr  # type: ignore[assignment]  # noqa: SLF001
 
     return register_plugin_function(
         args=[expr],
@@ -184,6 +185,64 @@ def list_pow(base: pl.Expr, exp: pl.Expr) -> pl.Expr:
         plugin_path=LIB,
         function_name="list_pow",
         args=[base, exp],
+        is_elementwise=True,
+    )
+
+
+def list_clip(values: pl.Expr, lower: pl.Expr, upper: pl.Expr) -> pl.Expr:
+    """Element-wise clip operation on list columns with per-row bounds.
+
+    Clips each element in the list column to be within [lower, upper] bounds.
+    Supports per-row scalar bounds or list bounds for element-wise clipping.
+    Always returns Float64 values.
+
+    Supports:
+        - list.clip(scalar_col, scalar_col) - per-row bounds from columns
+        - list.clip(list_col, list_col) - per-element bounds from lists
+        - list.clip(scalar_col, literal) - mixed bounds
+
+    Args:
+        values: Values to clip (List column or expression)
+        lower: Lower bound (List/scalar column or expression)
+        upper: Upper bound (List/scalar column or expression)
+
+    Returns:
+        Expression with clipped values as List<Float64>
+
+    Raises:
+        ComputeError: If values is not a List type
+        ComputeError: If inner list lengths don't match bounds (for list bounds)
+
+    Examples:
+        >>> import polars as pl
+        >>> from gaspatchio_core.functions.vector import list_clip
+        >>>
+        >>> # List with scalar column bounds
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "values": [[0.5, 1.5, 2.5, 3.5], [0.0, 5.0, 10.0]],
+        ...         "lower": [1.0, 2.0],
+        ...         "upper": [3.0, 8.0],
+        ...     }
+        ... )
+        >>> df.with_columns(
+        ...     clipped=list_clip(pl.col("values"), pl.col("lower"), pl.col("upper"))
+        ... )
+
+        >>> # List with literal bounds
+        >>> df.with_columns(
+        ...     clipped=list_clip(pl.col("values"), pl.lit(0.0), pl.lit(5.0))
+        ... )
+
+    Note:
+        This is an internal function used by the dispatch system.
+        Actuaries should use `af.values.clip(af.lower, af.upper)` syntax.
+
+    """
+    return register_plugin_function(
+        plugin_path=LIB,
+        function_name="list_clip",
+        args=[values, lower, upper],
         is_elementwise=True,
     )
 

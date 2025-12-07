@@ -49,6 +49,23 @@ pub fn list_pow(inputs: &[Series]) -> PolarsResult<Series> {
     gaspatchio_core_lib::polars_functions::list_pow(inputs)
 }
 
+/// Output type for list_clip: List<Float64>
+fn list_clip_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    let name = input_fields
+        .first()
+        .map(|f| f.name().clone())
+        .unwrap_or_else(|| PlSmallStr::from_static("list_clip"));
+
+    // Always return List<Float64>
+    Ok(Field::new(name, DataType::List(Box::new(DataType::Float64))))
+}
+
+/// PyO3 wrapper for list_clip - element-wise clip on list columns with per-row bounds
+#[polars_expr(output_type_func = list_clip_output)]
+pub fn list_clip(inputs: &[Series]) -> PolarsResult<Series> {
+    gaspatchio_core_lib::polars_functions::list_clip(inputs)
+}
+
 /// Output type for list_conditional: List<Float64>
 fn list_conditional_output(input_fields: &[Field]) -> PolarsResult<Field> {
     let name = input_fields

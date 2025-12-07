@@ -116,8 +116,24 @@ def _unwrap(arg: Any) -> Any:  # noqa: ANN401
     if isinstance(arg, ExpressionProxy):
         return arg._expr  # noqa: SLF001
     if isinstance(arg, ConditionExpression):
+        # Return raw boolean expression for methods like .filter()
         return arg._expr  # noqa: SLF001
     return arg
+
+
+# Arithmetic operations that should coerce ConditionExpression to boolean (0.0/1.0)
+_ARITHMETIC_OPS: set[str] = {"add", "sub", "mul", "truediv", "floordiv", "mod", "pow"}
+
+
+def _unwrap_for_arithmetic(arg: Any) -> Any:  # noqa: ANN401
+    """Unwrap for arithmetic, converting ConditionExpression to boolean float."""
+    from .condition_expression import ConditionExpression
+
+    if isinstance(arg, ConditionExpression):
+        # For arithmetic ops, convert to boolean float (0.0/1.0)
+        # This handles list vs scalar columns properly via list_conditional
+        return arg._to_boolean_expr()  # noqa: SLF001
+    return _unwrap(arg)
 
 
 def _wrap(
@@ -298,7 +314,7 @@ def _create_method_wrapper(
 
 def _make_wrapper(
     name: str,
-) -> Callable[["ProxyType", ...], Any]:
+) -> Callable[..., Any]:
     """Create the core logic function used by DelegatorDescriptor.
 
     This is the heart of the proxy delegation system. It creates wrapper functions
@@ -393,6 +409,12 @@ def _unwrap_for_list_eval(
         # Complex expressions should also not be used in list.eval directly
         msg = "Cannot use complex expressions inside list.eval context."
         raise TypeError(msg)
+    if isinstance(arg, pl.Expr):
+        # Check if expression contains named column references
+        expr_str = str(arg)
+        if 'col("' in expr_str:
+            msg = "Cannot use expressions with named columns inside list.eval."
+            raise TypeError(msg)
     # For basic Python types, convert to literals that work in list.eval
     if isinstance(arg, (str, int, float, bool)):
         return pl.lit(arg)
@@ -656,6 +678,91 @@ class ErrorEnhancer:
         return new_error
 
 
+def _has_column_operands(args: tuple, kwargs: dict) -> bool:
+    """Check if any argument is a column reference or expression with named columns."""
+    from .column_proxy import ColumnProxy
+    from .expression_proxy import ExpressionProxy
+
+    for arg in args:
+        if isinstance(arg, (ColumnProxy, ExpressionProxy)):
+            return True
+        # Also check for pl.Expr with named columns (from _unwrap_for_arithmetic)
+        if isinstance(arg, pl.Expr) and 'col("' in str(arg):
+            return True
+    for val in kwargs.values():
+        if isinstance(val, (ColumnProxy, ExpressionProxy)):
+            return True
+        if isinstance(val, pl.Expr) and 'col("' in str(val):
+            return True
+    return False
+
+
+def _execute_list_pow_plugin(
+    base_expr: pl.Expr,
+    args: tuple,
+) -> pl.Expr:
+    """Execute pow using Rust list_pow plugin for list columns with column exponents."""
+    from gaspatchio_core.functions.vector import list_pow
+
+    # Get the exponent expression from args
+    if not args:
+        msg = "pow requires an exponent argument"
+        raise ValueError(msg)
+
+    exp_arg = args[0]
+    exp_expr = _unwrap(exp_arg)
+
+    # Ensure exp_expr is a Polars expression
+    if not isinstance(exp_expr, pl.Expr):
+        exp_expr = pl.lit(exp_expr)
+
+    logger.trace(f"Using list_pow plugin: base={base_expr}, exp={exp_expr}")
+    return list_pow(base_expr, exp_expr)
+
+
+_CLIP_UPPER_ARG_INDEX = 2
+
+
+def _execute_list_clip_plugin(
+    base_expr: pl.Expr,
+    args: tuple,
+    kwargs: dict,
+) -> pl.Expr:
+    """Execute clip using Rust list_clip plugin for list columns with column bounds."""
+    from gaspatchio_core.functions.vector import list_clip
+
+    # Extract lower and upper bounds from args or kwargs
+    lower_arg = None
+    upper_arg = None
+
+    if len(args) >= 1:
+        lower_arg = args[0]
+    if len(args) >= _CLIP_UPPER_ARG_INDEX:
+        upper_arg = args[1]
+
+    # Check kwargs for bounds (Polars uses lower_bound/upper_bound)
+    if "lower_bound" in kwargs:
+        lower_arg = kwargs["lower_bound"]
+    if "upper_bound" in kwargs:
+        upper_arg = kwargs["upper_bound"]
+
+    # Convert to expressions
+    lower_expr = _unwrap(lower_arg) if lower_arg is not None else pl.lit(float("-inf"))
+    upper_expr = _unwrap(upper_arg) if upper_arg is not None else pl.lit(float("inf"))
+
+    # Ensure they are Polars expressions
+    if not isinstance(lower_expr, pl.Expr):
+        lower_expr = pl.lit(lower_expr)
+    if not isinstance(upper_expr, pl.Expr):
+        upper_expr = pl.lit(upper_expr)
+
+    logger.trace(
+        f"Using list_clip plugin: values={base_expr}, "
+        f"lower={lower_expr}, upper={upper_expr}"
+    )
+    return list_clip(base_expr, lower_expr, upper_expr)
+
+
 def _method_caller(  # noqa: PLR0913
     *,
     name: str,
@@ -667,6 +774,12 @@ def _method_caller(  # noqa: PLR0913
     kw: dict,
 ) -> Any:  # noqa: ANN401
     """Execute the delegated method with proper list-type handling."""
+    # For arithmetic operations, pre-process args to convert ConditionExpression
+    # to boolean float expressions (0.0/1.0) for mask patterns (GSP-12)
+    if name in _ARITHMETIC_OPS:
+        a = tuple(_unwrap_for_arithmetic(arg) for arg in a)
+        kw = {k: _unwrap_for_arithmetic(v) for k, v in kw.items()}
+
     # Determine if we should use list shimming
     should_use_list_shim = _should_use_list_shim(name, self_proxy, parent_af, base_expr)
 
@@ -686,9 +799,20 @@ def _method_caller(  # noqa: PLR0913
                 logger.trace(f"Executing list shim for {name}")
                 result = _execute_list_shim(name, base_expr, a, kw, is_unary=is_unary)
             except (TypeError, ValueError) as list_error:
-                # Fallback to regular execution if list shimming fails
+                # List shim failed - check if we can use a Rust plugin instead
                 logger.trace(f"List shim failed for {name}: {list_error}")
-                result = _execute_regular(polars_attr, a, kw)
+
+                # For pow with column operands, use Rust list_pow plugin
+                if name == "pow" and _has_column_operands(a, kw):
+                    logger.trace("Routing to list_pow Rust plugin")
+                    result = _execute_list_pow_plugin(base_expr, a)
+                # For clip with column operands, use Rust list_clip plugin
+                elif name == "clip" and _has_column_operands(a, kw):
+                    logger.trace("Routing to list_clip Rust plugin")
+                    result = _execute_list_clip_plugin(base_expr, a, kw)
+                else:
+                    # Fallback to regular execution for other operations
+                    result = _execute_regular(polars_attr, a, kw)
         else:
             result = _execute_regular(polars_attr, a, kw)
     except Exception as e:

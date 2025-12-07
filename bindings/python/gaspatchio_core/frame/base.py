@@ -9,7 +9,6 @@ from __future__ import annotations
 import keyword
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
 import polars as pl
 from loguru import logger
 
@@ -270,23 +269,20 @@ class ActuarialFrame:
             self._refresh_attr_columns_set()
         try:
             # Check for list broadcast metadata BEFORE converting to expr
+            # element_wise: True means expression already handles element-wise ops
+            # (e.g., projection accessor using .list.eval())
             if (
                 hasattr(value, "_list_broadcast_metadata")
                 and value._list_broadcast_metadata is not None
+                and value._list_broadcast_metadata.get("element_wise")
             ):
-                metadata = value._list_broadcast_metadata
-                # element_wise: True means expression already handles element-wise ops
-                # (e.g., projection accessor using .list.eval())
-                if metadata.get("element_wise") and "list_columns" not in metadata:
-                    # Just apply expression directly - it handles element-wise already
-                    expr = self._convert_to_expr(value)
-                    if self._tracing:
-                        append_operation_to_graph(self, key, expr)
-                        self._df = self._df.with_columns(expr.alias(key))
-                    else:
-                        self._df = self._df.with_columns(expr.alias(key))
-                    return
-                self._apply_conditional_list_broadcasting(key, metadata)
+                # Just apply expression directly - it handles element-wise already
+                expr = self._convert_to_expr(value)
+                if self._tracing:
+                    append_operation_to_graph(self, key, expr)
+                    self._df = self._df.with_columns(expr.alias(key))
+                else:
+                    self._df = self._df.with_columns(expr.alias(key))
                 return
 
             expr = self._convert_to_expr(value)
@@ -329,19 +325,20 @@ class ActuarialFrame:
 
     def _convert_to_expr(self, value: Any) -> pl.Expr:
         """Convert a value to a Polars expression."""
+        from gaspatchio_core.column.condition_expression import ConditionExpression
+
         if isinstance(value, ColumnProxy):
             return pl.col(value.name)
         if isinstance(value, ExpressionProxy):
             return value._expr
+        if isinstance(value, ConditionExpression):
+            # Use _to_boolean_expr() which handles list vs scalar columns properly
+            # For list columns, routes to list_conditional Rust plugin
+            # For scalar columns, uses native Polars comparison cast to Float64
+            return value._to_boolean_expr()
         if isinstance(value, pl.Expr):
             return value
-        if isinstance(value, str):
-            # Treat strings as literals in this general conversion context
-            return pl.lit(value)
-        # Keep handling for numpy arrays if needed, otherwise remove
-        if isinstance(value, np.ndarray):
-            return pl.lit(value)
-        # Default to literal for unsupported types
+        # Strings, numpy arrays, and other types become literals
         return pl.lit(value)
 
     # Excluded: _log_query_plan (now in tracing.py)
@@ -1925,186 +1922,6 @@ class ActuarialFrame:
             ):
                 eligible.add(c)
         self._attr_columns_set = eligible
-
-    def _apply_conditional_list_broadcasting(
-        self, key: str, metadata: dict[str, Any]
-    ) -> None:
-        """Apply list broadcasting for conditional expressions.
-
-        This method handles when-then-otherwise conditionals that involve list columns.
-        It uses the explode/re-aggregate pattern to apply element-wise conditionals.
-
-        Behavior by mode:
-        - **Debug mode**: Executes the pattern eagerly and captures a TracedOperation
-          in the computation graph for debugging and visualization. The operation
-          includes metadata about the list columns, conditional expression, and
-          source location.
-        - **Optimize mode**: Executes the pattern directly without tracing overhead.
-
-        Args:
-            key: Name of the column to create
-            metadata: Dictionary with:
-                - list_columns (set[str]): List columns to explode
-                - conditional_expr (pl.Expr): Conditional expression to apply
-
-        Example:
-            >>> af = ActuarialFrame({"month": [[0, 1, 2]], "amt": [[100, 200, 300]]})
-            >>> af.adjusted = when(af.month == 0).then(0.0).otherwise(af.amt)
-            >>> # In debug mode: captures operation + executes
-            >>> # In optimize mode: just executes
-
-        """
-        # Extract metadata
-        list_columns = metadata["list_columns"]
-        conditional_expr = metadata["conditional_expr"]
-
-        # In tracing mode: execute eagerly AND capture operation
-        if self._tracing:
-            from ..errors.metadata import capture_source_context
-            from .tracing import (
-                create_list_broadcast_traced_operations,  # type: ignore[attr-defined]
-            )
-
-            # CRITICAL: Apply pending operations before list broadcasting
-            # List broadcasting needs the actual schema to determine which columns are lists
-            # But in debug mode, columns may only exist in the computation graph
-            if self._computation_graph:
-                logger.trace(
-                    f"Debug mode: Applying {len(self._computation_graph)} pending "
-                    f"operation(s) before list broadcasting for '{key}'"
-                )
-                # Apply all pending operations to the LazyFrame
-                for op in self._computation_graph:
-                    # Skip string expressions (already applied)
-                    if isinstance(op.expression, str):
-                        continue
-                    self._df = self._df.with_columns(op.expression.alias(op.alias))
-
-                # Note: We keep operations in the graph for collect() to use
-                # but they're already in _df so collect() will skip re-applying them
-
-            # Capture source location from user code
-            source_metadata = None
-            for depth in range(2, 10):
-                temp_metadata = capture_source_context(depth=depth)
-                if not any(
-                    internal in temp_metadata.file_name
-                    for internal in [
-                        "gaspatchio_core/frame/",
-                        "gaspatchio_core/column/",
-                        "gaspatchio_core/functions/",
-                        "<frozen",
-                        "site-packages/",
-                    ]
-                ):
-                    source_metadata = temp_metadata
-                    break
-
-            # Create traced operations for this list broadcasting
-            traced_ops = create_list_broadcast_traced_operations(
-                frame_instance=self,
-                result_col=key,
-                list_columns=list_columns,
-                conditional_expr=conditional_expr,
-                metadata=source_metadata,
-            )
-
-            # Append to computation graph
-            self._computation_graph.extend(traced_ops)
-
-            logger.trace(
-                f"Debug mode: Executing list broadcasting for '{key}' eagerly "
-                f"and captured {len(traced_ops)} operation(s)"
-            )
-
-        # Execute the pattern (both modes reach here now)
-        new_df = self._build_list_broadcasting_df(key, conditional_expr, list_columns)
-
-        # In tracing mode, materialize immediately then convert back to lazy
-        # This prevents nested lazy operations that Polars can't optimize
-        if self._tracing:
-            try:
-                # Disable optimizations that might cause schema inference issues
-                self._df = new_df.collect(
-                    type_coercion=False,
-                    predicate_pushdown=False,
-                    projection_pushdown=False,
-                ).lazy()
-                logger.trace(
-                    f"Debug mode: Materialized list broadcasting for '{key}' "
-                    "to prevent nested lazy operations"
-                )
-            except Exception as e:
-                # If collection fails (e.g., schema inference error),
-                # fall back to keeping it lazy and hope for the best
-                logger.warning(
-                    f"Debug mode: Could not materialize list broadcasting for '{key}': {e}. "
-                    "Keeping as lazy frame."
-                )
-                self._df = new_df
-        else:
-            self._df = new_df
-
-    def _build_list_broadcasting_df(
-        self, result_col: str, conditional_expr: pl.Expr, list_columns: set[str]
-    ) -> pl.LazyFrame:
-        """Build DataFrame with list broadcasting using explode/re-aggregate pattern.
-
-        Args:
-            result_col: Name of the result column
-            conditional_expr: The conditional expression to apply
-            list_columns: Set of list column names to explode
-
-        Returns:
-            LazyFrame with the result column added as a list
-
-        """
-        if self._df is None:
-            msg = "Cannot apply list broadcasting to uninitialized ActuarialFrame"
-            raise ValueError(msg)
-
-        # Get schema to determine which columns to aggregate
-        schema = self._df.collect_schema()
-
-        # Filter list_columns to only include columns that exist and are actually lists
-        valid_list_cols = {
-            col
-            for col in list_columns
-            if col in schema and isinstance(schema[col], pl.List)
-        }
-
-        # Convert set to list for explode
-        list_cols_to_explode = list(valid_list_cols)
-
-        # Build aggregation expressions:
-        # After exploding, columns that were exploded become scalar and need re-aggregation
-        # - Columns in valid_list_cols: were exploded, now scalar -> aggregate back to list
-        # - Other list columns in schema: weren't exploded, still list -> take first (which is the whole list)
-        # - Scalar columns: weren't exploded, still scalar -> take first
-        agg_exprs = []
-        for col_name in schema.keys():
-            if col_name in valid_list_cols:
-                # Was exploded, now scalar - aggregate back to list
-                agg_exprs.append(pl.col(col_name))
-            elif isinstance(schema[col_name], pl.List):
-                # Is a list column but wasn't exploded - take first to keep as-is
-                agg_exprs.append(pl.col(col_name).first())
-            else:
-                # Scalar column - take first value to maintain scalar type
-                agg_exprs.append(pl.col(col_name).first())
-
-        # Add the result column as a list (it was created as scalar after explode)
-        agg_exprs.append(pl.col(result_col))
-
-        # Build explode/re-aggregate pipeline
-        return (
-            self._df.with_row_index("_row_id")
-            .explode(list_cols_to_explode)
-            .with_columns(**{result_col: conditional_expr})
-            .group_by("_row_id", maintain_order=True)
-            .agg(agg_exprs)
-            .drop("_row_id")
-        )
 
     def __repr__(self) -> str:
         """Return a string representation of the ActuarialFrame."""

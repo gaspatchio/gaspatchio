@@ -121,15 +121,16 @@ t=2: 560,118 ─┼─ fee ──► 559,651 ─┼─ ×1.005 ──► 562,449
 ### Memory Access Pattern
 
 ```python
-# BAD: Random access (cache misses)
-for t in range(n):
-    av[t] = av[t-1] * factor[t]  # Cache miss on av[t-1] every time
+# BAD: Materializing the whole trajectory when you only need the final value
+av = [initial] * n
+for t in range(1, n):
+    av[t] = av[t-1] * factor[t]  # reads and writes the big av[] array every step
 
-# GOOD: Sequential scan (cache-friendly)
+# GOOD: Stateful scan (cache- and register-friendly)
 state = initial
 for factor in factors:  # factors are contiguous in memory
-    state = state * factor
-    yield state
+    state = state * factor  # state can live in registers
+    yield state              # only write out if you actually need the path
 ```
 
 ### Performance Characteristics
@@ -137,7 +138,7 @@ for factor in factors:  # factors are contiguous in memory
 1. **Cache-friendly**: Reads memory sequentially
 2. **No allocations**: Updates state in-place
 3. **Branch-predictable**: Simple loop structure
-4. **SIMD-compatible**: Within-list operations can be vectorized
+4. **Pipeline-friendly**: Loop-carried dependency is simple enough that modern CPUs can keep the ALUs busy, even though this is not a classic SIMD/vectorizable pattern like `cum_sum`
 
 ---
 
@@ -862,6 +863,24 @@ fn account_value_scan_with_timing(
     )
 }
 ```
+
+> **Design note (Dec 2025):** These per-policy functions are intentionally written as
+> small, concrete examples. In the actual Gaspatchio implementation we do **not**
+> call a scalar `account_value_scan` per row. Instead, we will implement a
+> Polars expression plugin that:
+>
+> - operates on **list-per-row columns** (like the existing `list_pow` and
+>   `list_conditional` kernels in `core/src/polars_functions`),
+> - uses `ListChunked::amortized_iter()` to traverse the outer list (policies),
+> - runs a stateful loop over each inner list to compute the recurrence, and
+> - returns a list-per-row (or struct-of-lists) `Series` back to Polars.
+>
+> Subsequent design work (see
+> `gaspatchio-core/ref/26-recursive-accumulation/26-background-review.md`)
+> also generalizes this into a **linear recurrence primitive** `scan_linear`
+> (with `state_t = state_{t-1} * M_t + A_t`) that `rollforward`/`accumulate`
+> should be thin wrappers around, instead of hard-coding account-value logic
+> into a dedicated Rust kernel.
 
 ### A.4 Performance Comparison
 

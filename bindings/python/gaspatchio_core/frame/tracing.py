@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from gaspatchio_core.errors.metadata import (
-    OperationMetadata,
     TracedOperation,
     capture_source_context,
 )
@@ -172,106 +171,6 @@ def append_operation_to_graph(
         f"deps={dependencies}) at {metadata.display_filename}:"
         f"{metadata.line_number}",
     )
-
-
-def create_list_broadcast_traced_operations(
-    frame_instance: ActuarialFrame,
-    result_col: str,
-    list_columns: set[str],
-    conditional_expr: Any,
-    metadata: OperationMetadata | None = None,
-) -> list[TracedOperation]:
-    """Create TracedOperation objects for a list broadcasting operation.
-
-    Args:
-        frame_instance: The ActuarialFrame being operated on
-        result_col: Name of the result column
-        list_columns: Set of list columns being broadcast
-        conditional_expr: The conditional expression being applied
-        metadata: Optional source metadata (captured from user code)
-
-    Returns:
-        List of TracedOperation objects representing the pattern steps
-
-    """
-    from gaspatchio_core.frame.graph.graph_models import ListBroadcastMetadata
-
-    # Capture metadata if not provided
-    if metadata is None:
-        # Try to find user code in stack (skip internal frames)
-        for depth in range(2, 8):
-            temp_metadata = capture_source_context(depth=depth)
-            if not any(
-                internal in temp_metadata.file_name
-                for internal in [
-                    "gaspatchio_core/frame/",
-                    "gaspatchio_core/column/",
-                    "gaspatchio_core/functions/",
-                    "<frozen",
-                    "site-packages/",
-                ]
-            ):
-                metadata = temp_metadata
-                break
-        if metadata is None:
-            metadata = capture_source_context(depth=2)
-
-    # metadata should never be None at this point
-    if metadata is None:
-        msg = "Failed to capture source metadata"
-        raise AssertionError(msg)
-
-    # Create list broadcasting metadata (for future use in visualization)
-    _ = ListBroadcastMetadata(
-        result_column=result_col,
-        # Convert set to sorted list for consistency
-        list_columns=sorted(list_columns),
-        conditional_expr=str(conditional_expr),
-        pattern_steps=[
-            "with_row_index('_row_id')",
-            f"explode({sorted(list_columns)})",
-            f"with_columns({result_col}=<conditional>)",
-            "group_by('_row_id', maintain_order=True)",
-            "agg(<list columns + result>)",
-            "drop('_row_id')",
-        ],
-    )
-
-    # Infer result type (should be List[inner_type])
-    result_dtype = _infer_expression_type(conditional_expr, frame_instance)
-    if result_dtype is not None:
-        # Wrap in List type if not already
-        import polars as pl
-
-        if not isinstance(result_dtype, pl.List):
-            result_dtype = pl.List(result_dtype)
-
-    # Extract dependencies from the conditional expression
-    from gaspatchio_core.frame.graph import extract_dependencies
-
-    dependencies = extract_dependencies(conditional_expr)
-
-    # Create a single TracedOperation representing the entire pattern
-    # We could create one per step, but that would clutter the graph
-    # A single operation with detailed metadata is clearer
-    list_cols_str = ", ".join(sorted(list_columns))
-    operation = TracedOperation(
-        alias=result_col,
-        expression=(
-            f"when(...).then(...).otherwise(...) [list broadcast: {list_cols_str}]"
-        ),
-        metadata=metadata,
-        expected_dtype=result_dtype,
-        dependencies=dependencies,
-    )
-
-    logger.trace(
-        f"Graph: Added list broadcasting operation '{result_col}' "
-        f"(list_cols={sorted(list_columns)}, deps={dependencies}) "
-        f"at {metadata.display_filename}:{metadata.line_number}"
-    )
-
-    return [operation]
 
 
 def _infer_expression_type(expr: Any, frame_instance: ActuarialFrame) -> Any:

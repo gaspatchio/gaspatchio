@@ -214,6 +214,14 @@ class Table:
         This is useful when assumptions are stored as separate files per scenario
         (e.g., from an ESG tool that outputs per-scenario returns).
 
+        !!! note "When to use"
+            * **ESG Integration:** Load per-scenario returns or yield curves from
+                economic scenario generator outputs stored as separate files.
+            * **Stress Testing:** Combine base, stressed, and adverse scenario
+                assumption files into a single Table for multi-scenario runs.
+            * **Regulatory Scenarios:** Load prescribed regulatory scenarios
+                (e.g., IFRS17, Solvency II) from separate assumption files.
+
         Args:
             scenario_files: Mapping of scenario_id -> file path
             scenario_column: Name for the scenario ID column
@@ -225,6 +233,25 @@ class Table:
 
         Returns:
             Table with scenario_column added to dimensions
+
+        Examples:
+            Loading per-scenario rate files:
+
+            ```python no_output_check
+            from gaspatchio_core.assumptions import Table
+
+            rates_table = Table.from_scenario_files(
+                scenario_files={
+                    "BASE": "scenarios/BASE/rates.parquet",
+                    "UP": "scenarios/UP/rates.parquet",
+                    "DOWN": "scenarios/DOWN/rates.parquet",
+                },
+                scenario_column="scenario_id",
+                dimensions={"year": "year"},
+                value="forward_rate",
+                name="discount_rates",
+            )
+            ```
 
         """
         dfs = []
@@ -272,6 +299,14 @@ class Table:
         Convenience method when scenario files follow a predictable naming pattern.
         Expands the template with each scenario ID and delegates to from_scenario_files().
 
+        !!! note "When to use"
+            * **Templated Paths:** When scenario files follow a naming convention
+                like `scenarios/{scenario_id}/rates.parquet` or similar patterns.
+            * **Stochastic Scenarios:** For thousands of numbered scenarios where
+                manually specifying each path would be impractical.
+            * **Convention over Configuration:** When file organization follows
+                a predictable directory structure per scenario.
+
         Args:
             path_template: Path with {scenario_id} placeholder
             scenario_ids: List of scenario IDs to load
@@ -284,6 +319,22 @@ class Table:
 
         Returns:
             Table with scenario_column added to dimensions
+
+        Examples:
+            Loading files from templated paths:
+
+            ```python no_output_check
+            from gaspatchio_core.assumptions import Table
+
+            # Files: scenarios/BASE/returns.parquet, scenarios/UP/returns.parquet
+            returns_table = Table.from_scenario_template(
+                path_template="scenarios/{scenario_id}/returns.parquet",
+                scenario_ids=["BASE", "UP", "DOWN"],
+                scenario_column="scenario_id",
+                dimensions={"t": "t"},
+                value="inv_return_mth",
+            )
+            ```
 
         """
         scenario_files = {
