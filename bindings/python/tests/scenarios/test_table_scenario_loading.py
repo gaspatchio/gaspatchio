@@ -131,3 +131,79 @@ class TestTableFromScenarioFiles:
 
         # Assert
         assert len(table.to_dataframe()) == 9
+
+
+class TestTableFromScenarioTemplate:
+    """Tests for Table.from_scenario_template() classmethod."""
+
+    @pytest.fixture
+    def templated_scenario_files(self, tmp_path: Path) -> tuple[str, list[str]]:
+        """Create scenario files following a template pattern."""
+        scenarios = ["BASE", "UP", "DOWN"]
+
+        for scenario in scenarios:
+            scenario_dir = tmp_path / scenario
+            scenario_dir.mkdir()
+            scenario_df = pl.DataFrame(
+                {
+                    "year": [1, 2, 3],
+                    "rate": [0.03, 0.035, 0.04]
+                    if scenario == "BASE"
+                    else [0.035, 0.04, 0.045]
+                    if scenario == "UP"
+                    else [0.025, 0.03, 0.035],
+                }
+            )
+            scenario_df.write_parquet(scenario_dir / "rates.parquet")
+
+        template = str(tmp_path / "{scenario_id}" / "rates.parquet")
+        return template, scenarios
+
+    def test_expands_template_to_files(self, templated_scenario_files):
+        """Should expand template with scenario IDs."""
+        # Arrange
+        template, scenarios = templated_scenario_files
+
+        # Act
+        table = Table.from_scenario_template(
+            path_template=template,
+            scenario_ids=scenarios,
+            scenario_column="scenario_id",
+            dimensions={"year": "year"},
+            value="rate",
+            name="templated_rates",
+        )
+
+        # Assert
+        result_df = table.to_dataframe()
+        assert len(result_df) == 9  # 3 scenarios x 3 years
+        assert set(result_df["scenario_id"].unique().to_list()) == {
+            "BASE",
+            "UP",
+            "DOWN",
+        }
+
+    def test_template_with_integer_scenarios(self, tmp_path: Path):
+        """Template should work with integer scenario IDs."""
+        # Arrange
+        for i in range(1, 4):
+            scenario_dir = tmp_path / str(i)
+            scenario_dir.mkdir()
+            scenario_df = pl.DataFrame({"t": [1, 2], "rate": [0.01 * i, 0.02 * i]})
+            scenario_df.write_parquet(scenario_dir / "data.parquet")
+
+        template = str(tmp_path / "{scenario_id}" / "data.parquet")
+
+        # Act
+        table = Table.from_scenario_template(
+            path_template=template,
+            scenario_ids=[1, 2, 3],
+            scenario_column="scen",
+            dimensions={"t": "t"},
+            value="rate",
+            name="int_templated",
+        )
+
+        # Assert
+        result_df = table.to_dataframe()
+        assert len(result_df) == 6  # 3 scenarios x 2 periods

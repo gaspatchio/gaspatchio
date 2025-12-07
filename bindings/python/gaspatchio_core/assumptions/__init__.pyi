@@ -20,6 +20,29 @@ class Table:
         validate: bool = True,
         metadata: dict[str, Any] | None = None,
     ) -> None: ...
+    @classmethod
+    def from_scenario_files(
+        cls,
+        scenario_files: dict[str, str | Path],
+        scenario_column: str,
+        dimensions: dict[str, str | Dimension],
+        value: str,
+        name: str | None = None,
+        validate: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> Table: ...
+    @classmethod
+    def from_scenario_template(
+        cls,
+        path_template: str,
+        scenario_ids: list[str] | list[int],
+        scenario_column: str,
+        dimensions: dict[str, str | Dimension],
+        value: str,
+        name: str | None = None,
+        validate: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> Table: ...
     def lookup(self, **kwargs: str | pl.Expr) -> pl.Expr: ...
     def extend(
         self,

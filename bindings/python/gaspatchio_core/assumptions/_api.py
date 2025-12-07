@@ -254,6 +254,52 @@ class Table:
             metadata=metadata,
         )
 
+    @classmethod
+    def from_scenario_template(
+        cls,
+        path_template: str,
+        scenario_ids: list[str] | list[int],
+        scenario_column: str,
+        dimensions: dict[str, str | Dimension],
+        value: str,
+        name: str | None = None,
+        validate: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> Table:
+        """
+        Create a Table from scenario files matching a path template.
+
+        Convenience method when scenario files follow a predictable naming pattern.
+        Expands the template with each scenario ID and delegates to from_scenario_files().
+
+        Args:
+            path_template: Path with {scenario_id} placeholder
+            scenario_ids: List of scenario IDs to load
+            scenario_column: Name for the scenario ID column
+            dimensions: Dimension mapping (excluding scenario)
+            value: Value column name
+            name: Optional table name
+            validate: Whether to validate data on load
+            metadata: Optional metadata dictionary
+
+        Returns:
+            Table with scenario_column added to dimensions
+
+        """
+        scenario_files = {
+            scenario_id: path_template.format(scenario_id=scenario_id)
+            for scenario_id in scenario_ids
+        }
+        return cls.from_scenario_files(
+            scenario_files=scenario_files,
+            scenario_column=scenario_column,
+            dimensions=dimensions,
+            value=value,
+            name=name,
+            validate=validate,
+            metadata=metadata,
+        )
+
     def _process_data(self, source: str | Path | pl.DataFrame) -> None:
         """Process the data through dimension transformations and register with Rust.
 
