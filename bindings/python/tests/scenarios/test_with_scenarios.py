@@ -3,6 +3,8 @@
 
 """Tests for scenario expansion functionality."""
 
+import polars as pl
+
 from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.scenarios import with_scenarios
 
@@ -67,3 +69,110 @@ class TestWithScenariosBasic:
         result_df = result.collect()
         assert len(result_df) == 2
         assert result_df["scenario_id"].to_list() == ["DETERMINISTIC", "DETERMINISTIC"]
+
+
+class TestWithScenariosPerformance:
+    """Tests for scenario ID encoding and performance features."""
+
+    def test_integer_scenario_ids(self):
+        """Integer scenario IDs for stochastic runs."""
+        # Arrange
+        af = ActuarialFrame({"x": [1]})
+
+        # Act
+        result = with_scenarios(af, [1, 2, 3, 4, 5])
+
+        # Assert
+        result_df = result.collect()
+        assert len(result_df) == 5
+        assert result_df["scenario_id"].dtype == pl.Int64
+        assert set(result_df["scenario_id"].to_list()) == {1, 2, 3, 4, 5}
+
+    def test_categorical_encoding(self):
+        """Categorical encoding for string scenario IDs."""
+        # Arrange
+        af = ActuarialFrame({"x": [1]})
+
+        # Act
+        result = with_scenarios(af, ["A", "B", "C"], categorical=True)
+
+        # Assert
+        result_df = result.collect()
+        assert result_df["scenario_id"].dtype == pl.Categorical
+
+    def test_categorical_not_applied_to_integers(self):
+        """Categorical flag should not affect integer IDs."""
+        # Arrange
+        af = ActuarialFrame({"x": [1]})
+
+        # Act
+        result = with_scenarios(af, [1, 2, 3], categorical=True)
+
+        # Assert
+        result_df = result.collect()
+        # Integer IDs stay as integers even with categorical=True
+        assert result_df["scenario_id"].dtype == pl.Int64
+
+    def test_custom_scenario_column_name(self):
+        """Custom scenario column name."""
+        # Arrange
+        af = ActuarialFrame({"x": [1]})
+
+        # Act
+        result = with_scenarios(af, ["A", "B"], scenario_column="scen")
+
+        # Assert
+        result_df = result.collect()
+        assert "scen" in result_df.columns
+        assert "scenario_id" not in result_df.columns
+
+
+class TestWithScenariosPreservation:
+    """Tests for ActuarialFrame property preservation."""
+
+    def test_preserves_mode(self):
+        """Mode should be preserved from input ActuarialFrame."""
+        # Arrange
+        af = ActuarialFrame({"x": [1]}, mode="optimize")
+
+        # Act
+        result = with_scenarios(af, ["A"])
+
+        # Assert
+        assert result._mode == "optimize"  # noqa: SLF001
+
+    def test_preserves_verbose(self):
+        """Verbose flag should be preserved."""
+        # Arrange
+        af = ActuarialFrame({"x": [1]}, verbose=True)
+
+        # Act
+        result = with_scenarios(af, ["A"])
+
+        # Assert
+        assert result._verbose is True  # noqa: SLF001
+
+    def test_preserves_all_original_columns(self):
+        """All original columns should be present in result."""
+        # Arrange
+        af = ActuarialFrame(
+            {
+                "policy_id": [1],
+                "sum_assured": [100000],
+                "age": [35],
+                "sex": ["M"],
+            }
+        )
+
+        # Act
+        result = with_scenarios(af, ["BASE"])
+
+        # Assert
+        result_df = result.collect()
+        assert set(result_df.columns) == {
+            "policy_id",
+            "sum_assured",
+            "age",
+            "sex",
+            "scenario_id",
+        }
