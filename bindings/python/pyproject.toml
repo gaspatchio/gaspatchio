@@ -50,7 +50,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 module-name = "gaspatchio_core._internal"
-python-packages = ["gaspatchio"]
+python-packages = ["gaspatchio_core"]
 python-source = ""
 
 # Linting, formatting, type checking
