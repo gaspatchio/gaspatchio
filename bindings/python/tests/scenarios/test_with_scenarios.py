@@ -178,6 +178,40 @@ class TestWithScenariosPreservation:
         }
 
 
+class TestWithScenariosLazyMode:
+    """Tests for lazy mode support in with_scenarios()."""
+
+    def test_works_with_lazy_input(self):
+        """with_scenarios should work when given a lazy ActuarialFrame."""
+        # Arrange
+        lf = pl.LazyFrame({"x": [1, 2, 3]})
+        af = ActuarialFrame(lf, mode="optimize")
+
+        # Act
+        result = with_scenarios(af, ["A", "B"])
+
+        # Assert - Should produce 6 rows when collected
+        result_df = result.collect()
+        assert len(result_df) == 6
+
+    def test_scan_parquet_workflow(self, tmp_path):
+        """Test the lazy loading pattern from RFC."""
+        # Arrange - Create a test parquet file
+        test_df = pl.DataFrame({"policy_id": [1, 2], "premium": [100.0, 200.0]})
+        test_path = tmp_path / "model_points.parquet"
+        test_df.write_parquet(test_path)
+
+        # Load lazily
+        af = ActuarialFrame(pl.scan_parquet(test_path))
+
+        # Act - Expand
+        af = with_scenarios(af, ["BASE", "STRESS"])
+
+        # Assert - Collect
+        result_df = af.collect()
+        assert len(result_df) == 4  # 2 policies x 2 scenarios
+
+
 def test_import_from_top_level():
     """with_scenarios should be importable from gaspatchio_core."""
     from gaspatchio_core import with_scenarios

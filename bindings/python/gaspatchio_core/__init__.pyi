@@ -29,6 +29,9 @@ from .frame import run_model as run_model
 # Functions
 from .functions.conditional import when as when
 
+# Scenarios
+from .scenarios import with_scenarios as with_scenarios
+
 # Utility functions
 from .util import execution_mode as execution_mode
 from .util import get_default_mode as get_default_mode
@@ -92,6 +95,8 @@ __all__: list[str] = [
     "PerformanceWarning",
     # Functions
     "when",
+    # Scenarios
+    "with_scenarios",
     # Modules (for direct function access)
     "functions",
 ]
