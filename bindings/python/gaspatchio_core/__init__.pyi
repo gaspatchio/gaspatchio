@@ -30,6 +30,9 @@ from .frame import run_model as run_model
 from .functions.conditional import when as when
 
 # Scenarios
+from .scenarios import batch_scenarios as batch_scenarios
+from .scenarios import describe_scenarios as describe_scenarios
+from .scenarios import sensitivity_analysis as sensitivity_analysis
 from .scenarios import with_scenarios as with_scenarios
 
 # Utility functions
@@ -75,28 +78,23 @@ if TYPE_CHECKING:
 
 # Define __all__ to match __init__.py exactly
 __all__: list[str] = [
-    # Core classes
     "ActuarialFrame",
     "ColumnProxy",
     "ExpressionProxy",
-    # Assumptions API v2
+    "PerformanceWarning",
     "Table",
     "TableBuilder",
+    "batch_scenarios",
+    "describe_scenarios",
+    "execution_mode",
+    "functions",
+    "get_default_mode",
     "get_table_metadata",
     "list_tables",
     "list_tables_with_metadata",
-    # Execution
     "run_model",
-    # Utilities
-    "execution_mode",
-    "get_default_mode",
+    "sensitivity_analysis",
     "set_default_mode",
-    # Errors
-    "PerformanceWarning",
-    # Functions
     "when",
-    # Scenarios
     "with_scenarios",
-    # Modules (for direct function access)
-    "functions",
 ]

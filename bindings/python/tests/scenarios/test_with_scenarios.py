@@ -4,6 +4,7 @@
 """Tests for scenario expansion functionality."""
 
 import polars as pl
+import pytest
 
 from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.scenarios import with_scenarios
@@ -210,6 +211,37 @@ class TestWithScenariosLazyMode:
         # Assert - Collect
         result_df = af.collect()
         assert len(result_df) == 4  # 2 policies x 2 scenarios
+
+
+class TestWithScenariosValidation:
+    """Tests for input validation and error messages."""
+
+    def test_empty_scenario_list_raises(self):
+        """Empty scenario list should raise ValueError."""
+        # Arrange
+        af = ActuarialFrame({"x": [1]})
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="at least one scenario"):
+            with_scenarios(af, [])
+
+    def test_duplicate_scenarios_raises(self):
+        """Duplicate scenario IDs should raise ValueError."""
+        # Arrange
+        af = ActuarialFrame({"x": [1]})
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="duplicate"):
+            with_scenarios(af, ["A", "B", "A"])
+
+    def test_scenario_column_conflict_raises(self):
+        """Should raise if scenario_column already exists in frame."""
+        # Arrange
+        af = ActuarialFrame({"scenario_id": [1], "x": [2]})
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="already exists"):
+            with_scenarios(af, ["A", "B"])
 
 
 def test_import_from_top_level():

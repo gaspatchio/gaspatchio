@@ -38,6 +38,9 @@ class FinanceColumnAccessor(BaseColumnAccessor):
     def to_monthly(
         self, method: "Literal['compound', 'simple']" = "compound"
     ) -> "ExpressionProxy": ...
+    def compound(
+        self, rate: float, periods_per_year: int
+    ) -> "ExpressionProxy": ...
     def discount(
         self, rate_expr: "IntoExprColumn", n_periods_expr: "IntoExprColumn"
     ) -> "ExpressionProxy": ...

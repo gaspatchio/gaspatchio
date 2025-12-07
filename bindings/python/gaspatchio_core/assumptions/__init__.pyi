@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from gaspatchio_core.column.proxy import ColumnProxy, ExpressionProxy
+    from gaspatchio_core.scenarios.shocks import Shock
+
+# Type alias for lookup arguments
+LookupValue = str | pl.Expr | "ColumnProxy" | "ExpressionProxy"
 
 # Core API Classes
 class Table:
@@ -43,7 +50,15 @@ class Table:
         validate: bool = True,
         metadata: dict[str, Any] | None = None,
     ) -> Table: ...
-    def lookup(self, **kwargs: str | pl.Expr) -> pl.Expr: ...
+    @classmethod
+    def from_shocks(
+        cls,
+        base_table: Table,
+        shocks: dict[str, list[Shock]],
+        value_column: str,
+    ) -> dict[str, Table]: ...
+    def lookup(self, **kwargs: LookupValue) -> pl.Expr: ...
+    def with_shock(self, shock: Shock, name: str | None = None) -> Table: ...
     def extend(
         self,
         source: str | Path | pl.DataFrame,

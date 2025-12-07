@@ -3,6 +3,8 @@
 # Import key components for easier access
 from __future__ import annotations
 
+import polars as pl
+
 from gaspatchio_core.telemetry import (
     configure_telemetry,
 )
@@ -27,7 +29,12 @@ from .column import ColumnProxy, ExpressionProxy
 from .errors import PerformanceWarning
 from .frame import ActuarialFrame, run_model
 from .functions.conditional import when
-from .scenarios import with_scenarios
+from .scenarios import (
+    batch_scenarios,
+    describe_scenarios,
+    sensitivity_analysis,
+    with_scenarios,
+)
 from .util import (
     execution_mode,  # Context manager
     get_default_mode,  # Getter
@@ -36,30 +43,32 @@ from .util import (
 
 configure_telemetry(enable=True)
 
+# Enable Polars streaming engine by default for better performance with scenarios.
+# Streaming is 3-7x faster than in-memory and uses less memory.
+# Falls back to in-memory transparently for unsupported operations.
+# See: https://docs.pola.rs/user-guide/concepts/streaming/
+pl.Config.set_engine_affinity("streaming")
+
 
 # Define the public API surface
 __all__ = [
-    # Core classes
     "ActuarialFrame",
     "ColumnProxy",
     "ExpressionProxy",
-    # Errors
     "PerformanceWarning",
-    # Assumptions API v2
     "Table",
     "TableBuilder",
-    # Utilities
+    "batch_scenarios",
+    "describe_scenarios",
     "execution_mode",
-    # Functions
     "functions",
     "get_default_mode",
     "get_table_metadata",
     "list_tables",
     "list_tables_with_metadata",
-    # Execution
     "run_model",
+    "sensitivity_analysis",
     "set_default_mode",
     "when",
-    # Scenarios
     "with_scenarios",
 ]
