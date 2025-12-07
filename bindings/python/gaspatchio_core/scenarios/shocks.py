@@ -196,8 +196,10 @@ class OverrideShock(Shock):
         """Apply override shock to column expression."""
         import polars as pl
 
-        # Use col * 0 + value to broadcast the literal to match column length
-        return col * 0 + pl.lit(self.value)
+        # Cast column to Float64 first to avoid type coercion issues.
+        # The original `col * 0 + lit(value)` fails when col is integer
+        # and value is float. Casting to Float64 ensures compatibility.
+        return col.cast(pl.Float64) * 0 + self.value
 
     def describe(self) -> str:
         """Return description of this shock."""

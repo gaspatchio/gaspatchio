@@ -3,8 +3,6 @@
 # Import key components for easier access
 from __future__ import annotations
 
-import polars as pl
-
 from gaspatchio_core.telemetry import (
     configure_telemetry,
 )
@@ -42,12 +40,6 @@ from .util import (
 )
 
 configure_telemetry(enable=True)
-
-# Enable Polars streaming engine by default for better performance with scenarios.
-# Streaming is 3-7x faster than in-memory and uses less memory.
-# Falls back to in-memory transparently for unsupported operations.
-# See: https://docs.pola.rs/user-guide/concepts/streaming/
-pl.Config.set_engine_affinity("streaming")
 
 
 # Define the public API surface

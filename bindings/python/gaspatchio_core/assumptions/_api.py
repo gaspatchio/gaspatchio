@@ -261,6 +261,12 @@ class Table:
             ```
 
         """
+        if not scenario_files:
+            raise ValueError(
+                "scenario_files cannot be empty. "
+                "Provide at least one scenario_id -> file path mapping."
+            )
+
         dfs = []
         for scenario_id, path in scenario_files.items():
             # Load the file
