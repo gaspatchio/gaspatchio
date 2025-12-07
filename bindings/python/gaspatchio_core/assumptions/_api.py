@@ -168,6 +168,7 @@ class Table:
         Rows: 9
         Key columns: ['duration', 'product_type']
         ```
+
         """
         self._name = name
 
@@ -191,6 +192,67 @@ class Table:
 
         # Process the data during initialization
         self._process_data(source)
+
+    @classmethod
+    def from_scenario_files(
+        cls,
+        scenario_files: dict[str, str | Path],
+        scenario_column: str,
+        dimensions: dict[str, str | Dimension],
+        value: str,
+        name: str | None = None,
+        validate: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> Table:
+        """
+        Create a Table by concatenating per-scenario assumption files.
+
+        Loads each file, adds scenario_column with the scenario ID, concatenates
+        all into a single DataFrame, and creates a Table with scenario_column
+        as an additional dimension.
+
+        This is useful when assumptions are stored as separate files per scenario
+        (e.g., from an ESG tool that outputs per-scenario returns).
+
+        Args:
+            scenario_files: Mapping of scenario_id -> file path
+            scenario_column: Name for the scenario ID column
+            dimensions: Dimension mapping (excluding scenario, which is added automatically)
+            value: Value column name
+            name: Optional table name (defaults to "from_scenarios")
+            validate: Whether to validate data on load
+            metadata: Optional metadata dictionary
+
+        Returns:
+            Table with scenario_column added to dimensions
+
+        """
+        dfs = []
+        for scenario_id, path in scenario_files.items():
+            # Load the file
+            file_path = Path(path) if isinstance(path, str) else path
+            scenario_df = pl.read_parquet(file_path)
+
+            # Add scenario column
+            scenario_df = scenario_df.with_columns(
+                pl.lit(scenario_id).alias(scenario_column)
+            )
+            dfs.append(scenario_df)
+
+        # Concatenate all scenario DataFrames
+        combined = pl.concat(dfs)
+
+        # Build dimensions with scenario_column first
+        all_dimensions = {scenario_column: scenario_column, **dimensions}
+
+        return cls(
+            name=name or "from_scenarios",
+            source=combined,
+            dimensions=all_dimensions,
+            value=value,
+            validate=validate,
+            metadata=metadata,
+        )
 
     def _process_data(self, source: str | Path | pl.DataFrame) -> None:
         """Process the data through dimension transformations and register with Rust.
@@ -445,6 +507,7 @@ class Table:
         │ P004      ┆ WL           ┆ 1           ┆ 0.03       │
         └───────────┴──────────────┴─────────────┴────────────┘
         ```
+
         """
         # Merge both sources of dimensions
         all_dimensions = {}
@@ -624,6 +687,7 @@ class Table:
         Initial rows: 3
         After extension: 5
         ```
+
         """
         logger.debug(f"Extending table '{self._name}' with additional data")
 
@@ -1149,6 +1213,7 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
     ```text
     Registered 2 tables with metadata
     ```
+
     """
     metadata = _TABLE_METADATA.get(table_name)
     if metadata is not None:
@@ -1261,6 +1326,7 @@ def list_tables() -> list[str]:
     Missing tables: ['expense_validation_ex', 'interest_validation_ex']
     ⚠️  Model not ready - missing 2 tables
     ```
+
     """
     try:
         registry = PyAssumptionTableRegistry()
@@ -1371,5 +1437,6 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
     mortality_meta_ex2 registered: True
     lapse_meta_ex2 registered: True
     ```
+
     """
     return _TABLE_METADATA.copy()
