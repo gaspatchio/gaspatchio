@@ -8,12 +8,15 @@ use pyo3_polars::PyDataFrame;
 
 use pyo3::prelude::*;
 use serde::Deserialize;
+use std::str::FromStr;
 
 // Import the core logic function and assume Kwargs struct is defined there
 use gaspatchio_core_lib::assumptions::{
     append_to_assumption_table_global, get_global_assumption_registry,
-    register_assumption_table_global, register_or_replace_assumption_table_global,
-    reset_global_assumption_registry,
+    register_assumption_table_global, register_assumption_table_global_with_mode,
+    register_or_replace_assumption_table_global,
+    register_or_replace_assumption_table_global_with_mode, reset_global_assumption_registry,
+    StorageMode,
 };
 
 // Kwargs struct for the assumption lookup plugin
@@ -86,23 +89,26 @@ impl PyAssumptionTableRegistry {
         PyAssumptionTableRegistry
     }
 
-    #[pyo3(signature = (name, df, keys, value_column))]
+    #[pyo3(signature = (name, df, keys, value_column, storage_mode="auto"))]
     fn register_table(
         &self,
         name: String,
         df: PyDataFrame,
         keys: Vec<String>,
         value_column: String,
+        storage_mode: Option<&str>,
     ) -> PyResult<()> {
         let rust_df: DataFrame = df.into();
+        let mode = StorageMode::from_str(storage_mode.unwrap_or("auto"))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("{}", e)))?;
 
         log::debug!(
-            "PyAssumptionTableRegistry::register_table: Registering table '{}' with {} rows, keys: {:?}, value_column: '{}'",
-            name, rust_df.height(), keys, value_column
+            "PyAssumptionTableRegistry::register_table: Registering table '{}' with {} rows, keys: {:?}, value_column: '{}', mode: {:?}",
+            name, rust_df.height(), keys, value_column, mode
         );
 
-        // Use the global registry function
-        register_assumption_table_global(name.clone(), rust_df, keys, value_column)
+        // Use the global registry function with mode
+        register_assumption_table_global_with_mode(name.clone(), rust_df, keys, value_column, mode)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e)))?;
 
         // Verify registration
@@ -169,7 +175,21 @@ impl PyAssumptionTableRegistry {
         Ok(registry.table_exists(&name))
     }
 
-    #[pyo3(signature = (name, df, keys, value_column, force_replace=true))]
+    fn get_table_storage_mode(&self, name: String) -> PyResult<Option<String>> {
+        let registry = get_global_assumption_registry();
+        if let Some(table) = registry.get_table(&name) {
+            let mode = match table.storage_mode() {
+                StorageMode::Hash => "hash",
+                StorageMode::Array => "array",
+                StorageMode::Auto => "auto",
+            };
+            Ok(Some(mode.to_string()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[pyo3(signature = (name, df, keys, value_column, force_replace=true, storage_mode="auto"))]
     fn register_or_replace_table(
         &self,
         name: String,
@@ -177,18 +197,28 @@ impl PyAssumptionTableRegistry {
         keys: Vec<String>,
         value_column: String,
         force_replace: Option<bool>,
+        storage_mode: Option<&str>,
     ) -> PyResult<()> {
         let rust_df: DataFrame = df.into();
         let force = force_replace.unwrap_or(true);
+        let mode = StorageMode::from_str(storage_mode.unwrap_or("auto"))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("{}", e)))?;
 
         log::debug!(
-            "PyAssumptionTableRegistry::register_or_replace_table: Registering/replacing table '{}' with {} rows, keys: {:?}, value_column: '{}', force_replace: {}",
-            name, rust_df.height(), keys, value_column, force
+            "PyAssumptionTableRegistry::register_or_replace_table: Registering/replacing table '{}' with {} rows, keys: {:?}, value_column: '{}', force_replace: {}, mode: {:?}",
+            name, rust_df.height(), keys, value_column, force, mode
         );
 
-        // Use the new idempotent registry function
-        register_or_replace_assumption_table_global(name.clone(), rust_df, keys, value_column, force)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e)))?;
+        // Use the new idempotent registry function with mode
+        register_or_replace_assumption_table_global_with_mode(
+            name.clone(),
+            rust_df,
+            keys,
+            value_column,
+            force,
+            mode,
+        )
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e)))?;
 
         // Verify registration
         let registry = get_global_assumption_registry();

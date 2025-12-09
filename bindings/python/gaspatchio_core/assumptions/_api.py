@@ -60,6 +60,7 @@ class Table:
         value: str = "rate",
         validate: bool = True,
         metadata: dict[str, Any] | None = None,
+        storage_mode: str = "hash",
     ):
         """Create a new assumption table.
 
@@ -189,6 +190,7 @@ class Table:
 
         self._value = value
         self._validate = validate
+        self._storage_mode = storage_mode
         self._df: pl.DataFrame | None = None
         self._schema: TableSchema | None = None
 
@@ -582,6 +584,7 @@ class Table:
                 keys=key_columns,
                 value_column=self._value,
                 force_replace=True,  # Always replace for reentrancy support
+                storage_mode=self._storage_mode,
             )
             logger.debug(
                 f"Successfully registered/replaced table '{self._name}' with {len(processed_df)} rows, "

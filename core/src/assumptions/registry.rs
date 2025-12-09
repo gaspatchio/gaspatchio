@@ -192,6 +192,69 @@ pub fn append_to_assumption_table_global(
     })
 }
 
+/// Register a table with explicit storage mode.
+pub fn register_assumption_table_global_with_mode(
+    name: String,
+    df: DataFrame,
+    keys: Vec<String>,
+    value: String,
+    mode: crate::assumptions::table::StorageMode,
+) -> PolarsResult<()> {
+    let _guard = acquire_registration_lock()?;
+
+    // Check for existing table inside the lock
+    let current_registry = get_global_assumption_registry();
+    if current_registry.get_table(&name).is_some() {
+        return Err(polars_err!(ComputeError: "assumption table '{}' already exists", name));
+    }
+    drop(current_registry);
+
+    // Atomically update registry
+    update_global_registry("registered", &name, |registry| {
+        registry.register_table_with_mode(name.clone(), df, keys, value, mode)
+    })
+}
+
+/// Register or replace a table with explicit storage mode.
+pub fn register_or_replace_assumption_table_global_with_mode(
+    name: String,
+    df: DataFrame,
+    keys: Vec<String>,
+    value: String,
+    force_replace: bool,
+    mode: crate::assumptions::table::StorageMode,
+) -> PolarsResult<()> {
+    let _guard = acquire_registration_lock()?;
+
+    // Check for existing table inside the lock
+    let current_registry = get_global_assumption_registry();
+    let table_exists = current_registry.get_table(&name).is_some();
+    drop(current_registry);
+
+    if table_exists && !force_replace {
+        debug!(
+            "Table '{}' already exists and force_replace=false, skipping registration",
+            name
+        );
+        return Ok(());
+    }
+
+    // Atomically update registry
+    let operation = if table_exists {
+        "replaced"
+    } else {
+        "registered"
+    };
+    update_global_registry(operation, &name, |registry| {
+        // Remove existing table if force_replace is true
+        if table_exists && force_replace {
+            registry.assumption_tables.remove(&name);
+            debug!("Removed existing table '{}' for replacement", name);
+        }
+        registry.register_table_with_mode(name.clone(), df, keys, value, mode)
+    })
+}
+
 /// Performs a lookup using the global registry.
 ///
 /// This is the core logic function that accesses the globally shared
@@ -236,6 +299,21 @@ impl AssumptionTableRegistry {
         // Array storage doesn't currently support append
         let table = AssumptionTable::build_with_mode(df, keys, value, crate::assumptions::table::StorageMode::Hash)?;
         debug!("assumption table registered: {:?}", name);
+        self.assumption_tables.insert(name, Arc::new(table));
+        Ok(())
+    }
+
+    /// Registers an assumption table with explicit storage mode.
+    pub fn register_table_with_mode(
+        &mut self,
+        name: String,
+        df: DataFrame,
+        keys: Vec<String>,
+        value: String,
+        mode: crate::assumptions::table::StorageMode,
+    ) -> PolarsResult<()> {
+        let table = AssumptionTable::build_with_mode(df, keys, value, mode)?;
+        debug!("assumption table registered with mode {:?}: {:?}", mode, name);
         self.assumption_tables.insert(name, Arc::new(table));
         Ok(())
     }

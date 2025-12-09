@@ -14,6 +14,9 @@ if TYPE_CHECKING:
 # Type alias for lookup arguments
 LookupValue = str | pl.Expr | "ColumnProxy" | "ExpressionProxy"
 
+# Type alias for storage mode
+StorageModeType = Literal["auto", "hash", "array"]
+
 # Core API Classes
 class Table:
     """Main assumption table class with dimension-based structure."""
@@ -26,6 +29,7 @@ class Table:
         value: str = "rate",
         validate: bool = True,
         metadata: dict[str, Any] | None = None,
+        storage_mode: StorageModeType = "hash",
     ) -> None: ...
     @classmethod
     def from_scenario_files(
