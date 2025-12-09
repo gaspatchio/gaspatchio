@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use gaspatchio_core_lib::assumptions::table::AssumptionTable;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use gaspatchio_core_lib::assumptions::table::{AssumptionTable, StorageMode};
 use polars::prelude::*;
 use polars_core::utils::concat_df;
 use std::fs::File;
@@ -84,6 +84,33 @@ fn create_mortality_table() -> PolarsResult<AssumptionTable> {
         df_mortality_long,
         vec!["age-last".to_string(), "gender_smoking".to_string()],
         "mortality_rate".to_string(),
+    )
+}
+
+// Helper function to create the mortality table with a specific storage mode
+fn create_mortality_table_with_mode(mode: StorageMode) -> PolarsResult<AssumptionTable> {
+    let ages: Vec<i64> = (18..=100).collect(); // 83 ages
+    let df_mortality_wide = df!(
+        "age-last" => ages.clone(),
+        "MNS" => ages.iter().map(|&age| 0.001 * (1.0 + age as f64/100.0)).collect::<Vec<f64>>(),
+        "FNS" => ages.iter().map(|&age| 0.0008 * (1.0 + age as f64/100.0)).collect::<Vec<f64>>(),
+        "MS" => ages.iter().map(|&age| 0.0015 * (1.0 + age as f64/100.0)).collect::<Vec<f64>>(),
+        "FS" => ages.iter().map(|&age| 0.0012 * (1.0 + age as f64/100.0)).collect::<Vec<f64>>(),
+    )?;
+
+    let df_mortality_long = custom_melt(
+        &df_mortality_wide,
+        &["age-last"],
+        &["MNS", "FNS", "MS", "FS"],
+        "gender_smoking",
+        "mortality_rate",
+    )?;
+
+    AssumptionTable::build_with_mode(
+        df_mortality_long,
+        vec!["age-last".to_string(), "gender_smoking".to_string()],
+        "mortality_rate".to_string(),
+        mode,
     )
 }
 
@@ -382,11 +409,144 @@ fn benchmark_assumption_table_vector_lookup_100k(c: &mut Criterion) {
     group.finish();
 }
 
+// Benchmark comparing hash vs array storage with 1k model points
+fn benchmark_hash_vs_array_1k(c: &mut Criterion) {
+    let df_model_points = match load_model_points_1k() {
+        Ok(df) => df,
+        Err(e) => {
+            eprintln!("Failed to load 1k model points: {}", e);
+            return;
+        }
+    };
+
+    let age_col = df_model_points
+        .column("age-last")
+        .unwrap()
+        .as_series()
+        .unwrap();
+    let gender_col = df_model_points
+        .column("gender_smoking")
+        .unwrap()
+        .as_series()
+        .unwrap();
+    let keys: Vec<&Series> = vec![age_col, gender_col];
+
+    let mut group = c.benchmark_group("hash_vs_array_1k");
+
+    // Hash storage
+    let hash_table = create_mortality_table_with_mode(StorageMode::Hash)
+        .expect("Failed to create hash table");
+    group.bench_function("hash_lookup_1k", |b| {
+        b.iter(|| {
+            let result = hash_table.lookup_series(black_box(&keys));
+            black_box(result)
+        })
+    });
+
+    // Array storage
+    let array_table = create_mortality_table_with_mode(StorageMode::Array)
+        .expect("Failed to create array table");
+    assert!(
+        array_table.is_array_storage(),
+        "Should use array storage for dense table"
+    );
+    group.bench_function("array_lookup_1k", |b| {
+        b.iter(|| {
+            let result = array_table.lookup_series(black_box(&keys));
+            black_box(result)
+        })
+    });
+
+    group.finish();
+}
+
+// Benchmark comparing hash vs array storage with 100k model points
+fn benchmark_hash_vs_array_100k(c: &mut Criterion) {
+    let df_model_points = match load_model_points_100k() {
+        Ok(df) => df,
+        Err(e) => {
+            eprintln!("Failed to load 100k model points: {}", e);
+            return;
+        }
+    };
+
+    let age_col = df_model_points
+        .column("age-last")
+        .unwrap()
+        .as_series()
+        .unwrap();
+    let gender_col = df_model_points
+        .column("gender_smoking")
+        .unwrap()
+        .as_series()
+        .unwrap();
+    let keys: Vec<&Series> = vec![age_col, gender_col];
+
+    let mut group = c.benchmark_group("hash_vs_array_100k");
+    group.sample_size(20); // Reduce sample size for long benchmarks
+
+    // Hash storage
+    let hash_table = create_mortality_table_with_mode(StorageMode::Hash)
+        .expect("Failed to create hash table");
+    group.bench_function("hash_lookup_100k", |b| {
+        b.iter(|| {
+            let result = hash_table.lookup_series(black_box(&keys));
+            black_box(result)
+        })
+    });
+
+    // Array storage
+    let array_table = create_mortality_table_with_mode(StorageMode::Array)
+        .expect("Failed to create array table");
+    group.bench_function("array_lookup_100k", |b| {
+        b.iter(|| {
+            let result = array_table.lookup_series(black_box(&keys));
+            black_box(result)
+        })
+    });
+
+    group.finish();
+}
+
+// Parameterized benchmark with scaling across different sizes
+fn benchmark_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("lookup_scaling");
+
+    for size in [1_000, 10_000, 100_000].iter() {
+        // Load or create appropriately sized model points
+        let df = if *size <= 1_000 {
+            load_model_points_1k().unwrap()
+        } else {
+            load_model_points_100k().unwrap().head(Some(*size))
+        };
+
+        let age_col = df.column("age-last").unwrap().as_series().unwrap();
+        let gender_col = df.column("gender_smoking").unwrap().as_series().unwrap();
+        let keys: Vec<&Series> = vec![age_col, gender_col];
+
+        let hash_table = create_mortality_table_with_mode(StorageMode::Hash).unwrap();
+        let array_table = create_mortality_table_with_mode(StorageMode::Array).unwrap();
+
+        group.bench_with_input(BenchmarkId::new("hash", size), size, |b, _| {
+            b.iter(|| hash_table.lookup_series(black_box(&keys)))
+        });
+
+        group.bench_with_input(BenchmarkId::new("array", size), size, |b, _| {
+            b.iter(|| array_table.lookup_series(black_box(&keys)))
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     benchmark_assumption_table_lookup_1k,
     //benchmark_assumption_table_lookup_100k,
     benchmark_assumption_table_vector_lookup_1k,
     //benchmark_assumption_table_vector_lookup_100k
+    benchmark_hash_vs_array_1k,
+    benchmark_hash_vs_array_100k,
+    benchmark_scaling,
 );
 criterion_main!(benches);
