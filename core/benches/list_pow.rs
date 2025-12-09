@@ -14,8 +14,7 @@ fn bench_list_pow_list_list(c: &mut Criterion) {
                 // Each row has 240 elements (typical actuarial projection)
                 let base_data: Vec<_> = (0..num_rows)
                     .map(|_| {
-                        let values: Vec<f64> =
-                            (0..240).map(|i| 1.0 + (i as f64 * 0.004)).collect();
+                        let values: Vec<f64> = (0..240).map(|i| 1.0 + (i as f64 * 0.004)).collect();
                         Some(Series::new("".into(), values))
                     })
                     .collect();
@@ -54,8 +53,7 @@ fn bench_list_pow_list_scalar(c: &mut Criterion) {
                 // Setup: List column and scalar exponent
                 let base_data: Vec<_> = (0..num_rows)
                     .map(|_| {
-                        let values: Vec<f64> =
-                            (0..240).map(|i| 1.0 + (i as f64 * 0.004)).collect();
+                        let values: Vec<f64> = (0..240).map(|i| 1.0 + (i as f64 * 0.004)).collect();
                         Some(Series::new("".into(), values))
                     })
                     .collect();
@@ -76,5 +74,9 @@ fn bench_list_pow_list_scalar(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_list_pow_list_list, bench_list_pow_list_scalar);
+criterion_group!(
+    benches,
+    bench_list_pow_list_list,
+    bench_list_pow_list_scalar
+);
 criterion_main!(benches);

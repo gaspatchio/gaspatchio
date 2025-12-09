@@ -100,11 +100,7 @@ pub struct HashStorage {
 
 impl HashStorage {
     /// Build hash storage from DataFrame.
-    pub fn build(
-        df: &DataFrame,
-        keys: &[String],
-        value: &str,
-    ) -> PolarsResult<Self> {
+    pub fn build(df: &DataFrame, keys: &[String], value: &str) -> PolarsResult<Self> {
         let n_rows = df.height();
 
         // Prepare codecs

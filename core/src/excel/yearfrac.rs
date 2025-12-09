@@ -56,7 +56,7 @@ pub fn yearfrac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Seri
     // Debug: Print types before conversion
     let start_dtype = start_date_series.dtype().clone();
     let end_dtype = end_date_series.dtype().clone();
-    
+
     match start_dtype.clone() {
         DataType::Datetime(_, _) => {
             // Try to cast datetime to date
@@ -72,14 +72,19 @@ pub fn yearfrac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Seri
         DataType::List(inner) => {
             if let DataType::Datetime(_, _) = inner.as_ref() {
                 // Convert List[Datetime] to List[Date]
-                start_date_series = start_date_series.list()?.apply_amortized(|s| {
-                    s.as_ref().cast(&DataType::Date).unwrap_or_else(|_| s.as_ref().clone())
-                }).into_series();
+                start_date_series = start_date_series
+                    .list()?
+                    .apply_amortized(|s| {
+                        s.as_ref()
+                            .cast(&DataType::Date)
+                            .unwrap_or_else(|_| s.as_ref().clone())
+                    })
+                    .into_series();
             }
         }
         _ => {}
     }
-    
+
     match end_dtype.clone() {
         DataType::Datetime(_, _) => {
             // Try to cast datetime to date
@@ -95,9 +100,14 @@ pub fn yearfrac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Seri
         DataType::List(inner) => {
             if let DataType::Datetime(_, _) = inner.as_ref() {
                 // Convert List[Datetime] to List[Date]
-                end_date_series = end_date_series.list()?.apply_amortized(|s| {
-                    s.as_ref().cast(&DataType::Date).unwrap_or_else(|_| s.as_ref().clone())
-                }).into_series();
+                end_date_series = end_date_series
+                    .list()?
+                    .apply_amortized(|s| {
+                        s.as_ref()
+                            .cast(&DataType::Date)
+                            .unwrap_or_else(|_| s.as_ref().clone())
+                    })
+                    .into_series();
             }
         }
         _ => {}
@@ -106,7 +116,7 @@ pub fn yearfrac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Seri
     // Handle different input types (scalar dates or list of dates)
     let final_start_dtype = start_date_series.dtype();
     let final_end_dtype = end_date_series.dtype();
-    
+
     match (final_start_dtype, final_end_dtype) {
         (DataType::Date, DataType::Date) => {
             // Both are scalar dates
@@ -195,8 +205,10 @@ fn yearfrac_list_scalar(
                         .into_iter()
                         .map(|date_opt| match (date_opt, scalar_date) {
                             (Some(list_days), Some(scalar_days)) => {
-                                let list_date = epoch + chrono::Duration::days(i64::from(list_days));
-                                let scalar_date = epoch + chrono::Duration::days(i64::from(scalar_days));
+                                let list_date =
+                                    epoch + chrono::Duration::days(i64::from(list_days));
+                                let scalar_date =
+                                    epoch + chrono::Duration::days(i64::from(scalar_days));
                                 let yearfrac = if reverse_args {
                                     calculate_yearfrac(scalar_date, list_date, basis)
                                 } else {
@@ -230,7 +242,8 @@ fn yearfrac_list_list(
     let end_list = end_series.list()?;
 
     // First, validate that all list pairs have matching lengths
-    for (idx, (start_opt, end_opt)) in start_list.into_iter().zip(end_list.into_iter()).enumerate() {
+    for (idx, (start_opt, end_opt)) in start_list.into_iter().zip(end_list.into_iter()).enumerate()
+    {
         if let (Some(start_s), Some(end_s)) = (start_opt, end_opt) {
             if start_s.len() != end_s.len() {
                 return Err(PolarsError::ComputeError(
@@ -462,9 +475,8 @@ pub fn yearfrac_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
     let end_type = &input_fields[1].dtype;
 
     // Helper function to check if a type is a valid date/datetime type
-    let is_valid_date_type = |dtype: &DataType| {
-        matches!(dtype, DataType::Date | DataType::Datetime(_, _))
-    };
+    let is_valid_date_type =
+        |dtype: &DataType| matches!(dtype, DataType::Date | DataType::Datetime(_, _));
 
     // Determine if output should be a list based on input types
     let is_list = matches!(start_type, DataType::List(_)) || matches!(end_type, DataType::List(_));
@@ -472,11 +484,11 @@ pub fn yearfrac_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
     // Validate input types
     let is_valid = match (start_type, end_type) {
         // Scalar types - both Date and Datetime are valid
-        (DataType::Date, DataType::Date) 
-        | (DataType::Datetime(_, _), DataType::Date) 
-        | (DataType::Date, DataType::Datetime(_, _)) 
+        (DataType::Date, DataType::Date)
+        | (DataType::Datetime(_, _), DataType::Date)
+        | (DataType::Date, DataType::Datetime(_, _))
         | (DataType::Datetime(_, _), DataType::Datetime(_, _)) => true,
-        
+
         // List types - check inner types
         (DataType::List(inner1), DataType::List(inner2)) => {
             is_valid_date_type(inner1.as_ref()) && is_valid_date_type(inner2.as_ref())
@@ -484,7 +496,7 @@ pub fn yearfrac_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
         (DataType::List(inner), other) | (other, DataType::List(inner)) => {
             is_valid_date_type(inner.as_ref()) && is_valid_date_type(other)
         }
-        
+
         _ => false,
     };
 
@@ -510,18 +522,27 @@ pub fn yearfrac_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_yearfrac_output_type_accepts_datetime() {
         // Test that yearfrac_output_type accepts datetime inputs
-        let datetime_field = Field::new("start".into(), DataType::Datetime(TimeUnit::Microseconds, None));
+        let datetime_field = Field::new(
+            "start".into(),
+            DataType::Datetime(TimeUnit::Microseconds, None),
+        );
         let date_field = Field::new("end".into(), DataType::Date);
-        
+
         let result = yearfrac_output_type(&[datetime_field.clone(), date_field.clone()]);
-        assert!(result.is_ok(), "Should accept Datetime and Date combination");
-        
+        assert!(
+            result.is_ok(),
+            "Should accept Datetime and Date combination"
+        );
+
         let result = yearfrac_output_type(&[datetime_field.clone(), datetime_field.clone()]);
-        assert!(result.is_ok(), "Should accept Datetime and Datetime combination");
+        assert!(
+            result.is_ok(),
+            "Should accept Datetime and Datetime combination"
+        );
     }
 
     #[test]
@@ -529,16 +550,16 @@ mod tests {
         // Test that yearfrac_output_type accepts List[Datetime] inputs
         let list_datetime_field = Field::new(
             "start".into(),
-            DataType::List(Box::new(DataType::Datetime(TimeUnit::Microseconds, None)))
+            DataType::List(Box::new(DataType::Datetime(TimeUnit::Microseconds, None))),
         );
-        let list_date_field = Field::new(
-            "end".into(),
-            DataType::List(Box::new(DataType::Date))
-        );
-        
+        let list_date_field = Field::new("end".into(), DataType::List(Box::new(DataType::Date)));
+
         let result = yearfrac_output_type(&[list_datetime_field.clone(), list_date_field.clone()]);
-        assert!(result.is_ok(), "Should accept List[Datetime] and List[Date]");
-        
+        assert!(
+            result.is_ok(),
+            "Should accept List[Datetime] and List[Date]"
+        );
+
         // Check output type is List[Float64]
         if let Ok(field) = result {
             assert_eq!(field.dtype, DataType::List(Box::new(DataType::Float64)));
@@ -549,7 +570,7 @@ mod tests {
     fn test_yearfrac_datetime_conversion_works() {
         // This test mimics what the Python test is trying to do
         use chrono::NaiveDateTime;
-        
+
         // Create datetime values
         let datetime1 = NaiveDateTime::parse_from_str("2020-01-01 10:30:00", "%Y-%m-%d %H:%M:%S")
             .unwrap()
@@ -559,7 +580,7 @@ mod tests {
             .unwrap()
             .and_utc()
             .timestamp_micros();
-        
+
         // Create series with datetime values
         let start_series = Series::new("start".into(), &[datetime1])
             .cast(&DataType::Datetime(TimeUnit::Microseconds, None))
@@ -567,13 +588,17 @@ mod tests {
         let end_series = Series::new("end".into(), &[datetime2])
             .cast(&DataType::Datetime(TimeUnit::Microseconds, None))
             .unwrap();
-        
+
         // Test that yearfrac can handle datetime inputs
         let kwargs = YearFracKwargs { basis: Some(0) };
         let result = yearfrac(&[start_series, end_series], &kwargs);
-        
-        assert!(result.is_ok(), "Should handle datetime inputs: {:?}", result.err());
-        
+
+        assert!(
+            result.is_ok(),
+            "Should handle datetime inputs: {:?}",
+            result.err()
+        );
+
         if let Ok(series) = result {
             let value = series.f64().unwrap().get(0).unwrap();
             // 2020-01-01 to 2020-07-01 is approximately 0.5 years
@@ -586,27 +611,27 @@ mod tests {
         // Create lists with mismatched lengths
         let date1 = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
         let date2 = NaiveDate::from_ymd_opt(2020, 7, 1).unwrap();
-        
+
         let days1 = (date1 - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days() as i32;
         let days2 = (date2 - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days() as i32;
-        
+
         // Create inner series with different lengths
-        let inner_start = Series::new("".into(), &[days1, days1])  // 2 elements
+        let inner_start = Series::new("".into(), &[days1, days1]) // 2 elements
             .cast(&DataType::Date)
             .unwrap();
-        let inner_end = Series::new("".into(), &[days2])  // 1 element
+        let inner_end = Series::new("".into(), &[days2]) // 1 element
             .cast(&DataType::Date)
             .unwrap();
-        
+
         // Create list series
         let start_list = ListChunked::from_iter([Some(inner_start)]).into_series();
         let end_list = ListChunked::from_iter([Some(inner_end)]).into_series();
-        
+
         let kwargs = YearFracKwargs { basis: Some(0) };
         let result = yearfrac(&[start_list, end_list], &kwargs);
-        
+
         assert!(result.is_err(), "Should error on mismatched list lengths");
-        
+
         if let Err(e) = result {
             let error_msg = e.to_string();
             assert!(

@@ -8,19 +8,14 @@ use polars::prelude::*;
 #[derive(Debug, Clone)]
 pub enum KeyEncoder {
     /// Integer keys with known range (age 0-100, duration 0-24).
-    IntRange {
-        offset: i64,
-        size: usize,
-    },
+    IntRange { offset: i64, size: usize },
     /// String keys mapped to indices via dictionary.
     Dictionary {
         value_to_idx: AHashMap<String, u32>,
         size: usize,
     },
     /// Pre-encoded categorical columns - use physical value directly.
-    Categorical {
-        size: usize,
-    },
+    Categorical { size: usize },
 }
 
 impl KeyEncoder {
@@ -73,14 +68,17 @@ impl KeyEncoder {
                 // Treat as integer if all whole numbers
                 let f64_ca = series.f64()?;
                 let all_whole = f64_ca.into_iter().all(|opt| {
-                    opt.map(|f| f.fract() == 0.0 && f.is_finite()).unwrap_or(true)
+                    opt.map(|f| f.fract() == 0.0 && f.is_finite())
+                        .unwrap_or(true)
                 });
                 if all_whole {
                     let min = series.min::<i64>()?.unwrap_or(0);
                     let max = series.max::<i64>()?.unwrap_or(0);
                     Ok(KeyEncoder::int_range(min, max))
                 } else {
-                    Err(polars_err!(ComputeError: "Float64 keys with decimals not supported for array storage"))
+                    Err(
+                        polars_err!(ComputeError: "Float64 keys with decimals not supported for array storage"),
+                    )
                 }
             }
             DataType::String => {
@@ -92,7 +90,9 @@ impl KeyEncoder {
                     .collect();
                 Ok(KeyEncoder::dictionary(&unique))
             }
-            dt => Err(polars_err!(ComputeError: "Unsupported key type for array storage: {:?}", dt)),
+            dt => {
+                Err(polars_err!(ComputeError: "Unsupported key type for array storage: {:?}", dt))
+            }
         }
     }
 

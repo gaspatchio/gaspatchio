@@ -57,12 +57,7 @@ fn test_hash_and_array_produce_same_results() -> PolarsResult<()> {
         if h.is_nan() {
             assert!(a.is_nan(), "Both should be NaN");
         } else {
-            assert!(
-                (h - a).abs() < 1e-15,
-                "Values should match: {} vs {}",
-                h,
-                a
-            );
+            assert!((h - a).abs() < 1e-15, "Values should match: {} vs {}", h, a);
         }
     }
 
@@ -136,13 +131,34 @@ fn test_force_hash_mode() -> PolarsResult<()> {
 fn test_storage_mode_from_str() -> PolarsResult<()> {
     use std::str::FromStr;
 
-    assert!(matches!(StorageMode::from_str("hash"), Ok(StorageMode::Hash)));
-    assert!(matches!(StorageMode::from_str("Hash"), Ok(StorageMode::Hash)));
-    assert!(matches!(StorageMode::from_str("HASH"), Ok(StorageMode::Hash)));
-    assert!(matches!(StorageMode::from_str("array"), Ok(StorageMode::Array)));
-    assert!(matches!(StorageMode::from_str("Array"), Ok(StorageMode::Array)));
-    assert!(matches!(StorageMode::from_str("auto"), Ok(StorageMode::Auto)));
-    assert!(matches!(StorageMode::from_str("Auto"), Ok(StorageMode::Auto)));
+    assert!(matches!(
+        StorageMode::from_str("hash"),
+        Ok(StorageMode::Hash)
+    ));
+    assert!(matches!(
+        StorageMode::from_str("Hash"),
+        Ok(StorageMode::Hash)
+    ));
+    assert!(matches!(
+        StorageMode::from_str("HASH"),
+        Ok(StorageMode::Hash)
+    ));
+    assert!(matches!(
+        StorageMode::from_str("array"),
+        Ok(StorageMode::Array)
+    ));
+    assert!(matches!(
+        StorageMode::from_str("Array"),
+        Ok(StorageMode::Array)
+    ));
+    assert!(matches!(
+        StorageMode::from_str("auto"),
+        Ok(StorageMode::Auto)
+    ));
+    assert!(matches!(
+        StorageMode::from_str("Auto"),
+        Ok(StorageMode::Auto)
+    ));
 
     assert!(StorageMode::from_str("invalid").is_err());
 

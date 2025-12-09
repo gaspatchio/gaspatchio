@@ -20,11 +20,7 @@ pub struct ArrayStorage {
 impl ArrayStorage {
     /// Build array storage from DataFrame.
     /// Returns None if table is too sparse (< 30% density).
-    pub fn build(
-        df: &DataFrame,
-        keys: &[String],
-        value: &str,
-    ) -> PolarsResult<Option<Self>> {
+    pub fn build(df: &DataFrame, keys: &[String], value: &str) -> PolarsResult<Option<Self>> {
         let n_rows = df.height();
 
         // Build encoders for each key column
@@ -94,7 +90,10 @@ impl ArrayStorage {
 
         log::debug!(
             "Built ArrayStorage: dims={:?}, capacity={}, density={:.1}%, memory={}KB",
-            dims, capacity, density * 100.0, memory_bytes / 1024
+            dims,
+            capacity,
+            density * 100.0,
+            memory_bytes / 1024
         );
 
         Ok(Some(Self {
@@ -190,13 +189,12 @@ mod tests {
             "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
         }?;
 
-        let storage = ArrayStorage::build(
-            &df,
-            &["age".to_string(), "gender".to_string()],
-            "rate",
-        )?;
+        let storage = ArrayStorage::build(&df, &["age".to_string(), "gender".to_string()], "rate")?;
 
-        assert!(storage.is_some(), "Should build array storage for dense table");
+        assert!(
+            storage.is_some(),
+            "Should build array storage for dense table"
+        );
         let storage = storage.unwrap();
 
         assert_eq!(storage.dimensions(), vec![3, 2]); // 3 ages x 2 genders
@@ -213,11 +211,8 @@ mod tests {
             "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
         }?;
 
-        let storage = ArrayStorage::build(
-            &df,
-            &["age".to_string(), "gender".to_string()],
-            "rate",
-        )?.expect("Should build array storage");
+        let storage = ArrayStorage::build(&df, &["age".to_string(), "gender".to_string()], "rate")?
+            .expect("Should build array storage");
 
         // Test lookup
         let age_series = Series::new("age".into(), &[30i64, 31, 32, 99]);
@@ -227,9 +222,9 @@ mod tests {
 
         let values: Vec<f64> = result.f64()?.into_no_null_iter().collect();
         assert!((values[0] - 0.0008).abs() < 1e-10); // age=30, gender=F
-        assert!((values[1] - 0.001).abs() < 1e-10);  // age=31, gender=F
+        assert!((values[1] - 0.001).abs() < 1e-10); // age=31, gender=F
         assert!((values[2] - 0.0012).abs() < 1e-10); // age=32, gender=F
-        assert!(values[3].is_nan());                  // age=99 - not in table
+        assert!(values[3].is_nan()); // age=99 - not in table
 
         Ok(())
     }
@@ -243,11 +238,7 @@ mod tests {
             "value" => [1.0, 2.0]
         }?;
 
-        let storage = ArrayStorage::build(
-            &df,
-            &["key1".to_string(), "key2".to_string()],
-            "value",
-        )?;
+        let storage = ArrayStorage::build(&df, &["key1".to_string(), "key2".to_string()], "value")?;
 
         assert!(storage.is_none(), "Should return None for sparse table");
 
@@ -278,20 +269,19 @@ mod tests {
             "rate" => df_rows_rate
         }?;
 
-        let storage = ArrayStorage::build(
-            &df,
-            &["age".to_string(), "cat".to_string()],
-            "rate",
-        )?.expect("Should build array storage");
+        let storage = ArrayStorage::build(&df, &["age".to_string(), "cat".to_string()], "rate")?
+            .expect("Should build array storage");
 
         // Create test data with 10k lookups
         let test_ages: Vec<i64> = (0..10_000).map(|i| 18 + (i % 83) as i64).collect();
-        let test_cats: Vec<&str> = (0..10_000).map(|i| match i % 4 {
-            0 => "MNS",
-            1 => "FNS",
-            2 => "MS",
-            _ => "FS",
-        }).collect();
+        let test_cats: Vec<&str> = (0..10_000)
+            .map(|i| match i % 4 {
+                0 => "MNS",
+                1 => "FNS",
+                2 => "MS",
+                _ => "FS",
+            })
+            .collect();
 
         let age_series = Series::new("age".into(), test_ages);
         let cat_series = Series::new("cat".into(), test_cats);
@@ -311,20 +301,28 @@ mod tests {
 
         let per_lookup_ns = elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
         eprintln!("ArrayStorage lookup timing:");
-        eprintln!("  10k lookups x {} iterations = {} total lookups", iterations, iterations * 10_000);
+        eprintln!(
+            "  10k lookups x {} iterations = {} total lookups",
+            iterations,
+            iterations * 10_000
+        );
         eprintln!("  Total time: {:?}", elapsed);
         eprintln!("  Per lookup: {:.2}ns", per_lookup_ns);
 
         // Sanity check: should be at least 1ns per lookup (anything less is suspicious)
-        assert!(per_lookup_ns > 0.1, "Lookup time suspiciously fast: {:.2}ns", per_lookup_ns);
+        assert!(
+            per_lookup_ns > 0.1,
+            "Lookup time suspiciously fast: {:.2}ns",
+            per_lookup_ns
+        );
 
         Ok(())
     }
 
     #[test]
     fn test_array_vs_hash_timing_comparison() -> PolarsResult<()> {
-        use std::time::Instant;
         use crate::assumptions::hash_storage::HashStorage;
+        use std::time::Instant;
 
         // Build a mortality-like table: 83 ages x 4 categories = 332 entries
         let ages: Vec<i64> = (18..=100).collect();
@@ -346,26 +344,23 @@ mod tests {
             "rate" => df_rows_rate
         }?;
 
-        let array_storage = ArrayStorage::build(
-            &df,
-            &["age".to_string(), "cat".to_string()],
-            "rate",
-        )?.expect("Should build array storage");
+        let array_storage =
+            ArrayStorage::build(&df, &["age".to_string(), "cat".to_string()], "rate")?
+                .expect("Should build array storage");
 
-        let hash_storage = HashStorage::build(
-            &df,
-            &["age".to_string(), "cat".to_string()],
-            "rate",
-        )?;
+        let hash_storage =
+            HashStorage::build(&df, &["age".to_string(), "cat".to_string()], "rate")?;
 
         // Create test data with 10k lookups
         let test_ages: Vec<i64> = (0..10_000).map(|i| 18 + (i % 83) as i64).collect();
-        let test_cats: Vec<&str> = (0..10_000).map(|i| match i % 4 {
-            0 => "MNS",
-            1 => "FNS",
-            2 => "MS",
-            _ => "FS",
-        }).collect();
+        let test_cats: Vec<&str> = (0..10_000)
+            .map(|i| match i % 4 {
+                0 => "MNS",
+                1 => "FNS",
+                2 => "MS",
+                _ => "FS",
+            })
+            .collect();
 
         let age_series = Series::new("age".into(), test_ages);
         let cat_series = Series::new("cat".into(), test_cats);
@@ -397,15 +392,32 @@ mod tests {
         let hash_per_lookup_ns = hash_elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
         let speedup = hash_elapsed.as_nanos() as f64 / array_elapsed.as_nanos() as f64;
 
-        eprintln!("\nArray vs Hash timing comparison (10k lookups x {} iterations):", iterations);
-        eprintln!("  Array: {:?} total, {:.2}ns per lookup", array_elapsed, array_per_lookup_ns);
-        eprintln!("  Hash:  {:?} total, {:.2}ns per lookup", hash_elapsed, hash_per_lookup_ns);
+        eprintln!(
+            "\nArray vs Hash timing comparison (10k lookups x {} iterations):",
+            iterations
+        );
+        eprintln!(
+            "  Array: {:?} total, {:.2}ns per lookup",
+            array_elapsed, array_per_lookup_ns
+        );
+        eprintln!(
+            "  Hash:  {:?} total, {:.2}ns per lookup",
+            hash_elapsed, hash_per_lookup_ns
+        );
         eprintln!("  Speedup: {:.1}x", speedup);
 
         // Both should be reasonably fast (< 500ns per lookup)
         // Note: Debug mode is ~10x slower than release mode
-        assert!(array_per_lookup_ns < 500.0, "Array lookup too slow: {:.2}ns", array_per_lookup_ns);
-        assert!(hash_per_lookup_ns < 500.0, "Hash lookup too slow: {:.2}ns", hash_per_lookup_ns);
+        assert!(
+            array_per_lookup_ns < 500.0,
+            "Array lookup too slow: {:.2}ns",
+            array_per_lookup_ns
+        );
+        assert!(
+            hash_per_lookup_ns < 500.0,
+            "Hash lookup too slow: {:.2}ns",
+            hash_per_lookup_ns
+        );
 
         Ok(())
     }

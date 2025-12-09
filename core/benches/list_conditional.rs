@@ -111,7 +111,9 @@ fn bench_list_conditional_gte_all_lists(c: &mut Criterion) {
         let right = ListChunked::from_iter((0..num_rows).map(|_| {
             Some(Series::new(
                 "".into(),
-                (120..120 + list_len).map(|i| i as f64).collect::<Vec<f64>>(),
+                (120..120 + list_len)
+                    .map(|i| i as f64)
+                    .collect::<Vec<f64>>(),
             ))
         }));
 

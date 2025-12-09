@@ -29,7 +29,9 @@ impl FromStr for StorageMode {
             "hash" => Ok(StorageMode::Hash),
             "array" => Ok(StorageMode::Array),
             "auto" => Ok(StorageMode::Auto),
-            _ => Err(polars_err!(ComputeError: "Invalid storage mode: '{}'. Use 'hash', 'array', or 'auto'", s)),
+            _ => Err(
+                polars_err!(ComputeError: "Invalid storage mode: '{}'. Use 'hash', 'array', or 'auto'", s),
+            ),
         }
     }
 }
@@ -67,7 +69,6 @@ impl TableStorage {
     pub fn is_hash(&self) -> bool {
         matches!(self, TableStorage::Hash(_))
     }
-
 }
 
 #[derive(Debug)]
@@ -366,7 +367,9 @@ impl AssumptionTable {
             TableStorage::Array(_) => {
                 // If we're using array storage, we need to fall back to hash-style lookup for vectors
                 // This is acceptable as vector lookups are less common
-                return Err(polars_err!(ComputeError: "Vector lookups with array storage not yet implemented"));
+                return Err(
+                    polars_err!(ComputeError: "Vector lookups with array storage not yet implemented"),
+                );
             }
         };
 
@@ -492,9 +495,10 @@ impl AssumptionTable {
     }
 
     pub fn get_key_name(&self, index: usize) -> PolarsResult<&str> {
-        self.keys.get(index).map(|s| s.as_str()).ok_or_else(|| {
-            polars_err!(ComputeError: "Key index {} out of bounds", index)
-        })
+        self.keys
+            .get(index)
+            .map(|s| s.as_str())
+            .ok_or_else(|| polars_err!(ComputeError: "Key index {} out of bounds", index))
     }
 
     pub fn get_key_columns(&self) -> &[String] {
@@ -587,8 +591,16 @@ mod tests {
         let array_result = array_table.lookup_series(&[&ages, &genders])?;
 
         // Results should be identical
-        let hash_vals: Vec<f64> = hash_result.f64()?.into_iter().map(|v| v.unwrap_or(f64::NAN)).collect();
-        let array_vals: Vec<f64> = array_result.f64()?.into_iter().map(|v| v.unwrap_or(f64::NAN)).collect();
+        let hash_vals: Vec<f64> = hash_result
+            .f64()?
+            .into_iter()
+            .map(|v| v.unwrap_or(f64::NAN))
+            .collect();
+        let array_vals: Vec<f64> = array_result
+            .f64()?
+            .into_iter()
+            .map(|v| v.unwrap_or(f64::NAN))
+            .collect();
 
         for (h, a) in hash_vals.iter().zip(array_vals.iter()) {
             if h.is_nan() {

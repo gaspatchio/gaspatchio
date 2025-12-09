@@ -70,14 +70,13 @@ mod tests {
     #[test]
     fn test_list_pow_with_nulls() {
         // Base with null: [[1.0, null, 3.0]]
-        let base = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![Some(1.0), None, Some(3.0)])),
-        ]);
+        let base = ListChunked::from_iter([Some(Series::new(
+            "".into(),
+            vec![Some(1.0), None, Some(3.0)],
+        ))]);
 
         // Exponent: [[2.0, 2.0, 2.0]]
-        let exp = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![2.0, 2.0, 2.0])),
-        ]);
+        let exp = ListChunked::from_iter([Some(Series::new("".into(), vec![2.0, 2.0, 2.0]))]);
 
         // Expected: [[1.0, null, 9.0]]
         let result = list_pow(&[base.into_series(), exp.into_series()]).unwrap();
@@ -115,9 +114,9 @@ pub fn list_pow(inputs: &[Series]) -> PolarsResult<Series> {
     let rhs = &inputs[1];
 
     // Ensure lhs is a List
-    let lhs_list = lhs.list().map_err(|_| {
-        PolarsError::ComputeError("lhs must be List dtype for list_pow".into())
-    })?;
+    let lhs_list = lhs
+        .list()
+        .map_err(|_| PolarsError::ComputeError("lhs must be List dtype for list_pow".into()))?;
 
     // Case A: RHS is also a List (pairwise operation)
     if matches!(rhs.dtype(), DataType::List(_)) {

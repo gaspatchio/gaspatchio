@@ -62,8 +62,12 @@ mod tests {
         ]);
 
         // Expected: [[1.0, 2.0, 3.0], [4.0, 5.0]] (all values within bounds)
-        let result =
-            list_clip(&[values.into_series(), lower.into_series(), upper.into_series()]).unwrap();
+        let result = list_clip(&[
+            values.into_series(),
+            lower.into_series(),
+            upper.into_series(),
+        ])
+        .unwrap();
         let result_list = result.list().unwrap();
 
         let first = result_list.get_as_series(0).unwrap();
@@ -119,9 +123,9 @@ pub fn list_clip(inputs: &[Series]) -> PolarsResult<Series> {
     let upper = &inputs[2];
 
     // Ensure values is a List
-    let values_list = values.list().map_err(|_| {
-        PolarsError::ComputeError("values must be List dtype for list_clip".into())
-    })?;
+    let values_list = values
+        .list()
+        .map_err(|_| PolarsError::ComputeError("values must be List dtype for list_clip".into()))?;
 
     // Determine if bounds are lists or scalars
     let lower_is_list = matches!(lower.dtype(), DataType::List(_));

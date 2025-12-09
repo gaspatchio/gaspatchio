@@ -435,8 +435,8 @@ fn benchmark_hash_vs_array_1k(c: &mut Criterion) {
     let mut group = c.benchmark_group("hash_vs_array_1k");
 
     // Hash storage
-    let hash_table = create_mortality_table_with_mode(StorageMode::Hash)
-        .expect("Failed to create hash table");
+    let hash_table =
+        create_mortality_table_with_mode(StorageMode::Hash).expect("Failed to create hash table");
     group.bench_function("hash_lookup_1k", |b| {
         b.iter(|| {
             let result = hash_table.lookup_series(black_box(&keys));
@@ -445,8 +445,8 @@ fn benchmark_hash_vs_array_1k(c: &mut Criterion) {
     });
 
     // Array storage
-    let array_table = create_mortality_table_with_mode(StorageMode::Array)
-        .expect("Failed to create array table");
+    let array_table =
+        create_mortality_table_with_mode(StorageMode::Array).expect("Failed to create array table");
     assert!(
         array_table.is_array_storage(),
         "Should use array storage for dense table"
@@ -487,8 +487,8 @@ fn benchmark_hash_vs_array_100k(c: &mut Criterion) {
     group.sample_size(20); // Reduce sample size for long benchmarks
 
     // Hash storage
-    let hash_table = create_mortality_table_with_mode(StorageMode::Hash)
-        .expect("Failed to create hash table");
+    let hash_table =
+        create_mortality_table_with_mode(StorageMode::Hash).expect("Failed to create hash table");
     group.bench_function("hash_lookup_100k", |b| {
         b.iter(|| {
             let result = hash_table.lookup_series(black_box(&keys));
@@ -497,8 +497,8 @@ fn benchmark_hash_vs_array_100k(c: &mut Criterion) {
     });
 
     // Array storage
-    let array_table = create_mortality_table_with_mode(StorageMode::Array)
-        .expect("Failed to create array table");
+    let array_table =
+        create_mortality_table_with_mode(StorageMode::Array).expect("Failed to create array table");
     group.bench_function("array_lookup_100k", |b| {
         b.iter(|| {
             let result = array_table.lookup_series(black_box(&keys));

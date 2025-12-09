@@ -297,7 +297,12 @@ impl AssumptionTableRegistry {
     ) -> PolarsResult<()> {
         // Use hash storage mode for registry tables since they may need append operations
         // Array storage doesn't currently support append
-        let table = AssumptionTable::build_with_mode(df, keys, value, crate::assumptions::table::StorageMode::Hash)?;
+        let table = AssumptionTable::build_with_mode(
+            df,
+            keys,
+            value,
+            crate::assumptions::table::StorageMode::Hash,
+        )?;
         debug!("assumption table registered: {:?}", name);
         self.assumption_tables.insert(name, Arc::new(table));
         Ok(())
@@ -313,7 +318,10 @@ impl AssumptionTableRegistry {
         mode: crate::assumptions::table::StorageMode,
     ) -> PolarsResult<()> {
         let table = AssumptionTable::build_with_mode(df, keys, value, mode)?;
-        debug!("assumption table registered with mode {:?}: {:?}", mode, name);
+        debug!(
+            "assumption table registered with mode {:?}: {:?}",
+            mode, name
+        );
         self.assumption_tables.insert(name, Arc::new(table));
         Ok(())
     }

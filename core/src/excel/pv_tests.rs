@@ -82,7 +82,14 @@ fn test_pv_monthly_type0_and_type1_identity() {
     let pmt = s(&[-1000.0_f64]);
 
     // type 0
-    let out0 = pv(&[rate_month.clone(), nper_months.clone(), pmt.clone()], &PvKwargs { fv: Some(0.0), typ: Some(0) }).unwrap();
+    let out0 = pv(
+        &[rate_month.clone(), nper_months.clone(), pmt.clone()],
+        &PvKwargs {
+            fv: Some(0.0),
+            typ: Some(0),
+        },
+    )
+    .unwrap();
     let v0 = out0.f64().unwrap().get(0).unwrap();
     let r = 0.12_f64 / 12.0;
     let n = 360.0;
@@ -92,7 +99,14 @@ fn test_pv_monthly_type0_and_type1_identity() {
     assert!(lhs0.abs() < 1e-9);
 
     // type 1
-    let out1 = pv(&[rate_month, nper_months, pmt], &PvKwargs { fv: Some(0.0), typ: Some(1) }).unwrap();
+    let out1 = pv(
+        &[rate_month, nper_months, pmt],
+        &PvKwargs {
+            fv: Some(0.0),
+            typ: Some(1),
+        },
+    )
+    .unwrap();
     let v1 = out1.f64().unwrap().get(0).unwrap();
     let lhs1 = v1 + p * (1.0 + r * 1.0) * a + 0.0 * (1.0 + r).powf(-n);
     assert!(lhs1.abs() < 1e-9);
@@ -204,7 +218,10 @@ fn test_pv_excel_learn_example() {
     let rate = Series::new("rate".into(), vec![0.0825_f64]);
     let nper = Series::new("nper".into(), vec![20.0_f64]);
     let pmt = Series::new("pmt".into(), vec![-50000.0_f64]);
-    let kwargs = PvKwargs { fv: Some(1_000_000.0), typ: Some(1) };
+    let kwargs = PvKwargs {
+        fv: Some(1_000_000.0),
+        typ: Some(1),
+    };
 
     let out = pv(&[rate.clone(), nper.clone(), pmt.clone()], &kwargs).unwrap();
     let v = out.f64().unwrap().get(0).unwrap();

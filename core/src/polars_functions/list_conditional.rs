@@ -73,17 +73,16 @@ mod tests {
     fn test_list_conditional_lt_list_scalar() {
         // month < policy_term (scalar per row)
         // month: [[0, 1, 2, 3]]
-        let left = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![0, 1, 2, 3])),
-        ]);
+        let left = ListChunked::from_iter([Some(Series::new("".into(), vec![0, 1, 2, 3]))]);
 
         // policy_term: [2] (scalar)
         let right = Series::new("right".into(), vec![2]);
 
         // then_val: [[100.0, 100.0, 100.0, 100.0]]
-        let then_val = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![100.0, 100.0, 100.0, 100.0])),
-        ]);
+        let then_val = ListChunked::from_iter([Some(Series::new(
+            "".into(),
+            vec![100.0, 100.0, 100.0, 100.0],
+        ))]);
 
         // otherwise_val: scalar 0.0
         let otherwise_val = Series::new("otherwise".into(), vec![0.0]);
@@ -116,29 +115,23 @@ mod tests {
     #[test]
     fn test_list_conditional_all_operators() {
         // Test all 6 operators
-        let left = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![1.0, 2.0, 3.0])),
-        ]);
+        let left = ListChunked::from_iter([Some(Series::new("".into(), vec![1.0, 2.0, 3.0]))]);
 
-        let right = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![2.0, 2.0, 2.0])),
-        ]);
+        let right = ListChunked::from_iter([Some(Series::new("".into(), vec![2.0, 2.0, 2.0]))]);
 
-        let then_val = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![10.0, 10.0, 10.0])),
-        ]);
+        let then_val =
+            ListChunked::from_iter([Some(Series::new("".into(), vec![10.0, 10.0, 10.0]))]);
 
-        let otherwise_val = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![0.0, 0.0, 0.0])),
-        ]);
+        let otherwise_val =
+            ListChunked::from_iter([Some(Series::new("".into(), vec![0.0, 0.0, 0.0]))]);
 
         // Test each operator
         let test_cases = vec![
-            ("eq", vec![0.0, 10.0, 0.0]), // [1==2, 2==2, 3==2]
-            ("ne", vec![10.0, 0.0, 10.0]), // [1!=2, 2!=2, 3!=2]
-            ("lt", vec![10.0, 0.0, 0.0]),  // [1<2, 2<2, 3<2]
+            ("eq", vec![0.0, 10.0, 0.0]),   // [1==2, 2==2, 3==2]
+            ("ne", vec![10.0, 0.0, 10.0]),  // [1!=2, 2!=2, 3!=2]
+            ("lt", vec![10.0, 0.0, 0.0]),   // [1<2, 2<2, 3<2]
             ("lte", vec![10.0, 10.0, 0.0]), // [1<=2, 2<=2, 3<=2]
-            ("gt", vec![0.0, 0.0, 10.0]),  // [1>2, 2>2, 3>2]
+            ("gt", vec![0.0, 0.0, 10.0]),   // [1>2, 2>2, 3>2]
             ("gte", vec![0.0, 10.0, 10.0]), // [1>=2, 2>=2, 3>=2]
         ];
 
@@ -196,10 +189,7 @@ mod tests {
 /// - Left is not a List type
 /// - Inner list lengths don't match
 /// - Unknown operator
-pub fn list_conditional(
-    inputs: &[Series],
-    kwargs: &ConditionalKwargs,
-) -> PolarsResult<Series> {
+pub fn list_conditional(inputs: &[Series], kwargs: &ConditionalKwargs) -> PolarsResult<Series> {
     let left = &inputs[0];
     let right = &inputs[1];
     let then_val = &inputs[2];
@@ -264,11 +254,16 @@ pub fn list_conditional(
                         let otherwise_lookup_idx = if otherwise_is_broadcast { 0 } else { idx };
 
                         let then_scalar = then_ca.get(then_lookup_idx).ok_or_else(|| {
-                            PolarsError::ComputeError(format!("then_val at row {} is null", idx).into())
+                            PolarsError::ComputeError(
+                                format!("then_val at row {} is null", idx).into(),
+                            )
                         })?;
-                        let otherwise_scalar = otherwise_ca.get(otherwise_lookup_idx).ok_or_else(|| {
-                            PolarsError::ComputeError(format!("otherwise_val at row {} is null", idx).into())
-                        })?;
+                        let otherwise_scalar =
+                            otherwise_ca.get(otherwise_lookup_idx).ok_or_else(|| {
+                                PolarsError::ComputeError(
+                                    format!("otherwise_val at row {} is null", idx).into(),
+                                )
+                            })?;
 
                         let out: Vec<Option<f64>> = l_ca
                             .iter()
@@ -326,11 +321,16 @@ pub fn list_conditional(
                         let otherwise_lookup_idx = if otherwise_is_broadcast { 0 } else { idx };
 
                         let right_scalar = right_ca.get(right_lookup_idx).ok_or_else(|| {
-                            PolarsError::ComputeError(format!("right at row {} is null", idx).into())
+                            PolarsError::ComputeError(
+                                format!("right at row {} is null", idx).into(),
+                            )
                         })?;
-                        let otherwise_scalar = otherwise_ca.get(otherwise_lookup_idx).ok_or_else(|| {
-                            PolarsError::ComputeError(format!("otherwise_val at row {} is null", idx).into())
-                        })?;
+                        let otherwise_scalar =
+                            otherwise_ca.get(otherwise_lookup_idx).ok_or_else(|| {
+                                PolarsError::ComputeError(
+                                    format!("otherwise_val at row {} is null", idx).into(),
+                                )
+                            })?;
 
                         let out: Vec<Option<f64>> = l_ca
                             .iter()
@@ -376,7 +376,9 @@ pub fn list_conditional(
                 // Get otherwise scalar for this row
                 let otherwise_lookup_idx = if otherwise_is_broadcast { 0 } else { idx };
                 let otherwise_scalar = otherwise_ca.get(otherwise_lookup_idx).ok_or_else(|| {
-                    PolarsError::ComputeError(format!("otherwise_val at row {} is null", idx).into())
+                    PolarsError::ComputeError(
+                        format!("otherwise_val at row {} is null", idx).into(),
+                    )
                 })?;
 
                 match (left_inner, right_inner, then_inner) {
@@ -432,8 +434,13 @@ pub fn list_conditional(
             .zip(right_list.amortized_iter())
             .zip(then_list.amortized_iter())
             .zip(otherwise_list.amortized_iter())
-            .map(|(((left_inner, right_inner), then_inner), otherwise_inner)| {
-                match (left_inner, right_inner, then_inner, otherwise_inner) {
+            .map(
+                |(((left_inner, right_inner), then_inner), otherwise_inner)| match (
+                    left_inner,
+                    right_inner,
+                    then_inner,
+                    otherwise_inner,
+                ) {
                     (Some(l_series), Some(r_series), Some(t_series), Some(o_series)) => {
                         let l = l_series.as_ref().cast(&DataType::Float64)?;
                         let r = r_series.as_ref().cast(&DataType::Float64)?;
@@ -471,8 +478,8 @@ pub fn list_conditional(
                         Ok(Some(Float64Chunked::from_iter(out).into_series()))
                     }
                     _ => Ok(Some(Series::new_empty("".into(), &DataType::Float64))),
-                }
-            })
+                },
+            )
             .collect::<PolarsResult<ListChunked>>()?;
 
         return Ok(result.into_series());
@@ -509,7 +516,9 @@ pub fn list_conditional(
                     PolarsError::ComputeError(format!("then_val at row {} is null", idx).into())
                 })?;
                 let otherwise_scalar = otherwise_ca.get(otherwise_lookup_idx).ok_or_else(|| {
-                    PolarsError::ComputeError(format!("otherwise_val at row {} is null", idx).into())
+                    PolarsError::ComputeError(
+                        format!("otherwise_val at row {} is null", idx).into(),
+                    )
                 })?;
 
                 match left_inner {
