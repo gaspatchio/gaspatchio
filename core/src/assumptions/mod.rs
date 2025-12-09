@@ -12,4 +12,4 @@ pub use registry::{
     register_assumption_table_global, register_or_replace_assumption_table_global,
     reset_global_assumption_registry, AssumptionTableRegistry,
 };
-pub use table::AssumptionTable;
+pub use table::{AssumptionTable, StorageMode, TableStorage};

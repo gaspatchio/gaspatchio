@@ -232,7 +232,9 @@ impl AssumptionTableRegistry {
         keys: Vec<String>,
         value: String,
     ) -> PolarsResult<()> {
-        let table = AssumptionTable::build(df, keys, value)?;
+        // Use hash storage mode for registry tables since they may need append operations
+        // Array storage doesn't currently support append
+        let table = AssumptionTable::build_with_mode(df, keys, value, crate::assumptions::table::StorageMode::Hash)?;
         debug!("assumption table registered: {:?}", name);
         self.assumption_tables.insert(name, Arc::new(table));
         Ok(())

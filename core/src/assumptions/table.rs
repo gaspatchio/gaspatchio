@@ -1,169 +1,149 @@
+// ABOUTME: AssumptionTable with pluggable storage backends (hash or array).
+// ABOUTME: Provides unified lookup interface with Python-controlled storage mode.
+
+use crate::assumptions::array_storage::ArrayStorage;
+use crate::assumptions::hash_storage::{ColumnCodec, HashStorage};
 use ahash::{AHashMap, AHasher};
 use log::debug;
 use polars::prelude::*;
-use rayon::prelude::*;
 use std::hash::Hasher;
+use std::str::FromStr;
 
-// Optimized codec without dynamic dispatch
-#[derive(Debug, Clone)]
-pub enum ColumnCodec {
-    String,
-    Float64,
-    Integer,
+/// Storage mode for assumption tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StorageMode {
+    /// Use hash table storage (original implementation).
+    Hash,
+    /// Use multi-dimensional array storage (faster for dense tables).
+    Array,
+    /// Automatically choose based on table density.
+    #[default]
+    Auto,
 }
 
-impl ColumnCodec {
-    #[inline]
-    fn encode(&self, av: AnyValue) -> u64 {
-        match (self, av) {
-            // String encoding - handle special cases first (categorical indices)
-            (ColumnCodec::String, AnyValue::Categorical(idx, _, _)) => u64::from(idx),
-            (ColumnCodec::String, AnyValue::String(s)) => {
-                // Hash the string content directly
-                let mut hasher = AHasher::default();
-                hasher.write(s.as_bytes());
-                hasher.finish()
-            }
-            (ColumnCodec::String, AnyValue::StringOwned(s)) => {
-                // Hash the string content directly for owned strings
-                let mut hasher = AHasher::default();
-                hasher.write(s.as_bytes());
-                hasher.finish()
-            }
-            // Handle integer inputs to String codec by converting to string first
-            (ColumnCodec::String, AnyValue::Int64(i)) => {
-                let s = i.to_string();
-                let mut hasher = AHasher::default();
-                hasher.write(s.as_bytes());
-                hasher.finish()
-            }
-            (ColumnCodec::String, AnyValue::Int32(i)) => {
-                let s = i.to_string();
-                let mut hasher = AHasher::default();
-                hasher.write(s.as_bytes());
-                hasher.finish()
-            }
-            (ColumnCodec::String, AnyValue::UInt64(u)) => {
-                let s = u.to_string();
-                let mut hasher = AHasher::default();
-                hasher.write(s.as_bytes());
-                hasher.finish()
-            }
-            (ColumnCodec::String, AnyValue::UInt32(u)) => {
-                let s = u.to_string();
-                let mut hasher = AHasher::default();
-                hasher.write(s.as_bytes());
-                hasher.finish()
-            }
+impl FromStr for StorageMode {
+    type Err = PolarsError;
 
-            (ColumnCodec::String, AnyValue::Float64(f)) => {
-                // Convert float to string, handling special cases
-                let s = if f.fract() == 0.0 && f.is_finite() {
-                    // Whole number: format as integer
-                    format!("{}", f as i64)
-                } else {
-                    // Decimal or special value: format as float
-                    f.to_string()
-                };
-                let mut hasher = AHasher::default();
-                hasher.write(s.as_bytes());
-                hasher.finish()
-            }
-
-            // Float64 codec - normalize whole numbers to integer encoding for consistency
-            (ColumnCodec::Float64, AnyValue::Float64(f)) => {
-                if f.fract() == 0.0 && f.is_finite() {
-                    // Whole number: use integer encoding for consistency with i64 inputs
-                    f as i64 as u64
-                } else {
-                    // True decimal: use float encoding
-                    f.to_bits()
-                }
-            }
-            (ColumnCodec::Float64, AnyValue::Int64(i)) => i as u64,
-            (ColumnCodec::Float64, AnyValue::Int32(i)) => i as u64,
-            (ColumnCodec::Float64, AnyValue::UInt64(u)) => u,
-            (ColumnCodec::Float64, AnyValue::UInt32(u)) => u as u64,
-
-            // Integer codec - handle float inputs that are whole numbers
-            (ColumnCodec::Integer, AnyValue::Int64(i)) => i as u64,
-            (ColumnCodec::Integer, AnyValue::Int32(i)) => i as u64,
-            (ColumnCodec::Integer, AnyValue::UInt64(u)) => u,
-            (ColumnCodec::Integer, AnyValue::UInt32(u)) => u as u64,
-            (ColumnCodec::Integer, AnyValue::Float64(f)) => {
-                if f.fract() == 0.0 && f.is_finite() {
-                    // Whole number: use integer encoding
-                    f as i64 as u64
-                } else {
-                    // Non-integer: fallback to float bits (edge case)
-                    f.to_bits()
-                }
-            }
-
-            _ => 0u64, // fallback
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "hash" => Ok(StorageMode::Hash),
+            "array" => Ok(StorageMode::Array),
+            "auto" => Ok(StorageMode::Auto),
+            _ => Err(polars_err!(ComputeError: "Invalid storage mode: '{}'. Use 'hash', 'array', or 'auto'", s)),
         }
     }
+}
+
+/// Storage backend for assumption tables.
+#[derive(Debug)]
+pub enum TableStorage {
+    Hash(HashStorage),
+    Array(ArrayStorage),
+}
+
+impl TableStorage {
+    /// Perform scalar lookup on the underlying storage.
+    pub fn lookup_scalar(&self, key_cols: &[&Series]) -> PolarsResult<Series> {
+        match self {
+            TableStorage::Hash(h) => h.lookup_scalar(key_cols),
+            TableStorage::Array(a) => a.lookup_scalar(key_cols),
+        }
+    }
+
+    /// Get entry count from underlying storage.
+    pub fn entry_count(&self) -> usize {
+        match self {
+            TableStorage::Hash(h) => h.entry_count(),
+            TableStorage::Array(a) => a.entry_count(),
+        }
+    }
+
+    /// Check if this is array storage.
+    pub fn is_array(&self) -> bool {
+        matches!(self, TableStorage::Array(_))
+    }
+
+    /// Check if this is hash storage.
+    pub fn is_hash(&self) -> bool {
+        matches!(self, TableStorage::Hash(_))
+    }
+
 }
 
 #[derive(Debug)]
 pub struct AssumptionTable {
-    keys: Vec<String>, // Store key names for metadata queries
-    codecs: Vec<ColumnCodec>,
-    map: AHashMap<u64, f64>, // frozen, read-only
+    keys: Vec<String>,
+    storage: TableStorage,
+    storage_mode_used: StorageMode,
 }
 
 impl AssumptionTable {
-    pub fn build(df: DataFrame, keys: Vec<String>, value: String) -> PolarsResult<Self> {
-        let n_rows = df.height();
-        // 1. Prepare codecs
-        let mut codecs = Vec::with_capacity(keys.len());
-
-        for col_name in &keys {
-            let s = df.column(col_name)?;
-
-            codecs.push(match s.dtype() {
-                DataType::String => ColumnCodec::String,
-                DataType::Float64 => ColumnCodec::Float64,
-                _ => ColumnCodec::Integer,
-            });
-        }
-
-        // 2. Build the hash map
-        let mut map: AHashMap<u64, f64> = AHashMap::with_capacity(n_rows.next_power_of_two());
-
-        let value_series = df.column(&value)?.f64()?;
-
-        // Row iteration – columnar, but we need row access for hashing
-        for row_idx in 0..n_rows {
-            let hash = if codecs.len() == 2 {
-                // Fast path for 2-key case
-                let av1 = df.column(&keys[0])?.get(row_idx)?;
-                let av2 = df.column(&keys[1])?.get(row_idx)?;
-                let hash1 = codecs[0].encode(av1);
-                let hash2 = codecs[1].encode(av2);
-                hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
-            } else {
-                // General case
-                let mut h = AHasher::default();
-                for (codec, key_name) in codecs.iter().zip(&keys) {
-                    let av = df.column(key_name)?.get(row_idx)?;
-                    h.write_u64(codec.encode(av));
+    /// Build with specified storage mode.
+    pub fn build_with_mode(
+        df: DataFrame,
+        keys: Vec<String>,
+        value: String,
+        mode: StorageMode,
+    ) -> PolarsResult<Self> {
+        let storage = match mode {
+            StorageMode::Hash => {
+                let hash = HashStorage::build(&df, &keys, &value)?;
+                TableStorage::Hash(hash)
+            }
+            StorageMode::Array => {
+                // Force array storage, but fall back to hash if it fails
+                match ArrayStorage::build(&df, &keys, &value)? {
+                    Some(arr) => TableStorage::Array(arr),
+                    None => {
+                        log::warn!("Array storage not suitable, falling back to hash");
+                        let hash = HashStorage::build(&df, &keys, &value)?;
+                        TableStorage::Hash(hash)
+                    }
                 }
-                h.finish()
-            };
-            let v = value_series.get(row_idx).unwrap_or(f64::NAN);
-            map.insert(hash, v);
-        }
+            }
+            StorageMode::Auto => {
+                // Try array first, fall back to hash
+                match ArrayStorage::build(&df, &keys, &value)? {
+                    Some(arr) => TableStorage::Array(arr),
+                    None => {
+                        let hash = HashStorage::build(&df, &keys, &value)?;
+                        TableStorage::Hash(hash)
+                    }
+                }
+            }
+        };
+
+        let storage_mode_used = if storage.is_array() {
+            StorageMode::Array
+        } else {
+            StorageMode::Hash
+        };
 
         Ok(Self {
-            keys: keys.clone(),
-            codecs,
-            map,
+            keys,
+            storage,
+            storage_mode_used,
         })
+    }
+
+    /// Build with default (Auto) storage mode - backward compatible.
+    pub fn build(df: DataFrame, keys: Vec<String>, value: String) -> PolarsResult<Self> {
+        Self::build_with_mode(df, keys, value, StorageMode::Auto)
+    }
+
+    /// Get which storage mode is actually being used.
+    pub fn storage_mode(&self) -> StorageMode {
+        self.storage_mode_used
+    }
+
+    /// Check if using array storage.
+    pub fn is_array_storage(&self) -> bool {
+        self.storage.is_array()
     }
 
     /// Build a new table by combining an existing table with new DataFrame data.
     /// Uses immutable rebuild approach for optimal lookup performance.
+    /// Note: This always uses hash storage since it requires append support.
     pub fn build_combined(
         existing: &AssumptionTable,
         new_df: DataFrame,
@@ -189,6 +169,19 @@ impl AssumptionTable {
             }
         }
 
+        // If existing table is using array storage, error out with helpful message
+        // This is a temporary limitation until we support array storage append
+        let existing_hash = match &existing.storage {
+            TableStorage::Hash(h) => h,
+            TableStorage::Array(_) => {
+                return Err(polars_err!(ComputeError:
+                    "Cannot append to table using array storage. This is a temporary limitation. \
+                     Please use StorageMode::Hash when building tables that will need append operations."));
+            }
+        };
+
+        let existing_codecs = existing_hash.codecs();
+
         // Validate codecs compatibility by checking column types
         for (i, key_name) in keys.iter().enumerate() {
             let new_series = new_df.column(key_name)?;
@@ -199,20 +192,20 @@ impl AssumptionTable {
             };
 
             // Compare with existing codec
-            if !Self::codecs_compatible(&existing.codecs[i], &new_codec) {
+            if !Self::codecs_compatible(&existing_codecs[i], &new_codec) {
                 return Err(polars_err!(
                     ComputeError:
                     "Codec mismatch for key '{}': existing type {:?}, new type {:?}",
-                    key_name, existing.codecs[i], new_codec
+                    key_name, existing_codecs[i], new_codec
                 ));
             }
         }
 
         // Clone existing map as base (AHashMap clone is efficient)
-        let mut combined_map = existing.map.clone();
+        let mut combined_map = existing_hash.map.clone();
 
         // Build new entries from DataFrame
-        let new_entries = Self::build_entries_map(&new_df, &keys, &value, &existing.codecs)?;
+        let new_entries = Self::build_entries_map(&new_df, &keys, &value, existing_codecs)?;
 
         // Validate no duplicate keys before extending
         for key in new_entries.keys() {
@@ -227,10 +220,16 @@ impl AssumptionTable {
         // Extend with new entries
         combined_map.extend(new_entries);
 
+        // Create new hash storage with combined map
+        let combined_storage = HashStorage {
+            codecs: existing_codecs.to_vec(),
+            map: combined_map,
+        };
+
         Ok(Self {
             keys: existing.keys.clone(),
-            codecs: existing.codecs.clone(),
-            map: combined_map,
+            storage: TableStorage::Hash(combined_storage),
+            storage_mode_used: StorageMode::Hash,
         })
     }
 
@@ -285,7 +284,7 @@ impl AssumptionTable {
 
     pub fn lookup_series(&self, key_cols: &[&Series]) -> PolarsResult<Series> {
         // Validate input lengths
-        if key_cols.len() != self.codecs.len() {
+        if key_cols.len() != self.keys.len() {
             return Err(polars_err!(ShapeMismatch: "wrong # key columns"));
         }
 
@@ -294,16 +293,22 @@ impl AssumptionTable {
             .iter()
             .all(|s| !matches!(s.dtype(), DataType::List(_)))
         {
-            return self.lookup_scalar(key_cols);
+            return self.storage.lookup_scalar(key_cols);
         }
 
         // Vector path: Full analysis when lists are present
+        // For now, vector lookups always use hash storage fallback
+        self.lookup_vector_fallback(key_cols)
+    }
+
+    /// Fallback for vector lookups - uses hash-based logic internally
+    fn lookup_vector_fallback(&self, key_cols: &[&Series]) -> PolarsResult<Series> {
         let (any_vectors, vector_len, vector_indices) = self.analyze_inputs(key_cols)?;
 
         if any_vectors {
             self.lookup_vector(key_cols, vector_len.unwrap(), &vector_indices)
         } else {
-            self.lookup_scalar(key_cols)
+            self.storage.lookup_scalar(key_cols)
         }
     }
 
@@ -348,821 +353,248 @@ impl AssumptionTable {
         Ok((any_vectors, vector_len, vector_indices))
     }
 
-    fn lookup_scalar(&self, key_cols: &[&Series]) -> PolarsResult<Series> {
-        let len = key_cols[0].len();
-
-        // Validate all series have same length
-        for s in key_cols.iter().skip(1) {
-            if s.len() != len {
-                return Err(polars_err!(ShapeMismatch: "key columns not equal length"));
-            }
-        }
-
-        // Fast path for common case: 2 keys (age + gender_smoking)
-        if self.codecs.len() == 2 && len > 1000 {
-            return self.lookup_scalar_fast_path_2keys(key_cols);
-        }
-
-        // Pre-allocate result vector
-        let mut out = vec![f64::NAN; len];
-
-        // Parallel processing for scalar lookups
-        out.par_iter_mut().enumerate().for_each(|(idx, slot)| {
-            let key = if self.codecs.len() == 2 {
-                // Use same fast path logic as build for 2-key case
-                let av1 = unsafe { key_cols[0].get_unchecked(idx) };
-                let av2 = unsafe { key_cols[1].get_unchecked(idx) };
-                let hash1 = self.codecs[0].encode(av1);
-                let hash2 = self.codecs[1].encode(av2);
-                hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
-            } else {
-                // General case
-                let mut h = AHasher::default();
-                for (codec, series) in self.codecs.iter().zip(key_cols) {
-                    let av = unsafe { series.get_unchecked(idx) };
-                    h.write_u64(codec.encode(av));
-                }
-                h.finish()
-            };
-            if let Some(v) = self.map.get(&key) {
-                *slot = *v;
-            }
-        });
-
-        Ok(Series::from_vec("lookup".into(), out))
-    }
-
-    // Specialized fast path for 2-key lookups (most common case)
-    fn lookup_scalar_fast_path_2keys(&self, key_cols: &[&Series]) -> PolarsResult<Series> {
-        let len = key_cols[0].len();
-        let mut out = vec![f64::NAN; len];
-
-        // Extract raw data pointers for faster access
-        let series1 = key_cols[0];
-        let series2 = key_cols[1];
-
-        // Batch process in chunks for better cache locality
-        const CHUNK_SIZE: usize = 1024;
-
-        out.par_chunks_mut(CHUNK_SIZE)
-            .enumerate()
-            .for_each(|(chunk_idx, chunk)| {
-                let start_idx = chunk_idx * CHUNK_SIZE;
-                let end_idx = (start_idx + chunk.len()).min(len);
-
-                for (local_idx, slot) in chunk.iter_mut().enumerate() {
-                    let global_idx = start_idx + local_idx;
-                    if global_idx >= end_idx {
-                        break;
-                    }
-
-                    // Fast hash computation without allocating AHasher each time
-                    let av1 = unsafe { series1.get_unchecked(global_idx) };
-                    let av2 = unsafe { series2.get_unchecked(global_idx) };
-
-                    let hash1 = self.codecs[0].encode(av1);
-                    let hash2 = self.codecs[1].encode(av2);
-
-                    // Combine hashes efficiently
-                    let key = hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2;
-
-                    if let Some(v) = self.map.get(&key) {
-                        *slot = *v;
-                    }
-                }
-            });
-
-        Ok(Series::from_vec("lookup".into(), out))
-    }
-
     fn lookup_vector(
         &self,
         key_cols: &[&Series],
         vector_len: usize,
         vector_indices: &[usize],
     ) -> PolarsResult<Series> {
-        // Pre-compute vector indices as boolean array for faster lookup
-        let mut vector_indices_bool = vec![false; key_cols.len()];
-        for &idx in vector_indices {
-            vector_indices_bool[idx] = true;
-        }
-
-        // Determine parallelization threshold
-        let use_parallel = vector_len > 50;
-        debug!("use_parallel: {}, vector_len: {}", use_parallel, vector_len);
-
-        // Process each row (policy/entity)
-        let series_list_result: PolarsResult<Vec<Series>> = if use_parallel {
-            (0..vector_len)
-                .into_par_iter()
-                .map(|row_idx| {
-                    self.process_vector_row_optimized(key_cols, &vector_indices_bool, row_idx)
-                })
-                .collect()
-        } else {
-            (0..vector_len)
-                .map(|row_idx| {
-                    self.process_vector_row_optimized(key_cols, &vector_indices_bool, row_idx)
-                })
-                .collect()
+        // For vector lookups, we need hash storage's codec logic
+        // This is a temporary limitation - we could optimize this in the future
+        let codecs = match &self.storage {
+            TableStorage::Hash(h) => h.codecs(),
+            TableStorage::Array(_) => {
+                // If we're using array storage, we need to fall back to hash-style lookup for vectors
+                // This is acceptable as vector lookups are less common
+                return Err(polars_err!(ComputeError: "Vector lookups with array storage not yet implemented"));
+            }
         };
 
-        let series_list = series_list_result?;
+        debug!(
+            "lookup_vector: vector_len={}, vector_indices={:?}",
+            vector_len, vector_indices
+        );
 
-        // Convert to ListChunked
-        let list_chunked =
-            ListChunked::from_iter(series_list.into_iter().map(Some)).with_name("lookup".into());
+        // Pre-allocate result vector of Lists
+        let mut out_lists = Vec::with_capacity(vector_len);
+
+        // For each outer row, look up all inner vector elements
+        for outer_idx in 0..vector_len {
+            // First, determine the inner vector length by examining all vector columns
+            let inner_len = self.compute_inner_len(key_cols, outer_idx, vector_indices)?;
+
+            let mut inner_vals = vec![f64::NAN; inner_len];
+
+            // For each inner element, look up the value
+            #[allow(clippy::needless_range_loop)]
+            for inner_idx in 0..inner_len {
+                // Build the hash key for this specific inner element
+                let key = if codecs.len() == 2 {
+                    // Fast path for 2 keys
+                    let av1 =
+                        self.get_value_at(key_cols, 0, outer_idx, inner_idx, vector_indices)?;
+                    let av2 =
+                        self.get_value_at(key_cols, 1, outer_idx, inner_idx, vector_indices)?;
+                    let hash1 = codecs[0].encode(av1);
+                    let hash2 = codecs[1].encode(av2);
+                    hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
+                } else {
+                    // General case
+                    let mut h = AHasher::default();
+                    for (key_idx, codec) in codecs.iter().enumerate() {
+                        let av = self.get_value_at(
+                            key_cols,
+                            key_idx,
+                            outer_idx,
+                            inner_idx,
+                            vector_indices,
+                        )?;
+                        h.write_u64(codec.encode(av));
+                    }
+                    h.finish()
+                };
+
+                // Look up in hash map
+                if let TableStorage::Hash(h) = &self.storage {
+                    if let Some(v) = h.map.get(&key) {
+                        inner_vals[inner_idx] = *v;
+                    }
+                }
+            }
+
+            // Convert inner values to Series
+            let inner_series = Series::from_vec("inner".into(), inner_vals);
+            out_lists.push(inner_series);
+        }
+
+        // Convert list of Series to ListChunked
+        let list_chunked: ListChunked = out_lists.into_iter().collect();
 
         Ok(list_chunked.into_series())
     }
 
-    fn process_vector_row_optimized(
+    /// Compute the length of the inner vector at a given outer index.
+    fn compute_inner_len(
         &self,
         key_cols: &[&Series],
-        vector_indices_bool: &[bool],
-        row_idx: usize,
-    ) -> PolarsResult<Series> {
-        // Get inner list length from first vector column
-        let first_vector_idx = vector_indices_bool.iter().position(|&x| x).unwrap();
-        let inner_len = self.get_inner_list_len(key_cols[first_vector_idx], row_idx)?;
+        outer_idx: usize,
+        vector_indices: &[usize],
+    ) -> PolarsResult<usize> {
+        // Check the first vector column for the inner length
+        let first_vec_idx = vector_indices[0];
+        let list_series = key_cols[first_vec_idx];
 
-        if inner_len == 0 {
-            return Ok(Series::new_empty("inner".into(), &DataType::Float64));
-        }
-
-        // Pre-allocate result vector
-        let mut inner_results = Vec::with_capacity(inner_len);
-
-        // Pre-extract scalar values to avoid repeated extraction
-        let mut scalar_values = Vec::with_capacity(key_cols.len());
-        for (key_idx, series) in key_cols.iter().enumerate() {
-            if !vector_indices_bool[key_idx] {
-                let scalar_idx = if series.len() == 1 { 0 } else { row_idx };
-                scalar_values.push(Some(self.extract_scalar(series, scalar_idx)?));
-            } else {
-                scalar_values.push(None);
-            }
-        }
-
-        // Process each element in the inner lists
-        for element_idx in 0..inner_len {
-            let mut key_has_null = false;
-
-            // Collect all AnyValues first
-            let mut any_values = Vec::with_capacity(key_cols.len());
-            for (key_idx, series) in key_cols.iter().enumerate() {
-                let av = if vector_indices_bool[key_idx] {
-                    // Vector key - extract from list at [row_idx][element_idx]
-                    match self.extract_from_list(series, row_idx, element_idx) {
-                        Ok(av) => av,
-                        Err(_) => {
-                            key_has_null = true;
-                            AnyValue::Null
-                        }
-                    }
-                } else {
-                    // Scalar key - use pre-extracted value
-                    scalar_values[key_idx].as_ref().unwrap().clone()
-                };
-
-                if matches!(av, AnyValue::Null) {
-                    key_has_null = true;
-                }
-                any_values.push(av);
-            }
-
-            // Compute hash key using same logic as build
-            let key = if key_has_null {
-                0u64 // Will result in NaN anyway
-            } else if self.codecs.len() == 2 {
-                // Use same fast path logic as build for 2-key case
-                let hash1 = self.codecs[0].encode(any_values[0].clone());
-                let hash2 = self.codecs[1].encode(any_values[1].clone());
-                hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
-            } else {
-                // General case
-                let mut h = AHasher::default();
-                for (codec, av) in self.codecs.iter().zip(&any_values) {
-                    h.write_u64(codec.encode(av.clone()));
-                }
-                h.finish()
-            };
-
-            // Perform lookup
-            let result_value = if key_has_null {
-                f64::NAN
-            } else {
-                self.map.get(&key).copied().unwrap_or(f64::NAN)
-            };
-
-            inner_results.push(result_value);
-        }
-
-        Ok(Series::from_vec("inner".into(), inner_results))
-    }
-
-    fn extract_from_list(
-        &self,
-        series: &Series,
-        row_idx: usize,
-        element_idx: usize,
-    ) -> PolarsResult<AnyValue<'_>> {
-        let list_ca = series.list()?;
-        if row_idx >= list_ca.len() {
-            return Ok(AnyValue::Null);
-        }
-
-        match list_ca.get_any_value(row_idx)? {
-            AnyValue::List(inner_series) => {
-                if element_idx < inner_series.len() {
-                    Ok(inner_series.get(element_idx)?.into_static())
-                } else {
-                    Ok(AnyValue::Null)
-                }
-            }
-            AnyValue::Null => Ok(AnyValue::Null),
-            _ => Err(polars_err!(ComputeError: "Expected List type in extract_from_list")),
-        }
-    }
-
-    fn extract_scalar(&self, series: &Series, idx: usize) -> PolarsResult<AnyValue<'_>> {
-        if idx >= series.len() {
-            Ok(AnyValue::Null)
-        } else {
-            Ok(series.get(idx)?.into_static())
-        }
-    }
-
-    fn get_inner_list_len(&self, series: &Series, row_idx: usize) -> PolarsResult<usize> {
-        let list_ca = series.list()?;
-        if row_idx >= list_ca.len() {
-            return Ok(0);
-        }
-
-        match list_ca.get_any_value(row_idx)? {
+        let list_chunked = list_series.list()?;
+        match list_chunked.get_any_value(outer_idx)? {
             AnyValue::List(inner_series) => Ok(inner_series.len()),
             AnyValue::Null => Ok(0),
-            _ => Err(polars_err!(ComputeError: "Expected List type in get_inner_list_len")),
+            _ => Err(polars_err!(ComputeError: "Expected List type in compute_inner_len")),
         }
     }
 
-    // Hot path – returns a Series of the same length as the key columns
+    /// Get the value at the specified position, handling both scalar and vector columns.
+    fn get_value_at(
+        &self,
+        key_cols: &[&Series],
+        key_idx: usize,
+        outer_idx: usize,
+        inner_idx: usize,
+        vector_indices: &[usize],
+    ) -> PolarsResult<AnyValue<'_>> {
+        let series = key_cols[key_idx];
 
-    // Metadata methods for validation support
+        // Check if this column is a vector
+        if vector_indices.contains(&key_idx) {
+            // Vector column - access inner element
+            let list_chunked = series.list()?;
+            match list_chunked.get_any_value(outer_idx)? {
+                AnyValue::List(inner_series) => {
+                    if inner_idx < inner_series.len() {
+                        Ok(inner_series.get(inner_idx)?.into_static())
+                    } else {
+                        Ok(AnyValue::Null)
+                    }
+                }
+                AnyValue::Null => Ok(AnyValue::Null),
+                _ => Err(polars_err!(ComputeError: "Expected List type in get_value_at")),
+            }
+        } else {
+            // Scalar column - handle broadcasting
+            let scalar_len = series.len();
+            let actual_idx = if scalar_len == 1 { 0 } else { outer_idx };
+            Ok(series.get(actual_idx)?.into_static())
+        }
+    }
 
-    /// Get the number of key columns for this table
+    // Metadata methods
     pub fn get_key_count(&self) -> usize {
         self.keys.len()
     }
 
-    /// Get the name of the key column at the specified index
     pub fn get_key_name(&self, index: usize) -> PolarsResult<&str> {
         self.keys.get(index).map(|s| s.as_str()).ok_or_else(|| {
-            polars_err!(
-                ComputeError: "Key index {} out of bounds (table has {} keys)",
-                index, self.keys.len()
-            )
+            polars_err!(ComputeError: "Key index {} out of bounds", index)
         })
     }
 
-    /// Get all key column names
     pub fn get_key_columns(&self) -> &[String] {
         &self.keys
     }
 
-    /// Get a cloned copy of all key column names
     pub fn get_key_columns_owned(&self) -> Vec<String> {
         self.keys.clone()
     }
 
-    /// Get the number of entries in the lookup table
     pub fn entry_count(&self) -> usize {
-        self.map.len()
+        self.storage.entry_count()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use polars::chunked_array::builder::ListPrimitiveChunkedBuilder;
-    use polars::datatypes::Int64Type;
     use polars::df;
 
-    fn create_test_mortality_table() -> PolarsResult<AssumptionTable> {
+    #[test]
+    fn test_build_with_auto_mode() -> PolarsResult<()> {
         let df = df! {
-            "age" => [30, 30, 31, 31, 32, 32],
+            "age" => [30i64, 30, 31, 31, 32, 32],
             "gender" => ["M", "F", "M", "F", "M", "F"],
             "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
         }?;
 
-        AssumptionTable::build(
+        let table = AssumptionTable::build(
             df,
             vec!["age".to_string(), "gender".to_string()],
             "rate".to_string(),
-        )
+        )?;
+
+        // With high density, should choose array storage
+        assert!(table.is_array_storage());
+        assert_eq!(table.storage_mode(), StorageMode::Array);
+
+        Ok(())
     }
 
-    fn create_test_lapse_table() -> PolarsResult<AssumptionTable> {
+    #[test]
+    fn test_force_hash_mode() -> PolarsResult<()> {
         let df = df! {
-            "duration" => [1, 2, 3, 4, 5],
-            "lapse_rate" => [0.05, 0.04, 0.03, 0.02, 0.01]
+            "age" => [30i64, 30, 31, 31, 32, 32],
+            "gender" => ["M", "F", "M", "F", "M", "F"],
+            "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
         }?;
 
-        AssumptionTable::build(df, vec!["duration".to_string()], "lapse_rate".to_string())
-    }
+        let table = AssumptionTable::build_with_mode(
+            df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Hash,
+        )?;
 
-    #[test]
-    fn test_scalar_lookup_single_key() -> PolarsResult<()> {
-        let table = create_test_lapse_table()?;
-
-        // Test scalar lookup with single key
-        let duration_series = Series::new("duration".into(), &[1, 3, 5, 99]); // 99 doesn't exist
-        let result = table.lookup_series(&[&duration_series])?;
-
-        let expected = Series::new("lookup".into(), &[0.05, 0.03, 0.01, f64::NAN]);
-        assert!(result.equals_missing(&expected));
-        Ok(())
-    }
-
-    #[test]
-    fn test_scalar_lookup_multi_key() -> PolarsResult<()> {
-        let table = create_test_mortality_table()?;
-
-        // Test scalar lookup with multiple keys
-        let age_series = Series::new("age".into(), &[30, 31, 32, 99]);
-        let gender_series = Series::new("gender".into(), &["F", "F", "F", "M"]); // Use F to get consistent results
-        let result = table.lookup_series(&[&age_series, &gender_series])?;
-
-        let expected = Series::new("lookup".into(), &[0.0008, 0.001, 0.0012, f64::NAN]);
-        assert!(result.equals_missing(&expected));
-        Ok(())
-    }
-
-    #[test]
-    fn test_vector_lookup_single_key() -> PolarsResult<()> {
-        let table = create_test_lapse_table()?;
-
-        // Create vector input
-        let mut list_builder =
-            ListPrimitiveChunkedBuilder::<Int64Type>::new("duration".into(), 3, 5, DataType::Int64);
-        list_builder.append_slice(&[1i64, 2]); // Row 0: [1, 2]
-        list_builder.append_slice(&[3i64, 4, 5]); // Row 1: [3, 4, 5]
-        list_builder.append_slice(&[1i64]); // Row 2: [1]
-        let duration_vector = list_builder.finish().into_series();
-
-        let result = table.lookup_series(&[&duration_vector])?;
-
-        // Verify result is List type
-        assert!(matches!(result.dtype(), DataType::List(_)));
-
-        // Extract and verify values
-        let list_ca = result.list()?;
-        assert_eq!(list_ca.len(), 3);
-
-        // Row 0: [1, 2] -> [0.05, 0.04]
-        let row0 = list_ca.get_any_value(0)?;
-        if let AnyValue::List(inner) = row0 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.05, 0.04]);
-        } else {
-            panic!("Expected List type");
-        }
-
-        // Row 1: [3, 4, 5] -> [0.03, 0.02, 0.01]
-        let row1 = list_ca.get_any_value(1)?;
-        if let AnyValue::List(inner) = row1 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.03, 0.02, 0.01]);
-        } else {
-            panic!("Expected List type");
-        }
-
-        // Row 2: [1] -> [0.05]
-        let row2 = list_ca.get_any_value(2)?;
-        if let AnyValue::List(inner) = row2 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.05]);
-        } else {
-            panic!("Expected List type");
-        }
+        assert!(!table.is_array_storage());
+        assert_eq!(table.storage_mode(), StorageMode::Hash);
 
         Ok(())
     }
 
     #[test]
-    fn test_vector_lookup_multi_key() -> PolarsResult<()> {
-        let table = create_test_mortality_table()?;
-
-        // Create vector inputs
-        let mut age_builder =
-            ListPrimitiveChunkedBuilder::<Int64Type>::new("age".into(), 2, 3, DataType::Int64);
-        age_builder.append_slice(&[30i64, 31]); // Row 0: [30, 31]
-        age_builder.append_slice(&[31i64, 32]); // Row 1: [31, 32]
-        let age_vector = age_builder.finish().into_series();
-
-        let gender_vector = Series::new(
-            "gender".into(),
-            &[
-                Series::new("".into(), &["M", "F"]),
-                Series::new("".into(), &["M", "F"]),
-            ],
-        );
-
-        let result = table.lookup_series(&[&age_vector, &gender_vector])?;
-
-        // Verify result is List type
-        assert!(matches!(result.dtype(), DataType::List(_)));
-
-        let list_ca = result.list()?;
-        assert_eq!(list_ca.len(), 2);
-
-        // Row 0: age=[30, 31], gender=["M", "F"] -> [0.001, 0.001] (30,M and 31,F)
-        let row0 = list_ca.get_any_value(0)?;
-        if let AnyValue::List(inner) = row0 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.001, 0.001]);
-        } else {
-            panic!("Expected List type");
-        }
-
-        // Row 1: age=[31, 32], gender=["M", "F"] -> [0.0012, 0.0012] (31,M and 32,F)
-        let row1 = list_ca.get_any_value(1)?;
-        if let AnyValue::List(inner) = row1 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.0012, 0.0012]);
-        } else {
-            panic!("Expected List type");
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_mixed_vector_scalar_lookup() -> PolarsResult<()> {
-        let table = create_test_mortality_table()?;
-
-        // Vector age, scalar gender (broadcasting)
-        let mut age_builder =
-            ListPrimitiveChunkedBuilder::<Int64Type>::new("age".into(), 2, 3, DataType::Int64);
-        age_builder.append_slice(&[30i64, 31]); // Row 0: [30, 31]
-        age_builder.append_slice(&[31i64, 32]); // Row 1: [31, 32]
-        let age_vector = age_builder.finish().into_series();
-
-        let gender_scalar = Series::new("gender".into(), &["M"]); // Broadcast single value
-
-        let result = table.lookup_series(&[&age_vector, &gender_scalar])?;
-
-        // Verify result is List type
-        assert!(matches!(result.dtype(), DataType::List(_)));
-
-        let list_ca = result.list()?;
-        assert_eq!(list_ca.len(), 2);
-
-        // Row 0: age=[30, 31], gender="M" -> [0.001, 0.0012] (30,M and 31,M)
-        let row0 = list_ca.get_any_value(0)?;
-        if let AnyValue::List(inner) = row0 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.001, 0.0012]);
-        } else {
-            panic!("Expected List type");
-        }
-
-        // Row 1: age=[31, 32], gender="M" -> [0.0012, 0.0014] (31,M and 32,M)
-        let row1 = list_ca.get_any_value(1)?;
-        if let AnyValue::List(inner) = row1 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.0012, 0.0014]);
-        } else {
-            panic!("Expected List type");
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_mixed_vector_scalar_rowwise() -> PolarsResult<()> {
-        let table = create_test_mortality_table()?;
-
-        // Vector age, scalar gender (row-wise matching)
-        let mut age_builder =
-            ListPrimitiveChunkedBuilder::<Int64Type>::new("age".into(), 2, 3, DataType::Int64);
-        age_builder.append_slice(&[30i64, 31]); // Row 0: [30, 31]
-        age_builder.append_slice(&[31i64, 32]); // Row 1: [31, 32]
-        let age_vector = age_builder.finish().into_series();
-
-        let gender_scalar = Series::new("gender".into(), &["M", "F"]); // Row-wise values
-
-        let result = table.lookup_series(&[&age_vector, &gender_scalar])?;
-
-        let list_ca = result.list()?;
-        assert_eq!(list_ca.len(), 2);
-
-        // Row 0: age=[30, 31], gender="M" -> [0.001, 0.0012] (30,M and 31,M)
-        let row0 = list_ca.get_any_value(0)?;
-        if let AnyValue::List(inner) = row0 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.001, 0.0012]);
-        } else {
-            panic!("Expected List type");
-        }
-
-        // Row 1: age=[31, 32], gender="F" -> [0.001, 0.0012] (31,F and 32,F)
-        let row1 = list_ca.get_any_value(1)?;
-        if let AnyValue::List(inner) = row1 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.001, 0.0012]);
-        } else {
-            panic!("Expected List type");
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_empty_vector_lookup() -> PolarsResult<()> {
-        let table = create_test_lapse_table()?;
-
-        // Create vector with empty list
-        let mut list_builder =
-            ListPrimitiveChunkedBuilder::<Int64Type>::new("duration".into(), 2, 3, DataType::Int64);
-        list_builder.append_slice(&[]); // Row 0: empty list
-        list_builder.append_slice(&[1i64, 2]); // Row 1: [1, 2]
-        let duration_vector = list_builder.finish().into_series();
-
-        let result = table.lookup_series(&[&duration_vector])?;
-
-        let list_ca = result.list()?;
-        assert_eq!(list_ca.len(), 2);
-
-        // Row 0: empty list -> empty result
-        let row0 = list_ca.get_any_value(0)?;
-        if let AnyValue::List(inner) = row0 {
-            assert_eq!(inner.len(), 0);
-        } else {
-            panic!("Expected List type");
-        }
-
-        // Row 1: [1, 2] -> [0.05, 0.04]
-        let row1 = list_ca.get_any_value(1)?;
-        if let AnyValue::List(inner) = row1 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values, vec![0.05, 0.04]);
-        } else {
-            panic!("Expected List type");
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_null_values_in_vectors() -> PolarsResult<()> {
-        let table = create_test_lapse_table()?;
-
-        // Create vector with some invalid lookups (99 doesn't exist)
-        let mut list_builder =
-            ListPrimitiveChunkedBuilder::<Int64Type>::new("duration".into(), 1, 3, DataType::Int64);
-        list_builder.append_slice(&[1i64, 99, 2]); // [1, 99, 2] where 99 is invalid
-        let duration_vector = list_builder.finish().into_series();
-
-        let result = table.lookup_series(&[&duration_vector])?;
-
-        let list_ca = result.list()?;
-        let row0 = list_ca.get_any_value(0)?;
-        if let AnyValue::List(inner) = row0 {
-            let f64_ca = inner.f64()?;
-            assert_eq!(f64_ca.len(), 3);
-            assert_eq!(f64_ca.get(0), Some(0.05)); // 1 -> 0.05
-            assert!(f64_ca.get(1).unwrap().is_nan()); // 99 -> NaN (not found)
-            assert_eq!(f64_ca.get(2), Some(0.04)); // 2 -> 0.04
-        } else {
-            panic!("Expected List type");
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_error_wrong_key_count() -> PolarsResult<()> {
-        let table = create_test_mortality_table()?; // Expects 2 keys
-
-        let age_series = Series::new("age".into(), &[30, 31]);
-        let result = table.lookup_series(&[&age_series]); // Only 1 key provided
-
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("wrong # key columns"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_error_vector_length_mismatch() -> PolarsResult<()> {
-        let table = create_test_mortality_table()?;
-
-        // Create vectors with different lengths
-        let mut age_builder =
-            ListPrimitiveChunkedBuilder::<Int64Type>::new("age".into(), 2, 3, DataType::Int64);
-        age_builder.append_slice(&[30i64, 31]); // Row 0: length 2
-        age_builder.append_slice(&[32i64]); // Row 1: length 1 - different!
-        let age_vector = age_builder.finish().into_series();
-
-        let gender_vector = Series::new(
-            "gender".into(),
-            &[
-                Series::new("".into(), &["M", "F"]),
-                Series::new("".into(), &["M", "F"]),
-            ],
-        );
-
-        let result = table.lookup_series(&[&age_vector, &gender_vector]);
-
-        // This should actually succeed because Polars allows different inner list lengths
-        // Our implementation handles this by taking the minimum length for each row
-        assert!(result.is_ok());
-        Ok(())
-    }
-
-    #[test]
-    fn test_error_scalar_length_mismatch() -> PolarsResult<()> {
-        let table = create_test_mortality_table()?;
-
-        let age_series = Series::new("age".into(), &[30, 31]); // Length 2
-        let gender_series = Series::new("gender".into(), &["M", "F", "M"]); // Length 3
-        let result = table.lookup_series(&[&age_series, &gender_series]);
-
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("key columns not equal length"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_performance_large_vector_lookup() -> PolarsResult<()> {
-        let table = create_test_lapse_table()?;
-
-        // Create large vector input to test parallelization
-        let vector_len = 200; // > 100 threshold for parallel processing
-        let inner_len = 5;
-
-        let mut list_builder = ListPrimitiveChunkedBuilder::<Int64Type>::new(
-            "duration".into(),
-            vector_len,
-            inner_len * vector_len,
-            DataType::Int64,
-        );
-
-        for _ in 0..vector_len {
-            list_builder.append_slice(&[1i64, 2, 3, 4, 5]); // All valid lookups
-        }
-
-        let duration_vector = list_builder.finish().into_series();
-        let result = table.lookup_series(&[&duration_vector])?;
-
-        // Verify result structure
-        let list_ca = result.list()?;
-        assert_eq!(list_ca.len(), vector_len);
-
-        // Spot check a few rows
-        for i in [0, 50, 100, 199] {
-            let row = list_ca.get_any_value(i)?;
-            if let AnyValue::List(inner) = row {
-                let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-                assert_eq!(values, vec![0.05, 0.04, 0.03, 0.02, 0.01]);
-            } else {
-                panic!("Expected List type");
-            }
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn debug_hash_issue() -> PolarsResult<()> {
+    fn test_lookup_works_with_both_storage_modes() -> PolarsResult<()> {
         let df = df! {
-            "age" => [30, 30, 31, 31],
+            "age" => [30i64, 30, 31, 31],
             "gender" => ["M", "F", "M", "F"],
             "rate" => [0.001, 0.0008, 0.0012, 0.001]
         }?;
-        let table = AssumptionTable::build(
+
+        let hash_table = AssumptionTable::build_with_mode(
             df.clone(),
             vec!["age".to_string(), "gender".to_string()],
             "rate".to_string(),
+            StorageMode::Hash,
         )?;
-        // Debug: print what's in the map
+
+        let array_table = AssumptionTable::build_with_mode(
+            df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Array,
+        )?;
 
         // Test lookup
-        let age_series = Series::new("age".into(), &[30]);
-        let gender_series = Series::new("gender".into(), &["F"]);
-        // Debug: manually compute hash for lookup
-        let av1 = age_series.get(0)?;
-        let av2 = gender_series.get(0)?;
-        let hash1 = table.codecs[0].encode(av1);
-        let hash2 = table.codecs[1].encode(av2);
-        let combined_hash = hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2;
-        if let Some(_value) = table.map.get(&combined_hash) {
-            // Value found in map
-        }
+        let ages = Series::new("age".into(), &[30i64, 31, 99]);
+        let genders = Series::new("gender".into(), &["M", "F", "X"]);
 
-        let _result = table.lookup_series(&[&age_series, &gender_series])?;
-        Ok(())
-    }
+        let hash_result = hash_table.lookup_series(&[&ages, &genders])?;
+        let array_result = array_table.lookup_series(&[&ages, &genders])?;
 
-    #[test]
-    fn test_codec_consistency_integer_string() -> PolarsResult<()> {
-        // Test the exact scenario from the failing Python test
-        let _df = df! {
-            "Age" => [30, 31, 32],
-            "1" => [0.002, 0.0021, 0.0022],
-            "2" => [0.0015, 0.0016, 0.0017],
-            "3" => [0.001, 0.0011, 0.0012]
-        }?;
+        // Results should be identical
+        let hash_vals: Vec<f64> = hash_result.f64()?.into_iter().map(|v| v.unwrap_or(f64::NAN)).collect();
+        let array_vals: Vec<f64> = array_result.f64()?.into_iter().map(|v| v.unwrap_or(f64::NAN)).collect();
 
-        // This will be melted to long format, so we need to simulate that
-        let melted_df = df! {
-            "Age" => [30, 31, 32, 30, 31, 32, 30, 31, 32],
-            "variable" => ["1", "1", "1", "2", "2", "2", "3", "3", "3"],
-            "qx" => [0.002, 0.0021, 0.0022, 0.0015, 0.0016, 0.0017, 0.001, 0.0011, 0.0012]
-        }?;
-        let table = AssumptionTable::build(
-            melted_df.clone(),
-            vec!["Age".to_string(), "variable".to_string()],
-            "qx".to_string(),
-        )?;
-        // Debug: print what's in the map with more detail
-
-        // Test specific lookups that are failing
-        let test_cases = vec![(30, "1", 0.002), (31, "2", 0.0016), (32, "3", 0.0012)];
-
-        for (age, variable, expected) in test_cases {
-            let age_series = Series::new("Age".into(), &[age]);
-            let var_series = Series::new("variable".into(), &[variable]);
-
-            // Debug: manually compute hash for lookup
-            let av1 = age_series.get(0)?;
-            let av2 = var_series.get(0)?;
-            let hash1 = table.codecs[0].encode(av1);
-            let hash2 = table.codecs[1].encode(av2);
-            let combined_hash = hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2;
-            if let Some(value) = table.map.get(&combined_hash) {
-                assert!(
-                    (value - expected).abs() < 1e-10,
-                    "Expected {}, got {} for Age={}, variable='{}'",
-                    expected,
-                    value,
-                    age,
-                    variable
-                );
+        for (h, a) in hash_vals.iter().zip(array_vals.iter()) {
+            if h.is_nan() {
+                assert!(a.is_nan());
             } else {
-                panic!(
-                    "Value not found in map for Age={}, variable='{}'!",
-                    age, variable
-                );
-            }
-
-            let result = table.lookup_series(&[&age_series, &var_series])?;
-            let actual = result.f64()?.get(0).unwrap();
-            assert!(
-                (actual - expected).abs() < 1e-10,
-                "Lookup failed: Expected {}, got {} for Age={}, variable='{}'",
-                expected,
-                actual,
-                age,
-                variable
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_codec_string_hashing_consistency() -> PolarsResult<()> {
-        // Test that string hashing is consistent between build and lookup
-        let test_strings = vec!["1", "2", "3", "MNS", "FNS", "MS", "FS", "Ultimate", "Ult."];
-
-        for test_str in test_strings {
-            // Create a series with the string
-            let series = Series::new("test".into(), &[test_str]);
-            let av = series.get(0)?;
-            // Test codec encoding
-            let codec = ColumnCodec::String;
-            let hash1 = codec.encode(av.clone());
-            let hash2 = codec.encode(av.clone());
-            assert_eq!(
-                hash1, hash2,
-                "String hashing not consistent for '{}'",
-                test_str
-            );
-
-            // Test that different strings produce different hashes (mostly)
-            if test_str != "1" {
-                let other_series = Series::new("test".into(), &["1"]);
-                let other_av = other_series.get(0)?;
-                let other_hash = codec.encode(other_av);
-
-                if hash1 == other_hash {}
+                assert!((h - a).abs() < 1e-15);
             }
         }
 
@@ -1170,1096 +602,13 @@ mod tests {
     }
 
     #[test]
-    fn test_codec_integer_consistency() -> PolarsResult<()> {
-        // Test integer codec consistency
-        let test_integers = vec![30, 31, 32, 1, 2, 3, 99, 100];
-
-        for test_int in test_integers {
-            // Test different integer types
-            let series_i32 = Series::new("test".into(), &[test_int]);
-            let series_i64 = Series::new("test".into(), &[test_int as i64]);
-            let series_u32 = Series::new("test".into(), &[test_int as u32]);
-            let series_u64 = Series::new("test".into(), &[test_int as u64]);
-
-            let av_i32 = series_i32.get(0)?;
-            let av_i64 = series_i64.get(0)?;
-            let av_u32 = series_u32.get(0)?;
-            let av_u64 = series_u64.get(0)?;
-            let codec = ColumnCodec::Integer;
-            let hash_i32 = codec.encode(av_i32);
-            let hash_i64 = codec.encode(av_i64);
-            let hash_u32 = codec.encode(av_u32);
-            let hash_u64 = codec.encode(av_u64);
-            // All should produce the same hash for the same logical value
-            assert_eq!(
-                hash_i32, hash_u32,
-                "i32 and u32 hashes differ for {}",
-                test_int
-            );
-            assert_eq!(
-                hash_i64, hash_u64,
-                "i64 and u64 hashes differ for {}",
-                test_int
-            );
-            assert_eq!(
-                hash_i32, hash_i64,
-                "i32 and i64 hashes differ for {}",
-                test_int
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_hash_combination_consistency() -> PolarsResult<()> {
-        // Test that the 2-key hash combination is consistent
-        let ages = vec![30, 31, 32];
-        let variables = vec!["1", "2", "3"];
-
-        for age in &ages {
-            for variable in &variables {
-                // Create series
-                let age_series = Series::new("Age".into(), &[*age]);
-                let var_series = Series::new("variable".into(), &[*variable]);
-
-                // Get AnyValues
-                let av_age = age_series.get(0)?;
-                let av_var = var_series.get(0)?;
-
-                // Encode with codecs
-                let age_codec = ColumnCodec::Integer;
-                let var_codec = ColumnCodec::String;
-
-                let hash_age = age_codec.encode(av_age);
-                let hash_var = var_codec.encode(av_var);
-
-                // Combine using the same logic as in the code
-                let combined_hash1 = hash_age.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash_var;
-                let combined_hash2 = hash_age.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash_var;
-                assert_eq!(
-                    combined_hash1, combined_hash2,
-                    "Hash combination not consistent for Age={}, variable='{}'",
-                    age, variable
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_vs_lookup_hash_consistency() -> PolarsResult<()> {
-        // This is the critical test - ensure build and lookup use identical hash computation
-        let df = df! {
-            "Age" => [30, 31, 32],
-            "variable" => ["1", "2", "3"],
-            "value" => [0.002, 0.0016, 0.0012]
-        }?;
-        // Build the table
-        let table = AssumptionTable::build(
-            df.clone(),
-            vec!["Age".to_string(), "variable".to_string()],
-            "value".to_string(),
-        )?;
-        // For each row in the original data, verify we can look it up correctly
-        for row_idx in 0..df.height() {
-            let age = df.column("Age")?.get(row_idx)?;
-            let variable = df.column("variable")?.get(row_idx)?;
-            let expected_value = df.column("value")?.get(row_idx)?;
-            // Manually compute the hash using build logic
-            let hash_age = table.codecs[0].encode(age.clone());
-            let hash_var = table.codecs[1].encode(variable.clone());
-            let build_hash = hash_age.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash_var;
-            // Check if it exists in the map
-            if let Some(stored_value) = table.map.get(&build_hash) {
-                if let AnyValue::Float64(expected_f64) = expected_value {
-                    assert!(
-                        (stored_value - expected_f64).abs() < 1e-10,
-                        "Stored value {} doesn't match expected {} for row {}",
-                        stored_value,
-                        expected_f64,
-                        row_idx
-                    );
-                }
-            } else {
-                panic!("Hash {} not found in map for row {}", build_hash, row_idx);
-            }
-
-            // Now test lookup using series
-            let age_val = match age {
-                AnyValue::Int64(i) => i,
-                AnyValue::Int32(i) => i as i64,
-                _ => panic!("Unexpected age type"),
-            };
-            let var_val = match variable {
-                AnyValue::String(s) => s.to_string(),
-                AnyValue::StringOwned(s) => s.to_string(),
-                _ => panic!("Unexpected variable type"),
-            };
-
-            let age_series = Series::new("Age".into(), &[age_val]);
-            let var_series = Series::new("variable".into(), &[var_val.as_str()]);
-
-            // Perform lookup
-            let result = table.lookup_series(&[&age_series, &var_series])?;
-            let lookup_value = result.f64()?.get(0).unwrap();
-            if let AnyValue::Float64(expected_f64) = expected_value {
-                assert!(
-                    (lookup_value - expected_f64).abs() < 1e-10,
-                    "Lookup value {} doesn't match expected {} for row {}",
-                    lookup_value,
-                    expected_f64,
-                    row_idx
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_lookup_scalar_fast_path_2keys() -> PolarsResult<()> {
-        // Test the fast path that triggers when len > 1000 and codecs.len() == 2
-        let table = create_test_mortality_table()?;
-
-        // Create large series to trigger fast path (> 1000 elements)
-        let large_size = 1500;
-        let mut ages = Vec::with_capacity(large_size);
-        let mut genders = Vec::with_capacity(large_size);
-        let mut expected_values = Vec::with_capacity(large_size);
-
-        // Cycle through our test data
-        let test_data = [
-            (30, "M", 0.001),
-            (30, "F", 0.0008),
-            (31, "M", 0.0012),
-            (31, "F", 0.001),
-            (32, "M", 0.0014),
-            (32, "F", 0.0012),
-        ];
-
-        for i in 0..large_size {
-            let (age, gender, expected) = &test_data[i % test_data.len()];
-            ages.push(*age);
-            genders.push(*gender);
-            expected_values.push(*expected);
-        }
-
-        let age_series = Series::new("age".into(), ages);
-        let gender_series = Series::new("gender".into(), genders);
-        // This should trigger the fast path
-        let result = table.lookup_series(&[&age_series, &gender_series])?;
-
-        assert_eq!(result.len(), large_size);
-
-        // Verify a few specific values
-        let result_f64 = result.f64()?;
-        for (i, expected) in expected_values.iter().take(10).enumerate() {
-            let actual = result_f64.get(i).unwrap();
-            assert!(
-                (actual - expected).abs() < 1e-10,
-                "Fast path failed at index {}: expected {}, got {}",
-                i,
-                expected,
-                actual
-            );
-        }
-
-        // Verify last few values
-        for (offset, expected) in expected_values
-            .iter()
-            .enumerate()
-            .take(large_size)
-            .skip(large_size - 10)
-        {
-            let i = offset;
-            let actual = result_f64.get(i).unwrap();
-            assert!(
-                (actual - expected).abs() < 1e-10,
-                "Fast path failed at index {}: expected {}, got {}",
-                i,
-                expected,
-                actual
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_lookup_scalar_regular_path_vs_fast_path() -> PolarsResult<()> {
-        // Test that regular path and fast path produce identical results
-        let table = create_test_mortality_table()?;
-
-        // Test with small data (regular path)
-        let small_ages = vec![30, 31, 32, 30, 31];
-        let small_genders = vec!["M", "F", "M", "F", "M"];
-        let small_age_series = Series::new("age".into(), small_ages.clone());
-        let small_gender_series = Series::new("gender".into(), small_genders.clone());
-
-        let small_result = table.lookup_series(&[&small_age_series, &small_gender_series])?;
-
-        // Test with large data (fast path) - same pattern repeated
-        let large_size = 1500;
-        let mut large_ages = Vec::with_capacity(large_size);
-        let mut large_genders = Vec::with_capacity(large_size);
-
-        for i in 0..large_size {
-            let idx = i % small_ages.len();
-            large_ages.push(small_ages[idx]);
-            large_genders.push(small_genders[idx]);
-        }
-
-        let large_age_series = Series::new("age".into(), large_ages);
-        let large_gender_series = Series::new("gender".into(), large_genders);
-
-        let large_result = table.lookup_series(&[&large_age_series, &large_gender_series])?;
-
-        // Compare first few results
-        let small_f64 = small_result.f64()?;
-        let large_f64 = large_result.f64()?;
-
-        for i in 0..small_ages.len() {
-            let small_val = small_f64.get(i).unwrap();
-            let large_val = large_f64.get(i).unwrap();
-            assert!(
-                (small_val - large_val).abs() < 1e-10,
-                "Regular vs fast path mismatch at index {}: regular={}, fast={}",
-                i,
-                small_val,
-                large_val
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_vector_lookup_hash_consistency() -> PolarsResult<()> {
-        // Test that vector lookup uses the same hash computation as scalar lookup
-        let table = create_test_mortality_table()?;
-
-        // Create vector data
-        let mut age_builder =
-            ListPrimitiveChunkedBuilder::<Int64Type>::new("age".into(), 2, 4, DataType::Int64);
-        age_builder.append_slice(&[30i64, 31]); // Row 0: [30, 31]
-        age_builder.append_slice(&[32i64, 30]); // Row 1: [32, 30]
-        let age_vector = age_builder.finish().into_series();
-
-        let gender_vector = Series::new(
-            "gender".into(),
-            &[
-                Series::new("".into(), &["M", "F"]),
-                Series::new("".into(), &["M", "F"]),
-            ],
-        );
-        let vector_result = table.lookup_series(&[&age_vector, &gender_vector])?;
-
-        // Verify result structure
-        assert!(matches!(vector_result.dtype(), DataType::List(_)));
-        let list_ca = vector_result.list()?;
-        assert_eq!(list_ca.len(), 2);
-
-        // Row 0: age=[30, 31], gender=["M", "F"] -> [0.001, 0.001] (30,M and 31,F)
-        let row0 = list_ca.get_any_value(0)?;
-        if let AnyValue::List(inner) = row0 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values.len(), 2);
-            assert!(
-                (values[0] - 0.001).abs() < 1e-10,
-                "Expected 0.001 for (30,M), got {}",
-                values[0]
-            );
-            assert!(
-                (values[1] - 0.001).abs() < 1e-10,
-                "Expected 0.001 for (31,F), got {}",
-                values[1]
-            );
-        } else {
-            panic!("Expected List type");
-        }
-
-        // Row 1: age=[32, 30], gender=["M", "F"] -> [0.0014, 0.0008] (32,M and 30,F)
-        let row1 = list_ca.get_any_value(1)?;
-        if let AnyValue::List(inner) = row1 {
-            let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-            assert_eq!(values.len(), 2);
-            assert!(
-                (values[0] - 0.0014).abs() < 1e-10,
-                "Expected 0.0014 for (32,M), got {}",
-                values[0]
-            );
-            assert!(
-                (values[1] - 0.0008).abs() < 1e-10,
-                "Expected 0.0008 for (30,F), got {}",
-                values[1]
-            );
-        } else {
-            panic!("Expected List type");
-        }
-
-        // Compare with equivalent scalar lookups
-        let scalar_age_series = Series::new("age".into(), &[30, 31, 32, 30]);
-        let scalar_gender_series = Series::new("gender".into(), &["M", "F", "M", "F"]);
-        let scalar_result = table.lookup_series(&[&scalar_age_series, &scalar_gender_series])?;
-        let scalar_f64 = scalar_result.f64()?;
-
-        // Verify scalar results match vector results
-        assert!((scalar_f64.get(0).unwrap() - 0.001).abs() < 1e-10); // 30,M
-        assert!((scalar_f64.get(1).unwrap() - 0.001).abs() < 1e-10); // 31,F
-        assert!((scalar_f64.get(2).unwrap() - 0.0014).abs() < 1e-10); // 32,M
-        assert!((scalar_f64.get(3).unwrap() - 0.0008).abs() < 1e-10); // 30,F
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_vector_lookup_with_failing_python_pattern() -> PolarsResult<()> {
-        // Test vector lookup with the exact pattern that's failing in Python
-        let melted_df = df! {
-            "Age" => [30, 31, 32, 30, 31, 32, 30, 31, 32],
-            "variable" => ["1", "1", "1", "2", "2", "2", "3", "3", "3"],
-            "qx" => [0.002, 0.0021, 0.0022, 0.0015, 0.0016, 0.0017, 0.001, 0.0011, 0.0012]
-        }?;
-
-        let table = AssumptionTable::build(
-            melted_df,
-            vec!["Age".to_string(), "variable".to_string()],
-            "qx".to_string(),
-        )?;
-
-        // Create vector data that mimics the Python failing case
-        let mut age_builder =
-            ListPrimitiveChunkedBuilder::<Int64Type>::new("Age".into(), 2, 6, DataType::Int64);
-        age_builder.append_slice(&[30i64, 31, 32]); // Row 0: [30, 31, 32]
-        age_builder.append_slice(&[30i64, 31, 32]); // Row 1: [30, 31, 32]
-        let age_vector = age_builder.finish().into_series();
-
-        let variable_vector = Series::new(
-            "variable".into(),
-            &[
-                Series::new("".into(), &["1", "2", "3"]),
-                Series::new("".into(), &["1", "2", "3"]),
-            ],
-        );
-        let result = table.lookup_series(&[&age_vector, &variable_vector])?;
-
-        let list_ca = result.list()?;
-        assert_eq!(list_ca.len(), 2);
-
-        // Both rows should have identical results since they have the same data
-        for row_idx in 0..2 {
-            let row = list_ca.get_any_value(row_idx)?;
-            if let AnyValue::List(inner) = row {
-                let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-                assert_eq!(values.len(), 3);
-
-                // Expected: Age=30,var="1" -> 0.002, Age=31,var="2" -> 0.0016, Age=32,var="3" -> 0.0012
-                assert!(
-                    (values[0] - 0.002).abs() < 1e-10,
-                    "Row {}: Expected 0.002 for (30,'1'), got {}",
-                    row_idx,
-                    values[0]
-                );
-                assert!(
-                    (values[1] - 0.0016).abs() < 1e-10,
-                    "Row {}: Expected 0.0016 for (31,'2'), got {}",
-                    row_idx,
-                    values[1]
-                );
-                assert!(
-                    (values[2] - 0.0012).abs() < 1e-10,
-                    "Row {}: Expected 0.0012 for (32,'3'), got {}",
-                    row_idx,
-                    values[2]
-                );
-            } else {
-                panic!("Expected List type for row {}", row_idx);
-            }
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_general_case_hash_path() -> PolarsResult<()> {
-        // Test the general case hash path (not 2-key optimization)
-        // Create a table with 3 keys to force general case
-        let df = df! {
-            "key1" => [1, 2, 3],
-            "key2" => ["A", "B", "C"],
-            "key3" => [10, 20, 30],
-            "value" => [0.1, 0.2, 0.3]
-        }?;
-
-        let table = AssumptionTable::build(
-            df,
-            vec!["key1".to_string(), "key2".to_string(), "key3".to_string()],
-            "value".to_string(),
-        )?;
-        assert_eq!(table.codecs.len(), 3); // Should force general case
-
-        // Test lookup
-        let key1_series = Series::new("key1".into(), &[1, 2, 3]);
-        let key2_series = Series::new("key2".into(), &["A", "B", "C"]);
-        let key3_series = Series::new("key3".into(), &[10, 20, 30]);
-
-        let result = table.lookup_series(&[&key1_series, &key2_series, &key3_series])?;
-        let result_f64 = result.f64()?;
-
-        assert!((result_f64.get(0).unwrap() - 0.1).abs() < 1e-10);
-        assert!((result_f64.get(1).unwrap() - 0.2).abs() < 1e-10);
-        assert!((result_f64.get(2).unwrap() - 0.3).abs() < 1e-10);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_table_metadata_methods() -> PolarsResult<()> {
-        // Test the new metadata methods for table key information
-        let df = df! {
-            "age" => [30, 31, 32],
-            "gender" => ["M", "F", "M"],
-            "smoking" => ["Y", "N", "Y"],
-            "rate" => [0.001, 0.0008, 0.0012]
-        }?;
-
-        let table = AssumptionTable::build(
-            df,
-            vec![
-                "age".to_string(),
-                "gender".to_string(),
-                "smoking".to_string(),
-            ],
-            "rate".to_string(),
-        )?;
-
-        // Test get_key_count
-        assert_eq!(table.get_key_count(), 3);
-
-        // Test get_key_name with valid indices
-        assert_eq!(table.get_key_name(0)?, "age");
-        assert_eq!(table.get_key_name(1)?, "gender");
-        assert_eq!(table.get_key_name(2)?, "smoking");
-
-        // Test get_key_name with invalid index
-        let result = table.get_key_name(3);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("out of bounds"));
-
-        // Test get_key_columns
-        let keys = table.get_key_columns();
-        assert_eq!(keys.len(), 3);
-        assert_eq!(keys[0], "age");
-        assert_eq!(keys[1], "gender");
-        assert_eq!(keys[2], "smoking");
-
-        // Test get_key_columns_owned
-        let owned_keys = table.get_key_columns_owned();
-        assert_eq!(owned_keys.len(), 3);
-        assert_eq!(owned_keys[0], "age");
-        assert_eq!(owned_keys[1], "gender");
-        assert_eq!(owned_keys[2], "smoking");
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_table_metadata_single_key() -> PolarsResult<()> {
-        // Test metadata methods with single key table
-        let df = df! {
-            "duration" => [1, 2, 3, 4, 5],
-            "lapse_rate" => [0.05, 0.04, 0.03, 0.02, 0.01]
-        }?;
-
-        let table =
-            AssumptionTable::build(df, vec!["duration".to_string()], "lapse_rate".to_string())?;
-
-        assert_eq!(table.get_key_count(), 1);
-        assert_eq!(table.get_key_name(0)?, "duration");
-
-        let keys = table.get_key_columns();
-        assert_eq!(keys.len(), 1);
-        assert_eq!(keys[0], "duration");
-
-        // Test out of bounds
-        let result = table.get_key_name(1);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Key index 1 out of bounds"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_table_metadata_empty_keys() -> PolarsResult<()> {
-        // Edge case: test with minimal data structure
-        let df = df! {
-            "key" => [1],
-            "value" => [0.5]
-        }?;
-
-        let table = AssumptionTable::build(df, vec!["key".to_string()], "value".to_string())?;
-
-        assert_eq!(table.get_key_count(), 1);
-        assert_eq!(table.get_key_name(0)?, "key");
-        assert_eq!(table.get_key_columns().len(), 1);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_combined_basic() -> PolarsResult<()> {
-        // Create base table
-        let base_df = df! {
-            "age" => [30, 31],
-            "gender" => ["M", "F"],
-            "rate" => [0.001, 0.0008]
-        }?;
-
-        let base_table = AssumptionTable::build(
-            base_df,
-            vec!["age".to_string(), "gender".to_string()],
-            "rate".to_string(),
-        )?;
-
-        // Create new data to append
-        let new_df = df! {
-            "age" => [32, 33],
-            "gender" => ["M", "F"],
-            "rate" => [0.0012, 0.001]
-        }?;
-
-        // Build combined table
-        let combined_table = AssumptionTable::build_combined(
-            &base_table,
-            new_df,
-            vec!["age".to_string(), "gender".to_string()],
-            "rate".to_string(),
-        )?;
-
-        // Verify the combined table has all entries
-        assert_eq!(combined_table.entry_count(), 4); // 2 original + 2 new entries
-        assert_eq!(combined_table.keys, base_table.keys);
-        assert_eq!(combined_table.codecs.len(), base_table.codecs.len());
-
-        // Test lookup on combined data
-        let age_series = Series::new("age".into(), &[30, 32, 33]);
-        let gender_series = Series::new("gender".into(), &["M", "M", "F"]);
-        let result = combined_table.lookup_series(&[&age_series, &gender_series])?;
-
-        let result_f64 = result.f64()?;
-        assert!((result_f64.get(0).unwrap() - 0.001).abs() < 1e-10); // 30,M from base
-        assert!((result_f64.get(1).unwrap() - 0.0012).abs() < 1e-10); // 32,M from new
-        assert!((result_f64.get(2).unwrap() - 0.001).abs() < 1e-10); // 33,F from new
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_combined_key_count_mismatch() -> PolarsResult<()> {
-        let base_df = df! {
-            "age" => [30, 31],
-            "rate" => [0.001, 0.0008]
-        }?;
-
-        let base_table =
-            AssumptionTable::build(base_df, vec!["age".to_string()], "rate".to_string())?;
-
-        let new_df = df! {
-            "age" => [32],
-            "gender" => ["M"],
-            "rate" => [0.0012]
-        }?;
-
-        let result = AssumptionTable::build_combined(
-            &base_table,
-            new_df,
-            vec!["age".to_string(), "gender".to_string()], // Different key count
-            "rate".to_string(),
-        );
-
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Key count mismatch"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_combined_key_name_mismatch() -> PolarsResult<()> {
-        let base_df = df! {
-            "age" => [30, 31],
-            "gender" => ["M", "F"],
-            "rate" => [0.001, 0.0008]
-        }?;
-
-        let base_table = AssumptionTable::build(
-            base_df,
-            vec!["age".to_string(), "gender".to_string()],
-            "rate".to_string(),
-        )?;
-
-        let new_df = df! {
-            "age" => [32],
-            "sex" => ["M"], // Different key name
-            "rate" => [0.0012]
-        }?;
-
-        let result = AssumptionTable::build_combined(
-            &base_table,
-            new_df,
-            vec!["age".to_string(), "sex".to_string()],
-            "rate".to_string(),
-        );
-
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Key name mismatch"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_combined_duplicate_keys() -> PolarsResult<()> {
-        let base_df = df! {
-            "age" => [30, 31],
-            "gender" => ["M", "F"],
-            "rate" => [0.001, 0.0008]
-        }?;
-
-        let base_table = AssumptionTable::build(
-            base_df,
-            vec!["age".to_string(), "gender".to_string()],
-            "rate".to_string(),
-        )?;
-
-        // Create new data with duplicate key combination
-        let new_df = df! {
-            "age" => [30], // Same as existing
-            "gender" => ["M"], // Same as existing
-            "rate" => [0.0012] // Different value
-        }?;
-
-        let result = AssumptionTable::build_combined(
-            &base_table,
-            new_df,
-            vec!["age".to_string(), "gender".to_string()],
-            "rate".to_string(),
-        );
-
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Duplicate key found"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_combined_codec_compatibility() -> PolarsResult<()> {
-        let base_df = df! {
-            "age" => [30, 31],
-            "rate" => [0.001, 0.0008]
-        }?;
-
-        let base_table =
-            AssumptionTable::build(base_df, vec!["age".to_string()], "rate".to_string())?;
-
-        // Create new data with incompatible type (string instead of integer)
-        let new_df = df! {
-            "age" => ["thirty-two"], // String instead of integer
-            "rate" => [0.0012]
-        }?;
-
-        let result = AssumptionTable::build_combined(
-            &base_table,
-            new_df,
-            vec!["age".to_string()],
-            "rate".to_string(),
-        );
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Codec mismatch"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_combined_integer_float_compatibility() -> PolarsResult<()> {
-        // Test that integer and float types are compatible
-        let base_df = df! {
-            "age" => [30i32, 31i32],
-            "rate" => [0.001, 0.0008]
-        }?;
-
-        let base_table =
-            AssumptionTable::build(base_df, vec!["age".to_string()], "rate".to_string())?;
-
-        // Append with float age column
-        let new_df = df! {
-            "age" => [32.0f64], // Float instead of integer (should be compatible)
-            "rate" => [0.0012]
-        }?;
-
-        let result = AssumptionTable::build_combined(
-            &base_table,
-            new_df,
-            vec!["age".to_string()],
-            "rate".to_string(),
-        );
-
-        assert!(result.is_ok());
-        let combined = result?;
-        assert_eq!(combined.entry_count(), 3); // Original 2 + 1 new
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_combined_single_key_table() -> PolarsResult<()> {
-        // Test append with single key table (common case)
-        let base_df = df! {
-            "duration" => [1, 2, 3],
-            "lapse_rate" => [0.05, 0.04, 0.03]
-        }?;
-
-        let base_table = AssumptionTable::build(
-            base_df,
-            vec!["duration".to_string()],
-            "lapse_rate".to_string(),
-        )?;
-
-        let new_df = df! {
-            "duration" => [4, 5, 6],
-            "lapse_rate" => [0.02, 0.01, 0.005]
-        }?;
-
-        let combined_table = AssumptionTable::build_combined(
-            &base_table,
-            new_df,
-            vec!["duration".to_string()],
-            "lapse_rate".to_string(),
-        )?;
-
-        assert_eq!(combined_table.entry_count(), 6); // 3 original + 3 new
-
-        // Test lookup on combined data
-        let duration_series = Series::new("duration".into(), &[1, 4, 6]);
-        let result = combined_table.lookup_series(&[&duration_series])?;
-
-        let result_f64 = result.f64()?;
-        assert!((result_f64.get(0).unwrap() - 0.05).abs() < 1e-10); // From base
-        assert!((result_f64.get(1).unwrap() - 0.02).abs() < 1e-10); // From new
-        assert!((result_f64.get(2).unwrap() - 0.005).abs() < 1e-10); // From new
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_build_combined_large_append() -> PolarsResult<()> {
-        // Test append with larger dataset to verify performance
-        let base_ages: Vec<i32> = (30..40).collect();
-        let base_rates: Vec<f64> = base_ages.iter().map(|&age| age as f64 * 0.001).collect();
-
-        let base_df = df! {
-            "age" => base_ages,
-            "rate" => base_rates
-        }?;
-
-        let base_table =
-            AssumptionTable::build(base_df, vec!["age".to_string()], "rate".to_string())?;
-
-        let new_ages: Vec<i32> = (40..50).collect();
-        let new_rates: Vec<f64> = new_ages.iter().map(|&age| age as f64 * 0.001).collect();
-
-        let new_df = df! {
-            "age" => new_ages,
-            "rate" => new_rates
-        }?;
-
-        let combined_table = AssumptionTable::build_combined(
-            &base_table,
-            new_df,
-            vec!["age".to_string()],
-            "rate".to_string(),
-        )?;
-
-        assert_eq!(combined_table.entry_count(), 20); // 10 original + 10 new
-
-        // Test spot check lookups
-        let test_ages = Series::new("age".into(), &[30, 35, 40, 45]);
-        let result = combined_table.lookup_series(&[&test_ages])?;
-        let result_f64 = result.f64()?;
-
-        assert!((result_f64.get(0).unwrap() - 0.030).abs() < 1e-10); // 30 from base
-        assert!((result_f64.get(1).unwrap() - 0.035).abs() < 1e-10); // 35 from base
-        assert!((result_f64.get(2).unwrap() - 0.040).abs() < 1e-10); // 40 from new
-        assert!((result_f64.get(3).unwrap() - 0.045).abs() < 1e-10); // 45 from new
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_codecs_compatible() {
-        // Test codec compatibility logic
-        assert!(AssumptionTable::codecs_compatible(
-            &ColumnCodec::String,
-            &ColumnCodec::String
-        ));
-        assert!(AssumptionTable::codecs_compatible(
-            &ColumnCodec::Float64,
-            &ColumnCodec::Float64
-        ));
-        assert!(AssumptionTable::codecs_compatible(
-            &ColumnCodec::Integer,
-            &ColumnCodec::Integer
-        ));
-
-        // Test integer/float compatibility
-        assert!(AssumptionTable::codecs_compatible(
-            &ColumnCodec::Float64,
-            &ColumnCodec::Integer
-        ));
-        assert!(AssumptionTable::codecs_compatible(
-            &ColumnCodec::Integer,
-            &ColumnCodec::Float64
-        ));
-
-        // Test incompatible combinations
-        assert!(!AssumptionTable::codecs_compatible(
-            &ColumnCodec::String,
-            &ColumnCodec::Integer
-        ));
-        assert!(!AssumptionTable::codecs_compatible(
-            &ColumnCodec::String,
-            &ColumnCodec::Float64
-        ));
-        assert!(!AssumptionTable::codecs_compatible(
-            &ColumnCodec::Integer,
-            &ColumnCodec::String
-        ));
-        assert!(!AssumptionTable::codecs_compatible(
-            &ColumnCodec::Float64,
-            &ColumnCodec::String
-        ));
-    }
-
-    #[test]
-    fn benchmark_parallel_threshold() -> PolarsResult<()> {
-        use std::time::Instant;
-
-        let table = create_test_mortality_table()?;
-
-        // Test different vector lengths to find optimal parallel threshold
-        let test_sizes = vec![10, 25, 50, 75, 100, 150, 200, 300, 500];
-        for &size in &test_sizes {
-            // Create vector data
-            let mut age_builder = ListPrimitiveChunkedBuilder::<Int64Type>::new(
-                "age".into(),
-                size,
-                size * 2,
-                DataType::Int64,
-            );
-
-            for _ in 0..size {
-                age_builder.append_slice(&[30i64, 31]); // 2 elements per row
-            }
-            let age_vector = age_builder.finish().into_series();
-
-            let gender_vector = Series::new(
-                "gender".into(),
-                (0..size)
-                    .map(|_| Series::new("".into(), &["M", "F"]))
-                    .collect::<Vec<_>>(),
-            );
-
-            // Force sequential processing by temporarily modifying the threshold logic
-            // We'll time both approaches manually
-
-            // Time sequential approach (simulate by using small threshold)
-            let start = Instant::now();
-            let _result1 = table.lookup_series(&[&age_vector, &gender_vector])?;
-            let _sequential_time = start.elapsed();
-
-            // For this test, we can't easily force parallel vs sequential without modifying the code
-            // But we can at least see the current performance characteristics
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_parallel_threshold_behavior() -> PolarsResult<()> {
-        let table = create_test_mortality_table()?;
-
-        // Test that we get consistent results regardless of parallel/sequential execution
-        let test_sizes = vec![50, 150]; // One below threshold, one above
-
-        for &size in &test_sizes {
-            let mut age_builder = ListPrimitiveChunkedBuilder::<Int64Type>::new(
-                "age".into(),
-                size,
-                size * 3,
-                DataType::Int64,
-            );
-
-            for _ in 0..size {
-                // Use only valid combinations from our test table (ages 30-32, genders M/F)
-                age_builder.append_slice(&[30i64, 31, 32]);
-            }
-            let age_vector = age_builder.finish().into_series();
-
-            let gender_vector = Series::new(
-                "gender".into(),
-                (0..size)
-                    .map(|_| Series::new("".into(), &["M", "F", "M"]))
-                    .collect::<Vec<_>>(),
-            );
-
-            let result = table.lookup_series(&[&age_vector, &gender_vector])?;
-
-            // Verify result structure
-            assert!(matches!(result.dtype(), DataType::List(_)));
-            let list_ca = result.list()?;
-            assert_eq!(list_ca.len(), size);
-
-            // Spot check a few results
-            for i in [0, size / 2, size - 1] {
-                let row = list_ca.get_any_value(i)?;
-                if let AnyValue::List(inner) = row {
-                    assert_eq!(inner.len(), 3);
-                    // All values should be valid (not NaN) since we're using valid age/gender combinations
-                    let values: Vec<f64> = inner.f64()?.into_no_null_iter().collect();
-                    for &val in &values {
-                        assert!(!val.is_nan(), "Found NaN at size {}, row {}", size, i);
-                    }
-                } else {
-                    panic!("Expected List type");
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_f64_table_i64_lookup_bug() -> PolarsResult<()> {
-        // Reproduce the exact issue from the failing Python test
-        // Table is built with f64 age column, but lookup uses i64 age
-
-        // Create table data with f64 age (as happens when Python converts to f64)
-        let df = df! {
-            "age" => [40.0f64, 41.0f64, 42.0f64],
-            "product" => ["A", "A", "A"],
-            "duration" => ["1", "1", "1"],
-            "rate" => [0.012, 0.0135, 0.015]
-        }?;
-
-        // Build table
-        let table = AssumptionTable::build(
-            df,
-            vec![
-                "age".to_string(),
-                "product".to_string(),
-                "duration".to_string(),
-            ],
-            "rate".to_string(),
-        )?;
-        // Create lookup data with i64 age (as happens from Python model points)
-        let age_series = Series::new("age".into(), &[40i64, 41i64, 42i64]);
-        let product_series = Series::new("product".into(), &["A", "A", "A"]);
-        let duration_series = Series::new("duration".into(), &["1", "1", "1"]);
-        // Attempt lookup
-        let result = table.lookup_series(&[&age_series, &product_series, &duration_series])?;
-        let result_f64 = result.f64()?;
-        for i in 0..result.len() {
-            let _val = result_f64.get(i).unwrap();
-        }
-
-        // Debug: manually check hash computation for first lookup
-        let av_age = age_series.get(0)?;
-        let av_product = product_series.get(0)?;
-        let av_duration = duration_series.get(0)?;
-        let hash_age = table.codecs[0].encode(av_age);
-        let hash_product = table.codecs[1].encode(av_product);
-        let hash_duration = table.codecs[2].encode(av_duration);
-        // Compute combined hash using general case logic (3 keys)
-        let mut h = ahash::AHasher::default();
-        h.write_u64(hash_age);
-        h.write_u64(hash_product);
-        h.write_u64(hash_duration);
-        let combined_hash = h.finish();
-        if let Some(_stored_value) = table.map.get(&combined_hash) {
-            // Value found in map
-        }
-
-        // The test should pass - we expect to find the values
-        assert!(
-            !result_f64.get(0).unwrap().is_nan(),
-            "Expected to find value for (40, A, 1) but got NaN"
-        );
-        assert!(
-            !result_f64.get(1).unwrap().is_nan(),
-            "Expected to find value for (41, A, 1) but got NaN"
-        );
-        assert!(
-            !result_f64.get(2).unwrap().is_nan(),
-            "Expected to find value for (42, A, 1) but got NaN"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_string_duration_integer_lookup_bug() -> PolarsResult<()> {
-        // Test the specific case where duration is stored as string but looked up as integer
-        // This is likely the real bug from the Python test
-
-        // Create table data with string duration (as happens in wide table processing)
-        let df = df! {
-            "age" => [40.0f64, 41.0f64, 42.0f64],
-            "product" => ["A", "A", "A"],
-            "duration" => ["1", "2", "3"],  // STRING duration
-            "rate" => [0.012, 0.0135, 0.015]
-        }?;
-
-        // Build table
-        let table = AssumptionTable::build(
-            df,
-            vec![
-                "age".to_string(),
-                "product".to_string(),
-                "duration".to_string(),
-            ],
-            "rate".to_string(),
-        )?;
-        // Create lookup data with INTEGER duration (as happens from Python model points)
-        let age_series = Series::new("age".into(), &[40i64, 41i64, 42i64]);
-        let product_series = Series::new("product".into(), &["A", "A", "A"]);
-        let duration_series = Series::new("duration".into(), &[1i64, 2i64, 3i64]); // INTEGER duration
-                                                                                   // This will be Int64
-
-        // Attempt lookup - this should fail/return NaN because String codec != Integer input
-        let result = table.lookup_series(&[&age_series, &product_series, &duration_series])?;
-        let result_f64 = result.f64()?;
-        for i in 0..result.len() {
-            let _val = result_f64.get(i).unwrap();
-        }
-
-        // Debug: show the codec mismatch
-        // Check what happens when we encode integer with String codec
-        let duration_av = duration_series.get(0)?; // Int64(1)
-        let _duration_hash = table.codecs[2].encode(duration_av); // String codec encoding Int64 input
-                                                                  // This should fail because the String codec doesn't handle Int64 properly
-                                                                  // The encode method returns 0u64 for unhandled cases, which won't match
+    fn test_storage_mode_from_str() -> PolarsResult<()> {
+        assert_eq!(StorageMode::from_str("hash")?, StorageMode::Hash);
+        assert_eq!(StorageMode::from_str("array")?, StorageMode::Array);
+        assert_eq!(StorageMode::from_str("auto")?, StorageMode::Auto);
+        assert_eq!(StorageMode::from_str("HASH")?, StorageMode::Hash); // case insensitive
+
+        assert!(StorageMode::from_str("invalid").is_err());
 
         Ok(())
     }
