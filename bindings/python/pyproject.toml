@@ -30,10 +30,12 @@ dependencies = [
 dev = [
     "ai-code-tracker>=0.1.1",
     "hypothesis>=6.131.15",
+    "memray>=1.19.1",
     "mypy>=1.15.0",
     "pyright>=1.1.400",
     "pytest-accept>=0.1.12",
     "pytest-benchmark>=5.1.0",
+    "pytest-memray>=1.8.0",
 ]
 
 [project.optional-dependencies]

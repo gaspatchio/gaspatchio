@@ -1,8 +1,10 @@
+mod array_storage;
 mod hash_storage;
 mod key_encoder;
 pub mod registry;
 pub mod table;
 
+pub use array_storage::ArrayStorage;
 pub use hash_storage::{ColumnCodec, HashStorage};
 pub use key_encoder::KeyEncoder;
 pub use registry::{

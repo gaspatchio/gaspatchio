@@ -358,8 +358,23 @@ class ActuarialFrame:
         """Decorator to capture operations within a function call in optimize mode."""
         return build_trace_decorator(self)(func)
 
-    def collect(self) -> pl.DataFrame:
-        """Execute and materialize the dataframe."""
+    def collect(
+        self,
+        *,
+        engine: str | None = None,
+    ) -> pl.DataFrame:
+        """Execute and materialize the dataframe.
+
+        Args:
+            engine: Execution engine to use. Options:
+                - None (default): Use Polars default in-memory execution
+                - "streaming": Process data in batches to reduce peak memory usage.
+                  Note: Some operations (cumulative, joins) may fall back to in-memory.
+
+        Returns:
+            Materialized DataFrame with all computations applied.
+
+        """
         try:
             if self._df is None:
                 # Ensure an empty schema matching Polars behavior for empty LazyFrame.collect()
@@ -401,6 +416,9 @@ class ActuarialFrame:
                 # Optionally clear the graph after applying, though the tracer resets it per call.
                 # self._computation_graph = []
 
+            # Call collect with engine parameter if specified
+            if engine is not None:
+                return final_df.collect(engine=engine)
             return final_df.collect()
         except Exception as e:
             _handle_execution_error(self, e)  # Will re-raise or format

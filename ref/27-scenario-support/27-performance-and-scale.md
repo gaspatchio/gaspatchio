@@ -544,16 +544,236 @@ This enables CTE/VaR calculation even when scenario-level results don't fit in m
 
 ## Performance Benchmarks
 
-*To be populated with actual benchmarks once implementation is complete.*
+**Last Updated**: 2025-12-08
+**Test System**: macOS Darwin, 16 GB RAM, Apple Silicon
+**Model**: GMXB (applied_life) with 180-month projections, dynamic lapse, guarantees
 
-### Expected Performance (Estimates)
+### Actual Benchmark Results
 
-| Configuration | Time | Memory |
-|--------------|------|--------|
-| 8 policies × 3 scenarios | ~1s | ~50 MB |
-| 1K policies × 1K scenarios | ~30s | ~2 GB |
-| 1K policies × 10K scenarios (streaming) | ~5 min | ~4 GB |
-| 10K policies × 10K scenarios (batched) | ~30 min | ~8 GB |
+#### Full Model (GMXB with Stochastic Returns)
+
+| Policies | Scenarios | Rows | Memory (Peak) | Time | Notes |
+|----------|-----------|------|---------------|------|-------|
+| 8 | 10 | 80 | 92.8 MiB | ~0.8s | Baseline |
+| 8 | 100 | 800 | 153.8 MiB | ~1.5s | |
+| 1,000 | 10 | 10,000 | 745.7 MiB | ~11.5s | |
+| 1,000 | 50 | 50,000 | 2.8 GiB | ~57.5s | |
+| 1,000 | 100 | 100,000 | **5.7 GiB** | ~114s | ~58 KiB/row at scale |
+
+#### Memory Breakdown (1k × 10 = 10k rows)
+
+| Component | Memory |
+|-----------|--------|
+| Polars collect() | 368.8 MiB |
+| Assumptions loading | 64.5 MiB |
+| Other overhead | ~312 MiB |
+| **Total Peak** | **745.7 MiB** |
+
+#### Scenario Expansion Only (No Model Execution)
+
+| Policies | Scenarios | Rows | Memory | Time |
+|----------|-----------|------|--------|------|
+| 8 | 100 | 800 | 10.8 KiB | 256 µs |
+| 1,000 | 100 | 100,000 | ~540 µs | 540 µs |
+| 10,000 | 100 | 1,000,000 | 170.3 MiB | 7.5 ms |
+
+**Key insight**: Scenario expansion itself is extremely fast (microseconds). The memory consumption comes from model execution with list columns.
+
+#### Streaming vs Non-Streaming (Expansion Only)
+
+| Mode | Memory (10k × 100) | Notes |
+|------|-------------------|-------|
+| Non-streaming | 136.2 MiB | Default, simpler |
+| Streaming | 212.4 MiB | Higher overhead for simple ops |
+
+**Finding**: Streaming has overhead and mainly helps with very large datasets that don't fit in RAM. For the GMXB model, streaming provides no benefit because cumulative operations (`cum_prod`, `previous_period`) require full history.
+
+#### Batched vs Unbatched (1k x 100 scenarios)
+
+| Approach | Peak Memory | Time | Reduction |
+|----------|-------------|------|-----------|
+| Unbatched (all 100 at once) | **5.6 GiB** | ~114s | baseline |
+| Batched (10 batches of 10) | **636.6 MiB** | ~223s | **8.8x less memory** |
+
+**Key insight**: The `batch_scenarios()` API reduces peak memory by nearly 9x at the cost of ~2x runtime. This is essential for running large scenario counts on constrained hardware.
+
+**How batching works**:
+```
+100 scenarios, batch_size=10
+         │
+         ▼
+┌─────────────────────────────────────────────────────────┐
+│  batch_scenarios([1..100], batch_size=10)               │
+│  yields: [1-10], [11-20], [21-30], ... [91-100]         │
+└─────────────────────────────────────────────────────────┘
+         │
+         ▼ (10 iterations)
+┌─────────────────────────────────────────────────────────┐
+│  For each batch:                                        │
+│    1. Expand: 1k policies x 10 scenarios = 10k rows     │
+│    2. Run model -> 10k rows with all columns            │
+│    3. Aggregate: group_by("scenario_id").sum()          │
+│       -> 10 rows (one per scenario)                     │
+│    4. Append to batch_aggregates list                   │
+│    5. GC clears the 10k-row intermediate                │
+└─────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────┐
+│  pl.concat(batch_aggregates)                            │
+│  -> 100 rows total (10 batches x 10 rows each)          │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Sink-then-Stream Pattern (1k x 100 scenarios)
+
+An alternative to batch-aggregate is **sink-then-stream**: write full results to files, then aggregate later using the streaming engine.
+
+| Approach | Peak Memory | Time | Flexibility |
+|----------|-------------|------|-------------|
+| Unbatched | 5.6 GiB | ~114s | Full data in memory |
+| Batch-aggregate | 636.6 MiB | ~223s | Must choose aggregation upfront |
+| **Sink-then-stream** | **1.2 GiB** | **~118s** | **Any aggregation later** |
+
+**Why sink-then-stream works**:
+- Phase 1 (model run): Same memory constraint as batch-aggregate (~300 MiB per batch)
+- Phase 2 (aggregation): Streaming works because `group_by/sum/mean` have no cumulative operations
+- Data persists on disk for ad-hoc analysis
+
+**Pattern**:
+```python
+from gaspatchio_core.scenarios import batch_scenarios, with_scenarios
+
+# Phase 1: Sink full results to parquet
+for batch_num, batch_ids in enumerate(batch_scenarios(scenario_ids, batch_size=10)):
+    af = ActuarialFrame(model_points)
+    af = with_scenarios(af, batch_ids)
+    result = run_model(af).collect()
+    result.write_parquet(f"results/batch_{batch_num:04d}.parquet")
+    del result  # Free memory
+
+# Phase 2: Stream-aggregate from files (any aggregation you want!)
+totals = (
+    pl.scan_parquet("results/*.parquet")
+    .group_by("scenario_id")
+    .agg(pl.col("pv_net_cf").sum())
+    .collect(engine="streaming")  # Works! No cum_prod in aggregation
+)
+
+# Run different aggregations without re-running the model
+means = pl.scan_parquet("results/*.parquet").group_by("scenario_id").agg(
+    pl.col("pv_net_cf").mean()
+).collect(engine="streaming")
+
+percentiles = pl.scan_parquet("results/*.parquet").select(
+    pl.col("pv_net_cf").quantile(0.95)
+).collect(engine="streaming")
+```
+
+**When to use each**:
+
+| Pattern | Best For |
+|---------|----------|
+| **Unbatched** | Small runs (<4 GiB), one-off analysis |
+| **Batch-aggregate** | Memory-constrained, known aggregation upfront |
+| **Sink-then-stream** | Exploratory analysis, multiple reports, audit trail |
+
+### Scaling Estimates
+
+Based on measured benchmarks, extrapolated estimates:
+
+| Configuration | Rows | Est. Memory | Est. Time | Strategy |
+|--------------|------|-------------|-----------|----------|
+| 1k × 100 | 100k | 5.7 GiB | ~2 min | Single-shot on 8+ GB RAM |
+| 1k × 500 | 500k | ~28 GiB | ~10 min | **Batching required** |
+| 1k × 1,000 | 1M | ~57 GiB | ~19 min | **Batching required** |
+| 10k × 100 | 1M | ~57 GiB | ~19 min | **Batching required** |
+| 10k × 1,000 | 10M | ~570 GiB | ~3.2 hrs | **Heavy batching** |
+| 100k × 10k | **1B** | **~58 TB** | ~13.2 days | **See below** |
+
+### Extreme Scale: 100K Model Points × 10K Scenarios
+
+For regulatory stress testing at the extreme end (1 billion rows):
+
+#### Why ~58 TB Peak Memory?
+
+At scale, our benchmarks show memory stabilizes at **~58 KiB per row**:
+
+| Rows | Measured Memory | Per-Row |
+|------|-----------------|---------|
+| 10k | 745.7 MiB | 74.6 KiB |
+| 50k | 2.8 GiB | 57.3 KiB |
+| 100k | 5.7 GiB | 58.4 KiB |
+
+Extrapolating: `1,000,000,000 rows × 58 KiB = 58 TB`
+
+This is **peak working memory** during model execution, not final result size. The model creates 180 months of intermediate columns during projection.
+
+#### How to Actually Run 100K × 10K
+
+**Option 1: Two-level batching (64 GB machine)**
+
+With 64 GB RAM, you can run ~1M rows per batch:
+- 1k policies × 1k scenarios = 1M rows per batch
+- Total batches: 100 × 10 = **1,000 batches**
+- Each batch: ~5.7 GiB, ~2 minutes
+- Total wall time: ~33 hours (serial)
+- With 8 parallel workers: ~4 hours
+
+```python
+from itertools import product
+
+policy_batches = list(batch_sequence(range(100_000), batch_size=1_000))  # 100 batches
+scenario_batches = list(batch_sequence(range(10_000), batch_size=1_000))  # 10 batches
+
+for p_batch, s_batch in product(policy_batches, scenario_batches):
+    mp_subset = model_points.filter(pl.col("policy_id").is_in(p_batch))
+    af = ActuarialFrame(mp_subset)
+    af = gs.with_scenarios(af, s_batch)
+    result = main(af)
+    # Aggregate and write incrementally
+```
+
+**Option 2: Cloud burst (recommended)**
+
+For one-off regulatory runs, burst to cloud:
+
+| Cloud Instance | RAM | Cost/hr | Batch Size | Batches | Est. Time | Est. Cost |
+|----------------|-----|---------|------------|---------|-----------|-----------|
+| AWS r6i.8xlarge | 256 GB | ~$2 | 4M rows | 250 | ~8 hrs | ~$16 |
+| AWS r6i.16xlarge | 512 GB | ~$4 | 8M rows | 125 | ~4 hrs | ~$16 |
+| AWS r6i.metal | 1 TB | ~$8 | 16M rows | 63 | ~2.1 hrs | ~$17 |
+
+**Option 3: Distributed (Polars on Spark/Ray)**
+
+For regular 100K × 10K runs, consider:
+- Polars on Ray or Spark for distributed execution
+- Each worker handles a subset of policies
+- Horizontal scaling up to cluster RAM
+
+### Streaming Limitations
+
+The GMXB model **cannot stream** due to these operations:
+```python
+af.cumulative_growth_factor = af.combined_growth_factor.cum_prod()  # Line 427
+af.cumulative_survival = af.survival_factor.cum_prod()              # Line 491
+af.survival_prob = af.cumulative_survival.projection.previous_period()  # Line 494
+```
+
+These require full history and force Polars to fall back to in-memory execution.
+
+### Running Benchmarks
+
+```bash
+# All benchmarks with memory profiling
+uv run pytest tests/scenarios/test_scenario_benchmarks.py -m benchmark --memray
+
+# Specific scale
+uv run pytest tests/scenarios/test_scenario_benchmarks.py -m benchmark --memray -k "1k_x_10"
+
+# Streaming comparison
+uv run pytest tests/scenarios/test_scenario_benchmarks.py -m benchmark --memray -k "TestStreamingComparison"
+```
 
 Factors affecting performance:
 - Model complexity (number of calculations per row)

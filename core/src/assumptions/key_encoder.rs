@@ -50,6 +50,13 @@ impl KeyEncoder {
         KeyEncoder::Categorical { size: n_categories }
     }
 
+    /// Build encoder automatically from a Column.
+    pub fn from_column(column: &Column) -> PolarsResult<Self> {
+        // Convert Column to Series for processing
+        let series = column.as_materialized_series().clone();
+        Self::from_series(&series)
+    }
+
     /// Build encoder automatically from a Series.
     pub fn from_series(series: &Series) -> PolarsResult<Self> {
         match series.dtype() {
