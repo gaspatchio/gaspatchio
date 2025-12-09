@@ -79,11 +79,12 @@ fn create_mortality_table() -> PolarsResult<AssumptionTable> {
         "mortality_rate",
     )?;
 
-    // Build the AssumptionTable
-    AssumptionTable::build(
+    // Build the AssumptionTable with Hash mode for vector lookup compatibility
+    AssumptionTable::build_with_mode(
         df_mortality_long,
         vec!["age-last".to_string(), "gender_smoking".to_string()],
         "mortality_rate".to_string(),
+        StorageMode::Hash,
     )
 }
 

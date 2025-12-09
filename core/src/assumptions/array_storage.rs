@@ -253,4 +253,159 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_lookup_timing_sanity_check() -> PolarsResult<()> {
+        use std::time::Instant;
+
+        // Build a mortality-like table: 83 ages x 4 categories = 332 entries
+        let ages: Vec<i64> = (18..=100).collect();
+        let mut df_rows_age = vec![];
+        let mut df_rows_cat = vec![];
+        let mut df_rows_rate = vec![];
+
+        for age in &ages {
+            for cat in &["MNS", "FNS", "MS", "FS"] {
+                df_rows_age.push(*age);
+                df_rows_cat.push(*cat);
+                df_rows_rate.push(0.001 * (1.0 + *age as f64 / 100.0));
+            }
+        }
+
+        let df = df! {
+            "age" => df_rows_age,
+            "cat" => df_rows_cat,
+            "rate" => df_rows_rate
+        }?;
+
+        let storage = ArrayStorage::build(
+            &df,
+            &["age".to_string(), "cat".to_string()],
+            "rate",
+        )?.expect("Should build array storage");
+
+        // Create test data with 10k lookups
+        let test_ages: Vec<i64> = (0..10_000).map(|i| 18 + (i % 83) as i64).collect();
+        let test_cats: Vec<&str> = (0..10_000).map(|i| match i % 4 {
+            0 => "MNS",
+            1 => "FNS",
+            2 => "MS",
+            _ => "FS",
+        }).collect();
+
+        let age_series = Series::new("age".into(), test_ages);
+        let cat_series = Series::new("cat".into(), test_cats);
+        let keys = vec![&age_series, &cat_series];
+
+        // Warm up
+        let _ = storage.lookup_scalar(&keys)?;
+
+        // Timed run
+        let start = Instant::now();
+        let iterations = 100;
+        for _ in 0..iterations {
+            let result = storage.lookup_scalar(&keys)?;
+            let _ = std::hint::black_box(result);
+        }
+        let elapsed = start.elapsed();
+
+        let per_lookup_ns = elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
+        eprintln!("ArrayStorage lookup timing:");
+        eprintln!("  10k lookups x {} iterations = {} total lookups", iterations, iterations * 10_000);
+        eprintln!("  Total time: {:?}", elapsed);
+        eprintln!("  Per lookup: {:.2}ns", per_lookup_ns);
+
+        // Sanity check: should be at least 1ns per lookup (anything less is suspicious)
+        assert!(per_lookup_ns > 0.1, "Lookup time suspiciously fast: {:.2}ns", per_lookup_ns);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_array_vs_hash_timing_comparison() -> PolarsResult<()> {
+        use std::time::Instant;
+        use crate::assumptions::hash_storage::HashStorage;
+
+        // Build a mortality-like table: 83 ages x 4 categories = 332 entries
+        let ages: Vec<i64> = (18..=100).collect();
+        let mut df_rows_age = vec![];
+        let mut df_rows_cat = vec![];
+        let mut df_rows_rate = vec![];
+
+        for age in &ages {
+            for cat in &["MNS", "FNS", "MS", "FS"] {
+                df_rows_age.push(*age);
+                df_rows_cat.push(*cat);
+                df_rows_rate.push(0.001 * (1.0 + *age as f64 / 100.0));
+            }
+        }
+
+        let df = df! {
+            "age" => df_rows_age,
+            "cat" => df_rows_cat,
+            "rate" => df_rows_rate
+        }?;
+
+        let array_storage = ArrayStorage::build(
+            &df,
+            &["age".to_string(), "cat".to_string()],
+            "rate",
+        )?.expect("Should build array storage");
+
+        let hash_storage = HashStorage::build(
+            &df,
+            &["age".to_string(), "cat".to_string()],
+            "rate",
+        )?;
+
+        // Create test data with 10k lookups
+        let test_ages: Vec<i64> = (0..10_000).map(|i| 18 + (i % 83) as i64).collect();
+        let test_cats: Vec<&str> = (0..10_000).map(|i| match i % 4 {
+            0 => "MNS",
+            1 => "FNS",
+            2 => "MS",
+            _ => "FS",
+        }).collect();
+
+        let age_series = Series::new("age".into(), test_ages);
+        let cat_series = Series::new("cat".into(), test_cats);
+        let keys = vec![&age_series, &cat_series];
+
+        // Warm up both
+        let _ = array_storage.lookup_scalar(&keys)?;
+        let _ = hash_storage.lookup_scalar(&keys)?;
+
+        let iterations = 20;
+
+        // Time array storage
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let result = array_storage.lookup_scalar(&keys)?;
+            let _ = std::hint::black_box(result);
+        }
+        let array_elapsed = start.elapsed();
+
+        // Time hash storage
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let result = hash_storage.lookup_scalar(&keys)?;
+            let _ = std::hint::black_box(result);
+        }
+        let hash_elapsed = start.elapsed();
+
+        let array_per_lookup_ns = array_elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
+        let hash_per_lookup_ns = hash_elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
+        let speedup = hash_elapsed.as_nanos() as f64 / array_elapsed.as_nanos() as f64;
+
+        eprintln!("\nArray vs Hash timing comparison (10k lookups x {} iterations):", iterations);
+        eprintln!("  Array: {:?} total, {:.2}ns per lookup", array_elapsed, array_per_lookup_ns);
+        eprintln!("  Hash:  {:?} total, {:.2}ns per lookup", hash_elapsed, hash_per_lookup_ns);
+        eprintln!("  Speedup: {:.1}x", speedup);
+
+        // Both should be reasonably fast (< 100ns per lookup in release mode)
+        assert!(array_per_lookup_ns < 100.0, "Array lookup too slow: {:.2}ns", array_per_lookup_ns);
+        assert!(hash_per_lookup_ns < 100.0, "Hash lookup too slow: {:.2}ns", hash_per_lookup_ns);
+
+        Ok(())
+    }
 }
