@@ -540,6 +540,341 @@ fn benchmark_scaling(c: &mut Criterion) {
     group.finish();
 }
 
+// =============================================================================
+// Realistic Benchmarks using actual actuarial assumption tables
+// =============================================================================
+
+/// Load the actual mortality_select assumption table from appliedlife model.
+/// 9600 rows with keys: [table_id (str), attained_age (i64), duration (i64)]
+fn load_mortality_select_table(mode: StorageMode) -> PolarsResult<AssumptionTable> {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("benches/fixtures/mortality_select.parquet");
+    let file = File::open(&path).map_err(|e| {
+        PolarsError::ComputeError(format!("Failed to open mortality_select parquet: {}", e).into())
+    })?;
+    let df = ParquetReader::new(file).finish()?;
+
+    AssumptionTable::build_with_mode(
+        df,
+        vec![
+            "table_id".to_string(),
+            "attained_age".to_string(),
+            "duration".to_string(),
+        ],
+        "mort_rate".to_string(),
+        mode,
+    )
+}
+
+/// Load the actual lapse_rates assumption table.
+/// 60 rows with keys: [duration (i64), lapse_id (str)]
+fn load_lapse_rates_table(mode: StorageMode) -> PolarsResult<AssumptionTable> {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("benches/fixtures/lapse_rates.parquet");
+    let file = File::open(&path).map_err(|e| {
+        PolarsError::ComputeError(format!("Failed to open lapse_rates parquet: {}", e).into())
+    })?;
+    let df = ParquetReader::new(file).finish()?;
+
+    AssumptionTable::build_with_mode(
+        df,
+        vec!["duration".to_string(), "lapse_id".to_string()],
+        "lapse_rate".to_string(),
+        mode,
+    )
+}
+
+/// Load the actual risk_free_rates assumption table.
+/// 1800 rows with keys: [scenario (str), currency (str), year (i64)]
+fn load_risk_free_rates_table(mode: StorageMode) -> PolarsResult<AssumptionTable> {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("benches/fixtures/risk_free_rates.parquet");
+    let file = File::open(&path).map_err(|e| {
+        PolarsError::ComputeError(format!("Failed to open risk_free_rates parquet: {}", e).into())
+    })?;
+    let df = ParquetReader::new(file).finish()?;
+
+    AssumptionTable::build_with_mode(
+        df,
+        vec![
+            "scenario".to_string(),
+            "currency".to_string(),
+            "year".to_string(),
+        ],
+        "forward_rate".to_string(),
+        mode,
+    )
+}
+
+/// Benchmark mortality_select table with realistic lookup patterns.
+/// Simulates 1000 model points × 120 projection months = 120k individual lookups
+fn benchmark_realistic_mortality_select(c: &mut Criterion) {
+    // Create lookup keys simulating realistic actuarial model usage:
+    // - 1000 model points (policies)
+    // - Each policy has 120 projection months (10 years)
+    // - Keys: table_id (categorical), attained_age (0-120), duration (0-30)
+
+    let n_policies = 1000;
+    let n_months = 120;
+    let total_lookups = n_policies * n_months;
+
+    // Generate realistic key data
+    let table_ids: Vec<&str> = (0..total_lookups)
+        .map(|_| "T3363") // Single table ID for this benchmark
+        .collect();
+
+    // Ages increment over projection: base_age + month/12
+    let ages: Vec<i64> = (0..n_policies)
+        .flat_map(|policy| {
+            let base_age = 30 + (policy % 50) as i64; // Ages 30-79
+            (0..n_months).map(move |month| base_age + (month as i64 / 12))
+        })
+        .collect();
+
+    // Duration caps at 30, typically starts at policy duration + month
+    let durations: Vec<i64> = (0..n_policies)
+        .flat_map(|policy| {
+            let base_dur = (policy % 10) as i64;
+            (0..n_months).map(move |month| (base_dur + month as i64 / 12).min(30))
+        })
+        .collect();
+
+    let table_id_series = Series::new("table_id".into(), table_ids);
+    let age_series = Series::new("attained_age".into(), ages);
+    let duration_series = Series::new("duration".into(), durations);
+
+    let mut group = c.benchmark_group("realistic_mortality_select");
+    group.sample_size(50);
+
+    // Hash storage benchmark
+    let hash_table = load_mortality_select_table(StorageMode::Hash)
+        .expect("Failed to load mortality_select with hash storage");
+    let keys: Vec<&Series> = vec![&table_id_series, &age_series, &duration_series];
+
+    group.bench_function(
+        format!("hash_{}k_lookups", total_lookups / 1000),
+        |b| {
+            b.iter(|| {
+                let result = hash_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    // Array storage benchmark
+    let array_table = load_mortality_select_table(StorageMode::Array)
+        .expect("Failed to load mortality_select with array storage");
+    let is_array = array_table.is_array_storage();
+
+    group.bench_function(
+        format!("array_{}k_lookups{}", total_lookups / 1000, if is_array { "" } else { "_fallback_hash" }),
+        |b| {
+            b.iter(|| {
+                let result = array_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    group.finish();
+}
+
+/// Benchmark lapse_rates table - smaller table, simpler keys
+fn benchmark_realistic_lapse_rates(c: &mut Criterion) {
+    let n_policies = 1000;
+    let n_months = 120;
+    let total_lookups = n_policies * n_months;
+
+    // Generate realistic key data
+    let durations: Vec<i64> = (0..n_policies)
+        .flat_map(|policy| {
+            let base_dur = (policy % 10) as i64;
+            (0..n_months).map(move |month| (base_dur + month as i64 / 12).min(30))
+        })
+        .collect();
+
+    let lapse_ids: Vec<&str> = (0..total_lookups)
+        .map(|i| if i % 2 == 0 { "L001" } else { "L002" })
+        .collect();
+
+    let duration_series = Series::new("duration".into(), durations);
+    let lapse_id_series = Series::new("lapse_id".into(), lapse_ids);
+
+    let mut group = c.benchmark_group("realistic_lapse_rates");
+    group.sample_size(50);
+
+    // Hash storage
+    let hash_table = load_lapse_rates_table(StorageMode::Hash)
+        .expect("Failed to load lapse_rates with hash storage");
+    let keys: Vec<&Series> = vec![&duration_series, &lapse_id_series];
+
+    group.bench_function(
+        format!("hash_{}k_lookups", total_lookups / 1000),
+        |b| {
+            b.iter(|| {
+                let result = hash_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    // Array storage
+    let array_table = load_lapse_rates_table(StorageMode::Array)
+        .expect("Failed to load lapse_rates with array storage");
+    let is_array = array_table.is_array_storage();
+
+    group.bench_function(
+        format!("array_{}k_lookups{}", total_lookups / 1000, if is_array { "" } else { "_fallback_hash" }),
+        |b| {
+            b.iter(|| {
+                let result = array_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    group.finish();
+}
+
+/// Benchmark risk_free_rates table - 3 string/int keys, 1800 rows
+fn benchmark_realistic_risk_free_rates(c: &mut Criterion) {
+    let n_policies = 1000;
+    let n_months = 120;
+    let total_lookups = n_policies * n_months;
+
+    // Generate realistic key data
+    let scenarios: Vec<&str> = (0..total_lookups)
+        .map(|i| match (i / n_months) % 10 {
+            0 => "BASE",
+            1 => "S001",
+            2 => "S002",
+            3 => "S003",
+            4 => "S004",
+            5 => "S005",
+            6 => "S006",
+            7 => "S007",
+            8 => "S008",
+            _ => "S009",
+        })
+        .collect();
+
+    let currencies: Vec<&str> = (0..total_lookups).map(|_| "EUR").collect();
+
+    let years: Vec<i64> = (0..n_policies)
+        .flat_map(|_| (0..n_months).map(|month| (month / 12) as i64))
+        .collect();
+
+    let scenario_series = Series::new("scenario".into(), scenarios);
+    let currency_series = Series::new("currency".into(), currencies);
+    let year_series = Series::new("year".into(), years);
+
+    let mut group = c.benchmark_group("realistic_risk_free_rates");
+    group.sample_size(50);
+
+    // Hash storage
+    let hash_table = load_risk_free_rates_table(StorageMode::Hash)
+        .expect("Failed to load risk_free_rates with hash storage");
+    let keys: Vec<&Series> = vec![&scenario_series, &currency_series, &year_series];
+
+    group.bench_function(
+        format!("hash_{}k_lookups", total_lookups / 1000),
+        |b| {
+            b.iter(|| {
+                let result = hash_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    // Array storage
+    let array_table = load_risk_free_rates_table(StorageMode::Array)
+        .expect("Failed to load risk_free_rates with array storage");
+    let is_array = array_table.is_array_storage();
+
+    group.bench_function(
+        format!("array_{}k_lookups{}", total_lookups / 1000, if is_array { "" } else { "_fallback_hash" }),
+        |b| {
+            b.iter(|| {
+                let result = array_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    group.finish();
+}
+
+/// Combined benchmark simulating a full model run with multiple table lookups
+fn benchmark_realistic_model_run(c: &mut Criterion) {
+    // Simulate a realistic model run:
+    // - 100 policies × 120 months = 12k rows per table lookup
+    // - 5 different assumption tables queried per projection step
+
+    let n_policies = 100;
+    let n_months = 120;
+    let total_lookups = n_policies * n_months;
+
+    // Prepare mortality_select keys
+    let mort_table_ids: Vec<&str> = (0..total_lookups).map(|_| "T3363").collect();
+    let mort_ages: Vec<i64> = (0..n_policies)
+        .flat_map(|policy| {
+            let base_age = 30 + (policy % 50) as i64;
+            (0..n_months).map(move |month| base_age + (month as i64 / 12))
+        })
+        .collect();
+    let mort_durations: Vec<i64> = (0..n_policies)
+        .flat_map(|policy| {
+            let base_dur = (policy % 10) as i64;
+            (0..n_months).map(move |month| (base_dur + month as i64 / 12).min(30))
+        })
+        .collect();
+
+    // Prepare lapse_rates keys
+    let lapse_durations: Vec<i64> = mort_durations.clone();
+    let lapse_ids: Vec<&str> = (0..total_lookups)
+        .map(|i| if i % 2 == 0 { "L001" } else { "L002" })
+        .collect();
+
+    // Create series
+    let mort_table_id_series = Series::new("table_id".into(), mort_table_ids);
+    let mort_age_series = Series::new("attained_age".into(), mort_ages);
+    let mort_duration_series = Series::new("duration".into(), mort_durations);
+    let lapse_duration_series = Series::new("duration".into(), lapse_durations);
+    let lapse_id_series = Series::new("lapse_id".into(), lapse_ids);
+
+    // Load tables
+    let mort_hash = load_mortality_select_table(StorageMode::Hash).unwrap();
+    let mort_array = load_mortality_select_table(StorageMode::Array).unwrap();
+    let lapse_hash = load_lapse_rates_table(StorageMode::Hash).unwrap();
+    let lapse_array = load_lapse_rates_table(StorageMode::Array).unwrap();
+
+    let mort_keys: Vec<&Series> = vec![&mort_table_id_series, &mort_age_series, &mort_duration_series];
+    let lapse_keys: Vec<&Series> = vec![&lapse_duration_series, &lapse_id_series];
+
+    let mut group = c.benchmark_group("realistic_model_run");
+    group.sample_size(50);
+
+    // Hash storage - combined mortality + lapse lookups
+    group.bench_function("hash_combined_lookups", |b| {
+        b.iter(|| {
+            let mort_result = mort_hash.lookup_series(black_box(&mort_keys));
+            let lapse_result = lapse_hash.lookup_series(black_box(&lapse_keys));
+            black_box((mort_result, lapse_result))
+        })
+    });
+
+    // Array storage - combined mortality + lapse lookups
+    group.bench_function("array_combined_lookups", |b| {
+        b.iter(|| {
+            let mort_result = mort_array.lookup_series(black_box(&mort_keys));
+            let lapse_result = lapse_array.lookup_series(black_box(&lapse_keys));
+            black_box((mort_result, lapse_result))
+        })
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     benchmark_assumption_table_lookup_1k,
@@ -550,4 +885,13 @@ criterion_group!(
     benchmark_hash_vs_array_100k,
     benchmark_scaling,
 );
-criterion_main!(benches);
+
+criterion_group!(
+    realistic_benches,
+    benchmark_realistic_mortality_select,
+    benchmark_realistic_lapse_rates,
+    benchmark_realistic_risk_free_rates,
+    benchmark_realistic_model_run,
+);
+
+criterion_main!(benches, realistic_benches);
