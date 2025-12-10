@@ -804,6 +804,141 @@ fn benchmark_realistic_risk_free_rates(c: &mut Criterion) {
     group.finish();
 }
 
+/// Create a scenario returns table simulating stochastic model runs.
+/// Structure: scenario_id (i64) × t (i64) × fund_index (str) → return_value (f64)
+/// Size: n_scenarios × n_months × n_funds rows
+fn create_scenario_returns_table(
+    n_scenarios: usize,
+    n_months: usize,
+    mode: StorageMode,
+) -> PolarsResult<AssumptionTable> {
+    let funds = vec!["FUND1", "FUND2", "FUND3", "FUND4", "FUND5", "FUND6"];
+    let n_funds = funds.len();
+    let total_rows = n_scenarios * n_months * n_funds;
+
+    let mut scenario_ids = Vec::with_capacity(total_rows);
+    let mut ts = Vec::with_capacity(total_rows);
+    let mut fund_indices = Vec::with_capacity(total_rows);
+    let mut return_values = Vec::with_capacity(total_rows);
+
+    for scen in 1..=n_scenarios {
+        for t in 0..n_months {
+            for fund in &funds {
+                scenario_ids.push(scen as i64);
+                ts.push(t as i64);
+                fund_indices.push(*fund);
+                // Simulate risk-neutral returns: small random-ish values
+                return_values.push(0.001 * ((scen + t) as f64 / 100.0));
+            }
+        }
+    }
+
+    let df = df! {
+        "scenario_id" => scenario_ids,
+        "t" => ts,
+        "fund_index" => fund_indices,
+        "return_value" => return_values
+    }?;
+
+    AssumptionTable::build_with_mode(
+        df,
+        vec![
+            "scenario_id".to_string(),
+            "t".to_string(),
+            "fund_index".to_string(),
+        ],
+        "return_value".to_string(),
+        mode,
+    )
+}
+
+/// Benchmark simulating stochastic scenario model run with cross-join expansion.
+/// Pattern: n_policies × n_scenarios rows, each doing 180 months of lookups.
+/// This models the actual `with_scenarios` cross-join pattern in actuarial models.
+fn benchmark_scenario_cross_join(c: &mut Criterion) {
+    // Simulate: 1000 policies × 50 scenarios = 50,000 model rows
+    // Each row needs lookups for 180 projection months
+    // Total: 50,000 × 180 = 9,000,000 individual lookups
+
+    let n_policies = 1000;
+    let n_scenarios = 50;
+    let n_months = 180;
+    let n_funds = 6;
+
+    // Total model rows after cross-join
+    let n_model_rows = n_policies * n_scenarios;
+    // Total lookups (one per month per model row)
+    let total_lookups = n_model_rows * n_months;
+
+    // Create scenario returns table: 50 × 180 × 6 = 54,000 rows
+    let hash_table = create_scenario_returns_table(n_scenarios, n_months, StorageMode::Hash)
+        .expect("Failed to create scenario returns hash table");
+    let array_table = create_scenario_returns_table(n_scenarios, n_months, StorageMode::Array)
+        .expect("Failed to create scenario returns array table");
+
+    // Generate lookup keys simulating cross-joined model rows
+    // Each policy is expanded to n_scenarios rows, each needing n_months lookups
+    let scenario_ids: Vec<i64> = (0..n_policies)
+        .flat_map(|_policy| {
+            (1..=n_scenarios).flat_map(|scen| {
+                (0..n_months).map(move |_| scen as i64)
+            })
+        })
+        .collect();
+
+    let ts: Vec<i64> = (0..n_policies)
+        .flat_map(|_policy| {
+            (1..=n_scenarios).flat_map(|_scen| {
+                (0..n_months).map(|t| t as i64)
+            })
+        })
+        .collect();
+
+    // Cycle through funds for each lookup
+    let fund_indices: Vec<&str> = (0..total_lookups)
+        .map(|i| match i % n_funds {
+            0 => "FUND1",
+            1 => "FUND2",
+            2 => "FUND3",
+            3 => "FUND4",
+            4 => "FUND5",
+            _ => "FUND6",
+        })
+        .collect();
+
+    let scenario_id_series = Series::new("scenario_id".into(), scenario_ids);
+    let t_series = Series::new("t".into(), ts);
+    let fund_index_series = Series::new("fund_index".into(), fund_indices);
+    let keys: Vec<&Series> = vec![&scenario_id_series, &t_series, &fund_index_series];
+
+    let mut group = c.benchmark_group("scenario_cross_join");
+    group.sample_size(10); // Fewer samples for this massive benchmark
+
+    let is_array = array_table.is_array_storage();
+
+    group.bench_function(
+        format!("hash_{}M_lookups", total_lookups / 1_000_000),
+        |b| {
+            b.iter(|| {
+                let result = hash_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    group.bench_function(
+        format!("array_{}M_lookups{}", total_lookups / 1_000_000, if is_array { "" } else { "_fallback_hash" }),
+        |b| {
+            b.iter(|| {
+                let result = array_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    group.finish();
+}
+
 /// Combined benchmark simulating a full model run with multiple table lookups
 fn benchmark_realistic_model_run(c: &mut Criterion) {
     // Simulate a realistic model run:
@@ -892,6 +1027,7 @@ criterion_group!(
     benchmark_realistic_lapse_rates,
     benchmark_realistic_risk_free_rates,
     benchmark_realistic_model_run,
+    benchmark_scenario_cross_join,
 );
 
 criterion_main!(benches, realistic_benches);
