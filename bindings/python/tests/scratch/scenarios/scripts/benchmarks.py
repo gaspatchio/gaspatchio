@@ -292,10 +292,13 @@ def print_results(results: dict) -> None:
     wall_time = results["profile_time_s"]
     ms_per_row = (wall_time / results["total_rows"]) * 1000
 
+    ns_per_row = ms_per_row * 1_000_000
+
     print("\nTiming Summary:")
     print(f"  Model execution:  {results['model_time_s']:.2f}s")
     print(f"  Collection time:  {results['profile_time_s']:.2f}s")
     print(f"  Time per row:     {ms_per_row:.4f} ms/row")
+    print(f"  Time per row:     {ns_per_row:,.0f} ns/row")
 
     print("\nTiming by Category (extrapolated from profile ratios):")
     print("-" * 55)
@@ -352,6 +355,7 @@ def save_results(results: dict, output_path: Path) -> None:
     """Save benchmark results to JSON file."""
     wall_time = results["profile_time_s"]
     ms_per_row = (wall_time / results["total_rows"]) * 1000
+    ns_per_row = ms_per_row * 1_000_000
 
     # Build serializable output
     output = {
@@ -367,6 +371,7 @@ def save_results(results: dict, output_path: Path) -> None:
             "model_execution_s": results["model_time_s"],
             "collection_s": results["profile_time_s"],
             "ms_per_row": round(ms_per_row, 4),
+            "ns_per_row": round(ns_per_row),
         },
         "categories": {
             cat: {
@@ -431,7 +436,7 @@ def main() -> None:
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Enable debug logging (shows Rust lookup details: scalar/vector, storage mode)",
+        help="Enable debug logging (shows Rust lookup details)",
     )
 
     args = parser.parse_args()
