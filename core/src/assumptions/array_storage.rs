@@ -2,6 +2,7 @@
 // ABOUTME: Uses dictionary-encoded keys for O(1) array indexing instead of hash lookups.
 
 use crate::assumptions::key_encoder::KeyEncoder;
+use ahash::AHashMap;
 use polars::prelude::*;
 use rayon::prelude::*;
 
@@ -20,13 +21,41 @@ pub struct ArrayStorage {
 impl ArrayStorage {
     /// Build array storage from DataFrame.
     /// Returns None if table is too sparse (< 30% density).
-    pub fn build(df: &DataFrame, keys: &[String], value: &str) -> PolarsResult<Option<Self>> {
+    /// If string_mappings is provided, creates CategoricalWithStringFallback encoders
+    /// for columns that have mappings, enabling transparent string lookup.
+    pub fn build(
+        df: &DataFrame,
+        keys: &[String],
+        value: &str,
+    ) -> PolarsResult<Option<Self>> {
+        Self::build_with_mappings(df, keys, value, None)
+    }
+
+    /// Build array storage with optional string mappings for transparent string lookup.
+    pub fn build_with_mappings(
+        df: &DataFrame,
+        keys: &[String],
+        value: &str,
+        string_mappings: Option<&AHashMap<String, AHashMap<String, u32>>>,
+    ) -> PolarsResult<Option<Self>> {
         let n_rows = df.height();
 
         // Build encoders for each key column
         let mut encoders = Vec::with_capacity(keys.len());
         for key_name in keys {
             let column = df.column(key_name)?;
+
+            // If we have a string mapping for this column, create a hybrid encoder
+            // that can handle both categorical and string input
+            if let Some(mappings) = string_mappings {
+                if let Some(mapping) = mappings.get(key_name) {
+                    let encoder = KeyEncoder::categorical_with_string_fallback(mapping.clone());
+                    encoders.push(encoder);
+                    continue;
+                }
+            }
+
+            // Default: create encoder from column type
             let encoder = KeyEncoder::from_column(column)?;
             encoders.push(encoder);
         }
@@ -104,6 +133,7 @@ impl ArrayStorage {
     }
 
     /// Lookup values for scalar key columns.
+    /// Uses pre-encoded indices for maximum performance.
     pub fn lookup_scalar(&self, key_cols: &[&Series]) -> PolarsResult<Series> {
         let len = key_cols[0].len();
 
@@ -114,6 +144,17 @@ impl ArrayStorage {
             }
         }
 
+        // PRE-ENCODE all columns to indices BEFORE the parallel loop.
+        // This is the key optimization - hash lookups happen here ONCE,
+        // then the inner loop is pure integer arithmetic.
+        let encoded_cols: Vec<Vec<u32>> = self
+            .encoders
+            .iter()
+            .zip(key_cols.iter())
+            .map(|(encoder, series)| encoder.encode_column(series))
+            .collect::<PolarsResult<Vec<_>>>()?;
+
+        let invalid = u32::MAX;
         let mut out = vec![f64::NAN; len];
 
         // Parallel processing with chunking for cache locality
@@ -131,18 +172,18 @@ impl ArrayStorage {
                         break;
                     }
 
-                    // Compute linear index from all keys
+                    // Compute linear index from pre-encoded indices
+                    // This is now PURE INTEGER ARITHMETIC - no hash lookups!
                     let mut linear_idx = 0usize;
                     let mut valid = true;
 
-                    for (i, series) in key_cols.iter().enumerate() {
-                        let av = unsafe { series.get_unchecked(global_idx) };
-                        if let Some(idx) = self.encoders[i].encode(av) {
-                            linear_idx += idx as usize * self.strides[i];
-                        } else {
+                    for (i, encoded) in encoded_cols.iter().enumerate() {
+                        let idx = encoded[global_idx];
+                        if idx == invalid {
                             valid = false;
                             break;
                         }
+                        linear_idx += idx as usize * self.strides[i];
                     }
 
                     if valid && linear_idx < self.data.len() {
@@ -172,6 +213,270 @@ impl ArrayStorage {
     /// Get array dimensions.
     pub fn dimensions(&self) -> Vec<usize> {
         self.encoders.iter().map(|e| e.size()).collect()
+    }
+
+    /// Lookup values for vector key columns using batch encoding (optimized).
+    /// Each outer row produces a List of lookup results.
+    /// This method uses vectorized operations for dramatically faster performance.
+    ///
+    /// Key optimization: Encode scalars once, then expand the encoded indices (cheap u32 repeat)
+    /// rather than expanding values then encoding (expensive AnyValue operations).
+    pub fn lookup_vector_batch(
+        &self,
+        key_cols: &[&Series],
+        vector_len: usize,
+        vector_indices: &[usize],
+    ) -> PolarsResult<Series> {
+        // Step 1: Compute offsets and total flattened length from first vector column
+        let (offsets, total_len) = self.compute_offsets_and_total_len(key_cols, vector_indices)?;
+
+        // Step 2: Encode all columns, then expand to total_len
+        // - Vector columns: explode first, then encode
+        // - Scalar columns: encode once, then expand indices (cheap!)
+        let encoded = self.encode_and_expand_columns(key_cols, &offsets, total_len, vector_indices)?;
+
+        // Step 3: Compute linear indices vectorially
+        let linear_indices = self.compute_linear_indices_batch(&encoded, total_len);
+
+        // Step 4: Gather values from data array (parallel)
+        let flat_values: Vec<f64> = linear_indices
+            .par_iter()
+            .map(|&idx| {
+                if idx < self.data.len() {
+                    self.data[idx]
+                } else {
+                    f64::NAN
+                }
+            })
+            .collect();
+
+        // Step 5: Reshape to Lists using offsets
+        self.reshape_to_lists(&flat_values, &offsets, vector_len)
+    }
+
+    /// Compute offsets and total length from vector columns.
+    /// Returns (offsets, total_len) where offsets[i] is the start index in the flattened array.
+    fn compute_offsets_and_total_len(
+        &self,
+        key_cols: &[&Series],
+        vector_indices: &[usize],
+    ) -> PolarsResult<(Vec<i64>, usize)> {
+        let first_vec_idx = vector_indices[0];
+        let list_series = key_cols[first_vec_idx];
+        let list_chunked = list_series.list()?;
+
+        let offsets_buffer = list_chunked.offsets()?;
+        let offsets = offsets_buffer.as_slice();
+        let total_len = offsets[offsets.len() - 1] as usize;
+
+        Ok((offsets.to_vec(), total_len))
+    }
+
+    /// Encode columns and expand to total_len.
+    /// - Vector columns: explode, then encode (both at total_len)
+    /// - Scalar columns: encode at outer_len, then expand indices to total_len
+    fn encode_and_expand_columns(
+        &self,
+        key_cols: &[&Series],
+        offsets: &[i64],
+        total_len: usize,
+        vector_indices: &[usize],
+    ) -> PolarsResult<Vec<Vec<u32>>> {
+        let outer_len = offsets.len() - 1;
+        let mut encoded_expanded = Vec::with_capacity(key_cols.len());
+
+        for (key_idx, series) in key_cols.iter().enumerate() {
+            let encoder = &self.encoders[key_idx];
+
+            if vector_indices.contains(&key_idx) {
+                // Vector column: explode the List, then encode
+                let list_chunked = series.list()?;
+                let exploded = list_chunked.explode(false)?;
+                let encoded = encoder.encode_column(&exploded)?;
+                encoded_expanded.push(encoded);
+            } else {
+                // Scalar column: encode once at outer_len, then expand indices
+                let scalar_len = series.len();
+
+                // Handle broadcast case where scalar_len == 1
+                let series_to_encode = if scalar_len == 1 && outer_len > 1 {
+                    // Broadcast single value to outer_len using Polars new_from_index
+                    series.new_from_index(0, outer_len)
+                } else {
+                    (*series).clone()
+                };
+
+                // Encode at outer_len (cheap - only outer_len encode operations)
+                let encoded_outer = encoder.encode_column(&series_to_encode)?;
+
+                // Expand encoded indices to total_len (cheap - just repeating u32 values)
+                let mut expanded = Vec::with_capacity(total_len);
+                for outer_idx in 0..outer_len {
+                    let idx = encoded_outer[outer_idx];
+                    let inner_len = (offsets[outer_idx + 1] - offsets[outer_idx]) as usize;
+                    expanded.extend(std::iter::repeat(idx).take(inner_len));
+                }
+                encoded_expanded.push(expanded);
+            }
+        }
+
+        Ok(encoded_expanded)
+    }
+
+    /// Compute linear indices from encoded columns using vectorized operations.
+    /// linear_idx[i] = sum(encoded[k][i] * strides[k] for k in 0..n_keys)
+    fn compute_linear_indices_batch(&self, encoded: &[Vec<u32>], total_len: usize) -> Vec<usize> {
+        let invalid = u32::MAX;
+
+        (0..total_len)
+            .into_par_iter()
+            .map(|i| {
+                let mut linear_idx = 0usize;
+                let mut valid = true;
+
+                for (key_idx, encoded_col) in encoded.iter().enumerate() {
+                    let idx = encoded_col[i];
+                    if idx == invalid {
+                        valid = false;
+                        break;
+                    }
+                    linear_idx += idx as usize * self.strides[key_idx];
+                }
+
+                if valid {
+                    linear_idx
+                } else {
+                    usize::MAX
+                }
+            })
+            .collect()
+    }
+
+    /// Reshape flat values back to Lists using offsets.
+    fn reshape_to_lists(
+        &self,
+        flat_values: &[f64],
+        offsets: &[i64],
+        vector_len: usize,
+    ) -> PolarsResult<Series> {
+        let mut out_lists = Vec::with_capacity(vector_len);
+
+        for outer_idx in 0..vector_len {
+            let start = offsets[outer_idx] as usize;
+            let end = offsets[outer_idx + 1] as usize;
+            let inner_vals = flat_values[start..end].to_vec();
+
+            let inner_series = Series::from_vec("inner".into(), inner_vals);
+            out_lists.push(inner_series);
+        }
+
+        let list_chunked: ListChunked = out_lists.into_iter().collect();
+        Ok(list_chunked.into_series())
+    }
+
+    /// Lookup values for vector key columns (List types).
+    /// Each outer row produces a List of lookup results.
+    pub fn lookup_vector(
+        &self,
+        key_cols: &[&Series],
+        vector_len: usize,
+        vector_indices: &[usize],
+    ) -> PolarsResult<Series> {
+        // Pre-allocate result vector of Lists
+        let mut out_lists = Vec::with_capacity(vector_len);
+
+        // For each outer row, look up all inner vector elements
+        for outer_idx in 0..vector_len {
+            // Determine inner vector length from first vector column
+            let inner_len = self.compute_inner_len(key_cols, outer_idx, vector_indices)?;
+
+            let mut inner_vals = vec![f64::NAN; inner_len];
+
+            // For each inner element, compute linear index and look up
+            for inner_idx in 0..inner_len {
+                // Compute linear index from all keys
+                let mut linear_idx = 0usize;
+                let mut valid = true;
+
+                for (key_idx, encoder) in self.encoders.iter().enumerate() {
+                    let av =
+                        self.get_value_at(key_cols, key_idx, outer_idx, inner_idx, vector_indices)?;
+
+                    if let Some(idx) = encoder.encode(av) {
+                        linear_idx += idx as usize * self.strides[key_idx];
+                    } else {
+                        valid = false;
+                        break;
+                    }
+                }
+
+                if valid && linear_idx < self.data.len() {
+                    inner_vals[inner_idx] = self.data[linear_idx];
+                }
+            }
+
+            // Convert inner values to Series
+            let inner_series = Series::from_vec("inner".into(), inner_vals);
+            out_lists.push(inner_series);
+        }
+
+        // Convert list of Series to ListChunked
+        let list_chunked: ListChunked = out_lists.into_iter().collect();
+
+        Ok(list_chunked.into_series())
+    }
+
+    /// Compute the length of the inner vector at a given outer index.
+    fn compute_inner_len(
+        &self,
+        key_cols: &[&Series],
+        outer_idx: usize,
+        vector_indices: &[usize],
+    ) -> PolarsResult<usize> {
+        // Check the first vector column for the inner length
+        let first_vec_idx = vector_indices[0];
+        let list_series = key_cols[first_vec_idx];
+
+        let list_chunked = list_series.list()?;
+        match list_chunked.get_any_value(outer_idx)? {
+            AnyValue::List(inner_series) => Ok(inner_series.len()),
+            AnyValue::Null => Ok(0),
+            _ => Err(polars_err!(ComputeError: "Expected List type in compute_inner_len")),
+        }
+    }
+
+    /// Get the value at the specified position, handling both scalar and vector columns.
+    fn get_value_at(
+        &self,
+        key_cols: &[&Series],
+        key_idx: usize,
+        outer_idx: usize,
+        inner_idx: usize,
+        vector_indices: &[usize],
+    ) -> PolarsResult<AnyValue<'static>> {
+        let series = key_cols[key_idx];
+
+        // Check if this column is a vector
+        if vector_indices.contains(&key_idx) {
+            // Vector column - access inner element
+            let list_chunked = series.list()?;
+            match list_chunked.get_any_value(outer_idx)? {
+                AnyValue::List(inner_series) => {
+                    if inner_idx < inner_series.len() {
+                        Ok(inner_series.get(inner_idx)?.into_static())
+                    } else {
+                        Ok(AnyValue::Null)
+                    }
+                }
+                AnyValue::Null => Ok(AnyValue::Null),
+                _ => Err(polars_err!(ComputeError: "Expected List type in get_value_at")),
+            }
+        } else {
+            // Scalar column - handle broadcasting
+            let scalar_len = series.len();
+            let actual_idx = if scalar_len == 1 { 0 } else { outer_idx };
+            Ok(series.get(actual_idx)?.into_static())
+        }
     }
 }
 
@@ -418,6 +723,142 @@ mod tests {
             "Hash lookup too slow: {:.2}ns",
             hash_per_lookup_ns
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_lookup() -> PolarsResult<()> {
+        // Create a dense table: 3 ages x 2 genders = 6 entries
+        let df = df! {
+            "age" => [30i64, 30, 31, 31, 32, 32],
+            "gender" => ["M", "F", "M", "F", "M", "F"],
+            "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
+        }?;
+
+        let storage = ArrayStorage::build(&df, &["age".to_string(), "gender".to_string()], "rate")?
+            .expect("Should build array storage");
+
+        // Create vector input: age is a List column (vector), gender is scalar
+        // Two outer rows, each with a vector of ages to look up
+        let age_lists = ListChunked::from_iter([
+            Some(Series::new("".into(), vec![30i64, 31, 32])), // First row: look up ages 30, 31, 32
+            Some(Series::new("".into(), vec![30i64, 31])),     // Second row: look up ages 30, 31
+        ]);
+        let age_series = age_lists.into_series();
+
+        // Gender is scalar, broadcasts to each inner element
+        let gender_series = Series::new("gender".into(), &["M", "F"]);
+
+        // vector_indices indicates which columns are vectors (just column 0 = age)
+        let vector_indices = vec![0usize];
+        let vector_len = 2; // Two outer rows
+
+        let result =
+            storage.lookup_vector(&[&age_series, &gender_series], vector_len, &vector_indices)?;
+
+        // Result should be a List of Lists
+        let result_list = result.list()?;
+        assert_eq!(result_list.len(), 2);
+
+        // First row: ages [30, 31, 32] with gender "M"
+        let first_inner = result_list.get_any_value(0)?;
+        if let AnyValue::List(inner_series) = first_inner {
+            let values: Vec<f64> = inner_series.f64()?.into_no_null_iter().collect();
+            assert_eq!(values.len(), 3);
+            assert!((values[0] - 0.001).abs() < 1e-10); // age=30, gender=M
+            assert!((values[1] - 0.0012).abs() < 1e-10); // age=31, gender=M
+            assert!((values[2] - 0.0014).abs() < 1e-10); // age=32, gender=M
+        } else {
+            panic!("Expected List, got {:?}", first_inner);
+        }
+
+        // Second row: ages [30, 31] with gender "F"
+        let second_inner = result_list.get_any_value(1)?;
+        if let AnyValue::List(inner_series) = second_inner {
+            let values: Vec<f64> = inner_series.f64()?.into_no_null_iter().collect();
+            assert_eq!(values.len(), 2);
+            assert!((values[0] - 0.0008).abs() < 1e-10); // age=30, gender=F
+            assert!((values[1] - 0.001).abs() < 1e-10); // age=31, gender=F
+        } else {
+            panic!("Expected List, got {:?}", second_inner);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_lookup_batch_matches_current() -> PolarsResult<()> {
+        // Create a table with array storage
+        let df = df! {
+            "age" => [30i64, 30, 31, 31, 32, 32],
+            "gender" => ["M", "F", "M", "F", "M", "F"],
+            "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
+        }?;
+
+        let storage = ArrayStorage::build(&df, &["age".to_string(), "gender".to_string()], "rate")?
+            .expect("Should build array storage");
+
+        // Create vector lookup keys: age is List, gender is scalar
+        let age_lists = ListChunked::from_iter([
+            Some(Series::new("".into(), vec![30i64, 31, 32])),
+            Some(Series::new("".into(), vec![30i64, 31])),
+            Some(Series::new("".into(), vec![32i64])),
+        ]);
+        let age_series = age_lists.into_series();
+        let gender_series = Series::new("gender".into(), &["M", "F", "M"]);
+
+        let vector_indices = vec![0usize];
+        let vector_len = 3;
+
+        // Call both methods
+        let current_result = storage.lookup_vector(
+            &[&age_series, &gender_series],
+            vector_len,
+            &vector_indices,
+        )?;
+
+        let batch_result = storage.lookup_vector_batch(
+            &[&age_series, &gender_series],
+            vector_len,
+            &vector_indices,
+        )?;
+
+        // Results should be identical
+        let current_list = current_result.list()?;
+        let batch_list = batch_result.list()?;
+
+        assert_eq!(current_list.len(), batch_list.len());
+
+        for i in 0..current_list.len() {
+            let current_inner = current_list.get_any_value(i)?;
+            let batch_inner = batch_list.get_any_value(i)?;
+
+            if let (AnyValue::List(c_series), AnyValue::List(b_series)) =
+                (current_inner, batch_inner)
+            {
+                let c_vals: Vec<f64> = c_series.f64()?.into_no_null_iter().collect();
+                let b_vals: Vec<f64> = b_series.f64()?.into_no_null_iter().collect();
+
+                assert_eq!(c_vals.len(), b_vals.len(), "Row {} length mismatch", i);
+                for (j, (c, b)) in c_vals.iter().zip(b_vals.iter()).enumerate() {
+                    if c.is_nan() {
+                        assert!(b.is_nan(), "Row {} elem {} NaN mismatch", i, j);
+                    } else {
+                        assert!(
+                            (c - b).abs() < 1e-15,
+                            "Row {} elem {} value mismatch: {} vs {}",
+                            i,
+                            j,
+                            c,
+                            b
+                        );
+                    }
+                }
+            } else {
+                panic!("Expected Lists at row {}", i);
+            }
+        }
 
         Ok(())
     }

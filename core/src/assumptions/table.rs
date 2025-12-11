@@ -52,6 +52,25 @@ impl TableStorage {
         }
     }
 
+    /// Perform vector lookup on the underlying storage.
+    pub fn lookup_vector(
+        &self,
+        key_cols: &[&Series],
+        vector_len: usize,
+        vector_indices: &[usize],
+    ) -> PolarsResult<Series> {
+        match self {
+            TableStorage::Hash(_) => {
+                // Hash storage vector lookup is handled in AssumptionTable::lookup_vector
+                // because it needs access to the codecs directly
+                Err(
+                    polars_err!(ComputeError: "Hash vector lookup should be handled by AssumptionTable"),
+                )
+            }
+            TableStorage::Array(a) => a.lookup_vector_batch(key_cols, vector_len, vector_indices),
+        }
+    }
+
     /// Get entry count from underlying storage.
     pub fn entry_count(&self) -> usize {
         match self {
@@ -86,14 +105,22 @@ impl AssumptionTable {
         value: String,
         mode: StorageMode,
     ) -> PolarsResult<Self> {
+        // Pre-process DataFrame: auto-cast string keys to categorical for array storage
+        let (processed_df, string_mappings) = Self::preprocess_for_array_storage(&df, &keys)?;
+
         let storage = match mode {
             StorageMode::Hash => {
                 let hash = HashStorage::build(&df, &keys, &value)?;
                 TableStorage::Hash(hash)
             }
             StorageMode::Array => {
-                // Force array storage, but fall back to hash if it fails
-                match ArrayStorage::build(&df, &keys, &value)? {
+                // Force array storage with string mappings for transparent string lookup
+                match ArrayStorage::build_with_mappings(
+                    &processed_df,
+                    &keys,
+                    &value,
+                    Some(&string_mappings),
+                )? {
                     Some(arr) => TableStorage::Array(arr),
                     None => {
                         log::warn!("Array storage not suitable, falling back to hash");
@@ -103,8 +130,13 @@ impl AssumptionTable {
                 }
             }
             StorageMode::Auto => {
-                // Try array first, fall back to hash
-                match ArrayStorage::build(&df, &keys, &value)? {
+                // Try array first with string mappings, fall back to hash
+                match ArrayStorage::build_with_mappings(
+                    &processed_df,
+                    &keys,
+                    &value,
+                    Some(&string_mappings),
+                )? {
                     Some(arr) => TableStorage::Array(arr),
                     None => {
                         let hash = HashStorage::build(&df, &keys, &value)?;
@@ -125,6 +157,88 @@ impl AssumptionTable {
             storage,
             storage_mode_used,
         })
+    }
+
+    /// Preprocess DataFrame for array storage: auto-cast string key columns to categorical.
+    /// Returns the processed DataFrame and mappings from string to categorical index.
+    fn preprocess_for_array_storage(
+        df: &DataFrame,
+        keys: &[String],
+    ) -> PolarsResult<(DataFrame, AHashMap<String, AHashMap<String, u32>>)> {
+        let mut processed_df = df.clone();
+        let mut string_mappings = AHashMap::new();
+
+        for key_name in keys {
+            let column = df.column(key_name)?;
+            let series = column.as_materialized_series();
+
+            match series.dtype() {
+                DataType::String => {
+                    // Auto-cast string columns to categorical
+                    let categorical_series = series
+                        .cast(&DataType::Categorical(None, CategoricalOrdering::Physical))?;
+
+                    // Extract the mapping: string -> physical index
+                    let mapping = Self::extract_categorical_mapping(&categorical_series)?;
+                    string_mappings.insert(key_name.clone(), mapping);
+
+                    // Replace column in dataframe
+                    processed_df.with_column(categorical_series)?;
+
+                    log::debug!(
+                        "Auto-cast string key '{}' to categorical with {} unique values",
+                        key_name,
+                        string_mappings.get(key_name).map(|m| m.len()).unwrap_or(0)
+                    );
+                }
+                DataType::Categorical(_, _) => {
+                    // Already categorical - just extract the mapping for string lookup support
+                    let mapping = Self::extract_categorical_mapping(series)?;
+                    let n_unique = mapping.len();
+                    string_mappings.insert(key_name.clone(), mapping);
+
+                    log::debug!(
+                        "Extracted mapping for categorical key '{}' with {} unique values",
+                        key_name,
+                        n_unique
+                    );
+                }
+                _ => {
+                    // Other types (integers, etc.) don't need preprocessing
+                }
+            }
+        }
+
+        Ok((processed_df, string_mappings))
+    }
+
+    /// Extract categorical mapping from a categorical Series.
+    /// Returns a map from string value to physical index.
+    fn extract_categorical_mapping(series: &Series) -> PolarsResult<AHashMap<String, u32>> {
+        let mut mapping = AHashMap::new();
+
+        let cat_chunked = series.categorical()?;
+        let rev_map = cat_chunked.get_rev_map();
+
+        // Iterate through the reverse map to build string -> index mapping
+        match &**rev_map {
+            RevMapping::Local(values, _) => {
+                for (idx, opt_value) in values.iter().enumerate() {
+                    if let Some(value) = opt_value {
+                        mapping.insert(value.to_string(), idx as u32);
+                    }
+                }
+            }
+            RevMapping::Global(_hash_map, values, _) => {
+                for (idx, opt_value) in values.iter().enumerate() {
+                    if let Some(value) = opt_value {
+                        mapping.insert(value.to_string(), idx as u32);
+                    }
+                }
+            }
+        }
+
+        Ok(mapping)
     }
 
     /// Build with default (Auto) storage mode - backward compatible.
@@ -290,15 +404,16 @@ impl AssumptionTable {
         }
 
         // Fast path: Quick check for scalar-only inputs (most common case)
-        if key_cols
+        let is_scalar_only = key_cols
             .iter()
-            .all(|s| !matches!(s.dtype(), DataType::List(_)))
-        {
+            .all(|s| !matches!(s.dtype(), DataType::List(_)));
+
+        if is_scalar_only {
+            // Encoders handle string-to-categorical conversion transparently
             return self.storage.lookup_scalar(key_cols);
         }
 
         // Vector path: Full analysis when lists are present
-        // For now, vector lookups always use hash storage fallback
         self.lookup_vector_fallback(key_cols)
     }
 
@@ -360,17 +475,16 @@ impl AssumptionTable {
         vector_len: usize,
         vector_indices: &[usize],
     ) -> PolarsResult<Series> {
-        // For vector lookups, we need hash storage's codec logic
-        // This is a temporary limitation - we could optimize this in the future
+        // For array storage, delegate to the optimized batch implementation
+        // Encoders handle string-to-categorical conversion transparently
+        if let TableStorage::Array(a) = &self.storage {
+            return a.lookup_vector_batch(key_cols, vector_len, vector_indices);
+        }
+
+        // For hash storage, we use the codec-based lookup
         let codecs = match &self.storage {
             TableStorage::Hash(h) => h.codecs(),
-            TableStorage::Array(_) => {
-                // If we're using array storage, we need to fall back to hash-style lookup for vectors
-                // This is acceptable as vector lookups are less common
-                return Err(
-                    polars_err!(ComputeError: "Vector lookups with array storage not yet implemented"),
-                );
-            }
+            TableStorage::Array(_) => unreachable!("Array case handled above"),
         };
 
         debug!(
@@ -518,6 +632,7 @@ impl AssumptionTable {
 mod tests {
     use super::*;
     use polars::df;
+    use polars::prelude::CategoricalOrdering;
 
     #[test]
     fn test_build_with_auto_mode() -> PolarsResult<()> {
@@ -621,6 +736,318 @@ mod tests {
         assert_eq!(StorageMode::from_str("HASH")?, StorageMode::Hash); // case insensitive
 
         assert!(StorageMode::from_str("invalid").is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_lookup_with_array_storage() -> PolarsResult<()> {
+        let df = df! {
+            "age" => [30i64, 30, 31, 31, 32, 32],
+            "gender" => ["M", "F", "M", "F", "M", "F"],
+            "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
+        }?;
+
+        // Build with array storage
+        let table = AssumptionTable::build_with_mode(
+            df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Array,
+        )?;
+
+        assert!(table.is_array_storage());
+
+        // Create vector input: age is a List column, gender is scalar
+        let age_lists = ListChunked::from_iter([
+            Some(Series::new("".into(), vec![30i64, 31, 32])),
+            Some(Series::new("".into(), vec![30i64, 31])),
+        ]);
+        let age_series = age_lists.into_series();
+        let gender_series = Series::new("gender".into(), &["M", "F"]);
+
+        // Call lookup_series which should detect vectors and route to lookup_vector
+        let result = table.lookup_series(&[&age_series, &gender_series])?;
+
+        // Verify result is a List
+        let result_list = result.list()?;
+        assert_eq!(result_list.len(), 2);
+
+        // First row: ages [30, 31, 32] with gender "M"
+        let first_inner = result_list.get_any_value(0)?;
+        if let AnyValue::List(inner_series) = first_inner {
+            let values: Vec<f64> = inner_series.f64()?.into_no_null_iter().collect();
+            assert_eq!(values.len(), 3);
+            assert!((values[0] - 0.001).abs() < 1e-10); // age=30, gender=M
+            assert!((values[1] - 0.0012).abs() < 1e-10); // age=31, gender=M
+            assert!((values[2] - 0.0014).abs() < 1e-10); // age=32, gender=M
+        } else {
+            panic!("Expected List");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_lookup_hash_vs_array_same_results() -> PolarsResult<()> {
+        let df = df! {
+            "age" => [30i64, 30, 31, 31, 32, 32],
+            "gender" => ["M", "F", "M", "F", "M", "F"],
+            "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
+        }?;
+
+        let hash_table = AssumptionTable::build_with_mode(
+            df.clone(),
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Hash,
+        )?;
+
+        let array_table = AssumptionTable::build_with_mode(
+            df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Array,
+        )?;
+
+        // Create vector input
+        let age_lists = ListChunked::from_iter([
+            Some(Series::new("".into(), vec![30i64, 31, 32])),
+            Some(Series::new("".into(), vec![30i64, 31])),
+        ]);
+        let age_series = age_lists.into_series();
+        let gender_series = Series::new("gender".into(), &["M", "F"]);
+
+        let hash_result = hash_table.lookup_series(&[&age_series, &gender_series])?;
+        let array_result = array_table.lookup_series(&[&age_series, &gender_series])?;
+
+        // Results should be identical
+        let hash_list = hash_result.list()?;
+        let array_list = array_result.list()?;
+
+        assert_eq!(hash_list.len(), array_list.len());
+
+        for i in 0..hash_list.len() {
+            let hash_inner = hash_list.get_any_value(i)?;
+            let array_inner = array_list.get_any_value(i)?;
+
+            if let (AnyValue::List(h_series), AnyValue::List(a_series)) = (hash_inner, array_inner)
+            {
+                let h_vals: Vec<f64> = h_series.f64()?.into_no_null_iter().collect();
+                let a_vals: Vec<f64> = a_series.f64()?.into_no_null_iter().collect();
+
+                assert_eq!(h_vals.len(), a_vals.len());
+                for (h, a) in h_vals.iter().zip(a_vals.iter()) {
+                    if h.is_nan() {
+                        assert!(a.is_nan());
+                    } else {
+                        assert!((h - a).abs() < 1e-15, "Mismatch: {} vs {}", h, a);
+                    }
+                }
+            } else {
+                panic!("Expected Lists");
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_keys_auto_cast_on_build() -> PolarsResult<()> {
+        // Test that string keys are automatically converted to categoricals during build
+        let df = df! {
+            "age" => [30i64, 30, 31, 31, 32, 32],
+            "gender" => ["M", "F", "M", "F", "M", "F"],
+            "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
+        }?;
+
+        let table = AssumptionTable::build_with_mode(
+            df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Array,
+        )?;
+
+        // Verify array storage was used (high density should succeed)
+        assert!(table.is_array_storage());
+
+        // Test lookup with string keys (should auto-convert)
+        let ages = Series::new("age".into(), &[30i64, 31, 32]);
+        let genders = Series::new("gender".into(), &["M", "F", "M"]);
+
+        let result = table.lookup_series(&[&ages, &genders])?;
+
+        let values: Vec<f64> = result
+            .f64()?
+            .into_iter()
+            .map(|v| v.unwrap_or(f64::NAN))
+            .collect();
+
+        assert!((values[0] - 0.001).abs() < 1e-10); // age=30, gender=M
+        assert!((values[1] - 0.001).abs() < 1e-10); // age=31, gender=F
+        assert!((values[2] - 0.0014).abs() < 1e-10); // age=32, gender=M
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_keys_auto_cast_performance() -> PolarsResult<()> {
+        // Test that auto-cast string lookups perform similar to manual categorical
+        use std::time::Instant;
+
+        let df = df! {
+            "age" => [30i64, 30, 31, 31, 32, 32],
+            "gender" => ["M", "F", "M", "F", "M", "F"],
+            "rate" => [0.001, 0.0008, 0.0012, 0.001, 0.0014, 0.0012]
+        }?;
+
+        // Build table with string keys (should auto-convert internally)
+        let table_string = AssumptionTable::build_with_mode(
+            df.clone(),
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Array,
+        )?;
+
+        // Build table with manually categorized keys
+        let df_categorical = df.lazy()
+            .with_column(
+                col("gender").cast(DataType::Categorical(None, CategoricalOrdering::Physical))
+            )
+            .collect()?;
+
+        let table_categorical = AssumptionTable::build_with_mode(
+            df_categorical,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Array,
+        )?;
+
+        // Create test data - 10k lookups
+        let test_ages: Vec<i64> = (0..10_000).map(|i| 30 + (i % 3) as i64).collect();
+        let test_genders: Vec<&str> = (0..10_000)
+            .map(|i| if i % 2 == 0 { "M" } else { "F" })
+            .collect();
+
+        let age_series = Series::new("age".into(), test_ages);
+        let gender_series = Series::new("gender".into(), test_genders);
+
+        // Warmup
+        let _ = table_string.lookup_series(&[&age_series, &gender_series])?;
+        let _ = table_categorical.lookup_series(&[&age_series, &gender_series])?;
+
+        // Time string lookup (with auto-cast)
+        let start = Instant::now();
+        let iterations = 100;
+        for _ in 0..iterations {
+            let result = table_string.lookup_series(&[&age_series, &gender_series])?;
+            let _ = std::hint::black_box(result);
+        }
+        let string_elapsed = start.elapsed();
+
+        // Time categorical lookup
+        let gender_categorical = gender_series
+            .cast(&DataType::Categorical(None, CategoricalOrdering::Physical))?;
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let result = table_categorical.lookup_series(&[&age_series, &gender_categorical])?;
+            let _ = std::hint::black_box(result);
+        }
+        let categorical_elapsed = start.elapsed();
+
+        let string_per_lookup_ns = string_elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
+        let categorical_per_lookup_ns = categorical_elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
+
+        eprintln!("\nString auto-cast performance:");
+        eprintln!("  String keys (auto-cast): {:.2}ns per lookup", string_per_lookup_ns);
+        eprintln!("  Categorical keys (manual): {:.2}ns per lookup", categorical_per_lookup_ns);
+        eprintln!("  Ratio: {:.2}x", string_per_lookup_ns / categorical_per_lookup_ns);
+
+        // Auto-cast should be within 10x of manual categorical
+        // (The conversion overhead is acceptable given the convenience)
+        // Note: In release mode, this overhead is much smaller (~2x)
+        assert!(
+            string_per_lookup_ns < categorical_per_lookup_ns * 10.0,
+            "Auto-cast too slow: {:.2}ns vs {:.2}ns (manual categorical)",
+            string_per_lookup_ns,
+            categorical_per_lookup_ns
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_lookup_on_categorical_table() -> PolarsResult<()> {
+        // Test that string lookups work on tables built with categorical keys
+        let df = df! {
+            "age" => [30i64, 30, 31, 31],
+            "gender" => ["M", "F", "M", "F"],
+            "rate" => [0.001, 0.0008, 0.0012, 0.001]
+        }?;
+
+        // Manually cast to categorical before building
+        let df_categorical = df.lazy()
+            .with_column(
+                col("gender").cast(DataType::Categorical(None, CategoricalOrdering::Physical))
+            )
+            .collect()?;
+
+        let table = AssumptionTable::build_with_mode(
+            df_categorical,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Array,
+        )?;
+
+        // Lookup with string keys (should auto-convert to match table's categorical)
+        let ages = Series::new("age".into(), &[30i64, 31, 99]);
+        let genders = Series::new("gender".into(), &["M", "F", "X"]);
+
+        let result = table.lookup_series(&[&ages, &genders])?;
+
+        let values: Vec<f64> = result
+            .f64()?
+            .into_iter()
+            .map(|v| v.unwrap_or(f64::NAN))
+            .collect();
+
+        assert!((values[0] - 0.001).abs() < 1e-10); // age=30, gender=M
+        assert!((values[1] - 0.001).abs() < 1e-10); // age=31, gender=F
+        assert!(values[2].is_nan()); // age=99, gender=X - not in table
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_keys_unknown_values() -> PolarsResult<()> {
+        // Test that unknown string values return NaN
+        let df = df! {
+            "age" => [30i64, 30],
+            "gender" => ["M", "F"],
+            "rate" => [0.001, 0.0008]
+        }?;
+
+        let table = AssumptionTable::build_with_mode(
+            df,
+            vec!["age".to_string(), "gender".to_string()],
+            "rate".to_string(),
+            StorageMode::Array,
+        )?;
+
+        let ages = Series::new("age".into(), &[30i64, 30, 30]);
+        let genders = Series::new("gender".into(), &["M", "F", "X"]); // X not in table
+
+        let result = table.lookup_series(&[&ages, &genders])?;
+
+        let values: Vec<f64> = result
+            .f64()?
+            .into_iter()
+            .map(|v| v.unwrap_or(f64::NAN))
+            .collect();
+
+        assert!((values[0] - 0.001).abs() < 1e-10); // M found
+        assert!((values[1] - 0.0008).abs() < 1e-10); // F found
+        assert!(values[2].is_nan()); // X not found -> NaN
 
         Ok(())
     }

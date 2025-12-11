@@ -29,7 +29,7 @@ class Table:
         value: str = "rate",
         validate: bool = True,
         metadata: dict[str, Any] | None = None,
-        storage_mode: StorageModeType = "hash",
+        storage_mode: StorageModeType = "auto",
     ) -> None: ...
     @classmethod
     def from_scenario_files(
@@ -79,6 +79,8 @@ class Table:
     def dimensions(self) -> dict[str, Dimension]: ...
     @property
     def metadata(self) -> dict[str, Any] | None: ...
+    @property
+    def storage_mode(self) -> str: ...
 
 class TableBuilder:
     """Builder pattern for constructing assumption tables with validation."""

@@ -569,8 +569,7 @@ fn load_mortality_select_table(mode: StorageMode) -> PolarsResult<AssumptionTabl
 /// Load the actual lapse_rates assumption table.
 /// 60 rows with keys: [duration (i64), lapse_id (str)]
 fn load_lapse_rates_table(mode: StorageMode) -> PolarsResult<AssumptionTable> {
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("benches/fixtures/lapse_rates.parquet");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("benches/fixtures/lapse_rates.parquet");
     let file = File::open(&path).map_err(|e| {
         PolarsError::ComputeError(format!("Failed to open lapse_rates parquet: {}", e).into())
     })?;
@@ -651,15 +650,12 @@ fn benchmark_realistic_mortality_select(c: &mut Criterion) {
         .expect("Failed to load mortality_select with hash storage");
     let keys: Vec<&Series> = vec![&table_id_series, &age_series, &duration_series];
 
-    group.bench_function(
-        format!("hash_{}k_lookups", total_lookups / 1000),
-        |b| {
-            b.iter(|| {
-                let result = hash_table.lookup_series(black_box(&keys));
-                black_box(result)
-            })
-        },
-    );
+    group.bench_function(format!("hash_{}k_lookups", total_lookups / 1000), |b| {
+        b.iter(|| {
+            let result = hash_table.lookup_series(black_box(&keys));
+            black_box(result)
+        })
+    });
 
     // Array storage benchmark
     let array_table = load_mortality_select_table(StorageMode::Array)
@@ -667,7 +663,11 @@ fn benchmark_realistic_mortality_select(c: &mut Criterion) {
     let is_array = array_table.is_array_storage();
 
     group.bench_function(
-        format!("array_{}k_lookups{}", total_lookups / 1000, if is_array { "" } else { "_fallback_hash" }),
+        format!(
+            "array_{}k_lookups{}",
+            total_lookups / 1000,
+            if is_array { "" } else { "_fallback_hash" }
+        ),
         |b| {
             b.iter(|| {
                 let result = array_table.lookup_series(black_box(&keys));
@@ -708,15 +708,12 @@ fn benchmark_realistic_lapse_rates(c: &mut Criterion) {
         .expect("Failed to load lapse_rates with hash storage");
     let keys: Vec<&Series> = vec![&duration_series, &lapse_id_series];
 
-    group.bench_function(
-        format!("hash_{}k_lookups", total_lookups / 1000),
-        |b| {
-            b.iter(|| {
-                let result = hash_table.lookup_series(black_box(&keys));
-                black_box(result)
-            })
-        },
-    );
+    group.bench_function(format!("hash_{}k_lookups", total_lookups / 1000), |b| {
+        b.iter(|| {
+            let result = hash_table.lookup_series(black_box(&keys));
+            black_box(result)
+        })
+    });
 
     // Array storage
     let array_table = load_lapse_rates_table(StorageMode::Array)
@@ -724,7 +721,11 @@ fn benchmark_realistic_lapse_rates(c: &mut Criterion) {
     let is_array = array_table.is_array_storage();
 
     group.bench_function(
-        format!("array_{}k_lookups{}", total_lookups / 1000, if is_array { "" } else { "_fallback_hash" }),
+        format!(
+            "array_{}k_lookups{}",
+            total_lookups / 1000,
+            if is_array { "" } else { "_fallback_hash" }
+        ),
         |b| {
             b.iter(|| {
                 let result = array_table.lookup_series(black_box(&keys));
@@ -776,15 +777,12 @@ fn benchmark_realistic_risk_free_rates(c: &mut Criterion) {
         .expect("Failed to load risk_free_rates with hash storage");
     let keys: Vec<&Series> = vec![&scenario_series, &currency_series, &year_series];
 
-    group.bench_function(
-        format!("hash_{}k_lookups", total_lookups / 1000),
-        |b| {
-            b.iter(|| {
-                let result = hash_table.lookup_series(black_box(&keys));
-                black_box(result)
-            })
-        },
-    );
+    group.bench_function(format!("hash_{}k_lookups", total_lookups / 1000), |b| {
+        b.iter(|| {
+            let result = hash_table.lookup_series(black_box(&keys));
+            black_box(result)
+        })
+    });
 
     // Array storage
     let array_table = load_risk_free_rates_table(StorageMode::Array)
@@ -792,7 +790,11 @@ fn benchmark_realistic_risk_free_rates(c: &mut Criterion) {
     let is_array = array_table.is_array_storage();
 
     group.bench_function(
-        format!("array_{}k_lookups{}", total_lookups / 1000, if is_array { "" } else { "_fallback_hash" }),
+        format!(
+            "array_{}k_lookups{}",
+            total_lookups / 1000,
+            if is_array { "" } else { "_fallback_hash" }
+        ),
         |b| {
             b.iter(|| {
                 let result = array_table.lookup_series(black_box(&keys));
@@ -880,18 +882,12 @@ fn benchmark_scenario_cross_join(c: &mut Criterion) {
     // Each policy is expanded to n_scenarios rows, each needing n_months lookups
     let scenario_ids: Vec<i64> = (0..n_policies)
         .flat_map(|_policy| {
-            (1..=n_scenarios).flat_map(|scen| {
-                (0..n_months).map(move |_| scen as i64)
-            })
+            (1..=n_scenarios).flat_map(|scen| (0..n_months).map(move |_| scen as i64))
         })
         .collect();
 
     let ts: Vec<i64> = (0..n_policies)
-        .flat_map(|_policy| {
-            (1..=n_scenarios).flat_map(|_scen| {
-                (0..n_months).map(|t| t as i64)
-            })
-        })
+        .flat_map(|_policy| (1..=n_scenarios).flat_map(|_scen| (0..n_months).map(|t| t as i64)))
         .collect();
 
     // Cycle through funds for each lookup
@@ -927,7 +923,122 @@ fn benchmark_scenario_cross_join(c: &mut Criterion) {
     );
 
     group.bench_function(
-        format!("array_{}M_lookups{}", total_lookups / 1_000_000, if is_array { "" } else { "_fallback_hash" }),
+        format!(
+            "array_{}M_lookups{}",
+            total_lookups / 1_000_000,
+            if is_array { "" } else { "_fallback_hash" }
+        ),
+        |b| {
+            b.iter(|| {
+                let result = array_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    group.finish();
+}
+
+// Benchmark comparing hash vs array storage for vector lookups with 1k model points
+fn benchmark_vector_hash_vs_array_1k(c: &mut Criterion) {
+    let df_model_points = match load_model_points_1k() {
+        Ok(df) => df,
+        Err(e) => {
+            eprintln!("Failed to load 1k model points for vector benchmark: {}", e);
+            return;
+        }
+    };
+
+    // Extract key columns - age-last is List(Float64), gender_smoking is scalar String
+    let age_vector_col = df_model_points
+        .column("age-last")
+        .unwrap()
+        .as_series()
+        .unwrap();
+    let gender_scalar_col = df_model_points
+        .column("gender_smoking")
+        .unwrap()
+        .as_series()
+        .unwrap();
+    let keys: Vec<&Series> = vec![age_vector_col, gender_scalar_col];
+
+    let mut group = c.benchmark_group("vector_hash_vs_array_1k");
+
+    // Hash storage vector lookup
+    let hash_table =
+        create_mortality_table_with_mode(StorageMode::Hash).expect("Failed to create hash table");
+    group.bench_function("hash_vector_lookup_1k", |b| {
+        b.iter(|| {
+            let result = hash_table.lookup_series(black_box(&keys));
+            black_box(result)
+        })
+    });
+
+    // Array storage vector lookup
+    let array_table =
+        create_mortality_table_with_mode(StorageMode::Array).expect("Failed to create array table");
+    let is_array = array_table.is_array_storage();
+    group.bench_function(
+        format!(
+            "array_vector_lookup_1k{}",
+            if is_array { "" } else { "_fallback_hash" }
+        ),
+        |b| {
+            b.iter(|| {
+                let result = array_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    group.finish();
+}
+
+// Benchmark comparing hash vs array storage for vector lookups with 100k model points
+fn benchmark_vector_hash_vs_array_100k(c: &mut Criterion) {
+    let df_model_points = match load_model_points_100k() {
+        Ok(df) => df,
+        Err(e) => {
+            eprintln!("Failed to load 100k model points for vector benchmark: {}", e);
+            return;
+        }
+    };
+
+    // Extract key columns - age-last is List(Float64), gender_smoking is scalar String
+    let age_vector_col = df_model_points
+        .column("age-last")
+        .unwrap()
+        .as_series()
+        .unwrap();
+    let gender_scalar_col = df_model_points
+        .column("gender_smoking")
+        .unwrap()
+        .as_series()
+        .unwrap();
+    let keys: Vec<&Series> = vec![age_vector_col, gender_scalar_col];
+
+    let mut group = c.benchmark_group("vector_hash_vs_array_100k");
+    group.sample_size(20); // Reduce sample size for long benchmarks
+
+    // Hash storage vector lookup
+    let hash_table =
+        create_mortality_table_with_mode(StorageMode::Hash).expect("Failed to create hash table");
+    group.bench_function("hash_vector_lookup_100k", |b| {
+        b.iter(|| {
+            let result = hash_table.lookup_series(black_box(&keys));
+            black_box(result)
+        })
+    });
+
+    // Array storage vector lookup
+    let array_table =
+        create_mortality_table_with_mode(StorageMode::Array).expect("Failed to create array table");
+    let is_array = array_table.is_array_storage();
+    group.bench_function(
+        format!(
+            "array_vector_lookup_100k{}",
+            if is_array { "" } else { "_fallback_hash" }
+        ),
         |b| {
             b.iter(|| {
                 let result = array_table.lookup_series(black_box(&keys));
@@ -983,7 +1094,11 @@ fn benchmark_realistic_model_run(c: &mut Criterion) {
     let lapse_hash = load_lapse_rates_table(StorageMode::Hash).unwrap();
     let lapse_array = load_lapse_rates_table(StorageMode::Array).unwrap();
 
-    let mort_keys: Vec<&Series> = vec![&mort_table_id_series, &mort_age_series, &mort_duration_series];
+    let mort_keys: Vec<&Series> = vec![
+        &mort_table_id_series,
+        &mort_age_series,
+        &mort_duration_series,
+    ];
     let lapse_keys: Vec<&Series> = vec![&lapse_duration_series, &lapse_id_series];
 
     let mut group = c.benchmark_group("realistic_model_run");
@@ -1018,8 +1133,142 @@ criterion_group!(
     //benchmark_assumption_table_vector_lookup_100k
     benchmark_hash_vs_array_1k,
     benchmark_hash_vs_array_100k,
+    benchmark_vector_hash_vs_array_1k,
+    benchmark_vector_hash_vs_array_100k,
     benchmark_scaling,
 );
+
+/// Create a scenario returns table with categorical fund_index column.
+/// This tests the optimal case where string keys are pre-encoded as categoricals.
+fn create_scenario_returns_table_categorical(
+    n_scenarios: usize,
+    n_months: usize,
+    mode: StorageMode,
+) -> PolarsResult<AssumptionTable> {
+    let funds = vec!["FUND1", "FUND2", "FUND3", "FUND4", "FUND5", "FUND6"];
+    let n_funds = funds.len();
+    let total_rows = n_scenarios * n_months * n_funds;
+
+    let mut scenario_ids = Vec::with_capacity(total_rows);
+    let mut ts = Vec::with_capacity(total_rows);
+    let mut fund_indices = Vec::with_capacity(total_rows);
+    let mut return_values = Vec::with_capacity(total_rows);
+
+    for scen in 1..=n_scenarios {
+        for t in 0..n_months {
+            for fund in &funds {
+                scenario_ids.push(scen as i64);
+                ts.push(t as i64);
+                fund_indices.push(*fund);
+                return_values.push(0.001 * ((scen + t) as f64 / 100.0));
+            }
+        }
+    }
+
+    // Create DataFrame with fund_index as categorical
+    let fund_series = Series::new("fund_index".into(), fund_indices)
+        .cast(&DataType::Categorical(None, CategoricalOrdering::Physical))?;
+
+    let df = DataFrame::new(vec![
+        Series::new("scenario_id".into(), scenario_ids).into(),
+        Series::new("t".into(), ts).into(),
+        fund_series.into(),
+        Series::new("return_value".into(), return_values).into(),
+    ])?;
+
+    AssumptionTable::build_with_mode(
+        df,
+        vec![
+            "scenario_id".to_string(),
+            "t".to_string(),
+            "fund_index".to_string(),
+        ],
+        "return_value".to_string(),
+        mode,
+    )
+}
+
+/// Benchmark with categorical columns - tests optimal O(1) encoding path.
+/// Compares: hash storage vs array storage with categorical keys.
+fn benchmark_scenario_cross_join_categorical(c: &mut Criterion) {
+    let n_policies = 1000;
+    let n_scenarios = 50;
+    let n_months = 180;
+    let n_funds = 6;
+
+    let n_model_rows = n_policies * n_scenarios;
+    let total_lookups = n_model_rows * n_months;
+
+    // Create tables with categorical fund_index
+    let hash_table =
+        create_scenario_returns_table_categorical(n_scenarios, n_months, StorageMode::Hash)
+            .expect("Failed to create categorical hash table");
+    let array_table =
+        create_scenario_returns_table_categorical(n_scenarios, n_months, StorageMode::Array)
+            .expect("Failed to create categorical array table");
+
+    // Generate lookup keys - fund_index as categorical
+    let scenario_ids: Vec<i64> = (0..n_policies)
+        .flat_map(|_policy| {
+            (1..=n_scenarios).flat_map(|scen| (0..n_months).map(move |_| scen as i64))
+        })
+        .collect();
+
+    let ts: Vec<i64> = (0..n_policies)
+        .flat_map(|_policy| (1..=n_scenarios).flat_map(|_scen| (0..n_months).map(|t| t as i64)))
+        .collect();
+
+    // Create fund indices as categorical (matching the table's categorical)
+    let fund_strs: Vec<&str> = (0..total_lookups)
+        .map(|i| match i % n_funds {
+            0 => "FUND1",
+            1 => "FUND2",
+            2 => "FUND3",
+            3 => "FUND4",
+            4 => "FUND5",
+            _ => "FUND6",
+        })
+        .collect();
+
+    let fund_index_series = Series::new("fund_index".into(), fund_strs)
+        .cast(&DataType::Categorical(None, CategoricalOrdering::Physical))
+        .expect("Failed to cast to categorical");
+
+    let scenario_id_series = Series::new("scenario_id".into(), scenario_ids);
+    let t_series = Series::new("t".into(), ts);
+    let keys: Vec<&Series> = vec![&scenario_id_series, &t_series, &fund_index_series];
+
+    let mut group = c.benchmark_group("scenario_cross_join_categorical");
+    group.sample_size(10);
+
+    let is_array = array_table.is_array_storage();
+
+    group.bench_function(
+        format!("hash_{}M_lookups", total_lookups / 1_000_000),
+        |b| {
+            b.iter(|| {
+                let result = hash_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    group.bench_function(
+        format!(
+            "array_{}M_lookups{}",
+            total_lookups / 1_000_000,
+            if is_array { "" } else { "_fallback_hash" }
+        ),
+        |b| {
+            b.iter(|| {
+                let result = array_table.lookup_series(black_box(&keys));
+                black_box(result)
+            })
+        },
+    );
+
+    group.finish();
+}
 
 criterion_group!(
     realistic_benches,
@@ -1028,6 +1277,7 @@ criterion_group!(
     benchmark_realistic_risk_free_rates,
     benchmark_realistic_model_run,
     benchmark_scenario_cross_join,
+    benchmark_scenario_cross_join_categorical,
 );
 
 criterion_main!(benches, realistic_benches);

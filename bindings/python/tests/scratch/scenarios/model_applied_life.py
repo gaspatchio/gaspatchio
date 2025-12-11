@@ -37,10 +37,14 @@ Build Order (Phase 4 - Present Values - COMPLETE):
 import datetime
 import math
 from pathlib import Path
+from typing import Literal
 
 import polars as pl
+
 from gaspatchio_core import ActuarialFrame, when
 from gaspatchio_core.assumptions import Table
+
+StorageModeType = Literal["auto", "hash", "array"]
 
 # Model configuration matching lifelib run_id=6
 VALUATION_DATE = datetime.date(2024, 1, 1)  # base_date + 1 day
@@ -56,8 +60,13 @@ SCALAR_DURATION_CAP = 14  # Mortality scalar table has durations 0-14
 LAPSE_DURATION_CAP = 14  # Lapse table has durations 0-14
 
 
-def load_assumptions():
-    """Load assumption tables needed for MVP."""
+def load_assumptions(storage_mode: StorageModeType = "auto"):
+    """Load assumption tables needed for MVP.
+
+    Args:
+        storage_mode: Storage backend for tables - "auto" (default), "hash", or "array".
+
+    """
     # Product params (to get mort_table_male, mort_scalar_id)
     product_params = pl.read_parquet(ASSUMPTIONS_DIR / "product_params_gmxb.parquet")
 
@@ -72,6 +81,7 @@ def load_assumptions():
             "duration": "duration",
         },
         value="mort_rate",
+        storage_mode=storage_mode,
     )
 
     # Mortality scalars (duration, scalar_id -> mort_scalar)
@@ -84,6 +94,7 @@ def load_assumptions():
             "scalar_id": "scalar_id",
         },
         value="mort_scalar",
+        storage_mode=storage_mode,
     )
 
     # Lapse rates (duration, lapse_id -> lapse_rate)
@@ -96,6 +107,7 @@ def load_assumptions():
             "lapse_id": "lapse_id",
         },
         value="lapse_rate",
+        storage_mode=storage_mode,
     )
 
     # Surrender charges (duration, surr_charge_id -> surr_charge_rate)
@@ -108,6 +120,7 @@ def load_assumptions():
             "surr_charge_id": "surr_charge_id",
         },
         value="surr_charge_rate",
+        storage_mode=storage_mode,
     )
 
     # Scenario returns (fund_index, t -> inv_return_mth)
@@ -133,6 +146,7 @@ def load_assumptions():
             "year": "year",
         },
         value="forward_rate",
+        storage_mode=storage_mode,
     )
 
     return {
@@ -164,6 +178,7 @@ def main(
 
     Returns:
         ActuarialFrame with projection results
+
     """
     # Load assumptions
     assumptions = load_assumptions()

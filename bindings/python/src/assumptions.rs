@@ -69,12 +69,26 @@ fn lookup_by_table_and_hash(
             )
         })?;
         
+    // Determine if this is a vector lookup (any key is a List type)
+    let has_list_keys = key_series_refs
+        .iter()
+        .any(|s| matches!(s.dtype(), polars::prelude::DataType::List(_)));
+    let lookup_type = if has_list_keys { "vector" } else { "scalar" };
+    let num_rows = key_series_refs.first().map(|s| s.len()).unwrap_or(0);
+
     log::debug!(
-        "lookup_by_table_and_hash: Found table '{}', performing lookup with {} key columns",
+        "Lookup '{}': {} rows, {} keys, mode={}, storage={}",
         table_name,
-        key_series_refs.len()
+        num_rows,
+        lookup_type,
+        key_series_refs.len(),
+        match table.storage_mode() {
+            StorageMode::Hash => "hash",
+            StorageMode::Array => "array",
+            StorageMode::Auto => "auto",
+        }
     );
-    
+
     table.lookup_series(&key_series_refs)
 }
 

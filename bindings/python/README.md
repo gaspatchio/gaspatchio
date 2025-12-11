@@ -15,6 +15,43 @@ For development:
 uv sync
 ```
 
+## Building Rust Extensions
+
+Gaspatchio Core includes high-performance Rust extensions built with [maturin](https://www.maturin.rs/). By default, `uv sync` builds in **debug mode** for faster compilation during development.
+
+### Debug vs Release Builds
+
+| Mode | Command | Use Case |
+|------|---------|----------|
+| Debug | `maturin build -uv` | Development, faster compile times |
+| Release | `maturin build --release -uv` | Benchmarking, production, best performance |
+
+### Building in Release Mode
+
+For benchmarking or production use, build with optimizations:
+
+```bash
+cd gaspatchio-core/bindings/python
+maturin build --release -uv
+```
+
+### Native CPU Optimizations
+
+For maximum performance on your local machine, enable native CPU instruction sets (AVX2, AVX-512, etc.):
+
+```bash
+RUSTFLAGS="-C target-cpu=native" maturin build --release -uv
+```
+
+This can provide 10-30% additional speedup for numeric workloads by enabling SIMD vectorization.
+
+**Warning:** Binaries built with `target-cpu=native` are **not portable**. They will only run on CPUs with the same (or newer) instruction sets. Use this for:
+- Local benchmarking
+- Performance testing
+- Dedicated deployment targets with known CPU architecture
+
+Do **not** use for distributable packages or CI builds targeting diverse hardware.
+
 ## Command Line Interface (CLI)
 
 Gaspatchio Core includes a powerful CLI tool called `gspio` for executing actuarial models.

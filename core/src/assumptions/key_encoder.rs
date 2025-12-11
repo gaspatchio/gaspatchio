@@ -16,6 +16,12 @@ pub enum KeyEncoder {
     },
     /// Pre-encoded categorical columns - use physical value directly.
     Categorical { size: usize },
+    /// Categorical storage with string fallback - handles both categorical and string input.
+    /// Used when table stores categorical but users may pass strings at lookup time.
+    CategoricalWithStringFallback {
+        string_to_idx: AHashMap<String, u32>,
+        size: usize,
+    },
 }
 
 impl KeyEncoder {
@@ -43,6 +49,16 @@ impl KeyEncoder {
     /// Build encoder for categorical column.
     pub fn categorical(n_categories: usize) -> Self {
         KeyEncoder::Categorical { size: n_categories }
+    }
+
+    /// Build encoder for categorical column with string fallback.
+    /// This enables transparent string-to-categorical conversion at lookup time.
+    pub fn categorical_with_string_fallback(string_to_idx: AHashMap<String, u32>) -> Self {
+        let size = string_to_idx.len();
+        KeyEncoder::CategoricalWithStringFallback {
+            string_to_idx,
+            size,
+        }
     }
 
     /// Build encoder automatically from a Column.
@@ -82,12 +98,15 @@ impl KeyEncoder {
                 }
             }
             DataType::String => {
-                let unique: Vec<String> = series
+                let mut unique: Vec<String> = series
                     .unique()?
                     .str()?
                     .into_iter()
                     .filter_map(|opt| opt.map(|s| s.to_string()))
                     .collect();
+                // Sort alphabetically for deterministic index mapping.
+                // This ensures consistency with Polars Enum ordering in Python bindings.
+                unique.sort();
                 Ok(KeyEncoder::dictionary(&unique))
             }
             dt => {
@@ -102,6 +121,266 @@ impl KeyEncoder {
             KeyEncoder::IntRange { size, .. } => *size,
             KeyEncoder::Dictionary { size, .. } => *size,
             KeyEncoder::Categorical { size } => *size,
+            KeyEncoder::CategoricalWithStringFallback { size, .. } => *size,
+        }
+    }
+
+    /// Encode an entire Series to indices. Returns u32::MAX for invalid/missing values.
+    /// Uses parallel processing for large inputs.
+    pub fn encode_column(&self, series: &Series) -> PolarsResult<Vec<u32>> {
+        use rayon::prelude::*;
+
+        let len = series.len();
+        let invalid = u32::MAX;
+
+        match self {
+            KeyEncoder::IntRange { offset, size } => {
+                // Fast path for integer columns - extract slice and process in parallel
+                let offset = *offset;
+                let size = *size;
+
+                match series.dtype() {
+                    DataType::Int64 => {
+                        let ca = series.i64()?;
+                        // Use rechunk to get contiguous slice
+                        let ca = ca.rechunk();
+                        let slice = ca.cont_slice().ok();
+
+                        if let Some(values) = slice {
+                            // Parallel processing of contiguous slice
+                            let out: Vec<u32> = values
+                                .par_iter()
+                                .map(|&v| {
+                                    let idx = v - offset;
+                                    if idx >= 0 && (idx as usize) < size {
+                                        idx as u32
+                                    } else {
+                                        invalid
+                                    }
+                                })
+                                .collect();
+                            return Ok(out);
+                        }
+
+                        // Fallback for non-contiguous
+                        let mut out = vec![invalid; len];
+                        for (i, opt) in ca.into_iter().enumerate() {
+                            if let Some(v) = opt {
+                                let idx = v - offset;
+                                if idx >= 0 && (idx as usize) < size {
+                                    out[i] = idx as u32;
+                                }
+                            }
+                        }
+                        Ok(out)
+                    }
+                    DataType::Float64 => {
+                        let ca = series.f64()?;
+                        let ca = ca.rechunk();
+                        let slice = ca.cont_slice().ok();
+
+                        if let Some(values) = slice {
+                            let out: Vec<u32> = values
+                                .par_iter()
+                                .map(|&f| {
+                                    if f.fract() == 0.0 && f.is_finite() {
+                                        let idx = f as i64 - offset;
+                                        if idx >= 0 && (idx as usize) < size {
+                                            return idx as u32;
+                                        }
+                                    }
+                                    invalid
+                                })
+                                .collect();
+                            return Ok(out);
+                        }
+
+                        // Fallback
+                        let mut out = vec![invalid; len];
+                        for (i, opt) in ca.into_iter().enumerate() {
+                            if let Some(f) = opt {
+                                if f.fract() == 0.0 && f.is_finite() {
+                                    let idx = f as i64 - offset;
+                                    if idx >= 0 && (idx as usize) < size {
+                                        out[i] = idx as u32;
+                                    }
+                                }
+                            }
+                        }
+                        Ok(out)
+                    }
+                    _ => {
+                        // Fallback for other types
+                        let mut out = vec![invalid; len];
+                        for i in 0..len {
+                            if let Ok(av) = series.get(i) {
+                                if let Some(idx) = self.encode(av) {
+                                    out[i] = idx;
+                                }
+                            }
+                        }
+                        Ok(out)
+                    }
+                }
+            }
+
+            KeyEncoder::Dictionary { value_to_idx, .. } => {
+                // For string columns, we still need hash lookups per row
+                // But we can parallelize the iteration
+                let mut out = vec![invalid; len];
+
+                if let Ok(ca) = series.str() {
+                    // Process in parallel chunks
+                    const CHUNK_SIZE: usize = 4096;
+                    out.par_chunks_mut(CHUNK_SIZE)
+                        .enumerate()
+                        .for_each(|(chunk_idx, chunk)| {
+                            let start = chunk_idx * CHUNK_SIZE;
+                            for (local_idx, slot) in chunk.iter_mut().enumerate() {
+                                let global_idx = start + local_idx;
+                                if global_idx >= len {
+                                    break;
+                                }
+                                if let Some(s) = ca.get(global_idx) {
+                                    if let Some(&idx) = value_to_idx.get(s) {
+                                        *slot = idx;
+                                    }
+                                }
+                            }
+                        });
+                } else {
+                    // Fallback
+                    for i in 0..len {
+                        if let Ok(av) = series.get(i) {
+                            if let Some(idx) = self.encode(av) {
+                                out[i] = idx;
+                            }
+                        }
+                    }
+                }
+                Ok(out)
+            }
+
+            KeyEncoder::Categorical { size } => {
+                let size = *size;
+                let mut out = vec![invalid; len];
+
+                // Handle categorical series
+                if let Ok(ca) = series.categorical() {
+                    let physical = ca.physical();
+                    let physical = physical.rechunk();
+
+                    if let Some(values) = physical.cont_slice().ok() {
+                        // Parallel processing of physical indices
+                        let result: Vec<u32> = values
+                            .par_iter()
+                            .map(|&idx| if (idx as usize) < size { idx } else { invalid })
+                            .collect();
+                        return Ok(result);
+                    }
+
+                    // Fallback
+                    for (i, opt) in physical.into_iter().enumerate() {
+                        if let Some(idx) = opt {
+                            if (idx as usize) < size {
+                                out[i] = idx;
+                            }
+                        }
+                    }
+                // Handle U32 series (pre-computed physical indices from string->categorical mapping)
+                } else if matches!(series.dtype(), DataType::UInt32) {
+                    let u32_ca = series.u32()?;
+                    let u32_ca = u32_ca.rechunk();
+
+                    if let Some(values) = u32_ca.cont_slice().ok() {
+                        // Parallel processing of pre-computed indices
+                        let result: Vec<u32> = values
+                            .par_iter()
+                            .map(|&idx| if (idx as usize) < size { idx } else { invalid })
+                            .collect();
+                        return Ok(result);
+                    }
+
+                    // Fallback for non-contiguous
+                    for (i, opt) in u32_ca.into_iter().enumerate() {
+                        if let Some(idx) = opt {
+                            if (idx as usize) < size {
+                                out[i] = idx;
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback
+                    for i in 0..len {
+                        if let Ok(av) = series.get(i) {
+                            if let Some(idx) = self.encode(av) {
+                                out[i] = idx;
+                            }
+                        }
+                    }
+                }
+                Ok(out)
+            }
+
+            KeyEncoder::CategoricalWithStringFallback { string_to_idx, size } => {
+                let size = *size;
+                let mut out = vec![invalid; len];
+
+                // Fast path: categorical input - read physical indices directly
+                if let Ok(ca) = series.categorical() {
+                    let physical = ca.physical();
+                    let physical = physical.rechunk();
+
+                    if let Some(values) = physical.cont_slice().ok() {
+                        let result: Vec<u32> = values
+                            .par_iter()
+                            .map(|&idx| if (idx as usize) < size { idx } else { invalid })
+                            .collect();
+                        return Ok(result);
+                    }
+
+                    for (i, opt) in physical.into_iter().enumerate() {
+                        if let Some(idx) = opt {
+                            if (idx as usize) < size {
+                                out[i] = idx;
+                            }
+                        }
+                    }
+                    return Ok(out);
+                }
+
+                // Fast path: string input - do hash lookups directly (no intermediate Series)
+                if let Ok(ca) = series.str() {
+                    const CHUNK_SIZE: usize = 4096;
+                    out.par_chunks_mut(CHUNK_SIZE)
+                        .enumerate()
+                        .for_each(|(chunk_idx, chunk)| {
+                            let start = chunk_idx * CHUNK_SIZE;
+                            for (local_idx, slot) in chunk.iter_mut().enumerate() {
+                                let global_idx = start + local_idx;
+                                if global_idx >= len {
+                                    break;
+                                }
+                                if let Some(s) = ca.get(global_idx) {
+                                    if let Some(&idx) = string_to_idx.get(s) {
+                                        *slot = idx;
+                                    }
+                                }
+                            }
+                        });
+                    return Ok(out);
+                }
+
+                // Fallback for other types
+                for i in 0..len {
+                    if let Ok(av) = series.get(i) {
+                        if let Some(idx) = self.encode(av) {
+                            out[i] = idx;
+                        }
+                    }
+                }
+                Ok(out)
+            }
         }
     }
 
@@ -172,6 +451,35 @@ impl KeyEncoder {
                 }
             }
 
+            // Handle U32 values as pre-computed categorical physical indices
+            (KeyEncoder::Categorical { size }, AnyValue::UInt32(idx)) => {
+                if (idx as usize) < *size {
+                    Some(idx)
+                } else {
+                    None
+                }
+            }
+
+            // CategoricalWithStringFallback - handles both categorical and string input
+            (
+                KeyEncoder::CategoricalWithStringFallback { size, .. },
+                AnyValue::Categorical(idx, _, _),
+            ) => {
+                if (idx as usize) < *size {
+                    Some(idx)
+                } else {
+                    None
+                }
+            }
+            (
+                KeyEncoder::CategoricalWithStringFallback { string_to_idx, .. },
+                AnyValue::String(s),
+            ) => string_to_idx.get(s).copied(),
+            (
+                KeyEncoder::CategoricalWithStringFallback { string_to_idx, .. },
+                AnyValue::StringOwned(s),
+            ) => string_to_idx.get(s.as_str()).copied(),
+
             _ => None,
         }
     }
@@ -233,6 +541,26 @@ mod tests {
         match encoder {
             KeyEncoder::Dictionary { size, .. } => {
                 assert_eq!(size, 2);
+            }
+            _ => panic!("Expected Dictionary encoder"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_from_series_string_sorted_order() -> PolarsResult<()> {
+        // Input order: TERM, WL, UL (not alphabetical)
+        // Expected sorted order: TERM=0, UL=1, WL=2
+        let series = Series::new("product".into(), &["TERM", "WL", "UL", "TERM", "UL"]);
+        let encoder = KeyEncoder::from_series(&series)?;
+
+        match encoder {
+            KeyEncoder::Dictionary { value_to_idx, size } => {
+                assert_eq!(size, 3);
+                // Verify alphabetically sorted mapping
+                assert_eq!(value_to_idx.get("TERM"), Some(&0), "TERM should map to 0");
+                assert_eq!(value_to_idx.get("UL"), Some(&1), "UL should map to 1");
+                assert_eq!(value_to_idx.get("WL"), Some(&2), "WL should map to 2");
             }
             _ => panic!("Expected Dictionary encoder"),
         }
