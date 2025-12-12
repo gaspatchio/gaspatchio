@@ -64,3 +64,4 @@ docs/_build/
 /core/AGENT.md
 /core/CLAUDE.md
 /core/prompts
+/bindings/python/tests/scratch/scenarios/benchmark_history.jsonl
