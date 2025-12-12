@@ -2,6 +2,51 @@
 
 A high-performance actuarial modeling framework built with Python, Polars, and Rust extensions.
 
+## Quick Start
+
+### Library Usage
+
+Gaspatchio is designed to be used as a library for building high-performance actuarial models.
+
+```python
+from gaspatchio_core import ActuarialFrame
+from gaspatchio_core.assumptions import Table
+import polars as pl
+
+# 1. Load Assumption Tables
+# Tables are registered globally and optimized by the Rust backend
+mortality = Table(
+    name="mortality_v1",
+    source="data/mortality.parquet",
+    dimensions={"age": "age", "gender": "sex"},
+    value="rate"
+)
+
+# 2. Define Model Logic
+def projection(af: ActuarialFrame):
+    # Vectorized date math (using Excel conventions)
+    # Calculates age in years between dob and valuation date
+    af.attained_age = af.dob.excel.yearfrac(af.val_date) + af.t
+    
+    # High-speed Assumption Lookup (vectorized)
+    # Returns a Polars expression that executes in the Rust engine
+    af.qx = mortality.lookup(
+        age=af.attained_age,
+        gender=af.gender
+    )
+    
+    # Vectorized Projection
+    af.pols_if = af.pols_start * (1 - af.qx - af.w_rate)
+
+# 3. Run Model
+# Load model points (millions of rows supported)
+af = ActuarialFrame(data="model_points.parquet")
+projection(af)
+
+# Collect results (executes the optimized computation graph)
+result = af.collect()
+```
+
 ## Installation
 
 ```bash
@@ -188,7 +233,7 @@ from gaspatchio_core import ActuarialFrame
 
 def life_model(af: ActuarialFrame) -> None:
     # Your actuarial calculations here
-    af["premium"] = af["sum_assured"] * af["premium_rate"]
+    af.premium = af.sum_assured * af.premium_rate
     # ... more calculations
 ```
 
