@@ -579,12 +579,19 @@ class Table:
             if current_df[col].dtype == pl.String:
                 categories = current_df[col].unique().sort().to_list()
                 self._key_categories[col] = pl.Enum(categories)
+                max_categories_to_show = 5
                 logger.debug(
-                    f"Captured {len(categories)} categories for string column '{col}': {categories[:5]}{'...' if len(categories) > 5 else ''}"
+                    f"Captured {len(categories)} categories for string column '{col}': "
+                    f"{categories[:max_categories_to_show]}"
+                    f"{'...' if len(categories) > max_categories_to_show else ''}"
                 )
 
         # Convert keys to f64 for Rust compatibility
         processed_df = _convert_keys_to_f64(current_df, key_columns)
+
+        # Sort by key columns to ensure array storage indices match categorical order.
+        # This is critical for array storage where position == index.
+        processed_df = processed_df.sort(key_columns)
 
         # Store the processed DataFrame
         self._df = processed_df
@@ -602,11 +609,17 @@ class Table:
                 storage_mode=self._storage_mode,
             )
             # Query the actual storage mode chosen by Rust (may differ from requested if "auto")
-            actual_mode = registry.get_table_storage_mode(self._name) or self._storage_mode
+            actual_mode = (
+                registry.get_table_storage_mode(self._name) or self._storage_mode
+            )
             logger.info(
                 f"Registered table '{self._name}': {len(processed_df):,} rows, "
                 f"keys={key_columns}, storage={actual_mode}"
-                + (f" (requested={self._storage_mode})" if self._storage_mode != actual_mode else ""),
+                + (
+                    f" (requested={self._storage_mode})"
+                    if self._storage_mode != actual_mode
+                    else ""
+                ),
             )
         except Exception as e:
             logger.error(f"Failed to register table '{self._name}' with Rust: {e}")
@@ -1287,17 +1300,19 @@ class Table:
         import polars as pl
 
         # Dense table - should use array storage
-        data = pl.DataFrame({
-            "age": list(range(18, 101)),  # 83 ages
-            "rate": [0.001 * (1 + a/100) for a in range(18, 101)]
-        })
+        data = pl.DataFrame(
+            {
+                "age": list(range(18, 101)),  # 83 ages
+                "rate": [0.001 * (1 + a / 100) for a in range(18, 101)],
+            }
+        )
 
         table = Table(
             name="mortality_auto_test",
             source=data,
             dimensions={"age": "age"},
             value="rate",
-            storage_mode="auto"  # Let Rust decide
+            storage_mode="auto",  # Let Rust decide
         )
 
         print(f"Requested: auto, Actual: {table.storage_mode}")
@@ -1308,9 +1323,10 @@ class Table:
         try:
             registry = PyAssumptionTableRegistry()
             mode = registry.get_table_storage_mode(self._name)
-            return mode if mode else self._storage_mode
         except Exception:
             return self._storage_mode
+        else:
+            return mode if mode else self._storage_mode
 
     def with_shock(
         self,
