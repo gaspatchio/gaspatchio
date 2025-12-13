@@ -1,248 +1,112 @@
-# Gaspatchio Core
+# Gaspatchio
 
-Gaspatchio is a high-performance actuarial modeling framework that combines Python's simplicity with Rust's performance. It's designed for building and running actuarial models at scale, processing millions of policy projections efficiently while maintaining Excel function compatibility.
+**High-Performance Actuarial Modeling Framework**
 
-**New to Gaspatchio?** Start with the [Architecture Summary](ref/ARCHITECTURE_SUMMARY.md) for a comprehensive overview of key design decisions and technical motivations behind the framework.
+Gaspatchio is a next-generation actuarial modeling engine that combines the ease of Python with the raw speed of Rust. It provides a DataFrame-like API specialized for actuarial projections, assumption management, and financial calculations.
 
-## Overview
+## Design Principles
 
-Gaspatchio represents a modern approach to actuarial modeling, addressing the fundamental tension between the need for debuggable, maintainable models and the performance requirements of production systems. Here's what makes it unique:
+The framework evolved over time. Each major decision is documented in the `ref/` directory.
 
-## Principles 
+### The Formula IS the Code
 
-The framework evolved over time. Each major decision is documented in the [ref/](ref/) directory:
+Actuaries need to audit every calculation for regulatory compliance. In Gaspatchio, the math is completely visible—no hidden framework magic:
 
-### Meet you where you are
+```python
+# Simple math uses operators directly
+af.pols_death = af.pols_if * af.mort_rate_mth
+af.net_cf = af.premiums - af.claims - af.expenses - af.commissions
 
-- Ergonomics that feels (is) python but reads like a spreadsheet or pure formulas.
-- Assumption tables respect data however it turns up. You dont have to have clean data, or do ETL from other system outputs
-- Vector shimming 
-- Excel.
+# Complex operations use named methods
+af.pols_if = af.combined_decrement.projection.cumulative_survival()
+af.reserve_prev = af.reserve.projection.previous_period()
+
+# Business logic reads like English
+af.commissions = when(af.duration == 0).then(af.premiums).otherwise(0.0)
+```
+
+Each line is auditable. The calculation **is** the code.
+
+### Meet You Where You Are
+
+Ergonomics that feel like Python but read like a spreadsheet or pure formulas. Assumption tables respect data however it turns up—you don't need clean data or ETL from other system outputs. Vector shimming handles shape mismatches automatically. Excel function compatibility means familiar semantics.
 
 ### Design for AI
-- LLM native, great docs, great error messages built to be using (and tested with) agentic loops. 
-- MCP server, free agent for helping you build models.
 
-### Default fast, nudge to that.
-- Works quickly on your local machine on CPUs, scales with *0 extra effort* to GPUs. 
-- Key benchmarks are:
-  - How easy it is to make a change and see the result quickly, no warmup, no JIT, jsut go.
-  - You'll be in that loop for a while, change=>test=>refine so make that look as tight as possible 
-- This is a case of meeting people where they are in that as much as you can things should run quickly on common hardware. 
+LLM-native from the ground up: great docs, great error messages, built to be used (and tested with) agentic loops. Includes an MCP server and a free agent for helping you build models.
 
-### Amazing docs
-- Every method for every function is documented, and runs examples that have verfiied output.
-- Documentation taylored to actuarial use cases.
-- "Recipes" for common actuarial use cases.
-- All documentation is built to be used by AI to help build models. 
+### Default Fast, Nudge to Faster
 
-### Key Design Decisions
+Works quickly on your local machine on CPUs, scales with zero extra effort to GPUs. Key benchmarks are:
 
-The framework evolved over time. Each major decision is documented in the [ref/](ref/) directory:
+- **Change-test-refine loop**: How easy is it to make a change and see the result quickly? No warmup, no JIT, just go. You'll be in that loop for a while, so we make it as tight as possible.
+- **Common hardware first**: Things should run quickly on common hardware. Meet people where they are.
 
-1. **[Python-Native DSL](ref/01-dsl/)** - Write models in Python, not a custom language
-2. **[ActuarialFrame Abstraction](ref/02-assumptions/)** - DataFrames enhanced for actuarial projections
-3. **[Core/Bindings Separation](ref/03-library-isolation/)** - Pure Rust core with language bindings
-4. **[High-Performance Lookups](ref/04-assumption-lookup/)** - O(1) assumption table access
-5. **[Polars Integration](ref/05-dsl-polars-wrapper/)** - Leverage best-in-class DataFrame library
-6. **[Domain Namespacing](ref/07-dsl-namespacing/)** - Organized, discoverable actuarial functions
-7. **[Type-Safe Proxies](ref/09-concrete-proxies/)** - Full IDE support with autocompletion
-8. **[Contextual Errors](ref/13-error-handling/)** - Actionable error messages for model debugging
+### Amazing Docs
 
-### Why This Matters for Actuaries
+- Every method for every function is documented with examples that have verified output
+- Documentation tailored to actuarial use cases
+- "Recipes" for common actuarial patterns
+- All documentation is built to be used by AI to help build models
 
-- **Excel Function Compatibility**: Working toward comprehensive Excel function support (currently partial coverage)
-- **Vector Operations**: Natural support for time-based projections and mortality tables
-- **Assumption Management**: Efficient lookup tables with automatic transformations
-- **Debugging**: Enhanced error messages and operation tracing during development
-- **Performance**: High-performance Polars engine for production workloads
-- **AI-Ready**: Designed for LLM-assisted development with comprehensive documentation
+## 📂 Repository Structure
 
-### Enhanced Debugging and Tracing
+This repository contains the complete source code for the Gaspatchio system:
 
-Actuarial models in Gaspatchio are written in pure Python with a familiar DataFrame API. The framework provides two execution modes for different development needs:
-- **Debug Mode**: Enhanced tracing and logging for detailed error messages and operation tracking
-- **Optimize Mode**: Streamlined execution with minimal overhead for production performance
+*   **`bindings/python/`**: The main user-facing product. This directory contains the Python package (`gaspatchio_core`) which developers use to build models. It includes the PyO3 bindings that connect to the Rust engine.
+*   **`core/`**: The high-performance Rust engine. This contains the implementation of the Assumption Registry, vector plugins, and core algorithms.
+*   **`ref/`**: Architecture documentation and design notes.
 
-Both modes use the same high-performance Polars engine underneath, with debug mode providing additional introspection capabilities to help actuaries understand and troubleshoot their models.
+## 🚀 Getting Started
 
+If you are a model developer, start with the **Python Bindings**:
 
-## Architecture Overview
+👉 **[Python Package Documentation](bindings/python/README.md)**
 
-```mermaid
-graph TB
-    subgraph "Python User Code"
-        Model["Actuarial Model 
-        (Pure Python)"]
-        AF["ActuarialFrame API"]
-    end
-    
-    subgraph "gaspatchio-core/bindings/python"
-        PyInterface["Python Interface
-        (Type Hints & Docs)"]
-        PyO3["PyO3 Bindings
-        (Rust ↔ Python)"]
-    end
-    
-    subgraph "gaspatchio-core/core"
-        Core["Pure Rust Core"]
-        Polars["Polars Functions"]
-        Lookups["Assumption Lookups"]
-        Registry["Table Registry"]
-    end
-    
-    subgraph "Execution Modes"
-        Debug["Debug Mode 
-        (Computational Graph for Tracing Errors)"]
-        Optimize["Optimize Mode (Direct Execution)"]
-    end
-    
-    Model --> AF    
-    PyInterface --> PyO3
-    PyO3 --> Core
-    Core --> Polars
-    Core --> Lookups
-    Core --> Registry
-    
-    AF -.->|"mode=debug"| Debug
-    AF -.->|"mode=optimize"| Optimize
-    Debug --> PyInterface
-    Optimize --> PyInterface
-    
-    style Model fill:#e1f5fe
-    style AF fill:#b3e5fc
-    style Debug fill:#fff3e0
-    style Optimize fill:#c8e6c9
-    style Core fill:#ffcdd2
-```
-
-## Project Architecture
-
-This project follows a modular architecture with clear separation of concerns:
-
-### 1. Core Rust Library (`gaspatchio-core/core`)
-- Contains all core functionality, data structures, and algorithms
-- No PyO3 dependencies or references
-- Benchmarkable and testable in pure Rust
-- Includes all lookup registry logic, HashMap building, and plugin expressions
-- Integration and unit tests for all functionality
-- Move to the `core` directory to run the core library (`cd core`)
-- For more details, see the [Core README](core/README.md).
-
-```
-gaspatchio-core/core/
-├── benches/
-│   └── fixtures/           # Benchmark data fixtures
-└── src/
-    └── polars_functions/   # Core Polars function implementations
-├── tests/                  # Integration tests (Note: Need to confirm if this still exists or moved)
-└── Cargo.toml              # Core dependencies only
-```
-
-### 2. PyO3 Bindings in Rust (`gaspatchio-core/bindings/python`)
-- Thin layer that exposes core functionality to Python
-- Handles conversion between Python and Rust types
-- Only place where PyO3 dependencies should exist
-- No business logic, only binding code
-- Built using Matruin (`matruin build -uv`)
-- For more details, see the [Python Bindings README](bindings/python/README.md).
-
-```
-gaspatchio-core/bindings/python/
-├── src/                    # PyO3 module definition and binding code
-├── jobs/                   # Example job scripts (if applicable)
-├── scripts/                # Utility scripts
-├── tests/                  # Python binding tests
-└── Cargo.toml              # PyO3 and core dependencies
-```
-
-### 3. Python Interface (`gaspatchio-core/bindings/python/gaspatchio_core`)
-- Pure Python code for user-friendly interface
-- Polars plugin registration
-- Type conversions and convenience functions
-- Documentation and examples
-- Test using pytest (`uv run pytest -v`)
-- For more details, see the [Python Bindings README](bindings/python/README.md) (as `gaspatchio_core` is part of the `bindings/python` module).
-
-```
-gaspatchio-core/bindings/python/gaspatchio_core/
-├── __init__.py             # Package exports
-├── functions.py            # Plugin function wrappers (if still used)
-├── registry.py             # TableRegistry Python interface (if still used)
-└── typing.py               # Type definitions (if still used)
-```
-
-### Motivation for This Architecture
-
-This separation provides several benefits:
-1. **Core Library Purity**: The core Rust implementation remains focused and PyO3-free, making it easier to test, benchmark, and maintain.
-2. **Multiple Bindings**: Future bindings to other languages (R, JavaScript, etc.) can be added without modifying the core library.
-3. **Testing Efficiency**: Core functionality can be tested in Rust without Python dependencies, allowing for faster test cycles.
-4. **Performance Optimization**: Benchmarking can be done directly on the core library, ensuring optimal performance.
-5. **Maintainability**: Changes to the Python interface don't require recompiling the Rust code, and vice versa.
-
-## Technical Deep Dive
-
-### ActuarialFrame: The Core Abstraction
-
-At the heart of Gaspatchio is the `ActuarialFrame` - a DataFrame designed specifically for actuarial projections:
+### Quick Example
 
 ```python
-# Create projection timeline using vector operations
-af["proj_months"] = af.fill_series(af["num_proj_months"], 0, 1)
-af["age"] = af["age"] + (af["proj_months"] / 12)
+from gaspatchio_core import ActuarialFrame
+from gaspatchio_core.assumptions import Table
 
-# Multi-dimensional assumption lookups
-af["mortality_rate"] = gs.assumption_lookup(
-    "age-last", "variable", table_name="mortality_rates"
+# 1. Load Assumptions
+mortality = Table(
+    name="mortality_v1",
+    source="data/mortality.parquet",
+    dimensions={"age": "age"},
+    value="rate"
 )
 
-# Actuarial calculations with list operations
-af["P[IF]"] = pl.col("monthly_persist_prob").cum_prod().shift(1).fill_null(1.0)
+# 2. Build Model
+def projection(af: ActuarialFrame):
+    # Vectorized date math (using Excel conventions)
+    af.attained_age = af.dob.excel.yearfrac(af.val_date) + af.t
+    
+    # High-speed Assumption Lookup
+    af.qx = mortality.lookup(age=af.attained_age)
+    
+    # Vectorized Projection
+    af.pols_if = af.pols_start * (1 - af.qx - af.w_rate)
 
-# Excel function compatibility
-af["year_frac"] = af["effective_date"].excel.yearfrac(af["date"], 0)
+# 3. Run
+af = ActuarialFrame(data="model_points.parquet")
+projection(af)
+result = af.collect()
 ```
 
-### Performance Architecture
+## 📖 Architecture
 
-The dual execution mode is achieved through careful API design:
+For a deep dive into how Gaspatchio works under the hood, see:
 
-1. **Debug Mode**: Operations execute with enhanced tracing and logging for debugging
-2. **Optimize Mode**: Operations execute with minimal overhead for performance
+👉 **[Architecture Guide](ref/ARCHITECTURE.md)**
 
-```python
-# Same code, different execution modes
-af = ActuarialFrame(data, mode="optimize")  # Optimized execution
-af = ActuarialFrame(data, mode="debug")     # Debug execution with tracing
-```
+## 🛠 For Contributors
 
-### Assumption Management
+To work on the core engine:
 
-Gaspatchio provides O(1) lookup performance for assumption tables through HashMap-based indexing:
+1.  Ensure you have `cargo` (Rust) and `uv` (Python) installed.
+2.  Navigate to `bindings/python`.
+3.  Run `uv sync` to install dependencies.
+4.  Run `maturin develop -uv` to build the Rust extensions and install them into the virtual environment.
 
-```python
-# Register assumption tables once
-registry = TableRegistry()
-registry.register("mortality", mortality_df)
-registry.register("lapse", lapse_df)
-
-# Efficient lookups in projections
-af["mortality_rate"] = gs.assumption_lookup("age-last", "variable", table_name="mortality_rates")
-```
-
-### Project Documentation
-
-For comprehensive documentation, including guides, concepts, and API references, please visit the official Gaspatchio documentation site:
-- [Gaspatchio Documentation](https://opioinc.github.io/gaspatchio-docs/)
-
-### For AI, LLMs, and Automated Tooling
-
-Gaspatchio is designed with AI-assisted development in mind. We provide specific resources to help language models and automated tools understand and interact with the project:
-
-- **`llms.txt`**: [https://opioinc.github.io/gaspatchio-docs/llms.txt](https://opioinc.github.io/gaspatchio-docs/llms.txt)
-  - Provides concise, LLM-friendly context, guidance, and links to key documentation sections. This follows the emerging `llms.txt` convention (llmstxt.org), designed to give LLMs essential, structured information about a project or website efficiently.
-- **`llms-full.txt`**: [https://opioinc.github.io/gaspatchio-docs/llms-full.txt](https://opioinc.github.io/gaspatchio-docs/llms-full.txt)
-  - An expanded version, potentially including content from linked resources mentioned in `llms.txt`. This offers a more comprehensive context suitable for deeper analysis or more complex query answering.
-
-This approach, inspired by the AI-first design of Gaspatchio (see [Building Actuarial Models with AI](https://opioinc.github.io/gaspatchio-docs/ai/intro/)), helps ensure that AI tools can effectively assist in the development, analysis, and understanding of models built with this framework.
+See `core/README.md` for more details on the Rust implementation.
