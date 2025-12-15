@@ -144,7 +144,8 @@ def _execute_model_run(
     )
 
     # Check if data_lazy is empty *after* potential filtering
-    if data_lazy.fetch(1).is_empty():
+    # Note: using head(1).collect() instead of deprecated fetch(1) which has issues with filters
+    if data_lazy.head(1).collect().is_empty():
         error_suffix = f" for Policy ID '{policy_id}'" if policy_id else ""
         err_msg = f"No data found{error_suffix} after filtering."
         logger.error(err_msg)
@@ -289,6 +290,43 @@ def run_model(config: ModelRunConfig) -> ModelRunResult:
     return _execute_model_run(config, data_lazy, model_func)
 
 
+def _cast_policy_id(policy_id: str, col_dtype: pl.DataType) -> int | str:
+    """Cast policy ID string to match the column dtype.
+
+    Args:
+        policy_id: The policy ID as a string from CLI
+        col_dtype: The Polars dtype of the policy ID column
+
+    Returns:
+        The policy ID cast to the appropriate type (int or str)
+
+    Raises:
+        ValueError: If policy_id cannot be converted to the required type
+
+    """
+    int_types = (
+        pl.Int8,
+        pl.Int16,
+        pl.Int32,
+        pl.Int64,
+        pl.UInt8,
+        pl.UInt16,
+        pl.UInt32,
+        pl.UInt64,
+    )
+    if col_dtype in int_types:
+        try:
+            return int(policy_id)
+        except ValueError as e:
+            err_msg = (
+                f"Policy ID '{policy_id}' cannot be converted to integer "
+                f"to match column dtype {col_dtype}"
+            )
+            raise ValueError(err_msg) from e
+    # For string/categorical/other types, keep as string
+    return policy_id
+
+
 def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
     """Run actuarial model for a single policy and return results."""
     logger.debug(
@@ -312,14 +350,15 @@ def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
     logger.info("Reading model points data from {}", model_points_path)
     data_lazy = read_model_points(model_points_path)
 
-    # 4. Filter model points for the specified policy_id (lazy)
-    logger.debug("Filtering for single policy with ID: {}", policy_id)
-    try:
-        policy_id_int = int(policy_id)
-    except ValueError as e:
-        err_msg = f"Policy ID must be an integer, got: {policy_id}"
-        logger.error(err_msg)
-        raise ValueError(err_msg) from e
+    # 4. Determine column dtype and cast policy_id appropriately
+    col_dtype = data_lazy.collect_schema()[config.id_column_name]
+    policy_id_typed = _cast_policy_id(policy_id, col_dtype)
+    logger.debug(
+        "Filtering for single policy with ID: {} (cast to {} from dtype {})",
+        policy_id_typed,
+        type(policy_id_typed).__name__,
+        col_dtype,
+    )
 
     # Check if policy exists before filtering (on the full dataset)
     existing_ids = (
@@ -329,7 +368,7 @@ def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
         .collect()
         .get_column(config.id_column_name)
     )
-    if policy_id_int not in existing_ids:
+    if policy_id_typed not in existing_ids:
         err_msg = (
             f"Policy ID '{policy_id}' not found in column '{config.id_column_name}'. "
             f"Available IDs preview: {existing_ids[:10].to_list()}"
@@ -338,7 +377,7 @@ def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
         raise ValueError(err_msg)
 
     filtered_data_lazy = data_lazy.filter(
-        pl.col(config.id_column_name) == policy_id_int,
+        pl.col(config.id_column_name) == policy_id_typed,
     )
 
     # Delegate execution to helper - let enhanced error handling work
