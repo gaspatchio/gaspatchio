@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
@@ -133,7 +133,11 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             raise RuntimeError(msg)
         return parent_af
 
-    def cumulative_survival(self, start_at: float | None = 1.0) -> ExpressionProxy:
+    def cumulative_survival(
+        self,
+        rate_timing: Literal["beginning_of_period", "end_of_period"] | None = None,
+        start_at: float | None = 1.0,
+    ) -> ExpressionProxy:
         """Convert mortality rates to cumulative survival probabilities.
 
         Transforms period mortality rates (qx) into cumulative survival probabilities
@@ -155,14 +159,37 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             * **Pricing Models:** Calculate expected present values of benefits and
                 premiums weighted by survival probabilities.
 
+        Timing Conventions
+        ------------------
+        The `rate_timing` parameter controls when decrement rates are applied:
+
+        * **beginning_of_period** (default): Rate at period t is NOT yet applied to
+          P[IF][t]. The survival at t represents the probability of surviving TO the
+          start of period t. Result: ``[1.0, tpx[0], tpx[0]*tpx[1], ...]``
+
+        * **end_of_period**: Rate at period t HAS been applied to P[IF][t]. The
+          survival at t represents the probability of surviving THROUGH period t.
+          This matches Excel-style timing. Result: ``[tpx[0], tpx[0]*tpx[1], ...]``
+
+        With constant rates, both conventions give identical values. The difference
+        only appears when rates change over time (e.g., at age boundaries).
+
         Parameters
         ----------
+        rate_timing : {"beginning_of_period", "end_of_period"}, optional
+            When decrement rates are applied. Recommended for most users:
+
+            - ``"beginning_of_period"``: Rate at t NOT yet applied (default behavior)
+            - ``"end_of_period"``: Rate at t HAS been applied (Excel-style)
+
+            If not specified, falls back to `start_at` parameter behavior.
         start_at : float, optional
-            Initial survival probability to prepend at t=0. Shifts results to give
-            beginning-of-period values (standard actuarial practice). Common values:
-            - 1.0 (default): Beginning-of-period, full cohort [1.0, tpx[0], tpx[1], ...]
-            - None: End-of-period survival [tpx[0], tpx[1], ...]
-            - Other: Partial cohort after initial selection (e.g., 0.95 for 95%)
+            Lower-level control over timing. Only use if `rate_timing` is not set.
+            Initial survival probability to prepend at t=0:
+
+            - 1.0 (default): Beginning-of-period [1.0, tpx[0], tpx[1], ...]
+            - None: End-of-period [tpx[0], tpx[1], ...]
+            - Other: Custom initial value (e.g., 0.95 for partial cohort)
 
         Returns
         -------
@@ -171,12 +198,15 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         Raises
         ------
+        ValueError
+            If both `rate_timing` and a non-default `start_at` are specified,
+            or if `rate_timing` has an invalid value
         RuntimeError
             If the column is not part of an ActuarialFrame context
 
         Examples
         --------
-        **Vector Example: Policies Inforce (Beginning-of-Period)**
+        **Beginning-of-Period Timing (Default)**
 
         ```python
         from gaspatchio_core import ActuarialFrame
@@ -187,7 +217,12 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         }
         af = ActuarialFrame(data)
 
+        # Default: rate at t not yet applied
         af.pols_if = af.qx.projection.cumulative_survival()
+        # Or explicitly:
+        af.pols_if = af.qx.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
 
         print(af.collect())
         ```
@@ -204,7 +239,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         └───────────┴───────────────────────┴────────────────────────┘
         ```
 
-        **Vector Example: End-of-Period Survival**
+        **End-of-Period Timing (Excel-Style)**
 
         ```python
         from gaspatchio_core import ActuarialFrame
@@ -214,8 +249,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         }
         af = ActuarialFrame(data)
 
-        # For death benefits, use end-of-period survival
-        af.tpx = af.qx.projection.cumulative_survival(start_at=None)
+        # Excel-style: rate at t has been applied
+        af.tpx = af.qx.projection.cumulative_survival(rate_timing="end_of_period")
 
         print(af.collect())
         ```
@@ -231,7 +266,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         └───────────────────────┴─────────────────────────────┘
         ```
 
-        **Vector Example: Partial Cohort (Post-Underwriting)**
+        **Custom Initial Value (Partial Cohort)**
 
         ```python
         from gaspatchio_core import ActuarialFrame
@@ -241,7 +276,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         }
         af = ActuarialFrame(data)
 
-        # 95% survived underwriting
+        # 95% survived underwriting - use start_at for custom values
         af.pols_if = af.qx.projection.cumulative_survival(start_at=0.95)
 
         print(af.collect())
@@ -259,6 +294,28 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         ```
 
         """
+        # Handle rate_timing parameter - maps to start_at for backwards compatibility
+        if rate_timing is not None:
+            # Validate rate_timing value
+            valid_timings = ("beginning_of_period", "end_of_period")
+            if rate_timing not in valid_timings:
+                msg = (
+                    f"Invalid rate_timing value: {rate_timing!r}. "
+                    f"Must be one of {valid_timings}"
+                )
+                raise ValueError(msg)
+
+            # Check for conflicting parameters
+            if start_at != 1.0:
+                msg = (
+                    "Cannot specify both 'rate_timing' and 'start_at'. "
+                    "Use 'rate_timing' for standard timing conventions, "
+                    "or 'start_at' for custom initial values."
+                )
+                raise ValueError(msg)
+
+            # Map rate_timing to start_at
+            start_at = 1.0 if rate_timing == "beginning_of_period" else None
         from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.dispatch import (
             ColumnTypeDetector,  # type: ignore[attr-defined]

@@ -137,6 +137,165 @@ class TestCumulativeSurvival:
             assert pytest.approx(m, abs=1e-9) == a
 
 
+class TestRateTiming:
+    """Tests for rate_timing parameter in cumulative_survival()."""
+
+    def test_beginning_of_period_explicit(self):
+        """Test rate_timing='beginning_of_period' matches default behavior."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        # Default behavior
+        af.pols_if_default = af.qx.projection.cumulative_survival()
+
+        # Explicit beginning_of_period
+        af.pols_if_bop = af.qx.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
+
+        result = af.collect()
+
+        default = result["pols_if_default"][0]
+        bop = result["pols_if_bop"][0]
+
+        # Should be identical
+        assert len(default) == len(bop)
+        for d, b in zip(default, bop, strict=False):
+            assert pytest.approx(d, abs=1e-9) == b
+
+        # Verify values: [1.0, 0.999, 0.997002]
+        assert pytest.approx(bop[0], abs=1e-6) == 1.0
+        assert pytest.approx(bop[1], abs=1e-6) == 0.999
+        assert pytest.approx(bop[2], abs=1e-6) == 0.999 * 0.998
+
+    def test_end_of_period(self):
+        """Test rate_timing='end_of_period' matches start_at=None."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        # Using rate_timing
+        af.pols_if_eop = af.qx.projection.cumulative_survival(
+            rate_timing="end_of_period"
+        )
+
+        # Using start_at=None (equivalent)
+        af.pols_if_none = af.qx.projection.cumulative_survival(start_at=None)
+
+        result = af.collect()
+
+        eop = result["pols_if_eop"][0]
+        none_result = result["pols_if_none"][0]
+
+        # Should be identical
+        assert len(eop) == len(none_result)
+        for e, n in zip(eop, none_result, strict=False):
+            assert pytest.approx(e, abs=1e-9) == n
+
+        # Verify values: [0.999, 0.997002, 0.994011]
+        assert pytest.approx(eop[0], abs=1e-6) == 0.999
+        assert pytest.approx(eop[1], abs=1e-6) == 0.999 * 0.998
+        assert pytest.approx(eop[2], abs=1e-6) == 0.999 * 0.998 * 0.997
+
+    def test_timing_difference_at_rate_boundary(self):
+        """Test that BOP and EOP produce different results at rate boundaries.
+
+        When rates change (e.g., at age boundaries), the two timing conventions
+        give different results. With constant rates, they would be the same.
+        """
+        # Simulate rate change at month 2 (e.g., age boundary)
+        data = {"exit_rate": [[0.008, 0.008, 0.009, 0.009]]}
+        af = ActuarialFrame(data)
+
+        af.pols_if_bop = af.exit_rate.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
+        af.pols_if_eop = af.exit_rate.projection.cumulative_survival(
+            rate_timing="end_of_period"
+        )
+
+        result = af.collect()
+
+        bop = result["pols_if_bop"][0]
+        eop = result["pols_if_eop"][0]
+
+        # At period 0:
+        # BOP: 1.0 (rate not yet applied)
+        # EOP: 0.992 (rate applied)
+        assert pytest.approx(bop[0], abs=1e-6) == 1.0
+        assert pytest.approx(eop[0], abs=1e-6) == 0.992
+
+        # At period 2 (where rate changes from 0.008 to 0.009):
+        # BOP: uses rate[0] and rate[1] = 0.992 * 0.992 = 0.984064
+        # EOP: uses rate[0], rate[1], and rate[2] = 0.992 * 0.992 * 0.991 = 0.975267
+        # Note: BOP[2] has NOT applied rate[2] yet, EOP[2] HAS applied rate[2]
+        assert pytest.approx(bop[2], abs=1e-6) == 0.992 * 0.992
+        assert pytest.approx(eop[2], abs=1e-6) == 0.992 * 0.992 * 0.991
+
+        # The difference becomes visible at the boundary
+        assert bop[2] != eop[2]
+
+    def test_invalid_rate_timing_raises_error(self):
+        """Test that invalid rate_timing value raises ValueError."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        with pytest.raises(ValueError, match="Invalid rate_timing value"):
+            af.qx.projection.cumulative_survival(rate_timing="invalid_value")
+
+    def test_conflicting_parameters_raises_error(self):
+        """Test that specifying both rate_timing and non-default start_at raises."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            af.qx.projection.cumulative_survival(
+                rate_timing="end_of_period", start_at=0.95
+            )
+
+    def test_rate_timing_with_default_start_at_is_ok(self):
+        """Test that rate_timing with default start_at=1.0 works (no conflict)."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        # This should work - rate_timing with implicit default start_at
+        af.pols_if = af.qx.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
+
+        result = af.collect()
+        pols_if = result["pols_if"][0]
+
+        assert len(pols_if) == 3
+        assert pytest.approx(pols_if[0], abs=1e-6) == 1.0
+
+    def test_multiple_policies_with_rate_timing(self):
+        """Test rate_timing works correctly with multiple policies."""
+        data = {
+            "policy_id": ["P001", "P002"],
+            "qx": [[0.001, 0.002, 0.003], [0.002, 0.003, 0.004]],
+        }
+        af = ActuarialFrame(data)
+
+        af.pols_if_bop = af.qx.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
+        af.pols_if_eop = af.qx.projection.cumulative_survival(
+            rate_timing="end_of_period"
+        )
+
+        result = af.collect()
+
+        # Policy 1 BOP: [1.0, 0.999, 0.997002]
+        bop_1 = result["pols_if_bop"][0]
+        assert pytest.approx(bop_1[0], abs=1e-6) == 1.0
+        assert pytest.approx(bop_1[1], abs=1e-6) == 0.999
+
+        # Policy 2 EOP: [0.998, 0.995006, 0.991030]
+        eop_2 = result["pols_if_eop"][1]
+        assert pytest.approx(eop_2[0], abs=1e-6) == 0.998
+        assert pytest.approx(eop_2[1], abs=1e-6) == 0.998 * 0.997
+
+
 class TestWithPeriod:
     """Tests for with_period() method."""
 
