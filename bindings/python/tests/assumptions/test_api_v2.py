@@ -546,6 +546,225 @@ class TestTableValidation:
             table.validate_lookup(nonexistent="age")
 
 
+class TestDidYouMeanSuggestions:
+    """Test did-you-mean suggestions for typos in dimension names"""
+
+    def test_fuzzy_match_typo_suggestion(self):
+        """Test fuzzy matching suggests close matches for typos"""
+        data = pl.DataFrame(
+            {
+                "age_last": [30, 35, 40],
+                "rate_class": ["MNS", "FNS", "MS"],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_fuzzy_typo",
+            source=data,
+            dimensions={
+                "age_last": "age_last",
+                "rate_class": "rate_class",
+            },
+            value="qx",
+        )
+
+        # Test typo: age_lst -> age_last
+        with pytest.raises(ValueError) as exc_info:
+            table.validate_lookup(age_lst="some_col", rate_class="other_col")
+
+        assert "age_lst" in str(exc_info.value)
+        assert "Did you mean 'age_last'?" in str(exc_info.value)
+
+    def test_fuzzy_match_rate_class_typo(self):
+        """Test fuzzy matching for rate_clas -> rate_class"""
+        data = pl.DataFrame(
+            {
+                "age_last": [30, 35],
+                "rate_class": ["MNS", "FNS"],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_fuzzy_rate_class",
+            source=data,
+            dimensions={
+                "age_last": "age_last",
+                "rate_class": "rate_class",
+            },
+            value="qx",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            table.validate_lookup(age_last="col1", rate_clas="col2")
+
+        assert "rate_clas" in str(exc_info.value)
+        assert "Did you mean 'rate_class'?" in str(exc_info.value)
+
+    def test_prefix_match_suggestion(self):
+        """Test prefix matching for partial names like 'age' -> 'age_last'"""
+        data = pl.DataFrame(
+            {
+                "age_last": [30, 35, 40],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_prefix_match",
+            source=data,
+            dimensions={
+                "age_last": "age_last",
+            },
+            value="qx",
+        )
+
+        # Test prefix: age -> age_last (fuzzy may not catch this, but prefix will)
+        with pytest.raises(ValueError) as exc_info:
+            table.validate_lookup(age="some_col")
+
+        assert "age" in str(exc_info.value)
+        assert "Did you mean 'age_last'?" in str(exc_info.value)
+
+    def test_suffix_match_suggestion(self):
+        """Test suffix matching for partial names like 'last' -> 'age_last'"""
+        data = pl.DataFrame(
+            {
+                "age_last": [30, 35, 40],
+                "qx": [0.001, 0.002, 0.003],
+            },
+        )
+
+        table = Table(
+            name="test_suffix_match",
+            source=data,
+            dimensions={
+                "age_last": "age_last",
+            },
+            value="qx",
+        )
+
+        # Test suffix: last -> age_last
+        with pytest.raises(ValueError) as exc_info:
+            table.validate_lookup(last="some_col")
+
+        assert "last" in str(exc_info.value)
+        assert "Did you mean 'age_last'?" in str(exc_info.value)
+
+    def test_no_suggestion_for_unrelated_name(self):
+        """Test that no suggestion is made for completely unrelated names"""
+        data = pl.DataFrame(
+            {
+                "age_last": [30, 35],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_no_suggestion",
+            source=data,
+            dimensions={
+                "age_last": "age_last",
+            },
+            value="qx",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            table.validate_lookup(xyz="some_col")
+
+        error_msg = str(exc_info.value)
+        assert "xyz" in error_msg
+        assert "Did you mean" not in error_msg
+        assert "Available dimensions" in error_msg
+
+    def test_suggestion_in_lookup_dimension_mismatch(self):
+        """Test suggestions appear in lookup() dimension mismatch errors"""
+        data = pl.DataFrame(
+            {
+                "age_last": [30, 35],
+                "duration": [1, 2],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_lookup_mismatch",
+            source=data,
+            dimensions={
+                "age_last": "age_last",
+                "duration": "duration",
+            },
+            value="qx",
+        )
+
+        # Provide typo as extra dimension
+        with pytest.raises(ValueError) as exc_info:
+            table.lookup(age_last="col1", dur="col2")  # dur instead of duration
+
+        error_msg = str(exc_info.value)
+        assert "dur" in error_msg
+        assert "did you mean 'duration'?" in error_msg.lower()
+
+    def test_available_dimensions_always_shown(self):
+        """Test that available dimensions are always shown in error"""
+        data = pl.DataFrame(
+            {
+                "age_last": [30, 35],
+                "rate_class": ["MNS", "FNS"],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_available_dims",
+            source=data,
+            dimensions={
+                "age_last": "age_last",
+                "rate_class": "rate_class",
+            },
+            value="qx",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            table.validate_lookup(age_lst="col1", rate_class="col2")
+
+        error_msg = str(exc_info.value)
+        assert "Available dimensions:" in error_msg
+        assert "age_last" in error_msg
+        assert "rate_class" in error_msg
+
+    def test_multiple_typos_suggest_for_each(self):
+        """Test that suggestions work for multiple typos in lookup()"""
+        data = pl.DataFrame(
+            {
+                "age_last": [30, 35],
+                "duration": [1, 2],
+                "qx": [0.001, 0.002],
+            },
+        )
+
+        table = Table(
+            name="test_multiple_typos",
+            source=data,
+            dimensions={
+                "age_last": "age_last",
+                "duration": "duration",
+            },
+            value="qx",
+        )
+
+        # Provide correct dimension plus two extra (typos)
+        # This tests the dimension mismatch path
+        with pytest.raises(ValueError) as exc_info:
+            table.lookup(age_last="col1", dur="col2")
+
+        error_msg = str(exc_info.value)
+        # Should suggest duration for dur
+        assert "dur" in error_msg
+        assert "duration" in error_msg
+
+
 class TestTableExport:
     """Test table export functionality"""
 

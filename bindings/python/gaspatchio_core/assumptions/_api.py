@@ -11,6 +11,7 @@ modular system that separates concerns and improves composability.
 
 from __future__ import annotations
 
+from difflib import get_close_matches
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,38 @@ from .._internal import PyAssumptionTableRegistry
 from ._analysis import TableSchema, analyze_table
 from ._dimensions import DataDimension, Dimension
 from ._utils import _convert_keys_to_f64, _materialise
+
+
+def _suggest_dimension(invalid_name: str, valid_names: list[str]) -> str | None:
+    """Suggest a valid dimension name based on fuzzy matching.
+
+    Uses difflib.get_close_matches for fuzzy matching, with fallback to
+    prefix and suffix matching for cases like 'age' -> 'age_last'.
+
+    Args:
+        invalid_name: The invalid dimension name provided by the user
+        valid_names: List of valid dimension names
+
+    Returns:
+        The suggested dimension name, or None if no close match found
+
+    """
+    # Try fuzzy match first (cutoff=0.6 catches most typos)
+    matches = get_close_matches(invalid_name, valid_names, n=1, cutoff=0.6)
+    if matches:
+        return matches[0]
+
+    # Try prefix matching (e.g., 'age' matches 'age_last')
+    prefix_matches = [v for v in valid_names if v.startswith(invalid_name)]
+    if len(prefix_matches) == 1:
+        return prefix_matches[0]
+
+    # Try suffix matching (e.g., 'last' matches 'age_last')
+    suffix_matches = [v for v in valid_names if v.endswith(invalid_name)]
+    if len(suffix_matches) == 1:
+        return suffix_matches[0]
+
+    return None
 
 # Import for type hints without circular dependency
 
@@ -793,7 +826,15 @@ class Table:
             if missing:
                 error_parts.append(f"Missing dimensions: {sorted(missing)}")
             if extra:
-                error_parts.append(f"Extra dimensions: {sorted(extra)}")
+                # Add suggestions for extra (invalid) dimensions
+                extra_with_suggestions = []
+                for dim in sorted(extra):
+                    suggestion = _suggest_dimension(dim, list(required))
+                    if suggestion:
+                        extra_with_suggestions.append(f"'{dim}' (did you mean '{suggestion}'?)")
+                    else:
+                        extra_with_suggestions.append(f"'{dim}'")
+                error_parts.append(f"Extra dimensions: {extra_with_suggestions}")
 
             raise ValueError(
                 f"Dimension mismatch for table '{self._name}'. "
@@ -1475,11 +1516,15 @@ class Table:
         # Check that all provided dimensions exist
         for dim_name in all_dimensions:
             if dim_name not in self._dimensions:
-                available_dims = ", ".join(self._dimensions.keys())
-                raise ValueError(
-                    f"Invalid dimension '{dim_name}' for table '{self._name}'. "
-                    f"Available dimensions: {available_dims}",
-                )
+                available = list(self._dimensions.keys())
+                suggestion = _suggest_dimension(dim_name, available)
+
+                msg = f"Invalid dimension '{dim_name}' for table '{self._name}'."
+                if suggestion:
+                    msg += f"\n\nDid you mean '{suggestion}'?"
+                msg += f"\n\nAvailable dimensions: {', '.join(available)}"
+
+                raise ValueError(msg)
 
         # Check that all required dimensions are provided
         required_dims = set(self._dimensions.keys())
