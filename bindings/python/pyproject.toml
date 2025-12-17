@@ -24,6 +24,7 @@ dependencies = [
     "fastexcel>=0.14.0",
     "httpx>=0.28.0",
     "python-dotenv>=1.1.0",
+    "ty>=0.0.2",
 ]
 
 [dependency-groups]
