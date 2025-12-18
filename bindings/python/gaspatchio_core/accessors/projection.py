@@ -141,7 +141,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         """Convert mortality rates to cumulative survival probabilities.
 
         Transforms period mortality rates (qx) into cumulative survival probabilities
-        using the formula tpx[t] = (1-qx[0]) * (1-qx[1]) * ... * (1-qx[t]). Essential
+        using the formula `tpx[t] = (1-qx[0]) * (1-qx[1]) * ... * (1-qx[t])`. Essential
         for life insurance projections, reserve calculations, and any actuarial work
         requiring survival probabilities from mortality assumptions.
 
