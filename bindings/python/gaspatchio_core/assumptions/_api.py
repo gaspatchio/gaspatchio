@@ -1,7 +1,7 @@
 # ruff: noqa: TID252, TRY003, EM101, EM102, E501, PLR0913, ANN204, FBT001, FBT002
 # ruff: noqa: C901, PD901, SIM102, PLR0912, F821, SLF001, PGH003, B007, PERF102
 # ruff: noqa: ANN003, BLE001
-# type: ignore[import-untyped,arg-type,name-defined]
+# mypy: disable-error-code="import-untyped,arg-type,name-defined"
 """
 Main assumption table API (v2) - Table class with dimension-based structure.
 

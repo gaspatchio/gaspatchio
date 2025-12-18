@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sys
 from types import ModuleType
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import polars as pl
 
@@ -40,33 +40,6 @@ from .util import execution_mode as execution_mode
 from .util import get_default_mode as get_default_mode
 from .util import set_default_mode as set_default_mode
 
-# Type alias for the assumption_lookup function
-if TYPE_CHECKING:
-    from typing import Union
-
-    type IntoExpr = str | pl.Expr
-
-# Define the main functions that are in __init__.py directly (legacy API)
-def assumption_lookup(*keys: IntoExpr, table_name: str) -> pl.Expr: ...
-def load_assumptions(
-    name: str,
-    source: str | pl.DataFrame,
-    *,
-    id: str | list[str] | None = None,
-    value: str = "rate",
-    value_vars: list[str] | None = None,
-    overflow: str | None = "auto",
-    max_overflow: int = 200,
-    metadata: dict[str, any] | None = None,
-    lookup_keys: list[str] | None = None,
-    additional_keys: dict[str, any] | None = None,
-) -> pl.DataFrame: ...
-def append_assumptions(
-    name: str,
-    source: str | pl.DataFrame,
-    *,
-    additional_keys: dict[str, any],
-) -> pl.DataFrame: ...
 
 if TYPE_CHECKING:
     # Make submodules available for type checking if needed, but not strictly part of __all__

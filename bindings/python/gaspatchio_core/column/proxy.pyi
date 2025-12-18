@@ -32,11 +32,8 @@ if TYPE_CHECKING:
         StringNamespaceProxy as _StringNamespaceProxy,  # ADDED
     )
 
-    # Type alias for DtNamespaceProxy parent, consistent with dt_proxy.py
-    type ParentProxyType = ColumnProxy | ExpressionProxy
-
     # Although __dir__ is added dynamically, including it helps tools
-    def __dir__(self) -> builtins.list[str]: ...
+    def __dir__(self) -> builtins.list[builtins.str]: ...
 
 # Note: DtNamespaceProxy and StringNamespaceProxy are imported from their actual implementations
 # in the namespaces submodule to avoid duplicate maintenance of docstrings and method signatures.
@@ -60,8 +57,8 @@ class _BaseProxy:
     def __floordiv__(self, other: Any) -> ExpressionProxy: ...
     def __mod__(self, other: Any) -> ExpressionProxy: ...
     def __pow__(self, other: Any) -> ExpressionProxy: ...
-    def __eq__(self, other: object) -> ExpressionProxy: ...
-    def __ne__(self, other: object) -> ExpressionProxy: ...
+    def __eq__(self, other: object) -> ExpressionProxy: ...  # type: ignore[override]
+    def __ne__(self, other: object) -> ExpressionProxy: ...  # type: ignore[override]
     def __lt__(self, other: Any) -> ExpressionProxy: ...
     def __le__(self, other: Any) -> ExpressionProxy: ...
     def __gt__(self, other: Any) -> ExpressionProxy: ...
@@ -93,7 +90,7 @@ class _BaseProxy:
     def bin(self) -> ExprBinary: ...
 
     # --- Common Autopatched Methods/Namespaces (Returning ExpressionProxy) ---
-    def alias(self, name: str) -> ExpressionProxy:
+    def alias(self, name: builtins.str) -> ExpressionProxy:
         """Assign a new name to this expression for use in selections and computations.
 
         Creates a new ExpressionProxy with the specified column name. This is
@@ -961,8 +958,8 @@ class _BaseProxy:
         self,
         value: Any = None,
         *,
-        strategy: str = None,
-        limit: int = None,
+        strategy: builtins.str | None = None,
+        limit: builtins.int | None = None,
     ) -> ExpressionProxy:
         """Replace null (missing) values with a specified value or using a filling strategy.
 
@@ -1526,7 +1523,7 @@ class _BaseProxy:
         └───────────┴────────────────────────────┴──────────────────────────┘
         ```
         """
-    def shift(self, n: int = 1, *, fill_value: any = None) -> ExpressionProxy:
+    def shift(self, n: builtins.int = 1, *, fill_value: Any = None) -> ExpressionProxy:
         """Shift values by a specified number of periods.
 
         Moves values forward or backward in the sequence, creating lag or lead variables
@@ -1632,9 +1629,9 @@ class _BaseProxy:
         """
     def over(
         self,
-        partition_by: str | list[str] | pl.Expr | list[pl.Expr],
+        partition_by: builtins.str | builtins.list[builtins.str] | pl.Expr | builtins.list[pl.Expr],
         *,
-        mapping_strategy: str = "join",
+        mapping_strategy: builtins.str = "join",
     ) -> ExpressionProxy:
         """Apply window function over partitions defined by grouping columns.
 

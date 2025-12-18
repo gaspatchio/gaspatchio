@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, Literal, Union
 from .base import BaseColumnAccessor, BaseFrameAccessor
 
 if TYPE_CHECKING:
-    from ..column.proxy import ColumnProxy, ExpressionProxy
+    from ..column.column_proxy import ColumnProxy
+    from ..column.expression_proxy import ExpressionProxy
     from ..frame.base import ActuarialFrame
     from ..typing import IntoExprColumn
 

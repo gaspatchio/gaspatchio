@@ -7,11 +7,9 @@ import polars as pl
 from .base import BaseColumnAccessor, BaseFrameAccessor
 
 if TYPE_CHECKING:
-    from ..column.proxy import (
-        ColumnProxy,
-        ExpressionProxy,
-        IntoExprColumn,
-    )
+    from ..column.column_proxy import ColumnProxy
+    from ..column.expression_proxy import ExpressionProxy
+    from ..typing import IntoExprColumn
     from ..frame.base import ActuarialFrame
 
 class FinanceFrameAccessor(BaseFrameAccessor):

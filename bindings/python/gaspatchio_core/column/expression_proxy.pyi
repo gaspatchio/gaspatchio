@@ -19,9 +19,6 @@ if TYPE_CHECKING:
     from ..accessors.projection import ProjectionColumnAccessor
     from ..frame.base import ActuarialFrame
 
-    # Keep ExpressionProxy for self-reference if needed, though return types are in base
-    from .expression_proxy import ExpressionProxy
-
 # MODIFIED: Inherit from _BaseProxy
 class ExpressionProxy(_BaseProxy):
     """Type stub for ExpressionProxy."""
