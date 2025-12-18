@@ -63,13 +63,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: bindings/python/target
-          key: ${{ runner.os }}-maturin-${{ hashFiles('**/Cargo.lock', 'bindings/python/**/*.rs', 'core/src/**/*.rs') }}
+          key: ${{ runner.os }}-maturin-dev-${{ hashFiles('**/Cargo.lock', 'bindings/python/**/*.rs', 'core/src/**/*.rs') }}
           restore-keys: |
-            ${{ runner.os }}-maturin-
-      - name: Build maturin binary
-        uses: PyO3/maturin-action@v1
-        with:
-          working-directory: bindings/python
+            ${{ runner.os }}-maturin-dev-
       - name: Install Python dependencies
         run: uv sync
         working-directory: bindings/python
