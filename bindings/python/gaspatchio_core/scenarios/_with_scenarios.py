@@ -1,6 +1,6 @@
 # ABOUTME: Implementation of with_scenarios() for scenario expansion.
 # ABOUTME: Cross-joins ActuarialFrame with scenario IDs to enable multi-scenario runs.
-# ruff: noqa: FBT001, FBT002, SLF001
+# ruff: noqa: SLF001
 
 """Implementation of with_scenarios() for scenario expansion."""
 

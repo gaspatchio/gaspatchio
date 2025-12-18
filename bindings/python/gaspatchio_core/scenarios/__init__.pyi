@@ -1,17 +1,25 @@
 # ABOUTME: Type stubs for scenario support module.
 # ABOUTME: Provides type hints for scenario expansion and audit trail functions.
 
-"""Type stubs for scenario support module."""
-
-from __future__ import annotations
-
 from collections.abc import Iterator
-from typing import Literal, TypeVar, overload
+from typing import Any, Literal, overload
 
 from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios.shocks import Shock
-
-T = TypeVar("T", str, int)
+from gaspatchio_core.scenarios.shocks import (
+    AdditiveShock as AdditiveShock,
+    ClipShock as ClipShock,
+    FilterCondition as FilterCondition,
+    FilteredShock as FilteredShock,
+    MaxShock as MaxShock,
+    MinShock as MinShock,
+    MultiplicativeShock as MultiplicativeShock,
+    OverrideShock as OverrideShock,
+    ParameterShock as ParameterShock,
+    PipelineShock as PipelineShock,
+    RelativeFloorShock as RelativeFloorShock,
+    Shock as Shock,
+    TimeConditionalShock as TimeConditionalShock,
+)
 
 def with_scenarios(
     af: ActuarialFrame,
@@ -20,7 +28,7 @@ def with_scenarios(
     *,
     categorical: bool = False,
 ) -> ActuarialFrame: ...
-def batch_scenarios(
+def batch_scenarios[T: (str, int)](
     scenario_ids: list[T],
     batch_size: int = 1000,
 ) -> Iterator[list[T]]: ...
@@ -43,10 +51,28 @@ def sensitivity_analysis(
     scenario_format: str | None = None,
     include_base: bool = False,
 ) -> dict[str, list[Shock]]: ...
+def parse_scenario_config(
+    config: list[str | dict[str, Any]],
+) -> dict[str, list[Shock]]: ...
+def parse_shock_config(config: dict[str, Any]) -> Shock | ParameterShock: ...
 
 __all__: list[str] = [
+    "AdditiveShock",
+    "ClipShock",
+    "FilteredShock",
+    "MaxShock",
+    "MinShock",
+    "MultiplicativeShock",
+    "OverrideShock",
+    "ParameterShock",
+    "PipelineShock",
+    "RelativeFloorShock",
+    "Shock",
+    "TimeConditionalShock",
     "batch_scenarios",
     "describe_scenarios",
+    "parse_scenario_config",
+    "parse_shock_config",
     "sensitivity_analysis",
     "with_scenarios",
 ]
