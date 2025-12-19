@@ -1,5 +1,6 @@
 # ABOUTME: LLM-friendly scenario config parsing for declarative shock specifications.
 # ABOUTME: Converts dict/JSON configs to Shock objects for runtime injection.
+# ruff: noqa: PLR2004, E501, C901, PLR0912, PLR0915
 
 """LLM-friendly scenario config parsing for declarative shock specifications.
 
@@ -129,7 +130,7 @@ def _parse_pipeline_step(step: dict[str, Any]) -> Shock:
     raise ValueError(msg)
 
 
-def parse_shock_config(config: dict[str, Any]) -> Shock:
+def parse_shock_config(config: dict[str, Any]) -> Shock | ParameterShock:
     """
     Parse a single shock configuration dict into a Shock object.
 
@@ -178,13 +179,7 @@ def parse_shock_config(config: dict[str, Any]) -> Shock:
     **Solvency II lapse up (multiply then cap):**
 
     ```python
-    config = {
-        "table": "lapse",
-        "pipeline": [
-            {"multiply": 1.5},
-            {"clip": {"max": 1.0}}
-        ]
-    }
+    config = {"table": "lapse", "pipeline": [{"multiply": 1.5}, {"clip": {"max": 1.0}}]}
     shock = parse_shock_config(config)
     # Returns: PipelineShock(...)
     ```
@@ -200,13 +195,7 @@ def parse_shock_config(config: dict[str, Any]) -> Shock:
     **Solvency II lapse down (max of two options):**
 
     ```python
-    config = {
-        "table": "lapse",
-        "max": [
-            {"multiply": 0.5},
-            {"add": -0.2}
-        ]
-    }
+    config = {"table": "lapse", "max": [{"multiply": 0.5}, {"add": -0.2}]}
     shock = parse_shock_config(config)
     # Returns: MaxShock(...)
     ```
@@ -214,11 +203,7 @@ def parse_shock_config(config: dict[str, Any]) -> Shock:
     **Dimension-filtered shock:**
 
     ```python
-    config = {
-        "table": "lapse",
-        "multiply": 1.25,
-        "where": {"duration": {"lte": 3}}
-    }
+    config = {"table": "lapse", "multiply": 1.25, "where": {"duration": {"lte": 3}}}
     shock = parse_shock_config(config)
     # Returns: FilteredShock(...)
     ```
@@ -226,11 +211,7 @@ def parse_shock_config(config: dict[str, Any]) -> Shock:
     **Time-conditional shock:**
 
     ```python
-    config = {
-        "table": "lapse",
-        "add": 0.40,
-        "when": {"t": {"eq": 0}}
-    }
+    config = {"table": "lapse", "add": 0.40, "when": {"t": {"eq": 0}}}
     shock = parse_shock_config(config)
     # Returns: TimeConditionalShock(...)
     ```
@@ -272,7 +253,9 @@ def parse_shock_config(config: dict[str, Any]) -> Shock:
             raise ValueError(msg)
 
         shock_steps = tuple(_parse_pipeline_step(step) for step in steps)
-        base_shock: Shock = PipelineShock(shocks=shock_steps, table=table, column=column)
+        base_shock: Shock = PipelineShock(
+            shocks=shock_steps, table=table, column=column
+        )
 
     # Check if this is a max/min operation at the top level
     elif "max" in config:
@@ -305,7 +288,9 @@ def parse_shock_config(config: dict[str, Any]) -> Shock:
         has_clip = "clip" in config
 
         if len(operations_found) == 0 and not has_clip:
-            all_ops = SHOCK_OPERATIONS | EXTENDED_OPERATIONS | {"pipeline", "max", "min"}
+            all_ops = (
+                SHOCK_OPERATIONS | EXTENDED_OPERATIONS | {"pipeline", "max", "min"}
+            )
             msg = (
                 f"Shock config must include an operation: {all_ops}. "
                 f"Got keys: {list(config.keys())}"
@@ -325,7 +310,9 @@ def parse_shock_config(config: dict[str, Any]) -> Shock:
             value = config[operation]
 
             if operation == "multiply":
-                base_shock = MultiplicativeShock(factor=value, table=table, column=column)
+                base_shock = MultiplicativeShock(
+                    factor=value, table=table, column=column
+                )
             elif operation == "add":
                 base_shock = AdditiveShock(delta=value, table=table, column=column)
             else:  # "set"
@@ -373,7 +360,7 @@ def parse_shock_config(config: dict[str, Any]) -> Shock:
 
 def parse_scenario_config(
     config: list[str | dict[str, Any]],
-) -> dict[str, list[Shock]]:
+) -> dict[str, list[Shock | ParameterShock]]:
     """
     Parse a full scenario configuration into shock mappings.
 
@@ -450,14 +437,14 @@ def parse_scenario_config(
         msg = "Scenario config cannot be empty. Provide at least one scenario."
         raise ValueError(msg)
 
-    result: dict[str, list[Shock]] = {}
+    result: dict[str, list[Shock | ParameterShock]] = {}
     seen_ids: set[str] = set()
 
     for item in config:
         if isinstance(item, str):
             # Simple string scenario ID with no shocks
             scenario_id = item
-            shocks: list[Shock] = []
+            shocks: list[Shock | ParameterShock] = []
         elif isinstance(item, dict):
             # Dict scenario with optional shocks
             if "id" not in item:

@@ -8,7 +8,6 @@ from gaspatchio_core.frame import ActuarialFrame
 from gaspatchio_core.scenarios.shocks import (
     AdditiveShock as AdditiveShock,
     ClipShock as ClipShock,
-    FilterCondition as FilterCondition,
     FilteredShock as FilteredShock,
     MaxShock as MaxShock,
     MinShock as MinShock,
@@ -53,7 +52,7 @@ def sensitivity_analysis(
 ) -> dict[str, list[Shock]]: ...
 def parse_scenario_config(
     config: list[str | dict[str, Any]],
-) -> dict[str, list[Shock]]: ...
+) -> dict[str, list[Shock | ParameterShock]]: ...
 def parse_shock_config(config: dict[str, Any]) -> Shock | ParameterShock: ...
 
 __all__: list[str] = [
