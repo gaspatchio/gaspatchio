@@ -838,4 +838,215 @@ mod excel_verification {
         let _eurobond_frac = test_yearfrac(settlement, maturity, 4);
         let _money_market_frac = test_yearfrac(settlement, maturity, 2);
     }
+
+    // =======================================================================
+    // Feb 29 (Leap Day) Edge Case Tests - GSP-77
+    // =======================================================================
+    //
+    // These tests verify correct handling of Feb 29 (leap day) dates, which
+    // require special logic in the Actual/Actual (basis 1) calculation.
+    //
+    // Key insight: When the start date IS Feb 29 and the period is exactly
+    // 365 days, this represents a full year because Feb 29 doesn't exist in
+    // non-leap years. The "anniversary" of Feb 29 is Feb 28 the next year.
+    //
+    // This was identified in GSP-77 where policies with Feb 29 effective dates
+    // had 0% match rate due to this edge case.
+
+    #[test]
+    fn test_feb29_to_feb28_is_one_year() {
+        // The critical test case from GSP-77
+        // Feb 29 2024 -> Feb 28 2025 = 365 days, should be exactly 1.0
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 2, 28).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_feb29_to_mar1_is_one_year() {
+        // Feb 29 2024 -> Mar 1 2025 = 366 days
+        // This is also essentially "one year" from Feb 29
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 3, 1).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_feb28_to_feb29_is_one_year() {
+        // Feb 28 2023 -> Feb 29 2024 = 366 days
+        // Going TO a leap day should use 366 as denominator
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_mar1_to_feb29_less_than_one_year() {
+        // Mar 1 2023 -> Feb 29 2024 = 365 days
+        // This is NOT a full year (starts after Feb 29 2023 which doesn't exist)
+        // Should be 365/366 = 0.9972677...
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2023, 3, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 365.0 / 366.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_feb29_same_year_calculations() {
+        // Same-year calculations starting from Feb 29
+        // These should use 366 as the year length
+
+        // Feb 29 -> Mar 1 (1 day)
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 3, 1).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 1.0 / 366.0, epsilon = 1e-10);
+
+        // Feb 29 -> Dec 31 (306 days)
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 12, 31).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 306.0 / 366.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_feb29_multi_year_calculations() {
+        // Multi-year calculations starting from Feb 29
+        // These use average year length
+
+        // Feb 29 2024 -> Dec 31 2025 (671 days)
+        // Average year = (366 + 365) / 2 = 365.5
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 12, 31).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 671.0 / 365.5, epsilon = 1e-10);
+
+        // Feb 29 2024 -> Feb 28 2026 (730 days)
+        // Years: 2024, 2025, 2026 = (366 + 365 + 365) / 3 = 365.333...
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 2, 28).unwrap(),
+            1,
+        );
+        let avg_year = (366.0 + 365.0 + 365.0) / 3.0;
+        assert_relative_eq!(result, 730.0 / avg_year, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_feb29_to_feb29_four_years() {
+        // Feb 29 2024 -> Feb 29 2028 (1461 days)
+        // This is exactly 4 years (leap to leap)
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            NaiveDate::from_ymd_opt(2028, 2, 29).unwrap(),
+            1,
+        );
+        // Years: 2024, 2025, 2026, 2027, 2028 = (366 + 365 + 365 + 365 + 366) / 5
+        let avg_year = (366.0 + 365.0 + 365.0 + 365.0 + 366.0) / 5.0;
+        assert_relative_eq!(result, 1461.0 / avg_year, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_feb29_short_periods() {
+        // Short periods from Feb 29 that don't reach anniversary
+
+        // Feb 29 -> Feb 27 next year (364 days)
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 2, 27).unwrap(),
+            1,
+        );
+        // Contains Feb 29 (the start), so uses 366
+        assert_relative_eq!(result, 364.0 / 366.0, epsilon = 1e-10);
+
+        // Feb 29 -> Jan 1 next year (307 days)
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            1,
+        );
+        // Contains Feb 29 (the start), so uses 366
+        assert_relative_eq!(result, 307.0 / 366.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_feb29_other_bases() {
+        // Feb 29 handling for other bases (0, 2, 3, 4)
+        // These don't have the same complexity as basis 1
+
+        let feb29 = NaiveDate::from_ymd_opt(2024, 2, 29).unwrap();
+        let feb28_next = NaiveDate::from_ymd_opt(2025, 2, 28).unwrap();
+
+        // Basis 0 (US 30/360): Feb 29 is treated as Feb 30, Feb 28 (last day of Feb) also as Feb 30
+        // So Feb 30 -> Feb 30 = exactly 12 months = 360/360 = 1.0
+        let result = test_yearfrac(feb29, feb28_next, 0);
+        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+
+        // Basis 2 (Actual/360): Just actual days / 360
+        let result = test_yearfrac(feb29, feb28_next, 2);
+        assert_relative_eq!(result, 365.0 / 360.0, epsilon = 1e-10);
+
+        // Basis 3 (Actual/365): Just actual days / 365
+        let result = test_yearfrac(feb29, feb28_next, 3);
+        assert_relative_eq!(result, 365.0 / 365.0, epsilon = 1e-10);
+
+        // Basis 4 (European 30/360): Feb 29 stays as 29, Feb 28 stays as 28
+        // Feb 29 -> Feb 28 = (28 - 29) + 12 * 30 = 359 days in 30/360
+        let result = test_yearfrac(feb29, feb28_next, 4);
+        assert_relative_eq!(result, 359.0 / 360.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_crossing_feb29_vs_not_crossing() {
+        // Verify the difference between periods that cross Feb 29 and those that don't
+
+        // Jul 1 2019 -> Jul 1 2020: crosses Feb 29 2020
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2019, 7, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2020, 7, 1).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+
+        // Jul 1 2020 -> Jul 1 2021: does NOT cross Feb 29
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2020, 7, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2021, 7, 1).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+
+        // Mar 1 2023 -> Mar 1 2024: crosses Feb 29 2024
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2023, 3, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 3, 1).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+
+        // Mar 1 2024 -> Mar 1 2025: does NOT cross Feb 29
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2024, 3, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 3, 1).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+    }
 }
