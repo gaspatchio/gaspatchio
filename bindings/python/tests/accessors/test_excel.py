@@ -4,6 +4,7 @@ import datetime
 
 import polars as pl
 import pytest
+from openpyxl.utils.datetime import MAC_EPOCH, from_excel
 from polars.testing import assert_series_equal
 
 from gaspatchio_core import ActuarialFrame
@@ -87,46 +88,39 @@ def test_from_excel_serial_invalid_epoch():
 
 
 # =============================================================================
-# Comprehensive from_excel_serial tests with hardcoded expected values
-# All expected values have been verified against openpyxl.utils.datetime.from_excel
+# Comprehensive from_excel_serial tests comparing with openpyxl reference
 # =============================================================================
 
 
-class TestFromExcelSerialBoundaryDates:
-    """Tests for critical boundary dates around Excel's 1900 leap year bug.
+class TestFromExcelSerialAgainstOpenpyxl:
+    """Tests that verify from_excel_serial matches openpyxl's from_excel function.
 
-    All expected values verified against openpyxl.utils.datetime.from_excel.
+    openpyxl is the reference implementation for Excel serial date conversion.
+    These tests ensure our implementation handles Excel's 1900 leap year bug correctly.
     """
 
     @pytest.mark.parametrize(
-        "serial,expected_date,description",
+        "serial,description",
         [
-            (1, datetime.date(1900, 1, 1), "First valid serial - 1900-01-01"),
-            (2, datetime.date(1900, 1, 2), "Second day - 1900-01-02"),
-            (59, datetime.date(1900, 2, 28), "Day before Excel's phantom leap day"),
-            (60, datetime.date(1900, 2, 28), "Excel's phantom 1900-02-29 → 1900-02-28"),
-            (61, datetime.date(1900, 3, 1), "Day after phantom leap day - 1900-03-01"),
-            (62, datetime.date(1900, 3, 2), "Two days after phantom - 1900-03-02"),
+            (1, "First valid serial - 1900-01-01"),
+            (2, "Second day - 1900-01-02"),
+            (59, "Day before Excel's phantom leap day - 1900-02-28"),
+            (60, "Excel's phantom 1900-02-29 - should map to 1900-02-28"),
+            (61, "Day after phantom leap day - 1900-03-01"),
+            (62, "Two days after phantom - 1900-03-02"),
         ],
     )
-    def test_boundary_dates_around_excel_leap_year_bug(
-        self, serial, expected_date, description
-    ):
+    def test_boundary_dates_around_excel_leap_year_bug(self, serial, description):
         """Test critical boundary dates around Excel's 1900 leap year bug."""
+        expected = from_excel(serial).date()
+
         af = ActuarialFrame({"serial": [serial]})
         af = af.with_columns(
             af["serial"].excel.from_excel_serial().alias("converted_date")
         )
         result = af.collect()["converted_date"][0]
 
-        assert result == expected_date, f"{description}: expected {expected_date}, got {result}"
-
-
-class TestFromExcelSerialGSP78:
-    """Tests for GSP-78 issue that exposed the off-by-one bug.
-
-    All expected values verified against openpyxl.utils.datetime.from_excel.
-    """
+        assert result == expected, f"{description}: expected {expected}, got {result}"
 
     @pytest.mark.parametrize(
         "serial,expected_date",
@@ -140,6 +134,10 @@ class TestFromExcelSerialGSP78:
     )
     def test_gsp78_issue_test_cases(self, serial, expected_date):
         """Test specific cases from GSP-78 issue that exposed the off-by-one bug."""
+        # Verify our expected values match openpyxl
+        openpyxl_date = from_excel(serial).date()
+        assert openpyxl_date == expected_date, "Sanity check: openpyxl disagrees"
+
         af = ActuarialFrame({"serial": [serial]})
         af = af.with_columns(
             af["serial"].excel.from_excel_serial().alias("converted_date")
@@ -147,84 +145,57 @@ class TestFromExcelSerialGSP78:
         result = af.collect()["converted_date"][0]
 
         assert result == expected_date, f"Serial {serial}: expected {expected_date}, got {result}"
-
-
-class TestFromExcelSerialVariousDates:
-    """Tests for various dates across different eras.
-
-    All expected values verified against openpyxl.utils.datetime.from_excel.
-    """
 
     @pytest.mark.parametrize(
-        "serial,expected_date",
+        "serial",
         [
             # Modern dates (post-2000)
-            (36526, datetime.date(2000, 1, 1)),
-            (40179, datetime.date(2010, 1, 1)),
-            (43831, datetime.date(2020, 1, 1)),
-            (45292, datetime.date(2024, 1, 1)),
+            36526,  # 2000-01-01
+            40179,  # 2010-01-01
+            43831,  # 2020-01-01
+            45292,  # 2024-01-01
             # Historical dates
-            (1, datetime.date(1900, 1, 1)),
-            (366, datetime.date(1900, 12, 31)),
-            (367, datetime.date(1901, 1, 1)),
-            (10000, datetime.date(1927, 5, 18)),
-            (20000, datetime.date(1954, 10, 3)),
-            (30000, datetime.date(1982, 2, 18)),
-            # Random mid-year
-            (693, datetime.date(1901, 11, 23)),
+            1,      # 1900-01-01
+            366,    # 1900-12-31
+            367,    # 1901-01-01
+            10000,  # 1927-05-18
+            20000,  # 1954-10-03
+            30000,  # 1982-02-18
+            # Year boundaries
+            693,    # 1901-11-23
             # Large future dates
-            (50000, datetime.date(2036, 11, 21)),
-            (60000, datetime.date(2064, 4, 8)),
+            50000,  # 2036-11-21
+            60000,  # 2064-04-08
         ],
     )
-    def test_various_dates(self, serial, expected_date):
-        """Test that various dates across different eras are correct."""
+    def test_various_dates_match_openpyxl(self, serial):
+        """Test that various dates across different eras match openpyxl."""
+        expected = from_excel(serial).date()
+
         af = ActuarialFrame({"serial": [serial]})
         af = af.with_columns(
             af["serial"].excel.from_excel_serial().alias("converted_date")
         )
         result = af.collect()["converted_date"][0]
 
-        assert result == expected_date, f"Serial {serial}: expected {expected_date}, got {result}"
+        assert result == expected, f"Serial {serial}: expected {expected}, got {result}"
 
-
-class TestFromExcelSerialBatchAndEdgeCases:
-    """Tests for batch conversion and edge cases.
-
-    All expected values verified against openpyxl.utils.datetime.from_excel.
-    """
-
-    def test_batch_conversion(self):
-        """Test batch conversion of many serials."""
-        # Pre-computed expected values (verified against openpyxl)
-        test_data = [
-            (1, datetime.date(1900, 1, 1)),
-            (59, datetime.date(1900, 2, 28)),
-            (60, datetime.date(1900, 2, 28)),
-            (61, datetime.date(1900, 3, 1)),
-            (100, datetime.date(1900, 4, 9)),
-            (32331, datetime.date(1988, 7, 7)),
-            (43831, datetime.date(2020, 1, 1)),
-            (44197, datetime.date(2021, 1, 1)),
-            (44562, datetime.date(2022, 1, 1)),
-            (44927, datetime.date(2023, 1, 1)),
-            (45777, datetime.date(2025, 4, 30)),
-            (36526, datetime.date(2000, 1, 1)),
-            (40179, datetime.date(2010, 1, 1)),
-            (45292, datetime.date(2024, 1, 1)),
-            (50000, datetime.date(2036, 11, 21)),
+    def test_batch_conversion_matches_openpyxl(self):
+        """Test batch conversion of many serials matches openpyxl."""
+        # Generate a range of test serials
+        test_serials = list(range(1, 100)) + list(range(55, 70)) + [
+            32331, 43831, 44197, 44562, 44927, 45777,
+            36526, 40179, 45292, 50000,
         ]
 
-        serials = [s for s, _ in test_data]
-        expected_dates = [d for _, d in test_data]
-
-        af = ActuarialFrame({"serial": serials})
+        af = ActuarialFrame({"serial": test_serials})
         af = af.with_columns(
             af["serial"].excel.from_excel_serial().alias("converted_date")
         )
         results = af.collect()["converted_date"].to_list()
 
-        for serial, result, expected in zip(serials, results, expected_dates):
+        for serial, result in zip(test_serials, results):
+            expected = from_excel(serial).date()
             assert result == expected, f"Serial {serial}: expected {expected}, got {result}"
 
     def test_fractional_serials_extract_date_correctly(self):
@@ -277,8 +248,6 @@ class TestFromExcelSerialBatchAndEdgeCases:
         GSP-78 was discovered because month-end dates (Apr 30, Aug 30, etc.) were
         being converted incorrectly, causing YEARFRAC and subsequent mortality
         calculations to be wrong.
-
-        All expected values verified against openpyxl.utils.datetime.from_excel.
         """
         # Month-end dates that are often used as policy effective dates
         month_end_serials = [
@@ -290,6 +259,10 @@ class TestFromExcelSerialBatchAndEdgeCases:
         ]
 
         for serial, expected in month_end_serials:
+            # Verify against openpyxl
+            openpyxl_date = from_excel(serial).date()
+            assert openpyxl_date == expected, f"Sanity check failed for serial {serial}"
+
             af = ActuarialFrame({"serial": [serial]})
             af = af.with_columns(
                 af["serial"].excel.from_excel_serial().alias("converted_date")
@@ -299,10 +272,7 @@ class TestFromExcelSerialBatchAndEdgeCases:
 
 
 class TestFromExcelSerial1904Epoch:
-    """Tests for the 1904 epoch (Mac Excel).
-
-    All expected values verified against openpyxl.utils.datetime.from_excel with MAC_EPOCH.
-    """
+    """Tests for the 1904 epoch (Mac Excel)."""
 
     def test_1904_epoch_serial_1(self):
         """Test that serial 1 in 1904 epoch is 1904-01-02."""
@@ -317,17 +287,13 @@ class TestFromExcelSerial1904Epoch:
         assert result == expected
 
     @pytest.mark.parametrize(
-        "serial,expected_date",
-        [
-            (1, datetime.date(1904, 1, 2)),
-            (366, datetime.date(1905, 1, 1)),
-            (1462, datetime.date(1908, 1, 2)),
-            (10000, datetime.date(1931, 5, 19)),
-            (42370, datetime.date(2020, 1, 2)),
-        ],
+        "serial",
+        [1, 366, 1462, 10000, 42370],
     )
-    def test_1904_epoch_various_dates(self, serial, expected_date):
-        """Test various dates in 1904 epoch."""
+    def test_1904_epoch_various_dates(self, serial):
+        """Test various dates in 1904 epoch match openpyxl."""
+        expected = from_excel(serial, epoch=MAC_EPOCH).date()
+
         af = ActuarialFrame({"serial": [serial]})
         af = af.with_columns(
             af["serial"]
@@ -336,4 +302,4 @@ class TestFromExcelSerial1904Epoch:
         )
         result = af.collect()["converted_date"][0]
 
-        assert result == expected_date, f"Serial {serial}: expected {expected_date}, got {result}"
+        assert result == expected, f"Serial {serial}: expected {expected}, got {result}"
