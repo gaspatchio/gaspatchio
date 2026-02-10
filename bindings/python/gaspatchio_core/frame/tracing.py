@@ -86,8 +86,8 @@ def build_trace_decorator(frame_instance: ActuarialFrame) -> Callable:  # type: 
                     else:
                         logger.debug("No operations captured during trace.")
 
-                    # Return frame instance (state unchanged in debug mode)
-                    return frame_instance
+                    # Return result if model created a new frame, otherwise original
+                    return frame_instance if result is None else result
 
                 finally:
                     # Restore original tracing state

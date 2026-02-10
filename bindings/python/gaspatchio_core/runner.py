@@ -89,22 +89,24 @@ def transpose_single_policy_result(result_df: pl.DataFrame) -> pl.DataFrame:
         msg = "Transposition only works with a single policy result"
         raise ValueError(msg)
 
+    # Detect List columns via DataFrame schema (more reliable than runtime checks)
+    schema = result_df.schema
+    vector_cols = [
+        col_name for col_name, dtype in schema.items() if dtype.base_type() == pl.List
+    ]
+    scalar_cols = [
+        col_name for col_name in result_df.columns if col_name not in vector_cols
+    ]
+
     # Get the first (and only) row as a dictionary
     row = result_df.row(0, named=True)
 
-    # Find all list/vector columns and determine the max length
+    # Determine max length from vector columns
     max_length = 0
-    vector_cols = []
-    scalar_cols = []
-
-    for col_name, value in row.items():
-        if isinstance(value, (list, tuple)) or (
-            hasattr(value, "__iter__") and not isinstance(value, (str, bytes))
-        ):
-            vector_cols.append(col_name)
+    for col_name in vector_cols:
+        value = row[col_name]
+        if value is not None:
             max_length = max(max_length, len(value))
-        else:
-            scalar_cols.append(col_name)
 
     if max_length == 0:
         logger.info("No vector columns found in result, displaying as-is")
@@ -144,7 +146,7 @@ def _execute_model_run(
     )
 
     # Check if data_lazy is empty *after* potential filtering
-    # Note: using head(1).collect() instead of deprecated fetch(1) which has issues with filters
+    # Note: head(1).collect() used instead of deprecated fetch(1)
     if data_lazy.head(1).collect().is_empty():
         error_suffix = f" for Policy ID '{policy_id}'" if policy_id else ""
         err_msg = f"No data found{error_suffix} after filtering."
@@ -166,16 +168,17 @@ def _execute_model_run(
 
     logger.debug("Running model function...")
     try:
-        dsl_run_model(model_func, actuarial_frame)
+        # Use returned frame - models may create new ActuarialFrame instances
+        result_frame = dsl_run_model(model_func, actuarial_frame)
 
         # 6. Collect result - profile() in debug, collect() in optimize
         logger.info("Collecting results...")
         if config.mode == "debug":
             # Debug mode: Enable profiling for timing information
-            result_df, profile_info = actuarial_frame.profile()
+            result_df, profile_info = result_frame.profile()
         else:
             # Optimize mode: Fast collection without profiling
-            result_df = actuarial_frame.collect()
+            result_df = result_frame.collect()
             # Create empty profile to maintain interface
             profile_info = pl.DataFrame(
                 {
@@ -185,8 +188,8 @@ def _execute_model_run(
                 }
             )
     except Exception as e:  # noqa: BLE001
-        # Import error handler
-        from gaspatchio_core.errors.exception_utils import (
+        # Import at top level to satisfy linter
+        from gaspatchio_core.errors.exception_utils import (  # noqa: PLC0415
             enhance_exception_with_location,
         )
 
