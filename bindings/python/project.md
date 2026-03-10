@@ -304,6 +304,10 @@ LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true gspio run-model model.py data.parquet
 LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true gspio run-model model.py data.parquet --output-file results.parquet
 ```
 
+## Related Repositories
+- **gaspatchio-docs**: `../../../gaspatchio-docs` — MkDocs documentation site with AI-optimized content
+- **gaspatchio-models**: `../../../gaspatchio-models` — Example actuarial models demonstrating framework usage
+
 ## High-Level Architecture
 
 ### Python Package Structure
