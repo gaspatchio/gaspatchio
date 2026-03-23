@@ -1,7 +1,9 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use gaspatchio_core_lib::polars_functions::accumulate;
 use polars::prelude::*;
 
+/// Benchmark 1: Scale by number of policies (rows), fixed 240-month projection.
+/// Tests how the kernel scales with portfolio size.
 fn bench_accumulate(c: &mut Criterion) {
     let mut group = c.benchmark_group("accumulate");
 
@@ -10,8 +12,6 @@ fn bench_accumulate(c: &mut Criterion) {
             BenchmarkId::from_parameter(num_rows),
             &num_rows,
             |b, &num_rows| {
-                // Setup: Create initial values and list columns
-                // Each row has 240 elements (typical actuarial projection - 20 years monthly)
                 let initial_data: Vec<f64> = (0..num_rows).map(|i| 100.0 + (i as f64)).collect();
                 let initial = Series::new("initial".into(), initial_data);
 
@@ -36,8 +36,10 @@ fn bench_accumulate(c: &mut Criterion) {
                 let add_series = add_list.into_series();
 
                 b.iter(|| {
-                    accumulate(&[initial.clone(), multiply_series.clone(), add_series.clone()])
-                        .unwrap();
+                    let _ = black_box(
+                        accumulate(&[initial.clone(), multiply_series.clone(), add_series.clone()])
+                            .unwrap(),
+                    );
                 });
             },
         );
@@ -46,6 +48,8 @@ fn bench_accumulate(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark 2: Scale by projection length, fixed 10K policies.
+/// Tests how the kernel scales with projection horizon.
 fn bench_accumulate_varying_projection_length(c: &mut Criterion) {
     let mut group = c.benchmark_group("accumulate_projection_length");
     let num_rows = 10_000;
@@ -80,8 +84,10 @@ fn bench_accumulate_varying_projection_length(c: &mut Criterion) {
                 let add_series = add_list.into_series();
 
                 b.iter(|| {
-                    accumulate(&[initial.clone(), multiply_series.clone(), add_series.clone()])
-                        .unwrap();
+                    let _ = black_box(
+                        accumulate(&[initial.clone(), multiply_series.clone(), add_series.clone()])
+                            .unwrap(),
+                    );
                 });
             },
         );
