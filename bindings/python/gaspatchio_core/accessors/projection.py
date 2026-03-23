@@ -1386,3 +1386,102 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             raise ValueError(msg)
 
         return ExpressionProxy(result_expr, parent_af)
+
+    def accumulate(
+        self,
+        *,
+        initial: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        multiply: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        add: str | pl.Expr | ExpressionProxy | ColumnProxy,
+    ) -> ExpressionProxy:
+        """Accumulate values using a linear recurrence.
+
+        Computes ``state[t] = state[t-1] * multiply[t] + add[t]`` for each
+        time step, returning all intermediate states as a list column. This is
+        the core primitive for account value rollforwards and other
+        state-dependent actuarial projections where cashflows at time *t*
+        depend on accumulated state at *t-1*.
+
+        The actuary pre-computes the multiplicative and additive components in
+        Python, keeping business logic readable, while the Rust kernel handles
+        the tight sequential loop per policy. Polars parallelises across
+        policies automatically.
+
+        !!! note "When to use"
+            * **Account Value Rollforward:** Accumulate account values where
+                premiums, fees, and investment returns interact with the running
+                balance each period.
+            * **Reserve Accumulation:** Build up statutory or GAAP reserves
+                period-by-period using interest and cashflow assumptions.
+            * **Universal Life Projections:** Model COI deductions, crediting
+                rates, and expense charges that depend on the current account
+                value via Picard iteration with ``accumulate()``.
+            * **Unit-Linked Fund Projection:** Project fund values forward
+                where management charges are deducted as a proportion of the
+                current fund value.
+
+        Parameters
+        ----------
+        initial : str or pl.Expr or ExpressionProxy or ColumnProxy
+            Initial state per policy (e.g., starting account value). A scalar
+            column with one value per row. Broadcasts when length is 1.
+        multiply : str or pl.Expr or ExpressionProxy or ColumnProxy
+            Multiplicative growth factor per time step (e.g.,
+            ``1 + interest_rate``). A list column with one list per policy.
+        add : str or pl.Expr or ExpressionProxy or ColumnProxy
+            Additive flow per time step (e.g., premiums minus charges, grown
+            by the interest factor). A list column with one list per policy.
+            Inner list lengths must match ``multiply``.
+
+        Returns
+        -------
+        ExpressionProxy
+            List column of accumulated values at each time step.
+
+        Examples
+        --------
+        **Simple Account Value Rollforward**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "av_init": [1000.0, 2000.0],
+            "growth": [[1.01, 1.01, 1.01], [1.02, 1.02, 1.02]],
+            "net_flow": [[50.0, 50.0, 50.0], [100.0, 100.0, 100.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.av = af.growth.projection.accumulate(
+            initial="av_init",
+            multiply="growth",
+            add="net_flow",
+        )
+        print(af.collect()["av"].to_list())
+        # [[1060.0, 1120.6, 1181.8059999999998], [2140.0, 2282.8, 2428.456]]
+        ```
+
+        """
+        from gaspatchio_core.column.column_proxy import ColumnProxy
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio_core.functions.vector import accumulate as _accumulate
+
+        parent_af = self._get_parent_frame()
+
+        def _to_expr(
+            param: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        ) -> pl.Expr:
+            if isinstance(param, ExpressionProxy):
+                return param._expr  # noqa: SLF001
+            if isinstance(param, ColumnProxy):
+                return pl.col(param.name)
+            if isinstance(param, str):
+                return pl.col(param)
+            return param
+
+        initial_expr = _to_expr(initial)
+        multiply_expr = _to_expr(multiply)
+        add_expr = _to_expr(add)
+
+        result_expr = _accumulate(initial_expr, multiply_expr, add_expr)
+        return ExpressionProxy(result_expr, parent_af)

@@ -142,6 +142,50 @@ def round_to_int(expr: IntoExprColumn) -> pl.Expr:
     )
 
 
+def accumulate(initial: pl.Expr, multiply: pl.Expr, add: pl.Expr) -> pl.Expr:
+    """Compute linear recurrence: out[t] = out[t-1] * multiply[t] + add[t].
+
+    Produces all intermediate states of the accumulation, returning a list
+    column with one value per time step per policy.
+
+    Parameters
+    ----------
+    initial
+        Scalar initial state per row (e.g., initial account value per policy).
+    multiply
+        List column of multiplicative factors per time step.
+    add
+        List column of additive flows per time step.
+
+    Returns
+    -------
+    pl.Expr
+        List column of accumulated values.
+
+    Examples
+    --------
+    >>> import polars as pl
+    >>> from gaspatchio_core.functions.vector import accumulate
+    >>> df = pl.DataFrame({
+    ...     "initial": [100.0],
+    ...     "multiply": [[1.01, 1.01, 1.01]],
+    ...     "add": [[10.0, 10.0, 10.0]],
+    ... })
+    >>> df.with_columns(
+    ...     accumulate(
+    ...         pl.col("initial"), pl.col("multiply"), pl.col("add")
+    ...     ).alias("result")
+    ... )
+
+    """
+    return register_plugin_function(
+        plugin_path=LIB,
+        function_name="accumulate",
+        args=[initial, multiply, add],
+        is_elementwise=True,
+    )
+
+
 def list_pow(base: pl.Expr, exp: pl.Expr) -> pl.Expr:
     """Element-wise power operation on list columns.
 

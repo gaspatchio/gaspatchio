@@ -50,3 +50,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         *,
         timing: "Literal['beginning_of_period', 'end_of_period']" = "end_of_period",
     ) -> "ExpressionProxy": ...
+    def accumulate(
+        self,
+        *,
+        initial: "str | pl.Expr | ExpressionProxy | ColumnProxy",
+        multiply: "str | pl.Expr | ExpressionProxy | ColumnProxy",
+        add: "str | pl.Expr | ExpressionProxy | ColumnProxy",
+    ) -> "ExpressionProxy": ...

@@ -66,6 +66,20 @@ pub fn list_clip(inputs: &[Series]) -> PolarsResult<Series> {
     gaspatchio_core_lib::polars_functions::list_clip(inputs)
 }
 
+/// Output type for accumulate: List<Float64>
+fn accumulate_output(_: &[Field]) -> PolarsResult<Field> {
+    Ok(Field::new(
+        PlSmallStr::from_static("accumulate"),
+        DataType::List(Box::new(DataType::Float64)),
+    ))
+}
+
+/// PyO3 wrapper for accumulate - linear recurrence on list columns
+#[polars_expr(output_type_func = accumulate_output)]
+pub fn accumulate(inputs: &[Series]) -> PolarsResult<Series> {
+    gaspatchio_core_lib::polars_functions::accumulate(inputs)
+}
+
 /// Output type for list_conditional: List<Float64>
 fn list_conditional_output(input_fields: &[Field]) -> PolarsResult<Field> {
     let name = input_fields
