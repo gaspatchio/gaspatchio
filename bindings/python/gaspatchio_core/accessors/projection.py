@@ -1397,19 +1397,41 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         """Accumulate values using a linear recurrence.
 
         Computes ``state[t] = state[t-1] * multiply[t] + add[t]`` for each
-        time step, returning all intermediate states as a list column.
+        time step, returning all intermediate states as a list column. This is
+        the core primitive for account value rollforwards and other
+        state-dependent actuarial projections where cashflows at time *t*
+        depend on accumulated state at *t-1*.
 
-        This is the core primitive for account value rollforwards and other
-        state-dependent actuarial projections.
+        The actuary pre-computes the multiplicative and additive components in
+        Python, keeping business logic readable, while the Rust kernel handles
+        the tight sequential loop per policy. Polars parallelises across
+        policies automatically.
+
+        !!! note "When to use"
+            * **Account Value Rollforward:** Accumulate account values where
+                premiums, fees, and investment returns interact with the running
+                balance each period.
+            * **Reserve Accumulation:** Build up statutory or GAAP reserves
+                period-by-period using interest and cashflow assumptions.
+            * **Universal Life Projections:** Model COI deductions, crediting
+                rates, and expense charges that depend on the current account
+                value via Picard iteration with ``accumulate()``.
+            * **Unit-Linked Fund Projection:** Project fund values forward
+                where management charges are deducted as a proportion of the
+                current fund value.
 
         Parameters
         ----------
-        initial
-            Initial state per policy (e.g., starting account value).
-        multiply
-            Multiplicative growth factor per time step.
-        add
-            Additive flow per time step (premiums minus charges, etc.).
+        initial : str or pl.Expr or ExpressionProxy or ColumnProxy
+            Initial state per policy (e.g., starting account value). A scalar
+            column with one value per row. Broadcasts when length is 1.
+        multiply : str or pl.Expr or ExpressionProxy or ColumnProxy
+            Multiplicative growth factor per time step (e.g.,
+            ``1 + interest_rate``). A list column with one list per policy.
+        add : str or pl.Expr or ExpressionProxy or ColumnProxy
+            Additive flow per time step (e.g., premiums minus charges, grown
+            by the interest factor). A list column with one list per policy.
+            Inner list lengths must match ``multiply``.
 
         Returns
         -------
@@ -1418,13 +1440,26 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         Examples
         --------
-        >>> growth = 1 + af.interest_rate
-        >>> net_flow_grown = (af.premiums - af.fees) * growth
-        >>> af.av = af.projection.accumulate(
-        ...     initial=af.av_pp_init,
-        ...     multiply=growth,
-        ...     add=net_flow_grown,
-        ... )
+        **Simple Account Value Rollforward**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "av_init": [1000.0, 2000.0],
+            "growth": [[1.01, 1.01, 1.01], [1.02, 1.02, 1.02]],
+            "net_flow": [[50.0, 50.0, 50.0], [100.0, 100.0, 100.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.av = af.growth.projection.accumulate(
+            initial="av_init",
+            multiply="growth",
+            add="net_flow",
+        )
+        print(af.collect()["av"].to_list())
+        # [[1060.0, 1120.6, 1181.8059999999998], [2140.0, 2282.8, 2428.456]]
+        ```
 
         """
         from gaspatchio_core.column.column_proxy import ColumnProxy
@@ -1433,10 +1468,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         parent_af = self._get_parent_frame()
 
-        def _resolve_to_expr(
+        def _to_expr(
             param: str | pl.Expr | ExpressionProxy | ColumnProxy,
         ) -> pl.Expr:
-            """Resolve a parameter to a Polars expression."""
             if isinstance(param, ExpressionProxy):
                 return param._expr  # noqa: SLF001
             if isinstance(param, ColumnProxy):
@@ -1445,9 +1479,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
                 return pl.col(param)
             return param
 
-        initial_expr = _resolve_to_expr(initial)
-        multiply_expr = _resolve_to_expr(multiply)
-        add_expr = _resolve_to_expr(add)
+        initial_expr = _to_expr(initial)
+        multiply_expr = _to_expr(multiply)
+        add_expr = _to_expr(add)
 
         result_expr = _accumulate(initial_expr, multiply_expr, add_expr)
         return ExpressionProxy(result_expr, parent_af)
