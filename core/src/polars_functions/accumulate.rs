@@ -2,6 +2,8 @@
 // ABOUTME: Core primitive for account value rollforwards and state-dependent actuarial projections
 
 use polars::prelude::*;
+use polars_arrow::array::PrimitiveArray;
+use polars_arrow::offset::OffsetsBuffer;
 
 #[cfg(test)]
 mod tests {
@@ -219,17 +221,187 @@ pub fn accumulate(inputs: &[Series]) -> PolarsResult<Series> {
     let initial_ca = initial_f64.f64()?;
     let initial_is_broadcast = initial_ca.len() == 1;
 
-    // Ensure multiply is a List and cast inner to Float64
-    let multiply_list = multiply
-        .list()
-        .map_err(|_| PolarsError::ComputeError("multiply must be List dtype for accumulate".into()))?;
+    // Ensure multiply is a List
+    let multiply_list = multiply.list().map_err(|_| {
+        PolarsError::ComputeError("multiply must be List dtype for accumulate".into())
+    })?;
 
-    // Ensure add is a List and cast inner to Float64
+    // Ensure add is a List
     let add_list = add
         .list()
         .map_err(|_| PolarsError::ComputeError("add must be List dtype for accumulate".into()))?;
 
-    // Iterate over rows, computing the recurrence per row
+    // Check for any null lists or nulls in inner values - if so, fall back to the slower path
+    // The fast path requires:
+    // 1. No null list entries (outer nulls)
+    // 2. No nulls in initial values
+    // 3. No nulls in inner values (which would cause non-contiguous slices)
+    let has_outer_nulls =
+        multiply_list.null_count() > 0 || add_list.null_count() > 0 || initial_ca.null_count() > 0;
+
+    // Check for inner nulls by looking at the inner dtype's null count
+    let has_inner_nulls = {
+        let mul_inner_nulls = multiply_list
+            .rechunk()
+            .downcast_iter()
+            .next()
+            .map(|arr| arr.values().null_count())
+            .unwrap_or(0);
+        let add_inner_nulls = add_list
+            .rechunk()
+            .downcast_iter()
+            .next()
+            .map(|arr| arr.values().null_count())
+            .unwrap_or(0);
+        mul_inner_nulls > 0 || add_inner_nulls > 0
+    };
+
+    if has_outer_nulls || has_inner_nulls {
+        return accumulate_with_nulls(initial_ca, initial_is_broadcast, multiply_list, add_list);
+    }
+
+    // Fast path: no nulls anywhere, use direct array access
+    accumulate_fast(initial_ca, initial_is_broadcast, multiply_list, add_list)
+}
+
+/// Fast path for accumulate when there are no null lists.
+/// Works directly with underlying arrays to avoid per-row allocations.
+fn accumulate_fast(
+    initial_ca: &Float64Chunked,
+    initial_is_broadcast: bool,
+    multiply_list: &ListChunked,
+    add_list: &ListChunked,
+) -> PolarsResult<Series> {
+    // Rechunk to get contiguous arrays
+    let multiply_rechunked = multiply_list.rechunk();
+    let add_rechunked = add_list.rechunk();
+
+    // Get the underlying LargeListArrays
+    let mul_arr = multiply_rechunked.downcast_iter().next().unwrap();
+    let add_arr = add_rechunked.downcast_iter().next().unwrap();
+
+    // Get offsets and values
+    let mul_offsets = mul_arr.offsets();
+    let add_offsets = add_arr.offsets();
+
+    // Create Series from the inner values arrays using from_chunks_and_dtype_unchecked
+    // Then cast to Float64
+    let mul_inner_dtype = multiply_list.inner_dtype();
+    let add_inner_dtype = add_list.inner_dtype();
+
+    // SAFETY: dtype matches the array
+    let mul_values_series = unsafe {
+        Series::from_chunks_and_dtype_unchecked(
+            PlSmallStr::EMPTY,
+            vec![mul_arr.values().clone()],
+            &mul_inner_dtype.to_physical(),
+        )
+    }
+    .cast(&DataType::Float64)?;
+
+    let add_values_series = unsafe {
+        Series::from_chunks_and_dtype_unchecked(
+            PlSmallStr::EMPTY,
+            vec![add_arr.values().clone()],
+            &add_inner_dtype.to_physical(),
+        )
+    }
+    .cast(&DataType::Float64)?;
+
+    let mul_values = mul_values_series.f64()?;
+    let add_values = add_values_series.f64()?;
+
+    // Get contiguous slices for maximum performance
+    let mul_values_rechunked = mul_values.rechunk();
+    let add_values_rechunked = add_values.rechunk();
+
+    let mul_slice = mul_values_rechunked
+        .cont_slice()
+        .map_err(|_| PolarsError::ComputeError("multiply values not contiguous".into()))?;
+    let add_slice = add_values_rechunked
+        .cont_slice()
+        .map_err(|_| PolarsError::ComputeError("add values not contiguous".into()))?;
+
+    let initial_rechunked = initial_ca.rechunk();
+    let initial_slice = initial_rechunked
+        .cont_slice()
+        .map_err(|_| PolarsError::ComputeError("initial values not contiguous".into()))?;
+
+    let num_rows = mul_offsets.len() - 1;
+
+    // Pre-calculate total output length and build output offsets
+    let total_len: usize = *mul_offsets.last() as usize;
+    let mut output_values: Vec<f64> = Vec::with_capacity(total_len);
+    let mut output_offsets: Vec<i64> = Vec::with_capacity(num_rows + 1);
+    output_offsets.push(0);
+
+    for row_idx in 0..num_rows {
+        let mul_start = mul_offsets[row_idx] as usize;
+        let mul_end = mul_offsets[row_idx + 1] as usize;
+        let add_start = add_offsets[row_idx] as usize;
+        let add_end = add_offsets[row_idx + 1] as usize;
+
+        let mul_len = mul_end - mul_start;
+        let add_len = add_end - add_start;
+
+        // Verify lengths match
+        if mul_len != add_len {
+            return Err(PolarsError::ComputeError(
+                format!(
+                    "mismatched inner list lengths for accumulate at row {}: multiply={}, add={}",
+                    row_idx, mul_len, add_len
+                )
+                .into(),
+            ));
+        }
+
+        // Get initial value (broadcast or per-row)
+        let initial_idx = if initial_is_broadcast { 0 } else { row_idx };
+        let mut state = initial_slice[initial_idx];
+
+        // Compute the recurrence for this row
+        let mul_row = &mul_slice[mul_start..mul_end];
+        let add_row = &add_slice[add_start..add_end];
+
+        for t in 0..mul_len {
+            state = state * mul_row[t] + add_row[t];
+            output_values.push(state);
+        }
+
+        output_offsets.push(output_values.len() as i64);
+    }
+
+    // Build the output ListChunked from the flat arrays
+    // SAFETY: offsets are monotonically increasing and valid
+    let offsets = unsafe { OffsetsBuffer::new_unchecked(output_offsets.into()) };
+    let values_arr = PrimitiveArray::from_vec(output_values);
+
+    let list_arr = LargeListArray::new(
+        ArrowDataType::LargeList(Box::new(ArrowField::new(
+            PlSmallStr::from_static("item"),
+            ArrowDataType::Float64,
+            true,
+        ))),
+        offsets,
+        Box::new(values_arr),
+        None, // no validity - no nulls in fast path
+    );
+
+    // SAFETY: we constructed this correctly
+    let result =
+        unsafe { ListChunked::from_chunks(PlSmallStr::EMPTY, vec![Box::new(list_arr)]) };
+
+    Ok(result.into_series())
+}
+
+/// Slow path for accumulate when there are null values.
+/// Uses amortized_iter which handles nulls correctly but has per-row allocation overhead.
+fn accumulate_with_nulls(
+    initial_ca: &Float64Chunked,
+    initial_is_broadcast: bool,
+    multiply_list: &ListChunked,
+    add_list: &ListChunked,
+) -> PolarsResult<Series> {
     let result = multiply_list
         .amortized_iter()
         .zip(add_list.amortized_iter())
