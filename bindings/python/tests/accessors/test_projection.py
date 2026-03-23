@@ -953,3 +953,297 @@ class TestAtPeriod:
         assert policy_2_values[0] == 0
         assert policy_2_values[1] == 200
         assert policy_2_values[2] == 220
+
+
+class TestAccumulate:
+    """Tests for accumulate() method.
+
+    The accumulate() method computes the linear recurrence:
+        state[t] = state[t-1] * multiply[t] + add[t]
+
+    This is the core primitive for account value rollforwards and other
+    state-dependent actuarial projections.
+    """
+
+    def test_basic_accumulation(self):
+        """Test basic linear recurrence: state[t] = state[t-1] * M[t] + A[t]."""
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.01, 1.01, 1.01]],
+            "add": [[10.0, 10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.av = af.initial.projection.accumulate(
+            initial=af.initial,
+            multiply=af.multiply,
+            add=af.add,
+        )
+
+        result = af.collect()
+        av = result["av"][0]
+
+        # out[0] = 100 * 1.01 + 10 = 111.0
+        # out[1] = 111.0 * 1.01 + 10 = 122.11
+        # out[2] = 122.11 * 1.01 + 10 = 133.3311
+        assert len(av) == 3
+        assert pytest.approx(av[0], abs=1e-6) == 111.0
+        assert pytest.approx(av[1], abs=1e-6) == 122.11
+        assert pytest.approx(av[2], abs=1e-6) == 133.3311
+
+    def test_multiply_only_cumulative_product(self):
+        """Test that add=0 gives cumulative product with initial."""
+        data = {
+            "initial": [100.0],
+            "multiply": [[2.0, 3.0, 4.0]],
+            "add": [[0.0, 0.0, 0.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = af.initial.projection.accumulate(
+            initial=af.initial,
+            multiply=af.multiply,
+            add=af.add,
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        # out[0] = 100 * 2 + 0 = 200
+        # out[1] = 200 * 3 + 0 = 600
+        # out[2] = 600 * 4 + 0 = 2400
+        assert values[0] == 200.0
+        assert values[1] == 600.0
+        assert values[2] == 2400.0
+
+    def test_add_only_cumulative_sum(self):
+        """Test that multiply=1 gives cumulative sum with initial."""
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.0, 1.0, 1.0]],
+            "add": [[10.0, 20.0, 30.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = af.initial.projection.accumulate(
+            initial=af.initial,
+            multiply=af.multiply,
+            add=af.add,
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        # out[0] = 100 * 1 + 10 = 110
+        # out[1] = 110 * 1 + 20 = 130
+        # out[2] = 130 * 1 + 30 = 160
+        assert values[0] == 110.0
+        assert values[1] == 130.0
+        assert values[2] == 160.0
+
+    def test_multiple_policies(self):
+        """Test accumulate with multiple policies (rows)."""
+        data = {
+            "policy_id": [1, 2],
+            "initial": [100.0, 200.0],
+            "multiply": [[1.01, 1.02], [1.05, 1.05]],
+            "add": [[10.0, 20.0], [50.0, 50.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.av = af.initial.projection.accumulate(
+            initial=af.initial,
+            multiply=af.multiply,
+            add=af.add,
+        )
+
+        result = af.collect()
+
+        # Row 0: initial=100, multiply=[1.01, 1.02], add=[10, 20]
+        # out[0] = 100 * 1.01 + 10 = 111.0
+        # out[1] = 111.0 * 1.02 + 20 = 133.22
+        av_1 = result["av"][0]
+        assert pytest.approx(av_1[0], abs=1e-6) == 111.0
+        assert pytest.approx(av_1[1], abs=1e-6) == 133.22
+
+        # Row 1: initial=200, multiply=[1.05, 1.05], add=[50, 50]
+        # out[0] = 200 * 1.05 + 50 = 260.0
+        # out[1] = 260.0 * 1.05 + 50 = 323.0
+        av_2 = result["av"][1]
+        assert pytest.approx(av_2[0], abs=1e-6) == 260.0
+        assert pytest.approx(av_2[1], abs=1e-6) == 323.0
+
+    def test_broadcast_initial(self):
+        """Test single initial value (literal) broadcast to multiple rows."""
+        from gaspatchio_core.functions.vector import accumulate
+
+        data = {
+            "multiply": [[1.01, 1.01], [2.0, 2.0]],
+            "add": [[0.0, 0.0], [0.0, 0.0]],
+        }
+        af = ActuarialFrame(data)
+
+        # Use literal for broadcasting initial value across rows
+        af.result = accumulate(
+            pl.lit(100.0), pl.col("multiply"), pl.col("add")
+        )
+
+        result = af.collect()
+
+        # Row 0: initial=100 (broadcast), multiply=[1.01, 1.01]
+        # out[0] = 100 * 1.01 = 101.0
+        # out[1] = 101.0 * 1.01 = 102.01
+        values_1 = result["result"][0]
+        assert pytest.approx(values_1[0], abs=1e-6) == 101.0
+        assert pytest.approx(values_1[1], abs=1e-6) == 102.01
+
+        # Row 1: initial=100 (broadcast), multiply=[2, 2]
+        # out[0] = 100 * 2 = 200
+        # out[1] = 200 * 2 = 400
+        values_2 = result["result"][1]
+        assert pytest.approx(values_2[0], abs=1e-6) == 200.0
+        assert pytest.approx(values_2[1], abs=1e-6) == 400.0
+
+    def test_null_initial_produces_null_output(self):
+        """Test that null initial value produces all-null output row."""
+        from gaspatchio_core.functions.vector import accumulate
+
+        data = {
+            "initial": [None],
+            "multiply": [[1.01, 1.01]],
+            "add": [[10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = accumulate(
+            pl.col("initial"), pl.col("multiply"), pl.col("add")
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        # Null initial => all values should be null
+        assert values[0] is None
+        assert values[1] is None
+
+    def test_null_in_inner_list_propagates(self):
+        """Test that null in inner list produces null and propagates NaN."""
+        from gaspatchio_core.functions.vector import accumulate
+
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.01, None, 1.01]],
+            "add": [[10.0, 10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = accumulate(
+            pl.col("initial"), pl.col("multiply"), pl.col("add")
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        # out[0] = 100 * 1.01 + 10 = 111.0
+        assert pytest.approx(values[0], abs=1e-6) == 111.0
+        # out[1] = null (because multiply is null)
+        assert values[1] is None
+        # out[2] = NaN (state is NaN after null)
+        assert math.isnan(values[2])
+
+    def test_empty_lists_produce_empty_output(self):
+        """Test that empty input lists produce empty output list."""
+        from gaspatchio_core.functions.vector import accumulate
+
+        data = {
+            "initial": [100.0],
+            "multiply": [[]],
+            "add": [[]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = accumulate(
+            pl.col("initial"), pl.col("multiply"), pl.col("add")
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        assert len(values) == 0
+
+    def test_length_mismatch_raises_error(self):
+        """Test that mismatched multiply/add lengths raise error."""
+        from gaspatchio_core.functions.vector import accumulate
+        from polars.exceptions import ComputeError
+
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.01, 1.01, 1.01]],  # 3 elements
+            "add": [[10.0, 10.0]],  # 2 elements - mismatch!
+        }
+        af = ActuarialFrame(data)
+
+        af.result = accumulate(
+            pl.col("initial"), pl.col("multiply"), pl.col("add")
+        )
+
+        with pytest.raises(ComputeError, match="mismatched"):
+            af.collect()
+
+    def test_account_value_rollforward_pattern(self):
+        """Test the canonical account value rollforward pattern.
+
+        AV[t] = (AV[t-1] + Premium[t] - Fee[t]) × (1 + Return[t])
+        Rearranged to: State × M + A where M = (1+i), A = (Premium - Fee) × (1+i)
+        """
+        data = {
+            "av_pp_init": [1000.0],
+            "premiums": [[100.0, 100.0, 100.0]],
+            "fees": [[10.0, 10.0, 10.0]],
+            "interest_rate": [[0.01, 0.02, 0.03]],
+        }
+        af = ActuarialFrame(data)
+
+        # Calculate growth factor and net flow (grown)
+        growth = 1 + af.interest_rate
+        net_flow_grown = (af.premiums - af.fees) * growth
+
+        af.av = af.av_pp_init.projection.accumulate(
+            initial=af.av_pp_init,
+            multiply=growth,
+            add=net_flow_grown,
+        )
+
+        result = af.collect()
+        av = result["av"][0]
+
+        # Manual calculation:
+        # t=0: av = 1000 * 1.01 + (100 - 10) * 1.01 = 1010 + 90.9 = 1100.9
+        # t=1: av = 1100.9 * 1.02 + 90 * 1.02 = 1122.918 + 91.8 = 1214.718
+        # t=2: av = 1214.718 * 1.03 + 90 * 1.03 = 1251.15954 + 92.7 = 1343.85954
+        assert len(av) == 3
+        assert pytest.approx(av[0], abs=1e-2) == 1100.9
+        assert pytest.approx(av[1], abs=1e-2) == 1214.718
+        assert pytest.approx(av[2], abs=1e-2) == 1343.86
+
+    def test_with_string_column_names(self):
+        """Test accumulate with string column names (not ColumnProxy)."""
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.01, 1.01, 1.01]],
+            "add": [[10.0, 10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.av = af.initial.projection.accumulate(
+            initial="initial",
+            multiply="multiply",
+            add="add",
+        )
+
+        result = af.collect()
+        av = result["av"][0]
+
+        assert pytest.approx(av[0], abs=1e-6) == 111.0
+        assert pytest.approx(av[1], abs=1e-6) == 122.11
+        assert pytest.approx(av[2], abs=1e-6) == 133.3311
