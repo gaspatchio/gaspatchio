@@ -1386,3 +1386,68 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             raise ValueError(msg)
 
         return ExpressionProxy(result_expr, parent_af)
+
+    def accumulate(
+        self,
+        *,
+        initial: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        multiply: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        add: str | pl.Expr | ExpressionProxy | ColumnProxy,
+    ) -> ExpressionProxy:
+        """Accumulate values using a linear recurrence.
+
+        Computes ``state[t] = state[t-1] * multiply[t] + add[t]`` for each
+        time step, returning all intermediate states as a list column.
+
+        This is the core primitive for account value rollforwards and other
+        state-dependent actuarial projections.
+
+        Parameters
+        ----------
+        initial
+            Initial state per policy (e.g., starting account value).
+        multiply
+            Multiplicative growth factor per time step.
+        add
+            Additive flow per time step (premiums minus charges, etc.).
+
+        Returns
+        -------
+        ExpressionProxy
+            List column of accumulated values at each time step.
+
+        Examples
+        --------
+        >>> growth = 1 + af.interest_rate
+        >>> net_flow_grown = (af.premiums - af.fees) * growth
+        >>> af.av = af.projection.accumulate(
+        ...     initial=af.av_pp_init,
+        ...     multiply=growth,
+        ...     add=net_flow_grown,
+        ... )
+
+        """
+        from gaspatchio_core.column.column_proxy import ColumnProxy
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio_core.functions.vector import accumulate as _accumulate
+
+        parent_af = self._get_parent_frame()
+
+        def _resolve_to_expr(
+            param: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        ) -> pl.Expr:
+            """Resolve a parameter to a Polars expression."""
+            if isinstance(param, ExpressionProxy):
+                return param._expr  # noqa: SLF001
+            if isinstance(param, ColumnProxy):
+                return pl.col(param.name)
+            if isinstance(param, str):
+                return pl.col(param)
+            return param
+
+        initial_expr = _resolve_to_expr(initial)
+        multiply_expr = _resolve_to_expr(multiply)
+        add_expr = _resolve_to_expr(add)
+
+        result_expr = _accumulate(initial_expr, multiply_expr, add_expr)
+        return ExpressionProxy(result_expr, parent_af)
