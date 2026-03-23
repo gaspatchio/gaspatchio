@@ -12,24 +12,30 @@ from typing import TYPE_CHECKING
 import polars as pl
 from polars.plugins import register_plugin_function
 
-# Import the internal module to get its path
-IMPORT_ERROR_MSG = (
+_IMPORT_ERROR_MSG = (
     "Failed to import the gaspatchio_core native extension (_internal). "
     "Ensure the project is built and installed correctly "
     "(e.g., using 'maturin develop -uv')."
 )
 
-try:
-    from gaspatchio_core import _internal
-except ImportError as e:
-    raise ImportError(IMPORT_ERROR_MSG) from e
-
 if TYPE_CHECKING:
     from gaspatchio_core.typing import IntoExprColumn
 
-# Get the path to the compiled extension from the imported module
-# _internal.__file__ should always be set for our compiled extension
-LIB = Path(_internal.__file__)  # type: ignore[arg-type]
+# Lazy import: resolve _internal only when a plugin function is called,
+# not at module import time. This allows mkdocstrings and other tools to
+# import this module for docstring extraction without the compiled Rust extension.
+_LIB: Path | None = None
+
+
+def _get_lib() -> Path:
+    global _LIB  # noqa: PLW0603
+    if _LIB is None:
+        try:
+            from gaspatchio_core import _internal
+        except ImportError as e:
+            raise ImportError(_IMPORT_ERROR_MSG) from e
+        _LIB = Path(_internal.__file__)  # type: ignore[arg-type]
+    return _LIB
 
 
 def fill_series(expr: IntoExprColumn, start: int = 0, increment: int = 1) -> pl.Expr:
@@ -55,7 +61,7 @@ def fill_series(expr: IntoExprColumn, start: int = 0, increment: int = 1) -> pl.
 
     return register_plugin_function(
         args=[expr],
-        plugin_path=LIB,
+        plugin_path=_get_lib(),
         function_name="fill_series",
         is_elementwise=True,
         kwargs={"start": start, "increment": increment},
@@ -85,7 +91,7 @@ def floor(expr: IntoExprColumn, divisor: int = 1, default: int = 0) -> pl.Expr:
 
     return register_plugin_function(
         args=[expr],
-        plugin_path=LIB,
+        plugin_path=_get_lib(),
         function_name="floor",
         is_elementwise=True,
         kwargs={"divisor": divisor, "default": default},
@@ -111,7 +117,7 @@ def round(expr: IntoExprColumn, decimal_places: int = 0) -> pl.Expr:  # noqa: A0
 
     return register_plugin_function(
         args=[expr],
-        plugin_path=LIB,
+        plugin_path=_get_lib(),
         function_name="round",
         is_elementwise=True,
         kwargs={"decimal_places": decimal_places},
@@ -136,7 +142,7 @@ def round_to_int(expr: IntoExprColumn) -> pl.Expr:
 
     return register_plugin_function(
         args=[expr],
-        plugin_path=LIB,
+        plugin_path=_get_lib(),
         function_name="round_to_int",
         is_elementwise=True,
     )
@@ -179,7 +185,7 @@ def accumulate(initial: pl.Expr, multiply: pl.Expr, add: pl.Expr) -> pl.Expr:
 
     """
     return register_plugin_function(
-        plugin_path=LIB,
+        plugin_path=_get_lib(),
         function_name="accumulate",
         args=[initial, multiply, add],
         is_elementwise=True,
@@ -226,7 +232,7 @@ def list_pow(base: pl.Expr, exp: pl.Expr) -> pl.Expr:
 
     """
     return register_plugin_function(
-        plugin_path=LIB,
+        plugin_path=_get_lib(),
         function_name="list_pow",
         args=[base, exp],
         is_elementwise=True,
@@ -284,7 +290,7 @@ def list_clip(values: pl.Expr, lower: pl.Expr, upper: pl.Expr) -> pl.Expr:
 
     """
     return register_plugin_function(
-        plugin_path=LIB,
+        plugin_path=_get_lib(),
         function_name="list_clip",
         args=[values, lower, upper],
         is_elementwise=True,
@@ -358,7 +364,7 @@ def list_conditional(
 
     """
     return register_plugin_function(
-        plugin_path=LIB,
+        plugin_path=_get_lib(),
         function_name="list_conditional",
         args=[left, right, then_val, otherwise_val],
         is_elementwise=True,
