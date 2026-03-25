@@ -116,10 +116,11 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
                    - 1900 Epoch (WINDOWS_1900_EPOCH = 1899-12-30):
                      Serial 1 is 1900-01-01. Excel's serial 60 (phantom 1900-02-29)
-                     is mapped to 1900-03-01. Serials > 60 are adjusted by -1 day
-                     before adding to epoch.
+                     is mapped to 1900-02-28 (same as serial 59). Serials 1-59 add
+                     serial+1 days to epoch; serials > 60 add serial days to epoch.
                    - 1904 Epoch (MAC_1904_EPOCH = 1904-01-01):
-                     Serial 1 is 1904-01-01. Days to add from epoch are serial - 1.
+                     Serial 0 is invalid (represents time only). Serial 1 is 1904-01-02.
+                     Days to add from epoch are equal to the serial number.
 
         Returns:
             An ExpressionProxy representing the converted date column.
@@ -149,9 +150,9 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             │ ---       ┆ ---               ┆ ---         │
             │ str       ┆ i64               ┆ date        │
             ╞═══════════╪═══════════════════╪═════════════╡
-            │ P001      ┆ 44197             ┆ 2020-12-31  │
-            │ P002      ┆ 44562             ┆ 2021-12-31  │
-            │ P003      ┆ 44927             ┆ 2022-12-31  │
+            │ P001      ┆ 44197             ┆ 2021-01-01  │
+            │ P002      ┆ 44562             ┆ 2022-01-01  │
+            │ P003      ┆ 44927             ┆ 2023-01-01  │
             └───────────┴───────────────────┴─────────────┘
             ```
         """
@@ -162,32 +163,36 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         if epoch == "1900":
             EPOCH_DT = datetime.date(1899, 12, 30)
 
-            # Adjust serial for numbers > 60 due to Excel's 1900 leap year bug
-            # This serial is then added to EPOCH_DT
+            # Excel serial date adjustment for the 1900 leap year bug:
+            # - Serial 1-59: EPOCH + serial + 1 (compensate for Excel's phantom Feb 29)
+            # - Serial 60: Special case handled separately (maps to Feb 28, same as 59)
+            # - Serial > 60: EPOCH + serial (direct mapping after the phantom date)
             effective_serial_days = (
                 pl.when(numeric_expr > 60)
-                .then(numeric_expr - 1)
-                .otherwise(numeric_expr)
+                .then(numeric_expr)
+                .otherwise(numeric_expr + 1)
             )
 
             date_expr = (
                 pl.when(numeric_expr < 1)
                 .then(None)  # Invalid serial
                 .when(int_expr == 60)
-                .then(pl.lit(datetime.date(1900, 3, 1)))  # Correct Excel's 1900-02-29
+                .then(pl.lit(datetime.date(1900, 2, 28)))  # Excel's phantom 1900-02-29 → real Feb 28
                 .otherwise(pl.lit(EPOCH_DT) + pl.duration(days=effective_serial_days))
                 .cast(pl.Date)
             )
 
         elif epoch == "1904":
             EPOCH_DT = datetime.date(1904, 1, 1)
-            # For 1904 epoch, serial 1 is the first day (Jan 1, 1904).
-            # So, timedelta to add is (serial - 1) days.
-            days_to_add = numeric_expr - 1
+            # For 1904 epoch (Mac Excel):
+            # - Serial 0 represents midnight (just time, no date) → treat as invalid
+            # - Serial 1 = 1904-01-02 (EPOCH + 1 day)
+            # - Serial N = EPOCH + N days
+            days_to_add = numeric_expr
 
             date_expr = (
                 pl.when(numeric_expr < 1)
-                .then(None)  # serial 0 or less is invalid if 1 is first day
+                .then(None)  # Serial 0 or less is invalid (0 represents just time)
                 .otherwise(pl.lit(EPOCH_DT) + pl.duration(days=days_to_add))
                 .cast(pl.Date)
             )

@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import polars as pl
 
 if TYPE_CHECKING:
-    from gaspatchio_core.column.proxy import ColumnProxy, ExpressionProxy
+    from gaspatchio_core.column.column_proxy import ColumnProxy
+    from gaspatchio_core.column.expression_proxy import ExpressionProxy
     from gaspatchio_core.scenarios.shocks import Shock
 
 # Type alias for lookup arguments

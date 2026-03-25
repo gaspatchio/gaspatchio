@@ -4,7 +4,8 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..column.proxy import ColumnProxy, ExpressionProxy
+    from ..column.column_proxy import ColumnProxy
+    from ..column.expression_proxy import ExpressionProxy
     from ..frame.base import ActuarialFrame
 
 class BaseFrameAccessor(ABC):

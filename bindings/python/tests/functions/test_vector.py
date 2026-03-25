@@ -7,7 +7,7 @@ import pytest
 
 # Assuming ActuarialFrame and ExpressionProxy are part of the public API
 from gaspatchio_core import ActuarialFrame, ExpressionProxy
-from gaspatchio_core.functions.vector import LIB  # Import LIB for path checking
+from gaspatchio_core.functions.vector import _get_lib
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def test_frame_fill_series(mock_register_plugin: MagicMock, mock_frame: Actuaria
     call_args, call_kwargs = mock_register_plugin.call_args
 
     # Check the keyword arguments passed to register_plugin_function
-    assert call_kwargs["plugin_path"] == LIB
+    assert call_kwargs["plugin_path"] == _get_lib()
     assert call_kwargs["function_name"] == "fill_series"
     assert call_kwargs["is_elementwise"] is True
     assert call_kwargs["kwargs"] == {"start": 1, "increment": 2}

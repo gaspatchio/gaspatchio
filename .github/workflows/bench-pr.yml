@@ -1,0 +1,40 @@
+name: Benchmark PR
+
+on:
+  pull_request:
+    paths: ['core/**']
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  benchmark:
+    name: Criterion Benchmarks (PR comparison)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: bench-${{ runner.os }}-${{ hashFiles('core/Cargo.lock') }}
+      - name: Run benchmarks
+        run: cargo bench --bench assumption_table_lookup_benchmark -- --output-format bencher '(assumption_table_.*1k|hash_vs_array_1k|vector_hash_vs_array_1k|lookup_scaling/.*/1000$)' | tee bench-output.txt
+        working-directory: core
+      - name: Compare to baseline
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: cargo
+          output-file-path: core/bench-output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          alert-threshold: '130%'
+          comment-on-alert: true
+          fail-on-alert: false  # Don't fail PR if no baseline exists yet
+          auto-push: false  # Don't push — just compare and comment

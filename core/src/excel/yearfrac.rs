@@ -383,6 +383,11 @@ fn calculate_30_360_eu(start: NaiveDate, end: NaiveDate) -> f64 {
 }
 
 /// Actual/Actual day count convention
+///
+/// This implementation handles the Feb 29 (leap day) edge case correctly:
+/// - When the start date IS Feb 29 and the period is exactly 365 days,
+///   this represents a full year (since Feb 29 doesn't exist in non-leap years).
+///   In this case, we return 1.0 instead of 365/366.
 #[allow(clippy::cast_precision_loss)]
 fn calculate_actual_actual(start: NaiveDate, end: NaiveDate) -> f64 {
     let days_diff = (end - start).num_days();
@@ -397,9 +402,24 @@ fn calculate_actual_actual(start: NaiveDate, end: NaiveDate) -> f64 {
         return days_diff as f64 / year_days;
     }
 
-    // Case 2: Different years but less than 1 year span
+    // Case 2: Different years but less than or equal to 1 year span
     if days_diff <= 366 {
-        // Check if Feb 29 is in the range
+        // Special case: Start is Feb 29 (leap day)
+        // When starting from Feb 29, a "full year" is 365 days because
+        // Feb 29 doesn't exist in non-leap years. The anniversary date
+        // is Feb 28 of the following year.
+        if start.month() == 2 && start.day() == 29 && days_diff == 365 {
+            return 1.0;
+        }
+
+        // Special case: End is Feb 29 (leap day)
+        // When ending on Feb 29, we're coming from a previous year
+        // and the denominator should be 366 (the leap year)
+        if end.month() == 2 && end.day() == 29 {
+            return days_diff as f64 / DAYS_ACTUAL_366;
+        }
+
+        // General case: Check if Feb 29 is in the range
         let contains_leap_day = contains_feb_29(start, end);
         let year_days = if contains_leap_day {
             DAYS_ACTUAL_366

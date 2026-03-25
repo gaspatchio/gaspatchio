@@ -1,5 +1,7 @@
 """Tests for the accessor registry."""
 
+import copy
+
 import pytest
 
 # Import the items to test
@@ -8,16 +10,20 @@ from gaspatchio_core.frame.registry import (
     register_accessor,
 )
 
+# Save the real registry state once at import time
+_ORIGINAL_REGISTRY = copy.deepcopy(_ACCESSOR_REGISTRY)
+
 
 # --- Test Setup ---
 def setup_function(function):
-    """Clear the registry before each test function."""
+    """Reset the registry to a clean state before each test."""
     _ACCESSOR_REGISTRY.clear()
 
 
 def teardown_function(function):
-    """Clear the registry after each test function."""
+    """Restore the original registry after each test."""
     _ACCESSOR_REGISTRY.clear()
+    _ACCESSOR_REGISTRY.update(copy.deepcopy(_ORIGINAL_REGISTRY))
 
 
 # --- Dummy Accessor Classes ---

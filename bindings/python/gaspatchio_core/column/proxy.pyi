@@ -32,11 +32,8 @@ if TYPE_CHECKING:
         StringNamespaceProxy as _StringNamespaceProxy,  # ADDED
     )
 
-    # Type alias for DtNamespaceProxy parent, consistent with dt_proxy.py
-    type ParentProxyType = ColumnProxy | ExpressionProxy
-
     # Although __dir__ is added dynamically, including it helps tools
-    def __dir__(self) -> builtins.list[str]: ...
+    def __dir__(self) -> builtins.list[builtins.str]: ...
 
 # Note: DtNamespaceProxy and StringNamespaceProxy are imported from their actual implementations
 # in the namespaces submodule to avoid duplicate maintenance of docstrings and method signatures.
@@ -60,8 +57,8 @@ class _BaseProxy:
     def __floordiv__(self, other: Any) -> ExpressionProxy: ...
     def __mod__(self, other: Any) -> ExpressionProxy: ...
     def __pow__(self, other: Any) -> ExpressionProxy: ...
-    def __eq__(self, other: object) -> ExpressionProxy: ...
-    def __ne__(self, other: object) -> ExpressionProxy: ...
+    def __eq__(self, other: object) -> ExpressionProxy: ...  # type: ignore[override]
+    def __ne__(self, other: object) -> ExpressionProxy: ...  # type: ignore[override]
     def __lt__(self, other: Any) -> ExpressionProxy: ...
     def __le__(self, other: Any) -> ExpressionProxy: ...
     def __gt__(self, other: Any) -> ExpressionProxy: ...
@@ -93,7 +90,7 @@ class _BaseProxy:
     def bin(self) -> ExprBinary: ...
 
     # --- Common Autopatched Methods/Namespaces (Returning ExpressionProxy) ---
-    def alias(self, name: str) -> ExpressionProxy:
+    def alias(self, name: builtins.str) -> ExpressionProxy:
         """Assign a new name to this expression for use in selections and computations.
 
         Creates a new ExpressionProxy with the specified column name. This is
@@ -492,6 +489,262 @@ class _BaseProxy:
         │ P002      ┆ 38  ┆ [1, 2, … 4] ┆ [0.9998, 0.9998, … 0.9997] ┆ [0.9998, 0.9996, … 0.999]       │
         └───────────┴─────┴─────────────┴────────────────────────────┴─────────────────────────────────┘
         ```
+        """
+    def cum_sum(self, *, reverse: bool = False) -> ExpressionProxy:
+        """Compute the cumulative sum of numeric values.
+
+        Returns the cumulative sum of all values in order, with each position
+        containing the sum of all values up to and including that position.
+        Essential for cumulative premium calculations, cumulative claims, and
+        running balance projections in actuarial modeling.
+
+        !!! note "When to use"
+            * **Cumulative Premiums:** Calculate total premiums paid up to each
+                period for persistency analysis or surrender value calculations.
+            * **Cumulative Claims:** Track total claim amounts over time for
+                loss development and reserving.
+            * **Running Balances:** Compute cumulative deposits or withdrawals
+                for account balance projections.
+
+        Parameters:
+            reverse: If True, compute the cumulative sum in reverse order
+                (from last to first).
+
+        Returns:
+            ExpressionProxy with the cumulative sum applied.
+
+        Examples:
+            **Scalar Example: Cumulative Premiums**
+
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {
+                "policy_id": ["P001"],
+                "monthly_premium": [[100, 100, 100, 150, 150]],
+            }
+            af = ActuarialFrame(data)
+
+            af["total_paid"] = af["monthly_premium"].cum_sum()
+
+            print(af.collect())
+            ```
+
+            ```text
+            shape: (1, 3)
+            ┌───────────┬──────────────────────┬─────────────────────┐
+            │ policy_id ┆ monthly_premium      ┆ total_paid          │
+            │ ---       ┆ ---                  ┆ ---                 │
+            │ str       ┆ list[i64]            ┆ list[i64]           │
+            ╞═══════════╪══════════════════════╪═════════════════════╡
+            │ P001      ┆ [100, 100, … 150]   ┆ [100, 200, … 600]  │
+            └───────────┴──────────────────────┴─────────────────────┘
+            ```
+        """
+    def cum_min(self, *, reverse: bool = False) -> ExpressionProxy:
+        """Compute the cumulative minimum of numeric values.
+
+        Returns the running minimum at each position. Essential for tracking
+        guarantee floors, minimum account values, and worst-case scenarios
+        in actuarial projections.
+
+        !!! note "When to use"
+            * **Guarantee Floors:** Track the minimum account value reached
+                over time for secondary guarantee calculations.
+            * **Minimum Balance Tracking:** Monitor the lowest point of a
+                policy's account value for risk analysis.
+
+        Parameters:
+            reverse: If True, compute cumulative minimum in reverse order.
+
+        Returns:
+            ExpressionProxy with the cumulative minimum applied.
+
+        Examples:
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {"policy_id": ["P001"], "av": [[100, 90, 85, 95, 80]]}
+            af = ActuarialFrame(data)
+            af["min_av"] = af["av"].cum_min()
+            print(af.collect())
+            ```
+
+            ```text
+            shape: (1, 3)
+            ┌───────────┬─────────────────────┬─────────────────────┐
+            │ policy_id ┆ av                  ┆ min_av              │
+            │ ---       ┆ ---                 ┆ ---                 │
+            │ str       ┆ list[i64]           ┆ list[i64]           │
+            ╞═══════════╪═════════════════════╪═════════════════════╡
+            │ P001      ┆ [100, 90, … 80]    ┆ [100, 90, … 80]    │
+            └───────────┴─────────────────────┴─────────────────────┘
+            ```
+        """
+    def cum_max(self, *, reverse: bool = False) -> ExpressionProxy:
+        """Compute the cumulative maximum of numeric values.
+
+        Returns the running maximum at each position. Essential for tracking
+        high-water marks, GMDB ratchet bases, and peak account values
+        in actuarial projections.
+
+        !!! note "When to use"
+            * **GMDB High-Water Mark:** Track the maximum account value
+                reached for guaranteed minimum death benefit calculations.
+            * **Peak Exposure:** Monitor the highest account value for
+                fee-tier determination and risk management.
+
+        Parameters:
+            reverse: If True, compute cumulative maximum in reverse order.
+
+        Returns:
+            ExpressionProxy with the cumulative maximum applied.
+
+        Examples:
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {"policy_id": ["P001"], "av": [[100, 110, 105, 120, 115]]}
+            af = ActuarialFrame(data)
+            af["max_av"] = af["av"].cum_max()
+            print(af.collect())
+            ```
+
+            ```text
+            shape: (1, 3)
+            ┌───────────┬─────────────────────┬─────────────────────┐
+            │ policy_id ┆ av                  ┆ max_av              │
+            │ ---       ┆ ---                 ┆ ---                 │
+            │ str       ┆ list[i64]           ┆ list[i64]           │
+            ╞═══════════╪═════════════════════╪═════════════════════╡
+            │ P001      ┆ [100, 110, … 115]  ┆ [100, 110, … 120]  │
+            └───────────┴─────────────────────┴─────────────────────┘
+            ```
+        """
+    def diff(self, n: int = 1, null_behavior: builtins.str = "ignore") -> ExpressionProxy:
+        """Compute the difference between consecutive values.
+
+        Returns the change from one period to the next. Essential for
+        deriving incremental cashflows from cumulative totals, computing
+        period-over-period reserve movements, and calculating year-on-year
+        changes in mortality or lapse rates.
+
+        !!! note "When to use"
+            * **Incremental Cashflows:** Derive period cashflows from
+                cumulative totals (e.g., incremental claims from cumulative).
+            * **Reserve Movements:** Compute the change in reserves between
+                valuation dates for IFRS 17 analysis of change.
+            * **Rate Changes:** Calculate year-on-year changes in mortality
+                or lapse rates for experience studies.
+
+        Parameters:
+            n: Number of periods to look back (default 1).
+            null_behavior: How to handle nulls — "ignore" or "drop".
+
+        Returns:
+            ExpressionProxy with the differences applied.
+
+        Examples:
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {"policy_id": ["P001"], "reserves": [[100, 120, 115, 130, 125]]}
+            af = ActuarialFrame(data)
+            af["reserve_change"] = af["reserves"].diff()
+            print(af.collect())
+            ```
+
+            ```text
+            shape: (1, 3)
+            ┌───────────┬─────────────────────┬──────────────────────────┐
+            │ policy_id ┆ reserves            ┆ reserve_change           │
+            │ ---       ┆ ---                 ┆ ---                      │
+            │ str       ┆ list[i64]           ┆ list[i64]                │
+            ╞═══════════╪═════════════════════╪══════════════════════════╡
+            │ P001      ┆ [100, 120, … 125]  ┆ [null, 20, … -5]        │
+            └───────────┴─────────────────────┴──────────────────────────┘
+            ```
+        """
+    def fill_nan(self, value: float | int | None = None) -> ExpressionProxy:
+        """Replace NaN values with a specified value.
+
+        Distinct from ``fill_null`` — this targets IEEE 754 NaN values
+        specifically, which commonly appear when loading assumption tables
+        from Excel or CSV where blank cells become NaN.
+
+        !!! note "When to use"
+            * **Assumption Table Cleanup:** Replace NaN gaps in mortality
+                rate tables loaded from Excel.
+            * **Investment Return Data:** Clean NaN values in market data
+                feeds before using in projections.
+
+        Parameters:
+            value: The value to replace NaN with. If None, NaN is replaced
+                with null.
+
+        Returns:
+            ExpressionProxy with NaN values replaced.
+
+        Examples:
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {"policy_id": ["P001"], "rates": [[0.01, float("nan"), 0.03]]}
+            af = ActuarialFrame(data)
+            af["clean_rates"] = af["rates"].fill_nan(0.0)
+            print(af.collect())
+            ```
+
+            ```text
+            shape: (1, 3)
+            ┌───────────┬──────────────────┬──────────────────┐
+            │ policy_id ┆ rates            ┆ clean_rates      │
+            │ ---       ┆ ---              ┆ ---              │
+            │ str       ┆ list[f64]        ┆ list[f64]        │
+            ╞═══════════╪══════════════════╪══════════════════╡
+            │ P001      ┆ [0.01, NaN, 0.03]┆ [0.01, 0.0, 0.03]│
+            └───────────┴──────────────────┴──────────────────┘
+            ```
+        """
+    def interpolate(self, method: builtins.str = "linear") -> ExpressionProxy:
+        """Interpolate null values using the specified method.
+
+        Fills gaps in data by interpolating between known values. Useful
+        for filling missing points in assumption tables where rates are
+        only provided at quinquennial ages or select durations.
+
+        !!! note "When to use"
+            * **Mortality Table Gaps:** Fill rates between quinquennial
+                age points (e.g., interpolate between age 30 and 35).
+            * **Yield Curve Interpolation:** Fill missing tenors in a
+                yield curve for discount rate calculations.
+
+        Parameters:
+            method: Interpolation method — "linear" or "nearest".
+
+        Returns:
+            ExpressionProxy with interpolated values.
+
+        Examples:
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            data = {"policy_id": ["P001"], "rates": [[0.01, None, None, 0.04]]}
+            af = ActuarialFrame(data)
+            af["filled"] = af["rates"].interpolate()
+            print(af.collect())
+            ```
+
+            ```text
+            shape: (1, 3)
+            ┌───────────┬────────────────────┬────────────────────────┐
+            │ policy_id ┆ rates              ┆ filled                 │
+            │ ---       ┆ ---                ┆ ---                    │
+            │ str       ┆ list[f64]          ┆ list[f64]              │
+            ╞═══════════╪════════════════════╪════════════════════════╡
+            │ P001      ┆ [0.01, null, … 0.04]┆ [0.01, 0.02, … 0.04]│
+            └───────────┴────────────────────┴────────────────────────┘
+            ```
         """
     def mean(self) -> ExpressionProxy:
         """Compute the arithmetic mean of numeric values in this expression or column.
@@ -961,8 +1214,8 @@ class _BaseProxy:
         self,
         value: Any = None,
         *,
-        strategy: str = None,
-        limit: int = None,
+        strategy: builtins.str | None = None,
+        limit: builtins.int | None = None,
     ) -> ExpressionProxy:
         """Replace null (missing) values with a specified value or using a filling strategy.
 
@@ -1526,7 +1779,7 @@ class _BaseProxy:
         └───────────┴────────────────────────────┴──────────────────────────┘
         ```
         """
-    def shift(self, n: int = 1, *, fill_value: any = None) -> ExpressionProxy:
+    def shift(self, n: builtins.int = 1, *, fill_value: Any = None) -> ExpressionProxy:
         """Shift values by a specified number of periods.
 
         Moves values forward or backward in the sequence, creating lag or lead variables
@@ -1632,9 +1885,9 @@ class _BaseProxy:
         """
     def over(
         self,
-        partition_by: str | list[str] | pl.Expr | list[pl.Expr],
+        partition_by: builtins.str | builtins.list[builtins.str] | pl.Expr | builtins.list[pl.Expr],
         *,
-        mapping_strategy: str = "join",
+        mapping_strategy: builtins.str = "join",
     ) -> ExpressionProxy:
         """Apply window function over partitions defined by grouping columns.
 

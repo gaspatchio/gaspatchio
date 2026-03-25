@@ -152,16 +152,10 @@ class ActuarialFrame:
     def fill_series(
         self,
         column: IntoExprColumn,
-        limit: int,
+        start: int = 0,
+        increment: int = 1,
     ) -> ExpressionProxy:
         """Apply fill_series using the core function."""
-
-    def apply_function(
-        self,
-        func: Callable[..., Any],
-        *args: IntoExprColumn,
-        return_dtype: pl.DataType = ...,
-    ) -> ExpressionProxy: ...
     def max(self) -> MaxResult:
         """Calculate maximum values across all numeric columns.
 

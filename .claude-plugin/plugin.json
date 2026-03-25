@@ -1,0 +1,13 @@
+{
+  "name": "gaspatchio",
+  "version": "1.0.0",
+  "description": "Actuarial modeling toolkit — skills for building, reconciling, and reviewing gaspatchio models",
+  "author": {
+    "name": "Gaspatchio",
+    "url": "https://github.com/opioinc/gaspatchio-core"
+  },
+  "repository": "https://github.com/opioinc/gaspatchio-core",
+  "license": "MIT",
+  "keywords": ["actuarial", "modeling", "polars", "insurance", "projections"],
+  "skills": "./skills/"
+}

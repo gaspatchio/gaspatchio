@@ -82,7 +82,7 @@ class TestParseShockConfig:
 
         config = {"table": "mortality", "multiply": 1.2, "add": 0.01}
 
-        with pytest.raises(ValueError, match="one operation"):
+        with pytest.raises(ValueError, match="multiple"):
             parse_shock_config(config)
 
 

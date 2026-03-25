@@ -1,11 +1,12 @@
 # ABOUTME: Projection accessor for actuarial projection operations.
 # ABOUTME: Methods: cumulative survival, period overrides, time-shifting.
+# ruff: noqa: PLC0415
 
 """Projection accessor for actuarial operations on time-series."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
@@ -133,11 +134,15 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             raise RuntimeError(msg)
         return parent_af
 
-    def cumulative_survival(self, start_at: float | None = 1.0) -> ExpressionProxy:
+    def cumulative_survival(
+        self,
+        rate_timing: Literal["beginning_of_period", "end_of_period"] | None = None,
+        start_at: float | None = 1.0,
+    ) -> ExpressionProxy:
         """Convert mortality rates to cumulative survival probabilities.
 
         Transforms period mortality rates (qx) into cumulative survival probabilities
-        using the formula tpx[t] = (1-qx[0]) * (1-qx[1]) * ... * (1-qx[t]). Essential
+        using the formula `tpx[t] = (1-qx[0]) * (1-qx[1]) * ... * (1-qx[t])`. Essential
         for life insurance projections, reserve calculations, and any actuarial work
         requiring survival probabilities from mortality assumptions.
 
@@ -155,14 +160,37 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             * **Pricing Models:** Calculate expected present values of benefits and
                 premiums weighted by survival probabilities.
 
+        Timing Conventions
+        ------------------
+        The `rate_timing` parameter controls when decrement rates are applied:
+
+        * **beginning_of_period** (default): Rate at period t is NOT yet applied to
+          P[IF][t]. The survival at t represents the probability of surviving TO the
+          start of period t. Result: ``[1.0, tpx[0], tpx[0]*tpx[1], ...]``
+
+        * **end_of_period**: Rate at period t HAS been applied to P[IF][t]. The
+          survival at t represents the probability of surviving THROUGH period t.
+          This matches Excel-style timing. Result: ``[tpx[0], tpx[0]*tpx[1], ...]``
+
+        With constant rates, both conventions give identical values. The difference
+        only appears when rates change over time (e.g., at age boundaries).
+
         Parameters
         ----------
+        rate_timing : {"beginning_of_period", "end_of_period"}, optional
+            When decrement rates are applied. Recommended for most users:
+
+            - ``"beginning_of_period"``: Rate at t NOT yet applied (default behavior)
+            - ``"end_of_period"``: Rate at t HAS been applied (Excel-style)
+
+            If not specified, falls back to `start_at` parameter behavior.
         start_at : float, optional
-            Initial survival probability to prepend at t=0. Shifts results to give
-            beginning-of-period values (standard actuarial practice). Common values:
-            - 1.0 (default): Beginning-of-period, full cohort [1.0, tpx[0], tpx[1], ...]
-            - None: End-of-period survival [tpx[0], tpx[1], ...]
-            - Other: Partial cohort after initial selection (e.g., 0.95 for 95%)
+            Lower-level control over timing. Only use if `rate_timing` is not set.
+            Initial survival probability to prepend at t=0:
+
+            - 1.0 (default): Beginning-of-period [1.0, tpx[0], tpx[1], ...]
+            - None: End-of-period [tpx[0], tpx[1], ...]
+            - Other: Custom initial value (e.g., 0.95 for partial cohort)
 
         Returns
         -------
@@ -171,12 +199,15 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         Raises
         ------
+        ValueError
+            If both `rate_timing` and a non-default `start_at` are specified,
+            or if `rate_timing` has an invalid value
         RuntimeError
             If the column is not part of an ActuarialFrame context
 
         Examples
         --------
-        **Vector Example: Policies Inforce (Beginning-of-Period)**
+        **Beginning-of-Period Timing (Default)**
 
         ```python
         from gaspatchio_core import ActuarialFrame
@@ -187,7 +218,12 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         }
         af = ActuarialFrame(data)
 
+        # Default: rate at t not yet applied
         af.pols_if = af.qx.projection.cumulative_survival()
+        # Or explicitly:
+        af.pols_if = af.qx.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
 
         print(af.collect())
         ```
@@ -204,7 +240,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         └───────────┴───────────────────────┴────────────────────────┘
         ```
 
-        **Vector Example: End-of-Period Survival**
+        **End-of-Period Timing (Excel-Style)**
 
         ```python
         from gaspatchio_core import ActuarialFrame
@@ -214,8 +250,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         }
         af = ActuarialFrame(data)
 
-        # For death benefits, use end-of-period survival
-        af.tpx = af.qx.projection.cumulative_survival(start_at=None)
+        # Excel-style: rate at t has been applied
+        af.tpx = af.qx.projection.cumulative_survival(rate_timing="end_of_period")
 
         print(af.collect())
         ```
@@ -231,7 +267,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         └───────────────────────┴─────────────────────────────┘
         ```
 
-        **Vector Example: Partial Cohort (Post-Underwriting)**
+        **Custom Initial Value (Partial Cohort)**
 
         ```python
         from gaspatchio_core import ActuarialFrame
@@ -241,7 +277,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         }
         af = ActuarialFrame(data)
 
-        # 95% survived underwriting
+        # 95% survived underwriting - use start_at for custom values
         af.pols_if = af.qx.projection.cumulative_survival(start_at=0.95)
 
         print(af.collect())
@@ -259,6 +295,28 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         ```
 
         """
+        # Handle rate_timing parameter - maps to start_at for backwards compatibility
+        if rate_timing is not None:
+            # Validate rate_timing value
+            valid_timings = ("beginning_of_period", "end_of_period")
+            if rate_timing not in valid_timings:
+                msg = (
+                    f"Invalid rate_timing value: {rate_timing!r}. "
+                    f"Must be one of {valid_timings}"
+                )
+                raise ValueError(msg)
+
+            # Check for conflicting parameters
+            if start_at != 1.0:
+                msg = (
+                    "Cannot specify both 'rate_timing' and 'start_at'. "
+                    "Use 'rate_timing' for standard timing conventions, "
+                    "or 'start_at' for custom initial values."
+                )
+                raise ValueError(msg)
+
+            # Map rate_timing to start_at
+            start_at = 1.0 if rate_timing == "beginning_of_period" else None
         from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.dispatch import (
             ColumnTypeDetector,  # type: ignore[attr-defined]
@@ -1047,3 +1105,383 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         result._list_broadcast_metadata = {"element_wise": True}  # noqa: SLF001
 
         return result
+
+    def _build_discount_factors(
+        self,
+        cashflow_expr: pl.Expr,
+        discount_rate: float | ExpressionProxy | ColumnProxy | None,
+        discount_factor: ExpressionProxy | ColumnProxy | None,
+    ) -> pl.Expr:
+        """Build discount factor expression from rate or factor input.
+
+        Helper method to construct the v^t discount factor expression from either
+        a discount rate (scalar or list) or pre-computed discount factors.
+
+        """
+        from gaspatchio_core.column.column_proxy import ColumnProxy
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        if discount_factor is not None:
+            # Use provided discount factors directly
+            if isinstance(discount_factor, ExpressionProxy):
+                return discount_factor._expr  # noqa: SLF001
+            if isinstance(discount_factor, ColumnProxy):
+                return pl.col(discount_factor.name)
+            msg = (
+                "discount_factor must be ExpressionProxy or ColumnProxy, "
+                f"got {type(discount_factor)}"
+            )
+            raise TypeError(msg)
+
+        # Compute discount factors from rate: v(t) = 1 / (1 + r(t))
+        if isinstance(discount_rate, (int, float)):
+            # Scalar rate: v^t = v^t for each period t
+            v = 1.0 / (1.0 + discount_rate)
+            return cashflow_expr.list.eval(
+                pl.lit(v).pow(pl.int_range(0, pl.element().len()))
+            )
+
+        if isinstance(discount_rate, ExpressionProxy):
+            rate_expr = discount_rate._expr  # noqa: SLF001
+        elif isinstance(discount_rate, ColumnProxy):
+            rate_expr = pl.col(discount_rate.name)
+        else:
+            msg = (
+                "discount_rate must be float, ExpressionProxy, or ColumnProxy, "
+                f"got {type(discount_rate)}"
+            )
+            raise TypeError(msg)
+
+        # List column of rates: cumulative product of 1/(1+r)
+        v_expr = rate_expr.list.eval((1.0 / (1.0 + pl.element())).cum_prod())
+        # Shift to get beginning-of-period: [1, v[0], v[0]*v[1], ...]
+        list_len = v_expr.list.len()
+        return pl.concat_list([pl.lit([1.0]), v_expr]).list.slice(0, list_len)
+
+    def prospective_value(
+        self,
+        discount_rate: float | ExpressionProxy | ColumnProxy | None = None,
+        discount_factor: ExpressionProxy | ColumnProxy | None = None,
+        *,
+        timing: Literal["beginning_of_period", "end_of_period"] = "end_of_period",
+    ) -> ExpressionProxy:
+        """Calculate prospective (present) value of future cashflows from each time t.
+
+        Computes the present value of all future cashflows from each projection period
+        onwards, using backward recursion: PV(t) = CF(t) + PV(t+1) * v(t).
+
+        This is the standard actuarial "prospective policy value" calculation, essential
+        for reserve valuations, embedded value projections, profit testing, and asset
+        adequacy testing. Replaces complex Polars list operations with a clean,
+        actuarial-focused API.
+
+        !!! note "When to use"
+            * **Reserve Calculations:** Compute present value of future benefits less
+                premiums for statutory and GAAP reserve valuations.
+            * **Embedded Value:** Calculate present value of future profits for
+                embedded value and value of in-force business metrics.
+            * **Profit Testing:** Project present value of cashflows at each duration
+                for pricing validation and profitability analysis.
+            * **Asset Adequacy:** Test sufficiency of assets to cover future liabilities
+                under various interest rate scenarios.
+
+        Parameters
+        ----------
+        discount_rate : float or ExpressionProxy or ColumnProxy, optional
+            Per-period discount rate for discounting future cashflows:
+
+            - Scalar float: Constant rate for all periods (e.g., 0.05 for 5%)
+            - List column: Per-period rates that may vary over time
+
+            Cannot be specified together with `discount_factor`.
+        discount_factor : ExpressionProxy or ColumnProxy, optional
+            Pre-computed discount factors (v^t values). Use when you have yield curve
+            or scenario-specific discount factors already calculated.
+
+            Cannot be specified together with `discount_rate`.
+        timing : {"beginning_of_period", "end_of_period"}, default "end_of_period"
+            When cashflows occur within each period:
+
+            - ``"end_of_period"``: Cashflow at t paid at end of period (benefits)
+            - ``"beginning_of_period"``: Cashflow at t paid at start (premiums)
+
+        Returns
+        -------
+        ExpressionProxy
+            Present value of future cashflows at each projection period
+
+        Raises
+        ------
+        ValueError
+            If both `discount_rate` and `discount_factor` are specified,
+            or if neither is specified
+
+        Examples
+        --------
+        **Death Benefit PV with Constant Discount Rate**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "death_benefit": [[100.0, 100.0, 100.0]],
+        }
+        af = ActuarialFrame(data)
+
+        # Calculate prospective value at 5% discount rate
+        af.pv_benefits = af.death_benefit.projection.prospective_value(
+            discount_rate=0.05
+        )
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌────────────────────┬─────────────────────────────┐
+        │ death_benefit      ┆ pv_benefits                 │
+        │ ---                ┆ ---                         │
+        │ list[f64]          ┆ list[f64]                   │
+        ╞════════════════════╪═════════════════════════════╡
+        │ [100.0, 100.0, ... ┆ [285.94, 195.24, 100.0]     │
+        └────────────────────┴─────────────────────────────┘
+        ```
+
+        **Premium PV with Time-Varying Rates**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "premium": [[1000.0, 1000.0, 1000.0]],
+            "disc_rate": [[0.04, 0.05, 0.06]],
+        }
+        af = ActuarialFrame(data)
+
+        af.pv_premiums = af.premium.projection.prospective_value(
+            discount_rate=af.disc_rate,
+            timing="beginning_of_period"
+        )
+
+        print(af.collect())
+        ```
+
+        **With Pre-Computed Discount Factors**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "benefit": [[100.0, 100.0, 100.0]],
+            "v_t": [[1.0, 0.952381, 0.907029]],  # 5% discount factors
+        }
+        af = ActuarialFrame(data)
+
+        af.pv = af.benefit.projection.prospective_value(discount_factor=af.v_t)
+
+        print(af.collect())
+        ```
+
+        Notes
+        -----
+        **Implementation Details:**
+
+        The method internally performs:
+
+        1. Compute discounted cashflows: CF(t) * v(t)
+        2. Fill NaN values with 0 (handles cashflows beyond policy term)
+        3. Apply reverse -> cumsum -> reverse pattern to get "sum from t to end"
+        4. Adjust for timing convention
+
+        **Replaces Ugly Pattern:**
+
+        This method replaces verbose Polars list manipulation. The old pattern
+        required 6+ lines of Polars list operations (reverse, cumsum, reverse),
+        while the new API is a single clean method call.
+
+        See Also
+        --------
+        cumulative_survival : Calculate cumulative survival probabilities
+        previous_period : Access prior period values for reserve rollforward
+
+        """
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        # Validate parameters
+        if discount_rate is not None and discount_factor is not None:
+            msg = (
+                "Cannot specify both 'discount_rate' and 'discount_factor'. "
+                "Use 'discount_rate' for interest rates, or 'discount_factor' "
+                "for pre-computed v^t values."
+            )
+            raise ValueError(msg)
+
+        if discount_rate is None and discount_factor is None:
+            msg = (
+                "Must specify either 'discount_rate' or 'discount_factor'. "
+                "Use 'discount_rate' for interest rates (e.g., 0.05 for 5%), or "
+                "'discount_factor' for pre-computed v^t values."
+            )
+            raise ValueError(msg)
+
+        # Get base cashflow expression and parent frame
+        cashflow_expr = self._get_polars_expr()
+        parent_af = self._get_parent_frame()
+
+        # Build discount factor expression
+        v_expr = self._build_discount_factors(
+            cashflow_expr, discount_rate, discount_factor
+        )
+
+        # Compute discounted cashflows: CF(t) * v(t)
+        discounted_cf = cashflow_expr * v_expr
+
+        # Apply reverse -> cumsum -> reverse pattern to get remaining PV
+        remaining_pv = (
+            discounted_cf.list.eval(pl.element().fill_nan(0.0))
+            .list.reverse()
+            .list.eval(pl.element().cum_sum())
+            .list.reverse()
+        )
+
+        # Apply timing adjustment: end_of_period gives PV with no extra discounting,
+        # beginning_of_period multiplies by per-period v[t] (one extra discount period)
+        end_of_period_result = remaining_pv / v_expr
+
+        if timing == "end_of_period":
+            result_expr = end_of_period_result
+        elif timing == "beginning_of_period":
+            # Compute per-period discount factor v[t] = 1/(1+r[t])
+            # GSP-70 fix: multiply by v[t] at ALL periods including t=0
+            if isinstance(discount_rate, (int, float)):
+                # Scalar rate: constant v
+                per_period_v = 1.0 / (1.0 + discount_rate)
+                result_expr = end_of_period_result * per_period_v
+            elif discount_rate is not None:
+                # List column of rates: v[t] = 1/(1+r[t])
+                from gaspatchio_core.column.column_proxy import ColumnProxy
+                from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+                if isinstance(discount_rate, ExpressionProxy):
+                    rate_expr = discount_rate._expr  # noqa: SLF001
+                elif isinstance(discount_rate, ColumnProxy):
+                    rate_expr = pl.col(discount_rate.name)
+                else:
+                    rate_expr = discount_rate
+                per_period_v = rate_expr.list.eval(1.0 / (1.0 + pl.element()))
+                result_expr = end_of_period_result * per_period_v
+            else:
+                # discount_factor provided: derive v from v[t]/v[t-1]
+                # For BOP, we need the per-period v, which is v[t]/v[t-1]
+                # At t=0: v[0]/v[-1] = v[0]/1 = v[0]
+                # At t=1: v[1]/v[0]
+                v_prev = v_expr.list.eval(pl.element().shift(1, fill_value=1.0))
+                per_period_v = v_expr / v_prev
+                result_expr = end_of_period_result * per_period_v
+        else:
+            msg = (
+                f"Invalid timing value: {timing!r}. "
+                "Must be 'beginning_of_period' or 'end_of_period'"
+            )
+            raise ValueError(msg)
+
+        return ExpressionProxy(result_expr, parent_af)
+
+    def accumulate(
+        self,
+        *,
+        initial: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        multiply: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        add: str | pl.Expr | ExpressionProxy | ColumnProxy,
+    ) -> ExpressionProxy:
+        """Accumulate values using a linear recurrence.
+
+        Computes ``state[t] = state[t-1] * multiply[t] + add[t]`` for each
+        time step, returning all intermediate states as a list column. This is
+        the core primitive for account value rollforwards and other
+        state-dependent actuarial projections where cashflows at time *t*
+        depend on accumulated state at *t-1*.
+
+        The actuary pre-computes the multiplicative and additive components in
+        Python, keeping business logic readable, while the Rust kernel handles
+        the tight sequential loop per policy. Polars parallelises across
+        policies automatically.
+
+        !!! note "When to use"
+            * **Account Value Rollforward:** Accumulate account values where
+                premiums, fees, and investment returns interact with the running
+                balance each period.
+            * **Reserve Accumulation:** Build up statutory or GAAP reserves
+                period-by-period using interest and cashflow assumptions.
+            * **Universal Life Projections:** Model COI deductions, crediting
+                rates, and expense charges that depend on the current account
+                value via Picard iteration with ``accumulate()``.
+            * **Unit-Linked Fund Projection:** Project fund values forward
+                where management charges are deducted as a proportion of the
+                current fund value.
+
+        Parameters
+        ----------
+        initial : str or pl.Expr or ExpressionProxy or ColumnProxy
+            Initial state per policy (e.g., starting account value). A scalar
+            column with one value per row. Broadcasts when length is 1.
+        multiply : str or pl.Expr or ExpressionProxy or ColumnProxy
+            Multiplicative growth factor per time step (e.g.,
+            ``1 + interest_rate``). A list column with one list per policy.
+        add : str or pl.Expr or ExpressionProxy or ColumnProxy
+            Additive flow per time step (e.g., premiums minus charges, grown
+            by the interest factor). A list column with one list per policy.
+            Inner list lengths must match ``multiply``.
+
+        Returns
+        -------
+        ExpressionProxy
+            List column of accumulated values at each time step.
+
+        Examples
+        --------
+        **Simple Account Value Rollforward**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "av_init": [1000.0, 2000.0],
+            "growth": [[1.01, 1.01, 1.01], [1.02, 1.02, 1.02]],
+            "net_flow": [[50.0, 50.0, 50.0], [100.0, 100.0, 100.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.av = af.growth.projection.accumulate(
+            initial="av_init",
+            multiply="growth",
+            add="net_flow",
+        )
+        print(af.collect()["av"].to_list())
+        # [[1060.0, 1120.6, 1181.8059999999998], [2140.0, 2282.8, 2428.456]]
+        ```
+
+        """
+        from gaspatchio_core.column.column_proxy import ColumnProxy
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio_core.functions.vector import accumulate as _accumulate
+
+        parent_af = self._get_parent_frame()
+
+        def _to_expr(
+            param: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        ) -> pl.Expr:
+            if isinstance(param, ExpressionProxy):
+                return param._expr  # noqa: SLF001
+            if isinstance(param, ColumnProxy):
+                return pl.col(param.name)
+            if isinstance(param, str):
+                return pl.col(param)
+            return param
+
+        initial_expr = _to_expr(initial)
+        multiply_expr = _to_expr(multiply)
+        add_expr = _to_expr(add)
+
+        result_expr = _accumulate(initial_expr, multiply_expr, add_expr)
+        return ExpressionProxy(result_expr, parent_af)

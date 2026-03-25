@@ -6,12 +6,13 @@
 import os
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import polars as pl
 import typer
 from dotenv import load_dotenv
 from loguru import logger
+from pydantic import BaseModel
 from rich.console import Console
 
 from .api import APIConnectionError, KnowledgeAPIClient
@@ -538,6 +539,48 @@ def _log_metrics(metrics: RunMetrics) -> None:
     logger.trace("=====================\n")
 
 
+class DimensionDetail(BaseModel):
+    """Detailed information about a detected dimension."""
+
+    name: str
+    dtype: str
+    unique_count: int
+    sample_values: list[Any]
+    suggested_type: str  # "key", "melt", "categorical", "value"
+    numeric_pattern: str | None = None
+
+
+class InterpolationDetail(BaseModel):
+    """Interpolation opportunity for a dimension."""
+
+    dimension: str
+    detected_values: list[int | float]
+    missing_values: list[int | float]
+    suggested_method: str
+
+
+class DescribeResponse(BaseModel):
+    """Structured response for gspio describe --json.
+
+    Provides everything an LLM agent needs to write a Table() constructor:
+    schema, detected dimensions with types and unique values, suggested code,
+    sample rows, and interpolation hints.
+    """
+
+    file_path: str
+    format: str
+    rows: int
+    columns: list[str]
+    column_types: dict[str, str]
+    table_shape: str
+    detected_value_column: str
+    detected_dimensions: list[DimensionDetail]
+    sample_rows: list[dict[str, Any]]
+    suggested_code: str
+    overflow_candidate: str | None = None
+    interpolation_hints: list[InterpolationDetail] = []
+
+
 def _detect_table_structure(df: pl.DataFrame) -> tuple[str, dict[str, str]]:
     """Detect the value column and dimension structure from a DataFrame.
 
@@ -646,6 +689,15 @@ def describe(
             rich_help_panel="Table Options",
         ),
     ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            "-j",
+            help="Output structured JSON for LLM consumption",
+            rich_help_panel="Output Options",
+        ),
+    ] = False,
 ):
     """Describe the structure of a data file.
 
@@ -656,6 +708,7 @@ def describe(
     [bold green]Example:[/bold green]
         gspio describe data.parquet
         gspio describe data.csv --value-column custom_rate
+        gspio describe data.parquet --json
     """
     with console.status("[bold green]Analyzing file...") as status:
         # Read the file based on extension with better type inference
@@ -686,6 +739,94 @@ def describe(
                 )
             detected_value_column = value_column
             dimensions = {col: col for col in df.columns if col != value_column}
+
+        if json_output:
+            from .assumptions._analysis import analyze_table
+
+            # Run rich analysis
+            analysis = analyze_table(df, detect_overflow=True, detect_interpolation=True)
+
+            # Determine if this looks like model points vs assumption table
+            # Model points: many columns, no clear value column, has ID-like columns
+            _model_point_indicators = {
+                "point_id", "policy_id", "pol_id", "age_at_entry", "sum_assured",
+                "premium_pp", "av_pp_init", "policy_count", "policy_term",
+            }
+            has_mp_columns = bool(set(df.columns) & _model_point_indicators)
+            is_model_points = has_mp_columns and len(analysis.value_columns) <= 1
+
+            # Build dimension details from analysis
+            dim_details = [
+                DimensionDetail(
+                    name=dim.name,
+                    dtype=dim.dtype,
+                    unique_count=dim.unique_count,
+                    sample_values=dim.sample_values[:5],
+                    suggested_type=dim.suggested_type,
+                    numeric_pattern=dim.numeric_pattern,
+                )
+                for dim in analysis.data_dimensions
+                if dim.suggested_type != "value"
+            ]
+
+            # Detect value column from analysis
+            value_col = (
+                analysis.value_columns[0]
+                if analysis.value_columns
+                else detected_value_column
+            )
+
+            # Generate suggested code
+            if is_model_points:
+                file_ext = file_path.suffix.lower()
+                if file_ext == ".parquet":
+                    read_fn = f'pl.read_parquet("{file_path.name}")'
+                elif file_ext == ".csv":
+                    read_fn = f'pl.read_csv("{file_path.name}", infer_schema_length=10000)'
+                else:
+                    read_fn = f'pl.read_excel("{file_path.name}")'
+                suggested_code = (
+                    f"import polars as pl\n"
+                    f"from gaspatchio_core import ActuarialFrame\n\n"
+                    f"mp = {read_fn}\n"
+                    f"af = ActuarialFrame(mp)"
+                )
+            else:
+                suggested_code = analysis.suggest_table_config()
+
+            # Build interpolation hints
+            interp_hints = [
+                InterpolationDetail(
+                    dimension=hint.dimension,
+                    detected_values=hint.detected_values[:10],
+                    missing_values=hint.missing_values[:10],
+                    suggested_method=hint.suggested_method,
+                )
+                for hint in analysis.interpolation_opportunities
+            ]
+
+            # Sample rows
+            sample_rows = df.head(5).to_dicts()
+
+            response = DescribeResponse(
+                file_path=str(file_path),
+                format=file_path.suffix.lstrip(".").lower(),
+                rows=len(df),
+                columns=df.columns,
+                column_types={
+                    col: str(dtype)
+                    for col, dtype in zip(df.columns, df.dtypes, strict=True)
+                },
+                table_shape="model_points" if is_model_points else table_shape,
+                detected_value_column=value_col if not is_model_points else "",
+                detected_dimensions=dim_details,
+                sample_rows=sample_rows,
+                suggested_code=suggested_code,
+                overflow_candidate=analysis.overflow_candidate,
+                interpolation_hints=interp_hints,
+            )
+            print(response.model_dump_json(indent=2))
+            return
 
         # Display basic file information
         console.print(f"\n[bold]File Analysis: {file_path.name}[/bold]")

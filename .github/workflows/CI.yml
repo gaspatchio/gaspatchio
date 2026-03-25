@@ -45,34 +45,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.x
+          python-version: "3.12"
       - name: Install uv and cache dependencies
         uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
           cache-dependency-glob: |
-            bindings/python/uv.lock
-            bindings/python/pyproject.toml
+            uv.lock
+            pyproject.toml
           working-directory: bindings/python
       - name: Cache maturin build artifacts
         uses: actions/cache@v4
         with:
           path: bindings/python/target
-          key: ${{ runner.os }}-maturin-${{ hashFiles('**/Cargo.lock', 'bindings/python/**/*.rs', 'core/src/**/*.rs') }}
-          restore-keys: |
-            ${{ runner.os }}-maturin-
-      - name: Build maturin binary
-        uses: PyO3/maturin-action@v1
-        with:
-          working-directory: bindings/python
-      - name: Install Python dependencies
+          key: ${{ runner.os }}-maturin-dev-${{ hashFiles('**/Cargo.lock', 'bindings/python/**/*.rs', 'core/src/**/*.rs') }}
+          # No restore-keys — stale caches with missing Rust functions cause test failures
+      - name: Install Python dependencies and build extension
         run: uv sync
         working-directory: bindings/python
       - name: Run Python tests
         run: uv run pytest -v
+        working-directory: bindings/python
+      - name: Verify stub files match runtime
+        run: uv run python -m mypy.stubtest gaspatchio_core --ignore-missing-stub --ignore-unused-allowlist --mypy-config-file mypy-stubtest.ini --allowlist stubtest-allowlist.txt
         working-directory: bindings/python
 
   manylinux:
@@ -170,6 +170,47 @@ jobs:
         with:
           name: wheels-sdist
           path: bindings/python/dist
+
+  skill-structure-tests:
+    name: Skill Structure Tests (Tier 1)
+    needs: [python-tests]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bindings/python
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync
+      - name: Run skill structure tests
+        run: uv run pytest ../../tests/skills/ -v
+
+  tutorial-smoke-tests:
+    name: Tutorial Smoke Tests
+    needs: [python-tests]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bindings/python
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync
+      - name: Run tutorial base models
+        run: |
+          for model_file in ../../tutorial/level-*/base/model.py; do
+            echo "Running $model_file..."
+            uv run python "$model_file" || exit 1
+          done
+          # L4 has no __main__ block, test via its runner
+          echo "Running L4 benchmark runner..."
+          uv run python ../../tutorial/level-4-lifelib/base/run_benchmark.py || exit 1
 
   release:
     name: Release

@@ -27,6 +27,7 @@ from .column import ColumnProxy, ExpressionProxy
 from .errors import PerformanceWarning
 from .frame import ActuarialFrame, run_model
 from .functions.conditional import when
+from .rollforward import RollforwardBuilder, Step, StepDef
 from .scenarios import (
     batch_scenarios,
     describe_scenarios,
@@ -48,6 +49,9 @@ __all__ = [
     "ColumnProxy",
     "ExpressionProxy",
     "PerformanceWarning",
+    "RollforwardBuilder",
+    "Step",
+    "StepDef",
     "Table",
     "TableBuilder",
     "batch_scenarios",

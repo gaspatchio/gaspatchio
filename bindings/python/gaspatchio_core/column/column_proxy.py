@@ -21,6 +21,59 @@ if TYPE_CHECKING:
 from ..frame.registry import _ACCESSOR_REGISTRY
 
 
+class _RollforwardFieldAccessor:
+    """Dict-like accessor for extracting fields from a rollforward Struct column.
+
+    Used by ``ColumnProxy.increments`` and ``ColumnProxy.captures`` to provide
+    lazy struct field extraction via ``af.av.increments["Premium"]``.
+    """
+
+    __slots__ = ("_column_name", "_parent", "_prefix", "_suffix")
+
+    def __init__(
+        self,
+        parent: ActuarialFrame,
+        column_name: str,
+        prefix: str = "",
+        suffix: str = "",
+    ) -> None:
+        self._parent = parent
+        self._column_name = column_name
+        self._prefix = prefix
+        self._suffix = suffix
+
+    def __getitem__(self, field_name: str) -> ExpressionProxy:
+        """Extract a named field from the hidden rollforward Struct.
+
+        Uses ``map_batches`` to defer field extraction to runtime because
+        the Polars plugin's output type function declares only a minimal
+        struct schema, and lazy ``.struct.field()`` fails schema validation
+        for fields not in that minimal declaration.
+
+        Parameters
+        ----------
+        field_name : str
+            The step label (for increments) or capture label (for captures).
+
+        Returns
+        -------
+        ExpressionProxy
+            A lazy expression that extracts the named field.
+        """
+        hidden_col = f"__rollforward_{self._column_name}"
+        struct_field = f"{self._prefix}{field_name}{self._suffix}"
+        _sf = struct_field  # capture for closure
+        expr = pl.col(hidden_col).map_batches(
+            lambda s, _f=_sf: s.struct.field(_f),
+            return_dtype=pl.List(pl.Float64),
+        )
+        return ExpressionProxy(expr, self._parent)
+
+    def __repr__(self) -> str:
+        kind = "captures" if self._prefix else "increments"
+        return f"_RollforwardFieldAccessor({self._column_name!r}, kind={kind!r})"
+
+
 class ColumnProxy:
     """Represents a column identifier within an ActuarialFrame, acting as a starting point for expressions."""
 
@@ -271,6 +324,31 @@ class ColumnProxy:
     # --- Explicitly Defined Methods/Properties ---
     # These are methods we define directly, not relying on autopatching initially.
     # Common ones like alias and cast could be here or handled by autopatch.
+
+    @property
+    def increments(self) -> _RollforwardFieldAccessor:
+        """Access per-step increment fields from a tracked rollforward.
+
+        Returns a dict-like accessor so that ``af.av.increments["Premium"]``
+        lazily extracts the ``Premium`` increment series from the hidden
+        rollforward Struct column.
+
+        Only meaningful when the rollforward was built with
+        ``track_increments=True``.
+        """
+        return _RollforwardFieldAccessor(self._parent, self.name)
+
+    @property
+    def captures(self) -> _RollforwardFieldAccessor:
+        """Access capture fields from a tracked rollforward.
+
+        Returns a dict-like accessor so that ``af.av.captures["name"]``
+        lazily extracts the ``Capture(name)`` field from the hidden
+        rollforward Struct column.
+        """
+        return _RollforwardFieldAccessor(
+            self._parent, self.name, prefix="Capture(", suffix=")"
+        )
 
     def map_elements(self, func: Callable, return_dtype=None) -> ExpressionProxy:
         """Apply a Python function to each element of the column.

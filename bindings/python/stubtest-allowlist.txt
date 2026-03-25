@@ -1,0 +1,102 @@
+# Stubtest allowlist - Known acceptable differences between stubs and runtime
+# Format: one entry per line, supports patterns with wildcards
+# See: https://mypy.readthedocs.io/en/stable/stubtest.html#allowlist
+
+# Dynamically patched methods from Polars expressions (added by _autopatch)
+# The runtime uses generic wrapper signatures while stubs document the actual API.
+# This is intentional for better IDE support.
+gaspatchio_core\.ColumnProxy\..*
+gaspatchio_core\.ExpressionProxy\..*
+gaspatchio_core\.column\.ColumnProxy\..*
+gaspatchio_core\.column\.ExpressionProxy\..*
+gaspatchio_core\.column\.column_proxy\.ColumnProxy\..*
+gaspatchio_core\.column\.expression_proxy\.ExpressionProxy\..*
+
+# Internal frame modules
+gaspatchio_core\.frame\.graph\..*
+
+# Scenarios internals
+gaspatchio_core\.scenarios\._.*
+# gaspatchio_core\.scenarios\.T  # removed: unused
+gaspatchio_core\.scenarios\.shocks\.Any.*
+
+# CLI is not part of the public API
+gaspatchio_core\.cli\..*
+
+# Runner module has pydantic issues
+gaspatchio_core\.runner.*
+
+# TYPE_CHECKING imports that show as "not present at runtime"
+gaspatchio_core\..*\.IntoExprColumn
+gaspatchio_core\.typing\.DataType
+gaspatchio_core\.typing\.DataTypeClass
+gaspatchio_core\.typing\.PolarsDataType
+
+# Metaclass differences for ABC classes (acceptable)
+gaspatchio_core\.accessors\.excel\.ExcelColumnAccessor
+gaspatchio_core\.accessors\.excel\.ExcelFrameAccessor
+
+# API module re-exports type annotations and has pydantic issues
+gaspatchio_core\.api\.models.*
+
+# Assumptions module - stub may be out of sync with implementation
+gaspatchio_core\.assumptions\..*
+gaspatchio_core\.TableBuilder\..*
+
+# Projection accessor TYPE_CHECKING imports (covered by generic patterns above)
+# gaspatchio_core\.accessors\.projection\.ActuarialFrame  # removed: matched by .*\.ActuarialFrame$
+# gaspatchio_core\.accessors\.projection\.ColumnProxy  # removed: matched by .*\.ColumnProxy$
+# gaspatchio_core\.accessors\.projection\.ExpressionProxy  # removed: matched by .*\.ExpressionProxy$
+
+# Util module internal function
+gaspatchio_core\.util\._expr_to_str
+
+# Python 3.13 Path changes - new parameters added to pathlib.Path methods
+# that aren't in typeshed stubs yet. These are stdlib mismatches, not our code.
+# Pattern matches Path in any submodule.
+gaspatchio_core\..*\.Path\..*
+
+# Frame module TypeVars and internal types
+gaspatchio_core\.frame\.base\.ActuarialFrameT
+
+# Functions module
+gaspatchio_core\.functions\.when
+gaspatchio_core\.functions\.vector\.e
+
+# Registry module typing issues
+gaspatchio_core\.registry\..*
+
+# TYPE_CHECKING imports that show as "not present at runtime"
+# These are imports only used for type annotations, not available at runtime
+.*\.ActuarialFrame$
+.*\.ColumnProxy$
+.*\.ExpressionProxy$
+.*\.TracedOperation$
+.*\.ValidationError$
+.*\.ProxyType$
+.*\.ParentProxyType$
+.*\.PolarsTemporalType$
+.*\.Callable$
+.*\.Any$
+.*\.TypedDict$
+
+# Errors module
+gaspatchio_core\.errors\..*
+
+# Column namespaces
+gaspatchio_core\.column\.namespaces\..*
+gaspatchio_core\.column\.proxy$
+
+# Examples module (not part of public API)
+gaspatchio_core\.examples\..*
+
+# Python 3.13 typing.Any.__new__ signature change — affects all modules using Any
+.*\.Any\.__new__
+
+# Rollforward module TYPE_CHECKING imports
+gaspatchio_core\.rollforward\._compile\.RollforwardBuilder
+gaspatchio_core\.rollforward\._compile\.StepDef
+gaspatchio_core\.rollforward\._explain\.RollforwardBuilder
+
+# CLI module — PydanticUserError when stubtest imports module-level Pydantic models
+gaspatchio_core\.cli

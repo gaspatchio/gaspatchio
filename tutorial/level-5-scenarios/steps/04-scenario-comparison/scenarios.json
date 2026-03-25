@@ -1,0 +1,35 @@
+[
+  {
+    "id": "BASE",
+    "description": "Current best-estimate assumptions"
+  },
+  {
+    "id": "PANDEMIC",
+    "description": "Severe pandemic: mortality +50% ages 65+, +20% younger, lapses -30%",
+    "shocks": [
+      {"table": "mortality_select", "multiply": 1.5, "where": {"attained_age": {"gte": 65}}},
+      {"table": "mortality_select", "multiply": 1.2, "where": {"attained_age": {"lt": 65}}},
+      {"table": "lapse_rates", "multiply": 0.7}
+    ]
+  },
+  {
+    "id": "RATE_SHOCK",
+    "description": "Sudden rate drop: risk-free rates -200bp across all years",
+    "shocks": [{"table": "risk_free_rates", "add": -0.02}]
+  },
+  {
+    "id": "MASS_LAPSE",
+    "description": "Mass lapse event: lapse rates doubled",
+    "shocks": [{"table": "lapse_rates", "multiply": 2.0}]
+  },
+  {
+    "id": "COMBINED_STRESS",
+    "description": "Combined adverse: pandemic + rate shock + expense inflation",
+    "shocks": [
+      {"table": "mortality_select", "multiply": 1.3},
+      {"table": "risk_free_rates", "add": -0.01},
+      {"table": "space_params", "multiply": 1.2, "column": "expense_maint"},
+      {"table": "lapse_rates", "multiply": 1.3}
+    ]
+  }
+]

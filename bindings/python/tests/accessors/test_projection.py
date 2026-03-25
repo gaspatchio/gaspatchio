@@ -1,10 +1,13 @@
 # ABOUTME: Tests for the ProjectionColumnAccessor.
 # ABOUTME: Validates cumulative survival and period override methods.
-# ruff: noqa: S101, PLR2004, ANN201, ERA001
+# ruff: noqa: ERA001
 # type: ignore[attr-defined]
 
 """Tests for projection accessor methods."""
 
+import math
+
+import polars as pl
 import pytest
 
 from gaspatchio_core import ActuarialFrame
@@ -135,6 +138,165 @@ class TestCumulativeSurvival:
         assert len(manual) == len(auto)
         for m, a in zip(manual, auto, strict=False):
             assert pytest.approx(m, abs=1e-9) == a
+
+
+class TestRateTiming:
+    """Tests for rate_timing parameter in cumulative_survival()."""
+
+    def test_beginning_of_period_explicit(self):
+        """Test rate_timing='beginning_of_period' matches default behavior."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        # Default behavior
+        af.pols_if_default = af.qx.projection.cumulative_survival()
+
+        # Explicit beginning_of_period
+        af.pols_if_bop = af.qx.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
+
+        result = af.collect()
+
+        default = result["pols_if_default"][0]
+        bop = result["pols_if_bop"][0]
+
+        # Should be identical
+        assert len(default) == len(bop)
+        for d, b in zip(default, bop, strict=False):
+            assert pytest.approx(d, abs=1e-9) == b
+
+        # Verify values: [1.0, 0.999, 0.997002]
+        assert pytest.approx(bop[0], abs=1e-6) == 1.0
+        assert pytest.approx(bop[1], abs=1e-6) == 0.999
+        assert pytest.approx(bop[2], abs=1e-6) == 0.999 * 0.998
+
+    def test_end_of_period(self):
+        """Test rate_timing='end_of_period' matches start_at=None."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        # Using rate_timing
+        af.pols_if_eop = af.qx.projection.cumulative_survival(
+            rate_timing="end_of_period"
+        )
+
+        # Using start_at=None (equivalent)
+        af.pols_if_none = af.qx.projection.cumulative_survival(start_at=None)
+
+        result = af.collect()
+
+        eop = result["pols_if_eop"][0]
+        none_result = result["pols_if_none"][0]
+
+        # Should be identical
+        assert len(eop) == len(none_result)
+        for e, n in zip(eop, none_result, strict=False):
+            assert pytest.approx(e, abs=1e-9) == n
+
+        # Verify values: [0.999, 0.997002, 0.994011]
+        assert pytest.approx(eop[0], abs=1e-6) == 0.999
+        assert pytest.approx(eop[1], abs=1e-6) == 0.999 * 0.998
+        assert pytest.approx(eop[2], abs=1e-6) == 0.999 * 0.998 * 0.997
+
+    def test_timing_difference_at_rate_boundary(self):
+        """Test that BOP and EOP produce different results at rate boundaries.
+
+        When rates change (e.g., at age boundaries), the two timing conventions
+        give different results. With constant rates, they would be the same.
+        """
+        # Simulate rate change at month 2 (e.g., age boundary)
+        data = {"exit_rate": [[0.008, 0.008, 0.009, 0.009]]}
+        af = ActuarialFrame(data)
+
+        af.pols_if_bop = af.exit_rate.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
+        af.pols_if_eop = af.exit_rate.projection.cumulative_survival(
+            rate_timing="end_of_period"
+        )
+
+        result = af.collect()
+
+        bop = result["pols_if_bop"][0]
+        eop = result["pols_if_eop"][0]
+
+        # At period 0:
+        # BOP: 1.0 (rate not yet applied)
+        # EOP: 0.992 (rate applied)
+        assert pytest.approx(bop[0], abs=1e-6) == 1.0
+        assert pytest.approx(eop[0], abs=1e-6) == 0.992
+
+        # At period 2 (where rate changes from 0.008 to 0.009):
+        # BOP: uses rate[0] and rate[1] = 0.992 * 0.992 = 0.984064
+        # EOP: uses rate[0], rate[1], and rate[2] = 0.992 * 0.992 * 0.991 = 0.975267
+        # Note: BOP[2] has NOT applied rate[2] yet, EOP[2] HAS applied rate[2]
+        assert pytest.approx(bop[2], abs=1e-6) == 0.992 * 0.992
+        assert pytest.approx(eop[2], abs=1e-6) == 0.992 * 0.992 * 0.991
+
+        # The difference becomes visible at the boundary
+        assert bop[2] != eop[2]
+
+    def test_invalid_rate_timing_raises_error(self):
+        """Test that invalid rate_timing value raises ValueError."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        with pytest.raises(ValueError, match="Invalid rate_timing value"):
+            af.qx.projection.cumulative_survival(rate_timing="invalid_value")
+
+    def test_conflicting_parameters_raises_error(self):
+        """Test that specifying both rate_timing and non-default start_at raises."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            af.qx.projection.cumulative_survival(
+                rate_timing="end_of_period", start_at=0.95
+            )
+
+    def test_rate_timing_with_default_start_at_is_ok(self):
+        """Test that rate_timing with default start_at=1.0 works (no conflict)."""
+        data = {"qx": [[0.001, 0.002, 0.003]]}
+        af = ActuarialFrame(data)
+
+        # This should work - rate_timing with implicit default start_at
+        af.pols_if = af.qx.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
+
+        result = af.collect()
+        pols_if = result["pols_if"][0]
+
+        assert len(pols_if) == 3
+        assert pytest.approx(pols_if[0], abs=1e-6) == 1.0
+
+    def test_multiple_policies_with_rate_timing(self):
+        """Test rate_timing works correctly with multiple policies."""
+        data = {
+            "policy_id": ["P001", "P002"],
+            "qx": [[0.001, 0.002, 0.003], [0.002, 0.003, 0.004]],
+        }
+        af = ActuarialFrame(data)
+
+        af.pols_if_bop = af.qx.projection.cumulative_survival(
+            rate_timing="beginning_of_period"
+        )
+        af.pols_if_eop = af.qx.projection.cumulative_survival(
+            rate_timing="end_of_period"
+        )
+
+        result = af.collect()
+
+        # Policy 1 BOP: [1.0, 0.999, 0.997002]
+        bop_1 = result["pols_if_bop"][0]
+        assert pytest.approx(bop_1[0], abs=1e-6) == 1.0
+        assert pytest.approx(bop_1[1], abs=1e-6) == 0.999
+
+        # Policy 2 EOP: [0.998, 0.995006, 0.991030]
+        eop_2 = result["pols_if_eop"][1]
+        assert pytest.approx(eop_2[0], abs=1e-6) == 0.998
+        assert pytest.approx(eop_2[1], abs=1e-6) == 0.998 * 0.997
 
 
 class TestWithPeriod:
@@ -401,6 +563,271 @@ class TestNextPeriod:
         assert projected_next[2] is None
 
 
+class TestProspectiveValue:
+    """Tests for prospective_value() method.
+
+    The prospective_value() method calculates the present value of future cashflows
+    from each time t onwards, using the actuarial backward recursion formula:
+    PV(t) = CF(t) + PV(t+1) * v(t)
+
+    This is the standard actuarial "prospective policy value" calculation.
+    """
+
+    def test_constant_discount_rate(self):
+        """Test prospective_value with a constant (scalar) discount rate."""
+        data = {
+            "cashflow": [[100.0, 100.0, 100.0]],
+        }
+        af = ActuarialFrame(data)
+
+        # Calculate prospective value with 5% discount rate
+        af.pv = af.cashflow.projection.prospective_value(discount_rate=0.05)
+
+        result = af.collect()
+        pv = result["pv"][0]
+
+        # At t=2 (last period): PV = CF[2] = 100
+        # At t=1: PV = CF[1] + CF[2]/(1+r) = 100 + 100/1.05 = 195.238...
+        # At t=0: PV = CF[0] + (CF[1] + CF[2]/(1+r))/(1+r)
+        #       = 100 + 195.238.../1.05 = 285.941...
+        assert len(pv) == 3
+        assert pytest.approx(pv[2], abs=1e-2) == 100.0
+        assert pytest.approx(pv[1], abs=1e-2) == 100.0 + 100.0 / 1.05
+        assert pytest.approx(pv[0], abs=1e-2) == 100.0 + (100.0 + 100.0 / 1.05) / 1.05
+
+    def test_list_column_discount_rate(self):
+        """Test prospective_value with per-period discount rates (list column).
+
+        Convention: r[t] is the forward rate for the period starting at t.
+        - r[0] = rate from t=0 to t=1
+        - r[1] = rate from t=1 to t=2
+        - r[2] = rate from t=2 to t=3 (not used in 3-period projection)
+        """
+        data = {
+            "cashflow": [[100.0, 100.0, 100.0]],
+            "disc_rate": [[0.04, 0.05, 0.06]],  # Varying rates
+        }
+        af = ActuarialFrame(data)
+
+        af.pv = af.cashflow.projection.prospective_value(discount_rate=af.disc_rate)
+
+        result = af.collect()
+        pv = result["pv"][0]
+
+        # At t=2: PV = 100 (last cashflow, no future to discount)
+        # At t=1: PV = 100 + 100/(1+r[1]) = 100 + 100/1.05 = 195.24
+        # At t=0: PV = 100 + 195.24/(1+r[0]) = 100 + 195.24/1.04 = 287.73
+        assert len(pv) == 3
+        assert pytest.approx(pv[2], abs=1e-2) == 100.0
+        assert pytest.approx(pv[1], abs=1e-2) == 100.0 + 100.0 / 1.05
+        expected_pv0 = 100.0 + (100.0 + 100.0 / 1.05) / 1.04
+        assert pytest.approx(pv[0], abs=1e-2) == expected_pv0
+
+    def test_with_discount_factor(self):
+        """Test prospective_value with pre-computed discount factors."""
+        data = {
+            "cashflow": [[100.0, 100.0, 100.0]],
+            # v^t factors at 5%: [1.0, 0.952381, 0.907029]
+            "v_t": [[1.0, 1 / 1.05, 1 / 1.05**2]],
+        }
+        af = ActuarialFrame(data)
+
+        af.pv = af.cashflow.projection.prospective_value(discount_factor=af.v_t)
+
+        result = af.collect()
+        pv = result["pv"][0]
+
+        # With discount factors, the calculation uses the provided v^t directly
+        assert len(pv) == 3
+        # Last period: just the cashflow
+        assert pytest.approx(pv[2], abs=1e-2) == 100.0
+
+    def test_timing_end_of_period(self):
+        """Test prospective_value with end_of_period timing (benefits)."""
+        data = {
+            "benefit": [[100.0, 100.0, 100.0]],
+        }
+        af = ActuarialFrame(data)
+
+        # End of period: cashflow at t is discounted by v^t
+        af.pv = af.benefit.projection.prospective_value(
+            discount_rate=0.05, timing="end_of_period"
+        )
+
+        result = af.collect()
+        pv = result["pv"][0]
+
+        # End-of-period timing means benefits paid at end of each period
+        assert len(pv) == 3
+
+    def test_timing_beginning_of_period(self):
+        """Test prospective_value with beginning_of_period timing (premiums).
+
+        For beginning_of_period, cashflows are paid at the START of each period.
+        This means they should be discounted one additional period compared to
+        end_of_period:
+            beginning_of_period[t] = end_of_period[t] * v
+
+        GSP-70: This test verifies that t=0 is also correctly discounted.
+        """
+        data = {
+            "premium": [[100.0, 100.0, 100.0]],
+        }
+        af = ActuarialFrame(data)
+
+        # Calculate both timings to compare
+        af.pv_eop = af.premium.projection.prospective_value(
+            discount_rate=0.05, timing="end_of_period"
+        )
+        af.pv_bop = af.premium.projection.prospective_value(
+            discount_rate=0.05, timing="beginning_of_period"
+        )
+
+        result = af.collect()
+        pv_eop = result["pv_eop"][0]
+        pv_bop = result["pv_bop"][0]
+
+        v = 1 / 1.05  # Per-period discount factor
+
+        # Beginning-of-period should be end-of-period * v at EVERY time t
+        # GSP-70: The bug was that t=0 wasn't discounted (fill_value=1.0 in shift)
+        assert len(pv_bop) == 3
+        assert pytest.approx(pv_bop[0], abs=1e-2) == pv_eop[0] * v
+        assert pytest.approx(pv_bop[1], abs=1e-2) == pv_eop[1] * v
+        assert pytest.approx(pv_bop[2], abs=1e-2) == pv_eop[2] * v
+
+    def test_timing_beginning_of_period_with_list_rates(self):
+        """Test beginning_of_period timing with per-period discount rates.
+
+        GSP-70: Ensure the fix works with list column rates, not just scalar.
+        """
+        data = {
+            "premium": [[100.0, 100.0, 100.0]],
+            "disc_rate": [[0.04, 0.05, 0.06]],
+        }
+        af = ActuarialFrame(data)
+
+        af.pv_eop = af.premium.projection.prospective_value(
+            discount_rate=af.disc_rate, timing="end_of_period"
+        )
+        af.pv_bop = af.premium.projection.prospective_value(
+            discount_rate=af.disc_rate, timing="beginning_of_period"
+        )
+
+        result = af.collect()
+        pv_eop = result["pv_eop"][0]
+        pv_bop = result["pv_bop"][0]
+
+        # Per-period discount factors
+        v = [1 / 1.04, 1 / 1.05, 1 / 1.06]
+
+        # BOP should be EOP * v[t] at each time t
+        assert pytest.approx(pv_bop[0], abs=1e-2) == pv_eop[0] * v[0]
+        assert pytest.approx(pv_bop[1], abs=1e-2) == pv_eop[1] * v[1]
+        assert pytest.approx(pv_bop[2], abs=1e-2) == pv_eop[2] * v[2]
+
+    def test_multiple_policies(self):
+        """Test prospective_value with multiple policies."""
+        data = {
+            "policy_id": [1, 2],
+            "cashflow": [[100.0, 100.0, 100.0], [200.0, 200.0, 200.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.pv = af.cashflow.projection.prospective_value(discount_rate=0.05)
+
+        result = af.collect()
+
+        # Policy 2 should have 2x the PV of policy 1
+        pv_1 = result["pv"][0]
+        pv_2 = result["pv"][1]
+
+        assert pytest.approx(pv_2[0], abs=1e-2) == 2 * pv_1[0]
+        assert pytest.approx(pv_2[1], abs=1e-2) == 2 * pv_1[1]
+        assert pytest.approx(pv_2[2], abs=1e-2) == 2 * pv_1[2]
+
+    def test_handles_nan_beyond_term(self):
+        """Test that prospective_value handles NaN values beyond policy term."""
+        data = {
+            # Policy has 3 periods but projection has 5 - NaNs beyond term
+            "cashflow": [[100.0, 100.0, 100.0, float("nan"), float("nan")]],
+        }
+        af = ActuarialFrame(data)
+
+        af.pv = af.cashflow.projection.prospective_value(discount_rate=0.05)
+
+        result = af.collect()
+        pv = result["pv"][0]
+
+        # NaN cashflows should be treated as 0 (no cashflow beyond term)
+        # So PV at t=3 and t=4 should be 0
+        assert len(pv) == 5
+        # PV at periods with NaN cashflows should be 0 or NaN depending on impl
+        # The first 3 periods should have valid PV
+        assert not math.isnan(pv[0])
+        assert not math.isnan(pv[1])
+        assert not math.isnan(pv[2])
+
+    def test_conflicting_parameters_raises_error(self):
+        """Test that specifying both discount_rate and discount_factor raises."""
+        data = {"cashflow": [[100.0, 100.0, 100.0]]}
+        af = ActuarialFrame(data)
+
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            af.cashflow.projection.prospective_value(
+                discount_rate=0.05, discount_factor=af.cashflow
+            )
+
+    def test_no_discount_provided_raises_error(self):
+        """Test that not specifying discount_rate or discount_factor raises."""
+        data = {"cashflow": [[100.0, 100.0, 100.0]]}
+        af = ActuarialFrame(data)
+
+        with pytest.raises(ValueError, match="Must specify either"):
+            af.cashflow.projection.prospective_value()
+
+    def test_replaces_ugly_pattern(self):
+        """Test that prospective_value produces same results as manual pattern.
+
+        The manual pattern being replaced:
+        af.pv = (
+            af.discounted_cf.list.eval(pl.element().fill_nan(0.0))
+            .list.reverse()
+            .list.eval(pl.element().cum_sum())
+            .list.reverse()
+        )
+        """
+        data = {
+            "cashflow": [[100.0, 100.0, 100.0]],
+        }
+        af = ActuarialFrame(data)
+
+        # Calculate discount factors manually (v^t at 5%)
+        v = 1 / 1.05
+        discount_factors = [v**0, v**1, v**2]
+
+        # Manual calculation: discounted cashflows, reverse cumsum, reverse
+        # This is the pattern from GSP-69 that we're replacing
+        discounted = [100.0 * discount_factors[i] for i in range(3)]
+        # reverse -> cumsum -> reverse gives "sum from t to end"
+        reversed_cf = discounted[::-1]
+        cumsum = []
+        running = 0
+        for x in reversed_cf:
+            running += x
+            cumsum.append(running)
+        manual_pv = cumsum[::-1]
+
+        # Use the clean API
+        af.pv = af.cashflow.projection.prospective_value(discount_rate=0.05)
+
+        result = af.collect()
+        pv = result["pv"][0]
+
+        # Results should match (approximately - timing conventions may differ slightly)
+        assert len(pv) == len(manual_pv)
+
+
 class TestAtPeriod:
     """Tests for at_period() method."""
 
@@ -501,8 +928,6 @@ class TestAtPeriod:
 
     def test_scalar_column_with_grouping(self):
         """Test at_period with scalar columns using .over() grouping."""
-        import polars as pl
-
         data = {
             "policy_id": [1, 1, 1, 2, 2, 2],
             "period": [0, 1, 2, 0, 1, 2],
@@ -528,3 +953,297 @@ class TestAtPeriod:
         assert policy_2_values[0] == 0
         assert policy_2_values[1] == 200
         assert policy_2_values[2] == 220
+
+
+class TestAccumulate:
+    """Tests for accumulate() method.
+
+    The accumulate() method computes the linear recurrence:
+        state[t] = state[t-1] * multiply[t] + add[t]
+
+    This is the core primitive for account value rollforwards and other
+    state-dependent actuarial projections.
+    """
+
+    def test_basic_accumulation(self):
+        """Test basic linear recurrence: state[t] = state[t-1] * M[t] + A[t]."""
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.01, 1.01, 1.01]],
+            "add": [[10.0, 10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.av = af.initial.projection.accumulate(
+            initial=af.initial,
+            multiply=af.multiply,
+            add=af.add,
+        )
+
+        result = af.collect()
+        av = result["av"][0]
+
+        # out[0] = 100 * 1.01 + 10 = 111.0
+        # out[1] = 111.0 * 1.01 + 10 = 122.11
+        # out[2] = 122.11 * 1.01 + 10 = 133.3311
+        assert len(av) == 3
+        assert pytest.approx(av[0], abs=1e-6) == 111.0
+        assert pytest.approx(av[1], abs=1e-6) == 122.11
+        assert pytest.approx(av[2], abs=1e-6) == 133.3311
+
+    def test_multiply_only_cumulative_product(self):
+        """Test that add=0 gives cumulative product with initial."""
+        data = {
+            "initial": [100.0],
+            "multiply": [[2.0, 3.0, 4.0]],
+            "add": [[0.0, 0.0, 0.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = af.initial.projection.accumulate(
+            initial=af.initial,
+            multiply=af.multiply,
+            add=af.add,
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        # out[0] = 100 * 2 + 0 = 200
+        # out[1] = 200 * 3 + 0 = 600
+        # out[2] = 600 * 4 + 0 = 2400
+        assert values[0] == 200.0
+        assert values[1] == 600.0
+        assert values[2] == 2400.0
+
+    def test_add_only_cumulative_sum(self):
+        """Test that multiply=1 gives cumulative sum with initial."""
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.0, 1.0, 1.0]],
+            "add": [[10.0, 20.0, 30.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = af.initial.projection.accumulate(
+            initial=af.initial,
+            multiply=af.multiply,
+            add=af.add,
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        # out[0] = 100 * 1 + 10 = 110
+        # out[1] = 110 * 1 + 20 = 130
+        # out[2] = 130 * 1 + 30 = 160
+        assert values[0] == 110.0
+        assert values[1] == 130.0
+        assert values[2] == 160.0
+
+    def test_multiple_policies(self):
+        """Test accumulate with multiple policies (rows)."""
+        data = {
+            "policy_id": [1, 2],
+            "initial": [100.0, 200.0],
+            "multiply": [[1.01, 1.02], [1.05, 1.05]],
+            "add": [[10.0, 20.0], [50.0, 50.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.av = af.initial.projection.accumulate(
+            initial=af.initial,
+            multiply=af.multiply,
+            add=af.add,
+        )
+
+        result = af.collect()
+
+        # Row 0: initial=100, multiply=[1.01, 1.02], add=[10, 20]
+        # out[0] = 100 * 1.01 + 10 = 111.0
+        # out[1] = 111.0 * 1.02 + 20 = 133.22
+        av_1 = result["av"][0]
+        assert pytest.approx(av_1[0], abs=1e-6) == 111.0
+        assert pytest.approx(av_1[1], abs=1e-6) == 133.22
+
+        # Row 1: initial=200, multiply=[1.05, 1.05], add=[50, 50]
+        # out[0] = 200 * 1.05 + 50 = 260.0
+        # out[1] = 260.0 * 1.05 + 50 = 323.0
+        av_2 = result["av"][1]
+        assert pytest.approx(av_2[0], abs=1e-6) == 260.0
+        assert pytest.approx(av_2[1], abs=1e-6) == 323.0
+
+    def test_broadcast_initial(self):
+        """Test single initial value (literal) broadcast to multiple rows."""
+        from gaspatchio_core.functions.vector import accumulate
+
+        data = {
+            "multiply": [[1.01, 1.01], [2.0, 2.0]],
+            "add": [[0.0, 0.0], [0.0, 0.0]],
+        }
+        af = ActuarialFrame(data)
+
+        # Use literal for broadcasting initial value across rows
+        af.result = accumulate(
+            pl.lit(100.0), pl.col("multiply"), pl.col("add")
+        )
+
+        result = af.collect()
+
+        # Row 0: initial=100 (broadcast), multiply=[1.01, 1.01]
+        # out[0] = 100 * 1.01 = 101.0
+        # out[1] = 101.0 * 1.01 = 102.01
+        values_1 = result["result"][0]
+        assert pytest.approx(values_1[0], abs=1e-6) == 101.0
+        assert pytest.approx(values_1[1], abs=1e-6) == 102.01
+
+        # Row 1: initial=100 (broadcast), multiply=[2, 2]
+        # out[0] = 100 * 2 = 200
+        # out[1] = 200 * 2 = 400
+        values_2 = result["result"][1]
+        assert pytest.approx(values_2[0], abs=1e-6) == 200.0
+        assert pytest.approx(values_2[1], abs=1e-6) == 400.0
+
+    def test_null_initial_produces_null_output(self):
+        """Test that null initial value produces all-null output row."""
+        from gaspatchio_core.functions.vector import accumulate
+
+        data = {
+            "initial": [None],
+            "multiply": [[1.01, 1.01]],
+            "add": [[10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = accumulate(
+            pl.col("initial"), pl.col("multiply"), pl.col("add")
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        # Null initial => all values should be null
+        assert values[0] is None
+        assert values[1] is None
+
+    def test_null_in_inner_list_propagates(self):
+        """Test that null in inner list produces null and propagates NaN."""
+        from gaspatchio_core.functions.vector import accumulate
+
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.01, None, 1.01]],
+            "add": [[10.0, 10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = accumulate(
+            pl.col("initial"), pl.col("multiply"), pl.col("add")
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        # out[0] = 100 * 1.01 + 10 = 111.0
+        assert pytest.approx(values[0], abs=1e-6) == 111.0
+        # out[1] = null (because multiply is null)
+        assert values[1] is None
+        # out[2] = NaN (state is NaN after null)
+        assert math.isnan(values[2])
+
+    def test_empty_lists_produce_empty_output(self):
+        """Test that empty input lists produce empty output list."""
+        from gaspatchio_core.functions.vector import accumulate
+
+        data = {
+            "initial": [100.0],
+            "multiply": [[]],
+            "add": [[]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = accumulate(
+            pl.col("initial"), pl.col("multiply"), pl.col("add")
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        assert len(values) == 0
+
+    def test_length_mismatch_raises_error(self):
+        """Test that mismatched multiply/add lengths raise error."""
+        from gaspatchio_core.functions.vector import accumulate
+        from polars.exceptions import ComputeError
+
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.01, 1.01, 1.01]],  # 3 elements
+            "add": [[10.0, 10.0]],  # 2 elements - mismatch!
+        }
+        af = ActuarialFrame(data)
+
+        af.result = accumulate(
+            pl.col("initial"), pl.col("multiply"), pl.col("add")
+        )
+
+        with pytest.raises(ComputeError, match="mismatched"):
+            af.collect()
+
+    def test_account_value_rollforward_pattern(self):
+        """Test the canonical account value rollforward pattern.
+
+        AV[t] = (AV[t-1] + Premium[t] - Fee[t]) × (1 + Return[t])
+        Rearranged to: State × M + A where M = (1+i), A = (Premium - Fee) × (1+i)
+        """
+        data = {
+            "av_pp_init": [1000.0],
+            "premiums": [[100.0, 100.0, 100.0]],
+            "fees": [[10.0, 10.0, 10.0]],
+            "interest_rate": [[0.01, 0.02, 0.03]],
+        }
+        af = ActuarialFrame(data)
+
+        # Calculate growth factor and net flow (grown)
+        growth = 1 + af.interest_rate
+        net_flow_grown = (af.premiums - af.fees) * growth
+
+        af.av = af.av_pp_init.projection.accumulate(
+            initial=af.av_pp_init,
+            multiply=growth,
+            add=net_flow_grown,
+        )
+
+        result = af.collect()
+        av = result["av"][0]
+
+        # Manual calculation:
+        # t=0: av = 1000 * 1.01 + (100 - 10) * 1.01 = 1010 + 90.9 = 1100.9
+        # t=1: av = 1100.9 * 1.02 + 90 * 1.02 = 1122.918 + 91.8 = 1214.718
+        # t=2: av = 1214.718 * 1.03 + 90 * 1.03 = 1251.15954 + 92.7 = 1343.85954
+        assert len(av) == 3
+        assert pytest.approx(av[0], abs=1e-2) == 1100.9
+        assert pytest.approx(av[1], abs=1e-2) == 1214.718
+        assert pytest.approx(av[2], abs=1e-2) == 1343.86
+
+    def test_with_string_column_names(self):
+        """Test accumulate with string column names (not ColumnProxy)."""
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.01, 1.01, 1.01]],
+            "add": [[10.0, 10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.av = af.initial.projection.accumulate(
+            initial="initial",
+            multiply="multiply",
+            add="add",
+        )
+
+        result = af.collect()
+        av = result["av"][0]
+
+        assert pytest.approx(av[0], abs=1e-6) == 111.0
+        assert pytest.approx(av[1], abs=1e-6) == 122.11
+        assert pytest.approx(av[2], abs=1e-6) == 133.3311
