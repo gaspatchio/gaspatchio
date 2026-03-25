@@ -1,0 +1,124 @@
+name: Evals & Benchmarks
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 3am UTC daily
+  push:
+    branches: [main, develop]
+    paths: ['skills/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write  # for gh-pages push
+
+jobs:
+  rust-benchmarks:
+    name: Criterion Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run benchmarks
+        run: cargo bench --bench assumption_table_lookup_benchmark -- --output-format bencher '(assumption_table_.*1k|hash_vs_array_1k|vector_hash_vs_array_1k|lookup_scaling/.*/1000$)' | tee bench-output.txt
+        working-directory: core
+      - name: Store benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Rust Benchmarks
+          tool: cargo
+          output-file-path: core/bench-output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          benchmark-data-dir-path: dev/bench
+          alert-threshold: '130%'
+          fail-on-alert: true
+
+  model-benchmarks:
+    name: End-to-End Model Benchmarks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bindings/python
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync
+      - name: Generate 100K model points
+        run: uv run python ../../evals/benchmarks/generate_model_points.py
+      - name: Run model benchmarks
+        run: uv run python ../../evals/benchmarks/run_model_benchmarks.py | tee /tmp/model-bench-output.json
+      - name: Store model benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Model Benchmarks
+          tool: customSmallerIsBetter
+          output-file-path: /tmp/model-bench-output.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          benchmark-data-dir-path: dev/model-bench
+          alert-threshold: '150%'
+          fail-on-alert: true
+
+  skill-evals:
+    name: Skill Evals (4 models)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bindings/python
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync
+      - name: Run evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: uv run python ../../evals/run_evals.py
+      - name: Upload capability matrix
+        uses: actions/upload-artifact@v4
+        with:
+          name: capability-matrix
+          path: evals/results/capability-matrix.json  # relative to repo root
+      - name: Store eval results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Skill Evals
+          tool: customBiggerIsBetter
+          output-file-path: evals/results/benchmark-results.json  # relative to repo root
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          benchmark-data-dir-path: dev/evals
+          alert-threshold: '80%'
+          comment-on-alert: true
+
+  capability-matrix:
+    name: Update Capability Matrix
+    needs: skill-evals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      - name: Download eval results
+        uses: actions/download-artifact@v4
+        with:
+          name: capability-matrix
+          path: dev/capability/
+      - name: Render capability matrix page
+        run: python scripts/render-capability-matrix.py
+      - name: Push to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update capability matrix [skip ci]" || true
+          git push

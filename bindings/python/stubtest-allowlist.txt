@@ -17,7 +17,7 @@ gaspatchio_core\.frame\.graph\..*
 
 # Scenarios internals
 gaspatchio_core\.scenarios\._.*
-gaspatchio_core\.scenarios\.T
+# gaspatchio_core\.scenarios\.T  # removed: unused
 gaspatchio_core\.scenarios\.shocks\.Any.*
 
 # CLI is not part of the public API
@@ -43,10 +43,10 @@ gaspatchio_core\.api\.models.*
 gaspatchio_core\.assumptions\..*
 gaspatchio_core\.TableBuilder\..*
 
-# Projection accessor TYPE_CHECKING imports
-gaspatchio_core\.accessors\.projection\.ActuarialFrame
-gaspatchio_core\.accessors\.projection\.ColumnProxy
-gaspatchio_core\.accessors\.projection\.ExpressionProxy
+# Projection accessor TYPE_CHECKING imports (covered by generic patterns above)
+# gaspatchio_core\.accessors\.projection\.ActuarialFrame  # removed: matched by .*\.ActuarialFrame$
+# gaspatchio_core\.accessors\.projection\.ColumnProxy  # removed: matched by .*\.ColumnProxy$
+# gaspatchio_core\.accessors\.projection\.ExpressionProxy  # removed: matched by .*\.ExpressionProxy$
 
 # Util module internal function
 gaspatchio_core\.util\._expr_to_str
@@ -89,3 +89,14 @@ gaspatchio_core\.column\.proxy$
 
 # Examples module (not part of public API)
 gaspatchio_core\.examples\..*
+
+# Python 3.13 typing.Any.__new__ signature change — affects all modules using Any
+.*\.Any\.__new__
+
+# Rollforward module TYPE_CHECKING imports
+gaspatchio_core\.rollforward\._compile\.RollforwardBuilder
+gaspatchio_core\.rollforward\._compile\.StepDef
+gaspatchio_core\.rollforward\._explain\.RollforwardBuilder
+
+# CLI module — PydanticUserError when stubtest imports module-level Pydantic models
+gaspatchio_core\.cli

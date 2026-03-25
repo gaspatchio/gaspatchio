@@ -7,7 +7,7 @@ vector operations on list columns.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from polars.plugins import register_plugin_function
@@ -369,4 +369,32 @@ def list_conditional(
         args=[left, right, then_val, otherwise_val],
         is_elementwise=True,
         kwargs={"operator": operator},
+    )
+
+
+def rollforward_plugin(args: list[pl.Expr], kwargs: dict[str, Any]) -> pl.Expr:
+    """Register the rollforward Polars plugin function.
+
+    Parameters
+    ----------
+    args
+        Polars expressions for initial values and input columns,
+        ordered by _compile() index assignment.
+    kwargs
+        Serialized RollforwardKwargs dict.
+
+    Returns
+    -------
+    pl.Expr
+        Expression that evaluates to a Struct column.
+    """
+    from gaspatchio_core import _internal as _int  # noqa: PLC0415
+
+    lib = Path(_int.__file__)  # type: ignore[arg-type]
+    return register_plugin_function(
+        plugin_path=lib,
+        function_name="rollforward",
+        args=args,
+        kwargs=kwargs,
+        is_elementwise=True,
     )

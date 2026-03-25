@@ -1,0 +1,28 @@
+[
+  {"id": "BASE"},
+  {
+    "id": "MORT_UP_20",
+    "description": "Mortality rates increased by 20%",
+    "shocks": [{"table": "mortality_select", "multiply": 1.2}]
+  },
+  {
+    "id": "LAPSE_DOWN_20",
+    "description": "Lapse rates decreased by 20%",
+    "shocks": [{"table": "lapse_rates", "multiply": 0.8}]
+  },
+  {
+    "id": "RATES_UP_50BP",
+    "description": "Risk-free rates +50 basis points",
+    "shocks": [{"table": "risk_free_rates", "add": 0.005}]
+  },
+  {
+    "id": "RATES_DOWN_50BP",
+    "description": "Risk-free rates -50 basis points",
+    "shocks": [{"table": "risk_free_rates", "add": -0.005}]
+  },
+  {
+    "id": "EXPENSES_UP_10",
+    "description": "Maintenance expenses +10%",
+    "shocks": [{"table": "space_params", "multiply": 1.1, "column": "expense_maint"}]
+  }
+]

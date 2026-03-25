@@ -40,7 +40,9 @@ class DummyFrameAccessorWiring:
 def mock_registry_for_wiring_tests(monkeypatch):
     """Fixture to isolate registry state for these specific wiring tests."""
     # Store original registry
-    original_registry = _ACCESSOR_REGISTRY.copy()
+    import copy
+
+    original_registry = copy.deepcopy(_ACCESSOR_REGISTRY)
     # Clear the registry for the duration of the test
     _ACCESSOR_REGISTRY.clear()
 

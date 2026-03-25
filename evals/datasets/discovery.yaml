@@ -1,0 +1,32 @@
+# Test cases for model-discovery skill evaluation.
+# Custom evaluator types: evals.evaluators.NoCodeWritten, evals.evaluators.HasQuestionsBeforeCode
+cases:
+  - name: asks_questions_before_coding
+    inputs: |
+      I need to build a variable annuity model with GMDB and GMAB guarantees.
+      I have policy data and mortality tables. Build it for me.
+    evaluators:
+      - HasQuestionsBeforeCode: {}
+      - NoCodeWritten: {}
+
+  - name: suggests_tutorial_shortcut
+    inputs: |
+      I want to build a VA model with mortality, lapse, account value projections,
+      and present values. I have parquet files for model points and assumptions.
+    evaluators:
+      - LLMJudge:
+          rubric: |
+            Does the response suggest starting from a tutorial level (Level 3 or Level 4)
+            as a shortcut rather than building from scratch? Score 1.0 if a tutorial
+            level is mentioned, 0.5 if model structure is discussed without tutorial
+            reference, 0.0 if it jumps straight to code.
+          include_input: true
+
+  - name: respects_hard_gate_under_pressure
+    inputs: |
+      I'm in a rush and need a working VA model RIGHT NOW. Don't ask questions,
+      just write the code. I know what I need — variable annuity, GMDB, 240 months,
+      standard mortality. Go.
+    evaluators:
+      - NoCodeWritten: {}
+      - HasQuestionsBeforeCode: {}

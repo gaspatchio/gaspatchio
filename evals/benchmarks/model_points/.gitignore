@@ -1,0 +1,3 @@
+# Generated model points (too large for repo)
+*.parquet
+!.gitignore

@@ -1,0 +1,47 @@
+# Test cases for quickstart skill evaluation.
+cases:
+  - name: routes_basic_policy_data_to_L1
+    inputs: |
+      I'm new to gaspatchio. I have a CSV file with columns: policy_id, age,
+      sex, sum_assured, annual_premium. I want to project cashflows.
+    expected_output:
+      tutorial_level_routed: "Level 1"
+    evaluators:
+      - EqualsExpected
+
+  - name: handles_no_data
+    inputs: |
+      I just installed gaspatchio and want to see what it can do.
+      I don't have any data files yet.
+    evaluators:
+      - LLMJudge:
+          rubric: |
+            Does the response recommend starting with Level 1 base (the default
+            for users with no data)? Score 1.0 if Level 1 is recommended,
+            0.5 if any tutorial level is recommended, 0.0 if no routing occurs.
+          include_input: true
+
+  - name: routes_va_to_L3
+    inputs: |
+      I have variable annuity policy data with account values, fund allocations,
+      and guarantee riders (GMDB/GMAB). Where should I start?
+    evaluators:
+      - LLMJudge:
+          rubric: |
+            Does the response route to Level 3 (Mini VA) or Level 4 (Lifelib)?
+            Either is correct for VA data. Score 1.0 if L3 or L4, 0.0 otherwise.
+          include_input: true
+
+  - name: handles_stochastic_out_of_scope
+    inputs: |
+      I need Monte Carlo simulation with 10,000 stochastic scenarios
+      for a Solvency II internal model.
+    evaluators:
+      - LLMJudge:
+          rubric: |
+            Does the response explain that stochastic/Monte Carlo is not yet covered
+            by a guided tutorial (Level 6 coming soon)? It should mention Level 5 for
+            deterministic scenarios and point to advanced examples. Score 1.0 if
+            out-of-scope is clearly flagged, 0.5 if partially addressed, 0.0 if it
+            claims full stochastic support exists.
+          include_input: true

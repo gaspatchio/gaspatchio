@@ -99,3 +99,24 @@ pub fn list_conditional(
 ) -> PolarsResult<Series> {
     gaspatchio_core_lib::polars_functions::list_conditional(inputs, &kwargs)
 }
+
+/// Output type for rollforward: always Struct
+/// The actual fields are determined at runtime by the kernel based on kwargs.
+fn rollforward_output(_: &[Field]) -> PolarsResult<Field> {
+    Ok(Field::new(
+        PlSmallStr::from_static("rollforward"),
+        DataType::Struct(vec![Field::new(
+            PlSmallStr::from_static("result"),
+            DataType::List(Box::new(DataType::Float64)),
+        )]),
+    ))
+}
+
+/// PyO3 wrapper for rollforward — non-linear account value projection
+#[polars_expr(output_type_func = rollforward_output)]
+pub fn rollforward(
+    inputs: &[Series],
+    kwargs: gaspatchio_core_lib::RollforwardKwargs,
+) -> PolarsResult<Series> {
+    gaspatchio_core_lib::polars_functions::rollforward::rollforward(inputs, &kwargs)
+}

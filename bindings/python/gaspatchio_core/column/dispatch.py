@@ -86,8 +86,14 @@ _NUMERIC_ELEMENTWISE: set[str] = {
     "round",  # Can take decimals argument
     "cast",  # Type casting
     "cum_prod",
+    "cum_sum",
+    "cum_min",
+    "cum_max",
+    "diff",
     "shift",
     "fill_null",
+    "fill_nan",
+    "interpolate",
 }
 
 # All available Polars expression namespaces

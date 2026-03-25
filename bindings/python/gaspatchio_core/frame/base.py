@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     # Keep TYPE_CHECKING block for potential future forward refs if needed
     from collections.abc import Callable  # For trace method signature
 
+    from gaspatchio_core.rollforward._builder import RollforwardBuilder
     from gaspatchio_core.typing import IntoExprColumn
 
     # Add forward references for accessors used in type hints
@@ -265,6 +266,17 @@ class ActuarialFrame:
 
     def __setitem__(self, key: str, value: Any) -> None:  # noqa: ANN401
         """Handle column assignment using df['column'] = value."""
+        # --- Rollforward builder detection ---
+        from gaspatchio_core.rollforward._builder import RollforwardBuilder, RollforwardStateProxy  # noqa: PLC0415
+
+        if isinstance(value, RollforwardBuilder):
+            self._assign_rollforward(key, value)
+            return
+        if isinstance(value, RollforwardStateProxy):
+            self._assign_rollforward_state(key, value)
+            return
+        # --- END Rollforward builder detection ---
+
         if key not in self._column_order:
             self._column_order.append(key)
             self._refresh_attr_columns_set()
@@ -307,6 +319,90 @@ class ActuarialFrame:
             )
             raise type(e)(msg) from e
         # No return self needed for __setitem__
+
+    def _assign_rollforward(self, key: str, builder: RollforwardBuilder) -> None:
+        """Compile and assign a rollforward builder as a lazy expression.
+
+        Parameters
+        ----------
+        key
+            The column name to assign the rollforward result to.
+        builder
+            A fully configured ``RollforwardBuilder`` instance.
+        """
+        from gaspatchio_core.rollforward._compile import compile_rollforward  # noqa: PLC0415
+        from gaspatchio_core.functions.vector import rollforward_plugin  # noqa: PLC0415
+
+        args, kwargs = compile_rollforward(builder)
+        struct_expr = rollforward_plugin(args, kwargs)
+
+        # Store the Struct as a hidden column
+        hidden_name = f"__rollforward_{key}"
+        self._df = self._df.with_columns(struct_expr.alias(hidden_name))
+
+        # Single-state: extract "result" field as the user-facing column
+        if not builder.is_multi_state:
+            result_expr = pl.col(hidden_name).struct.field("result")
+            self._df = self._df.with_columns(result_expr.alias(key))
+
+        if key not in self._column_order:
+            self._column_order.append(key)
+            self._refresh_attr_columns_set()
+
+    def _assign_rollforward_state(self, key: str, proxy: Any) -> None:  # noqa: ANN401
+        """Compile a multi-state rollforward and extract one state field.
+
+        Because the Polars plugin output type declares only a minimal struct
+        schema (with a ``"result"`` field), lazy ``.struct.field()`` calls
+        for multi-state fields fail schema validation.  We therefore use
+        ``map_batches`` to defer field extraction to runtime.
+
+        Parameters
+        ----------
+        key
+            The column name to assign the extracted state to.
+        proxy
+            A ``RollforwardStateProxy`` holding the builder and state name.
+        """
+        from gaspatchio_core.rollforward._builder import RollforwardStateProxy  # noqa: PLC0415
+        from gaspatchio_core.rollforward._compile import compile_rollforward  # noqa: PLC0415
+        from gaspatchio_core.functions.vector import rollforward_plugin  # noqa: PLC0415
+
+        assert isinstance(proxy, RollforwardStateProxy)  # noqa: S101
+        builder = proxy._builder  # noqa: SLF001
+        state_name = proxy._state_name  # noqa: SLF001
+
+        # Use a shared hidden column keyed by builder identity so that
+        # multiple state extractions from the same builder share one
+        # compiled rollforward column.
+        hidden_name = f"__rollforward_{id(builder)}"
+
+        # Compile only once: check if already registered in the schema
+        try:
+            schema = self._df.collect_schema()
+            has_hidden = hidden_name in schema.names()
+        except Exception:  # noqa: BLE001
+            has_hidden = False
+
+        if not has_hidden:
+            args, kwargs = compile_rollforward(builder)
+            struct_expr = rollforward_plugin(args, kwargs)
+            self._df = self._df.with_columns(struct_expr.alias(hidden_name))
+
+        # Extract the named state field using map_batches to defer to runtime.
+        # The plugin's output_type_func only declares a "result" field, so
+        # lazy .struct.field() fails schema validation for multi-state fields.
+        _field = state_name  # capture for closure
+
+        result_expr = pl.col(hidden_name).map_batches(
+            lambda s, _f=_field: s.struct.field(_f),
+            return_dtype=pl.List(pl.Float64),
+        )
+        self._df = self._df.with_columns(result_expr.alias(key))
+
+        if key not in self._column_order:
+            self._column_order.append(key)
+            self._refresh_attr_columns_set()
 
     def _expr_to_str(self, value) -> str:
         """Convert an expression to a readable string (simplified)."""
@@ -420,6 +516,12 @@ class ActuarialFrame:
                 # Optionally clear the graph after applying, though the tracer resets it per call.
                 # self._computation_graph = []  # noqa: ERA001
 
+            # Strip hidden rollforward columns before collecting
+            schema_names = final_df.collect_schema().names()
+            rollforward_cols = [c for c in schema_names if c.startswith("__rollforward_")]
+            if rollforward_cols:
+                final_df = final_df.drop(rollforward_cols)
+
             # Call collect with engine parameter if specified
             if engine is not None:
                 return final_df.collect(engine=engine)
@@ -469,6 +571,12 @@ class ActuarialFrame:
 
                 # Optionally clear the graph after applying, though the tracer resets it per call.
                 # self._computation_graph = []  # noqa: ERA001
+
+            # Strip hidden rollforward columns before profiling
+            schema_names = final_df.collect_schema().names()
+            rollforward_cols = [c for c in schema_names if c.startswith("__rollforward_")]
+            if rollforward_cols:
+                final_df = final_df.drop(rollforward_cols)
 
             # Use Polars profile to get both result and profile info
             result_df, profile_info = final_df.profile()
@@ -723,7 +831,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        MaxResult
             A frame with one row containing maximum values for each column.
 
         Examples
@@ -825,7 +933,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        MinResult
             A frame with one row containing minimum values for each column.
 
         Examples
@@ -927,7 +1035,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        MeanResult
             A frame with one row containing mean values for numeric columns.
 
         Examples
@@ -1030,7 +1138,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        StdResult
             A frame with one row containing standard deviations for numeric columns.
 
         Examples
@@ -1134,7 +1242,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        VarResult
             A frame with one row containing variances for numeric columns.
 
         Examples
@@ -1234,7 +1342,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        MedianResult
             A frame with one row containing median values for numeric columns.
 
         Examples
@@ -1335,7 +1443,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        SumResult
             A frame with one row containing sum totals for numeric columns.
 
         Examples
@@ -1434,7 +1542,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        CountResult
             A frame with one row containing non-null counts for each column.
 
         Examples
@@ -1533,7 +1641,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        ProductResult
             A frame with one row containing products for numeric columns.
 
         Examples
@@ -1655,7 +1763,7 @@ class ActuarialFrame:
 
         Returns
         -------
-        pl.DataFrame
+        QuantileResult
             A frame with one row containing quantile values for numeric columns.
 
         Examples

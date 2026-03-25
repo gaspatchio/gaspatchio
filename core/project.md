@@ -121,6 +121,26 @@ Polars expressions are **automatically parallelized at the engine level**. Addin
 **Reference Implementation:** See `polars_functions/list_pow.rs` for example of optimal plugin pattern
 
 
+## Documentation Audience
+
+Gaspatchio documentation targets two audiences:
+
+1. **Actuaries** — They know the products and actuarial concepts. They need to see their workflow in the code.
+2. **LLMs** — They need complete examples with realistic actuarial data so they can generate correct code.
+
+Every documentation section should follow: **business problem** → **Gaspatchio solution** → **code example**. Lead with the actuarial problem being solved, not the computer science architecture. Skip internal implementation details (Rust kernels, Struct columns, kwargs serialization) unless directly relevant to how the user calls the API.
+
+## Design Documents and Plans
+
+Design specs and implementation plans live in `ref/<topic>/` alongside the relevant reference material. The `ref/` directory uses numbered prefixes (e.g., `ref/30-llm-helpers/`).
+
+- **Specs**: `ref/<topic>/specs/YYYY-MM-DD-<name>-design.md`
+- **Plans**: `ref/<topic>/plans/YYYY-MM-DD-<name>.md`
+
+When using Superpowers skills (brainstorming, writing-plans), save output to the relevant `ref/` subdirectory. If unsure which `ref/` folder applies, ask the user. Do NOT use `docs/superpowers/` — that directory does not exist in this project.
+
+Current active topic: `ref/30-llm-helpers/` (LLM skills, tutorial, CLI improvements).
+
 ### Rust rules for this project - apply to all rust (*rs) files
 
 @prompts/rust/core.md

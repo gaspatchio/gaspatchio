@@ -1,0 +1,140 @@
+# Test cases for model-review skill evaluation.
+# Custom evaluator types: evals.evaluators.SeverityClassification
+cases:
+  - name: catches_map_elements
+    inputs: |
+      Review this gaspatchio model for issues:
+
+      ```python
+      def main(af):
+          af.age_category = af.age_at_entry.map_elements(
+              lambda x: "young" if x < 40 else "old", return_dtype=pl.String
+          )
+          return af
+      ```
+    evaluators:
+      - SeverityClassification:
+          expected_critical_keywords: ["map_elements"]
+          expected_important_keywords: []
+
+  - name: catches_for_loop
+    inputs: |
+      Review this gaspatchio model for issues:
+
+      ```python
+      def main(af):
+          results = []
+          for row in af.collect().iter_rows(named=True):
+              results.append({"id": row["policy_id"], "val": row["premium"] * 2})
+          return af
+      ```
+    evaluators:
+      - SeverityClassification:
+          expected_critical_keywords: ["for", "loop", "iter_rows"]
+          expected_important_keywords: []
+
+  - name: catches_inline_polars
+    inputs: |
+      Review this gaspatchio model for issues:
+
+      ```python
+      def main(af):
+          mort_df = pl.DataFrame({"age": [30, 45, 60], "qx": [0.001, 0.004, 0.015]})
+          lookup = mort_df.filter(pl.col("age") == af.age_at_entry)
+          return af
+      ```
+    evaluators:
+      - SeverityClassification:
+          expected_critical_keywords: []
+          expected_important_keywords: ["polars", "filter", "Table"]
+
+  - name: catches_hardcoded_assumptions
+    inputs: |
+      Review this gaspatchio model for issues:
+
+      ```python
+      def main(af):
+          MORTALITY_RATE = 0.015
+          af.mortality_rate = MORTALITY_RATE
+          af.claims = af.sum_assured * af.mortality_rate
+          return af
+      ```
+    evaluators:
+      - SeverityClassification:
+          expected_critical_keywords: []
+          expected_important_keywords: ["hardcoded", "magic", "Table"]
+
+  - name: passes_clean_model
+    inputs: |
+      Review this gaspatchio model section. Report any issues found:
+
+      ```python
+      # SECTION 3: Mortality
+      af.mort_rate_ann = mortality_table.lookup(af.attained_age, af.sex)
+      af.mort_rate_mth = 1 - (1 - af.mort_rate_ann) ** (1 / 12)
+      af.pols_death = af.pols_if_bef_decr * af.mort_rate_mth
+      ```
+    expected_output:
+      critical_issues: []
+    evaluators:
+      - EqualsExpected
+
+  - name: catches_av_timing_bug
+    inputs: |
+      Review this gaspatchio model section. The model calculates death claims
+      using beginning-of-period account value:
+
+      ```python
+      # Death claims use beginning-of-period AV
+      af.claim_pp_death = when(af.has_gmdb).then(
+          when(af.av_pp > af.sum_assured_f).then(af.av_pp).otherwise(af.sum_assured_f)
+      ).otherwise(af.av_pp)
+      ```
+
+      The account value timeline is: av_pp (BOP) -> fees deducted -> av_pp_mid_mth -> investment return.
+      Is there a timing issue here?
+    evaluators:
+      - LLMJudge:
+          rubric: |
+            Does the review identify that death claims should use av_pp_mid_mth
+            (mid-month AV after fees) instead of av_pp (beginning-of-period AV)?
+            Score 1.0 if the timing issue is identified, 0.0 if not.
+          include_input: true
+
+  - name: catches_scalar_list_confusion
+    inputs: |
+      Review this gaspatchio model. The model uses list columns for projections
+      but assigns a scalar mortality rate:
+
+      ```python
+      def main(af):
+          af.timeline = af.create_projection_timeline(months=240)
+          # mortality_rate is a scalar float, not a list column
+          af.mortality_rate = 0.015
+          af.survival = af.mortality_rate.cumulative_survival()
+          return af
+      ```
+    evaluators:
+      - SeverityClassification:
+          expected_critical_keywords: ["scalar", "list"]
+          expected_important_keywords: []
+
+  - name: catches_missing_section_comments
+    inputs: |
+      Review this complete gaspatchio model:
+
+      ```python
+      def main(af):
+          af.timeline = af.create_projection_timeline(months=240)
+          af.mort_rate = mortality_table.lookup(af.age)
+          af.surv = (1 - af.mort_rate).cum_prod()
+          af.pols_death = af.pols_if * af.mort_rate
+          af.claims = af.pols_death * af.sum_assured
+          af.disc = (1 / (1 + af.disc_rate)).cum_prod()
+          af.pv_claims = (af.claims * af.disc).list.sum()
+          return af
+      ```
+    evaluators:
+      - SeverityClassification:
+          expected_critical_keywords: []
+          expected_important_keywords: ["comment", "section"]
