@@ -57,7 +57,7 @@ def compute_pass_rate(report) -> float:
         return 1.0
     passed = 0
     for case_result in report.cases:
-        scores = [s for s in case_result.scores.values() if s is not None]
+        scores = [s.value for s in case_result.scores.values() if s is not None]
         if scores and (sum(scores) / len(scores)) >= 0.7:
             passed += 1
     return passed / len(report.cases)
