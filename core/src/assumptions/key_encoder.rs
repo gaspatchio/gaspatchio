@@ -266,7 +266,7 @@ impl KeyEncoder {
                 let mut out = vec![invalid; len];
 
                 // Handle categorical series
-                if let Ok(ca) = series.categorical() {
+                if let Ok(ca) = series.cat32() {
                     let physical = ca.physical();
                     let physical = physical.rechunk();
 
@@ -327,7 +327,7 @@ impl KeyEncoder {
                 let mut out = vec![invalid; len];
 
                 // Fast path: categorical input - read physical indices directly
-                if let Ok(ca) = series.categorical() {
+                if let Ok(ca) = series.cat32() {
                     let physical = ca.physical();
                     let physical = physical.rechunk();
 
@@ -443,7 +443,7 @@ impl KeyEncoder {
             }
 
             // Categorical - use physical index directly
-            (KeyEncoder::Categorical { size }, AnyValue::Categorical(idx, _, _)) => {
+            (KeyEncoder::Categorical { size }, AnyValue::Categorical(idx, _)) => {
                 if (idx as usize) < *size {
                     Some(idx)
                 } else {
@@ -463,7 +463,7 @@ impl KeyEncoder {
             // CategoricalWithStringFallback - handles both categorical and string input
             (
                 KeyEncoder::CategoricalWithStringFallback { size, .. },
-                AnyValue::Categorical(idx, _, _),
+                AnyValue::Categorical(idx, _),
             ) => {
                 if (idx as usize) < *size {
                     Some(idx)

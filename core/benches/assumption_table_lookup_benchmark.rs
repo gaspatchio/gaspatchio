@@ -49,8 +49,8 @@ fn custom_melt(
         let value_series = df.column(col)?.clone().with_name(value_name.into());
         // Build a temporary DataFrame with the id columns
         let mut temp_df = id_df.clone();
-        temp_df.with_column(var_series)?;
-        temp_df.with_column(value_series)?;
+        temp_df.with_column(var_series.into_column())?;
+        temp_df.with_column(value_series.into_column())?;
         melted_frames.push(temp_df);
     }
 
@@ -1167,9 +1167,9 @@ fn create_scenario_returns_table_categorical(
 
     // Create DataFrame with fund_index as categorical
     let fund_series = Series::new("fund_index".into(), fund_indices)
-        .cast(&DataType::Categorical(None, CategoricalOrdering::Physical))?;
+        .cast(&DataType::from_categories(Categories::global()))?;
 
-    let df = DataFrame::new(vec![
+    let df = DataFrame::new_infer_height(vec![
         Series::new("scenario_id".into(), scenario_ids).into(),
         Series::new("t".into(), ts).into(),
         fund_series.into(),
@@ -1231,7 +1231,7 @@ fn benchmark_scenario_cross_join_categorical(c: &mut Criterion) {
         .collect();
 
     let fund_index_series = Series::new("fund_index".into(), fund_strs)
-        .cast(&DataType::Categorical(None, CategoricalOrdering::Physical))
+        .cast(&DataType::from_categories(Categories::global()))
         .expect("Failed to cast to categorical");
 
     let scenario_id_series = Series::new("scenario_id".into(), scenario_ids);

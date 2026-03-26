@@ -74,7 +74,7 @@ def test_expression_proxy_to_expr(expr_proxy):
         (lambda a, b: a - b, "-"),
         (lambda a, b: a * b, "*"),
         (lambda a, b: a / b, "/"),
-        (lambda a, b: a // b, "floor_div"),
+        (lambda a, b: a // b, "//"),
         (lambda a, b: a % b, "%"),
     ],
 )
@@ -145,7 +145,7 @@ def test_expression_proxy_comparison_operators(
         (lambda a, b: a - b, "-"),
         (lambda a, b: a * b, "*"),
         (lambda a, b: a / b, "/"),
-        (lambda a, b: a // b, "floor_div"),
+        (lambda a, b: a // b, "//"),
         (lambda a, b: a % b, "%"),
     ],
 )

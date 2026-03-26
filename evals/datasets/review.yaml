@@ -74,10 +74,8 @@ cases:
       af.mort_rate_mth = 1 - (1 - af.mort_rate_ann) ** (1 / 12)
       af.pols_death = af.pols_if_bef_decr * af.mort_rate_mth
       ```
-    expected_output:
-      critical_issues: []
     evaluators:
-      - EqualsExpected
+      - NoCriticalIssues
 
   - name: catches_av_timing_bug
     inputs: |

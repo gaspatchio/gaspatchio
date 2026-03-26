@@ -15,6 +15,7 @@ import gc
 import importlib.util
 import json
 import sys
+import threading
 import time
 import traceback
 import tracemalloc
@@ -23,7 +24,65 @@ from types import ModuleType
 
 import polars as pl
 
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
 from gaspatchio_core import ActuarialFrame
+
+
+class CpuMonitor:
+    """Sample per-core CPU usage in a background thread."""
+
+    def __init__(self, interval: float = 0.1) -> None:
+        self.interval = interval
+        self.samples: list[list[float]] = []
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if not HAS_PSUTIL:
+            return
+        self.samples.clear()
+        self._stop.clear()
+        # Prime psutil (first call returns 0)
+        psutil.cpu_percent(percpu=True)
+        self._thread = threading.Thread(target=self._sample, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> dict:
+        if not HAS_PSUTIL or self._thread is None:
+            return {}
+        self._stop.set()
+        self._thread.join(timeout=2)
+        self._thread = None
+        return self._summarize()
+
+    def _sample(self) -> None:
+        while not self._stop.is_set():
+            self.samples.append(psutil.cpu_percent(percpu=True))
+            self._stop.wait(self.interval)
+
+    def _summarize(self) -> dict:
+        if not self.samples:
+            return {}
+        n_cores = len(self.samples[0])
+        n_samples = len(self.samples)
+        # Average utilization per core across all samples
+        core_avgs = [
+            sum(s[c] for s in self.samples) / n_samples for c in range(n_cores)
+        ]
+        avg_util = sum(core_avgs) / n_cores
+        active_cores = sum(1 for a in core_avgs if a > 10.0)
+        peak_core = max(core_avgs)
+        return {
+            "avg_cpu_pct": round(avg_util, 1),
+            "active_cores": active_cores,
+            "total_cores": n_cores,
+            "peak_core_pct": round(peak_core, 1),
+        }
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 TUTORIAL_DIR = REPO_ROOT / "tutorial"
@@ -89,8 +148,10 @@ def bench_l4(mp_path: Path) -> dict:
     """Benchmark L4 model."""
     mp = pl.read_parquet(mp_path)
 
+    cpu = CpuMonitor()
     gc.collect()
     tracemalloc.start()
+    cpu.start()
     start = time.perf_counter()
 
     af = ActuarialFrame(mp)
@@ -98,10 +159,11 @@ def bench_l4(mp_path: Path) -> dict:
     _ = result_af.collect()
 
     elapsed = time.perf_counter() - start
+    cpu_stats = cpu.stop()
     _, peak_mem = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
-    return {"time_s": round(elapsed, 3), "peak_mb": round(peak_mem / 1024 / 1024, 1)}
+    return {"time_s": round(elapsed, 3), "peak_mb": round(peak_mem / 1024 / 1024, 1), **cpu_stats}
 
 
 def bench_l5(mp_path: Path) -> dict:
@@ -111,8 +173,10 @@ def bench_l5(mp_path: Path) -> dict:
     mp = pl.read_parquet(mp_path)
     scenarios = ["BASE", "UP", "DOWN"]
 
+    cpu = CpuMonitor()
     gc.collect()
     tracemalloc.start()
+    cpu.start()
     start = time.perf_counter()
 
     af = ActuarialFrame(mp)
@@ -121,15 +185,16 @@ def bench_l5(mp_path: Path) -> dict:
     _ = result_af.collect()
 
     elapsed = time.perf_counter() - start
+    cpu_stats = cpu.stop()
     _, peak_mem = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
-    return {"time_s": round(elapsed, 3), "peak_mb": round(peak_mem / 1024 / 1024, 1)}
+    return {"time_s": round(elapsed, 3), "peak_mb": round(peak_mem / 1024 / 1024, 1), **cpu_stats}
 
 
 BENCHMARKS = {
-    "L4-base": {"level": "4-lifelib", "gen_key": "4", "func": bench_l4},
-    "L5-base": {"level": "5-scenarios", "gen_key": "5", "func": bench_l5},
+    "VA Model (GMDB/GMAB)": {"level": "4-lifelib", "gen_key": "4", "func": bench_l4},
+    "VA + Scenarios (3x)": {"level": "5-scenarios", "gen_key": "5", "func": bench_l5},
 }
 
 
@@ -174,7 +239,11 @@ def main() -> None:
 
             try:
                 metrics = config["func"](mp_path)
-                print(f"{metrics['time_s']}s, {metrics['peak_mb']}MB", file=sys.stderr)
+                throughput = round(size / metrics["time_s"], 1) if metrics["time_s"] > 0 else 0
+                active = metrics.get("active_cores", "?")
+                total = metrics.get("total_cores", "?")
+                avg_cpu = metrics.get("avg_cpu_pct", "?")
+                print(f"{metrics['time_s']}s, {metrics['peak_mb']}MB, {throughput} pts/s, {active}/{total} cores ({avg_cpu}% avg)", file=sys.stderr)
 
                 results.append({
                     "name": f"{bench_name}/{size_label}-points",
@@ -182,10 +251,26 @@ def main() -> None:
                     "value": metrics["time_s"],
                 })
                 results.append({
+                    "name": f"{bench_name}/{size_label}-throughput",
+                    "unit": "points/sec",
+                    "value": throughput,
+                })
+                results.append({
                     "name": f"{bench_name}/{size_label}-memory",
                     "unit": "MB",
                     "value": metrics["peak_mb"],
                 })
+                if "active_cores" in metrics:
+                    results.append({
+                        "name": f"{bench_name}/{size_label}-cores",
+                        "unit": "cores",
+                        "value": metrics["active_cores"],
+                    })
+                    results.append({
+                        "name": f"{bench_name}/{size_label}-cpu-avg",
+                        "unit": "%",
+                        "value": metrics["avg_cpu_pct"],
+                    })
             except Exception as e:
                 print(f"ERROR: {e}", file=sys.stderr)
                 print(traceback.format_exc(), file=sys.stderr)

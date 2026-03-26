@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from pydantic_evals.evaluators import Evaluator, EvaluatorContext
 
-from evals.result_types import DiscoveryResult, ReviewResult, ScenarioResult
+from evals.result_types import DiscoveryResult, ReconciliationResult, ReviewResult, ScenarioResult
 
 
 @dataclass
@@ -55,6 +55,17 @@ class SeverityClassification(Evaluator[str, ReviewResult]):
 
 
 @dataclass
+class NoCriticalIssues(Evaluator[str, ReviewResult]):
+    """Clean model should have no critical issues.
+
+    Score 1.0 if critical_issues is empty, 0.0 otherwise.
+    """
+
+    def evaluate(self, ctx: EvaluatorContext[str, ReviewResult]) -> float:
+        return 1.0 if len(ctx.output.critical_issues) == 0 else 0.0
+
+
+@dataclass
 class TwoScriptPattern(Evaluator[str, ScenarioResult]):
     """Scenarios skill must not modify model.py and must create run_scenarios.py.
 
@@ -68,6 +79,35 @@ class TwoScriptPattern(Evaluator[str, ScenarioResult]):
         if not ctx.output.run_scenarios_created:
             return 0.0
         return 1.0
+
+
+@dataclass
+class IdentifiesReference(Evaluator[str, ReconciliationResult]):
+    """Reconciliation skill must identify or ask for a reference.
+
+    Score 1.0 if reference_identified is non-empty (agent asked/identified a reference),
+    0.0 if empty.
+    """
+
+    def evaluate(self, ctx: EvaluatorContext[str, ReconciliationResult]) -> float:
+        return 1.0 if ctx.output.reference_identified.strip() else 0.0
+
+
+@dataclass
+class InvestigatesMismatch(Evaluator[str, ReconciliationResult]):
+    """Reconciliation skill must not accept mismatches without investigation.
+
+    Score 1.0 if tolerance_stated is True (agent insists on precision),
+    0.5 if variables_compared is non-empty (at least investigating),
+    0.0 otherwise.
+    """
+
+    def evaluate(self, ctx: EvaluatorContext[str, ReconciliationResult]) -> float:
+        if ctx.output.tolerance_stated:
+            return 1.0
+        if len(ctx.output.variables_compared) > 0:
+            return 0.5
+        return 0.0
 
 
 @dataclass

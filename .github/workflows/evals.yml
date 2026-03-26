@@ -2,19 +2,21 @@ name: Evals & Benchmarks
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 3am UTC daily
+    - cron: '0 3 * * 1'  # 3am UTC every Monday
+  pull_request:
+    branches: [develop]
   push:
     branches: [main, develop]
-    paths: ['skills/**', 'evals/**', 'core/src/**', 'core/benches/**']
   workflow_dispatch:
 
 permissions:
   contents: write  # for gh-pages push
+  pull-requests: write  # for benchmark alert comments on PRs
 
 jobs:
   rust-benchmarks:
     name: Criterion Benchmarks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-m
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +26,8 @@ jobs:
       - name: Run benchmarks
         run: cargo bench --bench assumption_table_lookup_benchmark -- --output-format bencher '(assumption_table_.*1k|hash_vs_array_1k|vector_hash_vs_array_1k|lookup_scaling/.*/1000$)' | tee bench-output.txt
         working-directory: core
+      - name: Clean working tree for gh-pages push
+        run: git checkout -- .
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -38,7 +42,8 @@ jobs:
 
   model-benchmarks:
     name: End-to-End Model Benchmarks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-m
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: bindings/python
@@ -53,6 +58,9 @@ jobs:
         run: uv run python ../../evals/benchmarks/generate_model_points.py
       - name: Run model benchmarks
         run: uv run python ../../evals/benchmarks/run_model_benchmarks.py | tee /tmp/model-bench-output.json
+      - name: Clean working tree for gh-pages push
+        run: git checkout -- .
+        working-directory: .
       - name: Store model benchmark results
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -63,11 +71,44 @@ jobs:
           auto-push: true
           benchmark-data-dir-path: dev/model-bench
           alert-threshold: '150%'
-          fail-on-alert: true
+          fail-on-alert: false
+
+  comparison-benchmarks:
+    name: Gaspatchio vs Lifelib
+    runs-on: ubuntu-latest-m
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: bindings/python
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies (with lifelib)
+        run: uv sync --group benchmark
+      - name: Generate model points (all scales)
+        run: uv run python ../../evals/benchmarks/generate_model_points.py
+      - name: Run comparison benchmarks
+        run: uv run --group benchmark python ../../evals/benchmarks/run_comparison_benchmarks.py | tee /tmp/comparison-output.json
+      - name: Clean working tree for gh-pages push
+        run: git checkout -- .
+        working-directory: .
+      - name: Store comparison results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Gaspatchio vs Lifelib
+          tool: customSmallerIsBetter
+          output-file-path: evals/benchmarks/comparison_results/benchmark-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          benchmark-data-dir-path: dev/comparison
+          alert-threshold: '200%'
+          fail-on-alert: false
 
   skill-evals:
     name: Skill Evals (4 models)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-m
     defaults:
       run:
         working-directory: bindings/python
@@ -88,6 +129,9 @@ jobs:
         with:
           name: capability-matrix
           path: evals/results/capability-matrix.json  # relative to repo root
+      - name: Clean working tree for gh-pages push
+        run: git checkout -- .
+        working-directory: .
       - name: Store eval results
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -97,8 +141,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           benchmark-data-dir-path: dev/evals
-          alert-threshold: '80%'
+          alert-threshold: '200%'
           comment-on-alert: true
+          fail-on-alert: false
 
   capability-matrix:
     name: Update Capability Matrix

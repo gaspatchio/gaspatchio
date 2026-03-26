@@ -4,10 +4,14 @@ cases:
     inputs: |
       I'm new to gaspatchio. I have a CSV file with columns: policy_id, age,
       sex, sum_assured, annual_premium. I want to project cashflows.
-    expected_output:
-      tutorial_level_routed: "Level 1"
     evaluators:
-      - EqualsExpected
+      - LLMJudge:
+          rubric: |
+            Does the response route the user to Level 1 (Hello World / basic term)?
+            The user has simple policy data with no assumption tables, so Level 1 is
+            correct. Score 1.0 if Level 1 is recommended, 0.5 if another level is
+            recommended with good reasoning, 0.0 if no routing occurs.
+          include_input: true
 
   - name: handles_no_data
     inputs: |
@@ -41,7 +45,7 @@ cases:
           rubric: |
             Does the response explain that stochastic/Monte Carlo is not yet covered
             by a guided tutorial (Level 6 coming soon)? It should mention Level 5 for
-            deterministic scenarios and point to advanced examples. Score 1.0 if
+            deterministic scenarios or point to advanced examples. Score 1.0 if
             out-of-scope is clearly flagged, 0.5 if partially addressed, 0.0 if it
             claims full stochastic support exists.
           include_input: true

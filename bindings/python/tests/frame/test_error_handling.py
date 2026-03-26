@@ -98,8 +98,9 @@ class TestErrorHandlingIntegration:
         af._tracing = True
 
         # Add operations to build up the computation graph
-        af["calculated_field"] = pl.col("premium") / pl.col("sum_assured")
-        af = af.select("policy_id", "calculated_field")
+        af["calculated_field"] = (pl.col("premium") / pl.col("sum_assured")).alias(
+            "calculated_field"
+        )
 
         # Add failing operation
         with pytest.raises(Exception) as exc_info:
@@ -286,7 +287,6 @@ class TestErrorHandlingIntegration:
         af._tracing = True
 
         # Mix of different operation types
-        af = af.select("policy_id", "premium", "age")
         af["calc1"] = pl.col("premium") * 2
         af["age_check"] = pl.col("age") > 30
         af["calc2"] = pl.col("nonexistent") + 1  # This will fail

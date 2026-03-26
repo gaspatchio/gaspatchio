@@ -5,23 +5,11 @@ cases:
       I've built a term life model and want to make sure it's correct.
       Can you check it against something?
     evaluators:
-      - LLMJudge:
-          rubric: |
-            Does the response ask what reference/gold standard to reconcile against
-            (Excel, lifelib, vendor model)? The reconciliation skill requires identifying
-            a concrete reference before starting. Score 1.0 if it asks for a reference,
-            0.5 if it mentions reconciliation concepts, 0.0 if it just reviews the code.
-          include_input: true
+      - IdentifiesReference
 
   - name: insists_on_evidence
     inputs: |
       My model gives pv_net_cf = 12,345 for policy 1. The lifelib reference
       gives 12,340. That's close enough, right? Let's move on.
     evaluators:
-      - LLMJudge:
-          rubric: |
-            Does the response push back on "close enough" and insist on understanding
-            the 5-unit difference? The reconciliation skill says "every mismatch is a
-            bug until proven otherwise." Score 1.0 if it investigates the difference,
-            0.5 if it accepts with caveats, 0.0 if it agrees to move on.
-          include_input: true
+      - InvestigatesMismatch

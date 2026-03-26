@@ -858,11 +858,10 @@ class Table:
                     # Convert literal values to expressions
                     expr = pl.lit(value)
 
-                # Auto-convert string columns to Enum for optimal lookup performance.
-                # This enables the Rust side to use direct index access (10.5ms)
-                # instead of hash lookups (21ms) for string keys.
-                if col in self._key_categories:
-                    expr = expr.cast(self._key_categories[col])
+                # Note: String columns are handled by the Rust
+                # CategoricalWithStringFallback encoder which maps
+                # strings to the table's internal categorical indices.
+                # No pre-cast needed — the encoder handles raw strings.
 
                 key_exprs.append(expr)
             else:

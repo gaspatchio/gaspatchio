@@ -19,7 +19,7 @@ impl ColumnCodec {
     pub fn encode(&self, av: AnyValue) -> u64 {
         match (self, av) {
             // String encoding - handle special cases first (categorical indices)
-            (ColumnCodec::String, AnyValue::Categorical(idx, _, _)) => u64::from(idx),
+            (ColumnCodec::String, AnyValue::Categorical(idx, _)) => u64::from(idx),
             (ColumnCodec::String, AnyValue::String(s)) => {
                 let mut hasher = AHasher::default();
                 hasher.write(s.as_bytes());
