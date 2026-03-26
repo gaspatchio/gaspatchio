@@ -83,6 +83,11 @@ def generate_model_points(
     return sampled
 
 
+def write_lifelib_csv(df: pl.DataFrame, output_path: Path) -> None:
+    """Write model points in lifelib CSV format."""
+    df.write_csv(output_path)
+
+
 def main() -> None:
     """Generate all model point sets."""
     parser = argparse.ArgumentParser(description="Generate scaled model points")
@@ -115,6 +120,10 @@ def main() -> None:
             scaled = generate_model_points(source_mp, size)
             scaled.write_parquet(out_path)
             print(f"    Written: {out_path.stat().st_size / 1024:.0f} KB")
+            # Also write lifelib-format CSV
+            csv_path = out_path.with_suffix(".csv")
+            print(f"    Writing lifelib CSV → {csv_path}")
+            write_lifelib_csv(scaled, csv_path)
 
     print("Done.")
 

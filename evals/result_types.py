@@ -11,19 +11,24 @@ class ReviewResult(BaseModel):
     """Structured output from model-review skill."""
 
     critical_issues: list[str] = Field(
-        description="Issues that will produce wrong numbers (map_elements, for-loops, etc.)"
+        default_factory=list,
+        description="Issues that will produce wrong numbers (map_elements, for-loops, etc.)",
     )
     important_issues: list[str] = Field(
-        description="Methodology deviations or code quality issues"
+        default_factory=list,
+        description="Methodology deviations or code quality issues",
     )
     minor_issues: list[str] = Field(
-        description="Documentation gaps, style issues"
+        default_factory=list,
+        description="Documentation gaps, style issues",
     )
     positive_observations: list[str] = Field(
-        description="Things the model does well"
+        default_factory=list,
+        description="Things the model does well",
     )
     files_reviewed: list[str] = Field(
-        description="File paths that were reviewed"
+        default_factory=list,
+        description="File paths that were reviewed",
     )
 
 
@@ -31,7 +36,8 @@ class DiscoveryResult(BaseModel):
     """Structured output from model-discovery skill."""
 
     questions_asked: list[str] = Field(
-        description="Clarifying questions asked before any code"
+        default_factory=list,
+        description="Clarifying questions asked before any code",
     )
     tutorial_level_suggested: str | None = Field(
         default=None,
@@ -66,10 +72,12 @@ class BuildingResult(BaseModel):
         description="Whether gspio docs was used before writing code"
     )
     methods_looked_up: list[str] = Field(
-        description="API methods verified via gspio docs"
+        default_factory=list,
+        description="API methods verified via gspio docs",
     )
     antipatterns_avoided: list[str] = Field(
-        description="Anti-patterns explicitly avoided"
+        default_factory=list,
+        description="Anti-patterns explicitly avoided",
     )
 
 
@@ -80,7 +88,8 @@ class ReconciliationResult(BaseModel):
         description="What reference was identified (e.g. 'lifelib IntegratedLife')"
     )
     variables_compared: list[str] = Field(
-        description="Variables that were compared"
+        default_factory=list,
+        description="Variables that were compared",
     )
     tolerance_stated: bool = Field(
         description="Whether a numeric tolerance was stated"
@@ -103,7 +112,8 @@ class ScenarioResult(BaseModel):
         description="Whether a report was generated"
     )
     chart_types: list[str] = Field(
-        description="Types of charts produced (tornado, waterfall, etc.)"
+        default_factory=list,
+        description="Types of charts produced (tornado, waterfall, etc.)",
     )
     audit_trail_included: bool = Field(
         description="Whether describe_scenarios() audit trail was included"
