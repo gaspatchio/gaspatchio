@@ -138,11 +138,11 @@ fn pv_list_scalar(
     let a_opt = scalar_a.f64()?.get(0);
     let b_opt = scalar_b.f64()?.get(0);
 
-    let result: ListChunked = list_ca.apply_amortized(|s| {
+    let result: ListChunked = list_ca.try_apply_amortized(|s| {
         // Each inner series should be Float64
         if let Ok(vals) = s.as_ref().f64() {
-            let out = vals
-                .into_iter()
+            let out: Float64Chunked = vals
+                .iter()
                 .map(|x_opt| match (x_opt, a_opt, b_opt) {
                     (Some(x), Some(a), Some(b)) => {
                         let (rate, nper, pmt) = match list_index {
@@ -154,13 +154,13 @@ fn pv_list_scalar(
                     }
                     _ => None,
                 })
-                .collect::<Float64Chunked>();
-            out.into_series()
+                .collect();
+            Ok(out.into_series())
         } else {
             let len = s.as_ref().len();
-            Float64Chunked::full_null("".into(), len).into_series()
+            Ok(Float64Chunked::full_null("".into(), len).into_series())
         }
-    });
+    })?;
 
     Ok(result.into_series())
 }

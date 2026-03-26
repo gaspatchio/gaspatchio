@@ -88,7 +88,7 @@ def test_column_proxy_to_expr(col_proxy):
         (lambda a, b: a - b, "-"),
         (lambda a, b: a * b, "*"),
         (lambda a, b: a / b, "/"),
-        (lambda a, b: a // b, "floor_div"),
+        (lambda a, b: a // b, "//"),
         (lambda a, b: a % b, "%"),
         # Pow needs special handling in expr string
         # (lambda a, b: a ** b, "pow"),
@@ -144,7 +144,7 @@ def test_column_proxy_comparison_operators(col_proxy, op, op_symbol, operator_na
         (lambda a, b: a - b, "-"),
         (lambda a, b: a * b, "*"),
         (lambda a, b: a / b, "/"),
-        (lambda a, b: a // b, "floor_div"),
+        (lambda a, b: a // b, "//"),
         (lambda a, b: a % b, "%"),
         # Pow needs special handling
     ],

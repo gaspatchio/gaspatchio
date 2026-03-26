@@ -74,11 +74,11 @@ pub fn yearfrac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Seri
                 // Convert List[Datetime] to List[Date]
                 start_date_series = start_date_series
                     .list()?
-                    .apply_amortized(|s| {
-                        s.as_ref()
+                    .try_apply_amortized(|s| {
+                        Ok(s.as_ref()
                             .cast(&DataType::Date)
-                            .unwrap_or_else(|_| s.as_ref().clone())
-                    })
+                            .unwrap_or_else(|_| s.as_ref().clone()))
+                    })?
                     .into_series();
             }
         }
@@ -102,11 +102,11 @@ pub fn yearfrac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Seri
                 // Convert List[Datetime] to List[Date]
                 end_date_series = end_date_series
                     .list()?
-                    .apply_amortized(|s| {
-                        s.as_ref()
+                    .try_apply_amortized(|s| {
+                        Ok(s.as_ref()
                             .cast(&DataType::Date)
-                            .unwrap_or_else(|_| s.as_ref().clone())
-                    })
+                            .unwrap_or_else(|_| s.as_ref().clone()))
+                    })?
                     .into_series();
             }
         }
@@ -163,8 +163,9 @@ fn yearfrac_scalar(
 
     // Use binary_elementwise pattern for vectorized operation
     let result_ca = start_dates
-        .into_iter()
-        .zip(end_dates.into_iter())
+        .physical()
+        .iter()
+        .zip(end_dates.physical().iter())
         .map(|(start_opt, end_opt)| {
             match (start_opt, end_opt) {
                 (Some(start_days), Some(end_days)) => {
@@ -197,12 +198,13 @@ fn yearfrac_list_scalar(
     // Iterate over both the list and scalar series together
     let result: ListChunked = list_ca
         .into_iter()
-        .zip(scalar_dates.into_iter())
+        .zip(scalar_dates.physical().iter())
         .map(|(list_opt, scalar_date)| {
             if let Some(list_s) = list_opt {
                 if let Ok(dates) = list_s.date() {
                     let result_ca = dates
-                        .into_iter()
+                        .physical()
+                        .iter()
                         .map(|date_opt| match (date_opt, scalar_date) {
                             (Some(list_days), Some(scalar_days)) => {
                                 let list_date =
@@ -268,8 +270,9 @@ fn yearfrac_list_list(
                 let end_dates = end_s.date().ok()?;
 
                 let result_ca = start_dates
-                    .into_iter()
-                    .zip(end_dates.into_iter())
+                    .physical()
+                    .iter()
+                    .zip(end_dates.physical().iter())
                     .map(|(start_d, end_d)| match (start_d, end_d) {
                         (Some(start_days), Some(end_days)) => {
                             let start_date = epoch + chrono::Duration::days(i64::from(start_days));

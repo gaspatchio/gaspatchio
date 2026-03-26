@@ -176,14 +176,14 @@ impl AssumptionTable {
                 DataType::String => {
                     // Auto-cast string columns to categorical
                     let categorical_series = series
-                        .cast(&DataType::Categorical(None, CategoricalOrdering::Physical))?;
+                        .cast(&DataType::from_categories(Categories::global()))?;
 
                     // Extract the mapping: string -> physical index
                     let mapping = Self::extract_categorical_mapping(&categorical_series)?;
                     string_mappings.insert(key_name.clone(), mapping);
 
                     // Replace column in dataframe
-                    processed_df.with_column(categorical_series)?;
+                    processed_df.with_column(categorical_series.into_column())?;
 
                     log::debug!(
                         "Auto-cast string key '{}' to categorical with {} unique values",
@@ -217,23 +217,14 @@ impl AssumptionTable {
     fn extract_categorical_mapping(series: &Series) -> PolarsResult<AHashMap<String, u32>> {
         let mut mapping = AHashMap::new();
 
-        let cat_chunked = series.categorical()?;
-        let rev_map = cat_chunked.get_rev_map();
+        let cat_chunked = series.cat32()?;
+        let cat_mapping = cat_chunked.get_mapping();
 
-        // Iterate through the reverse map to build string -> index mapping
-        match &**rev_map {
-            RevMapping::Local(values, _) => {
-                for (idx, opt_value) in values.iter().enumerate() {
-                    if let Some(value) = opt_value {
-                        mapping.insert(value.to_string(), idx as u32);
-                    }
-                }
-            }
-            RevMapping::Global(_hash_map, values, _) => {
-                for (idx, opt_value) in values.iter().enumerate() {
-                    if let Some(value) = opt_value {
-                        mapping.insert(value.to_string(), idx as u32);
-                    }
+        // Iterate through all physical values to build string -> index mapping
+        for opt_idx in cat_chunked.physical().iter() {
+            if let Some(idx) = opt_idx {
+                if let Some(str_val) = cat_mapping.cat_to_str(idx) {
+                    mapping.insert(str_val.to_string(), idx);
                 }
             }
         }
@@ -632,7 +623,7 @@ impl AssumptionTable {
 mod tests {
     use super::*;
     use polars::df;
-    use polars::prelude::CategoricalOrdering;
+    use polars::prelude::Categories;
 
     #[test]
     fn test_build_with_auto_mode() -> PolarsResult<()> {
@@ -912,7 +903,7 @@ mod tests {
         // Build table with manually categorized keys
         let df_categorical = df.lazy()
             .with_column(
-                col("gender").cast(DataType::Categorical(None, CategoricalOrdering::Physical))
+                col("gender").cast(DataType::from_categories(Categories::global()))
             )
             .collect()?;
 
@@ -947,7 +938,7 @@ mod tests {
 
         // Time categorical lookup
         let gender_categorical = gender_series
-            .cast(&DataType::Categorical(None, CategoricalOrdering::Physical))?;
+            .cast(&DataType::from_categories(Categories::global()))?;
         let start = Instant::now();
         for _ in 0..iterations {
             let result = table_categorical.lookup_series(&[&age_series, &gender_categorical])?;
@@ -988,7 +979,7 @@ mod tests {
         // Manually cast to categorical before building
         let df_categorical = df.lazy()
             .with_column(
-                col("gender").cast(DataType::Categorical(None, CategoricalOrdering::Physical))
+                col("gender").cast(DataType::from_categories(Categories::global()))
             )
             .collect()?;
 

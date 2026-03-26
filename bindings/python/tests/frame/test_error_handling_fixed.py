@@ -99,15 +99,14 @@ class TestErrorHandlingIntegration:
         af._tracing = True
 
         # Add operations to build up the computation graph
-        af = af.with_columns(
-            (pl.col("premium") / pl.col("sum_assured")).alias("calculated_field"),
-        ).select("policy_id", "calculated_field")
+        af["calculated_field"] = (pl.col("premium") / pl.col("sum_assured")).alias(
+            "calculated_field"
+        )
 
         # Add failing operation
         with pytest.raises(Exception) as exc_info:
-            result = af.with_columns(
-                (pl.col("nonexistent") * 100).alias("another_calc"),
-            ).collect()
+            af["another_calc"] = pl.col("nonexistent") * 100
+            result = af.collect()
 
         # Error should be caught and handled
         exception = exc_info.value

@@ -170,9 +170,11 @@ def test_list_shimming_unary_on_scalar_col(sample_af: ActuarialFrame, op_name: s
     expr_str = str(proxy_op._expr).replace(" ", "")
     assert ".list.eval" not in expr_str
 
-    # MODIFIED ASSERTION: Check for '.<op_name>()' presence, special case log10
+    # MODIFIED ASSERTION: Check for '.<op_name>' presence, special case log10
     if op_name == "log10":
-        assert ".log()" in expr_str  # Expecting .log() based on previous failure
+        assert ".log(" in expr_str  # log10 becomes .log() with base arg
+    elif op_name == "log":
+        assert ".log(" in expr_str  # log() now shows base parameter
     elif op_name == "round":
         assert ".round(" in expr_str  # Check for round with parameters
     else:

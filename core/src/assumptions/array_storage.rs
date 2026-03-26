@@ -291,7 +291,7 @@ impl ArrayStorage {
             if vector_indices.contains(&key_idx) {
                 // Vector column: explode the List, then encode
                 let list_chunked = series.list()?;
-                let exploded = list_chunked.explode(false)?;
+                let exploded = list_chunked.explode(ExplodeOptions { empty_as_null: false, keep_nulls: false })?;
                 let encoded = encoder.encode_column(&exploded)?;
                 encoded_expanded.push(encoded);
             } else {
