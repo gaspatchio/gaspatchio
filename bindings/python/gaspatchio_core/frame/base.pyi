@@ -111,7 +111,7 @@ class ActuarialFrame:
     def trace(self, func: Callable[..., Any]) -> Callable[..., ActuarialFrameT | None]:
         """Decorator to capture operations within a function call in optimize mode."""
 
-    def collect(self, *, engine: str | None = None) -> pl.DataFrame:
+    def collect(self, *, engine: str = "streaming") -> pl.DataFrame:
         """Execute and materialize the dataframe."""
 
     def profile(self) -> tuple[pl.DataFrame, pl.DataFrame]:
