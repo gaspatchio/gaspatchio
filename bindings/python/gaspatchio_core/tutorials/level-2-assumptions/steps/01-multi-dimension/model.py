@@ -1,4 +1,3 @@
-# ruff: noqa: INP001
 """
 Level 2 → Step 01: Multi-Dimension Table
 

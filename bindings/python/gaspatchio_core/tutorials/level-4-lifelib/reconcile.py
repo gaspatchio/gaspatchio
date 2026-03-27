@@ -1,4 +1,3 @@
-# ruff: noqa: INP001, T201
 """
 Reconcile the Level 4 model against lifelib IntegratedLife reference output.
 

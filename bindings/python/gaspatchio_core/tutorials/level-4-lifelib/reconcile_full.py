@@ -1,4 +1,3 @@
-# ruff: noqa: INP001, T201
 """
 Full reconciliation: PVs AND intermediate cashflows against lifelib reference.
 

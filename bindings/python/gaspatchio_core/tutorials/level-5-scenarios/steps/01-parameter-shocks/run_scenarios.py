@@ -1,4 +1,3 @@
-# ruff: noqa: INP001, T201
 """
 Level 5 Step 01: Parameter Shocks with Tornado Chart
 
@@ -32,8 +31,8 @@ BASE_DIR = STEP_DIR.parent.parent / "base"
 sys.path.insert(0, str(BASE_DIR.parent))  # for charts import
 sys.path.insert(0, str(BASE_DIR))  # for model import
 
-import charts  # noqa: E402
-import model  # noqa: E402
+import charts 
+import model 
 
 # ---------------------------------------------------------------------------
 # Configuration

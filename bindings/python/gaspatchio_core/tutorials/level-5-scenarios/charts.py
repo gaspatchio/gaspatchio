@@ -1,4 +1,3 @@
-# ruff: noqa: INP001
 """Shared Altair chart and report generation module for Level 5 tutorial steps.
 
 Provides professional-quality chart functions and a report writer for

@@ -1,4 +1,3 @@
-# ruff: noqa: INP001, T201
 """
 Reconcile Step 06 model output against lifelib IntegratedLife reference data.
 

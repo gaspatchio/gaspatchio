@@ -1012,7 +1012,7 @@ dependencies = [
 
 [[package]]
 name = "gaspatchio_core_lib"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ahash",
  "approx",
@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "gaspatchio_core_python"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "arc-swap",
  "env_logger",

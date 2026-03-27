@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# ruff: noqa: INP001, T201
 """Run the L4 model for benchmarking.
 
 L4's model.py has no __main__ block. This script loads model points,
@@ -23,7 +22,7 @@ MODEL_DIR = Path(__file__).resolve().parent
 # Import the model
 import sys
 sys.path.insert(0, str(MODEL_DIR))
-import model  # noqa: E402
+import model 
 
 
 def main() -> None:

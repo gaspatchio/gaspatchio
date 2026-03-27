@@ -1,4 +1,3 @@
-# ruff: noqa: INP001
 """
 Level 2 → Step 02: Load Data from Files
 

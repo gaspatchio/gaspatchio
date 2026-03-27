@@ -1,4 +1,3 @@
-# ruff: noqa: INP001, T201
 """
 Level 5 Base: Interest Rate Scenarios (BASE / UP / DOWN)
 
@@ -23,8 +22,8 @@ sys.path.insert(0, str(SCRIPT_DIR))  # for model import
 from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.scenarios import with_scenarios
 
-import charts  # noqa: E402
-import model  # noqa: E402
+import charts 
+import model 
 
 # ---------------------------------------------------------------------------
 # Configuration

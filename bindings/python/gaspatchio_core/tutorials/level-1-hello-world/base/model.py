@@ -1,4 +1,3 @@
-# ruff: noqa: INP001
 """
 Level 1: Hello World — Term Life Portfolio
 

@@ -1,4 +1,3 @@
-# ruff: noqa: INP001, T201
 """
 Level 5 Step 03: Sensitivity Analysis
 
@@ -31,8 +30,8 @@ sys.path.insert(0, str(BASE_DIR))  # for model import
 from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.scenarios import parse_scenario_config, sensitivity_analysis
 
-import charts  # noqa: E402
-import model  # noqa: E402
+import charts 
+import model 
 
 # ---------------------------------------------------------------------------
 # Configuration

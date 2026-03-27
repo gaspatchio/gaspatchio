@@ -1,4 +1,3 @@
-# ruff: noqa: INP001
 """
 Level 1 → Step 03: Time Shifting
 
