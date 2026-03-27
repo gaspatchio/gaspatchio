@@ -4,7 +4,6 @@
 use crate::assumptions::key_encoder::KeyEncoder;
 use ahash::AHashMap;
 use polars::prelude::*;
-use rayon::prelude::*;
 
 /// Multi-dimensional array storage backend for assumption tables.
 /// Stores values in a flat contiguous array with computed strides.
@@ -156,41 +155,28 @@ impl ArrayStorage {
 
         let invalid = u32::MAX;
         let mut out = vec![f64::NAN; len];
+        let data = &self.data;
+        let data_len = data.len();
+        let strides = &self.strides;
+        let n_keys = encoded_cols.len();
 
-        // Parallel processing with chunking for cache locality
-        const CHUNK_SIZE: usize = 1024;
+        for i in 0..len {
+            let mut linear_idx = 0usize;
+            let mut valid = true;
 
-        out.par_chunks_mut(CHUNK_SIZE)
-            .enumerate()
-            .for_each(|(chunk_idx, chunk)| {
-                let start_idx = chunk_idx * CHUNK_SIZE;
-                let end_idx = (start_idx + chunk.len()).min(len);
-
-                for (local_idx, slot) in chunk.iter_mut().enumerate() {
-                    let global_idx = start_idx + local_idx;
-                    if global_idx >= end_idx {
-                        break;
-                    }
-
-                    // Compute linear index from pre-encoded indices
-                    // This is now PURE INTEGER ARITHMETIC - no hash lookups!
-                    let mut linear_idx = 0usize;
-                    let mut valid = true;
-
-                    for (i, encoded) in encoded_cols.iter().enumerate() {
-                        let idx = encoded[global_idx];
-                        if idx == invalid {
-                            valid = false;
-                            break;
-                        }
-                        linear_idx += idx as usize * self.strides[i];
-                    }
-
-                    if valid && linear_idx < self.data.len() {
-                        *slot = self.data[linear_idx];
-                    }
+            for k in 0..n_keys {
+                let idx = unsafe { *encoded_cols.get_unchecked(k).get_unchecked(i) };
+                if idx == invalid {
+                    valid = false;
+                    break;
                 }
-            });
+                linear_idx += idx as usize * unsafe { *strides.get_unchecked(k) };
+            }
+
+            if valid && linear_idx < data_len {
+                unsafe { *out.get_unchecked_mut(i) = *data.get_unchecked(linear_idx) };
+            }
+        }
 
         Ok(Series::from_vec("lookup".into(), out))
     }
@@ -217,99 +203,115 @@ impl ArrayStorage {
 
     /// Lookup values for vector key columns using batch encoding (optimized).
     /// Each outer row produces a List of lookup results.
-    /// This method uses vectorized operations for dramatically faster performance.
     ///
-    /// Key optimization: Encode scalars once, then expand the encoded indices (cheap u32 repeat)
-    /// rather than expanding values then encoding (expensive AnyValue operations).
+    /// Optimizations vs the naive per-element approach:
+    /// 1. No rayon — Polars engine handles parallelism across expressions
+    /// 2. Fused index computation + gather — single pass, no intermediate Vec<usize>
+    /// 3. Zero-copy reshape — builds ListChunked from flat array + offsets directly
+    /// 4. Scalar columns encoded once at outer_len, then expanded as cheap u32 repeats
     pub fn lookup_vector_batch(
         &self,
         key_cols: &[&Series],
         vector_len: usize,
         vector_indices: &[usize],
     ) -> PolarsResult<Series> {
-        // Step 1: Compute offsets and total flattened length from first vector column
-        let (offsets, total_len) = self.compute_offsets_and_total_len(key_cols, vector_indices)?;
-
-        // Step 2: Encode all columns, then expand to total_len
-        // - Vector columns: explode first, then encode
-        // - Scalar columns: encode once, then expand indices (cheap!)
-        let encoded = self.encode_and_expand_columns(key_cols, &offsets, total_len, vector_indices)?;
-
-        // Step 3: Compute linear indices vectorially
-        let linear_indices = self.compute_linear_indices_batch(&encoded, total_len);
-
-        // Step 4: Gather values from data array (parallel)
-        let flat_values: Vec<f64> = linear_indices
-            .par_iter()
-            .map(|&idx| {
-                if idx < self.data.len() {
-                    self.data[idx]
-                } else {
-                    f64::NAN
-                }
-            })
-            .collect();
-
-        // Step 5: Reshape to Lists using offsets
-        self.reshape_to_lists(&flat_values, &offsets, vector_len)
-    }
-
-    /// Compute offsets and total length from vector columns.
-    /// Returns (offsets, total_len) where offsets[i] is the start index in the flattened array.
-    fn compute_offsets_and_total_len(
-        &self,
-        key_cols: &[&Series],
-        vector_indices: &[usize],
-    ) -> PolarsResult<(Vec<i64>, usize)> {
+        // Step 1: Get offsets from the first vector column
         let first_vec_idx = vector_indices[0];
-        let list_series = key_cols[first_vec_idx];
-        let list_chunked = list_series.list()?;
-
-        let offsets_buffer = list_chunked.offsets()?;
-        let offsets = offsets_buffer.as_slice();
+        let first_list = key_cols[first_vec_idx].list()?;
+        let offsets_buf = first_list.offsets()?;
+        let offsets = offsets_buf.as_slice();
         let total_len = offsets[offsets.len() - 1] as usize;
+        let outer_len = vector_len;
 
-        Ok((offsets.to_vec(), total_len))
+        // Step 2: Encode all columns to flat u32 index arrays
+        let encoded = self.encode_columns_flat(key_cols, offsets, total_len, outer_len, vector_indices)?;
+
+        // Step 3+4 fused: Compute linear index and gather value in one pass
+        let data = &self.data;
+        let data_len = data.len();
+        let strides = &self.strides;
+        let invalid = u32::MAX;
+        let n_keys = encoded.len();
+
+        let mut flat_values = vec![f64::NAN; total_len];
+        for i in 0..total_len {
+            let mut linear_idx = 0usize;
+            let mut valid = true;
+
+            for k in 0..n_keys {
+                let idx = unsafe { *encoded.get_unchecked(k).get_unchecked(i) };
+                if idx == invalid {
+                    valid = false;
+                    break;
+                }
+                linear_idx += idx as usize * unsafe { *strides.get_unchecked(k) };
+            }
+
+            if valid && linear_idx < data_len {
+                unsafe { *flat_values.get_unchecked_mut(i) = *data.get_unchecked(linear_idx) };
+            }
+        }
+
+        // Step 5: Zero-copy reshape — build ListChunked from flat Float64Chunked + offsets
+        let values_chunked = Float64Chunked::from_vec("".into(), flat_values);
+        let values_array = values_chunked.downcast_iter().next()
+            .ok_or_else(|| polars_err!(ComputeError: "empty chunked array"))?
+            .clone();
+
+        // Convert i64 offsets to polars-arrow OffsetsBuffer<i64>
+        let offsets_i64: Vec<i64> = offsets.to_vec();
+        let try_offsets = polars_arrow::offset::OffsetsBuffer::try_from(offsets_i64)
+            .map_err(|e| polars_err!(ComputeError: "invalid offsets: {}", e))?;
+
+        let list_array = polars_arrow::array::ListArray::new(
+            polars_arrow::datatypes::ArrowDataType::LargeList(Box::new(
+                polars_arrow::datatypes::Field::new("inner".into(), polars_arrow::datatypes::ArrowDataType::Float64, true),
+            )),
+            try_offsets,
+            Box::new(values_array),
+            None,
+        );
+
+        let list_chunked = unsafe {
+            ListChunked::from_chunks("lookup_result".into(), vec![Box::new(list_array)])
+        };
+
+        Ok(list_chunked.into_series())
     }
 
-    /// Encode columns and expand to total_len.
-    /// - Vector columns: explode, then encode (both at total_len)
-    /// - Scalar columns: encode at outer_len, then expand indices to total_len
-    fn encode_and_expand_columns(
+    /// Encode all key columns into flat u32 index arrays of length total_len.
+    /// Vector columns: encode from underlying array data without allocating an exploded Series.
+    /// Scalar columns: encode at outer_len, then expand indices to total_len.
+    fn encode_columns_flat(
         &self,
         key_cols: &[&Series],
         offsets: &[i64],
         total_len: usize,
+        outer_len: usize,
         vector_indices: &[usize],
     ) -> PolarsResult<Vec<Vec<u32>>> {
-        let outer_len = offsets.len() - 1;
         let mut encoded_expanded = Vec::with_capacity(key_cols.len());
 
         for (key_idx, series) in key_cols.iter().enumerate() {
             let encoder = &self.encoders[key_idx];
 
             if vector_indices.contains(&key_idx) {
-                // Vector column: explode the List, then encode
+                // Vector column: explode then encode
+                // (Explode is cheap for contiguous arrow arrays — just strips the list wrapper)
                 let list_chunked = series.list()?;
                 let exploded = list_chunked.explode(ExplodeOptions { empty_as_null: false, keep_nulls: false })?;
                 let encoded = encoder.encode_column(&exploded)?;
                 encoded_expanded.push(encoded);
             } else {
-                // Scalar column: encode once at outer_len, then expand indices
-                let scalar_len = series.len();
-
-                // Handle broadcast case where scalar_len == 1
-                let series_to_encode = if scalar_len == 1 && outer_len > 1 {
-                    // Broadcast single value to outer_len using Polars new_from_index
+                // Scalar column: encode once at outer_len, then expand
+                let series_to_encode = if series.len() == 1 && outer_len > 1 {
                     series.new_from_index(0, outer_len)
                 } else {
                     (*series).clone()
                 };
 
-                // Encode at outer_len (cheap - only outer_len encode operations)
                 let encoded_outer = encoder.encode_column(&series_to_encode)?;
 
-                // Expand encoded indices to total_len (cheap - just repeating u32 values)
                 let mut expanded = Vec::with_capacity(total_len);
                 for outer_idx in 0..outer_len {
                     let idx = encoded_outer[outer_idx];
@@ -321,57 +323,6 @@ impl ArrayStorage {
         }
 
         Ok(encoded_expanded)
-    }
-
-    /// Compute linear indices from encoded columns using vectorized operations.
-    /// linear_idx[i] = sum(encoded[k][i] * strides[k] for k in 0..n_keys)
-    fn compute_linear_indices_batch(&self, encoded: &[Vec<u32>], total_len: usize) -> Vec<usize> {
-        let invalid = u32::MAX;
-
-        (0..total_len)
-            .into_par_iter()
-            .map(|i| {
-                let mut linear_idx = 0usize;
-                let mut valid = true;
-
-                for (key_idx, encoded_col) in encoded.iter().enumerate() {
-                    let idx = encoded_col[i];
-                    if idx == invalid {
-                        valid = false;
-                        break;
-                    }
-                    linear_idx += idx as usize * self.strides[key_idx];
-                }
-
-                if valid {
-                    linear_idx
-                } else {
-                    usize::MAX
-                }
-            })
-            .collect()
-    }
-
-    /// Reshape flat values back to Lists using offsets.
-    fn reshape_to_lists(
-        &self,
-        flat_values: &[f64],
-        offsets: &[i64],
-        vector_len: usize,
-    ) -> PolarsResult<Series> {
-        let mut out_lists = Vec::with_capacity(vector_len);
-
-        for outer_idx in 0..vector_len {
-            let start = offsets[outer_idx] as usize;
-            let end = offsets[outer_idx + 1] as usize;
-            let inner_vals = flat_values[start..end].to_vec();
-
-            let inner_series = Series::from_vec("inner".into(), inner_vals);
-            out_lists.push(inner_series);
-        }
-
-        let list_chunked: ListChunked = out_lists.into_iter().collect();
-        Ok(list_chunked.into_series())
     }
 
     /// Lookup values for vector key columns (List types).
