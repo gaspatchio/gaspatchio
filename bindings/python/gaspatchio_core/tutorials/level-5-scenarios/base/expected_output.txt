@@ -1,0 +1,15 @@
+shape: (8, 5)
+┌──────────┬────────────┬─────────┬───────────┬───────────┐
+│ point_id ┆ product_id ┆ plan_id ┆ pv_net_cf ┆ pv_claims │
+│ ---      ┆ ---        ┆ ---     ┆ ---       ┆ ---       │
+│ i64      ┆ str        ┆ str     ┆ f64       ┆ f64       │
+╞══════════╪════════════╪═════════╪═══════════╪═══════════╡
+│ 1        ┆ GMDB       ┆ PLAN_A  ┆ NaN       ┆ NaN       │
+│ 2        ┆ GMDB       ┆ PLAN_A  ┆ NaN       ┆ NaN       │
+│ 3        ┆ GMDB       ┆ PLAN_B  ┆ NaN       ┆ NaN       │
+│ 4        ┆ GMDB       ┆ PLAN_B  ┆ NaN       ┆ NaN       │
+│ 5        ┆ GMAB       ┆ PLAN_A  ┆ NaN       ┆ NaN       │
+│ 6        ┆ GMAB       ┆ PLAN_A  ┆ NaN       ┆ NaN       │
+│ 7        ┆ GMAB       ┆ PLAN_B  ┆ NaN       ┆ NaN       │
+│ 8        ┆ GMAB       ┆ PLAN_B  ┆ NaN       ┆ NaN       │
+└──────────┴────────────┴─────────┴───────────┴───────────┘
