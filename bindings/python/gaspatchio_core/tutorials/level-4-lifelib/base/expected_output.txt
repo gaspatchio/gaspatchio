@@ -1,0 +1,15 @@
+shape: (8, 4)
+┌──────────┬────────────┬───────────┬───────────┐
+│ point_id ┆ product_id ┆ pv_net_cf ┆ pv_claims │
+│ ---      ┆ ---        ┆ ---       ┆ ---       │
+│ i64      ┆ str        ┆ f64       ┆ f64       │
+╞══════════╪════════════╪═══════════╪═══════════╡
+│ 1        ┆ GMDB       ┆ NaN       ┆ NaN       │
+│ 2        ┆ GMDB       ┆ NaN       ┆ NaN       │
+│ 3        ┆ GMDB       ┆ NaN       ┆ NaN       │
+│ 4        ┆ GMDB       ┆ NaN       ┆ NaN       │
+│ 5        ┆ GMAB       ┆ NaN       ┆ NaN       │
+│ 6        ┆ GMAB       ┆ NaN       ┆ NaN       │
+│ 7        ┆ GMAB       ┆ NaN       ┆ NaN       │
+│ 8        ┆ GMAB       ┆ NaN       ┆ NaN       │
+└──────────┴────────────┴───────────┴───────────┘

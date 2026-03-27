@@ -461,15 +461,16 @@ class ActuarialFrame:
     def collect(
         self,
         *,
-        engine: str | None = None,
+        engine: str = "streaming",
     ) -> pl.DataFrame:
         """Execute and materialize the dataframe.
 
         Args:
             engine: Execution engine to use. Options:
-                - None (default): Use Polars default in-memory execution
-                - "streaming": Process data in batches to reduce peak memory usage.
-                  Note: Some operations (cumulative, joins) may fall back to in-memory.
+                - "streaming" (default): Process data in batches for ~2x faster
+                  execution. Falls back to in-memory for unsupported operations.
+                - "in-memory": Classic Polars in-memory execution.
+                - "auto": Let Polars choose the engine.
 
         Returns:
             Materialized DataFrame with all computations applied.
@@ -522,10 +523,7 @@ class ActuarialFrame:
             if rollforward_cols:
                 final_df = final_df.drop(rollforward_cols)
 
-            # Call collect with engine parameter if specified
-            if engine is not None:
-                return final_df.collect(engine=engine)
-            return final_df.collect()
+            return final_df.collect(engine=engine)
         except Exception as e:  # noqa: BLE001
             _handle_execution_error(self, e)  # Will re-raise or format
 

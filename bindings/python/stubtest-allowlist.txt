@@ -100,3 +100,11 @@ gaspatchio_core\.rollforward\._explain\.RollforwardBuilder
 
 # CLI module — PydanticUserError when stubtest imports module-level Pydantic models
 gaspatchio_core\.cli
+
+# Tutorial CLI module
+gaspatchio_core\.tutorial_cli\..*
+gaspatchio_core\.tutorial_cli
+
+# Tutorials — standalone scripts, not importable modules (hyphenated dirs, missing deps)
+gaspatchio_core\.tutorials\..*
+gaspatchio_core\.tutorials

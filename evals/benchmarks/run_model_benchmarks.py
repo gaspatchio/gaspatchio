@@ -18,7 +18,6 @@ import sys
 import threading
 import time
 import traceback
-import tracemalloc
 from pathlib import Path
 from types import ModuleType
 
@@ -144,13 +143,20 @@ _l5_model = _load_model_module(
 )
 
 
+def _measure_peak_rss_mb() -> float:
+    """Get current process RSS in MB. Falls back to tracemalloc if psutil unavailable."""
+    if HAS_PSUTIL:
+        return psutil.Process().memory_info().rss / 1024 / 1024
+    return 0.0
+
+
 def bench_l4(mp_path: Path) -> dict:
     """Benchmark L4 model."""
     mp = pl.read_parquet(mp_path)
 
     cpu = CpuMonitor()
     gc.collect()
-    tracemalloc.start()
+    rss_before = _measure_peak_rss_mb()
     cpu.start()
     start = time.perf_counter()
 
@@ -159,11 +165,10 @@ def bench_l4(mp_path: Path) -> dict:
     _ = result_af.collect()
 
     elapsed = time.perf_counter() - start
+    rss_after = _measure_peak_rss_mb()
     cpu_stats = cpu.stop()
-    _, peak_mem = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
 
-    return {"time_s": round(elapsed, 3), "peak_mb": round(peak_mem / 1024 / 1024, 1), **cpu_stats}
+    return {"time_s": round(elapsed, 3), "peak_mb": round(rss_after - rss_before, 1), "rss_mb": round(rss_after, 1), **cpu_stats}
 
 
 def bench_l5(mp_path: Path) -> dict:
@@ -175,7 +180,7 @@ def bench_l5(mp_path: Path) -> dict:
 
     cpu = CpuMonitor()
     gc.collect()
-    tracemalloc.start()
+    rss_before = _measure_peak_rss_mb()
     cpu.start()
     start = time.perf_counter()
 
@@ -185,11 +190,10 @@ def bench_l5(mp_path: Path) -> dict:
     _ = result_af.collect()
 
     elapsed = time.perf_counter() - start
+    rss_after = _measure_peak_rss_mb()
     cpu_stats = cpu.stop()
-    _, peak_mem = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
 
-    return {"time_s": round(elapsed, 3), "peak_mb": round(peak_mem / 1024 / 1024, 1), **cpu_stats}
+    return {"time_s": round(elapsed, 3), "peak_mb": round(rss_after - rss_before, 1), "rss_mb": round(rss_after, 1), **cpu_stats}
 
 
 BENCHMARKS = {
@@ -243,7 +247,8 @@ def main() -> None:
                 active = metrics.get("active_cores", "?")
                 total = metrics.get("total_cores", "?")
                 avg_cpu = metrics.get("avg_cpu_pct", "?")
-                print(f"{metrics['time_s']}s, {metrics['peak_mb']}MB, {throughput} pts/s, {active}/{total} cores ({avg_cpu}% avg)", file=sys.stderr)
+                rss = metrics.get("rss_mb", "?")
+                print(f"{metrics['time_s']}s, RSS={rss}MB, delta={metrics['peak_mb']}MB, {throughput} pts/s, {active}/{total} cores ({avg_cpu}% avg)", file=sys.stderr)
 
                 results.append({
                     "name": f"{bench_name}/{size_label}-points",
@@ -260,6 +265,12 @@ def main() -> None:
                     "unit": "MB",
                     "value": metrics["peak_mb"],
                 })
+                if "rss_mb" in metrics:
+                    results.append({
+                        "name": f"{bench_name}/{size_label}-rss",
+                        "unit": "MB",
+                        "value": metrics["rss_mb"],
+                    })
                 if "active_cores" in metrics:
                     results.append({
                         "name": f"{bench_name}/{size_label}-cores",

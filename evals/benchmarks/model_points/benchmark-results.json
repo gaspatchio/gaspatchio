@@ -1,0 +1,152 @@
+[
+  {
+    "name": "VA Model (GMDB/GMAB)/8-points",
+    "unit": "seconds",
+    "value": 1.031
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/8-throughput",
+    "unit": "points/sec",
+    "value": 7.8
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/8-memory",
+    "unit": "MB",
+    "value": 8.3
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/8-cores",
+    "unit": "cores",
+    "value": 8
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/8-cpu-avg",
+    "unit": "%",
+    "value": 12.1
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/1K-points",
+    "unit": "seconds",
+    "value": 0.615
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/1K-throughput",
+    "unit": "points/sec",
+    "value": 1626.0
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/1K-memory",
+    "unit": "MB",
+    "value": 0.1
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/1K-cores",
+    "unit": "cores",
+    "value": 8
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/1K-cpu-avg",
+    "unit": "%",
+    "value": 21.6
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/10K-points",
+    "unit": "seconds",
+    "value": 1.577
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/10K-throughput",
+    "unit": "points/sec",
+    "value": 6341.2
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/10K-memory",
+    "unit": "MB",
+    "value": 0.1
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/10K-cores",
+    "unit": "cores",
+    "value": 8
+  },
+  {
+    "name": "VA Model (GMDB/GMAB)/10K-cpu-avg",
+    "unit": "%",
+    "value": 20.0
+  },
+  {
+    "name": "VA + Scenarios (3x)/8-points",
+    "unit": "seconds",
+    "value": 0.404
+  },
+  {
+    "name": "VA + Scenarios (3x)/8-throughput",
+    "unit": "points/sec",
+    "value": 19.8
+  },
+  {
+    "name": "VA + Scenarios (3x)/8-memory",
+    "unit": "MB",
+    "value": 0.1
+  },
+  {
+    "name": "VA + Scenarios (3x)/8-cores",
+    "unit": "cores",
+    "value": 8
+  },
+  {
+    "name": "VA + Scenarios (3x)/8-cpu-avg",
+    "unit": "%",
+    "value": 16.8
+  },
+  {
+    "name": "VA + Scenarios (3x)/1K-points",
+    "unit": "seconds",
+    "value": 0.648
+  },
+  {
+    "name": "VA + Scenarios (3x)/1K-throughput",
+    "unit": "points/sec",
+    "value": 1543.2
+  },
+  {
+    "name": "VA + Scenarios (3x)/1K-memory",
+    "unit": "MB",
+    "value": 0.1
+  },
+  {
+    "name": "VA + Scenarios (3x)/1K-cores",
+    "unit": "cores",
+    "value": 8
+  },
+  {
+    "name": "VA + Scenarios (3x)/1K-cpu-avg",
+    "unit": "%",
+    "value": 19.2
+  },
+  {
+    "name": "VA + Scenarios (3x)/10K-points",
+    "unit": "seconds",
+    "value": 4.719
+  },
+  {
+    "name": "VA + Scenarios (3x)/10K-throughput",
+    "unit": "points/sec",
+    "value": 2119.1
+  },
+  {
+    "name": "VA + Scenarios (3x)/10K-memory",
+    "unit": "MB",
+    "value": 0.1
+  },
+  {
+    "name": "VA + Scenarios (3x)/10K-cores",
+    "unit": "cores",
+    "value": 8
+  },
+  {
+    "name": "VA + Scenarios (3x)/10K-cpu-avg",
+    "unit": "%",
+    "value": 16.6
+  }
+]

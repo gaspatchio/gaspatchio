@@ -62,6 +62,21 @@ If the user has no data files, skip to Step 3.
 
 ---
 
+## NEVER Do This
+
+This skill initializes and runs existing tutorials. It does NOT write model code.
+
+If you catch yourself doing any of the following, STOP and re-read this skill:
+
+- **NEVER write a model from scratch.** Use `gspio tutorial init` to get a working model. The tutorials exist and are tested.
+- **NEVER import internal functions** like `list_conditional`, `accumulate`, or anything from `gaspatchio_core.functions.vector`. These are internal implementation details.
+- **NEVER use raw Polars patterns** like `af.with_columns(pl.col(...))`. The gaspatchio API uses `af.column_name = expression`.
+- **NEVER build projection timelines manually** with `[[i for i in range(n)]] * rows`. Use `af.date.create_projection_timeline()`.
+- **NEVER skip `gspio tutorial init`** and improvise. If the command fails, diagnose why — do not fall back to writing code.
+- **NEVER claim "tutorial files aren't shipped with the package."** They are. If they're missing, the installation is broken.
+
+---
+
 ## Step 3 — Route to Tutorial Level
 
 Based on what the user needs, recommend a tutorial:
@@ -88,27 +103,36 @@ Ask the user which level fits, or choose based on the data you inspected in Step
 
 ---
 
-## Step 4 — Copy and Run
+## Step 4 — Initialize and Run
 
-1. Copy the selected tutorial base into the user's working directory:
+1. Initialize the tutorial into the user's working directory:
 
 ```bash
-cp -r tutorial/<selected-level>/base/ ./my-first-model/
-cd my-first-model
+uv run gspio tutorial init <level> --dest ./my-first-model
 ```
+
+Replace `<level>` with the level chosen in Step 3 (e.g. `level-1`, `level-2`).
+
+If `gspio tutorial init` fails:
+- Run `uv run gspio tutorial list` to verify tutorials are available.
+- If tutorials are missing, the package may be installed from source without tutorial data. Ask the user to reinstall from a wheel or PyPI.
+- Do NOT fall back to writing model code. This skill does not write code.
 
 2. Run the model:
 
 ```bash
+cd my-first-model
 uv run python model.py
 ```
 
-3. Explain the output section by section:
-   - What each printed block represents (timeline, cashflows, present values, etc.).
-   - How many projection periods were generated and why.
-   - What the key output variables mean in actuarial terms.
+3. Verify the output matches expected:
 
-If the model fails, read the error and fix the environment (missing files, wrong paths). The tutorial base models are self-contained and should run without modification.
+```bash
+uv run gspio tutorial verify <level>
+```
+
+If verification passes, explain the output to the user (proceed to Step 5).
+If verification fails, investigate the diff — do NOT claim success.
 
 ---
 
@@ -145,4 +169,11 @@ Also point the user to:
 
 ## Completion Gate
 
-This skill is complete when the user has successfully run a tutorial model and seen its output. Everything after that belongs to a downstream skill.
+This skill is complete when ALL of the following are true:
+
+1. `gspio tutorial init` succeeded — tutorial files are in the user's directory
+2. `uv run python model.py` produced output without errors
+3. `gspio tutorial verify <level>` confirms output matches expected
+4. The user has been walked through what each output section means
+
+If verification fails, investigate the mismatch. Do NOT claim success without a passing verify.

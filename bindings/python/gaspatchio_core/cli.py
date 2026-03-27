@@ -27,6 +27,7 @@ from .runner import (
 from .runner import (
     run_single_policy as run_single_policy_func,
 )
+from .tutorial_cli import tutorial_app
 
 # Load .env file if present (before any env var reads)
 load_dotenv()
@@ -73,6 +74,7 @@ you don't need to weigh multiple options.
     pretty_exceptions_enable=True,
     pretty_exceptions_show_locals=False,
 )
+app.add_typer(tutorial_app, name="tutorial")
 
 
 def validate_file_path(path: str) -> Path:

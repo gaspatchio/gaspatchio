@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio"
-version = "0.2.1"
+version = "0.2.2"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
@@ -87,6 +87,43 @@ extend-ignore = [
     "S101",    # asserts are ok in tests
     "ANN201",  # test functions don't need return type annotations
     "PLR2004", # magic values are ok in tests
+]
+"gaspatchio_core/tutorials/**/*.py" = [
+    "INP001",  # tutorials are standalone scripts, not part of a namespace package
+    "T201",    # print() is expected in tutorial output
+    "S101",    # asserts OK in tutorial code
+    "ANN201",  # tutorial functions don't need return annotations
+    "PLR2004", # magic values OK in tutorials
+    "D100",    # module docstrings optional for tutorial steps
+    "D103",    # function docstrings optional for tutorial steps
+    "D401",    # imperative mood not enforced in tutorial docstrings
+    "D417",    # missing argument docs acceptable for complex tutorials
+    "D400",    # first line docstring punctuation not enforced in tutorials
+    "D413",    # docstring section formatting relaxed for tutorials
+    "D415",    # first line docstring punctuation not enforced in tutorials
+    "E501",    # line length relaxed for tutorials
+    "E402",    # module level imports allowed after path setup in tutorials
+    "E741",    # ambiguous variable names acceptable in some tutorial contexts
+    "W291",    # trailing whitespace acceptable in tutorial code
+    "I001",    # import sorting not critical for tutorial code
+    "ERA001",  # commented code acceptable in tutorial steps
+    "RET504",  # unnecessary assignment acceptable in tutorial refactoring
+    "RUF003",  # unicode dashes acceptable in tutorial comments
+    "RUF002",  # unicode ambiguity acceptable in tutorial docstrings
+    "RUF001",  # unicode ambiguity in strings acceptable in tutorials
+    "RUF100",  # noqa directives for E402 acceptable when imports follow path setup
+    "PERF401", # list comprehensions not required in tutorial demos
+    "PERF402", # list append acceptable in tutorial code
+    "PLR0912", # branch complexity acceptable in tutorial code
+    "PLR0913", # function arguments acceptable in tutorial code
+    "PLR0915", # statement count acceptable in tutorial code
+    "PYI041",  # type simplification not critical for tutorials
+    "PLC0415", # import at top-level relaxed in tutorial scripts
+    "N806",    # variable case not enforced for constants in tutorial code
+    "C901",    # cyclomatic complexity not critical for tutorials
+    "B007",    # unused loop variables acceptable in tutorial code
+    "F841",    # unused variables acceptable in tutorial code
+    "EXE001",  # shebang not required for executable in tutorials
 ]
 
 [tool.ruff.lint.isort]
