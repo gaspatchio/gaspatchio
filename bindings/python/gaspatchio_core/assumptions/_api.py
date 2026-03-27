@@ -869,12 +869,15 @@ class Table:
                 raise ValueError(f"No value provided for key column '{col}'")
 
         # Create the actual plugin call to Rust lookup implementation
+        # is_elementwise=True: each row's lookup depends only on that row's keys,
+        # not on other rows. This enables the Polars streaming engine to process
+        # the query in chunks without falling back to in-memory execution.
         return register_plugin_function(
             plugin_path=LIB,
             function_name="lookup_by_table_and_hash",  # Must match #[polars_expr] function name
             args=key_exprs,
             kwargs={"table_name": self._name},
-            is_elementwise=False,  # Vector lookup is not elementwise
+            is_elementwise=True,
         )
 
     def extend(
