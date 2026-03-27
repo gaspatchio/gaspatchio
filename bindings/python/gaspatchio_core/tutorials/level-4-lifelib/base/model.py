@@ -890,3 +890,15 @@ def main(
     )
 
     return af
+
+
+# =========================================================================
+# STANDALONE EXECUTION
+# =========================================================================
+
+if __name__ == "__main__":
+    mp = pl.read_parquet(MODEL_DIR / "model_points.parquet")
+    af = ActuarialFrame(mp)
+    result_af = main(af)
+    result = result_af.collect()
+    print(result.select(["point_id", "product_id", "pv_net_cf", "pv_claims"]))
