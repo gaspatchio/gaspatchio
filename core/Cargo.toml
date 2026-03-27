@@ -59,3 +59,7 @@ harness = false
 [[bench]]
 name = "accumulate"
 harness = false
+
+[[bench]]
+name = "realistic_vector_lookup"
+harness = false

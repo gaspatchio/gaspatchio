@@ -108,6 +108,7 @@ jobs:
 
   skill-evals:
     name: Skill Evals (4 models)
+    needs: [rust-benchmarks, model-benchmarks, comparison-benchmarks]
     runs-on: ubuntu-latest-m
     defaults:
       run:
