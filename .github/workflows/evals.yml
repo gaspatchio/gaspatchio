@@ -24,7 +24,9 @@ jobs:
           lfs: true
       - uses: dtolnay/rust-toolchain@stable
       - name: Run benchmarks
-        run: cargo bench --bench assumption_table_lookup_benchmark -- --output-format bencher '(assumption_table_.*1k|hash_vs_array_1k|vector_hash_vs_array_1k|lookup_scaling/.*/1000$)' | tee bench-output.txt
+        run: |
+          cargo bench --bench assumption_table_lookup_benchmark -- --output-format bencher '(assumption_table_.*1k|hash_vs_array_1k|vector_hash_vs_array_1k|lookup_scaling/.*/1000$)' | tee bench-output.txt
+          cargo bench --bench realistic_vector_lookup -- --output-format bencher '.*1000.*' | tee -a bench-output.txt
         working-directory: core
       - name: Clean working tree for gh-pages push
         run: git checkout -- .
