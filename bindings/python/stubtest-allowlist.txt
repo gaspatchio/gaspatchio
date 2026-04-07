@@ -105,6 +105,10 @@ gaspatchio_core\.cli
 gaspatchio_core\.tutorial_cli\..*
 gaspatchio_core\.tutorial_cli
 
+# Telemetry — @wraps(original_map_elements) intentionally changes the visible signature
+# so the warning wrapper looks like the original Polars method to callers.
+gaspatchio_core\.telemetry\._map_with_warning_impl
+
 # Tutorials — standalone scripts, not importable modules (hyphenated dirs, missing deps)
 gaspatchio_core\.tutorials\..*
 gaspatchio_core\.tutorials

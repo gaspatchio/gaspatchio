@@ -3,6 +3,8 @@ from typing import Any
 import polars as pl
 import pytest
 
+from gaspatchio_core.accessors.base import BaseColumnAccessor, BaseFrameAccessor
+
 # from gaspatchio_core.column.proxy import ColumnProxy, ExpressionProxy # OLD
 from gaspatchio_core.column.column_proxy import ColumnProxy  # NEW
 from gaspatchio_core.column.expression_proxy import ExpressionProxy  # NEW
@@ -15,25 +17,25 @@ from gaspatchio_core.frame.registry import _ACCESSOR_REGISTRY, register_accessor
 # Dummy accessor classes for testing - now decorated
 # Use distinct names to avoid conflicts if run concurrently or reused
 @register_accessor("dummy_col_wiring", kind="column")
-class DummyColumnAccessorWiring:
+class DummyColumnAccessorWiring(BaseColumnAccessor):
     def __init__(self, parent: Any):
-        self._parent = parent
+        self._proxy = parent
 
     def col_method(self) -> str:
         return "col_ok"
 
 
 @register_accessor("another_col_wiring", kind="column")
-class AnotherColumnAccessorWiring:
+class AnotherColumnAccessorWiring(BaseColumnAccessor):
     def __init__(self, parent: Any):
-        self._parent = parent
+        self._proxy = parent
 
 
 # A dummy frame accessor to ensure kind filtering works
 @register_accessor("dummy_frame_wiring", kind="frame")
-class DummyFrameAccessorWiring:
+class DummyFrameAccessorWiring(BaseFrameAccessor):
     def __init__(self, parent: ActuarialFrame):
-        self._parent = parent
+        self._frame = parent
 
 
 @pytest.fixture(autouse=True)
@@ -78,7 +80,7 @@ def test_colproxy_accessor_dynamic_access(sample_proxies_wiring):
     assert hasattr(col_proxy, "dummy_col_wiring")
     accessor_instance = col_proxy.dummy_col_wiring
     assert isinstance(accessor_instance, DummyColumnAccessorWiring)
-    assert accessor_instance._parent is col_proxy
+    assert accessor_instance._proxy is col_proxy
     assert accessor_instance.col_method() == "col_ok"
 
     assert hasattr(col_proxy, "another_col_wiring")
@@ -142,7 +144,7 @@ def test_exprproxy_accessor_dynamic_access(sample_proxies_wiring):
     assert hasattr(expr_proxy, "dummy_col_wiring")
     accessor_instance = expr_proxy.dummy_col_wiring
     assert isinstance(accessor_instance, DummyColumnAccessorWiring)
-    assert accessor_instance._parent is expr_proxy
+    assert accessor_instance._proxy is expr_proxy
     assert accessor_instance.col_method() == "col_ok"
 
     assert hasattr(expr_proxy, "another_col_wiring")

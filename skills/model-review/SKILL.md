@@ -71,8 +71,8 @@ Check for anti-patterns against the reference file: [references/gaspatchio-antip
 
 | Anti-pattern | Severity | What to look for |
 |---|---|---|
-| `map_elements` / `apply` in model code | Critical | Any use of `.map_elements()` or `.apply()` in projection code |
-| Python for-loops over data rows | Critical | `for row in df.iter_rows()`, `for i in range(len(df))`, etc. |
+| `map_elements` / `apply` in model code | Critical | Any use of `.map_elements()` or `.apply()` in projection code. If the logic is reusable, recommend rewriting as an accessor using `gaspatchio-extending` skill. |
+| Python for-loops over data rows | Critical | `for row in df.iter_rows()`, `for i in range(len(df))`, etc. If the loop implements a reusable calculation, route to `gaspatchio-extending` skill for proper accessor implementation. |
 | Scalar/list confusion | Critical | Passing a scalar where a list column is expected, or vice versa |
 | Inline Polars instead of `Table.lookup()` | Important | Raw `df.filter()` / `df.join()` instead of the Table API |
 | Guessed API signatures (not verified via `gspio docs`) | Important | Method calls with wrong parameters or invented methods |

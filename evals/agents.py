@@ -14,6 +14,7 @@ from pydantic_ai import Agent
 from evals.result_types import (
     BuildingResult,
     DiscoveryResult,
+    ExtendingResult,
     QuickstartResult,
     ReconciliationResult,
     ReviewResult,
@@ -110,6 +111,17 @@ def make_scenarios_agent(model: str) -> Agent[None, ScenarioResult]:
     )
 
 
+def make_extending_agent(model: str) -> Agent[None, ExtendingResult]:
+    """Create an extending-gaspatchio agent."""
+    content = _load_skill_content("extending-gaspatchio")
+    return Agent(
+        model,
+        system_prompt=content + _output_instructions(model),
+        output_type=ExtendingResult,
+        output_retries=2,
+    )
+
+
 AGENT_FACTORIES = {
     "review": make_review_agent,
     "discovery": make_discovery_agent,
@@ -117,6 +129,7 @@ AGENT_FACTORIES = {
     "building": make_building_agent,
     "reconciliation": make_reconciliation_agent,
     "scenarios": make_scenarios_agent,
+    "extending": make_extending_agent,
 }
 
 

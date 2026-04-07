@@ -17,6 +17,7 @@ EXPECTED_SKILLS = [
     "model-review",
     "model-reconciliation",
     "model-scenarios",
+    "extending-gaspatchio",
 ]
 
 
@@ -81,3 +82,11 @@ def test_model_review_has_references() -> None:
     refs_dir = SKILLS_DIR / "model-review" / "references"
     assert (refs_dir / "gaspatchio-antipatterns.md").exists(), "Missing gaspatchio-antipatterns.md"
     assert (refs_dir / "asop56-checklist.md").exists(), "Missing asop56-checklist.md"
+
+
+def test_extending_has_references() -> None:
+    """Extending skill has accessor template, performance ladder, and anti-patterns."""
+    refs_dir = SKILLS_DIR / "extending-gaspatchio" / "references"
+    assert (refs_dir / "accessor-template.md").exists(), "Missing accessor-template.md"
+    assert (refs_dir / "performance-ladder.md").exists(), "Missing performance-ladder.md"
+    assert (refs_dir / "anti-patterns.md").exists(), "Missing anti-patterns.md"

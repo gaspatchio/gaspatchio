@@ -8,7 +8,13 @@ from dataclasses import dataclass
 
 from pydantic_evals.evaluators import Evaluator, EvaluatorContext
 
-from evals.result_types import DiscoveryResult, ReconciliationResult, ReviewResult, ScenarioResult
+from evals.result_types import (
+    DiscoveryResult,
+    ExtendingResult,
+    ReconciliationResult,
+    ReviewResult,
+    ScenarioResult,
+)
 
 
 @dataclass
@@ -111,6 +117,43 @@ class InvestigatesMismatch(Evaluator[str, ReconciliationResult]):
 
 
 @dataclass
+@dataclass
+class PlacementCorrect(Evaluator[str, ExtendingResult]):
+    """Extending skill must route to the correct performance ladder level.
+
+    Compares the agent's placement_level to the expected level.
+    Score 1.0 if exact match, 0.0 otherwise.
+    """
+
+    expected_level: int
+
+    def evaluate(self, ctx: EvaluatorContext[str, ExtendingResult]) -> float:
+        return 1.0 if ctx.output.placement_level == self.expected_level else 0.0
+
+
+@dataclass
+class NoAntiPattern(Evaluator[str, ExtendingResult]):
+    """Extending skill must never produce code with anti-patterns.
+
+    Score 1.0 if uses_antipattern is False, 0.0 if True.
+    """
+
+    def evaluate(self, ctx: EvaluatorContext[str, ExtendingResult]) -> float:
+        return 0.0 if ctx.output.uses_antipattern else 1.0
+
+
+@dataclass
+class ListColumnHandling(Evaluator[str, ExtendingResult]):
+    """Accessor extensions must handle both scalar and list columns.
+
+    Score 1.0 if handles_list_columns is True, 0.0 if False.
+    Only meaningful for accessor placements (Level 5/6).
+    """
+
+    def evaluate(self, ctx: EvaluatorContext[str, ExtendingResult]) -> float:
+        return 1.0 if ctx.output.handles_list_columns else 0.0
+
+
 class HasQuestionsBeforeCode(Evaluator[str, DiscoveryResult]):
     """Discovery must ask questions AND not write code.
 

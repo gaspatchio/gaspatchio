@@ -204,3 +204,15 @@ Tutorial models are in `tutorial/`. Start at Level 1 if new, Level 3 base for a 
 2. Analyze data files: `uv run gspio describe <file>.parquet`
 3. Build incrementally -- one section at a time, validate with `run-single-policy` after each
 4. Do NOT guess method signatures. Do NOT assume you know how a method works.
+
+---
+
+## Extending Gaspatchio
+
+To add custom calculations or accessor methods, use the `extending-gaspatchio` skill.
+Do not write raw Python loops or `map_elements` — compose Polars expressions.
+The accessor pattern (`@register_accessor` + base classes) is the primary extension mechanism.
+
+**Performance ladder:** Before writing anything, determine if the calculation is a setup utility (Python function), a reusable column operation (column accessor), a frame-level operation (frame accessor), or a Rust kernel contribution. The skill walks through the decision tree.
+
+**Anti-patterns:** `map_elements`, Python for-loops over policies, dict lookups per row — all cause 50-1000x slowdowns. The skill documents 7 concrete anti-patterns with correct alternatives.

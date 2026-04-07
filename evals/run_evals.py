@@ -25,8 +25,11 @@ from evals.evaluators import (
     HasQuestionsBeforeCode,
     IdentifiesReference,
     InvestigatesMismatch,
+    ListColumnHandling,
+    NoAntiPattern,
     NoCriticalIssues,
     NoCodeWritten,
+    PlacementCorrect,
     SeverityClassification,
     TwoScriptPattern,
 )
@@ -39,6 +42,9 @@ CUSTOM_EVALUATOR_TYPES = [
     IdentifiesReference,
     InvestigatesMismatch,
     TwoScriptPattern,
+    PlacementCorrect,
+    NoAntiPattern,
+    ListColumnHandling,
 ]
 
 MODELS = [
