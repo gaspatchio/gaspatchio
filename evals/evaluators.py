@@ -154,6 +154,7 @@ class ListColumnHandling(Evaluator[str, ExtendingResult]):
         return 1.0 if ctx.output.handles_list_columns else 0.0
 
 
+@dataclass
 class HasQuestionsBeforeCode(Evaluator[str, DiscoveryResult]):
     """Discovery must ask questions AND not write code.
 
