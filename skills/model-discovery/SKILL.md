@@ -76,6 +76,7 @@ Before asking **any** questions:
   - What already exists?
   - What is clearly missing?
   - Are we building new, refactoring, or porting?
+  - Does the model need custom calculations that don't exist in Gaspatchio yet? If so, note them — they will need the `gaspatchio-extending` skill before or during model building.
 
 You MUST also obtain **at least one concrete piece of source-model documentation** before proceeding:
 

@@ -57,6 +57,8 @@ uv run gspio knowledge "<concept>" -T <tag>
 
 **Do NOT guess method signatures. Do NOT assume you know how a method works. Look it up.**
 
+**Missing a method?** If the calculation you need does not exist as a built-in method, do not implement it inline with raw Python. Invoke the `extending-gaspatchio` skill to create a proper accessor. This ensures the calculation is reusable, vectorized, and follows the framework's performance patterns.
+
 ---
 
 ## Environment

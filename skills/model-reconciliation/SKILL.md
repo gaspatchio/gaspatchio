@@ -247,6 +247,7 @@ Before writing or changing gaspatchio code, answer:
 - Load all assumption tables into gaspatchio **before** any calculations.
 - Verify table dimensions, keys, and spot-check values directly against source.
 - Treat assumption parity as non-negotiable: if assumptions differ, everything downstream is noise.
+- If the source model uses a calculation that Gaspatchio doesn't have (e.g., a custom mortality adjustment, a specific rate conversion), use the `gaspatchio-extending` skill to add it as a proper accessor rather than implementing it inline with `map_elements` or Python loops.
 
 ### 2.2 Start with a minimal MVP
 

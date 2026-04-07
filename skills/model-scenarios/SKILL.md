@@ -69,6 +69,8 @@ The assumption table `risk_free_rates.parquet` must have BASE/UP/DOWN rows. `wit
 
 ### Level 2 -- Parameter Shocks (declarative JSON)
 
+**Note:** Stresses and shocks belong in this scenario system (`scenarios/shocks` composables), NOT as custom accessors. If someone asks to "add a lapse stress accessor," redirect them here. Use `gaspatchio-extending` only for new reusable calculations, not for stress/scenario modifications.
+
 Define shocks in a `scenarios.json` config file:
 
 ```json

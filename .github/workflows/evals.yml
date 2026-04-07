@@ -5,6 +5,7 @@ on:
     - cron: '0 3 * * 1'  # 3am UTC every Monday
   pull_request:
     branches: [develop]
+    types: [labeled]  # only when 'benchmark' label is added
   push:
     branches: [main, develop]
   workflow_dispatch:
@@ -16,6 +17,9 @@ permissions:
 jobs:
   rust-benchmarks:
     name: Criterion Benchmarks
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark'
     runs-on: ubuntu-latest-m
     timeout-minutes: 20
     steps:
@@ -44,6 +48,9 @@ jobs:
 
   model-benchmarks:
     name: End-to-End Model Benchmarks
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark'
     runs-on: ubuntu-latest-m
     timeout-minutes: 30
     defaults:
@@ -77,6 +84,9 @@ jobs:
 
   comparison-benchmarks:
     name: Gaspatchio vs Lifelib
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark'
     runs-on: ubuntu-latest-m
     timeout-minutes: 120
     defaults:
@@ -110,6 +120,9 @@ jobs:
 
   skill-evals:
     name: Skill Evals (4 models)
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark'
     needs: [rust-benchmarks, model-benchmarks, comparison-benchmarks]
     runs-on: ubuntu-latest-m
     defaults:
@@ -150,6 +163,9 @@ jobs:
 
   capability-matrix:
     name: Update Capability Matrix
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark'
     needs: skill-evals
     runs-on: ubuntu-latest
     steps:

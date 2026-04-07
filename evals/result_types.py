@@ -99,6 +99,38 @@ class ReconciliationResult(BaseModel):
     )
 
 
+class ExtendingResult(BaseModel):
+    """Structured output from extending-gaspatchio skill."""
+
+    placement_level: int = Field(
+        description=(
+            "Performance ladder level: 1=already exists, 2=inline/too simple, "
+            "3=setup utility, 4=needs Rust, 5=column accessor, 6=frame accessor"
+        ),
+    )
+    placement_reasoning: str = Field(
+        description="Why this level was chosen",
+    )
+    is_accessor: bool = Field(
+        description="Whether the agent decided to build an accessor (Level 5 or 6)",
+    )
+    uses_antipattern: bool = Field(
+        description=(
+            "Whether the proposed code uses map_elements, apply, iter_rows, "
+            "or Python for-loops over policies/timesteps"
+        ),
+    )
+    handles_list_columns: bool = Field(
+        description=(
+            "If accessor: whether it handles both scalar and list columns. "
+            "Set True if not an accessor (not applicable)."
+        ),
+    )
+    existing_method_checked: bool = Field(
+        description="Whether gspio docs or grep was used to check for existing methods",
+    )
+
+
 class ScenarioResult(BaseModel):
     """Structured output from model-scenarios skill."""
 
