@@ -252,10 +252,16 @@ def main(
         af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
     )
 
+    # Remaining term in months per policy, capped at projection horizon
+    af.remaining_term_months = (af.policy_term * 12 - af.duration_mth_init).clip(
+        lower_bound=0, upper_bound=projection_months
+    )
+
+    # Create per-policy projection timeline (each policy projects only as long as needed)
     af = af.date.create_projection_timeline(
         valuation_date=VALUATION_DATE,
         projection_end_type="term_months",
-        projection_end_value=projection_months,
+        projection_end_value="remaining_term_months",
         projection_frequency="monthly",
         output_column="projection_date",
     )

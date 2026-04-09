@@ -680,6 +680,361 @@ class ActuarialFrame:
             raise type(e)(msg) from e
         return self
 
+    def join(
+        self,
+        other: pl.DataFrame | pl.LazyFrame,
+        on: str | list[str] | None = None,
+        left_on: str | list[str] | None = None,
+        right_on: str | list[str] | None = None,
+        how: str = "left",
+    ) -> ActuarialFrame:
+        """Join with another DataFrame without leaving the ActuarialFrame API.
+
+        Enriches model points with assumption parameters, product lookups,
+        expense tables, or any static data that should be attached per policy.
+        This replaces the pattern of calling ``.collect()`` + raw Polars join
+        + re-wrapping with ``ActuarialFrame()``.
+
+        !!! note "When to use"
+            * **Expense Parameters:** Attach product-level expense loadings,
+                commission rates, or overhead allocations to each policy before
+                projection.
+            * **Product Configuration:** Join product parameter tables (riders,
+                benefit features, premium patterns) onto model points by product code.
+            * **Cohort Enrichment:** Add portfolio-level or cohort-level attributes
+                (risk class, distribution channel) from external reference data.
+
+        Parameters
+        ----------
+        other : pl.DataFrame | pl.LazyFrame
+            The right-side table to join against.
+        on : str | list[str] | None
+            Column name(s) to join on (when both sides use the same name).
+        left_on : str | list[str] | None
+            Column name(s) on the left (this frame).
+        right_on : str | list[str] | None
+            Column name(s) on the right (other frame).
+        how : str, default "left"
+            Join type: "left", "inner", "outer", "cross".
+
+        Returns
+        -------
+        ActuarialFrame
+            Frame with columns from both sides.
+
+        Examples
+        --------
+        **Attach expense parameters by product code**
+
+        ```python
+        import polars as pl
+        from gaspatchio_core import ActuarialFrame
+
+        expense_params = pl.DataFrame({
+            "product_code": ["TERM", "WL", "UL"],
+            "expense_pct": [0.05, 0.08, 0.10],
+        })
+
+        af = ActuarialFrame({
+            "policy_id": ["P001", "P002", "P003"],
+            "product_code": ["TERM", "WL", "TERM"],
+            "sum_assured": [100000, 200000, 150000],
+        })
+
+        af = af.join(expense_params, on="product_code")
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (3, 4)
+        ┌───────────┬──────────────┬─────────────┬─────────────┐
+        │ policy_id ┆ product_code ┆ sum_assured ┆ expense_pct │
+        │ ---       ┆ ---          ┆ ---         ┆ ---         │
+        │ str       ┆ str          ┆ i64         ┆ f64         │
+        ╞═══════════╪══════════════╪═════════════╪═════════════╡
+        │ P001      ┆ TERM         ┆ 100000      ┆ 0.05        │
+        │ P002      ┆ WL           ┆ 200000      ┆ 0.08        │
+        │ P003      ┆ TERM         ┆ 150000      ┆ 0.05        │
+        └───────────┴──────────────┴─────────────┴─────────────┘
+        ```
+
+        """
+        if self._df is None:
+            msg = "Cannot join on an uninitialized ActuarialFrame."
+            raise ValueError(msg)
+
+        right = other.lazy() if isinstance(other, pl.DataFrame) else other
+        self._df = self._df.join(right, on=on, left_on=left_on, right_on=right_on, how=how)
+        self._schema = self._df.collect_schema()
+        new_cols = [c for c in self._schema.keys() if c not in self._column_order]
+        self._column_order.extend(new_cols)
+        self._refresh_attr_columns_set()
+        return self
+
+    def filter(self, predicate: pl.Expr) -> ActuarialFrame:
+        """Filter rows by a boolean expression.
+
+        Removes policies that don't match the condition. Commonly used to
+        exclude lapsed, matured, or otherwise inactive policies before
+        running a projection.
+
+        !!! note "When to use"
+            * **In-Force Selection:** Filter to active policies (``status == "IF"``)
+                before projection to exclude lapsed, surrendered, or matured business.
+            * **Cohort Analysis:** Isolate a subset of policies by product, age band,
+                or underwriting class for targeted analysis.
+
+        Parameters
+        ----------
+        predicate : pl.Expr
+            Boolean expression to filter by.
+
+        Returns
+        -------
+        ActuarialFrame
+            Frame with only matching rows.
+
+        Examples
+        --------
+        **Filter to in-force policies only**
+
+        ```python
+        import polars as pl
+        from gaspatchio_core import ActuarialFrame
+
+        af = ActuarialFrame({
+            "policy_id": ["P001", "P002", "P003"],
+            "status": ["IF", "LAPSED", "IF"],
+            "premium": [1200, 800, 1500],
+        })
+
+        af = af.filter(pl.col("status") == "IF")
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬────────┬─────────┐
+        │ policy_id ┆ status ┆ premium │
+        │ ---       ┆ ---    ┆ ---     │
+        │ str       ┆ str    ┆ i64     │
+        ╞═══════════╪════════╪═════════╡
+        │ P001      ┆ IF     ┆ 1200    │
+        │ P003      ┆ IF     ┆ 1500    │
+        └───────────┴────────┴─────────┘
+        ```
+
+        """
+        if self._df is None:
+            msg = "Cannot filter an uninitialized ActuarialFrame."
+            raise ValueError(msg)
+
+        self._df = self._df.filter(predicate)
+        return self
+
+    def rename(self, mapping: dict[str, str]) -> ActuarialFrame:
+        """Rename columns to snake_case or actuarial conventions.
+
+        Converts raw data column names (often from Excel or vendor systems)
+        to the snake_case convention used throughout Gaspatchio models.
+        Run this in Phase 1 (setup) before creating the projection timeline.
+
+        !!! note "When to use"
+            * **Data Ingestion:** Convert Excel-style column names
+                (``"Issue Age"``, ``"Sum Assured"``) to snake_case for use
+                as ActuarialFrame attributes.
+            * **Vendor Data:** Standardise column names from different admin
+                systems or data providers before building assumptions.
+
+        Parameters
+        ----------
+        mapping : dict[str, str]
+            Mapping of old name to new name.
+
+        Returns
+        -------
+        ActuarialFrame
+            Frame with renamed columns.
+
+        Examples
+        --------
+        **Rename Excel-style columns to snake_case**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        af = ActuarialFrame({
+            "Policy Number": ["P001", "P002"],
+            "Issue Age": [30, 45],
+            "Sum Assured": [100000, 200000],
+        })
+
+        af = af.rename({
+            "Policy Number": "policy_id",
+            "Issue Age": "issue_age",
+            "Sum Assured": "sum_assured",
+        })
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬───────────┬─────────────┐
+        │ policy_id ┆ issue_age ┆ sum_assured │
+        │ ---       ┆ ---       ┆ ---         │
+        │ str       ┆ i64       ┆ i64         │
+        ╞═══════════╪═══════════╪═════════════╡
+        │ P001      ┆ 30        ┆ 100000      │
+        │ P002      ┆ 45        ┆ 200000      │
+        └───────────┴───────────┴─────────────┘
+        ```
+
+        """
+        if self._df is None:
+            msg = "Cannot rename columns on an uninitialized ActuarialFrame."
+            raise ValueError(msg)
+
+        self._df = self._df.rename(mapping)
+        self._schema = self._df.collect_schema()
+        self._column_order = [mapping.get(c, c) for c in self._column_order]
+        self._refresh_attr_columns_set()
+        return self
+
+    def drop(self, *columns: str) -> ActuarialFrame:
+        """Remove columns from the frame.
+
+        Drops intermediate or debug columns that are no longer needed.
+        Commonly used at the end of a model to clean up temporary
+        calculations before writing results.
+
+        !!! note "When to use"
+            * **Cleanup:** Remove intermediate calculation columns (flags,
+                temporary rates) before writing final results to parquet.
+            * **Memory:** Drop large columns that are no longer needed to
+                reduce peak memory during collection.
+
+        Parameters
+        ----------
+        *columns : str
+            Column names to drop.
+
+        Returns
+        -------
+        ActuarialFrame
+            Frame without the specified columns.
+
+        Examples
+        --------
+        **Remove temporary columns before output**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        af = ActuarialFrame({
+            "policy_id": ["P001"],
+            "premium": [1200],
+            "sum_assured": [100000],
+            "temp_debug": [999],
+        })
+
+        af = af.drop("temp_debug")
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 3)
+        ┌───────────┬─────────┬─────────────┐
+        │ policy_id ┆ premium ┆ sum_assured │
+        │ ---       ┆ ---     ┆ ---         │
+        │ str       ┆ i64     ┆ i64         │
+        ╞═══════════╪═════════╪═════════════╡
+        │ P001      ┆ 1200    ┆ 100000      │
+        └───────────┴─────────┴─────────────┘
+        ```
+
+        """
+        if self._df is None:
+            msg = "Cannot drop columns from an uninitialized ActuarialFrame."
+            raise ValueError(msg)
+
+        self._df = self._df.drop(list(columns))
+        self._schema = self._df.collect_schema()
+        self._column_order = [c for c in self._column_order if c not in columns]
+        self._refresh_attr_columns_set()
+        return self
+
+    def sort(
+        self,
+        by: str | list[str],
+        *,
+        descending: bool = False,
+    ) -> ActuarialFrame:
+        """Sort rows by one or more columns.
+
+        Orders policies by a key column before projection or output.
+        Useful for deterministic output ordering in reconciliation.
+
+        !!! note "When to use"
+            * **Reconciliation:** Sort by policy ID before comparing against
+                a reference model to ensure row-by-row alignment.
+            * **Reporting:** Order output by issue age, premium, or product
+                code for presentation.
+
+        Parameters
+        ----------
+        by : str | list[str]
+            Column name(s) to sort by.
+        descending : bool, default False
+            Sort in descending order.
+
+        Returns
+        -------
+        ActuarialFrame
+            Sorted frame.
+
+        Examples
+        --------
+        **Sort by issue age for reporting**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        af = ActuarialFrame({
+            "policy_id": ["P003", "P001", "P002"],
+            "issue_age": [55, 30, 45],
+            "premium": [1500, 1200, 800],
+        })
+
+        af = af.sort("issue_age")
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (3, 3)
+        ┌───────────┬───────────┬─────────┐
+        │ policy_id ┆ issue_age ┆ premium │
+        │ ---       ┆ ---       ┆ ---     │
+        │ str       ┆ i64       ┆ i64     │
+        ╞═══════════╪═══════════╪═════════╡
+        │ P001      ┆ 30        ┆ 1200    │
+        │ P002      ┆ 45        ┆ 800     │
+        │ P003      ┆ 55        ┆ 1500    │
+        └───────────┴───────────┴─────────┘
+        ```
+
+        """
+        if self._df is None:
+            msg = "Cannot sort an uninitialized ActuarialFrame."
+            raise ValueError(msg)
+
+        self._df = self._df.sort(by, descending=descending)
+        return self
+
     def pipe(
         self,
         func: Callable[..., ActuarialFrame | None],

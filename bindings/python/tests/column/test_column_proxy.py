@@ -161,7 +161,15 @@ def test_column_proxy_reverse_pow_operator(col_proxy):
     other = 2
     result_proxy = other**col_proxy
     assert isinstance(result_proxy, ExpressionProxy)
-    assert str(result_proxy._expr) == 'dyn int: 2.pow([col("test_col")])'
+    # Verify correctness via evaluation rather than expression string,
+    # since the dispatch may route through exp/log identity for list columns.
+    from gaspatchio_core import ActuarialFrame
+
+    af = ActuarialFrame({"test_col": [1, 2, 3]})
+    af.result = other ** af.test_col
+    result = af.collect()
+    vals = result["result"].to_list()
+    assert vals == [2.0, 4.0, 8.0], f"2**[1,2,3] should be [2,4,8], got {vals}"
 
 
 # --- ColumnProxy Explicit Method Tests (Example: _map_elements) ---

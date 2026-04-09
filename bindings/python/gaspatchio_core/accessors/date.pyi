@@ -1,6 +1,8 @@
 """Type stubs for date accessors."""
 
 import datetime
+
+import polars as pl
 from typing import TYPE_CHECKING, Literal, Union
 
 from .base import BaseColumnAccessor, BaseFrameAccessor
@@ -33,7 +35,7 @@ class DateFrameAccessor(BaseFrameAccessor):
         projection_end_type: Literal[
             "maximum_age", "term_years", "term_months", "fixed_date"
         ] = ...,
-        projection_end_value: Union[int, datetime.date] = ...,
+        projection_end_value: Union[int, datetime.date, str, "pl.Expr"] = ...,
         issue_age_column: str = ...,
         projection_frequency: Literal[
             "monthly", "quarterly", "semi-annual", "annual"

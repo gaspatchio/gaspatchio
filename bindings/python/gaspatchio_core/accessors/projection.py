@@ -1106,6 +1106,89 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         return result
 
+    def remaining_sum(self) -> ExpressionProxy:
+        """Compute backward cumulative sum (remaining sum from each period to end).
+
+        For each element at position ``t``, returns the sum of all elements
+        from ``t`` to the end of the list. Equivalent to reversing the list,
+        computing a cumulative sum, then reversing back.
+
+        This is the standard pattern for IFRS 17 coverage unit remaining
+        totals, remaining premium factors, and annuity-due calculations
+        where you need "sum of all future values from this point."
+
+        !!! note "When to use"
+            * **IFRS 17 Coverage Units:** Compute ``cu_remaining[t]`` — the
+                total remaining coverage from period ``t`` onward — for CSM
+                amortisation factor calculation: ``amort[t] = cu[t] / cu_remaining[t]``.
+            * **Remaining Premium Factors:** Calculate the remaining expected
+                premium stream from each period for net premium reserve
+                formulas.
+            * **Annuity-Due Factors:** Derive the running sum of future
+                discount factors for annuity-due present value calculations.
+
+        Returns
+        -------
+        ExpressionProxy
+            List column where each element is the sum from that position
+            to the end of the original list.
+
+        Examples
+        --------
+        **IFRS 17 coverage unit remaining totals**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        af = ActuarialFrame({
+            "policy_id": ["P001", "P002"],
+            "coverage_units": [
+                [100, 90, 80, 70, 60],
+                [200, 180, 160, 140, 120],
+            ],
+        })
+
+        af.cu_remaining = af.coverage_units.projection.remaining_sum()
+
+        print(af.collect().select(["policy_id", "coverage_units", "cu_remaining"]))
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬───────────────────┬───────────────────┐
+        │ policy_id ┆ coverage_units    ┆ cu_remaining      │
+        │ ---       ┆ ---               ┆ ---               │
+        │ str       ┆ list[i64]         ┆ list[i64]         │
+        ╞═══════════╪═══════════════════╪═══════════════════╡
+        │ P001      ┆ [100, 90, … 60]   ┆ [400, 300, … 60]  │
+        │ P002      ┆ [200, 180, … 120] ┆ [800, 600, … 120] │
+        └───────────┴───────────────────┴───────────────────┘
+        ```
+
+        Notes
+        -----
+        - At the last period, ``remaining_sum`` equals the element itself.
+        - At ``t=0``, it equals the total sum of the entire list.
+        - The relationship ``amort_factor[t] = cu[t] / cu_remaining[t]``
+          gives the proportion of CSM to release in each period.
+
+        See Also
+        --------
+        cumulative_survival : Forward cumulative product for survival probabilities
+        prospective_value : Present value of future cashflows from each period
+
+        """
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        base_expr = self._get_polars_expr()
+        parent_af = self._get_parent_frame()
+
+        result_expr = base_expr.list.eval(
+            pl.element().reverse().cum_sum().reverse()
+        )
+
+        return ExpressionProxy(result_expr, parent_af)
+
     def _build_discount_factors(
         self,
         cashflow_expr: pl.Expr,

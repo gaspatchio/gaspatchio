@@ -167,6 +167,28 @@ Also point the user to:
 
 ---
 
+## Red Flags — You Are Skipping Quickstart
+
+| Thought | Reality |
+|---------|---------|
+| "I already know gaspatchio" | Verify with `gspio tutorial verify`. If it fails, you don't know it well enough. |
+| "I'll figure it out as I go" | 10 minutes of quickstart saves hours of debugging wrong patterns. |
+| "The user wants to jump straight to coding" | Even experienced actuaries benefit from seeing the tutorial output first. |
+
+---
+
+## Integration
+
+**This is typically the first skill invoked.**
+
+**REQUIRED next steps (based on user's goal):**
+- New model from scratch or vague specs → **invoke `gaspatchio-model-discovery`**
+- Porting from Excel, lifelib, or another system → **invoke `gaspatchio-model-discovery`** (do NOT skip to model-building)
+- Modify or extend existing model code → **invoke `gaspatchio-model-building`**
+- Match output against a reference → **invoke `gaspatchio-model-reconciliation`**
+
+---
+
 ## Completion Gate
 
 This skill is complete when ALL of the following are true:

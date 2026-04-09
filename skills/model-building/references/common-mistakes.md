@@ -299,3 +299,41 @@ mort_data = pl.DataFrame({"age": ages, "qx": [compute_qx(a) for a in ages]})
 ```
 
 If you need interpolation, pre-compute the interpolated values and include them in the table.
+
+---
+
+## 14. `Table` with Multi-String-Key Dimensions Silently Returns NaN
+
+If your Table has 2+ string-type dimension columns (e.g., `sex`, `smoker`, `product_code`), the default `storage_mode="auto"` silently returns NaN on lookup. No error, no warning — the model runs but produces wrong results.
+
+```python
+# WRONG — silently returns NaN for multi-string-key tables
+mort = Table(name="mortality", source=df,
+             dimensions={"age": "age", "sex": "sex", "smoker": "smoker"},
+             value="qx")
+
+# RIGHT — explicitly use hash storage for tables with 2+ string dimensions
+mort = Table(name="mortality", source=df,
+             dimensions={"age": "age", "sex": "sex", "smoker": "smoker"},
+             value="qx",
+             storage_mode="hash")
+```
+
+**Rule**: If your Table has 2 or more string-type dimension columns, always pass `storage_mode="hash"`. If lookups return NaN unexpectedly, this is the first thing to check.
+
+---
+
+## 15. `when/then/otherwise` with Two List-Column Branches Crashes
+
+Even when both `.then()` and `.otherwise()` are list columns, the conditional can crash with "Unsupported combination of list/scalar inputs." This is a known framework limitation.
+
+```python
+# WRONG — crashes even though both branches are list columns
+af.qx = when(af.duration_yr <= 5).then(af.qx_select).otherwise(af.qx_ultimate)
+
+# RIGHT — use arithmetic masking
+af.flag_select = when(af.duration_yr <= 5).then(1.0).otherwise(0.0)
+af.qx = af.qx_select * af.flag_select + af.qx_ultimate * (1.0 - af.flag_select)
+```
+
+The arithmetic masking pattern is the standard workaround. Create a 0/1 flag, then multiply to select between values. See [conditionals-and-lists.md](conditionals-and-lists.md) for details.

@@ -66,10 +66,10 @@ uv run gspio knowledge "<concept>" -T <tag>
 Always use `uv run` for Python commands — the system Python does not have gaspatchio or polars installed:
 
 ```bash
-uv run gspio run-model model.py data.parquet              # full run
-uv run gspio run-single-policy model.py data.parquet 123   # single policy (POSITIONAL arg, not --policy-id)
-uv run gspio run-single-policy model.py data.parquet 123 --output-file /tmp/result.parquet  # save for analysis
-uv run python3 -c "import polars as pl; ..."               # inline scripts
+uv run gspio run-model model.py data.parquet                                        # full run
+uv run gspio run-single-policy model.py data.parquet 123                            # single policy (POSITIONAL arg)
+uv run gspio run-single-policy model.py data.parquet 123 --output-file /tmp/r.parquet  # save to parquet
+uv run python3 -c "import polars as pl; ..."                                        # inline scripts
 ```
 
 **Agent workflow**: Always use `--output-file` to save model results as parquet. Read the parquet with `gspio describe --json` or inline Polars for validation. Do NOT parse stdout.
@@ -105,8 +105,8 @@ def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
     # --- PHASE 2: Projection timeline ---
     af = af.date.create_projection_timeline(
         valuation_date=datetime.date(2025, 1, 1),
-        projection_end_type="maximum_age",
-        projection_end_value=100,  # NOT 99 — off-by-one is catastrophic
+        projection_end_type="term_months",
+        projection_end_value="remaining_term_months",  # per-policy (recommended)
         projection_frequency="monthly",
     )
 
@@ -207,8 +207,11 @@ These are the top mistakes from real model-building sessions. Each links to the 
 | 9 | Column name case mismatch | Polars is case-sensitive; always check `df.columns` first | [common-mistakes.md](references/common-mistakes.md) |
 | 10 | Guessing method signatures | Agents get it wrong ~70% of the time — `gspio docs` first | (this file, MANDATORY section) |
 | 11 | `af.month * 0 + CONSTANT` broadcast hack | Confusing — just assign the scalar directly: `af.rate = CONSTANT` | [common-mistakes.md](references/common-mistakes.md) |
-| 12 | `(1 + rate) ** af.month` scalar^list | TypeError — use `(af.month * math.log(1 + rate)).exp()` | [common-mistakes.md](references/common-mistakes.md) |
+| 12 | `(1 + rate) ** af.month` scalar^list | Now works — `**` operator handles all list/scalar combinations | [common-mistakes.md](references/common-mistakes.md) |
 | 13 | Boolean masking in audit code | `value * (condition)` is a programmer's trick — use `when/then` | [conditionals-and-lists.md](references/conditionals-and-lists.md) |
+| 14 | Writing `(1 + r) ** (1/12) - 1` inline | `finance.to_monthly()` already exists — use it | (this file) |
+| 15 | Writing `months_between` inline | `date.months_between()` already exists — use it | (this file) |
+| 16 | Scalar `projection_end_value` with mixed terms | All policies get max-length lists; wasted memory and compute — use a per-policy column instead |
 
 Full list with code examples: [references/common-mistakes.md](references/common-mistakes.md)
 
@@ -234,7 +237,9 @@ Load these when working in the relevant area:
 - Build in **sections**, not entire models at once.
 - After each section: `uv run gspio run-single-policy model.py data.parquet 1 --output-file /tmp/result.parquet` and check output for a single policy.
 - Only move on when the current section is clearly correct.
-- If reconciling, pair with `gaspatchio-reconciliation` and follow its loop strictly.
+- **REQUIRED:** If reconciling against a reference (Excel, lifelib, vendor output), invoke `gaspatchio-model-reconciliation` **before writing any reconciliation code**. Do not write your own diff scripts.
+- **REQUIRED:** If running scenarios (stress tests, sensitivities, shocks), invoke `gaspatchio-model-scenarios` **before writing a scenario runner**. Do not write scenarios.py from scratch.
+- **REQUIRED:** When the model is complete, invoke `gaspatchio-model-review` **before claiming the work is done**.
 
 ## Tutorial Reference
 
@@ -248,6 +253,37 @@ When building a new model, start from the tutorial level closest to your target 
 
 ---
 
+## Red Flags — You Are Skipping a Required Skill
+
+If you catch yourself thinking any of these, STOP:
+
+| Thought | Reality |
+|---------|---------|
+| "I'll just write a quick reconciliation script" | The reconciliation skill has structured diagnostics. Invoke it. |
+| "The model runs, so it's correct" | Running != correct. Invoke model-review. |
+| "I can check a few outputs manually" | Spot-checking misses systematic errors. Invoke model-reconciliation. |
+| "I'll add scenarios later" | Scenario structure affects model design. Invoke model-scenarios now. |
+| "The user didn't ask for reconciliation" | If there is a reference to match against, reconciliation is implied. |
+| "I already know how to write a scenarios runner" | Your runner won't follow the two-script pattern or use shock composables. Invoke the skill. |
+
+---
+
+## Integration
+
+**Called after:**
+- `gaspatchio-model-discovery` — spec must exist before building
+- `gaspatchio-quickstart` — for new users getting oriented
+
+**REQUIRED next steps (invoke these, do not skip):**
+- `gaspatchio-model-reconciliation` — when a reference model exists (Excel, lifelib, vendor)
+- `gaspatchio-model-scenarios` — when stress tests, sensitivities, or what-if analysis is needed
+- `gaspatchio-model-review` — always, before claiming the model is complete
+
+**Use when needed:**
+- `gaspatchio-extending` — when a needed calculation doesn't exist as a built-in method
+
+---
+
 ## Post-build checklist (completion gate)
 
 Before claiming the model is complete, verify ALL of these:
@@ -255,7 +291,7 @@ Before claiming the model is complete, verify ALL of these:
 - [ ] No Python for-loops over rows (no `for row in df.iter_rows()`)
 - [ ] All sections have header comments (SECTION 1, SECTION 2, etc.)
 - [ ] All `Table.lookup()` calls verified with `uv run gspio docs "Table.lookup"`
-- [ ] Model runs with `--output-file` without errors: `uv run gspio run-single-policy model.py data.parquet 1 --output-file /tmp/result.parquet`
+- [ ] Model runs without errors: `uv run gspio run-single-policy model.py data.parquet 1 --output-file /tmp/result.parquet`
 - [ ] Key outputs have expected signs (claims positive, net_cf can be negative)
 - [ ] All assumption Tables created with correct dimensions
 - [ ] No hardcoded magic numbers — all rates come from Table lookups or named constants

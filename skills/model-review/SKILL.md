@@ -76,7 +76,7 @@ Check for anti-patterns against the reference file: [references/gaspatchio-antip
 | Scalar/list confusion | Critical | Passing a scalar where a list column is expected, or vice versa |
 | Inline Polars instead of `Table.lookup()` | Important | Raw `df.filter()` / `df.join()` instead of the Table API |
 | Guessed API signatures (not verified via `gspio docs`) | Important | Method calls with wrong parameters or invented methods |
-| Missing `--output-file` validation | Important | Model tested by parsing stdout instead of writing parquet |
+| Model tested by parsing stdout | Important | Save results to parquet and inspect with `gspio describe --json`, not stdout parsing |
 | Wrong projection accessor | Important | Using `.list.sum()` where `.projection.cumulative_survival()` is needed |
 | Hardcoded assumptions (magic numbers) | Important | Literal numbers like `0.015` instead of `Table.lookup()` or named constants |
 | Missing `when/then/otherwise` for conditionals | Minor | Boolean masking like `value * (condition)` instead of explicit conditionals |
@@ -193,6 +193,33 @@ Present review findings in this structure:
 
 ---
 
+## Red Flags — You Are Skipping Review
+
+| Thought | Reality |
+|---------|---------|
+| "The model runs, so it's fine" | Running != correct. A model with `map_elements` runs but is 100x slower. |
+| "I already checked the outputs" | Checking outputs is reconciliation, not review. Code quality and methodology need separate verification. |
+| "Review is only for production models" | Catching anti-patterns early is cheaper. Review now. |
+| "The model is simple, review is overkill" | Simple models still have scalar/list confusion, missing section headers, and hardcoded assumptions. |
+| "I wrote the model, I know it's good" | Self-review is necessary but insufficient. Fresh eyes catch different issues. |
+
+---
+
+## Integration
+
+**Called after:**
+- `gaspatchio-model-building` — **REQUIRED** after model building is complete
+- `gaspatchio-model-reconciliation` — optional, after reconciliation confirms numerical correctness
+
+**Routes to when issues found:**
+- `gaspatchio-extending` — when `map_elements` or Python for-loops should be rewritten as proper accessors
+- `gaspatchio-model-building` — when structural issues require model refactoring
+
+**Called by:**
+- `gaspatchio-model-building` — Integration section routes here as a required next step
+
+---
+
 ## Completion Gate
 
 The review is complete when:
@@ -200,7 +227,7 @@ The review is complete when:
 - [ ] All Critical issues have been fixed and verified (re-run the model)
 - [ ] All Important issues have been fixed or have an agreed remediation plan with a deadline
 - [ ] Minor issues have been logged (fix not required to pass review)
-- [ ] The model runs successfully with `--output-file` and produces expected output
+- [ ] The model runs successfully: `uv run gspio run-single-policy model.py data.parquet 1`
 - [ ] The review output has been written in the format above
 
 If any Critical or Important issue remains unaddressed, the review is **not complete**.

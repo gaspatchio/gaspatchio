@@ -238,6 +238,7 @@ class TestOldAPIPatternMigration:
             dimensions={"age": "age"},
             value="mortality",
             metadata={"initial_size": 3},
+            storage_mode="hash",  # extend/append requires hash storage
         )
 
         # Additional data to append

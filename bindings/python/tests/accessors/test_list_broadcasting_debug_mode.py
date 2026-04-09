@@ -49,15 +49,6 @@ class TestListBroadcastingDebugMode:
         # Policy 2: month 0 should be 0.0, others should be original values
         assert result["adjusted"][1].to_list() == [0.0, 250.0, 350.0]
 
-    @pytest.mark.xfail(
-        reason=(
-            "Known limitation: Sequential conditionals referencing list columns "
-            "created by previous conditionals fail with nested explode pattern. "
-            "See Linear issue GSP-5. Workaround: use .collect().lazy() between "
-            "conditionals."
-        ),
-        strict=True,
-    )
     def test_multiple_conditionals_debug_mode(self):
         """Test multiple when-then-otherwise operations in debug mode.
 

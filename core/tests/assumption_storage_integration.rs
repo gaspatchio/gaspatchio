@@ -85,6 +85,65 @@ fn test_auto_mode_chooses_array_for_dense_tables() -> PolarsResult<()> {
 }
 
 #[test]
+fn test_auto_mode_uses_array_for_multi_string_keys() -> PolarsResult<()> {
+    // Tables with 2+ string key columns should use array storage (dense)
+    // and return CORRECT values (not NaN). This was previously broken because
+    // the categorical encoder used non-contiguous global physical indices.
+    let df = df! {
+        "product" => ["TERM", "WL", "UL", "TERM", "WL", "UL"],
+        "region" => ["US", "EU", "US", "EU", "US", "EU"],
+        "rate" => [0.01, 0.02, 0.015, 0.022, 0.011, 0.021]
+    }?;
+
+    let table = AssumptionTable::build_with_mode(
+        df,
+        vec!["product".to_string(), "region".to_string()],
+        "rate".to_string(),
+        StorageMode::Auto,
+    )?;
+
+    // Dense table (6 rows / 6 combos = 100%) should use array for performance
+    assert!(
+        table.is_array_storage(),
+        "Auto should choose array for dense multi-string-key table"
+    );
+
+    // Verify lookups return correct values (not NaN)
+    let products = Series::new("product".into(), &["TERM", "WL", "UL", "TERM"]);
+    let regions = Series::new("region".into(), &["US", "EU", "US", "EU"]);
+
+    let result = table.lookup_series(&[&products, &regions])?;
+    let vals: Vec<Option<f64>> = result.f64()?.into_iter().collect();
+
+    assert_eq!(vals[0], Some(0.01));   // TERM, US
+    assert_eq!(vals[1], Some(0.02));   // WL, EU
+    assert_eq!(vals[2], Some(0.015));  // UL, US
+    assert_eq!(vals[3], Some(0.022));  // TERM, EU
+
+    Ok(())
+}
+
+#[test]
+fn test_auto_mode_uses_array_for_single_string_key() -> PolarsResult<()> {
+    // Tables with only 1 string key column should use array when dense
+    let df = create_test_df()?; // age (int) + gender (string) = 1 string key
+
+    let table = AssumptionTable::build_with_mode(
+        df,
+        vec!["age".to_string(), "gender".to_string()],
+        "rate".to_string(),
+        StorageMode::Auto,
+    )?;
+
+    assert!(
+        table.is_array_storage(),
+        "Auto should choose array for dense table with 1 string key"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_auto_mode_chooses_hash_for_sparse_tables() -> PolarsResult<()> {
     // Sparse table: 2 rows for 100*100=10000 combinations = 0.02% density
     let df = df! {

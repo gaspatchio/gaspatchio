@@ -74,7 +74,7 @@ Always compare intermediate variables per timestep:
 - `av_pp_mid_mth` — is the account value decomposition right?
 - `claims_death`, `claims_lapse` — are claims using the right AV timing?
 
-Use `gspio run-single-policy --output-file` to capture ALL variables, then compare per-timestep:
+Run the model for a single policy and save results to parquet for machine-readable comparison:
 ```bash
 uv run gspio run-single-policy model.py data.parquet 1 --output-file /tmp/result.parquet
 uv run gspio describe --json /tmp/result.parquet
@@ -218,6 +218,25 @@ If any of these happen, you're about to waste time:
 - "It's close enough, we'll revisit" (you won't; mismatches compound).
 - "We changed 10 things, now it matches" (you can't attribute; revert and do one change).
 - "We can't run the source model, but..." (not reconciliation).
+
+## Integration
+
+**Called after:**
+- `gaspatchio-model-discovery` — when a reference model is identified during discovery
+- `gaspatchio-model-building` — when model is built and needs numerical verification
+
+**REQUIRED next step:**
+- `gaspatchio-model-review` — after reconciliation confirms numerical correctness, review code quality and methodology
+
+**Routes to when needed:**
+- `gaspatchio-extending` — when reconciliation reveals a missing calculation that needs a proper accessor
+- `gaspatchio-model-building` — when fixes require model code changes
+
+**Called by:**
+- `gaspatchio-model-building` — Integration section routes here when a reference model exists
+- `gaspatchio-model-discovery` — routes here when "reconcile" / "match Excel" is mentioned
+
+---
 
 ## Step 1: Understand and Run the Source Model
 
