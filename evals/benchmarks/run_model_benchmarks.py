@@ -150,6 +150,22 @@ def _measure_peak_rss_mb() -> float:
     return 0.0
 
 
+def _measure_data_mb(result_df: pl.DataFrame) -> float:
+    """Measure actual list column data memory in MB.
+
+    Counts total f64 elements across all List(Float64) columns.
+    This is the "real" data footprint — independent of process overhead.
+    """
+    total_elements = 0
+    for col in result_df.columns:
+        dtype = result_df[col].dtype
+        if dtype == pl.List(pl.Float64) or dtype == pl.List(pl.Int64):
+            total_elements += result_df[col].list.len().sum()
+        elif dtype == pl.List(pl.Date) or dtype == pl.List(pl.Datetime):
+            total_elements += result_df[col].list.len().sum()
+    return round(total_elements * 8 / 1024 / 1024, 1)
+
+
 def bench_l4(mp_path: Path) -> dict:
     """Benchmark L4 model."""
     mp = pl.read_parquet(mp_path)
@@ -162,13 +178,14 @@ def bench_l4(mp_path: Path) -> dict:
 
     af = ActuarialFrame(mp)
     result_af = _l4_model.main(af)
-    _ = result_af.collect()
+    result_df = result_af.collect()
 
     elapsed = time.perf_counter() - start
     rss_after = _measure_peak_rss_mb()
     cpu_stats = cpu.stop()
+    data_mb = _measure_data_mb(result_df)
 
-    return {"time_s": round(elapsed, 3), "peak_mb": round(rss_after - rss_before, 1), "rss_mb": round(rss_after, 1), **cpu_stats}
+    return {"time_s": round(elapsed, 3), "peak_mb": round(rss_after - rss_before, 1), "rss_mb": round(rss_after, 1), "data_mb": data_mb, **cpu_stats}
 
 
 def bench_l5(mp_path: Path) -> dict:
@@ -187,13 +204,14 @@ def bench_l5(mp_path: Path) -> dict:
     af = ActuarialFrame(mp)
     af = with_scenarios(af, scenarios)
     result_af = _l5_model.main(af)
-    _ = result_af.collect()
+    result_df = result_af.collect()
 
     elapsed = time.perf_counter() - start
     rss_after = _measure_peak_rss_mb()
     cpu_stats = cpu.stop()
+    data_mb = _measure_data_mb(result_df)
 
-    return {"time_s": round(elapsed, 3), "peak_mb": round(rss_after - rss_before, 1), "rss_mb": round(rss_after, 1), **cpu_stats}
+    return {"time_s": round(elapsed, 3), "peak_mb": round(rss_after - rss_before, 1), "rss_mb": round(rss_after, 1), "data_mb": data_mb, **cpu_stats}
 
 
 BENCHMARKS = {
@@ -248,7 +266,8 @@ def main() -> None:
                 total = metrics.get("total_cores", "?")
                 avg_cpu = metrics.get("avg_cpu_pct", "?")
                 rss = metrics.get("rss_mb", "?")
-                print(f"{metrics['time_s']}s, RSS={rss}MB, delta={metrics['peak_mb']}MB, {throughput} pts/s, {active}/{total} cores ({avg_cpu}% avg)", file=sys.stderr)
+                data = metrics.get("data_mb", "?")
+                print(f"{metrics['time_s']}s, RSS={rss}MB, delta={metrics['peak_mb']}MB, data={data}MB, {throughput} pts/s, {active}/{total} cores ({avg_cpu}% avg)", file=sys.stderr)
 
                 results.append({
                     "name": f"{bench_name}/{size_label}-points",
@@ -265,6 +284,12 @@ def main() -> None:
                     "unit": "MB",
                     "value": metrics["peak_mb"],
                 })
+                if "data_mb" in metrics:
+                    results.append({
+                        "name": f"{bench_name}/{size_label}-data-mb",
+                        "unit": "MB",
+                        "value": metrics["data_mb"],
+                    })
                 if "rss_mb" in metrics:
                     results.append({
                         "name": f"{bench_name}/{size_label}-rss",

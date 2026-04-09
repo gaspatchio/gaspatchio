@@ -169,6 +169,15 @@ def run_model(
             rich_help_panel="Display Options",
         ),
     ] = 15,
+    output_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Save results to a parquet file instead of printing to stdout",
+            rich_help_panel="Output Options",
+        ),
+    ] = None,
 ) -> None:
     """Execute an actuarial model from a file.
 
@@ -212,6 +221,12 @@ def run_model(
     if result_df is None:
         logger.error("Model run completed but produced no result dataframe")
         sys.exit(1)
+
+    # If output-file specified, write parquet and exit
+    if output_file is not None:
+        result_df.write_parquet(output_file)
+        console.print(f"[bold green]Results saved to {output_file}[/bold green]")
+        return
 
     # Determine column order - use tracked order from metrics if available
     tracked_column_order = (
@@ -361,6 +376,15 @@ def run_single_policy(
             rich_help_panel="Display Options",
         ),
     ] = 15,
+    output_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Save results to a parquet file instead of printing to stdout",
+            rich_help_panel="Output Options",
+        ),
+    ] = None,
 ):
     """Execute an actuarial model for a single policy ID.
 
@@ -397,6 +421,12 @@ def run_single_policy(
     if model_run.errors:
         logger.error(f"Errors occurred during single policy run: {model_run.errors}")
     elif model_run.result is not None and not model_run.result.is_empty():
+        # If output-file specified, write parquet and exit
+        if output_file is not None:
+            model_run.result.write_parquet(output_file)
+            console.print(f"[bold green]Results saved to {output_file}[/bold green]")
+            return
+
         # Transpose and print the result for better visibility of list columns
         transposed_result = transpose_single_policy_result(model_run.result)
 

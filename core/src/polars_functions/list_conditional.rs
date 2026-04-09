@@ -550,7 +550,208 @@ pub fn list_conditional(inputs: &[Series], kwargs: &ConditionalKwargs) -> Polars
         return Ok(result.into_series());
     }
 
+    // Case 5: Right scalar, then list, otherwise list
+    // e.g., when(af.duration_yr <= 5).then(af.qx_select).otherwise(af.qx_ultimate)
+    // This is the most common missing case from real models.
+    if !right_is_list && then_is_list && otherwise_is_list {
+        let right_f64 = right.cast(&DataType::Float64)?;
+        let right_ca = right_f64.f64()?;
+        let right_is_broadcast = right_ca.len() == 1;
+
+        let then_list = then_val.list()?;
+        let otherwise_list = otherwise_val.list()?;
+
+        let result = left_list
+            .amortized_iter()
+            .zip(then_list.amortized_iter())
+            .zip(otherwise_list.amortized_iter())
+            .enumerate()
+            .map(|(idx, ((left_inner, then_inner), otherwise_inner))| {
+                let right_lookup_idx = if right_is_broadcast { 0 } else { idx };
+                let right_scalar = right_ca.get(right_lookup_idx).ok_or_else(|| {
+                    PolarsError::ComputeError(format!("right at row {} is null", idx).into())
+                })?;
+
+                match (left_inner, then_inner, otherwise_inner) {
+                    (Some(l_series), Some(t_series), Some(o_series)) => {
+                        let l = l_series.as_ref().cast(&DataType::Float64)?;
+                        let t = t_series.as_ref().cast(&DataType::Float64)?;
+                        let o = o_series.as_ref().cast(&DataType::Float64)?;
+
+                        let l_ca = l.f64().unwrap();
+                        let t_ca = t.f64().unwrap();
+                        let o_ca = o.f64().unwrap();
+
+                        if l_ca.len() != t_ca.len() || l_ca.len() != o_ca.len() {
+                            return Err(PolarsError::ComputeError(
+                                format!(
+                                    "mismatched inner list lengths at row {}: left={}, then={}, otherwise={}",
+                                    idx, l_ca.len(), t_ca.len(), o_ca.len()
+                                ).into(),
+                            ));
+                        }
+
+                        let out: Vec<Option<f64>> = l_ca
+                            .iter()
+                            .zip(t_ca.iter())
+                            .zip(o_ca.iter())
+                            .map(|((l, t), o)| match (l, t, o) {
+                                (Some(lv), Some(tv), Some(ov)) => {
+                                    if compare(lv, right_scalar, &kwargs.operator) {
+                                        Some(tv)
+                                    } else {
+                                        Some(ov)
+                                    }
+                                }
+                                _ => None,
+                            })
+                            .collect();
+
+                        Ok(Some(Float64Chunked::from_iter(out).into_series()))
+                    }
+                    _ => Ok(Some(Series::new_empty("".into(), &DataType::Float64))),
+                }
+            })
+            .collect::<PolarsResult<ListChunked>>()?;
+
+        return Ok(result.into_series());
+    }
+
+    // Case 6: Right scalar, then scalar, otherwise list
+    if !right_is_list && !then_is_list && otherwise_is_list {
+        let right_f64 = right.cast(&DataType::Float64)?;
+        let then_f64 = then_val.cast(&DataType::Float64)?;
+        let right_ca = right_f64.f64()?;
+        let then_ca = then_f64.f64()?;
+        let right_is_broadcast = right_ca.len() == 1;
+        let then_is_broadcast = then_ca.len() == 1;
+
+        let otherwise_list = otherwise_val.list()?;
+
+        let result = left_list
+            .amortized_iter()
+            .zip(otherwise_list.amortized_iter())
+            .enumerate()
+            .map(|(idx, (left_inner, otherwise_inner))| {
+                let right_lookup_idx = if right_is_broadcast { 0 } else { idx };
+                let then_lookup_idx = if then_is_broadcast { 0 } else { idx };
+                let right_scalar = right_ca.get(right_lookup_idx).ok_or_else(|| {
+                    PolarsError::ComputeError(format!("right at row {} is null", idx).into())
+                })?;
+                let then_scalar = then_ca.get(then_lookup_idx).ok_or_else(|| {
+                    PolarsError::ComputeError(format!("then_val at row {} is null", idx).into())
+                })?;
+
+                match (left_inner, otherwise_inner) {
+                    (Some(l_series), Some(o_series)) => {
+                        let l = l_series.as_ref().cast(&DataType::Float64)?;
+                        let o = o_series.as_ref().cast(&DataType::Float64)?;
+                        let l_ca = l.f64().unwrap();
+                        let o_ca = o.f64().unwrap();
+
+                        if l_ca.len() != o_ca.len() {
+                            return Err(PolarsError::ComputeError(
+                                format!(
+                                    "mismatched inner list lengths at row {}: left={}, otherwise={}",
+                                    idx, l_ca.len(), o_ca.len()
+                                ).into(),
+                            ));
+                        }
+
+                        let out: Vec<Option<f64>> = l_ca
+                            .iter()
+                            .zip(o_ca.iter())
+                            .map(|(l, o)| match (l, o) {
+                                (Some(lv), Some(ov)) => {
+                                    if compare(lv, right_scalar, &kwargs.operator) {
+                                        Some(then_scalar)
+                                    } else {
+                                        Some(ov)
+                                    }
+                                }
+                                _ => None,
+                            })
+                            .collect();
+
+                        Ok(Some(Float64Chunked::from_iter(out).into_series()))
+                    }
+                    _ => Ok(Some(Series::new_empty("".into(), &DataType::Float64))),
+                }
+            })
+            .collect::<PolarsResult<ListChunked>>()?;
+
+        return Ok(result.into_series());
+    }
+
+    // Case 7: Right list, then scalar, otherwise list
+    if right_is_list && !then_is_list && otherwise_is_list {
+        let right_list = right.list()?;
+        let then_f64 = then_val.cast(&DataType::Float64)?;
+        let then_ca = then_f64.f64()?;
+        let then_is_broadcast = then_ca.len() == 1;
+
+        let otherwise_list = otherwise_val.list()?;
+
+        let result = left_list
+            .amortized_iter()
+            .zip(right_list.amortized_iter())
+            .zip(otherwise_list.amortized_iter())
+            .enumerate()
+            .map(|(idx, ((left_inner, right_inner), otherwise_inner))| {
+                let then_lookup_idx = if then_is_broadcast { 0 } else { idx };
+                let then_scalar = then_ca.get(then_lookup_idx).ok_or_else(|| {
+                    PolarsError::ComputeError(format!("then_val at row {} is null", idx).into())
+                })?;
+
+                match (left_inner, right_inner, otherwise_inner) {
+                    (Some(l_series), Some(r_series), Some(o_series)) => {
+                        let l = l_series.as_ref().cast(&DataType::Float64)?;
+                        let r = r_series.as_ref().cast(&DataType::Float64)?;
+                        let o = o_series.as_ref().cast(&DataType::Float64)?;
+
+                        let l_ca = l.f64().unwrap();
+                        let r_ca = r.f64().unwrap();
+                        let o_ca = o.f64().unwrap();
+
+                        if l_ca.len() != r_ca.len() || l_ca.len() != o_ca.len() {
+                            return Err(PolarsError::ComputeError(
+                                format!(
+                                    "mismatched inner list lengths at row {}: left={}, right={}, otherwise={}",
+                                    idx, l_ca.len(), r_ca.len(), o_ca.len()
+                                ).into(),
+                            ));
+                        }
+
+                        let out: Vec<Option<f64>> = l_ca
+                            .iter()
+                            .zip(r_ca.iter())
+                            .zip(o_ca.iter())
+                            .map(|((l, r), o)| match (l, r, o) {
+                                (Some(lv), Some(rv), Some(ov)) => {
+                                    if compare(lv, rv, &kwargs.operator) {
+                                        Some(then_scalar)
+                                    } else {
+                                        Some(ov)
+                                    }
+                                }
+                                _ => None,
+                            })
+                            .collect();
+
+                        Ok(Some(Float64Chunked::from_iter(out).into_series()))
+                    }
+                    _ => Ok(Some(Series::new_empty("".into(), &DataType::Float64))),
+                }
+            })
+            .collect::<PolarsResult<ListChunked>>()?;
+
+        return Ok(result.into_series());
+    }
+
     Err(PolarsError::ComputeError(
-        "Unsupported combination of list/scalar inputs".into(),
+        format!(
+            "Unsupported combination of list/scalar inputs: right_is_list={}, then_is_list={}, otherwise_is_list={}",
+            right_is_list, then_is_list, otherwise_is_list
+        ).into(),
     ))
 }

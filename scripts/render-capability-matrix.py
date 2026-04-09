@@ -85,16 +85,92 @@ def render_index() -> str:
 <html>
 <head>
 <title>Gaspatchio Dev Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; max-width: 800px; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; max-width: 1000px; }
 a { color: #0366d6; text-decoration: none; }
 a:hover { text-decoration: underline; }
 .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
 .card h2 { margin-top: 0; }
+.chart-container { position: relative; height: 300px; margin: 1rem 0; }
+.chart-row { display: flex; gap: 1rem; }
+.chart-row .chart-container { flex: 1; }
+.muted { color: #666; font-size: 0.85em; }
 </style>
 </head>
 <body>
 <h1>Gaspatchio Dev Dashboard</h1>
+
+<div class="card">
+<h2>VA Model Performance (100K policies)</h2>
+<p class="muted">Throughput and data memory over time. Higher throughput = faster. Lower data MB = more efficient.</p>
+<div class="chart-row">
+  <div class="chart-container"><canvas id="throughputChart"></canvas></div>
+  <div class="chart-container"><canvas id="memoryChart"></canvas></div>
+</div>
+<p class="muted">See <a href="dev/model-bench/">all model benchmarks</a> for full detail.</p>
+</div>
+
+<script src="dev/model-bench/data.js"></script>
+<script>
+(function() {
+  if (typeof window.BENCHMARK_DATA === 'undefined') return;
+  const entries = window.BENCHMARK_DATA.entries['Model Benchmarks'] || [];
+
+  function extract(entries, nameFilter) {
+    return entries.map(entry => {
+      const bench = entry.benches.find(b => b.name === nameFilter);
+      if (!bench) return null;
+      const date = new Date(entry.date);
+      return { x: date, y: bench.value, commit: entry.commit.id.substring(0, 7) };
+    }).filter(Boolean);
+  }
+
+  const throughputVA = extract(entries, 'VA Model (GMDB/GMAB)/100K-throughput');
+  const throughputL5 = extract(entries, 'VA + Scenarios (3x)/100K-throughput');
+  const dataMbVA = extract(entries, 'VA Model (GMDB/GMAB)/100K-data-mb');
+  const dataMbL5 = extract(entries, 'VA + Scenarios (3x)/100K-data-mb');
+  const memoryVA = extract(entries, 'VA Model (GMDB/GMAB)/100K-memory');
+  const memoryL5 = extract(entries, 'VA + Scenarios (3x)/100K-memory');
+
+  const chartOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { position: 'bottom' } },
+    scales: {
+      x: { type: 'time', time: { unit: 'day' } },
+    }
+  };
+
+  new Chart(document.getElementById('throughputChart'), {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'VA Model (pts/s)', data: throughputVA, borderColor: '#2563eb', backgroundColor: '#2563eb22', fill: false, tension: 0.2, pointRadius: 3 },
+        { label: 'VA + Scenarios (pts/s)', data: throughputL5, borderColor: '#7c3aed', backgroundColor: '#7c3aed22', fill: false, tension: 0.2, pointRadius: 3 },
+      ]
+    },
+    options: { ...chartOpts, plugins: { ...chartOpts.plugins, title: { display: true, text: 'Throughput (100K policies)' } }, scales: { ...chartOpts.scales, y: { title: { display: true, text: 'points/sec' }, beginAtZero: true } } }
+  });
+
+  // Memory chart: prefer data-mb if available, fall back to RSS delta
+  const memVA = dataMbVA.length > 0 ? dataMbVA : memoryVA;
+  const memL5 = dataMbL5.length > 0 ? dataMbL5 : memoryL5;
+  const memLabel = dataMbVA.length > 0 ? 'Data Memory' : 'RSS Delta';
+
+  new Chart(document.getElementById('memoryChart'), {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'VA Model (' + memLabel + ')', data: memVA, borderColor: '#dc2626', backgroundColor: '#dc262622', fill: false, tension: 0.2, pointRadius: 3 },
+        { label: 'VA + Scenarios (' + memLabel + ')', data: memL5, borderColor: '#ea580c', backgroundColor: '#ea580c22', fill: false, tension: 0.2, pointRadius: 3 },
+      ]
+    },
+    options: { ...chartOpts, plugins: { ...chartOpts.plugins, title: { display: true, text: 'Memory (100K policies)' } }, scales: { ...chartOpts.scales, y: { title: { display: true, text: 'MB' }, beginAtZero: true } } }
+  });
+})();
+</script>
 
 <div class="card">
 <h2><a href="dev/bench/">Rust Micro-Benchmarks</a></h2>

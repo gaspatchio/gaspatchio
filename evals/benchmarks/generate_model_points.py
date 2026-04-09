@@ -30,7 +30,7 @@ SIZES = [1_000, 10_000, 100_000]
 # Fields to vary and their variation ranges
 NUMERIC_VARIATIONS = {
     "age_at_entry": {"min": 20, "max": 75, "dtype": "int"},
-    "policy_term": {"min": 60, "max": 360, "dtype": "int"},  # months
+    "policy_term": {"min": 5, "max": 30, "dtype": "int"},  # years (model multiplies by 12)
     "sum_assured": {"min": 50_000, "max": 2_000_000, "dtype": "int"},
     "premium_pp": {"min": 500, "max": 50_000, "dtype": "int"},
     "av_pp_init": {"min": 10_000, "max": 500_000, "dtype": "int"},
@@ -64,15 +64,30 @@ def generate_model_points(
             continue
 
         original = sampled[col_name].to_numpy()
-        # ±30% variation, clipped to valid range
+        # ±30% multiplicative variation, clipped to valid range
         noise = rng.normal(1.0, 0.3, size=n)
         varied = (original * noise).clip(spec["min"], spec["max"])
+
+        # For fields where base value is 0 (e.g. duration_mth for new business),
+        # multiplicative noise has no effect. Use uniform random instead.
+        zero_mask = original == 0
+        if zero_mask.any():
+            uniform_fill = rng.integers(spec["min"], spec["max"] + 1, size=n)
+            varied[zero_mask] = uniform_fill[zero_mask]
+            varied = varied.clip(spec["min"], spec["max"])
 
         if spec["dtype"] == "int":
             varied = varied.astype(int)
 
         sampled = sampled.with_columns(
             pl.Series(col_name, varied).cast(sampled[col_name].dtype)
+        )
+
+    # Ensure duration_mth doesn't exceed policy_term (in months)
+    # A policy can't have been in force longer than its term
+    if "duration_mth" in sampled.columns and "policy_term" in sampled.columns:
+        sampled = sampled.with_columns(
+            pl.col("duration_mth").clip(upper_bound=pl.col("policy_term") * 12 - 1)
         )
 
     # New sequential point_ids

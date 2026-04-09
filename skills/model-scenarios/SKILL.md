@@ -312,6 +312,23 @@ These are the most common ways agents try to shortcut scenario analysis. Each is
 
 ---
 
+## Integration
+
+**Called after:**
+- `gaspatchio-model-building` — when the base model is complete and stress testing is needed
+- `gaspatchio-model-reconciliation` — when the base case is reconciled and scenario variants are needed
+
+**REQUIRED next step:**
+- `gaspatchio-model-review` — after scenarios are complete, review the full model including scenario infrastructure
+
+**Routes to when needed:**
+- `gaspatchio-extending` — only for new reusable calculations, NOT for stress/scenario modifications (use shock composables instead)
+
+**Called by:**
+- `gaspatchio-model-building` — Integration section routes here when stress tests or sensitivities are needed
+
+---
+
 ## Completion Gate
 
 Scenario analysis is complete when ALL of these are true:

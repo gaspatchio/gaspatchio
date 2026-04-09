@@ -169,14 +169,31 @@ Load these when working in the relevant area:
 
 ---
 
-## Routing to Other Skills
+## Red Flags — You Are Writing the Wrong Thing
 
-| Situation | Route to |
-|-----------|----------|
-| Writing model code that uses the new accessor | `gaspatchio-model-building` |
-| Reviewing extension quality | `gaspatchio-model-review` |
-| Matching output against a reference implementation | `gaspatchio-model-reconciliation` |
-| The calculation needs a Rust kernel | Tell the user — this is a core contribution, not a plugin |
+| Thought | Reality |
+|---------|---------|
+| "I'll use map_elements, it's just one function" | map_elements is 14-100x slower. Compose Polars expressions. Always. |
+| "This is a one-off, not worth an accessor" | If the formula has branching, parameters, or non-obvious logic, it IS worth an accessor. |
+| "I'll add the accessor later" | Later never comes. Write it now while you understand the pattern. |
+| "The performance ladder is overkill for this" | 20/20 test agents followed the ladder correctly. You should too. |
+| "I need a for-loop for this sequential calculation" | Check for existing Rust kernels first (accumulate, prospective_value, cumulative_survival). |
+| "This stress test should be an accessor" | Stresses belong in `scenarios/shocks` composables, not accessors. Invoke `gaspatchio-model-scenarios`. |
+
+---
+
+## Integration
+
+**Called by:**
+- `gaspatchio-model-building` — when a needed method doesn't exist
+- `gaspatchio-model-review` — when `map_elements` or Python for-loops should be rewritten as accessors
+
+**REQUIRED next steps:**
+- `gaspatchio-model-building` — to use the new accessor in model code
+- `gaspatchio-model-review` — to review the extension for quality
+
+**Routes to when needed:**
+- `gaspatchio-model-reconciliation` — when verifying the accessor against a reference implementation
 
 ---
 

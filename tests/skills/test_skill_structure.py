@@ -90,3 +90,81 @@ def test_extending_has_references() -> None:
     assert (refs_dir / "accessor-template.md").exists(), "Missing accessor-template.md"
     assert (refs_dir / "performance-ladder.md").exists(), "Missing performance-ladder.md"
     assert (refs_dir / "anti-patterns.md").exists(), "Missing anti-patterns.md"
+
+
+@pytest.mark.parametrize("skill_name", EXPECTED_SKILLS)
+def test_skill_has_integration_section(skill_name: str) -> None:
+    """Every skill has an Integration section mapping the workflow DAG."""
+    content = (SKILLS_DIR / skill_name / "SKILL.md").read_text()
+    assert "## Integration" in content, (
+        f"{skill_name} must have an '## Integration' section mapping "
+        f"called-by, required-next, and routes-to relationships"
+    )
+
+
+@pytest.mark.parametrize("skill_name", EXPECTED_SKILLS)
+def test_skill_has_red_flags(skill_name: str) -> None:
+    """Every skill has a Red Flags or anti-rationalization table."""
+    content = (SKILLS_DIR / skill_name / "SKILL.md").read_text().lower()
+    assert "red flag" in content or "anti-rational" in content or "distrust" in content, (
+        f"{skill_name} must have a Red Flags, Anti-rationalization, "
+        f"or Distrust-Based section to prevent skill skipping"
+    )
+
+
+# --- Skill routing DAG tests ---
+# These verify the workflow connections between skills are documented.
+
+def test_building_routes_to_reconciliation() -> None:
+    """model-building must route to model-reconciliation as REQUIRED."""
+    content = (SKILLS_DIR / "model-building" / "SKILL.md").read_text()
+    assert "model-reconciliation" in content
+    assert "REQUIRED" in content
+
+
+def test_building_routes_to_review() -> None:
+    """model-building must route to model-review as REQUIRED."""
+    content = (SKILLS_DIR / "model-building" / "SKILL.md").read_text()
+    assert "model-review" in content
+    assert "REQUIRED" in content
+
+
+def test_building_routes_to_scenarios() -> None:
+    """model-building must route to model-scenarios as REQUIRED."""
+    content = (SKILLS_DIR / "model-building" / "SKILL.md").read_text()
+    assert "model-scenarios" in content
+
+
+def test_discovery_routes_to_building() -> None:
+    """model-discovery must route to model-building after spec approval."""
+    content = (SKILLS_DIR / "model-discovery" / "SKILL.md").read_text()
+    assert "model-building" in content
+
+
+def test_discovery_mentions_excel_porting() -> None:
+    """model-discovery must explicitly mention Excel porting as a trigger."""
+    content = (SKILLS_DIR / "model-discovery" / "SKILL.md").read_text().lower()
+    assert "excel" in content, "model-discovery must mention Excel porting"
+
+
+def test_quickstart_routes_to_discovery() -> None:
+    """quickstart must route to model-discovery for new models."""
+    content = (SKILLS_DIR / "quickstart" / "SKILL.md").read_text()
+    assert "model-discovery" in content
+
+
+def test_review_routes_to_extending() -> None:
+    """model-review must route to extending when anti-patterns are found."""
+    content = (SKILLS_DIR / "model-review" / "SKILL.md").read_text()
+    assert "extending" in content
+
+
+def test_output_file_flag_consistency() -> None:
+    """Skills referencing --output-file must use it with gspio commands."""
+    for skill_name in EXPECTED_SKILLS:
+        content = (SKILLS_DIR / skill_name / "SKILL.md").read_text()
+        if "--output-file" in content:
+            # If a skill references --output-file, it must be with a gspio command
+            assert "gspio" in content, (
+                f"{skill_name} references --output-file but not a gspio command"
+            )

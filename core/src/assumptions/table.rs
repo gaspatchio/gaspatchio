@@ -213,18 +213,30 @@ impl AssumptionTable {
     }
 
     /// Extract categorical mapping from a categorical Series.
-    /// Returns a map from string value to physical index.
+    /// Returns a map from string value to a contiguous 0-based index.
+    ///
+    /// IMPORTANT: We assign our own contiguous indices (0, 1, 2, ...) rather
+    /// than using the physical categorical indices from Polars. The physical
+    /// indices come from `Categories::global()` which is a global registry —
+    /// when multiple string columns are cast to categorical, their physical
+    /// indices can be non-contiguous (e.g., "M"→5, "F"→6 if other categoricals
+    /// were registered first). Using those directly would exceed the encoder's
+    /// `size` and cause silent NaN on lookup.
     fn extract_categorical_mapping(series: &Series) -> PolarsResult<AHashMap<String, u32>> {
         let mut mapping = AHashMap::new();
 
         let cat_chunked = series.cat32()?;
         let cat_mapping = cat_chunked.get_mapping();
 
-        // Iterate through all physical values to build string -> index mapping
+        // Collect unique string values from the categorical column
         for opt_idx in cat_chunked.physical().iter() {
             if let Some(idx) = opt_idx {
                 if let Some(str_val) = cat_mapping.cat_to_str(idx) {
-                    mapping.insert(str_val.to_string(), idx);
+                    let str_owned = str_val.to_string();
+                    if !mapping.contains_key(&str_owned) {
+                        let next_idx = mapping.len() as u32;
+                        mapping.insert(str_owned, next_idx);
+                    }
                 }
             }
         }

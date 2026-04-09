@@ -305,6 +305,292 @@ def test_invalid_end_type():
 # Keep remaining tests as they test accessor methods already
 
 
+class TestPerPolicyProjection:
+    """Tests for per-policy variable-length projection timelines."""
+
+    def test_term_months_from_column_name(self):
+        """Each policy gets a different-length projection based on its remaining term."""
+        df = pl.DataFrame({
+            "policy_id": ["A", "B", "C"],
+            "remaining_term_months": [60, 120, 240],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_months",
+            projection_end_value="remaining_term_months",
+            projection_frequency="monthly",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+
+        # Each policy should have a different list length
+        lengths = collected["proj_dates"].list.len().to_list()
+        assert lengths == [61, 121, 241]  # closed="both" adds 1
+
+    def test_term_months_from_expression(self):
+        """Per-policy projection from a computed expression."""
+        df = pl.DataFrame({
+            "policy_id": ["A", "B"],
+            "policy_term": [10, 20],
+            "duration_mth": [24, 60],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_months",
+            projection_end_value=pl.col("policy_term") * 12 - pl.col("duration_mth"),
+            projection_frequency="monthly",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+
+        # A: 10*12 - 24 = 96 months remaining, B: 20*12 - 60 = 180 months remaining
+        lengths = collected["proj_dates"].list.len().to_list()
+        assert lengths == [97, 181]  # closed="both" adds 1
+
+    def test_term_years_from_column_name(self):
+        """Per-policy projection with term_years end type."""
+        df = pl.DataFrame({
+            "policy_id": ["A", "B"],
+            "remaining_years": [5, 15],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_years",
+            projection_end_value="remaining_years",
+            projection_frequency="monthly",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+
+        lengths = collected["proj_dates"].list.len().to_list()
+        assert lengths == [61, 181]  # 5yr=60mo+1, 15yr=180mo+1
+
+    def test_scalar_regression(self):
+        """Existing scalar behavior must be unchanged."""
+        df = pl.DataFrame({
+            "policy_id": ["A", "B", "C"],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_months",
+            projection_end_value=24,
+            projection_frequency="monthly",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+
+        # All policies should have the same length (uniform)
+        lengths = collected["proj_dates"].list.len().to_list()
+        assert lengths == [25, 25, 25]
+
+    # --- Task 3: num_proj_months auto-generation tests ---
+
+    def test_num_proj_months_per_policy(self):
+        """num_proj_months column matches actual list lengths for per-policy projection."""
+        df = pl.DataFrame({
+            "policy_id": ["A", "B", "C"],
+            "remaining_term_months": [60, 120, 240],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_months",
+            projection_end_value="remaining_term_months",
+            projection_frequency="monthly",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+
+        assert "num_proj_months" in collected.columns
+        actual_lengths = collected["proj_dates"].list.len().to_list()
+        reported_lengths = collected["num_proj_months"].to_list()
+        assert actual_lengths == reported_lengths
+
+    def test_num_proj_months_uniform(self):
+        """num_proj_months column is generated for scalar projection too."""
+        df = pl.DataFrame({"policy_id": ["A", "B"]})
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_months",
+            projection_end_value=24,
+            projection_frequency="monthly",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+
+        assert "num_proj_months" in collected.columns
+        assert collected["num_proj_months"].to_list() == [25, 25]
+
+    def test_num_proj_months_quarterly(self):
+        """num_proj_months reflects actual number of projection points for quarterly frequency."""
+        df = pl.DataFrame({
+            "policy_id": ["A"],
+            "remaining_term_months": [24],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_months",
+            projection_end_value="remaining_term_months",
+            projection_frequency="quarterly",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+
+        actual_len = collected["proj_dates"].list.len().to_list()[0]
+        reported_len = collected["num_proj_months"].to_list()[0]
+        assert actual_len == reported_len
+
+    # --- Task 4: Edge case and error tests ---
+
+    def test_edge_case_zero_remaining_term(self):
+        """Policy with 0 remaining term should produce a single-element list."""
+        df = pl.DataFrame({
+            "policy_id": ["A", "B"],
+            "remaining_term_months": [0, 12],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_months",
+            projection_end_value="remaining_term_months",
+            projection_frequency="monthly",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+        lengths = collected["proj_dates"].list.len().to_list()
+        assert lengths[0] == 1  # Just the start date (closed="both", 0-month range)
+        assert lengths[1] == 13
+
+    def test_edge_case_one_month_remaining(self):
+        """Policy with 1 month remaining should produce a 2-element list."""
+        df = pl.DataFrame({
+            "policy_id": ["A"],
+            "remaining_term_months": [1],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_months",
+            projection_end_value="remaining_term_months",
+            projection_frequency="monthly",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+        lengths = collected["proj_dates"].list.len().to_list()
+        assert lengths[0] == 2  # start + end
+
+    def test_fixed_date_rejects_expression(self):
+        """fixed_date projection type should reject column/expression values."""
+        df = pl.DataFrame({
+            "policy_id": ["A"],
+            "end_date": [datetime.date(2030, 1, 1)],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        with pytest.raises(TypeError, match="fixed_date"):
+            af.date.create_projection_timeline(
+                valuation_date=val_date,
+                projection_end_type="fixed_date",
+                projection_end_value="end_date",
+                projection_frequency="monthly",
+                output_column="proj_dates",
+            )
+
+    def test_maximum_age_from_column(self):
+        """Per-policy retirement age with maximum_age end type."""
+        df = pl.DataFrame({
+            "policy_id": ["A", "B"],
+            "issue_age": [30, 50],
+            "retirement_age": [60, 65],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="maximum_age",
+            projection_end_value="retirement_age",
+            issue_age_column="issue_age",
+            projection_frequency="annual",
+            output_column="proj_dates",
+        )
+        collected = af.collect()
+
+        # A: 60-30=30 years, B: 65-50=15 years (annual frequency)
+        lengths = collected["proj_dates"].list.len().to_list()
+        assert lengths == [31, 16]  # closed="both" adds 1
+
+    # --- Task 5: Downstream kernel compatibility test ---
+
+    def test_downstream_kernel_with_variable_lengths(self):
+        """Variable-length projections work with accumulate and cumulative_survival."""
+        df = pl.DataFrame({
+            "policy_id": ["A", "B", "C"],
+            "remaining_term_months": [6, 12, 24],
+            "initial_reserve": [1000.0, 2000.0, 3000.0],
+        })
+        af = ActuarialFrame(df)
+        val_date = datetime.date(2025, 1, 1)
+
+        af = af.date.create_projection_timeline(
+            valuation_date=val_date,
+            projection_end_type="term_months",
+            projection_end_value="remaining_term_months",
+            projection_frequency="monthly",
+            output_column="proj_dates",
+        )
+
+        # Create month indices from the timeline
+        af.month = (
+            af.proj_dates.dt.year() - val_date.year
+        ) * 12 + (af.proj_dates.dt.month() - val_date.month)
+
+        # Create a mock mortality rate (0.001 per month for all policies)
+        af.mort_rate = af.month * 0 + 0.001
+
+        # Test cumulative_survival with ragged list lengths
+        af.survival = af.mort_rate.projection.cumulative_survival()
+
+        collected = af.collect()
+
+        # Each policy should have survival column with matching length
+        surv_lengths = collected["survival"].list.len().to_list()
+        proj_lengths = collected["proj_dates"].list.len().to_list()
+        assert surv_lengths == proj_lengths
+
+        # Survival values should be decreasing (cumulative product of 1-0.001)
+        first_policy_surv = collected["survival"][0].to_list()
+        assert all(
+            first_policy_surv[i] >= first_policy_surv[i + 1]
+            for i in range(len(first_policy_surv) - 1)
+        )
+
+
 def test_error_when_start_date_not_stored():
     """Verify dates are generated but start date column is absent if store_start_date=False."""
     df = pl.DataFrame({"Policyholder issue age": [50]})

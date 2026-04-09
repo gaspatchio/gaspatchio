@@ -96,9 +96,104 @@ fn bench_accumulate_varying_projection_length(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark 3: Compare uniform vs variable-length projection for the same portfolio.
+/// 10K policies with terms distributed 60-600 months.
+/// "Uniform" gives every policy 600-element lists.
+/// "Variable" gives each policy its actual term-length lists.
+fn bench_accumulate_uniform_vs_variable(c: &mut Criterion) {
+    let mut group = c.benchmark_group("accumulate_uniform_vs_variable");
+    let num_rows: usize = 10_000;
+    let max_projection: usize = 600;
+
+    // Per-policy projection lengths: uniformly distributed 60..=600
+    let per_policy_lengths: Vec<usize> = (0..num_rows)
+        .map(|i| 60 + (i % 541))  // 60 to 600 inclusive
+        .collect();
+
+    let total_uniform_elements: usize = num_rows * max_projection;
+    let total_variable_elements: usize = per_policy_lengths.iter().sum();
+
+    // --- Uniform: all policies get max_projection elements ---
+    let initial_uniform: Vec<f64> = (0..num_rows).map(|i| 100.0 + (i as f64)).collect();
+    let initial_uniform = Series::new("initial".into(), initial_uniform);
+
+    let mul_uniform: Vec<_> = (0..num_rows)
+        .map(|_| {
+            let values: Vec<f64> = (0..max_projection).map(|_| 1.01).collect();
+            Some(Series::new("".into(), values))
+        })
+        .collect();
+    let add_uniform: Vec<_> = (0..num_rows)
+        .map(|_| {
+            let values: Vec<f64> = (0..max_projection).map(|i| 10.0 + (i as f64 * 0.1)).collect();
+            Some(Series::new("".into(), values))
+        })
+        .collect();
+
+    let mul_uniform_series = ListChunked::from_iter(mul_uniform).into_series();
+    let add_uniform_series = ListChunked::from_iter(add_uniform).into_series();
+
+    // --- Variable: each policy gets its actual term-length elements ---
+    let initial_variable: Vec<f64> = (0..num_rows).map(|i| 100.0 + (i as f64)).collect();
+    let initial_variable = Series::new("initial".into(), initial_variable);
+
+    let mul_variable: Vec<_> = per_policy_lengths
+        .iter()
+        .map(|&len| {
+            let values: Vec<f64> = (0..len).map(|_| 1.01).collect();
+            Some(Series::new("".into(), values))
+        })
+        .collect();
+    let add_variable: Vec<_> = per_policy_lengths
+        .iter()
+        .map(|&len| {
+            let values: Vec<f64> = (0..len).map(|i| 10.0 + (i as f64 * 0.1)).collect();
+            Some(Series::new("".into(), values))
+        })
+        .collect();
+
+    let mul_variable_series = ListChunked::from_iter(mul_variable).into_series();
+    let add_variable_series = ListChunked::from_iter(add_variable).into_series();
+
+    group.bench_function(
+        BenchmarkId::new("uniform", format!("{total_uniform_elements}_elements")),
+        |b| {
+            b.iter(|| {
+                let _ = black_box(
+                    accumulate(&[
+                        initial_uniform.clone(),
+                        mul_uniform_series.clone(),
+                        add_uniform_series.clone(),
+                    ])
+                    .unwrap(),
+                );
+            });
+        },
+    );
+
+    group.bench_function(
+        BenchmarkId::new("variable", format!("{total_variable_elements}_elements")),
+        |b| {
+            b.iter(|| {
+                let _ = black_box(
+                    accumulate(&[
+                        initial_variable.clone(),
+                        mul_variable_series.clone(),
+                        add_variable_series.clone(),
+                    ])
+                    .unwrap(),
+                );
+            });
+        },
+    );
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_accumulate,
-    bench_accumulate_varying_projection_length
+    bench_accumulate_varying_projection_length,
+    bench_accumulate_uniform_vs_variable
 );
 criterion_main!(benches);

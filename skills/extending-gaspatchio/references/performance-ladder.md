@@ -17,8 +17,8 @@ Gaspatchio already provides:
 | Namespace | Key Methods |
 |-----------|-------------|
 | `finance` | `discount_factor`, `present_value`, `to_monthly`, `compound`, `discount` |
-| `projection` | `cumulative_survival`, `previous_period`, `next_period`, `at_period`, `accumulate`, `prospective_value`, `rollforward` |
-| `date` | `create_projection_timeline`, `year_frac` |
+| `projection` | `cumulative_survival`, `previous_period`, `next_period`, `at_period`, `accumulate`, `prospective_value`, `rollforward`, `remaining_sum` |
+| `date` | `create_projection_timeline`, `year_frac`, `months_between`, `num_proj_months` |
 | `excel` | `pv`, `irr`, `yearfrac`, `edate` |
 
 **Frame-level methods** (on `ActuarialFrame` directly, not via accessors):
@@ -28,6 +28,11 @@ Gaspatchio already provides:
 | `af.quantile(q)` | Percentile / VaR calculation across policies |
 | `af.collect()` | Materialize lazy frame |
 | `af.select(cols)` | Select columns |
+| `af.join(other, on=...)` | Join with assumption/parameter tables |
+| `af.filter(predicate)` | Filter to in-force policies |
+| `af.rename(mapping)` | Rename columns to snake_case |
+| `af.drop(*cols)` | Remove temporary columns |
+| `af.sort(by)` | Order rows for reconciliation |
 
 **Scenario/shock system** (`gaspatchio_core/scenarios/shocks`):
 

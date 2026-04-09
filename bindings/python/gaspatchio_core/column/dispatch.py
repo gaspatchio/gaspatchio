@@ -706,11 +706,18 @@ def _has_column_operands(args: tuple, kwargs: dict) -> bool:
 def _execute_list_pow_plugin(
     base_expr: pl.Expr,
     args: tuple,
+    *,
+    base_is_list: bool = True,
 ) -> pl.Expr:
-    """Execute pow using Rust list_pow plugin for list columns with column exponents."""
+    """Execute pow using Rust list_pow plugin for list columns with column exponents.
+
+    Handles three cases:
+    - list ** list: direct list_pow call
+    - list ** scalar: direct list_pow call (plugin handles broadcasting)
+    - scalar ** list: uses exp/log identity since list_pow requires list base
+    """
     from gaspatchio_core.functions.vector import list_pow
 
-    # Get the exponent expression from args
     if not args:
         msg = "pow requires an exponent argument"
         raise ValueError(msg)
@@ -718,12 +725,32 @@ def _execute_list_pow_plugin(
     exp_arg = args[0]
     exp_expr = _unwrap(exp_arg)
 
-    # Ensure exp_expr is a Polars expression
     if not isinstance(exp_expr, pl.Expr):
         exp_expr = pl.lit(exp_expr)
 
-    logger.trace(f"Using list_pow plugin: base={base_expr}, exp={exp_expr}")
-    return list_pow(base_expr, exp_expr)
+    if base_is_list:
+        logger.trace(f"Using list_pow plugin: base={base_expr}, exp={exp_expr}")
+        return list_pow(base_expr, exp_expr)
+
+    # scalar ** list: use exp/log identity (scalar^list = exp(list * log(scalar))).
+    # The identity only holds for strictly positive bases. For zero or negative
+    # bases, log() produces -inf/NaN which corrupts the result silently.
+    # Guard: use when/then to handle base > 0 (exp/log), base == 0 (zero result),
+    # and base < 0 (NaN with warning — negative bases with fractional exponents
+    # are undefined in real numbers).
+    logger.trace("Using guarded exp/log identity for scalar**list pow")
+    exp_log_result = (exp_expr * base_expr.log()).list.eval(pl.element().exp())
+    return (
+        pl.when(base_expr > 0)
+        .then(exp_log_result)
+        .when(base_expr.eq(0))
+        .then(exp_expr.list.eval(
+            pl.when(pl.element() > 0).then(0.0)
+            .when(pl.element().eq(0)).then(1.0)  # 0^0 = 1 by convention
+            .otherwise(pl.lit(float("nan")))
+        ))
+        .otherwise(pl.lit(None))  # negative base: undefined for fractional exponents
+    )
 
 
 _CLIP_UPPER_ARG_INDEX = 2
@@ -780,6 +807,19 @@ def _method_caller(  # noqa: PLR0913
     kw: dict,
 ) -> Any:  # noqa: ANN401
     """Execute the delegated method with proper list-type handling."""
+    # For pow: check if any ARGUMENT is a ColumnProxy referencing a list column
+    # BEFORE unwrapping args (which converts ColumnProxy to pl.Expr).
+    pow_arg_is_list = False
+    if name == "pow" and a and parent_af:
+        from .column_proxy import ColumnProxy
+
+        detector = ColumnTypeDetector(parent_af)
+        for arg in a:
+            if isinstance(arg, ColumnProxy) and detector.is_list_column(arg.name):
+                pow_arg_is_list = True
+                logger.trace(f"Pow argument {arg.name} is list column")
+                break
+
     # For arithmetic operations, pre-process args to convert ConditionExpression
     # to boolean float expressions (0.0/1.0) for mask patterns (GSP-12)
     if name in _ARITHMETIC_OPS:
@@ -788,6 +828,13 @@ def _method_caller(  # noqa: PLR0913
 
     # Determine if we should use list shimming
     should_use_list_shim = _should_use_list_shim(name, self_proxy, parent_af, base_expr)
+    pow_base_is_list = should_use_list_shim
+
+    # If self is not a list but the argument is, still enable list shim for pow
+    if not should_use_list_shim and pow_arg_is_list:
+        should_use_list_shim = True
+        pow_base_is_list = False  # self is scalar/expr, arg is the list
+        logger.trace("Pow argument is list — enabling list shim with scalar base")
 
     # Check if this is a unary operation
     is_unary = name in _NUMERIC_UNARY and not a and not kw
@@ -801,24 +848,28 @@ def _method_caller(  # noqa: PLR0913
 
     try:
         if should_use_list_shim:
-            try:
-                logger.trace(f"Executing list shim for {name}")
-                result = _execute_list_shim(name, base_expr, a, kw, is_unary=is_unary)
-            except (TypeError, ValueError) as list_error:
-                # List shim failed - check if we can use a Rust plugin instead
-                logger.trace(f"List shim failed for {name}: {list_error}")
+            # For pow on list columns, route directly to Rust list_pow plugin.
+            # The list shim can't handle pow with column operands (list.eval
+            # can't reference external columns), and native Polars pow fails
+            # at collect time with InvalidOperationError on list dtypes.
+            if name == "pow" and a:
+                logger.trace(f"Routing pow to plugin (base_is_list={pow_base_is_list})")
+                result = _execute_list_pow_plugin(base_expr, a, base_is_list=pow_base_is_list)
+            else:
+                try:
+                    logger.trace(f"Executing list shim for {name}")
+                    result = _execute_list_shim(name, base_expr, a, kw, is_unary=is_unary)
+                except (TypeError, ValueError) as list_error:
+                    # List shim failed - check if we can use a Rust plugin instead
+                    logger.trace(f"List shim failed for {name}: {list_error}")
 
-                # For pow with column operands, use Rust list_pow plugin
-                if name == "pow" and _has_column_operands(a, kw):
-                    logger.trace("Routing to list_pow Rust plugin")
-                    result = _execute_list_pow_plugin(base_expr, a)
-                # For clip with column operands, use Rust list_clip plugin
-                elif name == "clip" and _has_column_operands(a, kw):
-                    logger.trace("Routing to list_clip Rust plugin")
-                    result = _execute_list_clip_plugin(base_expr, a, kw)
-                else:
-                    # Fallback to regular execution for other operations
-                    result = _execute_regular(polars_attr, a, kw)
+                    # For clip with column operands, use Rust list_clip plugin
+                    if name == "clip" and _has_column_operands(a, kw):
+                        logger.trace("Routing to list_clip Rust plugin")
+                        result = _execute_list_clip_plugin(base_expr, a, kw)
+                    else:
+                        # Fallback to regular execution for other operations
+                        result = _execute_regular(polars_attr, a, kw)
         else:
             result = _execute_regular(polars_attr, a, kw)
     except Exception as e:

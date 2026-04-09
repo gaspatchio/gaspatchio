@@ -1,6 +1,6 @@
 ---
 name: gaspatchio-model-discovery
-description: Use when starting to build or restructure a gaspatchio actuarial model from scratch or vague specs – forces a one-question-at-a-time discovery workflow for specification, data, assumptions, projection parameters, and outputs before any code is written.
+description: Use when starting a new gaspatchio model, porting from Excel or another system, or restructuring an existing model – forces a one-question-at-a-time discovery workflow for specification, data, assumptions, projection parameters, and outputs before any code is written.
 allowed-tools: Bash(uv:*,gspio:*) Read Grep Glob
 ---
 
@@ -32,7 +32,8 @@ You use it to pin down, in that spec document:
 Use this skill **before any gaspatchio code** when:
 
 - The user says "build a model", "create a model", or "help me with a gaspatchio model".
-- You are porting from Excel, lifelib, or another system.
+- **You are porting from Excel, lifelib, or another system.** This is a critical trigger — do NOT skip discovery for Excel ports. The Excel model structure, formula dependencies, and assumption tables must be mapped and specified before any gaspatchio code is written.
+- The user says "create an implementation plan" or "plan the conversion."
 - Model inputs, assumptions, or outputs are not yet fully specified.
 - You are tempted to "just start coding" to see what happens.
 
@@ -244,9 +245,29 @@ then:
 
 Treat reconciliation as a separate, **hard-mode** process layered on top of discovery.
 
-## Anti-rationalizations
+## Red Flags — You Are Skipping Discovery
 
-The agent must NOT skip discovery even when pressured:
-- "I already know what I want" → "Even experienced actuaries benefit from structured discovery. Let me confirm the data structure first."
-- "Just start coding" → "Models built without a spec take longer to debug. The spec takes 10 minutes and saves hours."
-- "We don't have time for this" → "Discovery IS the fastest path. Skipping it means debugging blind."
+| Thought | Reality |
+|---------|---------|
+| "I already know what I want" | Even experienced actuaries benefit from structured discovery. Confirm the data structure first. |
+| "Just start coding" | Models built without a spec take longer to debug. The spec takes 10 minutes and saves hours. |
+| "We don't have time for this" | Discovery IS the fastest path. Skipping it means debugging blind. |
+| "I have the Excel model, I can see what it does" | Excel models have hidden dependencies, stale caches, and undocumented formulas. Map them first. |
+| "The user already described the model" | A description is not a spec. Pin down data shape, assumptions, projection parameters, and outputs. |
+
+---
+
+## Integration
+
+**Called after:**
+- `gaspatchio-quickstart` — for new users getting oriented
+
+**REQUIRED next step:**
+- `gaspatchio-model-building` — **only after** the spec is approved by the user. The hard gate is absolute.
+
+**REQUIRED when applicable:**
+- `gaspatchio-model-reconciliation` — when a reference model exists. Hand off immediately after high-level discovery.
+
+**Called by:**
+- `gaspatchio-quickstart` routes here for new models
+- `gaspatchio-model-building` routes here if no spec exists

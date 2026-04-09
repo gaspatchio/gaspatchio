@@ -63,11 +63,12 @@ impl ArrayStorage {
         let dims: Vec<usize> = encoders.iter().map(|e| e.size()).collect();
         let capacity: usize = dims.iter().product();
 
-        // Check density - only use array if > 30% filled
+        // Check density - only use array if > 10% filled.
+        // Array is 67-126x faster than hash, so even sparse tables benefit.
         let density = n_rows as f64 / capacity as f64;
-        if density < 0.3 {
+        if density < 0.1 {
             log::debug!(
-                "Table density {:.1}% < 30%, falling back to hash storage",
+                "Table density {:.1}% < 10%, falling back to hash storage",
                 density * 100.0
             );
             return Ok(None);

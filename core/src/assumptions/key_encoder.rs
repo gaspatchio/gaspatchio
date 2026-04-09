@@ -282,24 +282,20 @@ impl KeyEncoder {
                 Ok(out)
             }
 
-            KeyEncoder::CategoricalWithStringFallback { string_to_idx, size } => {
-                let size = *size;
+            KeyEncoder::CategoricalWithStringFallback { string_to_idx, .. } => {
                 let mut out = vec![invalid; len];
 
                 if let Ok(ca) = series.cat32() {
-                    let physical = ca.physical();
-                    let physical = physical.rechunk();
-                    if let Some(values) = physical.cont_slice().ok() {
-                        let result: Vec<u32> = values
-                            .iter()
-                            .map(|&idx| if (idx as usize) < size { idx } else { invalid })
-                            .collect();
-                        return Ok(result);
-                    }
-                    for (i, opt) in physical.into_iter().enumerate() {
-                        if let Some(idx) = opt {
-                            if (idx as usize) < size {
-                                out[i] = idx;
+                    // Resolve each categorical value to its string, then look up
+                    // in our contiguous mapping. Cannot use physical indices directly
+                    // because Categories::global() assigns non-contiguous indices.
+                    let cat_mapping = ca.get_mapping();
+                    for (i, opt_idx) in ca.physical().into_iter().enumerate() {
+                        if let Some(phys_idx) = opt_idx {
+                            if let Some(s) = cat_mapping.cat_to_str(phys_idx) {
+                                if let Some(&contiguous_idx) = string_to_idx.get(s) {
+                                    out[i] = contiguous_idx;
+                                }
                             }
                         }
                     }
@@ -405,13 +401,17 @@ impl KeyEncoder {
                 }
             }
 
-            // CategoricalWithStringFallback - handles both categorical and string input
+            // CategoricalWithStringFallback - handles both categorical and string input.
+            // For categorical values, resolve to string first then look up in our
+            // contiguous index mapping. We cannot use the physical categorical index
+            // directly because Categories::global() assigns non-contiguous indices.
             (
-                KeyEncoder::CategoricalWithStringFallback { size, .. },
-                AnyValue::Categorical(idx, _),
+                KeyEncoder::CategoricalWithStringFallback { string_to_idx, .. },
+                AnyValue::Categorical(idx, mapping),
             ) => {
-                if (idx as usize) < *size {
-                    Some(idx)
+                // Resolve categorical physical index to string, then look up
+                if let Some(s) = mapping.cat_to_str(idx) {
+                    string_to_idx.get(s).copied()
                 } else {
                     None
                 }
