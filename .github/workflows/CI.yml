@@ -83,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build with Docker
-        run: docker run --rm -v $(pwd):/io -w /io/bindings/python ghcr.io/pyo3/maturin build --release
+        run: docker run --rm -v $(pwd):/io -w /io/bindings/python ghcr.io/pyo3/maturin build --release --find-interpreter
       - name: List build artifacts
         run: find . -name "*.whl" -o -name "*.tar.gz"
       - name: Create dist directory
