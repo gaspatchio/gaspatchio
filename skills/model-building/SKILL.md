@@ -22,7 +22,8 @@ Every concept in this skill has a worked example in the tutorial:
 - Column arithmetic, when/then → Level 1 (`tutorial/level-1-hello-world/`)
 - Table.lookup(), dimensions → Level 2 (`tutorial/level-2-assumptions/`)
 - Full VA model with all sections → Level 3 base (`tutorial/level-3-mini-va/base/`)
-- Data enrichment, BEF_DECR, accumulate → Level 4 (`tutorial/level-4-lifelib/`)
+- Data enrichment, BEF_DECR, **`accumulate()` for recursive calculations** → Level 4 (`tutorial/level-4-lifelib/`)
+- Reconciliation gaps including `accumulate()` vs `cum_prod()` → Level 3 Step 06 (`tutorial/level-3-mini-va/steps/06-reconcile/`)
 - Scenarios → Level 5 (`tutorial/level-5-scenarios/`)
 
 ## When to Use
@@ -55,9 +56,43 @@ uv run gspio knowledge "<concept>" -T <tag>
 | Need actuarial concept | `uv run gspio knowledge "CSM calculation" -T IFRS17` |
 | Analyzing an assumption file | `uv run gspio describe assumptions/mortality.parquet` |
 
+**Query tips:** Use descriptive phrases, not just method names. Short single-word queries return noise.
+
+| Method | Bad Query (returns noise) | Good Query (finds the method) |
+|--------|--------------------------|-------------------------------|
+| `accumulate` | `gspio docs "accumulate"` | `gspio docs "accumulate linear recurrence state"` |
+| `remaining_sum` | `gspio docs "remaining_sum"` | `gspio docs "remaining_sum backward cumulative"` |
+| `previous_period` | `gspio docs "previous_period"` | `gspio docs "previous_period shift prior"` |
+| `cum_prod` | `gspio docs "cum_prod"` | `gspio docs "cum_prod cumulative product survival"` |
+
+If a query returns irrelevant results, add 2-3 descriptive words about what the method does.
+
 **Do NOT guess method signatures. Do NOT assume you know how a method works. Look it up.**
 
 **Missing a method?** If the calculation you need does not exist as a built-in method, do not implement it inline with raw Python. Invoke the `extending-gaspatchio` skill to create a proper accessor. This ensures the calculation is reusable, vectorized, and follows the framework's performance patterns.
+
+---
+
+## MANDATORY: Classify the Model Before Writing Code
+
+**This is a hard gate, not a suggestion.**
+
+After examining the source data or specification but BEFORE writing any model code, classify the model:
+
+| Model Class | Key Signal | Gaspatchio Approach | Key Methods to Look Up |
+|---|---|---|---|
+| **Standard projection** | Per-policy, uniform timeline, decrement-driven (life, annuity, mortgage) | Three-phase pattern (Phase 1 setup → Phase 2 timeline → Phase 3 calculations). This is the default. | `create_projection_timeline`, `cumulative_survival`, `Table.lookup` |
+| **Recursive / path-dependent** | Values at time t depend on state at t-1 (account values, fund balances, cumulative gains, reserves) | Use `accumulate()` for the linear recurrence. Pre-compute multiply and add components as list columns, then accumulate. | `accumulate`, `previous_period` |
+| **Fund / portfolio aggregate** | Per-entity calculations → aggregate → fund-level outputs (NAV, P&L, balance sheet) | Phase 1-3 per-entity using AF, then `group_by` aggregation. Fund-level financials may use sequential operations IF there are cross-line dependencies. | `accumulate`, `group_by`, see [references/aggregate-patterns.md](references/aggregate-patterns.md) |
+| **Cash flow waterfall** | Sequential allocation with priority rules (debt service, distributions) | `when/then/otherwise` chains for priority logic + `accumulate` for running balances | `when/then/otherwise`, `accumulate` |
+
+**State your classification explicitly** before writing code. Example:
+
+> "This is a **recursive / fund aggregate** model: per-investor projections with cumulative gains (→ accumulate), then fund-level P&L and balance sheet."
+
+**Then look up every method in the "Key Methods" column** using `uv run gspio docs "<method>"`.
+
+If the model doesn't fit any class above, load [references/recursive-patterns.md](references/recursive-patterns.md) and [references/aggregate-patterns.md](references/aggregate-patterns.md) to check for applicable patterns before falling back to raw Python.
 
 ---
 
@@ -229,6 +264,30 @@ Load these when working in the relevant area:
 | **Timing & dates** | [references/timing-and-dates.md](references/timing-and-dates.md) | PV timing, YEARFRAC, proj_year vs year, BOP/EOP |
 | **Scenarios** | [references/scenarios.md](references/scenarios.md) | Stress testing, ScenarioParams, term-structure discounting |
 | **Common mistakes** | [references/common-mistakes.md](references/common-mistakes.md) | Troubleshooting — full annotated list of real failures |
+| **Recursive patterns** | [references/recursive-patterns.md](references/recursive-patterns.md) | Account value rollforward, cumulative gains, reserve rollforward, running balances |
+| **Aggregate patterns** | [references/aggregate-patterns.md](references/aggregate-patterns.md) | Fund models, per-entity → fund-level P&L, balance sheet, NAV |
+
+---
+
+## PRE-WRITE GATE: Confirm AF Usage Before Writing Code
+
+**Before writing any model code**, confirm:
+
+1. **Per-entity calculations will use ActuarialFrame operations** (column assignments, `when/then`, accessor methods), NOT Python `for` loops over entities or time periods
+2. **Sequential dependencies will use `accumulate()`**, NOT running state variables in a loop
+3. **Aggregation will use `group_by().agg()`**, NOT iterating over groups
+
+If you believe the model genuinely requires Python loops (this should be extremely rare), you MUST:
+1. Search `uv run gspio docs` for an alternative (try: "accumulate", "group_by", "previous_period")
+2. State explicitly WHY no gaspatchio API covers this case
+3. Limit loops to the smallest possible scope — never loop over both entities AND time periods
+
+**Red flags that you're about to write anti-pattern code:**
+- `for inv in df.iter_rows()` — use AF column operations instead
+- `for t in range(n_months)` — use list columns + `accumulate` instead
+- `running_total += value` — use `accumulate` or `.list.cumsum()` instead
+- `results.append({...})` building a list of dicts — use AF column assignments instead
+- `dict(zip(col_a, col_b))` for lookups — use `Table.lookup()` or `.join()` instead
 
 ---
 
@@ -265,6 +324,9 @@ If you catch yourself thinking any of these, STOP:
 | "I'll add scenarios later" | Scenario structure affects model design. Invoke model-scenarios now. |
 | "The user didn't ask for reconciliation" | If there is a reference to match against, reconciliation is implied. |
 | "I already know how to write a scenarios runner" | Your runner won't follow the two-script pattern or use shock composables. Invoke the skill. |
+| "This model type doesn't fit gaspatchio's pattern" | Classify the model first. Recursive → accumulate. Aggregate → group_by. Check references. |
+| "I'll just use a for loop, it's simpler" | Loops defeat vectorization. Look up accumulate, previous_period, when/then first. |
+| "There are only N entities, loops won't be slow" | Correctness matters more than speed. AF patterns are also more readable and auditable. |
 
 ---
 

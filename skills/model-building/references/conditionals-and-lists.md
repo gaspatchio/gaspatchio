@@ -135,6 +135,26 @@ af.running_total = af.cashflow.list.cumsum()
 af.compound_factor = af.growth_rate.cum_prod()
 ```
 
+### Recursive Accumulation (`accumulate`)
+
+For values that depend on their own prior state — account values, fund balances, cumulative gains:
+
+```python
+# Linear recurrence: state[t] = state[t-1] * multiply[t] + add[t]
+# Example: account value with growth and deposits
+af.shifted_growth = af.growth_factor.projection.previous_period(fill_value=1.0)
+af.account_value = af.shifted_growth.projection.accumulate(
+    initial=af.opening_balance,
+    multiply=af.shifted_growth,
+    add=af.deposits,
+)
+```
+
+**When to use:** Any time you're tempted to write `for t in range(n): state[t] = f(state[t-1])`.
+`accumulate` handles the sequential dependency per policy while Polars parallelises across policies.
+
+Look up before using: `uv run gspio docs "accumulate" -t code_example`
+
 ### Period Shifting
 
 ```python
