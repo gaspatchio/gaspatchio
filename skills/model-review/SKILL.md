@@ -82,6 +82,21 @@ Check for anti-patterns against the reference file: [references/gaspatchio-antip
 | Missing `when/then/otherwise` for conditionals | Minor | Boolean masking like `value * (condition)` instead of explicit conditionals |
 | No section header comments | Minor | Model code without `# SECTION N: DESCRIPTION` headers |
 
+### Anti-Pattern Check: Python Loops Over Data
+
+Grep the model code for these patterns:
+- `for.*in.*iter_rows` — should use AF column operations
+- `for.*in.*range` — should use list columns + `accumulate`
+- `for.*enumerate` — should use vectorised Polars/AF operations
+- `results.append` — should use AF column assignments
+- `math.ceil` or `math.floor` — should use `af.col.ceil()` / `af.col.floor()`
+- `import math` — check if any math functions have AF equivalents
+
+For each match found:
+1. Check if there is a gaspatchio equivalent (`accumulate`, `previous_period`, `ceil`, etc.)
+2. If yes, flag it: "This loop/stdlib call could use gaspatchio's `<method>` — consider refactoring"
+3. If no gaspatchio equivalent exists, verify the loop is justified and scoped to the minimum necessary
+
 ---
 
 ## Layer 2: Actuarial Methodology (ASOP 56-informed)

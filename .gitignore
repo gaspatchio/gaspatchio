@@ -69,3 +69,11 @@ docs/_build/
 evals/benchmarks/lifelib_ref/output/
 evals/benchmarks/lifelib_ref/**/__pycache__/
 evals/benchmarks/comparison_results/
+
+# Local scratch data
+ref/34-example/p2/example-fund/
+ref/34-example/p2/*/chat/
+ref/34-example/p2/*/*.xlsx
+ref/34-example/p2/*/*.parquet
+ref/34-example/p2/*/data/
+ref/34-example/p2/*/assumptions/

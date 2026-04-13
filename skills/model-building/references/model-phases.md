@@ -140,10 +140,11 @@ Always look these up with `gspio docs` before using. Here's the landscape:
 
 | Accessor | Key Methods |
 |----------|------------|
-| `.projection` | `cumulative_survival()`, `prospective_value()`, `previous_period()`, `next_period()`, `at_period()`, `with_period()` |
+| `.projection` | `cumulative_survival()`, `prospective_value()`, `previous_period()`, `next_period()`, `at_period()`, `with_period()`, `accumulate()`, `remaining_sum()` |
 | `.finance` | `to_monthly()`, `compound()`, `discount_factor()`, `present_value()` |
 | `.excel` | `pv()`, `yearfrac()`, `from_excel_serial()` |
 | `.list` | `.sum()`, `.mean()`, `.cumsum()`, `.head()` |
+| (expression) | `.cum_prod()`, `.sum()`, `.round()`, `.clip()` |
 
 **Do not memorize signatures.** Look them up:
 

@@ -337,3 +337,58 @@ af.qx = af.qx_select * af.flag_select + af.qx_ultimate * (1.0 - af.flag_select)
 ```
 
 The arithmetic masking pattern is the standard workaround. Create a 0/1 flag, then multiply to select between values. See [conditionals-and-lists.md](conditionals-and-lists.md) for details.
+
+---
+
+## 21. Writing Running Totals or Account Values with Python Loops
+
+```python
+# WRONG — Python loops over periods, defeats vectorization
+running_total = 0.0
+for t in range(n_periods):
+    running_total = running_total * growth[t] + deposit[t]
+    results.append(running_total)
+
+# RIGHT — accumulate() handles sequential dependency per policy
+af.shifted_growth = af.growth_factor.projection.previous_period(fill_value=1.0)
+af.balance = af.shifted_growth.projection.accumulate(
+    initial=af.opening_balance,
+    multiply=af.shifted_growth,
+    add=af.deposits,
+)
+```
+
+`accumulate` computes `state[t] = state[t-1] * multiply[t] + add[t]` via a Rust kernel.
+Polars parallelises across policies automatically. See Level 3 Step 06 and Level 4 SECTION 5 for production examples.
+
+---
+
+## 22. Using Python stdlib or raw Polars Instead of Gaspatchio Methods
+
+Gaspatchio wraps common numeric operations to work on both scalar and list columns. These are available on any AF column or expression via the proxy dispatch.
+
+```python
+# WRONG — Python stdlib (breaks on list columns, can't be lazy)
+import math
+gst_paid = math.ceil(income * GST * 100) / 100
+rounded = round(value, 2)
+
+# RIGHT — Gaspatchio methods (work on scalar AND list columns)
+af.gst_paid = (af.income * GST * 100).ceil() / 100
+af.rounded = af.value.round(2)
+```
+
+| Python / Polars | Gaspatchio Equivalent | Works on Lists? |
+|---|---|---|
+| `math.ceil(x)` | `af.col.ceil()` | Yes |
+| `math.floor(x)` | `af.col.floor()` | Yes |
+| `round(x, n)` | `af.col.round(n)` | Yes |
+| `abs(x)` | `af.col.abs()` | Yes |
+| `math.exp(x)` | `af.col.exp()` | Yes |
+| `math.log(x)` | `af.col.log()` | Yes |
+| `math.sqrt(x)` | `af.col.sqrt()` | Yes |
+| `results[i-1]["col"]` | `af.col.projection.previous_period()` | Yes |
+| `pl.col("x").shift(1)` | `af.x.projection.previous_period()` | Yes |
+| `pl.col("x").cum_sum()` | `af.x.projection.accumulate(initial=0, multiply=1.0, add=af.x)` | Yes |
+
+**Key insight:** `previous_period()`, `accumulate()`, `ceil()`, `round()`, and all other AF methods work on **both** list columns (within-list operation) and scalar columns (across-row operation). The same methods you use in Phase 3 per-entity calculations also work in Phase 4 fund-level calculations.
