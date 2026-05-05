@@ -969,7 +969,6 @@ When implementing scenario functionality:
 ### Web Search Sources
 
 #### Actuarial Scenario Modeling
-- [Actuarial Modeling Solutions with a commercial platform Actuarial Systems – a ratings agency's](https://www.a ratings agencys.com/web/en/us/solutions/capital-management/actuarial-modeling.html)
 - [Finalyse: Actuarial and Risk Modelling Solutions for Insurance](https://www.finalyse.com/actuarial-and-risk-modelling-for-insurance)
 - [Stochastic Modeling E-book – International Actuarial Association](https://actuaries.org/product/stochastic-modeling/)
 - [Stochastic modelling (insurance) - Wikipedia](https://en.wikipedia.org/wiki/Stochastic_modelling_(insurance))
