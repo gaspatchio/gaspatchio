@@ -393,7 +393,7 @@ Use Polars to compare the gaspatchio outputs to the source model outputs at the 
 **Canonical example**: Level 4 reconciliation — 0.0000% across 1,016 model points, 35 variables, ~9 million data points. See `tutorial/level-4-lifelib/reconciliation_report.md` for the full breakdown including upstream lifelib bugs found.
 
 The `tutorial/level-4-lifelib/` directory demonstrates a complete reconciliation:
-- `reconciliation_report.md` — My Model-style report: 8/8 points, 10/10 variables, 0.0000% difference
+- `reconciliation_report.md` — structured report: 8/8 points, 10/10 variables, 0.0000% difference
 - `reconcile.py` — one-command verification script
 - `reference/lifelib_reference.parquet` — gold standard output
 

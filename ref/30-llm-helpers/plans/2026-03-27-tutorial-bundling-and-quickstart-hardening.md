@@ -70,7 +70,7 @@ skills/
 - [ ] **Step 1: Move the tutorial directory into the package**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements
+cd ../gaspatchio-core-skills-improvements
 mv tutorial bindings/python/gaspatchio_core/tutorials
 ```
 
@@ -96,7 +96,7 @@ def get_tutorials_dir() -> Path:
 - [ ] **Step 3: Create symlink at repo root for developer convenience**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements
+cd ../gaspatchio-core-skills-improvements
 ln -s bindings/python/gaspatchio_core/tutorials tutorial
 ```
 
@@ -155,7 +155,7 @@ Run each tutorial from `bindings/python/` (where the uv environment lives). Capt
 For each level, run:
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run python -c "
 import sys, os
 os.chdir('gaspatchio_core/tutorials/level-1-hello-world/base')
@@ -295,7 +295,7 @@ class TestTutorialVerify:
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run pytest ../../tests/skills/test_tutorial_cli.py -v 2>&1 | tail -20
 ```
 
@@ -496,7 +496,7 @@ app.add_typer(tutorial_app, name="tutorial")
 - [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run pytest ../../tests/skills/test_tutorial_cli.py -v 2>&1
 ```
 
@@ -505,11 +505,11 @@ Expected: all tests PASS.
 - [ ] **Step 6: Manual smoke test**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run gspio tutorial list
 uv run gspio tutorial init level-1 --dest /tmp/test-tutorial-init
 cd /tmp/test-tutorial-init && uv run python model.py
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run gspio tutorial verify level-1
 rm -rf /tmp/test-tutorial-init
 ```
@@ -600,7 +600,7 @@ def test_tutorial_output_matches_expected(level: str):
 - [ ] **Step 2: Run the test**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run pytest ../../tests/skills/test_tutorial_outputs.py -v 2>&1
 ```
 
@@ -698,7 +698,7 @@ If verification fails, investigate the mismatch. Do NOT claim success without a 
 - [ ] **Step 4: Run the skill structure tests to ensure SKILL.md is still valid**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run pytest ../../tests/skills/test_skill_structure.py -v -k quickstart 2>&1
 ```
 
@@ -739,7 +739,7 @@ In `bindings/python/pyproject.toml`, add to the `[tool.ruff.lint.per-file-ignore
 - [ ] **Step 2: Verify ruff passes on tutorials**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run ruff check gaspatchio_core/tutorials/ 2>&1 | tail -10
 ```
 
@@ -759,7 +759,7 @@ git commit -m "chore: add ruff per-file-ignores for bundled tutorial scripts"
 - [ ] **Step 1: Run all tests together**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run pytest ../../tests/skills/ -v 2>&1
 ```
 
@@ -768,11 +768,11 @@ Expected: all tests pass — skill structure tests, tutorial CLI tests, tutorial
 - [ ] **Step 2: End-to-end smoke test of the full quickstart flow**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run gspio tutorial list
 uv run gspio tutorial init level-1 --dest /tmp/e2e-quickstart-test
 cd /tmp/e2e-quickstart-test && uv run python model.py
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements/bindings/python
+cd ../gaspatchio-core-skills-improvements/bindings/python
 uv run gspio tutorial verify level-1
 rm -rf /tmp/e2e-quickstart-test
 ```
@@ -782,7 +782,7 @@ Expected: full flow works end-to-end.
 - [ ] **Step 3: Verify tutorials are still accessible via the repo-root symlink**
 
 ```bash
-cd ~/projects/gaspatchio/gaspatchio-core-skills-improvements
+cd ../gaspatchio-core-skills-improvements
 ls tutorial/level-1-hello-world/base/model.py
 ls tutorial/README.md
 ```

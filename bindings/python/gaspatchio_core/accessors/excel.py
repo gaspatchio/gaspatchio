@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Accessors for Excel-related operations on ActuarialFrame columns/expressions."""
 
 import datetime

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Test tracing functionality for ActuarialFrame debug mode
 # ABOUTME: Verifies operation capture, log_query_plan calls, and mode switching
 # ruff: noqa: S101, PLR2004, ANN201, SLF001, ANN202, D100, INP001, ARG001, T201

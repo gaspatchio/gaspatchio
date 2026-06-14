@@ -35,7 +35,7 @@
 - [ ] Support single policy mode for debugging
 - [ ] Add output file parameter
 - [ ] Create integration tests with sample models
-- [ ] Test with My Model model
+- [ ] Test with the example model
 - [ ] Verify JSON output format matches specification
 - [ ] Add error handling for non-debug mode
 - [ ] Document usage in CLI help text

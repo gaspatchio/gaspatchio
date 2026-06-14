@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 1: Hello World — Term Life Portfolio
 
@@ -8,24 +12,23 @@ Run this first. Once it works, move to Step 01 to add projections.
 
 Key concepts introduced here:
 
-  - ActuarialFrame: a specialised DataFrame where each row is one policy.
-    You access columns as attributes (af.sum_assured) and assign new columns
-    the same way (af.expected_claims = ...). Under the hood gaspatchio queues
-    each operation lazily — nothing runs until you call .collect().
+  - ActuarialFrame: a portfolio container — one row per policy. You read
+    columns as attributes (af.sum_assured) and assign new ones the same
+    way (af.expected_claims = ...). Each line records the formula; no
+    numbers are computed until you ask for them with .collect().
 
-  - Column arithmetic: Python operators (+, -, *, /, **) work element-wise
-    across all policies at once. No loops, no apply(), no iteration. Write the
-    formula once and gaspatchio evaluates it for every row.
+  - Column arithmetic: Python operators (+, -, *, /, **) apply the same
+    formula to every policy at once. Write the formula once; gaspatchio
+    evaluates it across the whole portfolio.
 
-  - when().then().otherwise(): gaspatchio's conditional expression, equivalent
-    to Excel's IF(condition, value_if_true, value_if_false). Works element-wise
-    so you can express business rules that read like plain English:
+  - when().then().otherwise(): the conditional expression — the same shape
+    as Excel's IF(condition, value_if_true, value_if_false). Applies the
+    rule policy-by-policy so business logic reads like plain English:
       when(profit > 0).then("Yes").otherwise("No")
 
-  - .collect(): ActuarialFrame is lazy — every assignment queues a computation
-    but does not execute it. Call .collect() at the end to materialise the
-    result as a standard Polars DataFrame. This laziness lets gaspatchio
-    optimise the entire computation graph before running it.
+  - .collect(): assignments record what you want to calculate. Call
+    .collect() when you want the actual numbers — gaspatchio runs all the
+    formulas in one pass and returns the results as a Polars DataFrame.
 
   - Methods under .projection, .finance, .date, .excel are gaspatchio-specific.
     Everything else (.round(), .cast(), .list.sum()) is standard Polars.

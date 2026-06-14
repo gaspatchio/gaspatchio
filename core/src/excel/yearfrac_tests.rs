@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: Tests for the yearfrac Excel function implementation
 // ABOUTME: Contains unit tests and Excel compatibility verification tests
 

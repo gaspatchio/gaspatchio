@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/assumptions/_utils.py
-# hypothesis_version: 6.135.0
-
-[10000, '.csv', '.parquet', '999', 'auto', 'term', 'ult', 'ult.', 'ultimate']

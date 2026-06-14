@@ -10,9 +10,24 @@ permissions:
 
 jobs:
   benchmark:
-    name: Criterion Benchmarks (PR comparison)
-    runs-on: ubuntu-latest
+    name: Criterion Benchmarks (PR comparison, ${{ matrix.platform.display }})
+    runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - display: Linux
+            runner: ubuntu-latest
+            benchmark_name: Rust Benchmarks
+            benchmark_path: dev/bench
+          - display: Windows
+            runner: windows-m
+            benchmark_name: Rust Benchmarks (Windows)
+            benchmark_path: dev/bench-windows
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,8 +49,10 @@ jobs:
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: cargo
+          name: ${{ matrix.platform.benchmark_name }}
           output-file-path: core/bench-output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          benchmark-data-dir-path: ${{ matrix.platform.benchmark_path }}
           alert-threshold: '130%'
           comment-on-alert: true
           fail-on-alert: false  # Don't fail PR if no baseline exists yet

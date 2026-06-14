@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Error boundary detection using binary search replay
 # ABOUTME: Finds the exact operation that causes compilation or runtime errors
 """Error boundary detection using binary search replay."""

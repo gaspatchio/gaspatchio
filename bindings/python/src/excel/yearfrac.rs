@@ -1,4 +1,9 @@
 #![allow(clippy::unused_unit)]
+
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use gaspatchio_core_lib::excel::yearfrac::yearfrac_output_type as core_yearfrac_output_type;

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Agent factories for skill evaluation.
 
 Each factory loads a skill's SKILL.md and reference files as the system prompt,

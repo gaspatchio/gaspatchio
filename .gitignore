@@ -39,6 +39,10 @@ htmlcov/
 *.swp
 *.swo
 
+# macOS metadata
+.DS_Store
+._.DS_Store
+
 # Documentation
 docs/_build/
 /src/gaspatchio_core/__pycache__/__init__.cpython-313.pyc
@@ -47,28 +51,25 @@ docs/_build/
 /bindings/python/.pypirc
 /bindings/python/gaspatchio_core/_internal.cpython-312-darwin.so
 /bindings/python/gaspatchio_core/_internal.cpython-313-darwin.so
-/bindings/python/jobs/example/reconcillation
-/bindings/python/jobs/my-model/estimations_workbook.xlsm
-/bindings/python/jobs/my-model/~$estimations_workbook.xlsm
-/bindings/python/jobs/my-model/docs
-/bindings/python/.hypothesis
-/bindings/python/tests/.hypothesis
+/bindings/python/jobs/*/reconcillation
+/bindings/python/jobs/*/*.xlsm
+/bindings/python/jobs/*/docs
+.hypothesis/
 # Claude Code – keep shared config, ditch personal/state
 **/.claude/settings.local.json
 **/.claude/history*
 **/.claude/tmp/
 /core/rust-functions-outputs
 /bindings/python/pyfuncs-outputs
-/bindings/python/AGENT.md
-/bindings/python/CLAUDE.md
-/bindings/python/prompts
-/core/AGENT.md
-/core/CLAUDE.md
-/core/prompts
 /bindings/python/tests/scratch/scenarios/benchmark_history.jsonl
 evals/benchmarks/lifelib_ref/output/
 evals/benchmarks/lifelib_ref/**/__pycache__/
 evals/benchmarks/comparison_results/
+# Generated scenario benchmark / showcase artifacts (uploaded as CI artifacts, never committed)
+evals/benchmarks/scenario_showcase.json
+evals/benchmarks/scenario_showcase.vl.json
+evals/benchmarks/scenario_showcase.png
+evals/benchmarks/scenario_testdrive_results.json
 
 # Local scratch data
 ref/34-example/p2/example-fund/
@@ -77,3 +78,9 @@ ref/34-example/p2/*/*.xlsx
 ref/34-example/p2/*/*.parquet
 ref/34-example/p2/*/data/
 ref/34-example/p2/*/assumptions/
+
+# Scenario audit sidecars + tutorial run outputs (runtime artifacts, not source)
+gaspatchio_audit/
+bindings/python/gaspatchio_audit/
+bindings/python/gaspatchio_core/tutorials/**/report/
+bindings/python/gaspatchio_core/tutorials/**/gaspatchio_audit/

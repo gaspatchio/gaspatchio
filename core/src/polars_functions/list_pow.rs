@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: Element-wise power operation for list columns (list ** list and list ** scalar)
 // ABOUTME: Eliminates EXPLODE/GROUP_BY pattern for discount factor calculations
 

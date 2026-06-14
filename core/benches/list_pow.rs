@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use gaspatchio_core_lib::polars_functions::list_pow;
 use polars::prelude::*;

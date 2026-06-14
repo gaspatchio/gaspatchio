@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Projection accessor for actuarial projection operations.
 # ABOUTME: Methods: cumulative survival, period overrides, time-shifting.
 # ruff: noqa: PLC0415
@@ -318,21 +322,17 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             # Map rate_timing to start_at
             start_at = 1.0 if rate_timing == "beginning_of_period" else None
         from gaspatchio_core.column.column_proxy import ColumnProxy
-        from gaspatchio_core.column.dispatch import (
-            ColumnTypeDetector,  # type: ignore[attr-defined]
-        )
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         # Get base expression and parent frame
         base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
 
-        # Determine if this is a list column
-        detector = ColumnTypeDetector(parent_af)
-        is_list = False
-
-        if isinstance(self._proxy, ColumnProxy):
-            is_list = detector.is_list_column(self._proxy.name)
+        # Determine if this is a list column via the proxy's cached shape.
+        is_list = (
+            isinstance(self._proxy, ColumnProxy)
+            and self._proxy.shape == "list"
+        )
 
         # Apply appropriate calculation based on column type
         if is_list:
@@ -511,6 +511,17 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         modified_expr = pl.concat_list(
             [before_slice, replacement.list.first(), after_slice]
         )
+
+        # A fixed period index may be out of range for shorter (jagged)
+        # policies. list.slice clamps silently, so the naive concat would
+        # APPEND the replacement and grow such rows — a phantom value at a
+        # period the policy never reaches. Apply the replacement only where the
+        # index exists; leave out-of-range (already-matured) rows unchanged.
+        # Positive t is in-bounds when len > t; negative t (from the end) when
+        # len >= -t.
+        list_len = base_expr.list.len()
+        in_bounds = list_len > period if period >= 0 else list_len >= -period
+        modified_expr = pl.when(in_bounds).then(modified_expr).otherwise(base_expr)
 
         return ExpressionProxy(modified_expr, parent_af)
 
@@ -740,24 +751,17 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         """
         from gaspatchio_core.column.column_proxy import ColumnProxy
-        from gaspatchio_core.column.dispatch import (
-            ColumnTypeDetector,  # type: ignore[attr-defined]
-        )
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
 
-        # Determine if this is a list column/expression
-        detector = ColumnTypeDetector(parent_af)
-        is_list = False
-
-        if isinstance(self._proxy, ColumnProxy):
-            # For ColumnProxy, check by column name
-            is_list = detector.is_list_column(self._proxy.name)
-        elif isinstance(self._proxy, ExpressionProxy):
-            # For ExpressionProxy, infer output type from the expression
-            is_list = detector.is_expression_list_output(base_expr)
+        # Read the proxy's cached shape — both ColumnProxy and ExpressionProxy
+        # expose `.shape`, so a single check covers both cases.
+        is_list = (
+            isinstance(self._proxy, (ColumnProxy, ExpressionProxy))
+            and self._proxy.shape == "list"
+        )
 
         if is_list:
             # For list columns: use list.eval with shift to operate element-wise
@@ -770,12 +774,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             # For scalar columns: use shift(1) to get previous period value
             shifted_expr = base_expr.shift(1, fill_value=fill_value)
 
-        result = ExpressionProxy(shifted_expr, parent_af)
-
-        # Tag as element-wise to prevent incorrect list broadcasting
-        result._list_broadcast_metadata = {"element_wise": True}  # noqa: SLF001
-
-        return result
+        return ExpressionProxy(shifted_expr, parent_af)
 
     def next_period(self, fill_value=0.0) -> ExpressionProxy:
         """Get value from next period (t+1).
@@ -867,24 +866,17 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         """
         from gaspatchio_core.column.column_proxy import ColumnProxy
-        from gaspatchio_core.column.dispatch import (
-            ColumnTypeDetector,  # type: ignore[attr-defined]
-        )
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
 
-        # Determine if this is a list column/expression
-        detector = ColumnTypeDetector(parent_af)
-        is_list = False
-
-        if isinstance(self._proxy, ColumnProxy):
-            # For ColumnProxy, check by column name
-            is_list = detector.is_list_column(self._proxy.name)
-        elif isinstance(self._proxy, ExpressionProxy):
-            # For ExpressionProxy, infer output type from the expression
-            is_list = detector.is_expression_list_output(base_expr)
+        # Read the proxy's cached shape — both ColumnProxy and ExpressionProxy
+        # expose `.shape`, so a single check covers both cases.
+        is_list = (
+            isinstance(self._proxy, (ColumnProxy, ExpressionProxy))
+            and self._proxy.shape == "list"
+        )
 
         if is_list:
             # For list columns: use list.eval with shift to operate element-wise
@@ -897,12 +889,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             # For scalar columns: use shift(-1) to get next period value
             shifted_expr = base_expr.shift(-1, fill_value=fill_value)
 
-        result = ExpressionProxy(shifted_expr, parent_af)
-
-        # Tag as element-wise to prevent incorrect list broadcasting
-        result._list_broadcast_metadata = {"element_wise": True}  # noqa: SLF001
-
-        return result
+        return ExpressionProxy(shifted_expr, parent_af)
 
     def at_period(
         self, relative_period: int, fill_value: float | None = 0.0
@@ -1060,24 +1047,17 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         """
         from gaspatchio_core.column.column_proxy import ColumnProxy
-        from gaspatchio_core.column.dispatch import (
-            ColumnTypeDetector,  # type: ignore[attr-defined]
-        )
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
 
-        # Determine if this is a list column/expression
-        detector = ColumnTypeDetector(parent_af)
-        is_list = False
-
-        if isinstance(self._proxy, ColumnProxy):
-            # For ColumnProxy, check by column name
-            is_list = detector.is_list_column(self._proxy.name)
-        elif isinstance(self._proxy, ExpressionProxy):
-            # For ExpressionProxy, infer output type from the expression
-            is_list = detector.is_expression_list_output(base_expr)
+        # Read the proxy's cached shape — both ColumnProxy and ExpressionProxy
+        # expose `.shape`, so a single check covers both cases.
+        is_list = (
+            isinstance(self._proxy, (ColumnProxy, ExpressionProxy))
+            and self._proxy.shape == "list"
+        )
 
         if is_list:
             # For list columns: use list.eval with shift to operate element-wise
@@ -1099,12 +1079,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             # at_period(1) means t+1 (future), which needs shift(-1)
             shifted_expr = base_expr.shift(-relative_period, fill_value=fill_value)
 
-        result = ExpressionProxy(shifted_expr, parent_af)
-
-        # Tag as element-wise to prevent incorrect list broadcasting
-        result._list_broadcast_metadata = {"element_wise": True}  # noqa: SLF001
-
-        return result
+        return ExpressionProxy(shifted_expr, parent_af)
 
     def remaining_sum(self) -> ExpressionProxy:
         """Compute backward cumulative sum (remaining sum from each period to end).

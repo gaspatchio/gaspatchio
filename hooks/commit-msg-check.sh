@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 COMMIT_MSG_FILE="$1"
 COMMITTER_EMAIL=$(git config --get user.email)
 

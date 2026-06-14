@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: Excel-compatible YEARFRAC function implementation
 // ABOUTME: Calculates year fractions between dates using various day count conventions
 

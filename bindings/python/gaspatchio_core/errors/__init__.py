@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from .boundary import ErrorBoundaryFinder
 from .compilation_finder import CompilationErrorFinder
 from .formatter import ValidationErrorFormatter

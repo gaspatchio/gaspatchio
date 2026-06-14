@@ -2,7 +2,7 @@
 
 **Status**: Draft
 **Date**: 2025-12-09
-**Author**: Claude & Gaz Wright
+**Authors:** Matt Wright, Claude
 **Depends On**: RFC 29 (Assumption Lookup Performance Optimization)
 
 ## Summary

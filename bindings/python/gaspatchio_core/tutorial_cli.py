@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """CLI subcommands for managing gaspatchio tutorials.
 
 Provides list, init, and verify commands so users can get started

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Scratch test showing commission schedule calculation with conditionals.
 # ABOUTME: Demonstrates commission rates that vary by policy year and sum assured.
 # ruff: noqa: T201, INP001, ANN201, PLR2004

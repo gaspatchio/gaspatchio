@@ -196,8 +196,7 @@ Package everything for distribution. Each item below is a focused working sessio
 
 ## Source Material
 
-- `ref/30-llm-helpers/packaging-cli-skills-for-llm-agents.pdf` — ChatGPT research article
-- `ref/30-llm-helpers/analysis.md` — critical analysis and red-teaming of the article
+- `ref/30-llm-helpers/analysis.md` — critical analysis and red-teaming of CLI-skill packaging patterns
 - `ref/30-llm-helpers/skills/` — existing skill drafts (discovery, building, reconciliation)
 - Claude Code plugin docs: https://code.claude.com/docs/en/plugins.md
 - VS Code Copilot plugin docs: https://code.visualstudio.com/docs/copilot/customization/agent-plugins

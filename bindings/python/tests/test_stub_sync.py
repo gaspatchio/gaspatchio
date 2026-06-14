@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Test that .pyi stub files stay in sync with the runtime implementation."""
 
 import subprocess

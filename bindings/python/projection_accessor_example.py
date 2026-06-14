@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: T201, PD901, ANN201, E501
 # pyright: reportAttributeAccessIssue=false
 """

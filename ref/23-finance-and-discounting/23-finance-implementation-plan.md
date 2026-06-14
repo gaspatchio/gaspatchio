@@ -749,7 +749,7 @@ Expected: All docstring examples PASS
 ## Task 12: Integration test with basic_term model (optional)
 
 **Files:**
-- Reference: `~/Projects/gaspatchio-models/basic_term/model_projection.py`
+- Reference: `../gaspatchio-models/basic_term/model_projection.py`
 
 **Step 1: Create test script to compare old vs new approach**
 

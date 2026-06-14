@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: AssumptionTable with pluggable storage backends (hash or array).
 // ABOUTME: Provides unified lookup interface with Python-controlled storage mode.
 

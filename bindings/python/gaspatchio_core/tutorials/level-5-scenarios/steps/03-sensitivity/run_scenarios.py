@@ -1,349 +1,191 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
-Level 5 Step 03: Sensitivity Analysis
+Level 5 Step 03: Sensitivity Sweeps
 
-Demonstrates two techniques for systematic parameter sweeps:
+A sensitivity sweep is just a list of scenarios where one driver varies
+across a range. There is no special helper for this — you build the
+``shocks`` dict with a list comprehension, hand it to ``ScenarioRun``,
+and the loop runs them all. Two patterns are shown here:
 
-1. **1D sweep** -- Use ``sensitivity_analysis()`` to vary a single parameter
-   (mortality factor 0.8 to 1.4) and plot the resulting PV of net cashflows
-   as a sensitivity curve.
+  * **1D sweep** — vary mortality multiplier across 0.8, 0.9, 1.0, 1.1, 1.2.
+    Result: one number per multiplier — the response curve.
 
-2. **2D sweep** -- Build a mortality x lapse cross-product grid manually with
-   ``parse_scenario_config()`` and visualise the results as a heatmap.
+  * **2D sweep** — vary mortality AND lapse simultaneously over the same
+    grid. Result: a 5×5 surface of interactions, suitable for a heatmap.
 
-No ``scenarios.json`` is required -- sweeps are built programmatically.
+The 1D version generates 5 scenarios; the 2D version generates 25
+(``itertools.product``). Both runs share the L5 model and the bounded-
+memory ``for_each_scenario`` loop, so the cost scales linearly with the
+number of scenarios.
 
-Usage:
-    uv run python tutorial/level-5-scenarios/steps/03-sensitivity/run_scenarios.py
+Run::
+
+    cd tutorial/level-5-scenarios/steps/03-sensitivity
+    uv run python run_scenarios.py
 """
 
+import itertools
 import sys
 import time
 from pathlib import Path
 
 import polars as pl
 
+from gaspatchio_core import ActuarialFrame, MortalityTable
+from gaspatchio_core.scenarios import (
+    MultiplicativeShock,
+    ScenarioRun,
+    Sum,
+)
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-BASE_DIR = SCRIPT_DIR.parents[1] / "base"
-sys.path.insert(0, str(SCRIPT_DIR.parents[1]))  # for charts import
-sys.path.insert(0, str(BASE_DIR))  # for model import
+L5_BASE_DIR = SCRIPT_DIR.parent.parent / "base"
+sys.path.insert(0, str(L5_BASE_DIR))
+import model  # noqa: E402
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import parse_scenario_config, sensitivity_analysis
-
-import charts 
-import model 
+MODEL_POINTS_PATH = L5_BASE_DIR / "model_points.parquet"
+SELECT_PERIOD = model.SELECT_PERIOD_LEN
 
 # ---------------------------------------------------------------------------
-# Configuration
+# 1. Base tables + model wrapper (identical to step 01/02).
 # ---------------------------------------------------------------------------
 
-MODEL_POINTS_PATH = BASE_DIR / "model_points.parquet"
+assumptions = model.load_assumptions()
+mortality_select_raw = assumptions["mortality"].table
 
-MORT_SWEEP_VALUES = [0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4]
-MORT_GRID_VALUES = [0.8, 1.0, 1.2]
-LAPSE_GRID_VALUES = [0.8, 1.0, 1.2]
+BASE_TABLES = {
+    "mortality_select": mortality_select_raw,
+    "lapse_rates": assumptions["lapse_rates"],
+}
+
+
+def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
+    """Plan-agnostic adapter: override whichever tables the current plan supplies."""
+    del drivers
+    overrides = dict(assumptions)
+    if "mortality_select" in tables:
+        overrides["mortality"] = MortalityTable(
+            table=tables["mortality_select"],
+            age_basis="age_last_birthday",
+            structure="select_ultimate",
+            select_period=SELECT_PERIOD,
+        )
+    for name in ("mortality_scalars", "lapse_rates", "surrender_charges"):
+        if name in tables:
+            overrides[name] = tables[name]
+    return model.main(af, assumptions_override=overrides)
+
 
 # ---------------------------------------------------------------------------
-# Helper: run a single scenario and return aggregated PV net CF
+# 2. 1D sweep — mortality multiplier across a range.
 # ---------------------------------------------------------------------------
 
-
-def run_scenario(
-    mp: pl.DataFrame,
-    shocks: list[object],
-) -> float:
-    """Run the model with the given shocks and return the total pv_net_cf."""
-    assumptions = model.load_assumptions()
-
-    for shock in shocks:
-        table_name = shock.table  # type: ignore[attr-defined]
-        if table_name in assumptions and hasattr(assumptions[table_name], "with_shock"):
-            assumptions[table_name] = assumptions[table_name].with_shock(shock)
-
-    af = ActuarialFrame(mp)
-    result_af = model.main(af, assumptions_override=assumptions)
-    result = result_af.collect()
-    return result["pv_net_cf"].sum()
+MORT_VALUES = [0.8, 0.9, 1.0, 1.1, 1.2]
 
 
-# ===========================================================================
-# PART 1: 1D Mortality Sweep
-# ===========================================================================
+def mort_sweep_id(mult: float) -> str:
+    return f"MORT_x{mult:.2f}"
 
-start = time.perf_counter()
+
+sweep_1d_shocks = {
+    mort_sweep_id(m): (
+        [MultiplicativeShock(factor=m, table="mortality_select")] if m != 1.0 else []
+    )
+    for m in MORT_VALUES
+}
+
+plan_1d = ScenarioRun(
+    shocks=sweep_1d_shocks,
+    base_tables={"mortality_select": mortality_select_raw},
+    aggregations=(Sum("pv_net_cf").alias("pv_net_cf").over("scenario_id"),),
+)
+
+print("=== 1D Sweep: mortality multiplier ===")
+print(plan_1d.describe())
 
 mp = pl.read_parquet(MODEL_POINTS_PATH)
-n_points = len(mp)
+af = ActuarialFrame(mp)
 
-# Generate shock specifications for the mortality sweep.
-# Note: 1.0 is in MORT_SWEEP_VALUES so it acts as the base case (identity shock).
-# We don't set include_base=True since that would add a duplicate 1.0 entry.
-mort_scenarios = sensitivity_analysis(
-    table="mortality_select",
-    shock_type="multiplicative",
-    values=MORT_SWEEP_VALUES,
+start = time.perf_counter()
+result_1d = plan_1d.run(af, model_fn, audit=True)
+runtime_1d = time.perf_counter() - start
+
+curve_1d = (
+    result_1d.aggregations["pv_net_cf"]
+    .with_columns(
+        pl.col("scenario_id")
+        .str.replace("MORT_x", "")
+        .cast(pl.Float64)
+        .alias("mortality_mult")
+    )
+    .sort("mortality_mult")
+    .select(["mortality_mult", "pv_net_cf"])
 )
 
-# Run each scenario
-sweep_records: list[dict[str, float]] = []
-
-for scenario_id, shocks in mort_scenarios.items():
-    pv_net_cf = run_scenario(mp, shocks)
-
-    # Extract the mortality factor from the scenario_id
-    # Format: "mortality_select_0.8" -> 0.8
-    factor = float(scenario_id.split("_")[-1])
-
-    sweep_records.append({
-        "scenario_id": scenario_id,
-        "mortality_factor": factor,
-        "pv_net_cf": pv_net_cf,
-    })
-
-sweep_df = pl.DataFrame(sweep_records).sort("mortality_factor")
-
-part1_time = time.perf_counter() - start
-
-# Chart 1: Sensitivity curve
-sensitivity_chart = charts.sensitivity_line(
-    sweep_df,
-    "mortality_factor",
-    "pv_net_cf",
-    "Sensitivity: PV Net CF vs Mortality Factor",
-    base_x=1.0,
-)
-
-report_dir = SCRIPT_DIR / "report"
-report_dir.mkdir(parents=True, exist_ok=True)
-sensitivity_chart.save(str(report_dir / "sensitivity_mortality.png"), scale_factor=2)
-
-# ===========================================================================
-# PART 2: 2D Sweep (Mortality x Lapse)
-# ===========================================================================
-
-part2_start = time.perf_counter()
-
-grid_scenarios: dict[str, list[object]] = {}
-
-for m in MORT_GRID_VALUES:
-    for lps in LAPSE_GRID_VALUES:
-        sid = f"mort_{m}_lapse_{lps}"
-        shock_configs: list[dict[str, object]] = []
-        if m != 1.0:
-            shock_configs.append({"table": "mortality_select", "multiply": m})
-        if lps != 1.0:
-            shock_configs.append({"table": "lapse_rates", "multiply": lps})
-
-        parsed = parse_scenario_config([{"id": sid, "shocks": shock_configs}])
-        grid_scenarios.update(parsed)
-
-# Run all 9 scenarios
-grid_records: list[dict[str, float]] = []
-
-for scenario_id, shocks in grid_scenarios.items():
-    pv_net_cf = run_scenario(mp, shocks)
-
-    # Extract factors from scenario_id: "mort_0.8_lapse_1.0"
-    parts = scenario_id.split("_")
-    mort_factor = float(parts[1])
-    lapse_factor = float(parts[3])
-
-    grid_records.append({
-        "mortality_factor": mort_factor,
-        "lapse_factor": lapse_factor,
-        "pv_net_cf": pv_net_cf,
-    })
-
-grid_df = pl.DataFrame(grid_records).sort("mortality_factor", "lapse_factor")
-
-part2_time = time.perf_counter() - part2_start
-total_time = time.perf_counter() - start
-
-# Chart 2: 2D Heatmap
-heatmap_chart = charts.heatmap_2d(
-    grid_df,
-    "mortality_factor",
-    "lapse_factor",
-    "pv_net_cf",
-    "Interaction: Mortality x Lapse Impact on PV Net CF",
-)
-
-heatmap_chart.save(str(report_dir / "heatmap_interaction.png"), scale_factor=2)
+print(f"\nRuntime: {runtime_1d:.2f}s")
+print(curve_1d)
+print()
 
 # ---------------------------------------------------------------------------
-# Format display tables
+# 3. 2D sweep — mortality × lapse interaction grid.
 # ---------------------------------------------------------------------------
 
-sweep_display = sweep_df.select("mortality_factor", "pv_net_cf").with_columns(
-    pl.col("pv_net_cf")
-    .map_elements(charts.format_number, return_dtype=pl.String)
-    .alias("pv_net_cf"),
+LAPSE_VALUES = [0.8, 0.9, 1.0, 1.1, 1.2]
+
+
+def grid_id(mort: float, lapse: float) -> str:
+    return f"M{mort:.2f}_L{lapse:.2f}"
+
+
+sweep_2d_shocks = {}
+for m, lap in itertools.product(MORT_VALUES, LAPSE_VALUES):
+    shocks: list = []
+    if m != 1.0:
+        shocks.append(MultiplicativeShock(factor=m, table="mortality_select"))
+    if lap != 1.0:
+        shocks.append(MultiplicativeShock(factor=lap, table="lapse_rates"))
+    sweep_2d_shocks[grid_id(m, lap)] = shocks
+
+plan_2d = ScenarioRun(
+    shocks=sweep_2d_shocks,
+    base_tables=BASE_TABLES,
+    aggregations=(Sum("pv_net_cf").alias("pv_net_cf").over("scenario_id"),),
 )
 
-grid_display = grid_df.with_columns(
-    pl.col("pv_net_cf")
-    .map_elements(charts.format_number, return_dtype=pl.String)
-    .alias("pv_net_cf"),
+print("=== 2D Sweep: mortality × lapse (25 cells) ===")
+print(plan_2d.describe())
+
+start = time.perf_counter()
+result_2d = plan_2d.run(af, model_fn, audit=True)
+runtime_2d = time.perf_counter() - start
+
+# scenario_id format is "M{mort:.2f}_L{lapse:.2f}" — split on '_' then strip the prefix.
+heatmap = (
+    result_2d.aggregations["pv_net_cf"]
+    .with_columns(
+        pl.col("scenario_id")
+        .str.split("_")
+        .list.get(0)
+        .str.strip_prefix("M")
+        .cast(pl.Float64)
+        .alias("mortality_mult"),
+        pl.col("scenario_id")
+        .str.split("_")
+        .list.get(1)
+        .str.strip_prefix("L")
+        .cast(pl.Float64)
+        .alias("lapse_mult"),
+    )
+    .pivot(
+        values="pv_net_cf",
+        index="mortality_mult",
+        on="lapse_mult",
+    )
+    .sort("mortality_mult")
 )
 
-# ---------------------------------------------------------------------------
-# Key findings (auto-generated)
-# ---------------------------------------------------------------------------
-
-findings: list[str] = []
-
-# 1D sweep: linearity / convexity check
-base_pv = sweep_df.filter(pl.col("mortality_factor") == 1.0)["pv_net_cf"][0]
-low_pv = sweep_df.filter(pl.col("mortality_factor") == 0.8)["pv_net_cf"][0]
-high_pv = sweep_df.filter(pl.col("mortality_factor") == 1.4)["pv_net_cf"][0]
-
-# Check for convexity: if the midpoint (1.0) differs from the average of
-# endpoints, there is curvature.
-midpoint_avg = (low_pv + high_pv) / 2.0
-convexity = abs(base_pv - midpoint_avg) / abs(base_pv) * 100
-
-if convexity < 1.0:
-    findings.append(
-        f"The mortality sensitivity curve is approximately **linear** "
-        f"(midpoint deviation {convexity:.2f}%)."
-    )
-else:
-    findings.append(
-        f"The mortality sensitivity curve shows **convexity** "
-        f"(midpoint deviation {convexity:.2f}% from the average of endpoints)."
-    )
-
-# Range of impact
-pv_range = high_pv - low_pv
-pv_range_pct = pv_range / abs(base_pv) * 100
-findings.append(
-    f"Varying mortality from 0.8x to 1.4x changes PV net CF by "
-    f"{charts.format_number(pv_range)} ({pv_range_pct:+.1f}% of base)."
-)
-
-# 2D interaction effects
-# Compare the combined shock to the sum of individual effects
-base_grid = grid_df.filter(
-    (pl.col("mortality_factor") == 1.0) & (pl.col("lapse_factor") == 1.0)
-)["pv_net_cf"][0]
-
-mort_only = grid_df.filter(
-    (pl.col("mortality_factor") == 1.2) & (pl.col("lapse_factor") == 1.0)
-)["pv_net_cf"][0]
-
-lapse_only = grid_df.filter(
-    (pl.col("mortality_factor") == 1.0) & (pl.col("lapse_factor") == 1.2)
-)["pv_net_cf"][0]
-
-both = grid_df.filter(
-    (pl.col("mortality_factor") == 1.2) & (pl.col("lapse_factor") == 1.2)
-)["pv_net_cf"][0]
-
-# Interaction = combined effect - (sum of individual effects)
-individual_sum = (mort_only - base_grid) + (lapse_only - base_grid)
-combined_effect = both - base_grid
-interaction = combined_effect - individual_sum
-
-if abs(interaction) > 0.01 * abs(base_grid):
-    interaction_pct = interaction / abs(base_grid) * 100
-    findings.append(
-        f"Mortality and lapse shocks show a **non-trivial interaction** effect "
-        f"({interaction_pct:+.2f}% of base). The combined impact differs from "
-        f"the sum of individual effects."
-    )
-else:
-    findings.append(
-        "Mortality and lapse shocks are approximately **additive** -- "
-        "the combined impact is close to the sum of individual effects."
-    )
-
-# Which dimension dominates?
-mort_effect = abs(mort_only - base_grid)
-lapse_effect = abs(lapse_only - base_grid)
-
-if mort_effect > lapse_effect * 1.5:
-    findings.append(
-        "Mortality shocks have a **larger impact** on PV net CF than lapse shocks "
-        "at the same shock magnitude."
-    )
-elif lapse_effect > mort_effect * 1.5:
-    findings.append(
-        "Lapse shocks have a **larger impact** on PV net CF than mortality shocks "
-        "at the same shock magnitude."
-    )
-else:
-    findings.append(
-        "Mortality and lapse shocks have **similar magnitudes** of impact on PV net CF."
-    )
-
-# ---------------------------------------------------------------------------
-# Report
-# ---------------------------------------------------------------------------
-
-report_path = charts.write_report(
-    path=SCRIPT_DIR,
-    title="Sensitivity Analysis",
-    metadata={
-        "points": n_points,
-        "scenarios": len(mort_scenarios) + len(grid_scenarios),
-        "runtime_s": total_time,
-    },
-    sections=[
-        {
-            "heading": "Overview",
-            "content": (
-                "This step demonstrates systematic parameter sweeps using gaspatchio's "
-                "scenario API:\n\n"
-                "1. **1D sweep** -- `sensitivity_analysis()` generates multiplicative "
-                "shocks for mortality from 0.8x to 1.4x (7 data points plus base).\n"
-                "2. **2D sweep** -- A manual cross-product of mortality (0.8, 1.0, 1.2) "
-                "and lapse (0.8, 1.0, 1.2) factors produces a 3x3 grid.\n\n"
-                "No `scenarios.json` file is needed -- all scenarios are built "
-                "programmatically with `sensitivity_analysis()` and "
-                "`parse_scenario_config()`."
-            ),
-        },
-        {
-            "heading": "Scenario Parameters",
-            "content": (
-                "```python\n"
-                "# 1D sweep: mortality factor\n"
-                f"MORT_SWEEP_VALUES = {MORT_SWEEP_VALUES!r}\n"
-                "\n"
-                "mort_scenarios = sensitivity_analysis(\n"
-                '    table="mortality_select",\n'
-                '    shock_type="multiplicative",\n'
-                "    values=MORT_SWEEP_VALUES,\n"
-                ")\n"
-                "\n"
-                "# 2D sweep: mortality x lapse grid\n"
-                f"MORT_GRID_VALUES = {MORT_GRID_VALUES!r}\n"
-                f"LAPSE_GRID_VALUES = {LAPSE_GRID_VALUES!r}\n"
-                "# Cross-product: 3 x 3 = 9 scenarios\n"
-                "```"
-            ),
-        },
-        {
-            "heading": "1D Mortality Sweep",
-            "table": sweep_display,
-        },
-        {
-            "heading": "Sensitivity Curve",
-            "chart": "sensitivity_mortality.png",
-        },
-        {
-            "heading": "2D Mortality x Lapse Grid",
-            "table": grid_display,
-        },
-        {
-            "heading": "Interaction Heatmap",
-            "chart": "heatmap_interaction.png",
-        },
-        {
-            "heading": "Key Findings",
-            "findings": findings,
-        },
-    ],
-)
-
-print(f"Report generated in {total_time:.2f}s -> {report_path}")
+print(f"\nRuntime: {runtime_2d:.2f}s ({len(sweep_2d_shocks)} scenarios)")
+print(heatmap)

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Type stubs for conditional expressions (when/then/otherwise)
 # ABOUTME: Provides type hints for Excel-style IF() with list broadcasting
 """Type stubs for conditional expressions (when/then/otherwise).

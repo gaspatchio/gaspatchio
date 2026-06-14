@@ -475,11 +475,11 @@ gspio generate-variables model-points.parquet --output-dir ./
 # - model_variables.pyi (for better type hints)
 ```
 
-**Example Generated Files for My Model Model**
+**Example Generated Files for the example model**
 
 `model_variables.py`:
 ```python
-"""Auto-generated variable definitions for My Model model."""
+"""Auto-generated variable definitions for the example model."""
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -633,7 +633,7 @@ gspio run-model model.py model-points.parquet --enable-variables
 gspio calc-graph model.py model-points.parquet --output graph.json --enable-variables
 ```
 
-### Integration Test Example: My Model Model
+### Integration Test Example: the example model
 
 **Original Code** (`model_calculation_vars.py`):
 ```python
@@ -666,7 +666,7 @@ mortality_rates = 1 - (1 - monthly_cso_table) ** (1 / 12)
 - Create code generation framework
 - Generate .py and .pyi files for IDE support
 - Integrate with runner for runtime injection
-- Test with My Model model using natural variable names
+- Test with the example model using natural variable names
 
 ### Phase 2: Dependency Extraction (Second)
 - Implement expression tree walker
@@ -681,14 +681,14 @@ mortality_rates = 1 - (1 - monthly_cso_table) ** (1 / 12)
 - Ensure graph uses mapped variable names
 
 ### Phase 4: Testing & Refinement
-- End-to-end test with My Model model
+- End-to-end test with the example model
 - Handle edge cases (list operations, lookups)
 - Performance optimization
 - Documentation and examples
 
 ## Success Criteria
 
-1. Can extract dependencies from all expression types in My Model model
+1. Can extract dependencies from all expression types in the example model
 2. Variable mapping allows natural names like `issue_age = policyholder_issue_age + term_offset`
 3. **Full IDE support**: Autocomplete, type hints, and go-to-definition work for all variables
 4. Generated JSON matches specified format and can be visualized

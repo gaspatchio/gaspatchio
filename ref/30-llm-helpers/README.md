@@ -2,7 +2,7 @@
 
 ## Source Material
 
-- **Article**: `packaging-cli-skills-for-llm-agents.pdf` — ChatGPT deep research on packaging CLI "skills" so LLM agents can discover and invoke them. Covers patterns from gws, OpenClaw, gh, kubectl, Gemini CLI extensions, and MCP.
+- **Analysis**: `analysis.md` — critical analysis and red-teaming of patterns for packaging CLI "skills" so LLM agents can discover and invoke them. Covers patterns from gws, OpenClaw, gh, kubectl, Gemini CLI extensions, and MCP.
 - **Existing Skills**: `skills/` directory contains three agent-side SKILL.md bundles already in use (gaspatchio-discovery, gaspatchio-building, gaspatchio-reconciliation).
 
 ## Current State of Gaspatchio CLI (`gspio`)
@@ -121,7 +121,6 @@ Gaspatchio has the surfaces (CLI commands, external MCP, agent skills) but **no 
 ```
 30-llm-helpers/
 ├── README.md                              ← this file
-├── packaging-cli-skills-for-llm-agents.pdf ← source article
 └── skills/
     ├── gaspatchio-building.md              ← existing agent skill
     ├── gaspatchio-building-references/     ← reference files for building skill

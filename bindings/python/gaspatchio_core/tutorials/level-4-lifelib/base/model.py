@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 MVP Gaspatchio Model: GMDB PLAN_A Single Policy
 
@@ -296,14 +300,17 @@ def main(
         lower_bound=0, upper_bound=projection_months
     )
 
-    # Create per-policy projection timeline (each policy projects only as long as needed)
-    af = af.date.create_projection_timeline(
+    # Create per-policy projection timeline (each policy projects only as long as
+    # needed). per_policy=True yields variable-length (jagged) timelines, so a
+    # short-term policy doesn't carry the longest-lived policy's horizon.
+    af = af.projection.set(
         valuation_date=VALUATION_DATE,
-        projection_end_type="term_months",
-        projection_end_value="remaining_term_months",
-        projection_frequency="monthly",
-        output_column="projection_date",
+        until="term_months",
+        until_value="remaining_term_months",
+        frequency="monthly",
+        per_policy=True,
     )
+    af.projection_date = af.projection.period_dates()
 
     # Month index (0 = valuation date)
     af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
@@ -350,9 +357,11 @@ def main(
     # at mort_scalar_len (=15) instead of mort_scalar_len-1 (=14). At duration 15,
     # the reindex fails → NaN → mort_rate=0. To match lifelib, we zero mort_rate
     # at durations beyond the scalar table range.
-    af.mort_rate = when(
-        (af.duration >= 0) & (af.duration <= SCALAR_DURATION_CAP)
-    ).then(af.mort_scalar * af.base_mort_rate).otherwise(0.0)
+    af.mort_rate = (
+        when((af.duration >= 0) & (af.duration <= SCALAR_DURATION_CAP))
+        .then(af.mort_scalar * af.base_mort_rate)
+        .otherwise(0.0)
+    )
 
     # Convert annual to monthly: q_mth = 1 - (1 - q_ann)^(1/12)
     af.mort_rate_mth = 1 - (1 - af.mort_rate) ** (1 / 12)
@@ -367,14 +376,16 @@ def main(
     # Base lapse rate from lapse table (annual rate)
     # Same lifelib off-by-one as mort_scalar: lapse_len()=15 caps at 15 not 14.
     # Zero lapse_rate at durations beyond the table range to match lifelib.
-    af.base_lapse_rate = when(
-        (af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP)
-    ).then(
-        lapse_rates.lookup(
-            lapse_id=af.lapse_id,
-            duration=af.lapse_duration_capped,
+    af.base_lapse_rate = (
+        when((af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP))
+        .then(
+            lapse_rates.lookup(
+                lapse_id=af.lapse_id,
+                duration=af.lapse_duration_capped,
+            )
         )
-    ).otherwise(0.0)
+        .otherwise(0.0)
+    )
 
     # Note: Final lapse_rate and lapse_rate_mth will be calculated in Section 7
     # after dynamic lapse factor is computed. Policy counts depend on this.
@@ -460,7 +471,9 @@ def main(
     # Premium deposited to account value: premium after load, only at entry
     # prem_to_av = premium_pp * (1 - load_prem_rate) when duration_mth_t == 0
     af.prem_to_av = (
-        af.premium_pp * (1.0 - af.load_prem_rate) * (af.duration_mth_t == 0)
+        when(af.duration_mth_t == 0)
+        .then(af.premium_pp * (1.0 - af.load_prem_rate))
+        .otherwise(0.0)
     )
 
     # Shifted growth: multiply[t] = growth[t-1], with 1.0 at t=0
@@ -514,11 +527,11 @@ def main(
 
     # Final lapse_rate: max(dyn_lapse_floor, dyn_lapse_factor * base_lapse_rate)
     # Zero at durations beyond lapse table range (lifelib off-by-one: lapse_len=15, table 0-14)
-    af.lapse_rate = when(
-        (af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP)
-    ).then(
-        (af.dyn_lapse_factor * af.base_lapse_rate).clip(af.dyn_lapse_floor, None)
-    ).otherwise(0.0)
+    af.lapse_rate = (
+        when((af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP))
+        .then((af.dyn_lapse_factor * af.base_lapse_rate).clip(af.dyn_lapse_floor, None))
+        .otherwise(0.0)
+    )
 
     # Convert to monthly: lapse_rate_mth = 1 - (1 - lapse_rate)^(1/12)
     af.lapse_rate_mth = 1.0 - (1.0 - af.lapse_rate) ** (1.0 / 12.0)
@@ -542,28 +555,31 @@ def main(
     # Maturity month (policy_term in years * 12)
     af.maturity_month = af.policy_term * 12
 
-    # Policies in force before maturity: survival_prob * policy_count * (active period)
-    # Exclude pre-entry periods (duration_mth_t <= 0) where NB hasn't entered yet.
-    # NB enters via pols_new_biz at duration_mth_t == 0; pols_if_bef_mat must be 0 there.
-    # For IF business, duration_mth_t > 0 always during projection, so no change.
+    # Policies in force before maturity: active only when before/at maturity
+    # AND after the entry month. NB enters via pols_new_biz at duration_mth_t == 0;
+    # pols_if_bef_mat must be 0 there. For IF business duration_mth_t > 0 holds
+    # throughout projection.
     af.pols_if_bef_mat = (
-        af.survival_prob
-        * af.policy_count
-        * (af.duration_mth_t <= af.maturity_month)
-        * (af.duration_mth_t > 0)
+        when((af.duration_mth_t > 0) & (af.duration_mth_t <= af.maturity_month))
+        .then(af.survival_prob * af.policy_count)
+        .otherwise(0.0)
     )
 
     # pols_if = pols_if_bef_mat (lifelib's pols_if is BEF_MAT)
     af.pols_if = af.pols_if_bef_mat
 
     # Policies maturing this period (at exact maturity month)
-    af.pols_maturity = af.pols_if_bef_mat * (af.duration_mth_t == af.maturity_month)
+    af.pols_maturity = (
+        when(af.duration_mth_t == af.maturity_month)
+        .then(af.pols_if_bef_mat)
+        .otherwise(0.0)
+    )
 
     # Policies in force before new business
     af.pols_if_bef_nb = af.pols_if_bef_mat - af.pols_maturity
 
     # New business: enters at duration_mth_t == 0
-    af.pols_new_biz = af.policy_count * (af.duration_mth_t == 0)
+    af.pols_new_biz = when(af.duration_mth_t == 0).then(af.policy_count).otherwise(0.0)
 
     # Policies in force before decrements
     af.pols_if_bef_decr = af.pols_if_bef_nb + af.pols_new_biz
@@ -625,9 +641,8 @@ def main(
         upper_bound=SURR_CHARGE_DURATION_CAP
     )
 
-    # Lookup surrender charge rate by duration_year and surr_charge_id
-    # Use when() to conditionally lookup - avoids NaN for policies without surrender charges
-    # Note: otherwise() branch uses (duration_year * 0.0) to create a list of zeros matching the shape
+    # Lookup surrender charge rate by duration_year and surr_charge_id.
+    # when() conditionally looks up — avoids NaN for policies without surrender charges.
     af.surr_charge_rate = (
         when(af.has_surr_charge)
         .then(
@@ -636,7 +651,7 @@ def main(
                 surr_charge_id=af.surr_charge_id,
             )
         )
-        .otherwise(af.duration_year * 0.0)
+        .otherwise(0.0)
     )
 
     # Calculate surrender charge per lapsing policy
@@ -690,9 +705,10 @@ def main(
     # Premium is paid only at t=0 (first month of projection, when duration_mth_t == 0)
     # Use pols_if_bef_decr (policies in force before decrements)
 
-    # Premium per policy: non-zero only at t=0 for single premium products
-    # premium_pp is a scalar from model points; convert to list column that's non-zero only when duration_mth_t == 0
-    af.premium_pp_list = af.premium_pp * (af.duration_mth_t == 0)
+    # Premium per policy: non-zero only at t=0 for single-premium products.
+    # premium_pp is a scalar from model points; this gives a list column that's
+    # the per-policy premium at t=0 and 0.0 elsewhere.
+    af.premium_pp_list = when(af.duration_mth_t == 0).then(af.premium_pp).otherwise(0.0)
 
     # Total premiums: premium per policy * policies in force before decrements
     af.premiums = af.premium_pp_list * af.pols_if_bef_decr
@@ -717,9 +733,8 @@ def main(
     # Inflation rate (hardcoded for now - could be loaded from assumptions later)
     INFLATION_RATE = 0.01  # 1% annual inflation
 
-    # Inflation factor: (1 + inflation_rate)^(month/12)
-    # Using exp(b * ln(a)) identity to compute scalar^list without breaking pipeline
-    af.inflation_factor = (af.month / 12.0 * math.log(1.0 + INFLATION_RATE)).exp()
+    # Inflation factor: (1 + inflation_rate)^(month/12) per period.
+    af.inflation_factor = (1.0 + INFLATION_RATE) ** (af.month / 12.0)
 
     # Acquisition expense total
     # Note: pols_new_biz = 0 for all existing business, so this will be 0
@@ -848,12 +863,8 @@ def main(
     # Convert annual rate to monthly: (1 + r_ann)^(1/12) - 1
     af.disc_rate_mth = (1.0 + af.disc_rate) ** (1.0 / 12.0) - 1.0
 
-    # Discount factors: (1 + disc_rate_mth)^(-month)
-    # Using exp/log identity: a^b = exp(b * ln(a))
-    # So (1 + r)^(-t) = exp(-t * ln(1 + r))
-    af.disc_factors = (
-        af.month.cast(pl.Float64) * -1.0 * (1.0 + af.disc_rate_mth).log()
-    ).exp()
+    # Discount factors: (1 + disc_rate_mth)^(-month) per period.
+    af.disc_factors = (1.0 + af.disc_rate_mth) ** (af.month.cast(pl.Float64) * -1.0)
 
     # =========================================================================
     # SECTION 17: PRESENT VALUES

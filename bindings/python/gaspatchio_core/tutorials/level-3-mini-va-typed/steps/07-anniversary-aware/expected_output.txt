@@ -1,0 +1,19 @@
+PV Net Cashflow + Claims + Premiums + Anniversary Commission
+
+shape: (4, 5)
+┌──────────┬───────────────┬───────────┬─────────────┬───────────────────────────┐
+│ point_id ┆ pv_net_cf     ┆ pv_claims ┆ pv_premiums ┆ pv_anniversary_commission │
+│ ---      ┆ ---           ┆ ---       ┆ ---         ┆ ---                       │
+│ i64      ┆ f64           ┆ f64       ┆ f64         ┆ f64                       │
+╞══════════╪═══════════════╪═══════════╪═════════════╪═══════════════════════════╡
+│ 1        ┆ 266085.998013 ┆ 6.0518e6  ┆ 0.0         ┆ 126986.303142             │
+│ 2        ┆ 143600.62995  ┆ 1.9299e6  ┆ 0.0         ┆ 61508.570463              │
+│ 3        ┆ 469474.519553 ┆ 2.0223e7  ┆ 0.0         ┆ 245027.66071              │
+│ 4        ┆ 254968.351475 ┆ 3.9702e6  ┆ 0.0         ┆ 111538.643305             │
+└──────────┴───────────────┴───────────┴─────────────┴───────────────────────────┘
+
+Anniversary count check (True values in mask, capped at policy_term):
+  policy 1: term=10y  → expect 10 anniversaries in projection
+  policy 2: term=20y  → expect 20 anniversaries in projection
+  policy 3: term=5y  → expect 5 anniversaries in projection
+  policy 4: term=15y  → expect 15 anniversaries in projection

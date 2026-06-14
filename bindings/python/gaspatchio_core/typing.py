@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ADDED: Import necessary types outside TYPE_CHECKING block
 import sys
 from typing import TYPE_CHECKING, Union

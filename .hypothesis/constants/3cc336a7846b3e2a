@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/telemetry.py
-# hypothesis_version: 6.135.0
-
-['<lambda>', 'Date', 'Datetime', 'Float', 'Int', 'List', 'MISSING_RETURN_DTYPE', 'SLOW_OPERATION', 'Unknown', '__name__', 'map_batches', 'map_elements', 'optimize']

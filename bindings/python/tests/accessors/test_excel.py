@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for Excel accessor Python API - focuses on plumbing, not Excel logic."""
 
 import datetime

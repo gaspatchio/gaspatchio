@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ABOUTME: CLI tool to check standalone Python files with Gaspatchio style rules.
 ABOUTME: Validates code against GP rules and executes to show output.
 """

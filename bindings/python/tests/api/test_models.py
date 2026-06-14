@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for API response models.
 # ABOUTME: Validates Pydantic models can parse API responses correctly.
 """Tests for API response models."""

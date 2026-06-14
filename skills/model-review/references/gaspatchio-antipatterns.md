@@ -59,27 +59,33 @@ for i in range(len(df)):
 af.survival = af.mort_rate.projection.cumulative_survival()
 ```
 
+**Wrong** — Python loop building UL account-value period-by-period (state-machine recurrence):
+```python
+for t in range(n_periods):
+    coi_charge[t] = coi_rate[t] * max(0.0, sum_assured - av[t-1])
+    av[t] = av[t-1] + premium[t] - coi_charge[t] - admin_fee[t]
+    av[t] *= (1 + interest_rate[t])
+```
+
+**Right** — declare the within-period state machine to the rollforward kernel:
+```python
+b = af.projection.rollforward(states={"av": af["av_init"]})
+b["av"].add(af["premium"], label="Premium")
+b["av"].deduct_nar(af["coi_rate"], death_benefit=af["sum_assured"], label="COI")
+b["av"].subtract(af["admin_fee"], label="Admin")
+b["av"].grow(af["interest_rate"], label="Interest")
+b["av"].floor(value=0.0)
+compiled = compile_rollforward(b)
+af.av = RollforwardCollector(compiled).expr_for("av")
+```
+
+The rollforward kernel handles the within-period balance dependency the loop was working around — COI sees the running AV at the moment it's charged, the kernel runs across every policy in parallel, the chain has an inspectable fingerprint. See `tutorial/rollforward-patterns/` for runnable examples.
+
 ---
 
-## 3. Scalar/list confusion (Critical)
+## 3. Reaching into a list column with scalar APIs (Critical)
 
-Gaspatchio columns in projection phase are list-typed (one list per policy, one element per time step). Passing a scalar where a list is expected (or vice versa) causes runtime crashes or silently wrong results.
-
-**Wrong:**
-```python
-# Scalar in a when/then that expects a list column
-af.benefit = when(af.age > 65).then(1000.0).otherwise(af.account_value)
-# Crashes: "Unsupported combination of list/scalar inputs"
-```
-
-**Right:**
-```python
-# Wrap the scalar in a broadcast to match the list shape
-af.benefit = when(af.age > 65).then(af.account_value * 0 + 1000.0).otherwise(af.account_value)
-# Or better: assign the constant as a column first
-af.flat_benefit = 1000.0
-af.benefit = when(af.age > 65).then(af.flat_benefit).otherwise(af.account_value)
-```
+Gaspatchio columns in projection phase are list-typed (one list per policy, one element per time step). Mixing list and scalar branches inside a conditional is fine — gaspatchio routes those correctly via `list_conditional`. The real anti-pattern is reaching for scalar APIs (`.item()`, `.to_list()[0]`, `int(af.col)`) and silently dropping the time dimension.
 
 **Wrong:**
 ```python
@@ -91,6 +97,13 @@ rate = af.mort_rate.to_list()[0]  # Extracts a single value, loses time dimensio
 ```python
 # Keep the column as-is; operate on it vectorially
 af.death_cost = af.mort_rate * af.sum_assured
+```
+
+For mixed list/scalar branches in a conditional, just write it directly:
+
+```python
+# Works — gaspatchio routes the scalar branch through list_conditional
+af.benefit = when(af.age > 65).then(1000.0).otherwise(af.account_value)
 ```
 
 ---

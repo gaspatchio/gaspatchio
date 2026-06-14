@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: Linear recurrence accumulation for list columns (state[t] = state[t-1] * M[t] + A[t])
 // ABOUTME: Core primitive for account value rollforwards and state-dependent actuarial projections
 
@@ -284,29 +288,14 @@ fn accumulate_fast(
     let mul_offsets = mul_arr.offsets();
     let add_offsets = add_arr.offsets();
 
-    // Create Series from the inner values arrays using from_chunks_and_dtype_unchecked
-    // Then cast to Float64
-    let mul_inner_dtype = multiply_list.inner_dtype();
-    let add_inner_dtype = add_list.inner_dtype();
+    // Wrap the inner Arrow value arrays as Series, then cast to Float64.
+    let mul_values_series =
+        Series::from_arrow(PlSmallStr::EMPTY, mul_arr.values().clone())?
+            .cast(&DataType::Float64)?;
 
-    // SAFETY: dtype matches the array
-    let mul_values_series = unsafe {
-        Series::from_chunks_and_dtype_unchecked(
-            PlSmallStr::EMPTY,
-            vec![mul_arr.values().clone()],
-            &mul_inner_dtype.to_physical(),
-        )
-    }
-    .cast(&DataType::Float64)?;
-
-    let add_values_series = unsafe {
-        Series::from_chunks_and_dtype_unchecked(
-            PlSmallStr::EMPTY,
-            vec![add_arr.values().clone()],
-            &add_inner_dtype.to_physical(),
-        )
-    }
-    .cast(&DataType::Float64)?;
+    let add_values_series =
+        Series::from_arrow(PlSmallStr::EMPTY, add_arr.values().clone())?
+            .cast(&DataType::Float64)?;
 
     let mul_values = mul_values_series.f64()?;
     let add_values = add_values_series.f64()?;
@@ -371,9 +360,9 @@ fn accumulate_fast(
         output_offsets.push(output_values.len() as i64);
     }
 
-    // Build the output ListChunked from the flat arrays
-    // SAFETY: offsets are monotonically increasing and valid
-    let offsets = unsafe { OffsetsBuffer::new_unchecked(output_offsets.into()) };
+    // Build the output List<Float64> Series from the flat arrays via safe Polars APIs.
+    let offsets = OffsetsBuffer::try_from(output_offsets)
+        .map_err(|e| PolarsError::ComputeError(format!("invalid offsets: {e}").into()))?;
     let values_arr = PrimitiveArray::from_vec(output_values);
 
     let list_arr = LargeListArray::new(
@@ -387,11 +376,7 @@ fn accumulate_fast(
         None, // no validity - no nulls in fast path
     );
 
-    // SAFETY: we constructed this correctly
-    let result =
-        unsafe { ListChunked::from_chunks(PlSmallStr::EMPTY, vec![Box::new(list_arr)]) };
-
-    Ok(result.into_series())
+    Series::from_arrow(PlSmallStr::EMPTY, Box::new(list_arr))
 }
 
 /// Slow path for accumulate when there are null values.

@@ -179,7 +179,7 @@ result = result.with_columns([
 Run the research script to verify behavior:
 
 ```bash
-cd ~/Projects/gaspatchio/gaspatchio-core/bindings/python
+cd bindings/python
 uv run python scalar_to_list_research.py
 ```
 

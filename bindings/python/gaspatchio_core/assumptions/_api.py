@@ -1,6 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: TID252, TRY003, EM101, EM102, E501, PLR0913, ANN204, FBT001, FBT002
 # ruff: noqa: C901, PD901, SIM102, PLR0912, F821, SLF001, PGH003, B007, PERF102
-# ruff: noqa: ANN003, BLE001
+# ruff: noqa: ANN003, BLE001, D413
 # mypy: disable-error-code="import-untyped,arg-type,name-defined"
 """
 Main assumption table API (v2) - Table class with dimension-based structure.
@@ -58,6 +62,7 @@ def _suggest_dimension(invalid_name: str, valid_names: list[str]) -> str | None:
         return suffix_matches[0]
 
     return None
+
 
 # Import for type hints without circular dependency
 
@@ -211,7 +216,6 @@ class Table:
         Rows: 9
         Key columns: ['duration', 'product_type']
         ```
-
         """
         self._name = name
 
@@ -460,7 +464,7 @@ class Table:
 
             ```python no_output_check
             from gaspatchio_core.assumptions import Table
-            from gaspatchio_core.scenarios import sensitivity_analysis
+            from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
             import polars as pl
 
             # Create a base table
@@ -645,7 +649,7 @@ class Table:
             actual_mode = (
                 registry.get_table_storage_mode(self._name) or self._storage_mode
             )
-            logger.info(
+            logger.debug(
                 f"Registered table '{self._name}': {len(processed_df):,} rows, "
                 f"keys={key_columns}, storage={actual_mode}"
                 + (
@@ -798,7 +802,6 @@ class Table:
         │ P004      ┆ WL           ┆ 1           ┆ 0.03       │
         └───────────┴──────────────┴─────────────┴────────────┘
         ```
-
         """
         # Merge both sources of dimensions
         all_dimensions = {}
@@ -831,7 +834,9 @@ class Table:
                 for dim in sorted(extra):
                     suggestion = _suggest_dimension(dim, list(required))
                     if suggestion:
-                        extra_with_suggestions.append(f"'{dim}' (did you mean '{suggestion}'?)")
+                        extra_with_suggestions.append(
+                            f"'{dim}' (did you mean '{suggestion}'?)"
+                        )
                     else:
                         extra_with_suggestions.append(f"'{dim}'")
                 error_parts.append(f"Extra dimensions: {extra_with_suggestions}")
@@ -996,7 +1001,6 @@ class Table:
         Initial rows: 3
         After extension: 5
         ```
-
         """
         logger.debug(f"Extending table '{self._name}' with additional data")
 
@@ -1039,7 +1043,7 @@ class Table:
                 keys=key_columns,
                 value_column=self._value,
             )
-            logger.info(
+            logger.debug(
                 f"Successfully extended table '{self._name}' with {len(processed_df)} additional rows",
             )
         except Exception as e:
@@ -1051,6 +1055,43 @@ class Table:
             self._df = pl.concat([self._df, processed_df])
 
         return self
+
+    @property
+    def name(self) -> str:
+        """Get the table name supplied at construction.
+
+        Returns the stable identifier used by the registry, the typed-input
+        audit trail (e.g. :class:`gaspatchio_core.MortalityTable.source_sha`),
+        and any external consumer that needs a consistent reference for this
+        table.
+
+        !!! note "When to use"
+            *   **Audit trail**: Record the table's name alongside model
+                results so reviewers can identify which assumption set
+                produced each valuation.
+            *   **Registry lookups**: Pass the name to other gaspatchio
+                components (typed inputs, scenario configs) that need a
+                consistent reference for this table across the model.
+            *   **Reproducibility**: Pin the name into release manifests
+                so a future rerun can confirm the same table was used.
+
+        Returns:
+            str: The name string passed to the constructor
+
+        Examples:
+        --------
+        ```python
+        from gaspatchio_core.assumptions import Table
+        import polars as pl
+
+        data = pl.DataFrame({"age": [30, 35], "rate": [0.001, 0.002]})
+        table = Table("mortality_standard", data, {"age": "age"}, "rate")
+
+        print(table.name)
+        ```
+
+        """
+        return self._name
 
     @property
     def schema(self) -> TableSchema:
@@ -1371,6 +1412,146 @@ class Table:
         else:
             return mode if mode else self._storage_mode
 
+    def canonical_form(self) -> dict[str, Any]:
+        """Deterministic JSON-encodable identity recipe for the audit chain.
+
+        Returns a dictionary that uniquely identifies this table's content
+        and shape: name, sorted dimension keys, value column, and a
+        row-order-independent SHA-256 of the underlying data. Two tables
+        with the same content but loaded in different row orders produce
+        the same canonical_form; two tables differing in any cell value
+        produce different ones.
+
+        !!! note "When to use"
+            * **Audit chains:** Feed into `source_sha()` so a regulator
+              can verify the table used in a SCR run by hash alone.
+            * **Reproducibility checks:** Confirm that a Table reloaded
+              from disk matches the Table the run was authored against.
+            * **Change detection:** Compare canonical_form between
+              versions to detect data drift without re-running models.
+
+        Returns:
+            Dictionary with `kind`, `name`, sorted `dimensions`,
+            `value_column`, and a content `content_sha` over the
+            row-sorted parquet bytes of the data.
+
+        Examples:
+        --------
+        ```python
+        import polars as pl
+        from gaspatchio_core.assumptions import Table
+
+        mortality = Table(
+            name="mortality",
+            source=pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.0012]}),
+            dimensions={"age": "age"},
+            value="rate",
+        )
+
+        recipe = mortality.canonical_form()
+        print(sorted(recipe.keys()))
+        ```
+
+        ```text
+        ['content_sha', 'dimensions', 'kind', 'name', 'value_column']
+        ```
+
+        """
+        return {
+            "kind": "Table",
+            "name": self._name,
+            "dimensions": sorted(self._dimensions.keys()),
+            "value_column": self._value,
+            "content_sha": self._content_sha(),
+        }
+
+    def source_sha(self) -> str:
+        """SHA-256 over `canonical_form` bytes; stable for the same content + name.
+
+        The single content hash an auditor can reproduce from the same input
+        data. Identical Tables produce identical SHAs; any change to name,
+        dimensions, value column, or row content changes the SHA. Combine
+        with `ScenarioRun.source_sha()` to attest that an SCR run used a
+        specific input table.
+
+        !!! note "When to use"
+            * **Audit sidecar:** Embedded under the plan's
+              `canonical_form`/`source_sha` chain so the input data is
+              identifiable from the run record alone.
+            * **Pre-run validation:** Compare against a known-good SHA
+              before running production batches to catch silent drift in
+              assumption files.
+            * **Cross-team reproducibility:** Two analysts loading the
+              same parquet file produce the same SHA regardless of their
+              load order.
+
+        Returns:
+            64-character lowercase hexadecimal SHA-256 digest prefixed
+            with `sha256:`.
+
+        Examples:
+        --------
+        ```python
+        import polars as pl
+        from gaspatchio_core.assumptions import Table
+
+        mortality = Table(
+            name="mortality",
+            source=pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.0012]}),
+            dimensions={"age": "age"},
+            value="rate",
+        )
+
+        sha = mortality.source_sha()
+        print(sha.startswith("sha256:"))
+        ```
+
+        ```text
+        True
+        ```
+
+        """
+        from gaspatchio_core._identity import source_sha_of
+
+        return source_sha_of(self.canonical_form())
+
+    def _content_sha(self) -> str:
+        """Row-order-independent content hash via parquet bytes of sorted frame.
+
+        Algorithm:
+            1. Materialise frame as DataFrame.
+            2. Select [sorted(dim_names) + [value_column]].
+            3. Sort by all dimension columns.
+            4. Hash the parquet-serialised bytes (sha256).
+        """
+        import hashlib
+        import io
+
+        df = self._materialised_df()
+        dim_cols = sorted(self._dimensions.keys())
+        sorted_df = df.select([*dim_cols, self._value]).sort(dim_cols)
+        buf = io.BytesIO()
+        sorted_df.write_parquet(buf)
+        return f"sha256:{hashlib.sha256(buf.getvalue()).hexdigest()}"
+
+    def _materialised_df(self) -> pl.DataFrame:
+        """Return a materialised polars DataFrame view of the table's data.
+
+        ``Table._df`` is set to a materialised ``pl.DataFrame`` by
+        ``_process_data`` before any user code sees it; the ``LazyFrame``
+        branch is defensive (handles a hypothetical future where a lazy
+        frame is stored directly).
+
+        Raises:
+            RuntimeError: If ``_df`` is None (table has no materialised source).
+        """
+        if self._df is not None:
+            if isinstance(self._df, pl.LazyFrame):
+                return self._df.collect()
+            return self._df
+        msg = "Table has no materialisable source"
+        raise RuntimeError(msg)
+
     def with_shock(
         self,
         shock: Shock,
@@ -1671,7 +1852,6 @@ def get_table_metadata(table_name: str) -> dict[str, Any] | None:
     ```text
     Registered 2 tables with metadata
     ```
-
     """
     metadata = _TABLE_METADATA.get(table_name)
     if metadata is not None:
@@ -1784,7 +1964,6 @@ def list_tables() -> list[str]:
     Missing tables: ['expense_validation_ex', 'interest_validation_ex']
     ⚠️  Model not ready - missing 2 tables
     ```
-
     """
     try:
         registry = PyAssumptionTableRegistry()
@@ -1895,6 +2074,5 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
     mortality_meta_ex2 registered: True
     lapse_meta_ex2 registered: True
     ```
-
     """
     return _TABLE_METADATA.copy()

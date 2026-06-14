@@ -119,11 +119,11 @@ Let Polars handle parallelization. Never add Rayon or threading inside plugins.
 
 | # | Gotcha | What Goes Wrong |
 |---|--------|-----------------|
-| 1 | `when().then(scalar).otherwise(list_col)` | Runtime crash -- both branches must be same type (scalar/list) |
+| 1 | Arithmetic-masking blends in conditional code | Old workaround for a fixed limitation -- `when/then/otherwise` now handles mixed scalar/list branches |
 | 2 | `projection_end_value=99` | Truncates final year; use 100 (off-by-one is catastrophic, ~3% BEL gap) |
 | 3 | `python3` instead of `uv run python3` | `ModuleNotFoundError: No module named 'polars'` |
 | 4 | `--policy-id` flag | Policy ID is positional. `--policy-id-column` is a different thing |
-| 5 | `(1 + rate) ** af.month` (scalar^list) | TypeError -- use `(af.month * math.log(1 + rate)).exp()` |
+| 5 | Hand-rolled exp/log identity for `scalar ** list` | `**` works directly on list columns now -- write it as the operator |
 | 6 | Guessing method signatures | Agents get it wrong ~70% of the time -- `gspio docs` first |
 | 7 | `proj_year` vs `year` confusion | Stress scenarios silently wrong -- mass lapse never fires |
 | 8 | Column name case mismatch | Polars is case-sensitive; check `df.columns` first |
@@ -216,3 +216,67 @@ The accessor pattern (`@register_accessor` + base classes) is the primary extens
 **Performance ladder:** Before writing anything, determine if the calculation is a setup utility (Python function), a reusable column operation (column accessor), a frame-level operation (frame accessor), or a Rust kernel contribution. The skill walks through the decision tree.
 
 **Anti-patterns:** `map_elements`, Python for-loops over policies, dict lookups per row — all cause 50-1000x slowdowns. The skill documents 7 concrete anti-patterns with correct alternatives.
+
+---
+
+# Contributing to gaspatchio-core
+
+> The sections above describe how to **use** gaspatchio to build models.
+> The sections below are for **developing** gaspatchio-core itself.
+
+## Development rules (where they live)
+
+Rules live next to the code they govern; every agent auto-loads the nearest file when it
+edits in that subtree. A Claude Code session started at the repo root loads all of them
+at once via `CLAUDE.md`.
+
+- **Rust** core crate — [`core/AGENTS.md`](core/AGENTS.md)
+- **Python** bindings + API — [`bindings/python/AGENTS.md`](bindings/python/AGENTS.md)
+
+## Commit conventions
+
+- **Sign your commits.** This repository requires signed commits — configure SSH or GPG
+  signing and enable `git config commit.gpgsign true`.
+- Use **conventional commit** format (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`) and
+  explain the "why", not just the "what". Keep commits focused and atomic.
+- Reference issue numbers (e.g. `GSP-NNN`) when applicable.
+- **Never** add an AI-assistant signature or `Co-Authored-By: <assistant>` trailer to commit
+  messages.
+
+## Build & test
+
+```bash
+# Install workspace dependencies
+uv sync
+
+# Build the Rust extension after Rust changes
+cd bindings/python && maturin build -uv
+
+# Rust tests / benchmarks
+cd core && cargo test
+cd core && cargo bench
+
+# Python tests (incl. docstring validation)
+cd bindings/python && uv run pytest -v
+cd bindings/python && uv run pytest --doctest-modules --doctest-glob="*.pyi"
+```
+
+## Documentation Audience
+
+Gaspatchio documentation targets two audiences:
+
+1. **Actuaries** — They know the products and actuarial concepts. They need to see their workflow in the code.
+2. **LLMs** — They need complete examples with realistic actuarial data so they can generate correct code.
+
+Every documentation section should follow: **business problem** → **Gaspatchio solution** → **code example**. Lead with the actuarial problem being solved, not the computer science architecture. Skip internal implementation details (Rust kernels, Struct columns, kwargs serialization) unless directly relevant to how the user calls the API.
+
+## Design Documents and Plans
+
+Design specs and implementation plans live in `ref/<topic>/` alongside the relevant reference material. The `ref/` directory uses numbered prefixes (e.g., `ref/30-llm-helpers/`).
+
+- **Specs**: `ref/<topic>/specs/YYYY-MM-DD-<name>-design.md`
+- **Plans**: `ref/<topic>/plans/YYYY-MM-DD-<name>.md`
+
+When using Superpowers skills (brainstorming, writing-plans), save output to the relevant `ref/` subdirectory. If unsure which `ref/` folder applies, ask the user. Do NOT use `docs/superpowers/` — that directory does not exist in this project.
+
+Current active topic: `ref/30-llm-helpers/` (LLM skills, tutorial, CLI improvements).

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Shock specification data model for ad-hoc scenario modifications.
 # ABOUTME: Provides shock classes for stress testing: Clip, Pipeline, Filter, etc.
 
@@ -57,6 +61,44 @@ class Shock(ABC):
             Description string for audit trails
 
         """
+
+    def canonical_form(self) -> dict[str, Any]:
+        """Deterministic JSON-encodable identity recipe for the audit chain.
+
+        Default implementation introspects ``__dataclass_fields__``;
+        subclasses with nested shocks recurse via ``_encode_field``.
+
+        Returns:
+            Dict with ``"kind"`` (class name) plus every dataclass field,
+            sorted by key. Nested ``Shock`` instances recurse.
+
+        Raises:
+            TypeError: If a field value is not JSON-encodable
+                (e.g. ``OverrideShock`` with a non-scalar value).
+
+        """
+        from dataclasses import fields
+
+        out: dict[str, Any] = {"kind": type(self).__name__}
+        for fld in fields(self):  # type: ignore[arg-type]
+            out[fld.name] = Shock._encode_field(getattr(self, fld.name))
+        return dict(sorted(out.items()))
+
+    @staticmethod
+    def _encode_field(val: Any) -> Any:  # noqa: ANN401 — recursive any-encoder by design
+        """Recursive JSON-safe encoding for canonical_form field values."""
+        if isinstance(val, Shock):
+            return val.canonical_form()
+        if isinstance(val, tuple):
+            return [Shock._encode_field(v) for v in val]
+        if isinstance(val, list):
+            return [Shock._encode_field(v) for v in val]
+        if isinstance(val, dict):
+            return {k: Shock._encode_field(v) for k, v in sorted(val.items())}
+        if isinstance(val, (int, float, str, bool, type(None))):
+            return val
+        msg = f"Shock field {type(val).__name__} not canonical-encodable"
+        raise TypeError(msg)
 
 
 @dataclass(frozen=True)

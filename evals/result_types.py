@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Structured output types for skill evaluation agents.
 
 Each skill gets a Pydantic model so the agent returns typed data

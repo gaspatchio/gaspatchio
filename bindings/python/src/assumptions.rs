@@ -1,4 +1,9 @@
 #![allow(clippy::needless_pass_by_value)] // PyO3 functions often need owned types
+
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
                                           // Keep only necessary imports for the plugin function itself
 use polars::prelude::*;
 use polars::prelude::{DataType, Field, PlSmallStr, PolarsResult, Series};

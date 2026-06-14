@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: Tests for the PV Excel function implementation
 // ABOUTME: Covers scalar and list cases, edge cases, and output typing
 

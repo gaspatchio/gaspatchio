@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: Criterion benchmarks for list_conditional plugin
 // ABOUTME: Measures performance of element-wise conditional operations across various row counts
 

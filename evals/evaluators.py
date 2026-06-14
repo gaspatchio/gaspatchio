@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Custom evaluators for gaspatchio skill evals.
 
 Use built-in evaluators (Contains, EqualsExpected, LLMJudge) where possible.

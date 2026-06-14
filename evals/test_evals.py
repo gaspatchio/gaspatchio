@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Tier 2: Run skill evals as pytest tests.
 
 These tests call real LLM APIs and cost money (~$0.50-1.00 per full run).

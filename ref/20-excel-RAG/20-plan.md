@@ -2,14 +2,14 @@
 
 ## Executive Summary
 
-This document outlines the architecture and implementation plan for a Retrieval Augmented Generation (RAG) pipeline that will enable actuaries to write "Gaspatchio style" code through an MCP (Model Context Protocol) server. The system will index Gaspatchio docstrings, code examples, and Excel-to-Gaspatchio conversion recipes to provide contextual assistance.
+This document outlines the architecture and implementation plan for a Retrieval Augmented Generation (RAG) pipeline that will enable actuaries to write "Gaspatchio style" code through an MCP (Model Context Protocol) server. The system will index Gaspatchio docstrings, code examples, and Excel-namespace function examples to provide contextual assistance.
 
 ## Goals & Objectives
 
 1. **Primary Goal**: Enable actuaries to write idiomatic Gaspatchio code by providing relevant examples and documentation through an MCP extension
 2. **Secondary Goals**:
    - Reduce onboarding time for new Gaspatchio users
-   - Capture and surface Excel formula conversion patterns
+   - Capture and surface Excel-equivalent function patterns
    - Provide contextual code examples based on user intent
    - Enable discovery of Gaspatchio functions and patterns
 
@@ -22,7 +22,7 @@ This document outlines the architecture and implementation plan for a Retrieval 
 └─────────────────────┘     └──────────────────┘     │  supabase)      │
                                      │                └─────────────────┘
 ┌─────────────────────┐              │                         │
-│  Excel Recipes      │──────────────┘                         │
+│  Excel function examples      │──────────────┘                         │
 │  & Examples         │                                         │
 └─────────────────────┘                                         │
                                                                ▼
@@ -42,7 +42,7 @@ This document outlines the architecture and implementation plan for a Retrieval 
 1. Function Overview (name, short_description, parameters)
 2. Code Examples (individual examples with context)
 3. Usage Patterns (when_to_use sections)
-4. Excel Conversions (formula → Gaspatchio mappings)
+4. Excel function examples (Gaspatchio equivalents of common Excel functions)
 ```
 
 **Pros**: 
@@ -88,7 +88,7 @@ Before diving into chunking strategies, let's analyze typical actuary user queri
 
 2. **Conceptual Queries** (40%)
    - "How do I calculate policy duration with roll forward?"
-   - "Convert my Excel mortality table lookup to Gaspatchio"
+   - "Show me the Gaspatchio equivalent of an Excel mortality-table lookup"
    - "How to handle CSO tables in Gaspatchio?"
 
 3. **Code Completion Queries** (20%)
@@ -259,7 +259,7 @@ class HybridChunker:
         # 3. Cross-reference chunks (relationships)
         chunks.extend(self._create_reference_chunks(docstring))
         
-        # 4. Excel mapping chunks (special case)
+        # 4. Excel function example chunks
         chunks.extend(self._create_excel_chunks(docstring))
         
         return chunks
@@ -307,7 +307,7 @@ class HybridChunker:
    class QueryAwareChunker:
        def __init__(self):
            self.query_patterns = {
-               "excel_conversion": r"(?i)(excel|vlookup|yearfrac|formula)",
+               "excel_example": r"(?i)(excel|vlookup|yearfrac|formula)",
                "date_operations": r"(?i)(date|time|year|month|day)",
                "assumption_tables": r"(?i)(assumption|mortality|cso|table)"
            }
@@ -345,14 +345,14 @@ class GaspatchioChunkingPipeline:
         )
 ```
 
-### Special Considerations for Excel Formula Mappings
+### Special Considerations for Excel function examples
 
-Excel formula mappings require special chunking because they're inherently relational:
+Excel function examples require special chunking because they're inherently relational:
 
 ```python
 # Excel-aware chunking
-class ExcelFormulaChunker:
-    def chunk_excel_mapping(self, mapping):
+class ExcelExampleChunker:
+    def chunk_excel_example(self, mapping):
         return [
             {
                 "type": "excel_formula",
@@ -500,18 +500,18 @@ def search(query: str, search_type: str = "hybrid"):
 @server.tool()
 async def search_gaspatchio_docs(
     query: str,
-    doc_type: Literal["all", "functions", "examples", "excel_recipes"] = "all",
+    doc_type: Literal["all", "functions", "examples", "excel_examples"] = "all",
     complexity: Optional[Literal["basic", "intermediate", "advanced"]] = None,
     limit: int = 5
 ) -> SearchResults:
     """Search Gaspatchio documentation and examples"""
     
 @server.tool()
-async def get_excel_conversion(
+async def get_excel_function_example(
     excel_formula: str,
     context: Optional[str] = None
-) -> ExcelConversion:
-    """Convert Excel formula to Gaspatchio code"""
+) -> ExcelFunctionExample:
+    """Convert Excel function to Gaspatchio code"""
     
 @server.tool()
 async def suggest_next_steps(
@@ -554,7 +554,7 @@ async def suggest_next_steps(
 
 - **Content Coverage Analysis**:
   - Which functions lack examples?
-  - Which Excel patterns aren't covered?
+  - Which Excel functions aren't covered?
   - Usage analytics to identify gaps
 
 ### 4. User Proficiency Adaptation
@@ -578,10 +578,10 @@ Should the system adapt to user skill level?
 #### Response Time Targets
 - Search latency: < 200ms p95
 - Full example retrieval: < 500ms p95
-- Excel conversion: < 1s p95
+- Excel function lookup: < 1s p95
 
-### 6. Excel Recipe Management
-**Decision Needed**: How to source and maintain Excel → Gaspatchio mappings?
+### 6. Excel function example management
+**Decision Needed**: How to source and maintain Excel-function example pairs?
 
 **Options**:
 - A) Manually curated YAML/JSON files
@@ -593,7 +593,7 @@ Should the system adapt to user skill level?
 
 Example structure:
 ```yaml
-excel_recipes:
+excel_examples:
   - excel: "YEARFRAC(start_date, end_date, basis)"
     gaspatchio: |
       af["year_frac"] = af["start_date"].excel.yearfrac(af["end_date"], basis=0)
@@ -638,12 +638,12 @@ async def record_feedback(
 2. Supabase setup with vector storage
 3. Simple BM25 + vector search
 4. Basic FastMCP server with search tool
-5. 10-20 manually curated Excel recipes
+5. 10-20 manually curated Excel function examples
 
 ### Phase 2: Enhancement (4-6 weeks)
 1. Hybrid search with re-ranking
 2. Example-specific chunking
-3. Excel conversion tool
+3. Excel function lookup tool
 4. Basic caching layer
 5. Usage analytics
 
@@ -651,7 +651,7 @@ async def record_feedback(
 1. Contextual suggestions
 2. Learning path generation
 3. Community contribution system
-4. Advanced Excel pattern matching
+4. Advanced Excel function pattern matching
 5. Performance optimization
 
 ## Success Metrics
@@ -668,7 +668,7 @@ async def record_feedback(
 2. **Multi-language Support**: Should examples support languages beyond English?
 3. **Offline Capability**: Should we support local vector DB for air-gapped environments?
 4. **LLM Integration**: Should the MCP server include LLM-powered code generation, or stay retrieval-only?
-5. **Licensing**: How to handle proprietary Excel conversion recipes?
+5. **Licensing**: How to handle community-contributed Excel function examples?
 
 ## Risk Mitigation
 
@@ -677,7 +677,7 @@ async def record_feedback(
 | Stale documentation | Automated testing of examples in CI |
 | Poor search relevance | A/B testing framework, user feedback |
 | Performance degradation | Horizontal scaling, caching, monitoring |
-| Incomplete Excel mappings | Community contributions, LLM assistance |
+| Incomplete Excel function examples | Community contributions, LLM assistance |
 | Version mismatch | Clear version indicators, compatibility matrix |
 
 ## Next Steps

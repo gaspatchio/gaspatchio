@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Integration tests for shock scenarios with Table operations.
 # ABOUTME: Verifies Table.from_shocks() creates scenario-specific assumption tables.
 
@@ -9,7 +13,7 @@ import polars as pl
 import pytest
 
 from gaspatchio_core.assumptions import Table
-from gaspatchio_core.scenarios import sensitivity_analysis
+from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
 from gaspatchio_core.scenarios.shocks import (
     MultiplicativeShock,
 )

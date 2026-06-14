@@ -1,4 +1,9 @@
 #![allow(clippy::unused_unit)]
+
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
@@ -100,23 +105,64 @@ pub fn list_conditional(
     gaspatchio_core_lib::polars_functions::list_conditional(inputs, &kwargs)
 }
 
-/// Output type for rollforward: always Struct
-/// The actual fields are determined at runtime by the kernel based on kwargs.
-fn rollforward_output(_: &[Field]) -> PolarsResult<Field> {
+/// Output type for rollforward: Struct with one List<Float64> field per
+/// capture slot, named ``"{state}@{point}"`` — derived from kwargs at lazy-plan
+/// time so ``plugin.struct.field("av@eop")`` resolves against a real schema.
+fn rollforward_output(
+    _input_fields: &[Field],
+    kwargs: gaspatchio_core_lib::RollforwardKwargs,
+) -> PolarsResult<Field> {
+    let states = kwargs.ir.get("states").and_then(|v| v.as_array()).ok_or_else(|| {
+        PolarsError::ComputeError("rollforward: kwargs.ir.states missing or not an array".into())
+    })?;
+    let state_names: Vec<String> = states
+        .iter()
+        .map(|s| {
+            s.get("name")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    PolarsError::ComputeError("rollforward: ir.states[i].name missing".into())
+                })
+        })
+        .collect::<PolarsResult<Vec<_>>>()?;
+    let points = kwargs.ir.get("points").and_then(|v| v.as_array()).ok_or_else(|| {
+        PolarsError::ComputeError("rollforward: kwargs.ir.points missing or not an array".into())
+    })?;
+    let point_names: Vec<String> = points
+        .iter()
+        .map(|p| {
+            p.as_str()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    PolarsError::ComputeError("rollforward: ir.points entry not str".into())
+                })
+        })
+        .collect::<PolarsResult<Vec<_>>>()?;
+
+    let fields: Vec<Field> = kwargs
+        .captures_resolved
+        .iter()
+        .map(|cap| {
+            let name = format!("{}@{}", state_names[cap.state], point_names[cap.point]);
+            Field::new(
+                PlSmallStr::from(name.as_str()),
+                DataType::List(Box::new(DataType::Float64)),
+            )
+        })
+        .collect();
+
     Ok(Field::new(
         PlSmallStr::from_static("rollforward"),
-        DataType::Struct(vec![Field::new(
-            PlSmallStr::from_static("result"),
-            DataType::List(Box::new(DataType::Float64)),
-        )]),
+        DataType::Struct(fields),
     ))
 }
 
-/// PyO3 wrapper for rollforward — non-linear account value projection
-#[polars_expr(output_type_func = rollforward_output)]
+/// PyO3 wrapper for rollforward — D2/D3 IR-driven rollforward kernel.
+#[polars_expr(output_type_func_with_kwargs = rollforward_output)]
 pub fn rollforward(
     inputs: &[Series],
     kwargs: gaspatchio_core_lib::RollforwardKwargs,
 ) -> PolarsResult<Series> {
-    gaspatchio_core_lib::polars_functions::rollforward::rollforward(inputs, &kwargs)
+    gaspatchio_core_lib::polars_functions::rollforward::rollforward_kernel(inputs, &kwargs)
 }

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: T201
 """Gaspatchio vs lifelib head-to-head comparison benchmark orchestrator.
 
@@ -48,9 +52,23 @@ _OUTPUT_DIR = _BENCH_DIR / "comparison_results"
 _L4_MODEL_PATH = _TUTORIAL_DIR / "level-4-lifelib" / "base" / "model.py"
 _L4_BASE_DIR = _TUTORIAL_DIR / "level-4-lifelib" / "base"
 
-_LIFELIB_MODEL_DIR = _BENCH_DIR / "lifelib_ref"
-# The 2023Q4IF CSV that lifelib reads for run_id=2
-_LIFELIB_MP_CSV = _LIFELIB_MODEL_DIR / "model_point_data" / "model_point_2023Q4IF_GMXB.csv"
+# Make the repo root importable so `evals.benchmarks._benchmarks_dir` resolves
+# when this script is invoked from any cwd (e.g. bindings/python/ in CI).
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+# Lifelib reference data lives in the gaspatchio-benchmarks sister repo.
+# Resolved at call time via env var or sister-checkout.
+from evals.benchmarks._benchmarks_dir import _resolve_benchmarks_dir
+
+
+def _lifelib_model_dir() -> Path:
+    return _resolve_benchmarks_dir()
+
+
+def _lifelib_mp_csv() -> Path:
+    # The 2023Q4IF CSV that lifelib reads for run_id=2
+    return _lifelib_model_dir() / "model_point_data" / "model_point_2023Q4IF_GMXB.csv"
 
 # Scales supported (model-point counts)
 _ALL_SCALES = [8, 1_000, 10_000, 100_000]
@@ -301,7 +319,7 @@ def main() -> None:
     teardown_lifelib = _runner_mod.teardown_lifelib
 
     t_lib0 = time.perf_counter()
-    lifelib_ctx = setup_lifelib(model_dir=_LIFELIB_MODEL_DIR, num_scenarios=1)
+    lifelib_ctx = setup_lifelib(model_dir=_lifelib_model_dir(), num_scenarios=1)
     lib_setup_s = round(time.perf_counter() - t_lib0, 3)
     print(f"  lifelib setup: {lib_setup_s}s", file=sys.stderr)
 
@@ -311,10 +329,10 @@ def main() -> None:
     csv_backup: Path | None = None
     if any(s > 10 for s in scales):
         print(
-            f"\nBacking up original 2023Q4IF CSV: {_LIFELIB_MP_CSV}",
+            f"\nBacking up original 2023Q4IF CSV: {_lifelib_mp_csv()}",
             file=sys.stderr,
         )
-        csv_backup = _backup_original_csv(_LIFELIB_MP_CSV)
+        csv_backup = _backup_original_csv(_lifelib_mp_csv())
 
     # ------------------------------------------------------------------
     # Per-scale runs
@@ -352,10 +370,10 @@ def main() -> None:
             if scale > 10:
                 csv_path = _ensure_csv_for_parquet(gsp_mp_path)
                 print(
-                    f"  Swapping lifelib CSV → {_LIFELIB_MP_CSV.name}",
+                    f"  Swapping lifelib CSV → {_lifelib_mp_csv().name}",
                     file=sys.stderr,
                 )
-                shutil.copy2(csv_path, _LIFELIB_MP_CSV)
+                shutil.copy2(csv_path, _lifelib_mp_csv())
                 # Clear modelx cache so it re-reads the new CSV
                 try:
                     lifelib_ctx["model"].clear_all()
@@ -417,7 +435,7 @@ def main() -> None:
         # Restore the original 8-point CSV
         if csv_backup is not None and csv_backup.exists():
             print(f"  Restoring original CSV from {csv_backup.name} …", file=sys.stderr)
-            _restore_original_csv(_LIFELIB_MP_CSV, csv_backup)
+            _restore_original_csv(_lifelib_mp_csv(), csv_backup)
             csv_backup.unlink(missing_ok=True)
             print("  CSV restored.", file=sys.stderr)
 

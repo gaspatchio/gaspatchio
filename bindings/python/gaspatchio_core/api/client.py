@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: HTTP client for the Gaspatchio knowledge API.
 # ABOUTME: Handles docs and knowledge search requests.
 """HTTP client for Gaspatchio knowledge API."""

@@ -1,13 +1,13 @@
 ---
 name: gaspatchio-reconciliation
-description: Use when matching a gaspatchio model to an existing "gold standard" (Excel, lifelib, vendor model) and success means numbers match - enforces variable-by-variable reconciliation, evidence-first diffs, tiered diagnostic escalation (regression, PCA, cohort analysis, waterfall), and a required markdown build log so mismatches get fixed immediately and stay fixed.
+description: Use when matching a gaspatchio model to an existing "gold standard" (Excel, lifelib, or another reference implementation) and success means numbers match - enforces variable-by-variable reconciliation, evidence-first diffs, tiered diagnostic escalation (regression, PCA, cohort analysis, waterfall), and a required markdown build log so mismatches get fixed immediately and stay fixed.
 ---
 
 # Gaspatchio Model Reconciliation
 
 ## Overview
 
-You are not building a "similar" model; you are building a **reproducer**.
+You are not building a "similar" model; you are building a model whose numbers match the reference.
 
 This skill enforces a strict reconciliation workflow so your gaspatchio model matches an existing "gold standard" implementation (Excel, lifelib, or other systems) **exactly** (or within an agreed numeric tolerance), variable by variable.
 
@@ -15,15 +15,15 @@ This skill enforces a strict reconciliation workflow so your gaspatchio model ma
 
 Use this skill when:
 
-- The user says "reconcile", "match Excel", "match lifelib", "replicate", or "compare to existing model".
-- There is a clear source model considered "truth".
+- The user says "reconcile", "match Excel", "match lifelib", or "compare to existing model".
+- There is a clear reference model considered "truth".
 - Success is defined as "numbers match", not just "logic looks reasonable".
 
-If you cannot name the source model and show a single-policy output from it, **you are not doing reconciliation yet.**
+If you cannot name the reference model and show a single-policy output from it, **you are not doing reconciliation yet.**
 
 ## Core Rules
 
-- **You MUST be able to run the source model and see its output** for at least one policy before writing serious gaspatchio logic.
+- **You MUST be able to run the reference model and see its output** for at least one policy before writing serious gaspatchio logic.
 - **Reconcile in small steps** (variables or tight groups), not whole-model at once.
 - **Do not move on with known unexplained differences.** Every mismatch is a bug until proven otherwise.
 - **Test across policy space**, not just a cherry-picked example.
@@ -143,7 +143,7 @@ Update it continuously as you reconcile. Each time you make a reconciliation cha
 ```md
 # <Model Name> Build Log
 
-This document details the step-by-step process of building and reconciling the `<model_name>` gaspatchio model against a <source system> source model.
+This document details the step-by-step process of building and reconciling the `<model_name>` gaspatchio model against a <source system> reference model.
 
 ## Objective
 
@@ -258,13 +258,13 @@ If any of these happen, you're about to waste time:
 - "It's probably rounding" (prove it: show where rounding happens and reconcile).
 - "It's close enough, we'll revisit" (you won't; mismatches compound).
 - "We changed 10 things, now it matches" (you can't attribute; revert and do one change).
-- "We can't run the source model, but..." (not reconciliation).
+- "We can't run the reference model, but..." (not reconciliation).
 
-## Step 1: Understand and Run the Source Model
+## Step 1: Understand and Run the Reference Model
 
 Before writing or changing gaspatchio code, answer:
 
-1. **"How do I run the source model?"**
+1. **"How do I run the reference model?"**
    - Excel: which file, which sheet(s), which cell/range is the canonical output?
    - Lifelib: which model, which script or notebook, and the exact command to run.
    - Other systems: entrypoint, config, and output location.
@@ -279,7 +279,7 @@ Before writing or changing gaspatchio code, answer:
    - Excel diff, CSV comparison, Python/Pandas/Polars diff, or parquet compare.
    - Agree upfront so "match" has an operational definition.
 
-**Do not proceed until you can run the source model and see its output.**
+**Do not proceed until you can run the reference model and see its output.**
 
 ## Step 2: Build in Reconciliation Order
 
@@ -376,7 +376,7 @@ When a value doesn't match between source and gaspatchio, debug in this order:
 4. **Check timing**
    - Beginning vs end of period? Mid-month conventions? Effective date vs valuation date?
 5. **Check rounding**
-   - When and where is rounding applied in the source model vs gaspatchio?
+   - When and where is rounding applied in the reference model vs gaspatchio?
 6. **Check edge cases**
    - What happens on boundary periods: issue, first premium, last premium, maturity, lapse/death months?
 7. **Escalate to Diagnostic Toolkit**
@@ -399,12 +399,12 @@ uv run gspio describe /tmp/result.parquet --json
 
 **Always use `--output-file`**. Do NOT parse stdout for reconciliation — use parquet (typed, schema-preserved) for machine diffs.
 
-Use Polars to compare the gaspatchio outputs to the source model outputs at the **column + time-step** level.
+Use Polars to compare the gaspatchio outputs to the reference model outputs at the **column + time-step** level.
 
 ## Example: Level 4 Tutorial Reconciliation
 
 The `tutorial/level-4-lifelib/` directory demonstrates a complete reconciliation:
-- `reconciliation_report.md` — My Model-style report: 8/8 points, 10/10 variables, 0.0000% difference
+- `reconciliation_report.md` — structured report: 8/8 points, 10/10 variables, 0.0000% difference
 - `reconcile.py` — one-command verification script
 - `reference/lifelib_reference.parquet` — gold standard output
 

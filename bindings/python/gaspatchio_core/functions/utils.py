@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ABOUTME: Utility functions for Excel and other function implementations.
 ABOUTME: Provides proxy unwrapping and common patterns for plugin functions."""
 
@@ -17,6 +21,13 @@ def to_polars_expression(arg: "IntoExprColumn") -> pl.Expr:
     This function handles the common pattern of unwrapping proxy objects
     to get the underlying Polars expressions that plugin functions expect.
 
+    Frontend equivalent of ``polars_backend._shared._unwrap_proxy``. The two
+    helpers exist in parallel by design: this one lives in the frontend
+    (typed against ``IntoExprColumn``, intended for callers in
+    ``functions/`` and ``accessors/``); the backend one is duck-typed and
+    duplicated locally in ``polars_backend/`` to keep that subpackage's
+    ``column/``-import edges empty. They are kept consistent by hand.
+
     Args:
         arg: Can be a ColumnProxy, ExpressionProxy, or pl.Expr
 
@@ -27,10 +38,10 @@ def to_polars_expression(arg: "IntoExprColumn") -> pl.Expr:
         ```python
         # With ColumnProxy
         expr = to_polars_expression(af["column_name"])
-        
-        # With ExpressionProxy  
+
+        # With ExpressionProxy
         expr = to_polars_expression(af["col"].cast(pl.Date))
-        
+
         # With raw Polars expression
         expr = to_polars_expression(pl.col("column_name"))
         ```

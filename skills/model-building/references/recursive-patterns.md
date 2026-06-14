@@ -1,6 +1,23 @@
 # Recursive & Path-Dependent Patterns
 
-Values at time t depend on accumulated state at t-1. This is the #1 reason agents abandon gaspatchio for Python loops — but `accumulate()` handles it.
+Values at time *t* depend on accumulated state at *t-1*. Two primitives cover this in gaspatchio — pick by asking one question:
+
+**"Do the within-period charges depend on the running balance?"**
+
+- **No** — the recurrence collapses to a single multiply-and-add. Use **`accumulate()`** (this page).
+- **Yes** — the running balance is needed *during* the period to compute later steps within the same period. Use the **rollforward kernel** (`af.projection.rollforward(states={…})`). See [Rollforward](../../../gaspatchio-docs/docs/concepts/rollforward/index.md) for the concept page and [`tutorial/rollforward-patterns/`](../../../bindings/python/gaspatchio_core/tutorials/rollforward-patterns/) for runnable patterns.
+
+| Product mechanic | Primitive |
+|---|---|
+| Fund grown by a list-column return + flat-dollar fee deduction | `accumulate` |
+| Survival probability cumulative product, discount factor power | `cum_prod`, list arithmetic |
+| Term-life reserve roll, deterministic interest | `accumulate` |
+| UL fund with COI on net amount at risk | rollforward kernel |
+| IUL fund with floor/cap on the period's index credit | rollforward kernel |
+| VA + GMDB anniversary ratchet to the AV high-water mark | rollforward kernel (multi-state) |
+| GMWB run-off with lapse stop on fund exhaustion | rollforward kernel (`lapse_when_all_non_positive`) |
+
+The rest of this page documents the `accumulate()` primitive — the linear-recurrence half. For the state-machine half, the rollforward concept doc + tutorial scripts are the canonical reference.
 
 ## Core Primitive: `accumulate()`
 
@@ -8,19 +25,21 @@ Values at time t depend on accumulated state at t-1. This is the #1 reason agent
 state[t] = state[t-1] * multiply[t] + add[t]
 ```
 
-This is a linear recurrence. Most recursive actuarial calculations can be rewritten into this form.
+This is a linear recurrence. Many recursive actuarial calculations can be rewritten into this form; the ones that can't need rollforward.
 
 **Always look up before using:** `uv run gspio docs "accumulate" -t code_example`
 
 ---
 
-## Pattern 1: Account Value Rollforward
+## Pattern 1: Account Value Rollforward (linear case)
 
-The most common recursive pattern. Account value grows by investment return and receives premium deposits:
+A specific *linear* case. Account value grows by investment return and receives premium deposits — the within-period charge is a flat rate, not a charge on the running balance:
 
 ```
 av[t] = av[t-1] * (1 - fee/12) * (1 + return[t]) + premium[t]
 ```
+
+This collapses to a single multiply-and-add because the fee rate doesn't depend on AV. If your AV has COI on net amount at risk, an IUL floor/cap, or any other within-period charge that needs to see the running balance, this pattern doesn't fit — escalate to the rollforward kernel (see L3 step 07 for the migration recipe).
 
 Gaspatchio approach:
 
@@ -131,10 +150,11 @@ af.cash_balance = af.net_flow.projection.accumulate(
 
 ## When `accumulate` Doesn't Fit
 
-Some recurrences are genuinely non-linear and can't be expressed as `state * M + A`:
+Some recurrences can't be expressed as `state[t] = state[t-1] * multiply[t] + add[t]`:
 
-- **Newton-Raphson or solver-based calculations** (e.g., IRR, implied volatility) — these need iterative solvers, not projection patterns
-- **State machines with discrete state transitions** (e.g., IFRS 9 staging 1→2→3) — use `when/then/otherwise` chains, not `accumulate`
-- **Nested stochastic** (outer × inner scenarios) — framework-level feature, not model-level
+- **Charges that depend on the running balance** (COI on net amount at risk, IUL floor/cap on the in-period credit, AV-banded fees, GMDB ratchets, multi-state products) — use the rollforward kernel (`af.projection.rollforward`).
+- **Newton-Raphson or solver-based calculations** (IRR, implied volatility) — iterative solvers, not projection patterns.
+- **Discrete-state staging transitions** (IFRS 9 stage 1→2→3) — `when/then/otherwise` chains, not `accumulate`.
+- **Nested stochastic** (outer × inner scenarios) — framework-level feature, not model-level.
 
-If you believe your recurrence can't be linearised, check by trying to write it as `state[t] = state[t-1] * f(inputs[t]) + g(inputs[t])`. If `f` and `g` don't depend on `state`, it's linear and `accumulate` works.
+If you're not sure: try to write the recurrence as `state[t] = state[t-1] * f(inputs[t]) + g(inputs[t])`. If `f` and `g` truly don't depend on `state`, it's linear → `accumulate`. If either depends on the running balance (even via a max/min/clip), it's a state-machine → rollforward kernel.

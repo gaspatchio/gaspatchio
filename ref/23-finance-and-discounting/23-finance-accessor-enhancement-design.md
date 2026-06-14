@@ -2,7 +2,7 @@
 
 **Date:** 2025-01-11
 **Status:** Design Complete - Ready for Implementation
-**Authors:** Claude (Brainstorming), Mr Gaz Wright (Decisions)
+**Authors:** Matt Wright, Claude
 
 ## Executive Summary
 

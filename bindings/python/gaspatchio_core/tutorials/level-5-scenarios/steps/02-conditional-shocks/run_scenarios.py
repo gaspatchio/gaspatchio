@@ -1,276 +1,205 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 5 Step 02: Conditional Shocks
 
-Demonstrates three conditional shock types:
+Step 01 applied flat shocks ("mortality up 20% everywhere"). Real stress
+scenarios are usually targeted: "elderly lives only", "early policy years
+only", "Solvency-II lapse-up with the 100% cap". This step demonstrates
+three composable shock types that express those targeted stresses
+declaratively.
 
-- **FilteredShock** (``where`` clause): Apply shocks only to rows matching
-  a dimension filter (e.g., mortality +50 % for attained_age >= 65).
-- **TimeConditionalShock** (``when`` clause): Apply shocks only at specific
-  projection times (e.g., rates drop 100 bp starting year 3).
-- **PipelineShock**: Chain multiple operations (e.g., multiply then clip).
+The shock vocabulary
+--------------------
 
-Produces:
-  - cashflow_comparison.png -- monthly net cashflow for policy 1
-  - death_claims.png -- PV death claims by scenario and product
-  - report/report.md -- full Markdown report with audit trail
+  * ``FilteredShock``  — shock applies only to rows matching a WHERE clause.
+                         e.g. "mortality up 25% for attained_age ≥ 65"
 
-Usage:
-    uv run python tutorial/level-5-scenarios/steps/02-conditional-shocks/run_scenarios.py
+  * ``TimeConditionalShock`` — shock applies only during specified
+                         projection periods. e.g. "10% expense overrun in
+                         the first five years". Targets a time column on
+                         the base table (here ``duration``).
+
+  * ``PipelineShock``  — chain operations left-to-right. e.g. Solvency II
+                         lapse-up: multiply by 1.5, then clip at 100%.
+
+The five scenarios
+------------------
+
+  BASE                   — no shocks
+  ELDERLY_MORT_UP_25     — FilteredShock on mortality_select, age ≥ 65
+  EARLY_LAPSE_UP_25      — FilteredShock on lapse_rates, duration ≤ 3
+  EARLY_EXPENSE_UP_10    — TimeConditionalShock on surrender_charges,
+                           duration ≤ 5  (proxy for a first-five-years
+                           expense overrun)
+  SOLVENCY_II_LAPSE_UP   — PipelineShock on lapse_rates: ×1.5 then clip 1.0
+
+Run::
+
+    cd tutorial/level-5-scenarios/steps/02-conditional-shocks
+    uv run python run_scenarios.py
 """
 
-import json
 import sys
 import time
 from pathlib import Path
 
 import polars as pl
 
+from gaspatchio_core import ActuarialFrame, MortalityTable
+from gaspatchio_core.scenarios import (
+    ClipShock,
+    FilteredShock,
+    MultiplicativeShock,
+    PipelineShock,
+    ScenarioRun,
+    Sum,
+    TimeConditionalShock,
+)
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-BASE_DIR = SCRIPT_DIR.parents[1] / "base"
-sys.path.insert(0, str(SCRIPT_DIR.parents[1]))  # for charts import
-sys.path.insert(0, str(BASE_DIR))  # for model import
+L5_BASE_DIR = SCRIPT_DIR.parent.parent / "base"
+sys.path.insert(0, str(L5_BASE_DIR))
+import model  # noqa: E402
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import describe_scenarios, parse_scenario_config
-
-import charts 
-import model 
+MODEL_POINTS_PATH = L5_BASE_DIR / "model_points.parquet"
+SELECT_PERIOD = model.SELECT_PERIOD_LEN
 
 # ---------------------------------------------------------------------------
-# Configuration
+# 1. Load base assumptions once.
 # ---------------------------------------------------------------------------
 
-SCENARIOS_FILE = SCRIPT_DIR / "scenarios.json"
-MODEL_POINTS_PATH = BASE_DIR / "model_points.parquet"
+assumptions = model.load_assumptions()
+mortality_select_raw = assumptions["mortality"].table
 
-PV_COMPONENTS = [
-    "pv_claims",
-    "pv_expenses",
-    "pv_inv_income",
-    "pv_premiums",
-    "pv_commissions",
-    "pv_av_change",
-]
+BASE_TABLES = {
+    "mortality_select": mortality_select_raw,
+    "mortality_scalars": assumptions["mortality_scalars"],
+    "lapse_rates": assumptions["lapse_rates"],
+    "surrender_charges": assumptions["surrender_charges"],
+}
 
 # ---------------------------------------------------------------------------
-# Load scenario config
+# 2. Conditional shock specifications.
 # ---------------------------------------------------------------------------
 
-config_text = SCENARIOS_FILE.read_text()
-raw_config = json.loads(config_text)
-
-scenarios = parse_scenario_config(raw_config)
-scenario_ids = list(scenarios.keys())
-
-# Build audit trail description
-audit_trail = describe_scenarios(scenarios)
+SHOCKS = {
+    "BASE": [],
+    "ELDERLY_MORT_UP_25": [
+        FilteredShock(
+            shock=MultiplicativeShock(factor=1.25),
+            where={"age": {"gte": 65}},
+            table="mortality_select",
+        ),
+    ],
+    "EARLY_LAPSE_UP_25": [
+        FilteredShock(
+            shock=MultiplicativeShock(factor=1.25),
+            where={"duration": {"lte": 3}},
+            table="lapse_rates",
+        ),
+    ],
+    "EARLY_EXPENSE_UP_10": [
+        TimeConditionalShock(
+            shock=MultiplicativeShock(factor=1.10),
+            when={"duration": {"lte": 5}},
+            table="surrender_charges",
+            time_column="duration",
+        ),
+    ],
+    "SOLVENCY_II_LAPSE_UP": [
+        PipelineShock(
+            shocks=(
+                MultiplicativeShock(factor=1.5),
+                ClipShock(max_value=1.0),
+            ),
+            table="lapse_rates",
+        ),
+    ],
+}
 
 # ---------------------------------------------------------------------------
-# Run each scenario
+# 3. Aggregations — same per-scenario PV roll-up as step 01.
 # ---------------------------------------------------------------------------
 
-start = time.perf_counter()
+AGGREGATIONS = (
+    Sum("pv_net_cf").alias("pv_net_cf").over("scenario_id"),
+    Sum("pv_claims").alias("pv_claims").over("scenario_id"),
+    Sum("pv_expenses").alias("pv_expenses").over("scenario_id"),
+)
+
+# ---------------------------------------------------------------------------
+# 4. Model wrapper (identical adapter as step 01).
+# ---------------------------------------------------------------------------
+
+
+def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
+    """Rebuild typed assumptions dict from shocked base tables, then run."""
+    del drivers
+    overrides = dict(assumptions)
+    overrides["mortality"] = MortalityTable(
+        table=tables["mortality_select"],
+        age_basis="age_last_birthday",
+        structure="select_ultimate",
+        select_period=SELECT_PERIOD,
+    )
+    overrides["mortality_scalars"] = tables["mortality_scalars"]
+    overrides["lapse_rates"] = tables["lapse_rates"]
+    overrides["surrender_charges"] = tables["surrender_charges"]
+    return model.main(af, assumptions_override=overrides)
+
+
+# ---------------------------------------------------------------------------
+# 5. Run.
+# ---------------------------------------------------------------------------
+
+plan = ScenarioRun(
+    shocks=SHOCKS,
+    base_tables=BASE_TABLES,
+    aggregations=AGGREGATIONS,
+)
+
+print(plan.describe())
+print()
 
 mp = pl.read_parquet(MODEL_POINTS_PATH)
-n_points = len(mp)
+af = ActuarialFrame(mp)
 
-all_frames: list[pl.DataFrame] = []
-
-for scenario_id, shocks in scenarios.items():
-    # Load fresh assumptions for each scenario
-    assumptions = model.load_assumptions()
-
-    # Apply table shocks to the relevant assumption tables
-    for shock in shocks:
-        table_name = getattr(shock, "table", None)
-        if table_name and table_name in assumptions:
-            table_obj = assumptions[table_name]
-            assumptions[table_name] = table_obj.with_shock(shock)
-
-    # Run the model
-    af = ActuarialFrame(mp)
-    result_af = model.main(af, assumptions_override=assumptions)
-    result = result_af.collect()
-
-    # Tag with scenario_id
-    result = result.with_columns(pl.lit(scenario_id).alias("scenario_id"))
-    all_frames.append(result)
-
-all_results = pl.concat(all_frames)
-
+start = time.perf_counter()
+result = plan.run(af, model_fn, audit=True)
 runtime = time.perf_counter() - start
 
 # ---------------------------------------------------------------------------
-# Chart 1: Cashflow line chart -- monthly net cashflow for policy 1
+# 6. Report
 # ---------------------------------------------------------------------------
 
-point1 = all_results.filter(pl.col("point_id") == 1)
+print(f"Runtime: {runtime:.2f}s")
+print(f"Audit sidecar: {result.audit_path}")
+print()
 
-cashflow_rows: list[dict[str, object]] = []
-for row in point1.iter_rows(named=True):
-    ncf = row["net_cf"]  # list column
-    scenario = row["scenario_id"]
-    for i, val in enumerate(ncf):
-        cashflow_rows.append({"scenario_id": scenario, "month": i, "net_cf": val})
+pv_components = ["pv_net_cf", "pv_claims", "pv_expenses"]
+scenario_table = result.aggregations[pv_components[0]]
+for name in pv_components[1:]:
+    scenario_table = scenario_table.join(result.aggregations[name], on="scenario_id")
+scenario_table = scenario_table.sort("scenario_id")
 
-cashflow_df = pl.DataFrame(cashflow_rows)
+print("=== Per-Scenario PV Aggregates ===")
+print(scenario_table)
+print()
 
-cashflow_chart = charts.cashflow_line(
-    df=cashflow_df,
-    time_col="month",
-    value_col="net_cf",
-    scenario_col="scenario_id",
-    title="Monthly Net Cashflow: Policy 1",
-)
+base_pv = scenario_table.filter(pl.col("scenario_id") == "BASE").get_column("pv_net_cf").item()
 
-report_dir = SCRIPT_DIR / "report"
-report_dir.mkdir(parents=True, exist_ok=True)
-cashflow_chart.save(str(report_dir / "cashflow_comparison.png"), scale_factor=2)
-
-# ---------------------------------------------------------------------------
-# Chart 2: Grouped bar -- PV death claims by scenario x product
-# ---------------------------------------------------------------------------
-
-scenario_product_death = all_results.group_by("scenario_id", "product_id").agg(
-    pl.col("pv_claims_death").sum(),
-)
-
-death_bar = charts.scenario_bar_chart(
-    df=scenario_product_death,
-    metric="pv_claims_death",
-    group_col="product_id",
-    scenario_col="scenario_id",
-    title="PV Death Claims by Scenario",
-)
-
-death_bar.save(str(report_dir / "death_claims.png"), scale_factor=2)
-
-# ---------------------------------------------------------------------------
-# Results summary table
-# ---------------------------------------------------------------------------
-
-scenario_totals = all_results.group_by("scenario_id").agg(
-    pl.col("pv_net_cf").sum(),
-    *[pl.col(c).sum() for c in PV_COMPONENTS],
-)
-
-base_pv = scenario_totals.filter(pl.col("scenario_id") == "BASE")["pv_net_cf"][0]
-
-summary_table = (
-    scenario_totals.select("scenario_id", "pv_net_cf", "pv_claims")
-    .sort("scenario_id")
+deltas = (
+    scenario_table.filter(pl.col("scenario_id") != "BASE")
     .with_columns(
-        ((pl.col("pv_net_cf") - base_pv) / abs(base_pv)).alias("vs_base_pct"),
+        (pl.col("pv_net_cf") - base_pv).alias("delta"),
+        ((pl.col("pv_net_cf") - base_pv) / abs(base_pv) * 100).alias("delta_pct"),
     )
+    .sort("delta")
+    .select(["scenario_id", "delta", "delta_pct"])
 )
 
-summary_table_display = summary_table.with_columns(
-    pl.col("pv_net_cf")
-    .map_elements(charts.format_number, return_dtype=pl.String)
-    .alias("pv_net_cf"),
-    pl.col("pv_claims")
-    .map_elements(charts.format_number, return_dtype=pl.String)
-    .alias("pv_claims"),
-    pl.col("vs_base_pct")
-    .map_elements(charts.format_pct, return_dtype=pl.String)
-    .alias("vs_base_pct"),
-)
-
-# ---------------------------------------------------------------------------
-# Key findings (auto-generated)
-# ---------------------------------------------------------------------------
-
-findings: list[str] = []
-
-# Death claims impact from pandemic scenario
-pandemic_death = scenario_totals.filter(pl.col("scenario_id") == "PANDEMIC_ELDERLY")
-if not pandemic_death.is_empty():
-    base_death = scenario_totals.filter(pl.col("scenario_id") == "BASE")[
-        "pv_claims"
-    ][0]
-    pandemic_death_val = pandemic_death["pv_claims"][0]
-    delta_pct = (pandemic_death_val - base_death) / abs(base_death) * 100
-    findings.append(
-        f"PANDEMIC_ELDERLY increases total PV claims by {delta_pct:+.1f}% vs BASE, "
-        "reflecting the age-targeted mortality shock on this elderly portfolio."
-    )
-
-# Delayed rate shock timing
-delayed = scenario_totals.filter(pl.col("scenario_id") == "DELAYED_RATE_SHOCK")
-if not delayed.is_empty():
-    delayed_pv = delayed["pv_net_cf"][0]
-    delayed_pct = (delayed_pv - base_pv) / abs(base_pv) * 100
-    findings.append(
-        f"DELAYED_RATE_SHOCK changes PV net cashflows by {delayed_pct:+.1f}% vs BASE. "
-        "The impact appears at year 3 when the 100bp rate drop takes effect."
-    )
-
-# Mortality floor effect
-mort_floor = scenario_totals.filter(pl.col("scenario_id") == "MORT_FLOOR")
-if not mort_floor.is_empty():
-    floor_death = mort_floor["pv_claims"][0]
-    base_death = scenario_totals.filter(pl.col("scenario_id") == "BASE")[
-        "pv_claims"
-    ][0]
-    floor_pct = (floor_death - base_death) / abs(base_death) * 100
-    findings.append(
-        f"MORT_FLOOR increases PV claims by {floor_pct:+.1f}% vs BASE. "
-        "The pipeline applies a 30% uplift then floors at 0.5%, "
-        "preventing any mortality rate from falling below the minimum."
-    )
-
-# ---------------------------------------------------------------------------
-# Report
-# ---------------------------------------------------------------------------
-
-report_path = charts.write_report(
-    path=SCRIPT_DIR,
-    title="Conditional Shocks",
-    metadata={
-        "points": n_points,
-        "scenarios": len(scenario_ids),
-        "runtime_s": runtime,
-    },
-    sections=[
-        {
-            "heading": "Scenario Configuration",
-            "content": (
-                "This step demonstrates three conditional shock types:\n\n"
-                "- **FilteredShock** (`where` clause) -- applies only to rows matching "
-                "a dimension filter (e.g., mortality +50% for ages 65+)\n"
-                "- **TimeConditionalShock** (`when` clause) -- applies at specific "
-                "projection times (e.g., rates drop 100bp starting year 3)\n"
-                "- **PipelineShock** -- chains multiple operations "
-                "(e.g., multiply by 1.3 then floor at 0.5%)\n\n"
-                "All scenarios are defined declaratively in `scenarios.json` "
-                "and parsed via `parse_scenario_config()`."
-            ),
-        },
-        {
-            "heading": "Scenario Parameters",
-            "content": "```json\n" + config_text + "\n```",
-        },
-        {
-            "heading": "Audit Trail",
-            "content": audit_trail,
-        },
-        {
-            "heading": "Results Summary",
-            "table": summary_table_display,
-        },
-        {
-            "heading": "Cashflow Comparison (Policy 1)",
-            "chart": "cashflow_comparison.png",
-        },
-        {
-            "heading": "PV Death Claims by Scenario",
-            "chart": "death_claims.png",
-        },
-        {
-            "heading": "Key Findings",
-            "findings": findings,
-        },
-    ],
-)
-
-print(f"Report generated in {runtime:.2f}s -> {report_path}")
+print("=== Δ pv_net_cf vs BASE — by stress kind ===")
+print(deltas)

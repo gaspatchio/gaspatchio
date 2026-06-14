@@ -153,7 +153,9 @@ Work through these five areas explicitly:
 | **Data (model points)** | Where are model points stored (Parquet/CSV)? Policy ID column name? Which columns define policy, coverage, riders, and dates? |
 | **Assumptions** | Which assumption tables exist? Where are they located? What are their dimensions (age, duration, calendar year, policy year, scenario)? How are they keyed? |
 | **Projection** | Projection frequency (monthly, annual, other)? Projection length driver (term, attained age, maturity date, contract boundary)? Valuation date and alignment rules? |
+| **Within-period mechanics** | **Do any within-period charges or credits depend on the running balance?** (COI on net amount at risk, IUL floor/cap on the in-period index credit, AV-banded fees, GMDB ratchet to the post-growth AV, multi-state with cross-account reads.) This is the load-bearing question for linear-recurrence vs state-machine classification — answer it explicitly before handing off to model-building. |
 | **Outputs** | Required cashflows, reserves, PV metrics, roll-forwards, and aggregations (per-policy, portfolio, cohort)? Any regulatory or accounting views that must match existing reports? |
+| **Scenarios** | Will the model run under stress scenarios, sensitivity sweeps, or stochastic Monte Carlo? If yes, the model entry point should accept `assumptions_override` so a `ScenarioRun.run()` wrapper can hand shocked tables back in. Hand off to `gaspatchio-model-scenarios` after building. |
 
 ### 5. Explore alternative model structures
 

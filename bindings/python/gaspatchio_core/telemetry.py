@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Telemetry and performance monitoring for Gaspatchio
 
@@ -7,7 +11,6 @@ providing insights to help optimize code.
 
 import inspect
 import os
-import sys
 from functools import wraps
 
 import polars as pl
@@ -97,14 +100,9 @@ def _map_with_warning_impl(
                 f"SUGGESTION: {suggestion}\n\n"
                 f"map_elements() is NOT ALLOWED in optimize mode as it causes significant\n"
                 f"performance degradation. Please refactor to use native Polars expressions.\n"
-                f"{'=' * 80}\n\n"
-                f"PROGRAM EXECUTION TERMINATED\n"
                 f"{'=' * 80}\n"
             )
-            logger.error(error_message)
-            sys.stderr.write(error_message)
-            sys.stderr.flush()
-            sys.exit(1)
+            raise PerformanceViolationError(error_message)
         else:  # debug mode
             logger.warning(
                 "MAP_ELEMENTS_PERFORMANCE_ISSUE | {issue_type} | {file}:{line} | {func} | {dtype} | ID:{call_id}",

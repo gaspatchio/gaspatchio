@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/assumptions/__init__.py
-# hypothesis_version: 6.135.0
-
-['AutoDetectOverflow', 'CategoricalDimension', 'ComputedDimension', 'DataDimension', 'Dimension', 'DimensionInfo', 'ExtendOverflow', 'FillConstant', 'FillForward', 'FillStrategy', 'LinearInterpolate', 'MeltDimension', 'OverflowStrategy', 'Table', 'TableBuilder', 'TableSchema', 'analyze_table', 'get_table_metadata', 'list_tables']

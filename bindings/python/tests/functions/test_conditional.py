@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for when/then/otherwise conditional expressions
 # ABOUTME: Covers scalar, list broadcasting, error handling, and graph integration
 """Tests for when/then/otherwise conditional expressions.

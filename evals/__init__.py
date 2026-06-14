@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Gaspatchio skill evaluation harness.
 
 Uses pydantic-ai agents with structured output types and pydantic-evals

@@ -1,34 +1,53 @@
-"""Skip rollforward tests when the Rust rollforward plugin isn't available.
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
 
-The rollforward #[polars_expr] is registered in bindings/python/src/vector.rs,
-but uv sync in CI doesn't always rebuild the Rust extension. When the cached
-.so doesn't include the rollforward symbol, tests fail with:
-  NameError: name 'LIB' is not defined
+"""Shared IR-construction fixtures."""
 
-This skip is intentional — the rollforward tests pass locally after
-`maturin develop -uv`. Once the rollforward feature merges to main and
-the CI cache rebuilds, this skip can be removed.
-"""
+from __future__ import annotations
 
+from datetime import date
+
+import polars as pl
 import pytest
 
-
-def _rollforward_available() -> bool:
-    """Check if the rollforward Rust plugin function is available."""
-    try:
-        from gaspatchio_core.functions.vector import rollforward_plugin  # noqa: F401
-
-        return True
-    except (ImportError, NameError):
-        return False
+from gaspatchio_core.rollforward._ir import IR, State
+from gaspatchio_core.rollforward._ops import Add, Floor, Grow
+from gaspatchio_core.rollforward._refs import StateRef
+from gaspatchio_core.schedule import Schedule
 
 
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Skip rollforward kernel tests if the plugin is not available."""
-    if _rollforward_available():
-        return
+@pytest.fixture
+def monthly_schedule() -> Schedule:
+    return Schedule.from_calendar_grid(
+        start_date=date(2025, 1, 31),
+        n_periods=12,
+        frequency="1M",
+    )
 
-    skip_marker = pytest.mark.skip(reason="rollforward Rust plugin not available (stale CI cache)")
-    for item in items:
-        if "rollforward" in str(item.fspath):
-            item.add_marker(skip_marker)
+
+@pytest.fixture
+def single_state_ir(monthly_schedule: Schedule) -> IR:
+    """Whole-life-style: one state, three transitions."""
+    return IR(
+        states=(State(name="av", init=pl.col("cv_init")),),
+        points=("bop", "eop"),
+        transitions=(
+            Add(
+                target=StateRef(state="av", point="eop"),
+                expr=pl.col("premium"),
+                label="Premium",
+            ),
+            Grow(
+                target=StateRef(state="av", point="eop"),
+                rate=pl.col("interest"),
+                label="Interest",
+            ),
+            Floor(target=StateRef(state="av", point="eop"), value=0.0),
+        ),
+        schedule=monthly_schedule,
+        batch_axes=("policy",),
+        track_increments=False,
+        lapse_when_all_non_positive=(),
+        contract_boundary=None,
+    )

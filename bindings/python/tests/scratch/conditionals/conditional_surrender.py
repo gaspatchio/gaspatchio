@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Scratch test showing surrender charge calculation with conditionals.
 # ABOUTME: Demonstrates decreasing surrender charges based on policy duration.
 # ruff: noqa: T201, INP001, ANN201, PLR2004

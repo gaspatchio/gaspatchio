@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: CLI commands for the Gaspatchio actuarial modeling framework.
 # ABOUTME: Provides model execution, data inspection, and knowledge discovery commands.
 # ruff: noqa: T201, PLR0913, ANN201, E501, F841, BLE001, FBT001, RSE102, D400, D415, PLR2004, C901, PLR0912, PLR0915, PD901, TRY003, EM102, B904, FBT002

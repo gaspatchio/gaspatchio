@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: LLM-friendly scenario config parsing for declarative shock specifications.
 # ABOUTME: Converts dict/JSON configs to Shock objects for runtime injection.
 # ruff: noqa: PLR2004, E501, C901, PLR0912, PLR0915
@@ -33,7 +37,7 @@ Syntactic sugar for simple cases:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from gaspatchio_core.scenarios.shocks import (
     AdditiveShock,
@@ -48,6 +52,9 @@ from gaspatchio_core.scenarios.shocks import (
     Shock,
     TimeConditionalShock,
 )
+
+if TYPE_CHECKING:
+    from gaspatchio_core.scenarios._metric import Aggregator, _Partitioned
 
 # Valid operation keys in shock config (basic operations)
 SHOCK_OPERATIONS = {"multiply", "add", "set"}
@@ -365,8 +372,8 @@ def parse_scenario_config(
     Parse a full scenario configuration into shock mappings.
 
     Converts LLM-friendly list of scenario specs into the dict[str, list[Shock]]
-    format used by describe_scenarios() and Table.from_shocks(). This is the
-    main entry point for LLM-generated scenario configurations.
+    format used by ScenarioRun and Table.from_shocks(). This is the main entry
+    point for LLM-generated scenario configurations.
 
     !!! note "When to use"
         - Parsing LLM-generated scenario configurations
@@ -477,4 +484,72 @@ def parse_scenario_config(
     return result
 
 
-__all__ = ["parse_scenario_config", "parse_shock_config"]
+def parse_aggregations(
+    spec: list[dict[str, Any]],
+) -> tuple[Aggregator | _Partitioned, ...]:
+    """Parse a list-of-dict YAML spec into a tuple of aggregators.
+
+    Each entry is a recipe dict carrying ``kind``, ``alias``, plus the
+    aggregator's constructor kwargs. ``_Partitioned`` entries carry
+    ``by`` (list of partition columns) and ``inner`` (a nested recipe dict).
+    Unknown ``kind`` raises ``ValueError`` listing the available registrations.
+    The v0.1 ``aggregations: {alias: {...}}`` (dict-of-spec) shape raises a
+    pointed error directing callers at the migration table in §10 of the spec.
+    """
+    if not isinstance(spec, list):
+        msg = (
+            "v0.1 plan format detected (aggregations is not a list). "
+            "v0.2 uses a list of aggregators with .alias(). "
+            "See ref/41-backend-portability/specs/"
+            "2026-05-11-gsp-101-mergeable-aggregator-layer.md §10."
+        )
+        # Migration error: callers (and the test pinning this contract) catch
+        # ValueError. The shape mismatch is a config-format problem, not a
+        # generic Python type error - keep it as ValueError per spec §10.
+        raise ValueError(msg)  # noqa: TRY004
+
+    return tuple(_parse_one(entry) for entry in spec)
+
+
+def _parse_one(entry: dict[str, Any]) -> Aggregator | _Partitioned:
+    """Parse one aggregator recipe dict into an aggregator or _Partitioned."""
+    from gaspatchio_core.scenarios._aggregators import _AGGREGATOR_REGISTRY
+    from gaspatchio_core.scenarios._metric import _Partitioned
+
+    kind = entry.get("kind")
+    if kind is None:
+        msg = f"Aggregator entry missing 'kind' field: {entry!r}"
+        raise ValueError(msg)
+    alias = entry.get("alias")
+    if alias is None:
+        msg = f"Aggregator entry missing 'alias' field: {entry!r}"
+        raise ValueError(msg)
+
+    if kind == "_Partitioned":
+        inner_entry = entry["inner"]
+        # The inner recipe doesn't carry its own alias; the wrapper owns it.
+        # _parse_one requires an alias, so synthesise a sentinel for recursion;
+        # the inner's .alias_ is irrelevant once it's wrapped in _Partitioned.
+        inner_with_alias = dict(inner_entry)
+        inner_with_alias.setdefault("alias", "__inner__")
+        inner = _parse_one(inner_with_alias)
+        return _Partitioned(by=tuple(entry["by"]), inner=inner, alias=alias)
+
+    if kind not in _AGGREGATOR_REGISTRY:
+        available = sorted(_AGGREGATOR_REGISTRY.keys())
+        msg = (
+            f"Aggregator {kind!r} is not registered. Available: {available}. "
+            f"To register a custom aggregator, call register_aggregator() "
+            f"before parsing."
+        )
+        raise ValueError(msg)
+
+    cls = _AGGREGATOR_REGISTRY[kind]
+    kwargs = {k: v for k, v in entry.items() if k not in {"kind", "alias"}}
+    # YAML round-trip emits tuples as lists; coerce known tuple fields back.
+    if "levels" in kwargs and isinstance(kwargs["levels"], list):
+        kwargs["levels"] = tuple(kwargs["levels"])
+    return cls(**kwargs).alias(alias)
+
+
+__all__ = ["parse_aggregations", "parse_scenario_config", "parse_shock_config"]

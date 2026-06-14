@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Proxy for datetime operations on ActuarialFrame columns/expressions."""
 
 from __future__ import annotations
@@ -116,7 +120,7 @@ class DtNamespaceProxy:
 
         Applies list shimming if appropriate for ColumnProxy of List[Temporal].
         """
-        from gaspatchio_core.column.dispatch import _unwrap, _wrap
+        from gaspatchio_core.column._dispatch_common import _unwrap, _wrap
 
         def _raise_not_callable_error(name: str) -> None:
             msg = f"Attribute '{name}' on Polars 'dt' namespace is not callable."

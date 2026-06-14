@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 2: Assumptions — Table Lookup
 
@@ -69,7 +73,7 @@ MODEL_POINTS = {
     "sex": ["M", "F", "M"],
     "sum_assured": [500_000, 250_000, 100_000],
     "annual_premium": [450, 1_200, 2_800],
-    "lapse_rate": [0.05, 0.08, 0.03],   # scalar per policy (Step 03 replaces this)
+    "lapse_rate": [0.05, 0.08, 0.03],  # scalar per policy (Step 03 replaces this)
     "expense_rate": [0.10, 0.10, 0.10],
     "entry_date": ["2024/01/15", "2023/06/01", "2022/03/10"],
 }
@@ -90,8 +94,8 @@ mort_data = pl.DataFrame({"age": _ages, "qx": _qx})
 mort_table = Table(
     name="mortality",
     source=mort_data,
-    dimensions={"age": "age"},   # lookup key: dimension name → column name
-    value="qx",                  # column to return
+    dimensions={"age": "age"},  # lookup key: dimension name → column name
+    value="qx",  # column to return
 )
 
 VALUATION_DATE = datetime.date(2024, 1, 1)
@@ -124,13 +128,13 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
 
     # Expand each policy to one row per projection month
-    af = af.date.create_projection_timeline(
+    af = af.projection.set(
         valuation_date=VALUATION_DATE,
-        projection_end_type="term_months",
-        projection_end_value=PROJECTION_MONTHS,
-        projection_frequency="monthly",
-        output_column="projection_date",
+        until="term_months",
+        until_value=PROJECTION_MONTHS,
+        frequency="monthly",
     )
+    af.projection_date = af.projection.period_dates()
 
     # Month index (0 = valuation date, 1 = one month later, ...)
     af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (

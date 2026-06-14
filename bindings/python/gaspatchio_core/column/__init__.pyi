@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Type stubs for gaspatchio_core.column submodule."""
 
 # Re-export the proxy classes from their specific modules

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: T201, PD901, ANN201, E501, D205, BLE001, F841, DTZ005
 """
 ABOUTME: Research script to test Polars list vs scalar broadcasting.

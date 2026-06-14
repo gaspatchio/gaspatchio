@@ -1,838 +1,327 @@
-// ABOUTME: Rollforward kernel for non-linear account value projections
-// ABOUTME: Step-dispatch inner loop with single-state and multi-state support
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+//! Rollforward kernel — consumes the LowerToPolarsPlugin kwargs schema.
+//!
+//! Schema (JSON-decoded):
+//!   ir:                          canonical-form dict (states, points, transitions, …)
+//!   captures:                    Vec<[state, point]> in slot order
+//!   track_increments:            bool
+//!   lapse_when_all_non_positive: Vec<String> (sorted)
+//!   contract_boundary:           Option<String> (Polars Expr serialised string)
+//!   n_states, n_points, n_periods: usize
+//!   bop_idx, eop_idx:            usize indices into ir.points
+//!   input_columns:               Vec<String> (column names referenced by Ops)
+//!   ops:                         Vec<OpV2> with arg-indices
+//!   captures_resolved:           Vec<CaptureSlot> (state-index, point-index)
+//!
+//! The kernel walks transitions in declared order per period, evaluating
+//! each Op against the current per-row state vector. Output is a Polars
+//! Struct with one field per capture slot (named `"{state}@{point}"`) —
+//! plus one field per labelled increment when track_increments=True
+//! (increment emission is not yet implemented).
 
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::offset::OffsetsBuffer;
 use serde::Deserialize;
 
-/// Configuration for the rollforward kernel.
-///
-/// Receives all pre-resolved index references from Python. No string lookups
-/// occur in the hot loop — Python's `_compile()` method resolves column names
-/// to integer indices before serializing to JSON.
+/// Plugin kwargs payload — direct mirror of the dict produced by
+/// `LowerToPolarsPlugin.lower(ir, slots)` in
+/// `gaspatchio_core.rollforward._passes`.
 #[derive(Deserialize)]
 pub struct RollforwardKwargs {
-    pub states: Vec<StateSpec>,
-    pub steps: Vec<StepSpec>,
+    pub ir: serde_json::Value,
+    pub captures: Vec<Vec<String>>,
     pub track_increments: bool,
-    pub assertion_mode: Option<AssertionMode>,
-    pub num_captures: usize,
-    pub lapse_condition: Option<LapseCondition>,
+    pub lapse_when_all_non_positive: Vec<String>,
+    pub contract_boundary: Option<String>,
+    pub n_states: usize,
+    pub n_points: usize,
+    pub n_periods: usize,
+    pub bop_idx: usize,
+    pub eop_idx: usize,
+    pub input_columns: Vec<String>,
+    pub ops: Vec<OpV2>,
+    pub captures_resolved: Vec<CaptureSlot>,
+    #[serde(default)]
+    pub lapse_state_indices: Vec<usize>,
+    #[serde(default)]
+    pub contract_boundary_arg: Option<usize>,
+    /// Index (into `inputs`, after the state inits and input columns) of an
+    /// i64 column giving each policy's authoritative period count. Set by the
+    /// lowering for `per_policy_grid` schedules so the kernel sizes each
+    /// policy's projection from its own horizon — even when there are no input
+    /// list columns to infer length from. `None` => uniform (use `n_periods`).
+    #[serde(default)]
+    pub per_policy_lengths_arg: Option<usize>,
 }
 
-/// Specifies how assertion failures are surfaced.
+/// Resolved (state, point) capture slot — indices into ir.states / ir.points.
 #[derive(Deserialize)]
-pub enum AssertionMode {
-    Flag,
-    Warn,
-    Error,
+pub struct CaptureSlot {
+    pub state: usize,
+    pub point: usize,
 }
 
-/// Identifies a state variable and the column index of its initial value.
-#[derive(Deserialize)]
-pub struct StateSpec {
-    pub name: String,
-    pub initial_col_index: usize,
-}
-
-/// A single operation in the rollforward step sequence.
+/// Op enum — mirrors the typed Op classes in
+/// `gaspatchio_core.rollforward._ops`. Tag is the bare class name; payload
+/// fields use pre-resolved arg-indices (state, point, input-column slots) so
+/// the kernel's hot loop never does string lookups.
 ///
-/// All index fields are pre-resolved by Python. `target_index` is the
-/// zero-based index into the states slice. `input_index`, `rate_index`,
-/// etc. reference input columns passed to the kernel.
+/// Every ``*_arg`` field is an ``ArgRef``. ``ArgRef::Input { idx }`` reads
+/// from a precomputed list-column input; ``ArgRef::State { state, point }``
+/// reads from the live per-row state vector — the value most recently
+/// written to ``(state, point)`` during this period's Op walk (or carried
+/// from t-1).
+#[derive(Deserialize, Clone, Copy, Debug)]
+#[serde(tag = "kind")]
+#[serde(rename_all = "lowercase")]
+pub enum ArgRef {
+    Input { idx: usize },
+    State { state: usize, point: usize },
+}
+
 #[derive(Deserialize)]
-pub enum StepSpec {
+#[serde(tag = "op")]
+pub enum OpV2 {
     Add {
-        target_index: usize,
-        input_index: usize,
+        target_state: usize,
+        target_point: usize,
+        expr_arg: ArgRef,
         label: Option<String>,
-        expected_input_index: Option<usize>,
     },
     Subtract {
-        target_index: usize,
-        input_index: usize,
+        target_state: usize,
+        target_point: usize,
+        expr_arg: ArgRef,
         label: Option<String>,
-        expected_input_index: Option<usize>,
     },
     Charge {
-        target_index: usize,
-        input_index: usize,
+        target_state: usize,
+        target_point: usize,
+        rate_arg: ArgRef,
         label: Option<String>,
-        expected_input_index: Option<usize>,
     },
     Grow {
-        target_index: usize,
-        input_index: usize,
+        target_state: usize,
+        target_point: usize,
+        rate_arg: ArgRef,
         label: Option<String>,
-        expected_input_index: Option<usize>,
     },
     GrowCapped {
-        target_index: usize,
-        input_index: usize,
-        rate_floor: f64,
-        rate_cap: f64,
+        target_state: usize,
+        target_point: usize,
+        rate_arg: ArgRef,
+        floor_arg: ArgRef,
+        cap_arg: ArgRef,
         label: Option<String>,
-        expected_input_index: Option<usize>,
     },
-    DeductNar {
-        target_index: usize,
-        rate_index: usize,
-        db_index: usize,
+    DeductNAR {
+        target_state: usize,
+        target_point: usize,
+        coi_rate_arg: ArgRef,
+        death_benefit_arg: ArgRef,
         label: Option<String>,
-        expected_input_index: Option<usize>,
+    },
+    Ratchet {
+        target_state: usize,
+        target_point: usize,
+        to_arg: ArgRef,
+        when_arg: Option<ArgRef>,
+        label: Option<String>,
     },
     Floor {
-        target_index: usize,
+        target_state: usize,
+        target_point: usize,
         value: f64,
-        label: Option<String>,
     },
-    Cap {
-        target_index: usize,
-        value: f64,
-        label: Option<String>,
-    },
-    RatchetTo {
-        target_index: usize,
-        other_state_index: usize,
-        label: Option<String>,
-    },
-    ProRataWith {
-        target_index: usize,
-        capture_index: usize,
-        amount_index: usize,
-        label: Option<String>,
-    },
-    Capture {
-        target_index: usize,
-        capture_index: usize,
-    },
-    LapseIfZero {
-        target_index: usize,
-    },
-    AddIf {
-        target_index: usize,
-        condition_index: usize,
-        amount_index: usize,
-        label: Option<String>,
-    },
-    ChargeIf {
-        target_index: usize,
-        condition_index: usize,
-        rate_index: usize,
+    Apply {
+        target_state: usize,
+        target_point: usize,
+        body_arg: ArgRef,
         label: Option<String>,
     },
 }
 
-impl StepSpec {
-    /// Returns the index of the state that this step writes to.
-    pub fn target_index(&self) -> usize {
-        match self {
-            Self::Add { target_index, .. }
-            | Self::Subtract { target_index, .. }
-            | Self::Charge { target_index, .. }
-            | Self::Grow { target_index, .. }
-            | Self::GrowCapped { target_index, .. }
-            | Self::DeductNar { target_index, .. }
-            | Self::Floor { target_index, .. }
-            | Self::Cap { target_index, .. }
-            | Self::RatchetTo { target_index, .. }
-            | Self::ProRataWith { target_index, .. }
-            | Self::Capture { target_index, .. }
-            | Self::LapseIfZero { target_index }
-            | Self::AddIf { target_index, .. }
-            | Self::ChargeIf { target_index, .. } => *target_index,
-        }
-    }
-
-    /// Returns the human-readable label for this step, if any.
-    ///
-    /// `Capture` and `LapseIfZero` have no label field and always return `None`.
-    pub fn label(&self) -> Option<&str> {
-        match self {
-            Self::Add { label, .. }
-            | Self::Subtract { label, .. }
-            | Self::Charge { label, .. }
-            | Self::Grow { label, .. }
-            | Self::GrowCapped { label, .. }
-            | Self::DeductNar { label, .. }
-            | Self::Floor { label, .. }
-            | Self::Cap { label, .. }
-            | Self::RatchetTo { label, .. }
-            | Self::ProRataWith { label, .. }
-            | Self::AddIf { label, .. }
-            | Self::ChargeIf { label, .. } => label.as_deref(),
-            Self::Capture { .. } | Self::LapseIfZero { .. } => None,
-        }
-    }
+/// Owned per-row List<Float64> input slice — offsets + flat values.
+struct OwnedListSlice {
+    offsets: Vec<i64>,
+    values: Vec<f64>,
 }
 
-/// Condition under which a policy lapses during the rollforward.
-#[derive(Deserialize)]
-pub enum LapseCondition {
-    AllNonPositive { state_indices: Vec<usize> },
-}
+/// Plugin entry point — the function Polars discovers via the
+/// `#[polars_expr]` wrapper in `bindings/python/src/vector.rs`.
+pub fn rollforward_kernel(
+    inputs: &[Series],
+    kwargs: &RollforwardKwargs,
+) -> PolarsResult<Series> {
+    let n_states = kwargs.n_states;
+    let n_points = kwargs.n_points;
+    let n_periods = kwargs.n_periods;
+    let bop_idx = kwargs.bop_idx;
+    let eop_idx = kwargs.eop_idx;
 
-/// Rollforward kernel for non-linear account value projections.
-///
-/// Receives pre-resolved column indices from Python's `_compile()` method and
-/// dispatches step operations in the inner loop. For single-state, returns a
-/// Struct with a `"result"` field. For multi-state, returns a Struct with one
-/// field per state (named by `StateSpec::name`) plus optional increment fields.
-///
-/// # Arguments
-///
-/// * `inputs` - Array of Series: initial value scalars and list input columns.
-///   Index mapping is pre-resolved by Python. `inputs[state.initial_col_index]`
-///   gives the initial scalar; `inputs[step.input_index]` gives list columns.
-/// * `kwargs` - Pre-compiled rollforward configuration with states and steps.
-///
-/// # Errors
-///
-/// Returns `PolarsError::ComputeError` if:
-/// - No states are specified
-/// - Input columns contain nulls (slow path not yet implemented)
-/// - Inner list lengths are mismatched across columns within a row
-/// - Input columns are not List type or initial values are not castable to Float64
-pub fn rollforward(inputs: &[Series], kwargs: &RollforwardKwargs) -> PolarsResult<Series> {
-    if kwargs.states.is_empty() {
+    if n_states == 0 {
         return Err(PolarsError::ComputeError(
             "rollforward: at least one state is required".into(),
         ));
     }
-
-    // 1. Collect all list column indices referenced by steps
-    let list_input_indices: Vec<usize> = collect_list_input_indices(&kwargs.steps);
-
-    // Extract and validate list columns for nulls
-    let list_columns: Vec<&ListChunked> = list_input_indices
-        .iter()
-        .map(|&idx| {
-            inputs[idx].list().map_err(|_| {
-                PolarsError::ComputeError(
-                    format!("rollforward: input at index {} must be List dtype", idx).into(),
-                )
-            })
-        })
-        .collect::<PolarsResult<Vec<_>>>()?;
-
-    for (i, lc) in list_columns.iter().enumerate() {
-        if lc.null_count() > 0 {
-            return Err(PolarsError::ComputeError(
-                format!(
-                    "rollforward: null outer list at input index {} not yet supported",
-                    list_input_indices[i]
-                )
-                .into(),
-            ));
-        }
-        // Check inner nulls
-        let rechunked = lc.rechunk();
-        let inner_nulls = rechunked
-            .downcast_iter()
-            .next()
-            .map(|arr| arr.values().null_count())
-            .unwrap_or(0);
-        if inner_nulls > 0 {
-            return Err(PolarsError::ComputeError(
-                format!(
-                    "rollforward: null inner values at input index {} not yet supported",
-                    list_input_indices[i]
-                )
-                .into(),
-            ));
-        }
+    let n_extra = usize::from(kwargs.per_policy_lengths_arg.is_some());
+    if inputs.len() != n_states + kwargs.input_columns.len() + n_extra {
+        return Err(PolarsError::ComputeError(
+            format!(
+                "rollforward: expected {} inputs (n_states={} + input_columns={} \
+                 + per_policy_lengths={}); got {}",
+                n_states + kwargs.input_columns.len() + n_extra,
+                n_states,
+                kwargs.input_columns.len(),
+                n_extra,
+                inputs.len()
+            )
+            .into(),
+        ));
     }
 
-    // 2. Route to single-state or multi-state path
-    let output_series = if kwargs.states.len() == 1 {
-        let state_spec = &kwargs.states[0];
-        let initial = &inputs[state_spec.initial_col_index];
-        let initial_f64 = initial.cast(&DataType::Float64)?;
-        let initial_ca = initial_f64.f64()?;
-        let initial_is_broadcast = initial_ca.len() == 1;
-
-        if initial_ca.null_count() > 0 {
-            return Err(PolarsError::ComputeError(
-                "rollforward: null initial values not yet supported (slow path not implemented)"
-                    .into(),
-            ));
-        }
-
-        rollforward_fast_single_state(
-            initial_ca,
-            initial_is_broadcast,
-            inputs,
-            &kwargs.steps,
-            &list_input_indices,
-            kwargs.num_captures,
-            kwargs.track_increments,
-        )?
-    } else {
-        // Multi-state: extract and validate all initial value columns
-        let mut initial_columns: Vec<(&Float64Chunked, bool)> = Vec::with_capacity(kwargs.states.len());
-        // We need owned copies because cast() returns owned Series
-        let mut initial_owned: Vec<Series> = Vec::with_capacity(kwargs.states.len());
-
-        for state_spec in &kwargs.states {
-            let initial = &inputs[state_spec.initial_col_index];
-            let initial_f64 = initial.cast(&DataType::Float64)?;
-            initial_owned.push(initial_f64);
-        }
-
-        for s in &initial_owned {
+    // ---- 1. Extract state-init scalars ----
+    // Each is Float64-cast-able; broadcast-of-1 or per-row.
+    let mut init_owned: Vec<Series> = Vec::with_capacity(n_states);
+    for s in 0..n_states {
+        let init = inputs[s].cast(&DataType::Float64)?;
+        init_owned.push(init);
+    }
+    let init_slices: Vec<(Vec<f64>, bool)> = init_owned
+        .iter()
+        .map(|s| {
             let ca = s.f64()?;
             if ca.null_count() > 0 {
                 return Err(PolarsError::ComputeError(
-                    "rollforward: null initial values not yet supported (slow path not implemented)"
-                        .into(),
+                    "rollforward: null state-init values not yet supported".into(),
                 ));
             }
-            let is_broadcast = ca.len() == 1;
-            initial_columns.push((ca, is_broadcast));
-        }
-
-        rollforward_fast_multi_state(
-            &initial_columns,
-            inputs,
-            &kwargs.states,
-            &kwargs.steps,
-            &list_input_indices,
-            kwargs.num_captures,
-            kwargs.track_increments,
-            &kwargs.lapse_condition,
-        )?
-    };
-
-    // 3. Wrap result(s) in Struct
-    let num_rows = output_series[0].len();
-    let struct_chunked = StructChunked::from_series(
-        PlSmallStr::from_static("rollforward"),
-        num_rows,
-        output_series.iter(),
-    )?;
-
-    Ok(struct_chunked.into_series())
-}
-
-/// Collects the unique set of input column indices referenced by steps,
-/// preserving order of first occurrence.
-fn collect_list_input_indices(steps: &[StepSpec]) -> Vec<usize> {
-    let mut indices = Vec::new();
-    for step in steps {
-        let idx = match step {
-            StepSpec::Add { input_index, .. }
-            | StepSpec::Subtract { input_index, .. }
-            | StepSpec::Charge { input_index, .. }
-            | StepSpec::Grow { input_index, .. }
-            | StepSpec::GrowCapped { input_index, .. } => Some(*input_index),
-            StepSpec::DeductNar {
-                rate_index,
-                db_index,
-                ..
-            } => {
-                // DeductNar references two inputs
-                if !indices.contains(rate_index) {
-                    indices.push(*rate_index);
-                }
-                if !indices.contains(db_index) {
-                    indices.push(*db_index);
-                }
-                None
-            }
-            StepSpec::AddIf {
-                condition_index,
-                amount_index,
-                ..
-            } => {
-                if !indices.contains(condition_index) {
-                    indices.push(*condition_index);
-                }
-                if !indices.contains(amount_index) {
-                    indices.push(*amount_index);
-                }
-                None
-            }
-            StepSpec::ChargeIf {
-                condition_index,
-                rate_index,
-                ..
-            } => {
-                if !indices.contains(condition_index) {
-                    indices.push(*condition_index);
-                }
-                if !indices.contains(rate_index) {
-                    indices.push(*rate_index);
-                }
-                None
-            }
-            StepSpec::ProRataWith { amount_index, .. } => Some(*amount_index),
-            StepSpec::Floor { .. }
-            | StepSpec::Cap { .. }
-            | StepSpec::RatchetTo { .. }
-            | StepSpec::Capture { .. }
-            | StepSpec::LapseIfZero { .. } => None,
-        };
-        if let Some(i) = idx {
-            if !indices.contains(&i) {
-                indices.push(i);
-            }
-        }
-    }
-    indices
-}
-
-/// Fast path for single-state rollforward with no nulls.
-///
-/// Works directly with underlying arrays to avoid per-row allocations.
-/// All list columns must have matching inner list lengths per row.
-///
-/// Returns a `Vec<Series>` where:
-/// - `[0]` is always the `"result"` `List<Float64>` series
-/// - `[1..]` are increment `List<Float64>` series, one per labeled step
-///   (only present when `track_increments` is `true`)
-fn rollforward_fast_single_state(
-    initial_ca: &Float64Chunked,
-    initial_is_broadcast: bool,
-    inputs: &[Series],
-    steps: &[StepSpec],
-    list_input_indices: &[usize],
-    num_captures: usize,
-    track_increments: bool,
-) -> PolarsResult<Vec<Series>> {
-    // Build a mapping from input index to position in our extracted slices
-    let index_to_slot: std::collections::HashMap<usize, usize> = list_input_indices
-        .iter()
-        .enumerate()
-        .map(|(slot, &idx)| (idx, slot))
-        .collect();
-
-    // Owned slice storage for each list column: offsets + flat values
-    struct OwnedListSlice {
-        offsets: Vec<i64>,
-        values: Vec<f64>,
-    }
-
-    let mut owned_slices: Vec<OwnedListSlice> = Vec::with_capacity(list_input_indices.len());
-
-    for &col_idx in list_input_indices {
-        let list_ca = inputs[col_idx].list()?;
-        let rechunked = list_ca.rechunk();
-        let arr = rechunked.downcast_iter().next().unwrap();
-
-        let offsets = arr.offsets().as_slice().to_vec();
-
-        let inner_dtype = list_ca.inner_dtype();
-        // SAFETY: dtype matches the array
-        let values_series = unsafe {
-            Series::from_chunks_and_dtype_unchecked(
-                PlSmallStr::EMPTY,
-                vec![arr.values().clone()],
-                &inner_dtype.to_physical(),
-            )
-        }
-        .cast(&DataType::Float64)?;
-
-        let values_f64 = values_series.f64()?;
-        let values_rechunked = values_f64.rechunk();
-        let values = values_rechunked
-            .cont_slice()
-            .map_err(|_| {
-                PolarsError::ComputeError(
-                    format!(
-                        "rollforward: values not contiguous at input index {}",
-                        col_idx
-                    )
-                    .into(),
-                )
-            })?
-            .to_vec();
-
-        owned_slices.push(OwnedListSlice { offsets, values });
-    }
-
-    // Determine number of rows from the first list column (or initial if no list cols)
-    let num_rows = if owned_slices.is_empty() {
-        initial_ca.len()
-    } else {
-        owned_slices[0].offsets.len() - 1
-    };
-
-    // Get initial values as a contiguous slice
-    let initial_rechunked = initial_ca.rechunk();
-    let initial_slice = initial_rechunked
-        .cont_slice()
-        .map_err(|_| PolarsError::ComputeError("rollforward: initial values not contiguous".into()))?;
-
-    // Pre-calculate total output length from the first list column's offsets
-    // (or 0 if no list columns)
-    let total_len: usize = if owned_slices.is_empty() {
-        0
-    } else {
-        *owned_slices[0].offsets.last().unwrap_or(&0) as usize
-    };
-
-    let mut output_values: Vec<f64> = Vec::with_capacity(total_len);
-    let mut output_offsets: Vec<i64> = Vec::with_capacity(num_rows + 1);
-    output_offsets.push(0);
-
-    // Captures buffer: one slot per capture index, reset per row
-    let mut captures: Vec<f64> = vec![0.0; num_captures];
-
-    // Increment tracking setup: build label names and per-step buffer index mapping
-    // step_label_buf_idx[i] = Some(buf_idx) if steps[i] has a label and track_increments is on
-    let label_names: Vec<String>;
-    let step_label_buf_idx: Vec<Option<usize>>;
-    let mut increment_buffers: Vec<Vec<f64>>;
-    let mut increment_offsets: Vec<Vec<i64>>;
-
-    if track_increments {
-        let mut names: Vec<String> = Vec::new();
-        let mut mapping: Vec<Option<usize>> = Vec::with_capacity(steps.len());
-        for step in steps {
-            if let Some(lbl) = step.label() {
-                let buf_idx = names.len();
-                names.push(lbl.to_string());
-                mapping.push(Some(buf_idx));
-            } else {
-                mapping.push(None);
-            }
-        }
-        let num_labels = names.len();
-        label_names = names;
-        step_label_buf_idx = mapping;
-        increment_buffers = (0..num_labels)
-            .map(|_| Vec::with_capacity(total_len))
-            .collect();
-        increment_offsets = (0..num_labels)
-            .map(|_| {
-                let mut v = Vec::with_capacity(num_rows + 1);
-                v.push(0i64);
-                v
-            })
-            .collect();
-    } else {
-        label_names = Vec::new();
-        step_label_buf_idx = Vec::new();
-        increment_buffers = Vec::new();
-        increment_offsets = Vec::new();
-    }
-
-    for row_idx in 0..num_rows {
-        // Determine timestep count from the first list column
-        let timesteps = if owned_slices.is_empty() {
-            0usize
-        } else {
-            let start = owned_slices[0].offsets[row_idx] as usize;
-            let end = owned_slices[0].offsets[row_idx + 1] as usize;
-            end - start
-        };
-
-        // Verify all list columns have the same length for this row
-        for (slot, slice) in owned_slices.iter().enumerate() {
-            let s = slice.offsets[row_idx] as usize;
-            let e = slice.offsets[row_idx + 1] as usize;
-            let len = e - s;
-            if len != timesteps {
-                return Err(PolarsError::ComputeError(
-                    format!(
-                        "rollforward: mismatched inner list lengths at row {}: expected {}, got {} at input index {}",
-                        row_idx, timesteps, len, list_input_indices[slot]
-                    )
-                    .into(),
-                ));
-            }
-        }
-
-        // Get initial value (broadcast or per-row)
-        let initial_idx = if initial_is_broadcast { 0 } else { row_idx };
-        let mut state = initial_slice[initial_idx];
-
-        // Reset captures for this row
-        for c in captures.iter_mut() {
-            *c = 0.0;
-        }
-
-        // For each timestep, dispatch all steps
-        let mut lapsed = false;
-        for t in 0..timesteps {
-            for (step_idx, step) in steps.iter().enumerate() {
-                let av_before = state;
-                match step {
-                    StepSpec::Add { input_index, .. } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        state += owned_slices[slot].values[flat_idx];
-                    }
-                    StepSpec::Subtract { input_index, .. } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        state -= owned_slices[slot].values[flat_idx];
-                    }
-                    StepSpec::Charge { input_index, .. } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        state *= 1.0 - owned_slices[slot].values[flat_idx];
-                    }
-                    StepSpec::Grow { input_index, .. } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        state *= 1.0 + owned_slices[slot].values[flat_idx];
-                    }
-                    StepSpec::GrowCapped {
-                        input_index,
-                        rate_floor,
-                        rate_cap,
-                        ..
-                    } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        let rate = owned_slices[slot].values[flat_idx];
-                        state *= 1.0 + rate.clamp(*rate_floor, *rate_cap);
-                    }
-                    StepSpec::DeductNar {
-                        rate_index,
-                        db_index,
-                        ..
-                    } => {
-                        let rate_slot = index_to_slot[rate_index];
-                        let db_slot = index_to_slot[db_index];
-                        let rate_flat = owned_slices[rate_slot].offsets[row_idx] as usize + t;
-                        let db_flat = owned_slices[db_slot].offsets[row_idx] as usize + t;
-                        let rate = owned_slices[rate_slot].values[rate_flat];
-                        let db = owned_slices[db_slot].values[db_flat];
-                        let nar = f64::max(0.0, db - state);
-                        state -= rate * nar;
-                    }
-                    StepSpec::Floor { value, .. } => {
-                        state = f64::max(state, *value);
-                    }
-                    StepSpec::Cap { value, .. } => {
-                        state = f64::min(state, *value);
-                    }
-                    StepSpec::AddIf {
-                        condition_index,
-                        amount_index,
-                        ..
-                    } => {
-                        let cond_slot = index_to_slot[condition_index];
-                        let amt_slot = index_to_slot[amount_index];
-                        let cond_flat = owned_slices[cond_slot].offsets[row_idx] as usize + t;
-                        let amt_flat = owned_slices[amt_slot].offsets[row_idx] as usize + t;
-                        if owned_slices[cond_slot].values[cond_flat] > 0.0 {
-                            state += owned_slices[amt_slot].values[amt_flat];
-                        }
-                    }
-                    StepSpec::ChargeIf {
-                        condition_index,
-                        rate_index,
-                        ..
-                    } => {
-                        let cond_slot = index_to_slot[condition_index];
-                        let rate_slot = index_to_slot[rate_index];
-                        let cond_flat = owned_slices[cond_slot].offsets[row_idx] as usize + t;
-                        let rate_flat = owned_slices[rate_slot].offsets[row_idx] as usize + t;
-                        if owned_slices[cond_slot].values[cond_flat] > 0.0 {
-                            state *= 1.0 - owned_slices[rate_slot].values[rate_flat];
-                        }
-                    }
-                    StepSpec::LapseIfZero { .. } => {
-                        if state <= 0.0 {
-                            lapsed = true;
-                        }
-                    }
-                    StepSpec::Capture { capture_index, .. } => {
-                        captures[*capture_index] = state;
-                    }
-                    StepSpec::RatchetTo { .. } | StepSpec::ProRataWith { .. } => {
-                        panic!(
-                            "rollforward: multi-state step variant not yet implemented in single-state fast path"
-                        );
-                    }
-                }
-                // Record increment for this step if tracking is on and the step has a label
-                if track_increments {
-                    if let Some(buf_idx) = step_label_buf_idx[step_idx] {
-                        increment_buffers[buf_idx].push(state - av_before);
-                    }
-                }
-            }
-            output_values.push(state);
-
-            if lapsed {
-                // Zero all remaining timesteps and exit the timestep loop
-                let remaining = timesteps - t - 1;
-                for _ in 0..remaining {
-                    output_values.push(0.0);
-                }
-                // Push zeros into all increment buffers for the remaining timesteps
-                if track_increments {
-                    for buf in increment_buffers.iter_mut() {
-                        for _ in 0..remaining {
-                            buf.push(0.0);
-                        }
-                    }
-                }
-                break;
-            }
-        }
-
-        output_offsets.push(output_values.len() as i64);
-
-        // After each row, record current position in each increment offset vec
-        if track_increments {
-            for (buf_idx, buf) in increment_buffers.iter().enumerate() {
-                increment_offsets[buf_idx].push(buf.len() as i64);
-            }
-        }
-    }
-
-    // Helper closure to build a List<Float64> Series from flat values + offsets
-    let build_list_series = |flat_values: Vec<f64>, offsets_vec: Vec<i64>, name: PlSmallStr| -> Series {
-        // SAFETY: offsets are monotonically increasing and valid
-        let offsets = unsafe { OffsetsBuffer::new_unchecked(offsets_vec.into()) };
-        let values_arr = PrimitiveArray::from_vec(flat_values);
-        let list_arr = LargeListArray::new(
-            ArrowDataType::LargeList(Box::new(ArrowField::new(
-                PlSmallStr::from_static("item"),
-                ArrowDataType::Float64,
-                true,
-            ))),
-            offsets,
-            Box::new(values_arr),
-            None, // no validity — no nulls in fast path
-        );
-        // SAFETY: we constructed this correctly
-        let chunked =
-            unsafe { ListChunked::from_chunks(name, vec![Box::new(list_arr)]) };
-        chunked.into_series()
-    };
-
-    // Build "result" series
-    let result_series =
-        build_list_series(output_values, output_offsets, PlSmallStr::from_static("result"));
-
-    let mut output_series: Vec<Series> = Vec::with_capacity(1 + increment_buffers.len());
-    output_series.push(result_series);
-
-    // Build increment series (one per label, in label order)
-    for (buf_idx, (flat_values, offsets_vec)) in increment_buffers
-        .into_iter()
-        .zip(increment_offsets.into_iter())
-        .enumerate()
-    {
-        let name = PlSmallStr::from(label_names[buf_idx].as_str());
-        output_series.push(build_list_series(flat_values, offsets_vec, name));
-    }
-
-    Ok(output_series)
-}
-
-/// Fast path for multi-state rollforward with no nulls.
-///
-/// Uses a `Vec<f64>` state array indexed by `target_index`. Supports
-/// cross-state operations (`RatchetTo`, `ProRataWith`) and a
-/// `LapseCondition` that checks multiple states at end of each timestep.
-///
-/// Returns a `Vec<Series>` where:
-/// - `[0..num_states]` are named `List<Float64>` series, one per state
-/// - `[num_states..]` are increment `List<Float64>` series, one per labeled step
-///   (only present when `track_increments` is `true`)
-#[allow(clippy::too_many_arguments)]
-fn rollforward_fast_multi_state(
-    initial_columns: &[(&Float64Chunked, bool)],
-    inputs: &[Series],
-    state_specs: &[StateSpec],
-    steps: &[StepSpec],
-    list_input_indices: &[usize],
-    num_captures: usize,
-    track_increments: bool,
-    lapse_condition: &Option<LapseCondition>,
-) -> PolarsResult<Vec<Series>> {
-    let num_states = state_specs.len();
-
-    // Build a mapping from input index to position in our extracted slices
-    let index_to_slot: std::collections::HashMap<usize, usize> = list_input_indices
-        .iter()
-        .enumerate()
-        .map(|(slot, &idx)| (idx, slot))
-        .collect();
-
-    // Owned slice storage for each list column: offsets + flat values
-    struct OwnedListSlice {
-        offsets: Vec<i64>,
-        values: Vec<f64>,
-    }
-
-    let mut owned_slices: Vec<OwnedListSlice> = Vec::with_capacity(list_input_indices.len());
-
-    for &col_idx in list_input_indices {
-        let list_ca = inputs[col_idx].list()?;
-        let rechunked = list_ca.rechunk();
-        let arr = rechunked.downcast_iter().next().unwrap();
-
-        let offsets = arr.offsets().as_slice().to_vec();
-
-        let inner_dtype = list_ca.inner_dtype();
-        // SAFETY: dtype matches the array
-        let values_series = unsafe {
-            Series::from_chunks_and_dtype_unchecked(
-                PlSmallStr::EMPTY,
-                vec![arr.values().clone()],
-                &inner_dtype.to_physical(),
-            )
-        }
-        .cast(&DataType::Float64)?;
-
-        let values_f64 = values_series.f64()?;
-        let values_rechunked = values_f64.rechunk();
-        let values = values_rechunked
-            .cont_slice()
-            .map_err(|_| {
-                PolarsError::ComputeError(
-                    format!(
-                        "rollforward: values not contiguous at input index {}",
-                        col_idx
-                    )
-                    .into(),
-                )
-            })?
-            .to_vec();
-
-        owned_slices.push(OwnedListSlice { offsets, values });
-    }
-
-    // Determine number of rows from the first list column (or first initial if no list cols)
-    let num_rows = if owned_slices.is_empty() {
-        initial_columns[0].0.len()
-    } else {
-        owned_slices[0].offsets.len() - 1
-    };
-
-    // Get initial values as contiguous slices for each state
-    let initial_slices: Vec<(Vec<f64>, bool)> = initial_columns
-        .iter()
-        .map(|(ca, is_broadcast)| {
             let rechunked = ca.rechunk();
-            let slice = rechunked.cont_slice().map_err(|_| {
-                PolarsError::ComputeError("rollforward: initial values not contiguous".into())
-            })?;
-            Ok((slice.to_vec(), *is_broadcast))
+            let slice = rechunked
+                .cont_slice()
+                .map_err(|_| {
+                    PolarsError::ComputeError(
+                        "rollforward: state-init values not contiguous".into(),
+                    )
+                })?
+                .to_vec();
+            let is_broadcast = slice.len() == 1;
+            Ok((slice, is_broadcast))
         })
         .collect::<PolarsResult<Vec<_>>>()?;
 
-    // Pre-calculate total output length from the first list column's offsets
-    let total_len: usize = if owned_slices.is_empty() {
-        0
-    } else {
-        *owned_slices[0].offsets.last().unwrap_or(&0) as usize
+    // ---- 2. Extract input List<Float64> columns ----
+    let mut owned_slices: Vec<OwnedListSlice> = Vec::with_capacity(kwargs.input_columns.len());
+    for (i, _name) in kwargs.input_columns.iter().enumerate() {
+        let series = &inputs[n_states + i];
+        let list_ca = series.list().map_err(|_| {
+            PolarsError::ComputeError(
+                format!(
+                    "rollforward: input column {} (arg index {}) must be List dtype",
+                    kwargs.input_columns[i],
+                    n_states + i
+                )
+                .into(),
+            )
+        })?;
+        if list_ca.null_count() > 0 {
+            return Err(PolarsError::ComputeError(
+                format!(
+                    "rollforward: null outer list at input column {} not supported",
+                    kwargs.input_columns[i]
+                )
+                .into(),
+            ));
+        }
+        let rechunked = list_ca.rechunk();
+        let arr = rechunked.downcast_iter().next().ok_or_else(|| {
+            PolarsError::ComputeError(
+                format!(
+                    "rollforward: empty chunk for input column {}",
+                    kwargs.input_columns[i]
+                )
+                .into(),
+            )
+        })?;
+        let offsets = arr.offsets().as_slice().to_vec();
+        let values_series =
+            Series::from_arrow(PlSmallStr::EMPTY, arr.values().clone())?
+                .cast(&DataType::Float64)?;
+        let values_f64 = values_series.f64()?;
+        if values_f64.null_count() > 0 {
+            return Err(PolarsError::ComputeError(
+                format!(
+                    "rollforward: null inner values at input column {} not supported",
+                    kwargs.input_columns[i]
+                )
+                .into(),
+            ));
+        }
+        let values_rechunked = values_f64.rechunk();
+        let values = values_rechunked
+            .cont_slice()
+            .map_err(|_| {
+                PolarsError::ComputeError(
+                    format!(
+                        "rollforward: values not contiguous at input column {}",
+                        kwargs.input_columns[i]
+                    )
+                    .into(),
+                )
+            })?
+            .to_vec();
+        owned_slices.push(OwnedListSlice { offsets, values });
+    }
+
+    // ---- 2b. Authoritative per-policy period counts (per_policy_grid) ----
+    // When set, this is the single source of truth for each policy's horizon —
+    // not inferred from whichever input column happens to be first — so a
+    // jagged rollforward sizes correctly even with no input list columns.
+    let per_policy_lengths: Option<Vec<i64>> = match kwargs.per_policy_lengths_arg {
+        Some(idx) => {
+            let s = inputs[idx].cast(&DataType::Int64)?;
+            let ca = s.i64()?;
+            if ca.null_count() > 0 {
+                return Err(PolarsError::ComputeError(
+                    "rollforward: null per-policy length not supported".into(),
+                ));
+            }
+            Some(ca.rechunk().cont_slice().map_err(|_| {
+                PolarsError::ComputeError(
+                    "rollforward: per-policy lengths not contiguous".into(),
+                )
+            })?.to_vec())
+        }
+        None => None,
     };
 
-    // Per-state output buffers
-    let mut result_buffers: Vec<Vec<f64>> = (0..num_states)
+    // ---- 3. Determine number of rows ----
+    let num_rows = if let Some(ref lengths) = per_policy_lengths {
+        lengths.len()
+    } else if !owned_slices.is_empty() {
+        owned_slices[0].offsets.len() - 1
+    } else if init_slices[0].1 {
+        // broadcast: only 1 logical row (caller will broadcast the result)
+        1
+    } else {
+        init_slices[0].0.len()
+    };
+
+    // ---- 4. Decode state names (for output field names) ----
+    let state_names: Vec<String> = decode_state_names(&kwargs.ir)?;
+    let point_names: Vec<String> = decode_point_names(&kwargs.ir)?;
+
+    // ---- 5. Per-capture output buffers ----
+    let n_captures = kwargs.captures_resolved.len();
+    let total_len = num_rows * n_periods;
+    let mut capture_values: Vec<Vec<f64>> = (0..n_captures)
         .map(|_| Vec::with_capacity(total_len))
         .collect();
-    let mut result_offsets: Vec<Vec<i64>> = (0..num_states)
+    let mut capture_offsets: Vec<Vec<i64>> = (0..n_captures)
         .map(|_| {
             let mut v = Vec::with_capacity(num_rows + 1);
             v.push(0i64);
@@ -840,302 +329,443 @@ fn rollforward_fast_multi_state(
         })
         .collect();
 
-    // Captures buffer: one slot per capture index, reset per row
-    let mut captures: Vec<f64> = vec![0.0; num_captures];
-
-    // Increment tracking setup
-    let label_names: Vec<String>;
-    let step_label_buf_idx: Vec<Option<usize>>;
-    let mut increment_buffers: Vec<Vec<f64>>;
-    let mut increment_offsets: Vec<Vec<i64>>;
-
-    if track_increments {
-        let mut names: Vec<String> = Vec::new();
-        let mut mapping: Vec<Option<usize>> = Vec::with_capacity(steps.len());
-        for step in steps {
-            if let Some(lbl) = step.label() {
-                let buf_idx = names.len();
-                names.push(lbl.to_string());
-                mapping.push(Some(buf_idx));
-            } else {
-                mapping.push(None);
-            }
-        }
-        let num_labels = names.len();
-        label_names = names;
-        step_label_buf_idx = mapping;
-        increment_buffers = (0..num_labels)
-            .map(|_| Vec::with_capacity(total_len))
-            .collect();
-        increment_offsets = (0..num_labels)
-            .map(|_| {
-                let mut v = Vec::with_capacity(num_rows + 1);
-                v.push(0i64);
-                v
-            })
-            .collect();
-    } else {
-        label_names = Vec::new();
-        step_label_buf_idx = Vec::new();
-        increment_buffers = Vec::new();
-        increment_offsets = Vec::new();
-    }
-
+    // ---- 6. Per-row state walk ----
+    // Jagged-aware: each policy projects over its OWN period count. The
+    // recurrence value[t] = f(value[t-1], inputs[t]) has no cross-policy
+    // coupling — every read is policy-relative (offsets[row]+t) — so a
+    // policy's local `t` indexes its own input lists correctly regardless of
+    // any other policy's length. Per-row state[s][p][t] flat index:
+    //   s * (n_points * row_periods) + p * row_periods + t
+    // `kwargs.n_periods` is a portfolio-max capacity hint only, not a per-row
+    // invariant; the uniform path is the special case row_periods == n_periods.
     for row_idx in 0..num_rows {
-        // Determine timestep count from the first list column
-        let timesteps = if owned_slices.is_empty() {
-            0usize
+        // This policy's period count. Priority: (1) the authoritative
+        // schedule-supplied per-policy length, (2) the length of the first
+        // input list, (3) the kwargs n_periods (broadcast / state-init-only,
+        // uniform schedules). Every input column must then agree with it
+        // WITHIN the row — a length mismatch (e.g. a feeder built one period
+        // too long, or disagreeing with the schedule) is rejected loudly.
+        let row_periods = if let Some(ref lengths) = per_policy_lengths {
+            usize::try_from(lengths[row_idx]).map_err(|_| {
+                PolarsError::ComputeError(
+                    format!("rollforward: negative per-policy length at row {row_idx}").into(),
+                )
+            })?
+        } else if owned_slices.is_empty() {
+            n_periods
         } else {
-            let start = owned_slices[0].offsets[row_idx] as usize;
-            let end = owned_slices[0].offsets[row_idx + 1] as usize;
-            end - start
+            let first = &owned_slices[0];
+            first.offsets[row_idx + 1] as usize - first.offsets[row_idx] as usize
         };
-
-        // Verify all list columns have the same length for this row
-        for (slot, slice) in owned_slices.iter().enumerate() {
+        for (slot_idx, slice) in owned_slices.iter().enumerate() {
             let s = slice.offsets[row_idx] as usize;
             let e = slice.offsets[row_idx + 1] as usize;
             let len = e - s;
-            if len != timesteps {
+            if len != row_periods {
                 return Err(PolarsError::ComputeError(
                     format!(
-                        "rollforward: mismatched inner list lengths at row {}: expected {}, got {} at input index {}",
-                        row_idx, timesteps, len, list_input_indices[slot]
+                        "rollforward: input column {} row {}: list length {} != row period \
+                         count {} (all input columns must share one length within a policy)",
+                        kwargs.input_columns[slot_idx], row_idx, len, row_periods
                     )
                     .into(),
                 ));
             }
         }
 
-        // Initialize state vector from per-state initial value columns
-        let mut states: Vec<f64> = (0..num_states)
-            .map(|i| {
-                let (ref slice, is_broadcast) = initial_slices[i];
-                let idx = if is_broadcast { 0 } else { row_idx };
-                slice[idx]
-            })
-            .collect();
-
-        // Reset captures for this row
-        for c in captures.iter_mut() {
-            *c = 0.0;
+        // Zero-period policy (e.g. a fully matured / zero-term row): emit an
+        // empty capture list and skip — the state buffer would be empty, so the
+        // init write below must not run.
+        if row_periods == 0 {
+            for cap_idx in 0..n_captures {
+                capture_offsets[cap_idx].push(capture_values[cap_idx].len() as i64);
+            }
+            continue;
         }
 
-        // For each timestep, dispatch all steps
-        let mut lapsed = false;
-        for t in 0..timesteps {
-            for (step_idx, step) in steps.iter().enumerate() {
-                let ti = step.target_index();
-                let state_before = states[ti];
-                match step {
-                    StepSpec::Add { input_index, .. } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        states[ti] += owned_slices[slot].values[flat_idx];
-                    }
-                    StepSpec::Subtract { input_index, .. } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        states[ti] -= owned_slices[slot].values[flat_idx];
-                    }
-                    StepSpec::Charge { input_index, .. } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        states[ti] *= 1.0 - owned_slices[slot].values[flat_idx];
-                    }
-                    StepSpec::Grow { input_index, .. } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        states[ti] *= 1.0 + owned_slices[slot].values[flat_idx];
-                    }
-                    StepSpec::GrowCapped {
-                        input_index,
-                        rate_floor,
-                        rate_cap,
-                        ..
-                    } => {
-                        let slot = index_to_slot[input_index];
-                        let flat_idx = owned_slices[slot].offsets[row_idx] as usize + t;
-                        let rate = owned_slices[slot].values[flat_idx];
-                        states[ti] *= 1.0 + rate.clamp(*rate_floor, *rate_cap);
-                    }
-                    StepSpec::DeductNar {
-                        rate_index,
-                        db_index,
-                        ..
-                    } => {
-                        let rate_slot = index_to_slot[rate_index];
-                        let db_slot = index_to_slot[db_index];
-                        let rate_flat = owned_slices[rate_slot].offsets[row_idx] as usize + t;
-                        let db_flat = owned_slices[db_slot].offsets[row_idx] as usize + t;
-                        let rate = owned_slices[rate_slot].values[rate_flat];
-                        let db = owned_slices[db_slot].values[db_flat];
-                        let nar = f64::max(0.0, db - states[ti]);
-                        states[ti] -= rate * nar;
-                    }
-                    StepSpec::Floor { value, .. } => {
-                        states[ti] = f64::max(states[ti], *value);
-                    }
-                    StepSpec::Cap { value, .. } => {
-                        states[ti] = f64::min(states[ti], *value);
-                    }
-                    StepSpec::AddIf {
-                        condition_index,
-                        amount_index,
-                        ..
-                    } => {
-                        let cond_slot = index_to_slot[condition_index];
-                        let amt_slot = index_to_slot[amount_index];
-                        let cond_flat = owned_slices[cond_slot].offsets[row_idx] as usize + t;
-                        let amt_flat = owned_slices[amt_slot].offsets[row_idx] as usize + t;
-                        if owned_slices[cond_slot].values[cond_flat] > 0.0 {
-                            states[ti] += owned_slices[amt_slot].values[amt_flat];
-                        }
-                    }
-                    StepSpec::ChargeIf {
-                        condition_index,
-                        rate_index,
-                        ..
-                    } => {
-                        let cond_slot = index_to_slot[condition_index];
-                        let rate_slot = index_to_slot[rate_index];
-                        let cond_flat = owned_slices[cond_slot].offsets[row_idx] as usize + t;
-                        let rate_flat = owned_slices[rate_slot].offsets[row_idx] as usize + t;
-                        if owned_slices[cond_slot].values[cond_flat] > 0.0 {
-                            states[ti] *= 1.0 - owned_slices[rate_slot].values[rate_flat];
-                        }
-                    }
-                    StepSpec::LapseIfZero { .. } => {
-                        if states[ti] <= 0.0 {
-                            lapsed = true;
-                        }
-                    }
-                    StepSpec::Capture { capture_index, .. } => {
-                        captures[*capture_index] = states[ti];
-                    }
-                    StepSpec::RatchetTo {
-                        other_state_index, ..
-                    } => {
-                        states[ti] = f64::max(states[ti], states[*other_state_index]);
-                    }
-                    StepSpec::ProRataWith {
-                        capture_index,
-                        amount_index,
-                        ..
-                    } => {
-                        let ref_val = captures[*capture_index];
-                        if ref_val > 0.0 {
-                            let amt_slot = index_to_slot[amount_index];
-                            let amt_flat = owned_slices[amt_slot].offsets[row_idx] as usize + t;
-                            states[ti] *=
-                                1.0 - owned_slices[amt_slot].values[amt_flat] / ref_val;
-                        }
-                    }
-                }
-                // Record increment for this step if tracking is on and the step has a label
-                if track_increments {
-                    if let Some(buf_idx) = step_label_buf_idx[step_idx] {
-                        increment_buffers[buf_idx].push(states[ti] - state_before);
-                    }
+        // Per-row flat-index strides — keyed off THIS policy's length.
+        let stride_state = n_points * row_periods;
+        let stride_point = row_periods;
+
+        // Initialise the per-row state buffer (sized to this policy's length).
+        let mut state: Vec<f64> = vec![0.0; n_states * n_points * row_periods];
+        for (s, (slice, is_broadcast)) in init_slices.iter().enumerate() {
+            let init_val = if *is_broadcast { slice[0] } else { slice[row_idx] };
+            // state[s][bop][0] = init
+            state[s * stride_state + bop_idx * stride_point] = init_val;
+        }
+
+        // Walk periods. ``stopped`` flips True the first time a stop
+        // condition fires; subsequent periods write zeros to all cells.
+        let mut stopped = false;
+        for t in 0..row_periods {
+            if stopped {
+                // Already stopped — leave state cells at 0 for this period.
+                continue;
+            }
+
+            // Carry-forward bop = previous eop (for t > 0).
+            if t > 0 {
+                for s in 0..n_states {
+                    let prev_eop = state[s * stride_state + eop_idx * stride_point + (t - 1)];
+                    state[s * stride_state + bop_idx * stride_point + t] = prev_eop;
                 }
             }
 
-            // Record all state values at this timestep
-            for i in 0..num_states {
-                result_buffers[i].push(states[i]);
-            }
-
-            if lapsed {
-                // Zero remaining timesteps across all states and increments
-                let remaining = timesteps - t - 1;
-                for _ in 0..remaining {
-                    for buf in result_buffers.iter_mut() {
-                        buf.push(0.0);
-                    }
-                    if track_increments {
-                        for buf in increment_buffers.iter_mut() {
-                            buf.push(0.0);
+            // contract_boundary fires AT the period boundary (before Ops):
+            // if the mask is True at t, this period and all later periods
+            // are zeroed.
+            if let Some(boundary_arg) = kwargs.contract_boundary_arg {
+                let mask_val = read_list_at(&owned_slices, boundary_arg, row_idx, t);
+                if mask_val != 0.0 {
+                    // Zero this period across all states/points.
+                    for s in 0..n_states {
+                        for p in 0..n_points {
+                            state[s * stride_state + p * stride_point + t] = 0.0;
                         }
                     }
+                    stopped = true;
+                    continue;
                 }
-                break;
             }
 
-            // Check cross-state lapse condition at end of timestep
-            if let Some(LapseCondition::AllNonPositive { ref state_indices }) = lapse_condition {
-                if state_indices.iter().all(|&i| states[i] <= 0.0) {
-                    let remaining = timesteps - t - 1;
-                    for _ in 0..remaining {
-                        for buf in result_buffers.iter_mut() {
-                            buf.push(0.0);
-                        }
-                        if track_increments {
-                            for buf in increment_buffers.iter_mut() {
-                                buf.push(0.0);
-                            }
-                        }
+            // Seed every point cell from bop so Ops chain correctly within
+            // the period — supports between() Ops writing to mid-period points.
+            for s in 0..n_states {
+                let bop_val = state[s * stride_state + bop_idx * stride_point + t];
+                for p in 0..n_points {
+                    if p == bop_idx {
+                        continue;
                     }
-                    break;
+                    state[s * stride_state + p * stride_point + t] = bop_val;
+                }
+            }
+
+            // Apply Ops in declared order. After each Op, propagate the new
+            // (state, target_point) value to all later points in declared
+            // order so subsequent Ops chain correctly.
+            for op in &kwargs.ops {
+                apply_op(op, &mut state, t, &owned_slices, row_idx, stride_state, stride_point)?;
+                let (op_target_state, op_target_point) = op_target(op);
+                let new_val = state
+                    [op_target_state * stride_state + op_target_point * stride_point + t];
+                for p in (op_target_point + 1)..n_points {
+                    state[op_target_state * stride_state + p * stride_point + t] = new_val;
+                }
+            }
+
+            // lapse_when_all_non_positive fires AFTER the period's Op walk:
+            // if every named state's eop is <= 0, this period's values are
+            // kept (the lapse triggers at this boundary), and all subsequent
+            // periods are zeroed.
+            if !kwargs.lapse_state_indices.is_empty() {
+                let all_lapsed = kwargs.lapse_state_indices.iter().all(|&s| {
+                    state[s * stride_state + eop_idx * stride_point + t] <= 0.0
+                });
+                if all_lapsed {
+                    stopped = true;
                 }
             }
         }
 
-        // Record offsets for all state buffers
-        for i in 0..num_states {
-            result_offsets[i].push(result_buffers[i].len() as i64);
-        }
-
-        // Record offsets for increment buffers
-        if track_increments {
-            for (buf_idx, buf) in increment_buffers.iter().enumerate() {
-                increment_offsets[buf_idx].push(buf.len() as i64);
+        // Emit per-capture per-row lists.
+        for (cap_idx, cap) in kwargs.captures_resolved.iter().enumerate() {
+            let base = cap.state * stride_state + cap.point * stride_point;
+            for t in 0..row_periods {
+                capture_values[cap_idx].push(state[base + t]);
             }
+            capture_offsets[cap_idx].push(capture_values[cap_idx].len() as i64);
         }
     }
 
-    // Helper closure to build a List<Float64> Series from flat values + offsets
-    let build_list_series =
-        |flat_values: Vec<f64>, offsets_vec: Vec<i64>, name: PlSmallStr| -> Series {
-            // SAFETY: offsets are monotonically increasing and valid
-            let offsets = unsafe { OffsetsBuffer::new_unchecked(offsets_vec.into()) };
-            let values_arr = PrimitiveArray::from_vec(flat_values);
-            let list_arr = LargeListArray::new(
-                ArrowDataType::LargeList(Box::new(ArrowField::new(
-                    PlSmallStr::from_static("item"),
-                    ArrowDataType::Float64,
-                    true,
-                ))),
-                offsets,
-                Box::new(values_arr),
-                None,
-            );
-            // SAFETY: we constructed this correctly
-            let chunked = unsafe { ListChunked::from_chunks(name, vec![Box::new(list_arr)]) };
-            chunked.into_series()
-        };
-
-    // Build per-state series (named by state_specs[i].name)
-    let mut output_series: Vec<Series> =
-        Vec::with_capacity(num_states + increment_buffers.len());
-
-    for i in 0..num_states {
-        let name = PlSmallStr::from(state_specs[i].name.as_str());
-        let flat = std::mem::take(&mut result_buffers[i]);
-        let offs = std::mem::take(&mut result_offsets[i]);
-        output_series.push(build_list_series(flat, offs, name));
+    // ---- 7. Build output Struct ----
+    let mut output_series: Vec<Series> = Vec::with_capacity(n_captures);
+    for (cap_idx, cap) in kwargs.captures_resolved.iter().enumerate() {
+        let state_name = &state_names[cap.state];
+        let point_name = &point_names[cap.point];
+        let field_name = format!("{}@{}", state_name, point_name);
+        let values = std::mem::take(&mut capture_values[cap_idx]);
+        let offsets_vec = std::mem::take(&mut capture_offsets[cap_idx]);
+        output_series.push(build_list_series(values, offsets_vec, field_name.as_str())?);
     }
 
-    // Build increment series (one per label, in label order)
-    for (buf_idx, (flat_values, offsets_vec)) in increment_buffers
-        .into_iter()
-        .zip(increment_offsets.into_iter())
-        .enumerate()
-    {
-        let name = PlSmallStr::from(label_names[buf_idx].as_str());
-        output_series.push(build_list_series(flat_values, offsets_vec, name));
-    }
+    let struct_chunked = StructChunked::from_series(
+        PlSmallStr::from_static("rollforward"),
+        num_rows,
+        output_series.iter(),
+    )?;
+    Ok(struct_chunked.into_series())
+}
 
-    Ok(output_series)
+/// Apply a single Op to the per-row state buffer at period ``t``.
+fn apply_op(
+    op: &OpV2,
+    state: &mut [f64],
+    t: usize,
+    owned_slices: &[OwnedListSlice],
+    row_idx: usize,
+    stride_state: usize,
+    stride_point: usize,
+) -> PolarsResult<()> {
+    match op {
+        OpV2::Add {
+            target_state,
+            target_point,
+            expr_arg,
+            ..
+        } => {
+            let v = resolve_arg(*expr_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let i = *target_state * stride_state + *target_point * stride_point + t;
+            state[i] += v;
+            Ok(())
+        }
+        OpV2::Subtract {
+            target_state,
+            target_point,
+            expr_arg,
+            ..
+        } => {
+            let v = resolve_arg(*expr_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let i = *target_state * stride_state + *target_point * stride_point + t;
+            state[i] -= v;
+            Ok(())
+        }
+        OpV2::Charge {
+            target_state,
+            target_point,
+            rate_arg,
+            ..
+        } => {
+            let r = resolve_arg(*rate_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let i = *target_state * stride_state + *target_point * stride_point + t;
+            state[i] *= 1.0 - r;
+            Ok(())
+        }
+        OpV2::Grow {
+            target_state,
+            target_point,
+            rate_arg,
+            ..
+        } => {
+            // schedule dt is not threaded through yet — rates are taken
+            // as-quoted on the input list, period-by-period.
+            let r = resolve_arg(*rate_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let i = *target_state * stride_state + *target_point * stride_point + t;
+            state[i] *= 1.0 + r;
+            Ok(())
+        }
+        OpV2::Floor {
+            target_state,
+            target_point,
+            value,
+        } => {
+            let i = *target_state * stride_state + *target_point * stride_point + t;
+            if state[i] < *value {
+                state[i] = *value;
+            }
+            Ok(())
+        }
+        OpV2::GrowCapped {
+            target_state,
+            target_point,
+            rate_arg,
+            floor_arg,
+            cap_arg,
+            ..
+        } => {
+            // schedule dt is not threaded through yet.
+            let r = resolve_arg(*rate_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let f = resolve_arg(*floor_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let c = resolve_arg(*cap_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let clamped = r.clamp(f, c);
+            let i = *target_state * stride_state + *target_point * stride_point + t;
+            state[i] *= 1.0 + clamped;
+            Ok(())
+        }
+        OpV2::DeductNAR {
+            target_state,
+            target_point,
+            coi_rate_arg,
+            death_benefit_arg,
+            ..
+        } => {
+            let coi = resolve_arg(*coi_rate_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let db = resolve_arg(*death_benefit_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let i = *target_state * stride_state + *target_point * stride_point + t;
+            // Net amount at risk = death_benefit - state; charge coi over NAR.
+            state[i] -= coi * (db - state[i]);
+            Ok(())
+        }
+        OpV2::Ratchet {
+            target_state,
+            target_point,
+            to_arg,
+            when_arg,
+            ..
+        } => {
+            let fire = match when_arg {
+                Some(arg) => resolve_arg(*arg, owned_slices, state, row_idx, t, stride_state, stride_point) != 0.0,
+                None => true,
+            };
+            if fire {
+                let to_val = resolve_arg(*to_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+                let i = *target_state * stride_state + *target_point * stride_point + t;
+                if to_val > state[i] {
+                    state[i] = to_val;
+                }
+            }
+            Ok(())
+        }
+        OpV2::Apply { .. } => Err(PolarsError::ComputeError(
+            "rollforward: Apply is an escape hatch and is not yet \
+             evaluable by the kernel"
+                .into(),
+        )),
+    }
+}
+
+/// Resolve an ``ArgRef`` to a scalar f64 value at (row, period). For Input,
+/// reads from the precomputed list-column slice. For State, reads from the
+/// live per-row state vector — i.e. the most-recently-written value at
+/// ``(state, point)`` for this period.
+#[inline]
+fn resolve_arg(
+    arg: ArgRef,
+    owned_slices: &[OwnedListSlice],
+    state: &[f64],
+    row_idx: usize,
+    t: usize,
+    stride_state: usize,
+    stride_point: usize,
+) -> f64 {
+    match arg {
+        ArgRef::Input { idx } => read_list_at(owned_slices, idx, row_idx, t),
+        ArgRef::State { state: s, point: p } => {
+            state[s * stride_state + p * stride_point + t]
+        }
+    }
+}
+
+/// Return the (target_state, target_point) for an Op so the period walker
+/// can propagate the post-Op value to later points.
+fn op_target(op: &OpV2) -> (usize, usize) {
+    match op {
+        OpV2::Add {
+            target_state,
+            target_point,
+            ..
+        }
+        | OpV2::Subtract {
+            target_state,
+            target_point,
+            ..
+        }
+        | OpV2::Charge {
+            target_state,
+            target_point,
+            ..
+        }
+        | OpV2::Grow {
+            target_state,
+            target_point,
+            ..
+        }
+        | OpV2::GrowCapped {
+            target_state,
+            target_point,
+            ..
+        }
+        | OpV2::DeductNAR {
+            target_state,
+            target_point,
+            ..
+        }
+        | OpV2::Ratchet {
+            target_state,
+            target_point,
+            ..
+        }
+        | OpV2::Floor {
+            target_state,
+            target_point,
+            ..
+        }
+        | OpV2::Apply {
+            target_state,
+            target_point,
+            ..
+        } => (*target_state, *target_point),
+    }
+}
+
+/// Read a list-arg's value at (row_idx, t).
+fn read_list_at(
+    owned_slices: &[OwnedListSlice],
+    arg_idx: usize,
+    row_idx: usize,
+    t: usize,
+) -> f64 {
+    let slice = &owned_slices[arg_idx];
+    let flat_idx = slice.offsets[row_idx] as usize + t;
+    // Jagged-safety: t must stay within THIS row's slice (offsets[row]..offsets[row+1]).
+    debug_assert!(
+        flat_idx < slice.offsets[row_idx + 1] as usize,
+        "rollforward: period index {t} out of row {row_idx}'s list bounds"
+    );
+    slice.values[flat_idx]
+}
+
+/// Build a List<Float64> Series from flat values + offsets.
+fn build_list_series(
+    flat_values: Vec<f64>,
+    offsets_vec: Vec<i64>,
+    name: &str,
+) -> PolarsResult<Series> {
+    let offsets = OffsetsBuffer::try_from(offsets_vec)
+        .map_err(|e| PolarsError::ComputeError(format!("invalid offsets: {e}").into()))?;
+    let values_arr = PrimitiveArray::from_vec(flat_values);
+    let list_arr = LargeListArray::new(
+        ArrowDataType::LargeList(Box::new(ArrowField::new(
+            PlSmallStr::from_static("item"),
+            ArrowDataType::Float64,
+            true,
+        ))),
+        offsets,
+        Box::new(values_arr),
+        None,
+    );
+    let series = Series::from_arrow(PlSmallStr::from(name), Box::new(list_arr))?;
+    Ok(series)
+}
+
+/// Decode state names from the canonical-form ir["states"][i]["name"].
+fn decode_state_names(ir: &serde_json::Value) -> PolarsResult<Vec<String>> {
+    let states = ir.get("states").and_then(|v| v.as_array()).ok_or_else(|| {
+        PolarsError::ComputeError("rollforward: kwargs.ir.states missing or not an array".into())
+    })?;
+    let mut names = Vec::with_capacity(states.len());
+    for st in states {
+        let name = st.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
+            PolarsError::ComputeError("rollforward: ir.states[i].name missing".into())
+        })?;
+        names.push(name.to_string());
+    }
+    Ok(names)
+}
+
+/// Decode point names from the canonical-form ir["points"].
+fn decode_point_names(ir: &serde_json::Value) -> PolarsResult<Vec<String>> {
+    let points = ir.get("points").and_then(|v| v.as_array()).ok_or_else(|| {
+        PolarsError::ComputeError("rollforward: kwargs.ir.points missing or not an array".into())
+    })?;
+    let mut names = Vec::with_capacity(points.len());
+    for p in points {
+        let name = p
+            .as_str()
+            .ok_or_else(|| PolarsError::ComputeError("rollforward: ir.points entry not str".into()))?;
+        names.push(name.to_string());
+    }
+    Ok(names)
 }
 
 #[cfg(test)]
@@ -1143,913 +773,257 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_kwargs_deserialization() {
-        let json = r#"
-        {
-            "states": [
-                { "name": "account_value", "initial_col_index": 0 }
-            ],
-            "steps": [
-                {
-                    "Add": {
-                        "target_index": 0,
-                        "input_index": 1,
-                        "label": "premium",
-                        "expected_input_index": null
-                    }
-                }
-            ],
+    fn deserialise_minimal_kwargs() {
+        let json = r#"{
+            "ir": {"states": [], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
             "track_increments": false,
-            "assertion_mode": null,
-            "num_captures": 0,
-            "lapse_condition": null
-        }
-        "#;
-
-        let kwargs: RollforwardKwargs =
-            serde_json::from_str(json).expect("deserialization should succeed");
-
-        assert_eq!(kwargs.states.len(), 1);
-        assert_eq!(kwargs.states[0].name, "account_value");
-        assert_eq!(kwargs.states[0].initial_col_index, 0);
-
-        assert_eq!(kwargs.steps.len(), 1);
-        assert_eq!(kwargs.steps[0].target_index(), 0);
-        assert_eq!(kwargs.steps[0].label(), Some("premium"));
-
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 0,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": [],
+            "ops": [],
+            "captures_resolved": []
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(json).unwrap();
+        assert_eq!(kwargs.captures.len(), 1);
+        assert_eq!(kwargs.captures[0], vec!["av".to_string(), "eop".to_string()]);
         assert!(!kwargs.track_increments);
-        assert!(kwargs.assertion_mode.is_none());
-        assert_eq!(kwargs.num_captures, 0);
-        assert!(kwargs.lapse_condition.is_none());
+        assert!(kwargs.lapse_when_all_non_positive.is_empty());
+        assert!(kwargs.contract_boundary.is_none());
+        assert_eq!(kwargs.n_periods, 3);
+        assert_eq!(kwargs.bop_idx, 0);
+        assert_eq!(kwargs.eop_idx, 1);
     }
 
     #[test]
-    fn test_multi_state_kwargs() {
-        let json = r#"
-        {
-            "states": [
-                { "name": "account_value", "initial_col_index": 0 },
-                { "name": "gmdb_benefit_base", "initial_col_index": 1 }
-            ],
-            "steps": [
-                {
-                    "Grow": {
-                        "target_index": 0,
-                        "input_index": 2,
-                        "label": "crediting",
-                        "expected_input_index": null
-                    }
-                },
-                {
-                    "RatchetTo": {
-                        "target_index": 1,
-                        "other_state_index": 0,
-                        "label": "ratchet_db"
-                    }
-                },
-                {
-                    "LapseIfZero": {
-                        "target_index": 0
-                    }
+    fn deserialise_op_add_input_arg() {
+        let json = r#"{
+            "op": "Add",
+            "target_state": 0,
+            "target_point": 1,
+            "expr_arg": {"kind": "input", "idx": 0},
+            "label": "Premium"
+        }"#;
+        let op: OpV2 = serde_json::from_str(json).unwrap();
+        match op {
+            OpV2::Add {
+                target_state,
+                target_point,
+                expr_arg,
+                label,
+            } => {
+                assert_eq!(target_state, 0);
+                assert_eq!(target_point, 1);
+                match expr_arg {
+                    ArgRef::Input { idx } => assert_eq!(idx, 0),
+                    _ => panic!("expected ArgRef::Input"),
                 }
-            ],
-            "track_increments": true,
-            "assertion_mode": "Warn",
-            "num_captures": 2,
-            "lapse_condition": {
-                "AllNonPositive": {
-                    "state_indices": [0, 1]
+                assert_eq!(label.as_deref(), Some("Premium"));
+            }
+            _ => panic!("expected Add"),
+        }
+    }
+
+    #[test]
+    fn deserialise_op_ratchet_state_arg() {
+        // Cross-state read — Ratchet whose `to` references another
+        // state's value at a specific point.
+        let json = r#"{
+            "op": "Ratchet",
+            "target_state": 1,
+            "target_point": 1,
+            "to_arg": {"kind": "state", "state": 0, "point": 2},
+            "when_arg": {"kind": "input", "idx": 0},
+            "label": "GMDB"
+        }"#;
+        let op: OpV2 = serde_json::from_str(json).unwrap();
+        match op {
+            OpV2::Ratchet {
+                target_state,
+                target_point,
+                to_arg,
+                when_arg,
+                label,
+            } => {
+                assert_eq!(target_state, 1);
+                assert_eq!(target_point, 1);
+                match to_arg {
+                    ArgRef::State { state, point } => {
+                        assert_eq!(state, 0);
+                        assert_eq!(point, 2);
+                    }
+                    _ => panic!("expected ArgRef::State"),
                 }
+                match when_arg {
+                    Some(ArgRef::Input { idx }) => assert_eq!(idx, 0),
+                    _ => panic!("expected Some(ArgRef::Input)"),
+                }
+                assert_eq!(label.as_deref(), Some("GMDB"));
             }
+            _ => panic!("expected Ratchet"),
         }
-        "#;
+    }
 
-        let kwargs: RollforwardKwargs =
-            serde_json::from_str(json).expect("deserialization should succeed");
-
-        assert_eq!(kwargs.states.len(), 2);
-        assert_eq!(kwargs.states[1].name, "gmdb_benefit_base");
-
-        assert_eq!(kwargs.steps.len(), 3);
-
-        // RatchetTo step
-        let ratchet = &kwargs.steps[1];
-        assert_eq!(ratchet.target_index(), 1);
-        assert_eq!(ratchet.label(), Some("ratchet_db"));
-
-        // LapseIfZero step — no label
-        let lapse_step = &kwargs.steps[2];
-        assert_eq!(lapse_step.target_index(), 0);
-        assert_eq!(lapse_step.label(), None);
-
-        assert!(kwargs.track_increments);
-        assert!(matches!(
-            kwargs.assertion_mode,
-            Some(AssertionMode::Warn)
-        ));
-        assert_eq!(kwargs.num_captures, 2);
-
-        match &kwargs.lapse_condition {
-            Some(LapseCondition::AllNonPositive { state_indices }) => {
-                assert_eq!(state_indices, &[0, 1]);
+    #[test]
+    fn deserialise_op_floor() {
+        let json = r#"{
+            "op": "Floor",
+            "target_state": 0,
+            "target_point": 1,
+            "value": 0.0
+        }"#;
+        let op: OpV2 = serde_json::from_str(json).unwrap();
+        match op {
+            OpV2::Floor {
+                value,
+                target_state,
+                target_point,
+            } => {
+                assert_eq!(value, 0.0);
+                assert_eq!(target_state, 0);
+                assert_eq!(target_point, 1);
             }
-            None => panic!("expected lapse_condition to be Some"),
+            _ => panic!("expected Floor"),
         }
     }
 
-    /// Helper to build kwargs for single-state rollforward tests.
-    fn make_single_state_kwargs(initial_col_index: usize, steps: Vec<StepSpec>) -> RollforwardKwargs {
-        RollforwardKwargs {
-            states: vec![StateSpec {
-                name: "av".to_string(),
-                initial_col_index,
-            }],
-            steps,
-            track_increments: false,
-            assertion_mode: None,
-            num_captures: 0,
-            lapse_condition: None,
+    // ---- Jagged (per-policy variable-length) rollforward ----
+    //
+    // Single state "av", points [bop, eop]; one Op: Add premium to eop each
+    // period. The recurrence is eop[t] = bop[t] + premium[t] with bop[t] =
+    // eop[t-1] and bop[0] = init. This is the same linear recurrence that
+    // accumulate.rs already runs on jagged input — these tests prove the
+    // rollforward kernel can too once it derives each policy's period count
+    // from its own list length instead of a single global n_periods.
+
+    /// Run a single-state av rollforward capturing av@eop. ``premiums`` may be
+    /// jagged (per-policy different lengths). Returns one eop list per policy.
+    fn run_av_eop(init: Vec<f64>, premiums: Vec<Vec<f64>>) -> PolarsResult<Vec<Vec<f64>>> {
+        let init_series = Series::new("av_init".into(), init);
+        let prem_list = ListChunked::from_iter(
+            premiums
+                .into_iter()
+                .map(|p| Some(Series::new("".into(), p))),
+        )
+        .into_series();
+
+        // n_periods is the portfolio-max capacity hint; the kernel must size
+        // each policy from its own list length, not assume every row == 3.
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["premium"],
+            "ops": [{"op": "Add", "target_state": 0, "target_point": 1, "expr_arg": {"kind": "input", "idx": 0}, "label": "Premium"}],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+
+        let out = rollforward_kernel(&[init_series, prem_list], &kwargs)?;
+        let st = out.struct_().unwrap();
+        let field = st.fields_as_series()[0].clone(); // "av@eop", List<Float64>
+        let list = field.list().unwrap();
+        let mut rows = Vec::with_capacity(list.len());
+        for r in 0..list.len() {
+            let s = list.get_as_series(r).unwrap();
+            let f = s.f64().unwrap();
+            rows.push((0..f.len()).map(|i| f.get(i).unwrap()).collect());
+        }
+        Ok(rows)
+    }
+
+    #[test]
+    fn jagged_two_policies_different_lengths() {
+        // Policy A projects 2 periods, Policy B projects 3 — a jagged frame.
+        let out = run_av_eop(
+            vec![100.0, 100.0],
+            vec![vec![10.0, 20.0], vec![10.0, 20.0, 30.0]],
+        )
+        .unwrap();
+        assert_eq!(out.len(), 2);
+        // Policy A: 100 -> 110 -> 130, and ONLY 2 periods (no dead tail).
+        assert_eq!(out[0].len(), 2, "policy A must project its own 2 periods");
+        assert!((out[0][0] - 110.0).abs() < 1e-9);
+        assert!((out[0][1] - 130.0).abs() < 1e-9);
+        // Policy B: 100 -> 110 -> 130 -> 160, 3 periods.
+        assert_eq!(out[1].len(), 3, "policy B must project its own 3 periods");
+        assert!((out[1][0] - 110.0).abs() < 1e-9);
+        assert!((out[1][1] - 130.0).abs() < 1e-9);
+        assert!((out[1][2] - 160.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn uniform_two_policies_same_length_unchanged() {
+        // Regression guard: the uniform case (all policies same length) must
+        // still produce the identical answer it did before the jagged change.
+        let out = run_av_eop(
+            vec![100.0, 100.0],
+            vec![vec![10.0, 20.0, 30.0], vec![10.0, 20.0, 30.0]],
+        )
+        .unwrap();
+        assert_eq!(out.len(), 2);
+        for row in &out {
+            assert_eq!(row.len(), 3);
+            assert!((row[0] - 110.0).abs() < 1e-9);
+            assert!((row[1] - 130.0).abs() < 1e-9);
+            assert!((row[2] - 160.0).abs() < 1e-9);
         }
     }
 
     #[test]
-    fn test_single_state_add_only() {
-        // initial=1000, premium=[100,100,100]
-        // t0: 1000 + 100 = 1100
-        // t1: 1100 + 100 = 1200
-        // t2: 1200 + 100 = 1300
-        let initial = Series::new("initial".into(), vec![1000.0_f64]);
-        let premium = ListChunked::from_iter([Some(Series::new(
-            "".into(),
-            vec![100.0, 100.0, 100.0],
-        ))]);
-
-        let kwargs = make_single_state_kwargs(
-            0,
-            vec![StepSpec::Add {
-                target_index: 0,
-                input_index: 1,
-                label: Some("premium".to_string()),
-                expected_input_index: None,
-            }],
-        );
-
-        let result = rollforward(&[initial, premium.into_series()], &kwargs).unwrap();
-        let s = result.struct_().unwrap();
-        let av = s.field_by_name("result").unwrap();
-        let row0 = av.list().unwrap().get_as_series(0).unwrap();
-        let vals = row0.f64().unwrap();
-
-        assert_eq!(vals.get(0), Some(1100.0));
-        assert_eq!(vals.get(1), Some(1200.0));
-        assert_eq!(vals.get(2), Some(1300.0));
-    }
-
-    #[test]
-    fn test_single_state_charge_and_grow() {
-        // initial=1000, admin_rate=[0.01], interest=[0.05]
-        // t0: charge admin: 1000 * (1 - 0.01) = 990
-        //     grow interest: 990 * (1 + 0.05) = 1039.5
-        let initial = Series::new("initial".into(), vec![1000.0_f64]);
-        let admin_rate = ListChunked::from_iter([Some(Series::new("".into(), vec![0.01]))]);
-        let interest = ListChunked::from_iter([Some(Series::new("".into(), vec![0.05]))]);
-
-        let kwargs = make_single_state_kwargs(
-            0,
-            vec![
-                StepSpec::Charge {
-                    target_index: 0,
-                    input_index: 1,
-                    label: Some("admin".to_string()),
-                    expected_input_index: None,
-                },
-                StepSpec::Grow {
-                    target_index: 0,
-                    input_index: 2,
-                    label: Some("interest".to_string()),
-                    expected_input_index: None,
-                },
-            ],
-        );
-
-        let result =
-            rollforward(&[initial, admin_rate.into_series(), interest.into_series()], &kwargs)
-                .unwrap();
-        let s = result.struct_().unwrap();
-        let av = s.field_by_name("result").unwrap();
-        let row0 = av.list().unwrap().get_as_series(0).unwrap();
-        let vals = row0.f64().unwrap();
-
-        assert!((vals.get(0).unwrap() - 1039.5).abs() < 1e-10);
-    }
-
-    #[test]
-    fn test_floor_clamps_negative() {
-        // initial=100, subtract=[150], floor(0)
-        // t0: 100 - 150 = -50, then floor(0) → 0
-        let initial = Series::new("initial".into(), vec![100.0_f64]);
-        let withdraw = ListChunked::from_iter([Some(Series::new("".into(), vec![150.0]))]);
-
-        let kwargs = make_single_state_kwargs(
-            0,
-            vec![
-                StepSpec::Subtract {
-                    target_index: 0,
-                    input_index: 1,
-                    label: Some("withdraw".to_string()),
-                    expected_input_index: None,
-                },
-                StepSpec::Floor {
-                    target_index: 0,
-                    value: 0.0,
-                    label: Some("floor_zero".to_string()),
-                },
-            ],
-        );
-
-        let result = rollforward(&[initial, withdraw.into_series()], &kwargs).unwrap();
-        let s = result.struct_().unwrap();
-        let av = s.field_by_name("result").unwrap();
-        let row0 = av.list().unwrap().get_as_series(0).unwrap();
-        let vals = row0.f64().unwrap();
-
-        assert_eq!(vals.get(0), Some(0.0));
-    }
-
-    #[test]
-    fn test_grow_capped() {
-        // initial=1000, rate=[0.15, -0.05, 0.20], floor=0.0, cap=0.12
-        // clamped rates: [0.12, 0.0, 0.12]
-        // t0: 1000 * 1.12 = 1120.0
-        // t1: 1120 * 1.0  = 1120.0
-        // t2: 1120 * 1.12 = 1254.4
-        let initial = Series::new("initial".into(), vec![1000.0_f64]);
-        let rate = ListChunked::from_iter([Some(Series::new("".into(), vec![0.15_f64, -0.05, 0.20]))]);
-
-        let kwargs = make_single_state_kwargs(
-            0,
-            vec![StepSpec::GrowCapped {
-                target_index: 0,
-                input_index: 1,
-                rate_floor: 0.0,
-                rate_cap: 0.12,
-                label: Some("crediting".to_string()),
-                expected_input_index: None,
-            }],
-        );
-
-        let result = rollforward(&[initial, rate.into_series()], &kwargs).unwrap();
-        let s = result.struct_().unwrap();
-        let av = s.field_by_name("result").unwrap();
-        let row0 = av.list().unwrap().get_as_series(0).unwrap();
-        let vals = row0.f64().unwrap();
-
-        assert!((vals.get(0).unwrap() - 1120.0).abs() < 1e-10, "t0 expected 1120.0, got {:?}", vals.get(0));
-        assert!((vals.get(1).unwrap() - 1120.0).abs() < 1e-10, "t1 expected 1120.0, got {:?}", vals.get(1));
-        assert!((vals.get(2).unwrap() - 1254.4).abs() < 1e-10, "t2 expected 1254.4, got {:?}", vals.get(2));
-    }
-
-    #[test]
-    fn test_deduct_nar() {
-        // initial=1000, coi_rate=[0.001], death_benefit=[5000]
-        // NAR = max(0, 5000 - 1000) = 4000
-        // COI  = 0.001 * 4000 = 4.0
-        // AV   = 1000 - 4.0 = 996.0
-        let initial = Series::new("initial".into(), vec![1000.0_f64]);
-        let coi_rate = ListChunked::from_iter([Some(Series::new("".into(), vec![0.001_f64]))]);
-        let death_benefit = ListChunked::from_iter([Some(Series::new("".into(), vec![5000.0_f64]))]);
-
-        let kwargs = make_single_state_kwargs(
-            0,
-            vec![StepSpec::DeductNar {
-                target_index: 0,
-                rate_index: 1,
-                db_index: 2,
-                label: Some("coi".to_string()),
-                expected_input_index: None,
-            }],
-        );
-
-        let result = rollforward(
-            &[initial, coi_rate.into_series(), death_benefit.into_series()],
-            &kwargs,
-        )
-        .unwrap();
-        let s = result.struct_().unwrap();
-        let av = s.field_by_name("result").unwrap();
-        let row0 = av.list().unwrap().get_as_series(0).unwrap();
-        let vals = row0.f64().unwrap();
-
-        assert!((vals.get(0).unwrap() - 996.0).abs() < 1e-10, "expected 996.0, got {:?}", vals.get(0));
-    }
-
-    #[test]
-    fn test_lapse_if_zero() {
-        // initial=50, subtract=[100, 100, 100]
-        // t0: 50 - 100 = -50  → lapse fires after recording -50
-        // t1: 0 (zeroed by lapse)
-        // t2: 0 (zeroed by lapse)
-        let initial = Series::new("initial".into(), vec![50.0_f64]);
-        let subtract_vals = ListChunked::from_iter([Some(Series::new(
-            "".into(),
-            vec![100.0_f64, 100.0, 100.0],
-        ))]);
-
-        let kwargs = make_single_state_kwargs(
-            0,
-            vec![
-                StepSpec::Subtract {
-                    target_index: 0,
-                    input_index: 1,
-                    label: Some("withdraw".to_string()),
-                    expected_input_index: None,
-                },
-                StepSpec::LapseIfZero { target_index: 0 },
-            ],
-        );
-
-        let result = rollforward(&[initial, subtract_vals.into_series()], &kwargs).unwrap();
-        let s = result.struct_().unwrap();
-        let av = s.field_by_name("result").unwrap();
-        let row0 = av.list().unwrap().get_as_series(0).unwrap();
-        let vals = row0.f64().unwrap();
-
-        assert!((vals.get(0).unwrap() - (-50.0)).abs() < 1e-10, "t0 expected -50.0, got {:?}", vals.get(0));
-        assert_eq!(vals.get(1), Some(0.0), "t1 expected 0.0 after lapse");
-        assert_eq!(vals.get(2), Some(0.0), "t2 expected 0.0 after lapse");
-    }
-
-    #[test]
-    fn test_add_if() {
-        // initial=1000, condition=[1.0, 0.0, 1.0], amount=[100, 100, 100]
-        // t0: cond=1.0 → 1000 + 100 = 1100
-        // t1: cond=0.0 → 1100 (no add)
-        // t2: cond=1.0 → 1100 + 100 = 1200
-        let initial = Series::new("initial".into(), vec![1000.0_f64]);
-        let condition = ListChunked::from_iter([Some(Series::new(
-            "".into(),
-            vec![1.0_f64, 0.0, 1.0],
-        ))]);
-        let amount = ListChunked::from_iter([Some(Series::new(
-            "".into(),
-            vec![100.0_f64, 100.0, 100.0],
-        ))]);
-
-        let kwargs = make_single_state_kwargs(
-            0,
-            vec![StepSpec::AddIf {
-                target_index: 0,
-                condition_index: 1,
-                amount_index: 2,
-                label: Some("conditional_add".to_string()),
-            }],
-        );
-
-        let result = rollforward(
-            &[initial, condition.into_series(), amount.into_series()],
-            &kwargs,
-        )
-        .unwrap();
-        let s = result.struct_().unwrap();
-        let av = s.field_by_name("result").unwrap();
-        let row0 = av.list().unwrap().get_as_series(0).unwrap();
-        let vals = row0.f64().unwrap();
-
-        assert!((vals.get(0).unwrap() - 1100.0).abs() < 1e-10, "t0 expected 1100.0, got {:?}", vals.get(0));
-        assert!((vals.get(1).unwrap() - 1100.0).abs() < 1e-10, "t1 expected 1100.0, got {:?}", vals.get(1));
-        assert!((vals.get(2).unwrap() - 1200.0).abs() < 1e-10, "t2 expected 1200.0, got {:?}", vals.get(2));
-    }
-
-    #[test]
-    fn test_multiple_policies() {
-        // Policy 0: initial=1000, premium=[100, 200]
-        //   t0: 1000 + 100 = 1100
-        //   t1: 1100 + 200 = 1300
-        // Policy 1: initial=500, premium=[50, 50]
-        //   t0: 500 + 50 = 550
-        //   t1: 550 + 50 = 600
-        let initial = Series::new("initial".into(), vec![1000.0_f64, 500.0]);
-        let premium = ListChunked::from_iter([
-            Some(Series::new("".into(), vec![100.0, 200.0])),
-            Some(Series::new("".into(), vec![50.0, 50.0])),
-        ]);
-
-        let kwargs = make_single_state_kwargs(
-            0,
-            vec![StepSpec::Add {
-                target_index: 0,
-                input_index: 1,
-                label: Some("premium".to_string()),
-                expected_input_index: None,
-            }],
-        );
-
-        let result = rollforward(&[initial, premium.into_series()], &kwargs).unwrap();
-        let s = result.struct_().unwrap();
-        let av = s.field_by_name("result").unwrap();
-        let list_ca = av.list().unwrap();
-
-        // Policy 0
-        let row0 = list_ca.get_as_series(0).unwrap();
-        let vals0 = row0.f64().unwrap();
-        assert_eq!(vals0.get(0), Some(1100.0));
-        assert_eq!(vals0.get(1), Some(1300.0));
-
-        // Policy 1
-        let row1 = list_ca.get_as_series(1).unwrap();
-        let vals1 = row1.f64().unwrap();
-        assert_eq!(vals1.get(0), Some(550.0));
-        assert_eq!(vals1.get(1), Some(600.0));
-    }
-
-    #[test]
-    fn test_increment_tracking_single_state() {
-        // initial=1000, premium=[100], admin_rate=[0.01], interest=[0.05]
-        // After Add:    1000 + 100         = 1100.0.   Increment: 100.0
-        // After Charge: 1100 * (1 - 0.01) = 1089.0.   Increment: -11.0
-        // After Grow:   1089 * (1 + 0.05) = 1143.45.  Increment: 54.45
-        let initial = Series::new("initial".into(), vec![1000.0_f64]);
-        let premium = ListChunked::from_iter([Some(Series::new("".into(), vec![100.0_f64]))]);
-        let admin = ListChunked::from_iter([Some(Series::new("".into(), vec![0.01_f64]))]);
-        let interest = ListChunked::from_iter([Some(Series::new("".into(), vec![0.05_f64]))]);
-
-        let kwargs = RollforwardKwargs {
-            states: vec![StateSpec {
-                name: "__default__".to_string(),
-                initial_col_index: 0,
-            }],
-            steps: vec![
-                StepSpec::Add {
-                    target_index: 0,
-                    input_index: 1,
-                    label: Some("Premium".to_string()),
-                    expected_input_index: None,
-                },
-                StepSpec::Charge {
-                    target_index: 0,
-                    input_index: 2,
-                    label: Some("Admin".to_string()),
-                    expected_input_index: None,
-                },
-                StepSpec::Grow {
-                    target_index: 0,
-                    input_index: 3,
-                    label: Some("Interest".to_string()),
-                    expected_input_index: None,
-                },
-            ],
-            track_increments: true,
-            assertion_mode: None,
-            num_captures: 0,
-            lapse_condition: None,
+    fn per_policy_lengths_drive_horizon_with_zero_period_row() {
+        // Authoritative per-policy lengths [2, 0, 3] supplied via the
+        // per_policy_lengths input (idx 2 = n_states 1 + 1 input column). The
+        // zero-period policy must emit an EMPTY list (not panic); the others
+        // project their own horizon even though the schedule has no single
+        // n_periods that fits all rows.
+        let init = Series::new("av_init".into(), vec![100.0, 100.0, 100.0]);
+        let prem = ListChunked::from_iter([
+            Some(Series::new("".into(), vec![10.0, 20.0])),
+            Some(Series::new("".into(), Vec::<f64>::new())),
+            Some(Series::new("".into(), vec![10.0, 20.0, 30.0])),
+        ])
+        .into_series();
+        let lengths = Series::new("len".into(), vec![2i64, 0, 3]);
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["premium"],
+            "ops": [{"op": "Add", "target_state": 0, "target_point": 1, "expr_arg": {"kind": "input", "idx": 0}, "label": "Premium"}],
+            "captures_resolved": [{"state": 0, "point": 1}],
+            "per_policy_lengths_arg": 2
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, prem, lengths], &kwargs).unwrap();
+        let field = out.struct_().unwrap().fields_as_series()[0].clone();
+        let list = field.list().unwrap();
+        let row = |r: usize| -> Vec<f64> {
+            let s = list.get_as_series(r).unwrap();
+            let f = s.f64().unwrap();
+            (0..f.len()).map(|i| f.get(i).unwrap()).collect()
         };
-
-        let result = rollforward(
-            &[
-                initial,
-                premium.into_series(),
-                admin.into_series(),
-                interest.into_series(),
-            ],
-            &kwargs,
-        )
-        .unwrap();
-        let s = result.struct_().unwrap();
-
-        // Check result field
-        let av = s.field_by_name("result").unwrap();
-        let row0 = av.list().unwrap().get_as_series(0).unwrap();
-        assert!(
-            (row0.f64().unwrap().get(0).unwrap() - 1143.45).abs() < 1e-10,
-            "result expected 1143.45, got {:?}",
-            row0.f64().unwrap().get(0)
-        );
-
-        // Check Premium increment: +100
-        let prem_inc = s.field_by_name("Premium").unwrap();
-        let prem_row0 = prem_inc.list().unwrap().get_as_series(0).unwrap();
-        assert!(
-            (prem_row0.f64().unwrap().get(0).unwrap() - 100.0).abs() < 1e-10,
-            "Premium increment expected 100.0, got {:?}",
-            prem_row0.f64().unwrap().get(0)
-        );
-
-        // Check Admin increment: 1089 - 1100 = -11
-        let admin_inc = s.field_by_name("Admin").unwrap();
-        let admin_row0 = admin_inc.list().unwrap().get_as_series(0).unwrap();
-        assert!(
-            (admin_row0.f64().unwrap().get(0).unwrap() - (-11.0)).abs() < 1e-10,
-            "Admin increment expected -11.0, got {:?}",
-            admin_row0.f64().unwrap().get(0)
-        );
-
-        // Check Interest increment: 1143.45 - 1089 = 54.45
-        let int_inc = s.field_by_name("Interest").unwrap();
-        let int_row0 = int_inc.list().unwrap().get_as_series(0).unwrap();
-        assert!(
-            (int_row0.f64().unwrap().get(0).unwrap() - 54.45).abs() < 1e-10,
-            "Interest increment expected 54.45, got {:?}",
-            int_row0.f64().unwrap().get(0)
-        );
-    }
-
-    #[test]
-    fn test_no_tracking_only_result_field() {
-        // Same as basic add test but verify struct only has "result" (no increment fields)
-        let initial = Series::new("initial".into(), vec![1000.0_f64]);
-        let premium = ListChunked::from_iter([Some(Series::new("".into(), vec![100.0_f64]))]);
-
-        let kwargs = RollforwardKwargs {
-            states: vec![StateSpec {
-                name: "av".to_string(),
-                initial_col_index: 0,
-            }],
-            steps: vec![StepSpec::Add {
-                target_index: 0,
-                input_index: 1,
-                label: Some("Premium".to_string()),
-                expected_input_index: None,
-            }],
-            track_increments: false,
-            assertion_mode: None,
-            num_captures: 0,
-            lapse_condition: None,
-        };
-
-        let result = rollforward(&[initial, premium.into_series()], &kwargs).unwrap();
-        let s = result.struct_().unwrap();
-
-        // Should have "result" field
-        assert!(
-            s.field_by_name("result").is_ok(),
-            "expected 'result' field to exist"
-        );
-        // Should NOT have increment field even though the step has a label
-        assert!(
-            s.field_by_name("Premium").is_err(),
-            "expected no 'Premium' increment field when track_increments=false"
-        );
-    }
-
-    // ==================== Multi-state tests ====================
-
-    #[test]
-    fn test_multi_state_va_gmdb() {
-        // Two states: av (idx 0), guarantee (idx 1)
-        // initial av=1000, guarantee=1000
-        // Steps: Add premium to av, Grow av by fund_return, RatchetTo guarantee from av
-        // t0: av = (1000+100)*1.10 = 1210, guarantee = max(1000, 1210) = 1210
-        let initial_av = Series::new("av_init".into(), vec![1000.0_f64]);
-        let initial_g = Series::new("g_init".into(), vec![1000.0_f64]);
-        let premium =
-            ListChunked::from_iter([Some(Series::new("".into(), vec![100.0_f64]))]);
-        let fund_ret =
-            ListChunked::from_iter([Some(Series::new("".into(), vec![0.10_f64]))]);
-
-        // inputs: [0]=av_init, [1]=g_init, [2]=premium_list, [3]=fund_ret_list
-        let kwargs = RollforwardKwargs {
-            states: vec![
-                StateSpec {
-                    name: "av".to_string(),
-                    initial_col_index: 0,
-                },
-                StateSpec {
-                    name: "guarantee".to_string(),
-                    initial_col_index: 1,
-                },
-            ],
-            steps: vec![
-                StepSpec::Add {
-                    target_index: 0,
-                    input_index: 2,
-                    label: Some("Premium".to_string()),
-                    expected_input_index: None,
-                },
-                StepSpec::Grow {
-                    target_index: 0,
-                    input_index: 3,
-                    label: Some("FundReturn".to_string()),
-                    expected_input_index: None,
-                },
-                StepSpec::RatchetTo {
-                    target_index: 1,
-                    other_state_index: 0,
-                    label: Some("Ratchet".to_string()),
-                },
-            ],
-            track_increments: false,
-            assertion_mode: None,
-            num_captures: 0,
-            lapse_condition: None,
-        };
-
-        let result = rollforward(
-            &[
-                initial_av,
-                initial_g,
-                premium.into_series(),
-                fund_ret.into_series(),
-            ],
-            &kwargs,
-        )
-        .unwrap();
-        let s = result.struct_().unwrap();
-
-        // Verify Struct has "av" and "guarantee" fields
-        let av_field = s.field_by_name("av").unwrap();
-        let av_row0 = av_field.list().unwrap().get_as_series(0).unwrap();
-        let av_vals = av_row0.f64().unwrap();
-        // av = (1000 + 100) * 1.10 = 1210.0
-        assert!(
-            (av_vals.get(0).unwrap() - 1210.0).abs() < 1e-10,
-            "av t0 expected 1210.0, got {:?}",
-            av_vals.get(0)
-        );
-
-        let g_field = s.field_by_name("guarantee").unwrap();
-        let g_row0 = g_field.list().unwrap().get_as_series(0).unwrap();
-        let g_vals = g_row0.f64().unwrap();
-        // guarantee = max(1000, 1210) = 1210.0
-        assert!(
-            (g_vals.get(0).unwrap() - 1210.0).abs() < 1e-10,
-            "guarantee t0 expected 1210.0, got {:?}",
-            g_vals.get(0)
-        );
-    }
-
-    #[test]
-    fn test_lapse_when_all_non_positive() {
-        // Two states: av (idx 0) starts at 50, guarantee (idx 1) starts at 50
-        // Subtract 100 from each at t0 → av=-50, guarantee=-50
-        // Both non-positive → cross-state lapse fires
-        // t1: both 0
-        let initial_av = Series::new("av_init".into(), vec![50.0_f64]);
-        let initial_g = Series::new("g_init".into(), vec![50.0_f64]);
-        let subtract_av =
-            ListChunked::from_iter([Some(Series::new("".into(), vec![100.0_f64, 100.0]))]);
-        let subtract_g =
-            ListChunked::from_iter([Some(Series::new("".into(), vec![100.0_f64, 100.0]))]);
-
-        let kwargs = RollforwardKwargs {
-            states: vec![
-                StateSpec {
-                    name: "av".to_string(),
-                    initial_col_index: 0,
-                },
-                StateSpec {
-                    name: "guarantee".to_string(),
-                    initial_col_index: 1,
-                },
-            ],
-            steps: vec![
-                StepSpec::Subtract {
-                    target_index: 0,
-                    input_index: 2,
-                    label: None,
-                    expected_input_index: None,
-                },
-                StepSpec::Subtract {
-                    target_index: 1,
-                    input_index: 3,
-                    label: None,
-                    expected_input_index: None,
-                },
-            ],
-            track_increments: false,
-            assertion_mode: None,
-            num_captures: 0,
-            lapse_condition: Some(LapseCondition::AllNonPositive {
-                state_indices: vec![0, 1],
-            }),
-        };
-
-        let result = rollforward(
-            &[
-                initial_av,
-                initial_g,
-                subtract_av.into_series(),
-                subtract_g.into_series(),
-            ],
-            &kwargs,
-        )
-        .unwrap();
-        let s = result.struct_().unwrap();
-
-        let av_field = s.field_by_name("av").unwrap();
-        let av_row0 = av_field.list().unwrap().get_as_series(0).unwrap();
-        let av_vals = av_row0.f64().unwrap();
-        // t0: 50 - 100 = -50 (recorded), then lapse fires
-        assert!(
-            (av_vals.get(0).unwrap() - (-50.0)).abs() < 1e-10,
-            "av t0 expected -50.0, got {:?}",
-            av_vals.get(0)
-        );
-        // t1: zeroed by lapse
-        assert_eq!(av_vals.get(1), Some(0.0), "av t1 expected 0.0 after lapse");
-
-        let g_field = s.field_by_name("guarantee").unwrap();
-        let g_row0 = g_field.list().unwrap().get_as_series(0).unwrap();
-        let g_vals = g_row0.f64().unwrap();
-        assert!(
-            (g_vals.get(0).unwrap() - (-50.0)).abs() < 1e-10,
-            "guarantee t0 expected -50.0, got {:?}",
-            g_vals.get(0)
-        );
-        assert_eq!(
-            g_vals.get(1),
-            Some(0.0),
-            "guarantee t1 expected 0.0 after lapse"
-        );
-    }
-
-    #[test]
-    fn test_pro_rata_with_capture() {
-        // Two states: av (idx 0) = 1000, benefit_base (idx 1) = 500
-        // Steps:
-        //   1. Capture av as capture[0]
-        //   2. Subtract 200 from av → av = 800
-        //   3. ProRata on benefit_base using capture[0]: 500 * (1 - 200/1000) = 400
-        let initial_av = Series::new("av_init".into(), vec![1000.0_f64]);
-        let initial_bb = Series::new("bb_init".into(), vec![500.0_f64]);
-        let withdraw =
-            ListChunked::from_iter([Some(Series::new("".into(), vec![200.0_f64]))]);
-
-        // inputs: [0]=av_init, [1]=bb_init, [2]=withdraw_list
-        let kwargs = RollforwardKwargs {
-            states: vec![
-                StateSpec {
-                    name: "av".to_string(),
-                    initial_col_index: 0,
-                },
-                StateSpec {
-                    name: "benefit_base".to_string(),
-                    initial_col_index: 1,
-                },
-            ],
-            steps: vec![
-                StepSpec::Capture {
-                    target_index: 0,
-                    capture_index: 0,
-                },
-                StepSpec::Subtract {
-                    target_index: 0,
-                    input_index: 2,
-                    label: Some("Withdraw".to_string()),
-                    expected_input_index: None,
-                },
-                StepSpec::ProRataWith {
-                    target_index: 1,
-                    capture_index: 0,
-                    amount_index: 2,
-                    label: Some("ProRata".to_string()),
-                },
-            ],
-            track_increments: false,
-            assertion_mode: None,
-            num_captures: 1,
-            lapse_condition: None,
-        };
-
-        let result = rollforward(
-            &[initial_av, initial_bb, withdraw.into_series()],
-            &kwargs,
-        )
-        .unwrap();
-        let s = result.struct_().unwrap();
-
-        // av = 1000 - 200 = 800
-        let av_field = s.field_by_name("av").unwrap();
-        let av_row0 = av_field.list().unwrap().get_as_series(0).unwrap();
-        let av_vals = av_row0.f64().unwrap();
-        assert!(
-            (av_vals.get(0).unwrap() - 800.0).abs() < 1e-10,
-            "av t0 expected 800.0, got {:?}",
-            av_vals.get(0)
-        );
-
-        // benefit_base = 500 * (1 - 200/1000) = 500 * 0.8 = 400
-        let bb_field = s.field_by_name("benefit_base").unwrap();
-        let bb_row0 = bb_field.list().unwrap().get_as_series(0).unwrap();
-        let bb_vals = bb_row0.f64().unwrap();
-        assert!(
-            (bb_vals.get(0).unwrap() - 400.0).abs() < 1e-10,
-            "benefit_base t0 expected 400.0, got {:?}",
-            bb_vals.get(0)
-        );
-    }
-
-    #[test]
-    fn test_multi_state_with_increment_tracking() {
-        // Two states: av (idx 0), guarantee (idx 1)
-        // Steps: Add premium to av (labeled), RatchetTo guarantee (labeled)
-        // track_increments = true
-        // Verify Struct has state fields AND increment fields
-        let initial_av = Series::new("av_init".into(), vec![1000.0_f64]);
-        let initial_g = Series::new("g_init".into(), vec![900.0_f64]);
-        let premium =
-            ListChunked::from_iter([Some(Series::new("".into(), vec![100.0_f64, 50.0]))]);
-
-        let kwargs = RollforwardKwargs {
-            states: vec![
-                StateSpec {
-                    name: "av".to_string(),
-                    initial_col_index: 0,
-                },
-                StateSpec {
-                    name: "guarantee".to_string(),
-                    initial_col_index: 1,
-                },
-            ],
-            steps: vec![
-                StepSpec::Add {
-                    target_index: 0,
-                    input_index: 2,
-                    label: Some("Premium".to_string()),
-                    expected_input_index: None,
-                },
-                StepSpec::RatchetTo {
-                    target_index: 1,
-                    other_state_index: 0,
-                    label: Some("Ratchet".to_string()),
-                },
-            ],
-            track_increments: true,
-            assertion_mode: None,
-            num_captures: 0,
-            lapse_condition: None,
-        };
-
-        let result = rollforward(
-            &[initial_av, initial_g, premium.into_series()],
-            &kwargs,
-        )
-        .unwrap();
-        let s = result.struct_().unwrap();
-
-        // State fields
-        let av_field = s.field_by_name("av").unwrap();
-        let av_row0 = av_field.list().unwrap().get_as_series(0).unwrap();
-        let av_vals = av_row0.f64().unwrap();
-        // t0: 1000 + 100 = 1100
-        assert!(
-            (av_vals.get(0).unwrap() - 1100.0).abs() < 1e-10,
-            "av t0 expected 1100.0, got {:?}",
-            av_vals.get(0)
-        );
-        // t1: 1100 + 50 = 1150
-        assert!(
-            (av_vals.get(1).unwrap() - 1150.0).abs() < 1e-10,
-            "av t1 expected 1150.0, got {:?}",
-            av_vals.get(1)
-        );
-
-        let g_field = s.field_by_name("guarantee").unwrap();
-        let g_row0 = g_field.list().unwrap().get_as_series(0).unwrap();
-        let g_vals = g_row0.f64().unwrap();
-        // t0: max(900, 1100) = 1100
-        assert!(
-            (g_vals.get(0).unwrap() - 1100.0).abs() < 1e-10,
-            "guarantee t0 expected 1100.0, got {:?}",
-            g_vals.get(0)
-        );
-        // t1: max(1100, 1150) = 1150
-        assert!(
-            (g_vals.get(1).unwrap() - 1150.0).abs() < 1e-10,
-            "guarantee t1 expected 1150.0, got {:?}",
-            g_vals.get(1)
-        );
-
-        // Increment fields
-        let prem_inc = s.field_by_name("Premium").unwrap();
-        let prem_row0 = prem_inc.list().unwrap().get_as_series(0).unwrap();
-        let prem_vals = prem_row0.f64().unwrap();
-        // t0: 1100 - 1000 = 100
-        assert!(
-            (prem_vals.get(0).unwrap() - 100.0).abs() < 1e-10,
-            "Premium increment t0 expected 100.0, got {:?}",
-            prem_vals.get(0)
-        );
-        // t1: 1150 - 1100 = 50
-        assert!(
-            (prem_vals.get(1).unwrap() - 50.0).abs() < 1e-10,
-            "Premium increment t1 expected 50.0, got {:?}",
-            prem_vals.get(1)
-        );
-
-        let ratchet_inc = s.field_by_name("Ratchet").unwrap();
-        let ratchet_row0 = ratchet_inc.list().unwrap().get_as_series(0).unwrap();
-        let ratchet_vals = ratchet_row0.f64().unwrap();
-        // t0: guarantee went from 900 to 1100, increment = 200
-        assert!(
-            (ratchet_vals.get(0).unwrap() - 200.0).abs() < 1e-10,
-            "Ratchet increment t0 expected 200.0, got {:?}",
-            ratchet_vals.get(0)
-        );
-        // t1: guarantee went from 1100 to 1150, increment = 50
-        assert!(
-            (ratchet_vals.get(1).unwrap() - 50.0).abs() < 1e-10,
-            "Ratchet increment t1 expected 50.0, got {:?}",
-            ratchet_vals.get(1)
-        );
+        assert_eq!(row(0), vec![110.0, 130.0]);
+        assert!(row(1).is_empty(), "zero-period policy must emit an empty list");
+        assert_eq!(row(2), vec![110.0, 130.0, 160.0]);
     }
 }

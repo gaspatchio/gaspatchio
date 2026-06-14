@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for finance accessor methods (rate conversion, discounting)
 # ABOUTME: Covers to_monthly() column accessor and discount_factor() frame accessor
 """Tests for finance accessor methods (rate conversion, discounting)."""

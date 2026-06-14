@@ -304,7 +304,7 @@ pub use hash_storage::{ColumnCodec, HashStorage};
 
 **Step 3: Run existing tests to ensure extraction doesn't break anything**
 
-Run: `cd ~/Projects/gaspatchio/gaspatchio-core/core && cargo test assumptions`
+Run: `cd core && cargo test assumptions`
 
 Expected: All existing tests pass (we haven't changed table.rs yet)
 
@@ -578,7 +578,7 @@ pub use key_encoder::KeyEncoder;
 
 **Step 3: Run tests**
 
-Run: `cd ~/Projects/gaspatchio/gaspatchio-core/core && cargo test key_encoder`
+Run: `cd core && cargo test key_encoder`
 
 Expected: 4 tests pass
 
@@ -877,7 +877,7 @@ pub use array_storage::ArrayStorage;
 
 **Step 3: Run tests**
 
-Run: `cd ~/Projects/gaspatchio/gaspatchio-core/core && cargo test array_storage`
+Run: `cd core && cargo test array_storage`
 
 Expected: 3 tests pass
 
@@ -1096,7 +1096,7 @@ impl AssumptionTable {
 
 **Step 3: Run all assumption tests**
 
-Run: `cd ~/Projects/gaspatchio/gaspatchio-core/core && cargo test assumptions`
+Run: `cd core && cargo test assumptions`
 
 Expected: All tests pass
 
@@ -1257,7 +1257,7 @@ class Table:
 
 **Step 4: Run Python tests**
 
-Run: `cd ~/Projects/gaspatchio/gaspatchio-core/bindings/python && uv run pytest tests/assumptions/ -v`
+Run: `cd bindings/python && uv run pytest tests/assumptions/ -v`
 
 Expected: All tests pass
 
@@ -1444,7 +1444,7 @@ criterion_main!(benches);
 
 **Step 2: Run benchmarks**
 
-Run: `cd ~/Projects/gaspatchio/gaspatchio-core/core && cargo bench`
+Run: `cd core && cargo bench`
 
 Expected: Benchmark output showing hash vs array comparison
 
@@ -1553,7 +1553,7 @@ pub use registry::{
 
 **Step 3: Run tests**
 
-Run: `cd ~/Projects/gaspatchio/gaspatchio-core/core && cargo test`
+Run: `cd core && cargo test`
 
 Expected: All tests pass
 
@@ -1695,7 +1695,7 @@ fn test_force_hash_mode() -> PolarsResult<()> {
 
 **Step 2: Run integration tests**
 
-Run: `cd ~/Projects/gaspatchio/gaspatchio-core/core && cargo test --test assumption_storage_integration`
+Run: `cd core && cargo test --test assumption_storage_integration`
 
 Expected: All 4 tests pass
 
@@ -1774,7 +1774,7 @@ Change status from "Draft" to "Implementing" and add implementation notes.
 
 **Step 3: Run full test suite**
 
-Run: `cd ~/Projects/gaspatchio/gaspatchio-core/core && cargo test && cargo clippy && cargo fmt --check`
+Run: `cd core && cargo test && cargo clippy && cargo fmt --check`
 
 Expected: All pass
 

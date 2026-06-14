@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use super::table::AssumptionTable;
 use arc_swap::ArcSwap;
 use log::debug;

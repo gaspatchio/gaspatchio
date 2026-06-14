@@ -142,13 +142,13 @@ fund = fund.with_columns(
 )
 ```
 
-### When a Python loop IS justified
+### When `accumulate` Doesn't Fit
 
-A `for` loop over periods is acceptable ONLY when there is a multi-variable circular dependency that cannot be rearranged into `accumulate()` form — for example, if expense rates themselves change based on a threshold of the prior period's NAV (state-machine logic). In that case:
+A recurrence where the within-period transition depends on the running balance (expense rate that switches at a NAV threshold, COI on net amount at risk, an IUL crediting rate clamped against the current AV, a GMDB ratchet to the post-growth AV) cannot be rearranged into `accumulate()` form — that's not a linear recurrence, it's a state machine.
 
-1. State explicitly WHY it can't be vectorised
-2. Limit the loop to the fund-level data only (never loop over entities)
-3. Use `af.collect().to_dicts()` and build the result as a list of dicts
+The right primitive for state-machine recurrences is **`af.projection.rollforward(states={…})`**. It declares the within-period steps explicitly (`.add` / `.charge` / `.grow` / `.deduct_nar` / `.ratchet`), runs the kernel across every entity in parallel, and produces an inspectable, fingerprinted model — without a Python loop. See [recursive-patterns.md](recursive-patterns.md) and the rollforward concept docs.
+
+A Python `for` loop over periods is essentially never justified for actuarial recurrences. The two primitives — linear via `accumulate`, state-machine via rollforward — cover the design space. If you genuinely can't fit either, raise it as a framework gap rather than reaching for a loop.
 
 ---
 

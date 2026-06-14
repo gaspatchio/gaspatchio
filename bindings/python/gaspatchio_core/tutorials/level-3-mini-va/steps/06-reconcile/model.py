@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 3 → Step 06: Reconciled Model (reference answer)
 
@@ -137,44 +141,72 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # 1. Product params join
     mp = mp.join(
-        product_params.select([
-            "product_id", "plan_id", "mort_table_male", "mort_table_female",
-            "mort_scalar_id", "lapse_id", "dyn_lapse_param_id", "dyn_lapse_floor",
-            "maint_fee_rate", "has_gmdb", "has_gmab", "surr_charge_id",
-            "commission_rate", "load_prem_rate", "premium_type", "has_surr_charge",
-        ]),
+        product_params.select(
+            [
+                "product_id",
+                "plan_id",
+                "mort_table_male",
+                "mort_table_female",
+                "mort_scalar_id",
+                "lapse_id",
+                "dyn_lapse_param_id",
+                "dyn_lapse_floor",
+                "maint_fee_rate",
+                "has_gmdb",
+                "has_gmab",
+                "surr_charge_id",
+                "commission_rate",
+                "load_prem_rate",
+                "premium_type",
+                "has_surr_charge",
+            ]
+        ),
         on=["product_id", "plan_id"],
         how="left",
     )
 
     # 2. Dynamic lapse params join
     mp = mp.join(
-        dyn_lapse_params.select([
-            "index", "formula_id", "U", "L", "M", "D",
-            "FactorCap", "FactorFloor", "Y", "Power",
-        ]),
+        dyn_lapse_params.select(
+            [
+                "index",
+                "formula_id",
+                "U",
+                "L",
+                "M",
+                "D",
+                "FactorCap",
+                "FactorFloor",
+                "Y",
+                "Power",
+            ]
+        ),
         left_on="dyn_lapse_param_id",
         right_on="index",
         how="left",
-    ).with_columns([
-        pl.col("U").fill_null(2.0),
-        pl.col("L").fill_null(0.5),
-        pl.col("M").fill_null(0.0),
-        pl.col("D").fill_null(0.0),
-        pl.col("FactorCap").fill_null(2.0),
-        pl.col("FactorFloor").fill_null(0.5),
-        pl.col("Y").fill_null(1.0),
-        pl.col("Power").fill_null(1.0),
-    ])
+    ).with_columns(
+        [
+            pl.col("U").fill_null(2.0),
+            pl.col("L").fill_null(0.5),
+            pl.col("M").fill_null(0.0),
+            pl.col("D").fill_null(0.0),
+            pl.col("FactorCap").fill_null(2.0),
+            pl.col("FactorFloor").fill_null(0.5),
+            pl.col("Y").fill_null(1.0),
+            pl.col("Power").fill_null(1.0),
+        ]
+    )
 
     # 3. Space params join
     gmxb_expenses = space_params.filter(pl.col("space") == "GMXB").select(
         ["expense_acq", "expense_maint"]
     )
-    mp = mp.with_columns([
-        pl.lit(gmxb_expenses["expense_acq"].item()).alias("expense_acq"),
-        pl.lit(gmxb_expenses["expense_maint"].item()).alias("expense_maint"),
-    ])
+    mp = mp.with_columns(
+        [
+            pl.lit(gmxb_expenses["expense_acq"].item()).alias("expense_acq"),
+            pl.lit(gmxb_expenses["expense_maint"].item()).alias("expense_maint"),
+        ]
+    )
 
     af = ActuarialFrame(mp)
 
@@ -188,13 +220,13 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
     )
 
-    af = af.date.create_projection_timeline(
+    af = af.projection.set(
         valuation_date=VALUATION_DATE,
-        projection_end_type="term_months",
-        projection_end_value=PROJECTION_MONTHS,
-        projection_frequency="monthly",
-        output_column="projection_date",
+        until="term_months",
+        until_value=PROJECTION_MONTHS,
+        frequency="monthly",
     )
+    af.projection_date = af.projection.period_dates()
 
     af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
         af.projection_date.dt.month() - VALUATION_DATE.month
@@ -225,9 +257,11 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         duration=af.duration.clip(upper_bound=SCALAR_DURATION_CAP),
     )
 
-    af.mort_rate = when(
-        (af.duration >= 0) & (af.duration <= SCALAR_DURATION_CAP)
-    ).then(af.mort_scalar * af.base_mort_rate).otherwise(0.0)
+    af.mort_rate = (
+        when((af.duration >= 0) & (af.duration <= SCALAR_DURATION_CAP))
+        .then(af.mort_scalar * af.base_mort_rate)
+        .otherwise(0.0)
+    )
 
     af.mort_rate_mth = 1 - (1 - af.mort_rate) ** (1 / 12)
 
@@ -237,13 +271,13 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     af.lapse_duration_capped = af.duration.clip(upper_bound=LAPSE_DURATION_CAP)
 
-    af.base_lapse_rate = when(
-        (af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP)
-    ).then(
-        lapse_rates.lookup(
-            lapse_id=af.lapse_id, duration=af.lapse_duration_capped
+    af.base_lapse_rate = (
+        when((af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP))
+        .then(
+            lapse_rates.lookup(lapse_id=af.lapse_id, duration=af.lapse_duration_capped)
         )
-    ).otherwise(0.0)
+        .otherwise(0.0)
+    )
 
     # =====================================================================
     # SECTION 5: INVESTMENT RETURNS & ACCOUNT VALUE (FIX 1)
@@ -253,13 +287,21 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # Account value via accumulate() — production pattern
     # Linear recurrence: av[t] = av[t-1] * growth[t-1] + prem_to_av[t]
-    af.combined_growth_factor = (1.0 - af.maint_fee_rate / 12.0) * (1.0 + af.inv_return_mth)
+    af.combined_growth_factor = (1.0 - af.maint_fee_rate / 12.0) * (
+        1.0 + af.inv_return_mth
+    )
 
     # Premium deposited to AV: only at entry (duration_mth_t == 0)
-    af.prem_to_av = af.premium_pp * (1.0 - af.load_prem_rate) * (af.duration_mth_t == 0)
+    af.prem_to_av = (
+        when(af.duration_mth_t == 0)
+        .then(af.premium_pp * (1.0 - af.load_prem_rate))
+        .otherwise(0.0)
+    )
 
     # Shifted growth: multiply[t] = growth[t-1], with 1.0 at t=0
-    af.shifted_growth = af.combined_growth_factor.projection.previous_period(fill_value=1.0)
+    af.shifted_growth = af.combined_growth_factor.projection.previous_period(
+        fill_value=1.0
+    )
 
     # Accumulate: av_bef_fee[t] = av_bef_fee[t-1] * growth[t-1] + prem_to_av[t]
     af.av_pp_bef_fee = af.shifted_growth.projection.accumulate(
@@ -285,7 +327,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     af.dl001_factor = (1.0 - af.M * (1.0 / af.itm - af.D)).clip(af.L, af.U)
 
     # DL002: clip(Y * ITM^Power, FactorFloor, FactorCap)
-    af.dl002_factor = (af.Y * af.itm ** af.Power).clip(af.FactorFloor, af.FactorCap)
+    af.dl002_factor = (af.Y * af.itm**af.Power).clip(af.FactorFloor, af.FactorCap)
 
     # Select by formula_id
     af.dyn_lapse_factor = (
@@ -293,11 +335,11 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
 
     # Finalize lapse rate with floor and monthly conversion
-    af.lapse_rate = when(
-        (af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP)
-    ).then(
-        (af.dyn_lapse_factor * af.base_lapse_rate).clip(af.dyn_lapse_floor, None)
-    ).otherwise(0.0)
+    af.lapse_rate = (
+        when((af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP))
+        .then((af.dyn_lapse_factor * af.base_lapse_rate).clip(af.dyn_lapse_floor, None))
+        .otherwise(0.0)
+    )
 
     af.lapse_rate_mth = 1.0 - (1.0 - af.lapse_rate) ** (1.0 / 12.0)
 
@@ -314,19 +356,22 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # Policies in force before maturity (includes maturity month, excludes pre-entry)
     af.pols_if_bef_mat = (
-        af.survival_prob
-        * af.policy_count
-        * (af.duration_mth_t <= af.maturity_month)
-        * (af.duration_mth_t > 0)
+        when((af.duration_mth_t > 0) & (af.duration_mth_t <= af.maturity_month))
+        .then(af.survival_prob * af.policy_count)
+        .otherwise(0.0)
     )
     af.pols_if = af.pols_if_bef_mat
 
     # Maturities first
-    af.pols_maturity = af.pols_if_bef_mat * (af.duration_mth_t == af.maturity_month)
+    af.pols_maturity = (
+        when(af.duration_mth_t == af.maturity_month)
+        .then(af.pols_if_bef_mat)
+        .otherwise(0.0)
+    )
 
     # Remove maturities, add new business
     af.pols_if_bef_nb = af.pols_if_bef_mat - af.pols_maturity
-    af.pols_new_biz = af.policy_count * (af.duration_mth_t == 0)
+    af.pols_new_biz = when(af.duration_mth_t == 0).then(af.policy_count).otherwise(0.0)
     af.pols_if_bef_decr = af.pols_if_bef_nb + af.pols_new_biz
 
     # Deaths from BEF_DECR population, lapses from survivors
@@ -359,7 +404,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
                 duration=af.duration_year_capped,
             )
         )
-        .otherwise(af.duration * 0.0)
+        .otherwise(0.0)
     )
     af.surr_charge = af.surr_charge_rate * af.av_pp_mid_mth * af.pols_lapse
     af.claims_lapse = af.av_pp_mid_mth * af.pols_lapse - af.surr_charge
@@ -413,7 +458,12 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
 
     af.net_cf = (
-        af.premiums + af.inv_income - af.claims - af.expenses - af.commissions - af.av_change
+        af.premiums
+        + af.inv_income
+        - af.claims
+        - af.expenses
+        - af.commissions
+        - af.av_change
     )
 
     # =====================================================================
@@ -470,7 +520,5 @@ if __name__ == "__main__":
     result_af = main(af)
     result = result_af.collect()
     print(
-        result.select(
-            ["point_id", "product_id", "plan_id", "pv_net_cf", "pv_claims"]
-        )
+        result.select(["point_id", "product_id", "plan_id", "pv_net_cf", "pv_claims"])
     )

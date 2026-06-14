@@ -38,7 +38,7 @@ Each entry records:
 
 10. **Tutorial references in skills.** The discovery, building, and reconciliation skills should point to the tutorial levels as starting points and examples. **Status: APPLIED** — added tutorial reference sections to all three skills.
 
-11. **Reconciliation report format.** The My Model `reconciliation_status.md` is the gold standard format. 0.0000% is the benchmark — not "approximately zero." **Status: APPLIED** — created `tutorial/level-4-lifelib/reconciliation_report.md` in My Model format; reconciliation skill now references it as a template.
+11. **Reconciliation report format.** A structured `reconciliation_status.md` is the gold standard format. 0.0000% is the benchmark — not "approximately zero." **Status: APPLIED** — created `tutorial/level-4-lifelib/reconciliation_report.md` in this format; reconciliation skill now references it as a template.
 
 ### During L3 Step 06 reconciliation exercise and L1/L2 builds
 

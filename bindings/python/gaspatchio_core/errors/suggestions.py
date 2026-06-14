@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Error suggestion engine for generating helpful fix suggestions.
 
@@ -71,6 +75,11 @@ class ErrorSuggestionEngine:
             and ("not found" in error_msg or "does not exist" in error_msg)
         ):
             suggestions.extend(self._suggest_column_fixes(error_msg, available_columns))
+
+        # List-length mismatch — usually a jagged (per-policy) projection column
+        # combined with a fixed-width / portfolio-max list.
+        elif "list lengths differed" in error_msg or "lengths don't match" in error_msg:
+            suggestions.extend(self._suggest_list_length_fixes())
 
         # Type mismatch errors
         elif any(
@@ -267,6 +276,23 @@ class ErrorSuggestionEngine:
             "Use .cast() to align data types before joining",
             "Verify column names match exactly (case-sensitive)",
             "Use .select() to choose only needed columns before operations",
+        ]
+
+    def _suggest_list_length_fixes(self) -> list[str]:
+        """Suggest fixes for list-length mismatches.
+
+        Almost always a jagged (per-policy) projection column combined with a
+        fixed-width / portfolio-max list (yield curve, discount vector, or
+        externally-built assumption vector).
+        """
+        return [
+            "List lengths differ across rows — usually a jagged (per-policy) "
+            "projection column combined with a fixed-width list (e.g. a "
+            "portfolio-wide yield/discount curve or assumption vector).",
+            "Trim the fixed-width list to each policy's own horizon before the "
+            "arithmetic, e.g. `curve.list.head(af.month.list.len())`.",
+            "Or build a rectangular grid: pass `per_policy=False` to "
+            "`af.projection.set(...)` so every policy shares one period axis.",
         ]
 
     def _suggest_division_fixes(self) -> list[str]:

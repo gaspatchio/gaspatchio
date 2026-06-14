@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for loading assumption tables from per-scenario files.
 # ABOUTME: Verifies Table.from_scenario_files() concatenates scenario files correctly.
 

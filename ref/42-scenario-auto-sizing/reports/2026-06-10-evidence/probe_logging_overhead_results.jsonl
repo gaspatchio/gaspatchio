@@ -1,0 +1,1 @@
+{"n_pts": 10000, "n_scen": 100, "batch": 16, "passes": null, "on": {"n_pts": 10000, "n_scen": 100, "batch": 16, "logging": "on", "error": "NO_RESULT exit=0"}, "off": {"n_pts": 10000, "n_scen": 100, "batch": 16, "logging": "off", "error": "NO_RESULT exit=1"}}

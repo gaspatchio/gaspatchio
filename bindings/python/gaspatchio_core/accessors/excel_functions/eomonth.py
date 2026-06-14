@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Excel EOMONTH function implementation for getting end-of-month dates
 # ABOUTME: Provides Excel-compatible end-of-month calculations after adding months
 from __future__ import annotations

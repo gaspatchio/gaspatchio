@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Type stubs for dispatch.py."""
 
 from typing import TYPE_CHECKING, Any, Callable, Optional, Set, Type
@@ -19,17 +23,6 @@ _NAMESPACES: Set[str]
 def _unwrap(arg: Any) -> Any: ...
 def _wrap(parent: Optional["ActuarialFrame"], result: Any) -> Any: ...
 def _ensure_polars_expr_or_literal(arg: Any) -> Any: ...
-
-# Column Type Detection
-class ColumnTypeDetector:
-    """Unified type detection for columns across schema and computation graph."""
-    
-    parent_af: Optional["ActuarialFrame"]
-    
-    def __init__(self, parent_af: Optional["ActuarialFrame"]) -> None: ...
-    def is_list_column(self, column_name: str) -> bool: ...
-    def get_all_list_columns(self) -> list[str]: ...
-    def is_expression_list_output(self, expr: pl.Expr) -> bool: ...
 
 # Descriptor
 class DelegatorDescriptor:

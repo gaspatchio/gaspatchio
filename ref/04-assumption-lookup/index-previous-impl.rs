@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

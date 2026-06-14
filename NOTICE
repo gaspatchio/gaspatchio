@@ -1,0 +1,30 @@
+gaspatchio-core
+Copyright 2026 Opio Inc.
+
+This product is licensed under the Apache License, Version 2.0
+(the "License"); see the LICENSE file at the root of this repository
+for the full text.
+
+================================================================================
+Third-party notices
+================================================================================
+
+This product's source code in this repository is Apache-2.0 licensed and
+Copyright Opio Inc. as recorded in the per-file SPDX-FileCopyrightText
+headers (see REUSE.toml for the blanket assertion covering non-code files).
+
+This product depends at runtime on other open-source software. Each
+dependency's licence applies to its own code as distributed by its
+respective project; consult the dependency's own distribution for that
+licence text. Of the runtime closure that ships with the gaspatchio
+Python wheel, the following dependencies are not under MIT / BSD /
+Apache / ISC / PSF terms and so are called out explicitly:
+
+  certifi (https://github.com/certifi/python-certifi)
+    Mozilla Public License 2.0
+    File-level copyleft; redistribution of certifi source must
+    comply with MPL-2.0 §3 (Source Form) and §5 (Larger Works).
+
+No source files from certifi are vendored into gaspatchio-core; the
+dependency is resolved at install time by pip and installed into the
+user's Python environment as a separate package.

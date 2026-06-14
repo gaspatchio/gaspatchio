@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Test for previous_period/next_period with float columns
 # ABOUTME: Reproduces issue where Polars rejects integer fill_value
 # ruff: noqa: S101, PLR2004, ANN201

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Research script testing different methods for broadcasting
 # ABOUTME: scalar columns to list columns in Polars with performance comparisons
 

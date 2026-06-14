@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for applying shocks to assumption Tables.
 # ABOUTME: Verifies Table.with_shock() returns modified tables for scenarios.
 # ruff: noqa: SLF001

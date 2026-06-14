@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Implementation of sensitivity_analysis() for parameter sweep scenarios.
 # ABOUTME: Generates shock configurations across a range of values for testing.
 
@@ -57,7 +61,7 @@ def sensitivity_analysis(  # noqa: PLR0913
     **Mortality sensitivity sweep:**
 
     ```python no_output_check
-    from gaspatchio_core.scenarios import sensitivity_analysis
+    from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
 
     scenarios = sensitivity_analysis(
         table="mortality",
@@ -145,4 +149,6 @@ def _create_shock(
     return OverrideShock(value=value, table=table, column=column)
 
 
-__all__ = ["sensitivity_analysis"]
+# Module is now internal; no public __all__.
+# Use ScenarioRun + sweep configs instead. The function remains importable
+# from gaspatchio_core.scenarios._sensitivity for internal/tutorial callers.

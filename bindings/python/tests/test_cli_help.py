@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for gspio --help output.
 # ABOUTME: Validates command groups and LLM guidance text.
 """Tests for gspio --help output."""

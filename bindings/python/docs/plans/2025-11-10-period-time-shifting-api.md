@@ -1061,7 +1061,7 @@ Expected: See 7 commits (or fewer if some were combined):
 
 **References:**
 
-- Design discussion: `~/Projects/gaspatchio/gaspatchio-core/bindings/python/ref/22-api-design/22-brainstorm.md`
+- Design discussion: `bindings/python/ref/22-api-design/22-brainstorm.md`
 - Existing projection accessor: `gaspatchio_core/accessors/projection.py`
 - Existing tests: `tests/accessors/test_projection.py`
 

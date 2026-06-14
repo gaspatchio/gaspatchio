@@ -39,16 +39,16 @@ t=2:  (1-d)^2
 
 This is the vectorised equivalent of an Excel column like `=IF(t=0, 1, prev_cell * (1 - d))`.
 
-## Broadcasting scalars to lists
+## Cumulative survival from a constant rate
 
-`.projection.cumulative_survival()` requires a list column — one rate per period. In this model, rates are scalar (constant across all 12 months). To broadcast:
+When the decrement rate is constant across periods (as here), cumulative survival is the geometric closed form `(1 - d) ** t`. `**` broadcasts the scalar over the list-shaped `af.month`:
 
 ```python
-af.decrement_list = af.combined_decrement + af.month * 0.0
-af.pols_if = af.decrement_list.projection.cumulative_survival()
+af.pols_if = (1.0 - af.combined_decrement) ** af.month
+# → [1, (1-d), (1-d)^2, ..., (1-d)^n]
 ```
 
-This is a workaround needed only when rates are constant. In Level 2, `Table.lookup()` naturally produces list columns — no broadcast needed.
+Level 2 introduces `.projection.cumulative_survival()` — the general API for time-varying rates produced by `Table.lookup()`.
 
 ## Using pols_if
 

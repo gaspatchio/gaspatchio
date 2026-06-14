@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Stub file for finance accessors."""
 
 from typing import TYPE_CHECKING, Literal

@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/assumptions/_dimensions.py
-# hypothesis_version: 6.135.0
-
-[', ', '-', '_', '__test__', 'value', 'variable']

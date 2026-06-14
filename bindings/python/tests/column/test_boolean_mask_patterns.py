@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for boolean mask patterns: list == scalar and list * bool (GSP-12)
 # ABOUTME: Verifies that natural actuarial mask patterns work with list columns
 """Tests for boolean mask patterns: list == scalar and list * bool (GSP-12)."""

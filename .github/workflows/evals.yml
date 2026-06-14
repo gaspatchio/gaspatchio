@@ -9,19 +9,64 @@ on:
   push:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Which benchmark platform to run
+        type: choice
+        default: all
+        options:
+          - all
+          - linux
+          - windows
+      suite:
+        description: Which benchmark suite to run
+        type: choice
+        default: all
+        options:
+          - all
+          - benchmarks
+          - performance
 
 permissions:
   contents: write  # for gh-pages push
   pull-requests: write  # for benchmark alert comments on PRs
 
+env:
+  # Windows runners default stdout/stderr to the legacy cp1252 code page, which
+  # cannot encode the non-ASCII characters (→, …) the benchmark scripts print —
+  # crashing with UnicodeEncodeError before any benchmark runs. UTF-8 mode
+  # (PEP 540) forces UTF-8 for all I/O, matching Linux behaviour. No-op on Linux.
+  PYTHONUTF8: "1"
+
 jobs:
   rust-benchmarks:
-    name: Criterion Benchmarks
+    name: Criterion Benchmarks (${{ matrix.display }})
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.label.name == 'benchmark'
-    runs-on: ubuntu-latest-m
+      (github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark') &&
+      (github.event_name != 'workflow_dispatch' ||
+      inputs.suite == 'all' ||
+      inputs.suite == 'benchmarks')
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(github.event_name == 'workflow_dispatch' && inputs.platform == 'linux' && '["linux"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'windows' && '["windows"]' || '["linux", "windows"]') }}
+        include:
+          - os: linux
+            display: Linux
+            runner: ubuntu-latest-m
+            benchmark_name: Rust Benchmarks
+            benchmark_path: dev/bench
+          - os: windows
+            display: Windows
+            runner: windows-m
+            benchmark_name: Rust Benchmarks (Windows)
+            benchmark_path: dev/bench-windows
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,20 +82,78 @@ jobs:
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          name: Rust Benchmarks
+          name: ${{ matrix.benchmark_name }}
           tool: cargo
           output-file-path: core/bench-output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
-          benchmark-data-dir-path: dev/bench
+          benchmark-data-dir-path: ${{ matrix.benchmark_path }}
           alert-threshold: '200%'
           fail-on-alert: false
 
   model-benchmarks:
-    name: End-to-End Model Benchmarks
+    name: End-to-End Model Benchmarks (${{ matrix.display }})
+    if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark') &&
+      (github.event_name != 'workflow_dispatch' ||
+      inputs.suite == 'all' ||
+      inputs.suite == 'benchmarks')
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: bindings/python
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(github.event_name == 'workflow_dispatch' && inputs.platform == 'linux' && '["linux"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'windows' && '["windows"]' || '["linux", "windows"]') }}
+        include:
+          - os: linux
+            display: Linux
+            runner: ubuntu-latest-m
+            benchmark_name: Model Benchmarks
+            benchmark_path: dev/model-bench
+          - os: windows
+            display: Windows
+            runner: windows-m
+            benchmark_name: Model Benchmarks (Windows)
+            benchmark_path: dev/model-bench-windows
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync --no-dev
+      - name: Generate 100K model points
+        run: uv run --no-dev python ../../evals/benchmarks/generate_model_points.py
+      - name: Run model benchmarks
+        run: |
+          mkdir -p ../../benchmark-output
+          uv run --no-dev python ../../evals/benchmarks/run_model_benchmarks.py | tee ../../benchmark-output/model-bench-output.json
+      - name: Clean working tree for gh-pages push
+        run: git checkout -- .
+        working-directory: .
+      - name: Store model benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: ${{ matrix.benchmark_name }}
+          tool: customSmallerIsBetter
+          output-file-path: benchmark-output/model-bench-output.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          benchmark-data-dir-path: ${{ matrix.benchmark_path }}
+          alert-threshold: '150%'
+          fail-on-alert: false
+
+  aggregated-benchmarks:
+    name: Aggregation Surface Benchmarks
     if: >-
       github.event_name != 'pull_request' ||
-      github.event.label.name == 'benchmark'
+      github.event.label.name == 'benchmark' ||
+      github.event.label.name == 'performance'
     runs-on: ubuntu-latest-m
     timeout-minutes: 30
     defaults:
@@ -59,34 +162,156 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: true  # L4 tutorial model points + assumptions are git-LFS
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
         run: uv sync
-      - name: Generate 100K model points
-        run: uv run python ../../evals/benchmarks/generate_model_points.py
-      - name: Run model benchmarks
-        run: uv run python ../../evals/benchmarks/run_model_benchmarks.py | tee /tmp/model-bench-output.json
+      - name: Run aggregation-surface benchmarks (baseline vs run_aggregated vs spill)
+        run: uv run python ../../evals/benchmarks/run_aggregated_benchmarks.py | tee /tmp/aggregated-bench-output.json
       - name: Clean working tree for gh-pages push
         run: git checkout -- .
         working-directory: .
-      - name: Store model benchmark results
+      - name: Store aggregation benchmark results
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          name: Model Benchmarks
+          name: Aggregation Surface Benchmarks
           tool: customSmallerIsBetter
-          output-file-path: /tmp/model-bench-output.json
+          output-file-path: /tmp/aggregated-bench-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
-          benchmark-data-dir-path: dev/model-bench
+          benchmark-data-dir-path: dev/aggregated-bench
           alert-threshold: '150%'
           fail-on-alert: false
 
   comparison-benchmarks:
-    name: Gaspatchio vs Lifelib
+    name: Gaspatchio vs Lifelib (${{ matrix.display }})
+    if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark') &&
+      (github.event_name != 'workflow_dispatch' ||
+      inputs.suite == 'all' ||
+      inputs.suite == 'benchmarks')
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    env:
+      GASPATCHIO_BENCHMARKS_DIR: ${{ github.workspace }}/../gaspatchio-benchmarks
+    defaults:
+      run:
+        working-directory: bindings/python
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(github.event_name == 'workflow_dispatch' && inputs.platform == 'linux' && '["linux"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'windows' && '["windows"]' || '["linux", "windows"]') }}
+        include:
+          - os: linux
+            display: Linux
+            runner: ubuntu-latest-m
+            benchmark_name: Gaspatchio vs Lifelib
+            benchmark_path: dev/comparison
+          - os: windows
+            display: Windows
+            runner: windows-m
+            benchmark_name: Gaspatchio vs Lifelib (Windows)
+            benchmark_path: dev/comparison-windows
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Set up SSH agent for benchmarks deploy key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.BENCHMARKS_DEPLOY_KEY }}
+      - name: Clone gaspatchio-benchmarks (lifelib reference data)
+        run: git clone --depth 1 git@github.com:opioinc/gaspatchio-benchmarks.git "$GASPATCHIO_BENCHMARKS_DIR"
+        working-directory: .
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies (with lifelib)
+        run: uv sync --no-dev --group benchmark
+      - name: Generate model points (all scales)
+        run: uv run --no-dev python ../../evals/benchmarks/generate_model_points.py
+      - name: Run comparison benchmarks
+        run: |
+          mkdir -p ../../benchmark-output
+          set -o pipefail
+          uv run --no-dev --group benchmark python ../../evals/benchmarks/run_comparison_benchmarks.py | tee ../../benchmark-output/comparison-output.json
+      - name: Clean working tree for gh-pages push
+        run: git checkout -- .
+        working-directory: .
+      - name: Store comparison results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: ${{ matrix.benchmark_name }}
+          tool: customSmallerIsBetter
+          output-file-path: evals/benchmarks/comparison_results/benchmark-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          benchmark-data-dir-path: ${{ matrix.benchmark_path }}
+          alert-threshold: '200%'
+          fail-on-alert: false
+
+  scenario-benchmarks:
+    name: Scenario Throughput & Memory (${{ matrix.display }})
+    if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.label.name == 'performance') &&
+      (github.event_name != 'workflow_dispatch' ||
+      inputs.suite == 'all' ||
+      inputs.suite == 'performance')
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: bindings/python
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(github.event_name == 'workflow_dispatch' && inputs.platform == 'linux' && '["linux"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'windows' && '["windows"]' || '["linux", "windows"]') }}
+        include:
+          - os: linux
+            display: Linux
+            runner: ubuntu-latest-m
+            benchmark_name: Scenario Benchmarks
+            benchmark_path: dev/scenario-bench
+          - os: windows
+            display: Windows
+            runner: windows-m
+            benchmark_name: Scenario Benchmarks (Windows)
+            benchmark_path: dev/scenario-bench-windows
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync --no-dev
+      - name: Generate model points (incl. 100K L5)
+        run: uv run --no-dev python ../../evals/benchmarks/generate_model_points.py
+      - name: Run scenario benchmarks
+        run: |
+          mkdir -p ../../benchmark-output
+          uv run --no-dev python ../../evals/benchmarks/run_scenario_benchmarks.py | tee ../../benchmark-output/scenario-bench-output.json
+      - name: Clean working tree for gh-pages push
+        run: git checkout -- .
+        working-directory: .
+      - name: Store scenario benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: ${{ matrix.benchmark_name }}
+          tool: customSmallerIsBetter
+          output-file-path: benchmark-output/scenario-bench-output.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          benchmark-data-dir-path: ${{ matrix.benchmark_path }}
+          alert-threshold: '150%'
+          fail-on-alert: false
+
+  batch-search-benchmarks:
+    name: Scenario Batch Search
     if: >-
       github.event_name != 'pull_request' ||
-      github.event.label.name == 'benchmark'
+      github.event.label.name == 'performance'
     runs-on: ubuntu-latest-m
     timeout-minutes: 120
     defaults:
@@ -97,32 +322,98 @@ jobs:
         with:
           lfs: true
       - uses: astral-sh/setup-uv@v6
-      - name: Install dependencies (with lifelib)
-        run: uv sync --group benchmark
-      - name: Generate model points (all scales)
+      - name: Install dependencies
+        run: uv sync
+      - name: Generate model points (incl. 100K L5)
         run: uv run python ../../evals/benchmarks/generate_model_points.py
-      - name: Run comparison benchmarks
-        run: uv run --group benchmark python ../../evals/benchmarks/run_comparison_benchmarks.py | tee /tmp/comparison-output.json
+      - name: Run batch-search benchmark (auto-search throughput + in-mem floor)
+        run: uv run python ../../evals/benchmarks/scenario_batch_search_bench.py | tee /tmp/batch-search-output.json
       - name: Clean working tree for gh-pages push
         run: git checkout -- .
         working-directory: .
-      - name: Store comparison results
+      - name: Store batch-search benchmark results
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          name: Gaspatchio vs Lifelib
+          name: Scenario Batch Search
           tool: customSmallerIsBetter
-          output-file-path: evals/benchmarks/comparison_results/benchmark-results.json
+          output-file-path: /tmp/batch-search-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
-          benchmark-data-dir-path: dev/comparison
-          alert-threshold: '200%'
+          benchmark-data-dir-path: dev/batch-bench
+          alert-threshold: '150%'
           fail-on-alert: false
+
+  scenario-showcase:
+    name: Stochastic Scenario Showcase
+    if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.label.name == 'performance') &&
+      (github.event_name != 'workflow_dispatch' ||
+      ((inputs.suite == 'all' || inputs.suite == 'performance') &&
+      inputs.platform != 'windows'))
+    runs-on: ubuntu-latest-m
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: bindings/python
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync
+      - name: Run stochastic showcase (1000 scenarios)
+        run: uv run python ../../evals/benchmarks/run_scenario_showcase.py
+      - name: Render showcase chart
+        run: uv run python ../../evals/benchmarks/render_scenario_showcase.py
+      - name: Upload showcase artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenario-showcase
+          path: |
+            evals/benchmarks/scenario_showcase.json
+            evals/benchmarks/scenario_showcase.vl.json
+            evals/benchmarks/scenario_showcase.png
+
+  policy-axis-sweep:
+    name: Policy-Axis Batch Sweep (confirmation)
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'performance'
+    runs-on: ubuntu-latest-m
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: bindings/python
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true  # L4 base model points + assumptions are git-LFS
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync
+      - name: Sweep run_aggregated batch size (1K..1M ladder + 10M auto — bounded seed)
+        run: >-
+          uv run python
+          ../../ref/42-scenario-auto-sizing/reports/2026-06-11-policy-axis-evidence/policy_axis_sweep.py
+          --scales 1000 10000 100000 1000000 10000000
+          --max-batch 100000
+          --auto-only-scales 10000000
+          --out /tmp/policy-axis-sweep.json
+      - name: Upload sweep results
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-axis-sweep
+          path: /tmp/policy-axis-sweep.json
 
   skill-evals:
     name: Skill Evals (4 models)
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.label.name == 'benchmark'
+      (github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark') &&
+      (github.event_name != 'workflow_dispatch' ||
+      (inputs.suite == 'all' && inputs.platform == 'all'))
     needs: [rust-benchmarks, model-benchmarks, comparison-benchmarks]
     runs-on: ubuntu-latest-m
     defaults:
@@ -134,7 +425,7 @@ jobs:
           lfs: true
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --group evals
       - name: Run evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -164,8 +455,10 @@ jobs:
   capability-matrix:
     name: Update Capability Matrix
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.label.name == 'benchmark'
+      (github.event_name != 'pull_request' ||
+      github.event.label.name == 'benchmark') &&
+      (github.event_name != 'workflow_dispatch' ||
+      (inputs.suite == 'all' && inputs.platform == 'all'))
     needs: skill-evals
     runs-on: ubuntu-latest
     steps:

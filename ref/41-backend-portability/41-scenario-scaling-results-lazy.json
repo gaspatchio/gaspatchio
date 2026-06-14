@@ -1,0 +1,72 @@
+[
+  {
+    "n_scenarios": 50,
+    "status": "ok",
+    "wall_time_s": 6.38,
+    "peak_rss_mb_master": 5677.7,
+    "exit_code": 0,
+    "runner_payload": {
+      "n_scenarios": 50,
+      "n_policies": 1000,
+      "projection_months": 240,
+      "status": "ok",
+      "wall_time_s": 4.873223762027919,
+      "child_self_peak_rss_mb": 5677.68359375,
+      "n_output_rows": 50000,
+      "error_msg": null,
+      "streaming_engine_used": "streaming",
+      "polars_version": "1.38.1",
+      "platform": "macOS-15.7.3-x86_64-i386-64bit"
+    },
+    "stderr_tail": "\n2026-05-09 21:24:07.522 | DEBUG    | gaspatchio_core.assumptions._utils:_convert_keys_to_f64:142 - Keeping key column 'fund_index' as String (f64 conversion not possible)\n2026-05-09 21:24:07.522 | DEBUG    | gaspatchio_core.assumptions._utils:_convert_keys_to_f64:151 - Converted 1 key columns to f64: ['t']\n2026-05-09 21:24:07.523 | INFO     | gaspatchio_core.assumptions._api:_process_data:648 - Registered table 'inv_returns': 1,446 rows, keys=['t', 'fund_index'], storage=array (requested=auto)\n"
+  },
+  {
+    "n_scenarios": 100,
+    "status": "ok",
+    "wall_time_s": 15.86,
+    "peak_rss_mb_master": 1720.5,
+    "exit_code": 0,
+    "runner_payload": {
+      "n_scenarios": 100,
+      "n_policies": 1000,
+      "projection_months": 240,
+      "status": "ok",
+      "wall_time_s": 13.645108569879085,
+      "child_self_peak_rss_mb": 7398.23046875,
+      "n_output_rows": 100000,
+      "error_msg": null,
+      "streaming_engine_used": "streaming",
+      "polars_version": "1.38.1",
+      "platform": "macOS-15.7.3-x86_64-i386-64bit"
+    },
+    "stderr_tail": "\n2026-05-09 21:24:13.864 | DEBUG    | gaspatchio_core.assumptions._utils:_convert_keys_to_f64:142 - Keeping key column 'fund_index' as String (f64 conversion not possible)\n2026-05-09 21:24:13.864 | DEBUG    | gaspatchio_core.assumptions._utils:_convert_keys_to_f64:151 - Converted 1 key columns to f64: ['t']\n2026-05-09 21:24:13.865 | INFO     | gaspatchio_core.assumptions._api:_process_data:648 - Registered table 'inv_returns': 1,446 rows, keys=['t', 'fund_index'], storage=array (requested=auto)\n"
+  },
+  {
+    "n_scenarios": 200,
+    "status": "ok",
+    "wall_time_s": 51.63,
+    "peak_rss_mb_master": 0.0,
+    "exit_code": 0,
+    "runner_payload": {
+      "n_scenarios": 200,
+      "n_policies": 1000,
+      "projection_months": 240,
+      "status": "ok",
+      "wall_time_s": 47.82043953682296,
+      "child_self_peak_rss_mb": 7073.04296875,
+      "n_output_rows": 200000,
+      "error_msg": null,
+      "streaming_engine_used": "streaming",
+      "polars_version": "1.38.1",
+      "platform": "macOS-15.7.3-x86_64-i386-64bit"
+    },
+    "stderr_tail": "\n2026-05-09 21:24:30.085 | DEBUG    | gaspatchio_core.assumptions._utils:_convert_keys_to_f64:142 - Keeping key column 'fund_index' as String (f64 conversion not possible)\n2026-05-09 21:24:30.085 | DEBUG    | gaspatchio_core.assumptions._utils:_convert_keys_to_f64:151 - Converted 1 key columns to f64: ['t']\n2026-05-09 21:24:30.086 | INFO     | gaspatchio_core.assumptions._api:_process_data:648 - Registered table 'inv_returns': 1,446 rows, keys=['t', 'fund_index'], storage=array (requested=auto)\n"
+  },
+  {
+    "n_scenarios": 500,
+    "status": "timeout",
+    "wall_time_s": 364.62,
+    "peak_rss_mb_master": 45.7,
+    "exit_code": -1
+  }
+]

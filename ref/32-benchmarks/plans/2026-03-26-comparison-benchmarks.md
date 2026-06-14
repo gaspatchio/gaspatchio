@@ -1,5 +1,7 @@
 # Gaspatchio vs Lifelib Comparison Benchmark — Implementation Plan
 
+> **Status (2026-05):** Lifelib reference data was originally vendored into this repo at `evals/benchmarks/lifelib_ref/`. It now lives in the sister **gaspatchio-benchmarks** repository; the runner resolves it via `GASPATCHIO_BENCHMARKS_DIR` or a sibling-checkout at `../gaspatchio-benchmarks/`. The plan below describes the original arrangement and is preserved as historical record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a reproducible head-to-head performance benchmark comparing gaspatchio vs lifelib IntegratedLife on the same VA model, same data, same hardware, with results displayed on the gh-pages dashboard.
@@ -35,7 +37,7 @@
 - [ ] **Step 1: Copy the lifelib model from gaspatchio-models**
 
 ```bash
-cp -r ~/projects/gaspatchio-models/appliedlife/ref/appliedlife/ \
+cp -r ../gaspatchio-models/appliedlife/ref/appliedlife/ \
       evals/benchmarks/lifelib_ref/
 ```
 

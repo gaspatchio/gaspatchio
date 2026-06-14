@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from .base import ActuarialFrame as ActuarialFrame
 from .execution import run_model as run_model
 from .graph import CalculationGraph as CalculationGraph

@@ -1,13 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Defines the ColumnProxy class."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import polars as pl
 
 from .expression_proxy import ExpressionProxy  # Runtime import
+from .shape import _UNSET, Shape
 
 # Use TYPE_CHECKING for imports that would cause circular dependencies at runtime
 if TYPE_CHECKING:
@@ -96,6 +101,19 @@ class ColumnProxy:
         self.name = name
         self._parent = parent  # Reference to the parent ActuarialFrame
         self._dynamic_accessor_cache: dict[str, Any] = {}  # Initialize cache
+        self._shape_cached: tuple[int, str] | object = _UNSET
+
+    @property
+    def shape(self) -> Shape:
+        """Resolved shape of this column reference (`scalar`, `list`, or `unknown`)."""
+        gen = getattr(self._parent, "_schema_generation", 0)
+        if self._shape_cached is _UNSET or self._shape_cached[0] != gen:  # type: ignore[index]
+            from .shape import _shape_from_schema
+
+            self._shape_cached = (gen, _shape_from_schema(self._parent, self.name))
+        return self._shape_cached[1]  # type: ignore[index]
+
+    kind: ClassVar[str] = "value"
 
     def _to_expr(self) -> pl.Expr:
         """Convert this proxy to a base Polars column expression."""

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for binary operations (&, |, ~) with list_conditional plugin
 # ABOUTME: Verifies AND, OR, NOT work correctly with plugin integration
 # ruff: noqa: S101, PLR2004

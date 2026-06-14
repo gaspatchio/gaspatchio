@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Core ActuarialFrame implementation for actuarial modeling
 # ABOUTME: Main DataFrame wrapper with computation graph and tracing support
 # ruff: noqa: E501, TID252, N806
@@ -39,7 +43,6 @@ if TYPE_CHECKING:
     # Keep TYPE_CHECKING block for potential future forward refs if needed
     from collections.abc import Callable  # For trace method signature
 
-    from gaspatchio_core.rollforward._builder import RollforwardBuilder
     from gaspatchio_core.typing import IntoExprColumn
 
     # Add forward references for accessors used in type hints
@@ -53,6 +56,11 @@ if TYPE_CHECKING:
 
 # TODO: Move _DEFAULT_THREADS to util? For now, define locally or assume 0.  # noqa: TD002, TD003, FIX002
 _DEFAULT_THREADS = 0
+
+# Below this column count the lazy plan is shallow enough that a deep
+# ``collect_schema()`` is already cheap, so incremental schema maintenance on
+# assignment is not worth its overhead (matches column/shape.py's probe gate).
+_INCREMENTAL_SCHEMA_MIN_COLS = 16
 
 
 class _AggregationResult:
@@ -216,11 +224,12 @@ class ActuarialFrame:
 
     def __init__(self, data=None, mode=None, verbose=None, threads=None) -> None:
         """Initialize the ActuarialFrame with optional data, mode, and configuration."""
-        self._df: pl.LazyFrame | None = None
+        self.__df: pl.LazyFrame | None = None
         self._column_order: list[str] = []
         # Maintain a fast set of attribute-eligible column names
         self._attr_columns_set: set[str] = set()
         self._schema: dict[str, pl.DataType] | None = None
+        self._schema_generation: int = 0
 
         self._mode = mode if mode is not None else get_default_mode()
         self._verbose = verbose if verbose is not None else get_default_verbose()
@@ -231,6 +240,9 @@ class ActuarialFrame:
         # Support both legacy tuple format and new TracedOperation format for backward compatibility
         self._computation_graph: list[tuple[str, Any] | TracedOperation] = []
         self._tracing: bool = False
+
+        # Projection metadata — populated by af.projection.set(...)
+        self._projection: object | None = None
 
         # Excluded context, _operation_log
         self._show_query_plan = False  # Keep this simple flag
@@ -254,6 +266,60 @@ class ActuarialFrame:
             msg = "Data must be a Polars DataFrame, LazyFrame, or dictionary"
             raise TypeError(msg)
 
+    @property
+    def _df(self) -> pl.LazyFrame | None:
+        """The underlying Polars LazyFrame."""
+        return self.__df
+
+    @_df.setter
+    def _df(self, new_df: pl.LazyFrame | None) -> None:
+        """Replace _df, refresh the cached schema, bump the generation counter.
+
+        All mutation paths must go through this setter — the lint rule in CI
+        bans direct writes to __df outside this method.
+
+        If the new plan is invalid (e.g. references a nonexistent column),
+        ``collect_schema`` will raise.  We swallow that exception and leave
+        ``_schema`` at its last known-good value, preserving Polars' lazy-
+        evaluation contract: invalid plans only become hard errors at
+        ``.collect()`` time.  The generation counter is still bumped so that
+        any reader knows the plan has changed.
+        """
+        self.__df = new_df
+        if new_df is None:
+            self._schema = None
+        else:
+            # Defer schema resolution. Resolving the whole (growing) plan on
+            # every assignment is ~0.8ms/call on a real model plan and dominates
+            # plan-build time. The lazy ``_schema`` property resolves on demand;
+            # ``__setitem__`` updates the cache incrementally (cheap minimal
+            # probe) so the deep resolve almost never fires on the hot path.
+            object.__setattr__(self, "_schema_dirty", True)
+        self._schema_generation += 1
+
+    @property
+    def _schema(self) -> dict[str, pl.DataType] | None:
+        """Lazily-resolved, cached schema (deferred from the ``_df`` setter)."""
+        d = object.__getattribute__(self, "__dict__")
+        if d.get("_schema_dirty", False):
+            df = self._df
+            if df is not None:
+                try:
+                    object.__setattr__(
+                        self, "_schema_value", dict(df.collect_schema())
+                    )
+                except Exception:  # noqa: BLE001
+                    pass  # keep last known-good
+            object.__setattr__(self, "_schema_dirty", False)
+        return d.get("_schema_value")
+
+    @_schema.setter
+    def _schema(self, value: dict[str, pl.DataType] | None) -> None:
+        object.__setattr__(
+            self, "_schema_value", dict(value) if value is not None else None
+        )
+        object.__setattr__(self, "_schema_dirty", False)
+
     # Excluded accessor properties (.date, .finance)
 
     def __getitem__(self, key: str) -> ColumnProxy:
@@ -266,39 +332,24 @@ class ActuarialFrame:
 
     def __setitem__(self, key: str, value: Any) -> None:  # noqa: ANN401
         """Handle column assignment using df['column'] = value."""
-        # --- Rollforward builder detection ---
-        from gaspatchio_core.rollforward._builder import RollforwardBuilder, RollforwardStateProxy  # noqa: PLC0415
-
-        if isinstance(value, RollforwardBuilder):
-            self._assign_rollforward(key, value)
-            return
-        if isinstance(value, RollforwardStateProxy):
-            self._assign_rollforward_state(key, value)
-            return
-        # --- END Rollforward builder detection ---
-
         if key not in self._column_order:
             self._column_order.append(key)
             self._refresh_attr_columns_set()
         try:
-            # Check for list broadcast metadata BEFORE converting to expr
-            # element_wise: True means expression already handles element-wise ops
-            # (e.g., projection accessor using .list.eval())
-            if (
-                hasattr(value, "_list_broadcast_metadata")
-                and value._list_broadcast_metadata is not None  # noqa: SLF001
-                and value._list_broadcast_metadata.get("element_wise")  # noqa: SLF001
-            ):
-                # Just apply expression directly - it handles element-wise already
-                expr = self._convert_to_expr(value)
-                if self._tracing:
-                    append_operation_to_graph(self, key, expr)
-                    self._df = self._df.with_columns(expr.alias(key))
-                else:
-                    self._df = self._df.with_columns(expr.alias(key))
-                return
-
             expr = self._convert_to_expr(value)
+
+            # Incremental schema maintenance only pays off once the plan is deep
+            # enough that the deferred deep resolve is expensive. On shallow
+            # plans skip it entirely — leave the schema dirty for the lazy getter
+            # (cheap to resolve when shallow) — so trivial frames keep their
+            # original cost (e.g. a freshly-built chained when() over one column).
+            do_incremental = len(self._column_order) >= _INCREMENTAL_SCHEMA_MIN_COLS
+
+            # Resolve the new column's dtype cheaply against the CURRENT (clean)
+            # schema BEFORE mutating _df, so we can extend the schema cache
+            # incrementally rather than forcing a deep collect_schema in the
+            # setter (~0.8ms/call on a real plan -> the plan-build bottleneck).
+            new_dtype = self._resolve_assigned_dtype(expr) if do_incremental else None
 
             # MODIFIED: Integrate tracing
             if self._tracing:
@@ -308,6 +359,13 @@ class ActuarialFrame:
             else:
                 # Execute directly if not tracing
                 self._df = self._df.with_columns(expr.alias(key))
+
+            # Incremental schema maintenance (clears the dirty flag the _df
+            # setter just set). If skipped or the dtype could not be resolved
+            # cheaply, the flag stays set and the lazy _schema getter resolves it
+            # on demand.
+            if do_incremental:
+                self._apply_incremental_schema(key, new_dtype)
 
             # Basic logging if needed, removed verbose _operation_log
             # if self._verbose: print(f"Set column '{key}'")  # noqa: ERA001
@@ -320,110 +378,40 @@ class ActuarialFrame:
             raise type(e)(msg) from e
         # No return self needed for __setitem__
 
-    def _assign_rollforward(self, key: str, builder: RollforwardBuilder) -> None:
-        """Compile and assign a rollforward builder as a lazy expression.
+    def _resolve_assigned_dtype(self, expr: pl.Expr) -> pl.DataType | None:
+        """Cheaply resolve the output dtype of an assigned expression.
 
-        Parameters
-        ----------
-        key
-            The column name to assign the rollforward result to.
-        builder
-            A fully configured ``RollforwardBuilder`` instance.
+        Uses the minimal-root-column probe (resolves against only the columns
+        the expr references, ~20us) rather than a full-plan ``collect_schema``.
+        Returns ``None`` if it can't be resolved cheaply, in which case the
+        caller leaves the schema dirty for a later lazy resolve.
         """
-        from gaspatchio_core.rollforward._compile import compile_rollforward  # noqa: PLC0415
-        from gaspatchio_core.functions.vector import rollforward_plugin  # noqa: PLC0415
+        from gaspatchio_core.column.shape import _resolve_expr_output_dtype
 
-        args, kwargs = compile_rollforward(builder)
-        struct_expr = rollforward_plugin(args, kwargs)
-
-        # Store the Struct as a hidden column
-        hidden_name = f"__rollforward_{key}"
-        self._df = self._df.with_columns(struct_expr.alias(hidden_name))
-
-        # Single-state: extract "result" field as the user-facing column
-        if not builder.is_multi_state:
-            result_expr = pl.col(hidden_name).struct.field("result")
-            self._df = self._df.with_columns(result_expr.alias(key))
-
-        if key not in self._column_order:
-            self._column_order.append(key)
-            self._refresh_attr_columns_set()
-
-    def _assign_rollforward_state(self, key: str, proxy: Any) -> None:  # noqa: ANN401
-        """Compile a multi-state rollforward and extract one state field.
-
-        Because the Polars plugin output type declares only a minimal struct
-        schema (with a ``"result"`` field), lazy ``.struct.field()`` calls
-        for multi-state fields fail schema validation.  We therefore use
-        ``map_batches`` to defer field extraction to runtime.
-
-        Parameters
-        ----------
-        key
-            The column name to assign the extracted state to.
-        proxy
-            A ``RollforwardStateProxy`` holding the builder and state name.
-        """
-        from gaspatchio_core.rollforward._builder import RollforwardStateProxy  # noqa: PLC0415
-        from gaspatchio_core.rollforward._compile import compile_rollforward  # noqa: PLC0415
-        from gaspatchio_core.functions.vector import rollforward_plugin  # noqa: PLC0415
-
-        assert isinstance(proxy, RollforwardStateProxy)  # noqa: S101
-        builder = proxy._builder  # noqa: SLF001
-        state_name = proxy._state_name  # noqa: SLF001
-
-        # Use a shared hidden column keyed by builder identity so that
-        # multiple state extractions from the same builder share one
-        # compiled rollforward column.
-        hidden_name = f"__rollforward_{id(builder)}"
-
-        # Compile only once: check if already registered in the schema
         try:
-            schema = self._df.collect_schema()
-            has_hidden = hidden_name in schema.names()
+            return _resolve_expr_output_dtype(self, expr)
         except Exception:  # noqa: BLE001
-            has_hidden = False
+            return None
 
-        if not has_hidden:
-            args, kwargs = compile_rollforward(builder)
-            struct_expr = rollforward_plugin(args, kwargs)
-            self._df = self._df.with_columns(struct_expr.alias(hidden_name))
+    def _apply_incremental_schema(
+        self, key: str, new_dtype: pl.DataType | None
+    ) -> None:
+        """Extend the cached schema with one resolved column, marking it clean.
 
-        # Extract the named state field using map_batches to defer to runtime.
-        # The plugin's output_type_func only declares a "result" field, so
-        # lazy .struct.field() fails schema validation for multi-state fields.
-        _field = state_name  # capture for closure
-
-        result_expr = pl.col(hidden_name).map_batches(
-            lambda s, _f=_field: s.struct.field(_f),
-            return_dtype=pl.List(pl.Float64),
-        )
-        self._df = self._df.with_columns(result_expr.alias(key))
-
-        if key not in self._column_order:
-            self._column_order.append(key)
-            self._refresh_attr_columns_set()
-
-    def _expr_to_str(self, value) -> str:
-        """Convert an expression to a readable string (simplified)."""
-        if isinstance(value, ColumnProxy):
-            return f"col('{value.name}')"
-        if isinstance(value, ExpressionProxy):
-            # Attempt to represent the inner expression
-            try:
-                return str(value._expr)  # noqa: SLF001
-            except Exception:  # noqa: BLE001
-                return "ExpressionProxy(...)"
-        elif isinstance(value, pl.Expr):
-            return str(value)
-        elif callable(value):
-            return f"Function[{getattr(value, '__name__', 'anonymous')}]"
-        else:
-            return repr(value)
+        Bypasses the lazy getter (reads the raw cached dict) so it does not
+        trigger a deep resolve of the plan we just appended to.
+        """
+        if new_dtype is None:
+            return  # _schema_dirty stays True -> lazy getter resolves on demand
+        cur = object.__getattribute__(self, "__dict__").get("_schema_value")
+        new_schema = dict(cur) if cur is not None else {}
+        new_schema[key] = new_dtype
+        object.__setattr__(self, "_schema_value", new_schema)
+        object.__setattr__(self, "_schema_dirty", False)
 
     def _convert_to_expr(self, value: Any) -> pl.Expr:  # noqa: ANN401
         """Convert a value to a Polars expression."""
-        from gaspatchio_core.column.condition_expression import (  # noqa: PLC0415
+        from gaspatchio_core.column.condition_expression import (
             ConditionExpression,
         )
 
@@ -465,6 +453,14 @@ class ActuarialFrame:
     ) -> pl.DataFrame:
         """Execute and materialize the dataframe.
 
+        ``collect`` is the public escape hatch from the lazy ``ActuarialFrame``
+        graph to an eager :class:`polars.DataFrame`. Inside a model function
+        the lazy form is usually what you want — Polars fuses the expressions
+        and avoids intermediate materialisation. Reach for ``collect()`` when
+        the calculation genuinely needs eager column arrays, most commonly
+        when handing per-policy probabilities to a numpy RNG inside a
+        stochastic scenario kernel.
+
         Args:
             engine: Execution engine to use. Options:
                 - "streaming" (default): Process data in batches for ~2x faster
@@ -474,6 +470,17 @@ class ActuarialFrame:
 
         Returns:
             Materialized DataFrame with all computations applied.
+
+        Examples:
+            Inside a ``for_each_scenario`` stochastic model function:
+
+            >>> import numpy as np
+            >>> import polars as pl
+            >>> def my_model(af, *, tables, drivers):
+            ...     df = af.collect()  # materialise for numpy RNG access
+            ...     rng = np.random.default_rng(drivers["rng_seed"])
+            ...     deaths = rng.binomial(1, df["q_mort"].to_numpy())
+            ...     return af.with_columns(pl.Series("died", deaths))
 
         """
         try:
@@ -487,7 +494,7 @@ class ActuarialFrame:
                 # The trace decorator might have already logged the plan if verbose
                 # but repeating here or having a more structured way to log before collect is fine.
                 if self._show_query_plan:
-                    from .tracing import (  # noqa: PLC0415
+                    from .tracing import (
                         log_query_plan,  # Local import to avoid circularity at module level
                     )
 
@@ -503,13 +510,6 @@ class ActuarialFrame:
                         final_df = final_df.with_columns(expr_val.alias(name))
                     else:
                         # New format: TracedOperation
-                        # Skip if expression is a string (description only, already executed eagerly)
-                        # This happens for list broadcasting operations in debug mode
-                        if isinstance(operation.expression, str):
-                            logger.trace(
-                                f"Skipping '{operation.alias}' - already executed eagerly"
-                            )
-                            continue
                         final_df = final_df.with_columns(
                             operation.expression.alias(operation.alias)
                         )
@@ -519,7 +519,9 @@ class ActuarialFrame:
 
             # Strip hidden rollforward columns before collecting
             schema_names = final_df.collect_schema().names()
-            rollforward_cols = [c for c in schema_names if c.startswith("__rollforward_")]
+            rollforward_cols = [
+                c for c in schema_names if c.startswith("__rollforward_")
+            ]
             if rollforward_cols:
                 final_df = final_df.drop(rollforward_cols)
 
@@ -540,7 +542,7 @@ class ActuarialFrame:
                 # The trace decorator might have already logged the plan if verbose
                 # but repeating here or having a more structured way to log before collect is fine.
                 if self._show_query_plan:
-                    from .tracing import (  # noqa: PLC0415
+                    from .tracing import (
                         log_query_plan,  # Local import to avoid circularity at module level
                     )
 
@@ -556,13 +558,6 @@ class ActuarialFrame:
                         final_df = final_df.with_columns(expr_val.alias(name))
                     else:
                         # New format: TracedOperation
-                        # Skip if expression is a string (description only, already executed eagerly)
-                        # This happens for list broadcasting operations in debug mode
-                        if isinstance(operation.expression, str):
-                            logger.trace(
-                                f"Skipping '{operation.alias}' - already executed eagerly"
-                            )
-                            continue
                         final_df = final_df.with_columns(
                             operation.expression.alias(operation.alias)
                         )
@@ -572,7 +567,9 @@ class ActuarialFrame:
 
             # Strip hidden rollforward columns before profiling
             schema_names = final_df.collect_schema().names()
-            rollforward_cols = [c for c in schema_names if c.startswith("__rollforward_")]
+            rollforward_cols = [
+                c for c in schema_names if c.startswith("__rollforward_")
+            ]
             if rollforward_cols:
                 final_df = final_df.drop(rollforward_cols)
 
@@ -583,6 +580,20 @@ class ActuarialFrame:
             _handle_execution_error(self, e)  # Will re-raise or format
 
     # Excluded: optimize, get_execution_stats
+
+    def _set_projection(self, schedule: object) -> ActuarialFrame:
+        """Return a new frame carrying ``schedule`` in ``_projection``.
+
+        Internal helper used by ``ProjectionFrameAccessor.set(...)``. Not part
+        of the public API.
+        """
+        # Construct a new frame from the same lazy plan, copy state.
+        new_af = ActuarialFrame(self._df)
+        new_af._projection = schedule
+        new_af._mode = self._mode
+        new_af._verbose = self._verbose
+        new_af._threads = self._threads
+        return new_af
 
     def with_columns(self, *exprs: IntoExprColumn) -> ActuarialFrame:
         """Add columns to the DataFrame."""
@@ -649,10 +660,18 @@ class ActuarialFrame:
             raise ValueError(msg)
 
         try:
+            # In select(), bare strings are column NAMES (matching polars
+            # semantics), not literals. Other types route through the
+            # standard converter where strings → pl.lit.
+            def _select_convert(value: Any) -> pl.Expr:  # noqa: ANN401
+                if isinstance(value, str):
+                    return pl.col(value)
+                return self._convert_to_expr(value)
+
             # Convert positional and keyword arguments to Polars expressions
-            converted_positional = [self._convert_to_expr(e) for e in exprs]
+            converted_positional = [_select_convert(e) for e in exprs]
             converted_named = {
-                name: self._convert_to_expr(e) for name, e in named_exprs.items()
+                name: _select_convert(e) for name, e in named_exprs.items()
             }
 
             # Combine positional and named arguments for the underlying select
@@ -730,16 +749,20 @@ class ActuarialFrame:
         import polars as pl
         from gaspatchio_core import ActuarialFrame
 
-        expense_params = pl.DataFrame({
-            "product_code": ["TERM", "WL", "UL"],
-            "expense_pct": [0.05, 0.08, 0.10],
-        })
+        expense_params = pl.DataFrame(
+            {
+                "product_code": ["TERM", "WL", "UL"],
+                "expense_pct": [0.05, 0.08, 0.10],
+            }
+        )
 
-        af = ActuarialFrame({
-            "policy_id": ["P001", "P002", "P003"],
-            "product_code": ["TERM", "WL", "TERM"],
-            "sum_assured": [100000, 200000, 150000],
-        })
+        af = ActuarialFrame(
+            {
+                "policy_id": ["P001", "P002", "P003"],
+                "product_code": ["TERM", "WL", "TERM"],
+                "sum_assured": [100000, 200000, 150000],
+            }
+        )
 
         af = af.join(expense_params, on="product_code")
 
@@ -758,14 +781,15 @@ class ActuarialFrame:
         │ P003      ┆ TERM         ┆ 150000      ┆ 0.05        │
         └───────────┴──────────────┴─────────────┴─────────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot join on an uninitialized ActuarialFrame."
             raise ValueError(msg)
 
         right = other.lazy() if isinstance(other, pl.DataFrame) else other
-        self._df = self._df.join(right, on=on, left_on=left_on, right_on=right_on, how=how)
+        self._df = self._df.join(
+            right, on=on, left_on=left_on, right_on=right_on, how=how
+        )
         self._schema = self._df.collect_schema()
         new_cols = [c for c in self._schema.keys() if c not in self._column_order]
         self._column_order.extend(new_cols)
@@ -803,11 +827,13 @@ class ActuarialFrame:
         import polars as pl
         from gaspatchio_core import ActuarialFrame
 
-        af = ActuarialFrame({
-            "policy_id": ["P001", "P002", "P003"],
-            "status": ["IF", "LAPSED", "IF"],
-            "premium": [1200, 800, 1500],
-        })
+        af = ActuarialFrame(
+            {
+                "policy_id": ["P001", "P002", "P003"],
+                "status": ["IF", "LAPSED", "IF"],
+                "premium": [1200, 800, 1500],
+            }
+        )
 
         af = af.filter(pl.col("status") == "IF")
 
@@ -825,7 +851,6 @@ class ActuarialFrame:
         │ P003      ┆ IF     ┆ 1500    │
         └───────────┴────────┴─────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot filter an uninitialized ActuarialFrame."
@@ -865,17 +890,21 @@ class ActuarialFrame:
         ```python
         from gaspatchio_core import ActuarialFrame
 
-        af = ActuarialFrame({
-            "Policy Number": ["P001", "P002"],
-            "Issue Age": [30, 45],
-            "Sum Assured": [100000, 200000],
-        })
+        af = ActuarialFrame(
+            {
+                "Policy Number": ["P001", "P002"],
+                "Issue Age": [30, 45],
+                "Sum Assured": [100000, 200000],
+            }
+        )
 
-        af = af.rename({
-            "Policy Number": "policy_id",
-            "Issue Age": "issue_age",
-            "Sum Assured": "sum_assured",
-        })
+        af = af.rename(
+            {
+                "Policy Number": "policy_id",
+                "Issue Age": "issue_age",
+                "Sum Assured": "sum_assured",
+            }
+        )
 
         print(af.collect())
         ```
@@ -891,7 +920,6 @@ class ActuarialFrame:
         │ P002      ┆ 45        ┆ 200000      │
         └───────────┴───────────┴─────────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot rename columns on an uninitialized ActuarialFrame."
@@ -933,12 +961,14 @@ class ActuarialFrame:
         ```python
         from gaspatchio_core import ActuarialFrame
 
-        af = ActuarialFrame({
-            "policy_id": ["P001"],
-            "premium": [1200],
-            "sum_assured": [100000],
-            "temp_debug": [999],
-        })
+        af = ActuarialFrame(
+            {
+                "policy_id": ["P001"],
+                "premium": [1200],
+                "sum_assured": [100000],
+                "temp_debug": [999],
+            }
+        )
 
         af = af.drop("temp_debug")
 
@@ -955,7 +985,6 @@ class ActuarialFrame:
         │ P001      ┆ 1200    ┆ 100000      │
         └───────────┴─────────┴─────────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot drop columns from an uninitialized ActuarialFrame."
@@ -1003,11 +1032,13 @@ class ActuarialFrame:
         ```python
         from gaspatchio_core import ActuarialFrame
 
-        af = ActuarialFrame({
-            "policy_id": ["P003", "P001", "P002"],
-            "issue_age": [55, 30, 45],
-            "premium": [1500, 1200, 800],
-        })
+        af = ActuarialFrame(
+            {
+                "policy_id": ["P003", "P001", "P002"],
+                "issue_age": [55, 30, 45],
+                "premium": [1500, 1200, 800],
+            }
+        )
 
         af = af.sort("issue_age")
 
@@ -1026,7 +1057,6 @@ class ActuarialFrame:
         │ P003      ┆ 55        ┆ 1500    │
         └───────────┴───────────┴─────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot sort an uninitialized ActuarialFrame."
@@ -1086,7 +1116,7 @@ class ActuarialFrame:
             if not AccessorClass:
                 # Late import to ensure registration if registry was reset in tests
                 try:
-                    from ..accessors import (  # noqa: PLC0415
+                    from ..accessors import (
                         date as _date_mod,  # noqa: F401
                     )
 
@@ -1096,7 +1126,7 @@ class ActuarialFrame:
                 if not AccessorClass:
                     # Fallback to direct import of the built-in accessor class
                     try:
-                        from ..accessors.date import (  # noqa: PLC0415
+                        from ..accessors.date import (
                             DateFrameAccessor as _BuiltInDateAccessor,
                         )
 
@@ -1117,7 +1147,7 @@ class ActuarialFrame:
             AccessorClass = _ACCESSOR_REGISTRY.get("finance", {}).get("frame")
             if not AccessorClass:
                 try:
-                    from ..accessors import (  # noqa: PLC0415
+                    from ..accessors import (
                         finance as _finance_mod,  # noqa: F401
                     )
 
@@ -1126,7 +1156,7 @@ class ActuarialFrame:
                     AccessorClass = None
                 if not AccessorClass:
                     try:
-                        from ..accessors.finance import (  # noqa: PLC0415
+                        from ..accessors.finance import (
                             FinanceFrameAccessor as _BuiltInFinanceAccessor,
                         )
 
@@ -1145,7 +1175,7 @@ class ActuarialFrame:
             AccessorClass = _ACCESSOR_REGISTRY.get("excel", {}).get("frame")
             if not AccessorClass:
                 try:
-                    from ..accessors import (  # noqa: PLC0415
+                    from ..accessors import (
                         excel as _excel_mod,  # noqa: F401
                     )
 
@@ -1154,7 +1184,7 @@ class ActuarialFrame:
                     AccessorClass = None
                 if not AccessorClass:
                     try:
-                        from ..accessors.excel import (  # noqa: PLC0415
+                        from ..accessors.excel import (
                             ExcelFrameAccessor as _BuiltInExcelAccessor,
                         )
 
@@ -1256,7 +1286,6 @@ class ActuarialFrame:
         └───────────┴─────────────┴─────────────────────────────────────┴─────────────────────────────────────┘
         Max policy year: 2
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute max on an uninitialized ActuarialFrame."
@@ -1358,7 +1387,6 @@ class ActuarialFrame:
         └───────────┴─────────────┴─────────────────────────────────────┴─────────────────────────────────────┘
         Min retention level: [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500]
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute min on an uninitialized ActuarialFrame."
@@ -1458,7 +1486,6 @@ class ActuarialFrame:
         │ 1.5         ┆ [0.0, 250.0, 1500.0, … 0.0]   ┆ [1.5, 0.5, 2.5, … 0.5]       │
         └─────────────┴───────────────────────────────┴──────────────────────────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute mean on an uninitialized ActuarialFrame."
@@ -1562,7 +1589,6 @@ class ActuarialFrame:
         Term Life claims volatility: 1443.38
         Whole Life claims volatility: 1443.38
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute std on an uninitialized ActuarialFrame."
@@ -1667,7 +1693,6 @@ class ActuarialFrame:
         North region lapse variance: 0.000007
         South region lapse variance: 0.000003
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute var on an uninitialized ActuarialFrame."
@@ -1768,7 +1793,6 @@ class ActuarialFrame:
         Agent A001 median sales: 5.0
         Agent A002 median sales: 15.0
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute median on an uninitialized ActuarialFrame."
@@ -1867,7 +1891,6 @@ class ActuarialFrame:
         │ [215, 235, 200, 250, … 240, 225, 280] ┆ [322500, 352500, 300000, … 420000]    │
         └───────────────────────────────────────┴───────────────────────────────────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute sum on an uninitialized ActuarialFrame."
@@ -1966,7 +1989,6 @@ class ActuarialFrame:
         │ 2     ┆ 2            ┆ 2            │
         └───────┴──────────────┴──────────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute count on an uninitialized ActuarialFrame."
@@ -2062,7 +2084,6 @@ class ActuarialFrame:
         │ null     ┆ [0.9952, 0.9940] ┆ [0.9994, 0.9988] │
         └──────────┴──────────────────┴──────────────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute product on an uninitialized ActuarialFrame."
@@ -2226,7 +2247,6 @@ class ActuarialFrame:
         │ null       ┆ [2000000.0, 2500000.0]           │
         └────────────┴──────────────────────────────────┘
         ```
-
         """
         if self._df is None:
             msg = "Cannot compute quantile on an uninitialized ActuarialFrame."
@@ -2303,9 +2323,11 @@ class ActuarialFrame:
             # Known internal fields
             known_internal = {
                 "_df",
+                "_ActuarialFrame__df",
                 "_column_order",
                 "_attr_columns_set",
                 "_schema",
+                "_schema_generation",
                 "_mode",
                 "_verbose",
                 "_threads",
@@ -2315,6 +2337,7 @@ class ActuarialFrame:
                 "_date_accessor_instance",
                 "_excel_accessor_instance",
                 "_finance_accessor_instance",
+                "_projection",
             }
             if (name in known_internal) or hasattr(type(self), name):
                 return object.__setattr__(self, name, value)

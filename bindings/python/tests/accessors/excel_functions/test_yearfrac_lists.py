@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for yearfrac function with list column support and broadcasting
 # ABOUTME: Validates scalar/scalar, list/list, scalar/list, and list/scalar combinations
 

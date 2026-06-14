@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Test file that validates the Complete Life Insurance Model example from assumptions.md
 # ABOUTME: Ensures the documented code patterns compile and produce valid results
 

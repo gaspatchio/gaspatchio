@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Scratch test showing policy value zeroing after maturity date.
 # ABOUTME: Demonstrates setting all policy values to zero once maturity is reached.
 # ruff: noqa: T201, INP001, ANN201, PLR2004

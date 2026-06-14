@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/errors/compilation_finder.py
-# hypothesis_version: 6.135.0
-
-['SchemaError', 'lazy', 'query optimization', 'schema', 'type inference']

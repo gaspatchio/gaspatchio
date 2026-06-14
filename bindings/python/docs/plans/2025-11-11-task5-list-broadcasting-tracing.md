@@ -379,7 +379,7 @@ class TestListBroadcastingDebugMode:
 2. Run the test to confirm it fails:
 
 ```bash
-cd ~/Projects/gaspatchio/gaspatchio-core/bindings/python
+cd bindings/python
 uv run pytest tests/accessors/test_list_broadcasting_debug_mode.py -v
 ```
 
@@ -506,7 +506,7 @@ Task 5.4 of enabling list broadcasting in tracing mode.
 1. Run the new test file:
 
 ```bash
-cd ~/Projects/gaspatchio/gaspatchio-core/bindings/python
+cd bindings/python
 uv run pytest tests/accessors/test_list_broadcasting_debug_mode.py -v
 ```
 
@@ -565,7 +565,7 @@ Task 5.5 of enabling list broadcasting in tracing mode.
 1. Test with the user's model that originally failed:
 
 ```bash
-cd ~/projects/gaspatchio-models/basic_term
+cd ../gaspatchio-models/basic_term
 uv run mix.py run-model-code model_projection.py ../data/model_points.parquet --mode debug
 ```
 
@@ -846,7 +846,7 @@ if __name__ == "__main__":
 2. Run the benchmark:
 
 ```bash
-cd ~/Projects/gaspatchio/gaspatchio-core/bindings/python
+cd bindings/python
 uv run python tests/performance/bench_list_broadcasting_modes.py
 ```
 

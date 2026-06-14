@@ -38,7 +38,7 @@
 - [ ] **Step 1: Create the manifest file**
 
 ```bash
-mkdir -p ~/projects/gaspatchio/gaspatchio-core/.claude-plugin
+mkdir -p .claude-plugin
 ```
 
 Write `.claude-plugin/plugin.json`:
@@ -136,7 +136,7 @@ git commit -m "feat(plugin): add VS Code / Copilot plugin manifest"
 - [ ] **Step 1: Create the manifest file**
 
 ```bash
-mkdir -p ~/projects/gaspatchio/gaspatchio-core/.cursor-plugin
+mkdir -p .cursor-plugin
 ```
 
 Write `.cursor-plugin/plugin.json`:

@@ -1,9 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for sensitivity_analysis() parameter sweep function.
 # ABOUTME: Verifies generation of shock configurations across value ranges.
-
 """Tests for sensitivity_analysis() parameter sweep function."""
 
-from gaspatchio_core.scenarios import sensitivity_analysis
+import pytest
+
+from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
 from gaspatchio_core.scenarios.shocks import (
     AdditiveShock,
     MultiplicativeShock,
@@ -193,9 +198,6 @@ class TestSensitivityAnalysisValidation:
 
     def test_empty_values_raises(self):
         """Empty values list should raise ValueError."""
-        # Arrange / Act / Assert
-        import pytest
-
         with pytest.raises(ValueError, match="values"):
             sensitivity_analysis(
                 table="mortality",
@@ -205,9 +207,6 @@ class TestSensitivityAnalysisValidation:
 
     def test_invalid_shock_type_raises(self):
         """Invalid shock type should raise ValueError."""
-        # Arrange / Act / Assert
-        import pytest
-
         with pytest.raises(ValueError, match="shock_type"):
             sensitivity_analysis(
                 table="mortality",
@@ -219,10 +218,11 @@ class TestSensitivityAnalysisValidation:
 class TestSensitivityAnalysisWorkflow:
     """Tests for integration with other scenario functions."""
 
-    def test_output_compatible_with_describe_scenarios(self):
-        """Output can be passed directly to describe_scenarios."""
+    def test_output_compatible_with_scenario_run(self):
+        """Output can be wrapped directly in a ScenarioRun for audit."""
         # Arrange
-        from gaspatchio_core.scenarios import describe_scenarios
+        from gaspatchio_core.scenarios import ScenarioRun
+        from gaspatchio_core.scenarios._aggregators import Sum
 
         values = [0.9, 1.0, 1.1]
 
@@ -232,12 +232,13 @@ class TestSensitivityAnalysisWorkflow:
             shock_type="multiplicative",
             values=values,
         )
-        description = describe_scenarios(shocks_dict)
+        agg = Sum("dummy").alias("dummy")
+        plan = ScenarioRun(shocks=shocks_dict, base_tables={}, aggregations=(agg,))
 
-        # Assert
-        assert "mortality_0.9" in description
-        assert "mortality_1.0" in description
-        assert "mortality_1.1" in description
+        # Assert: canonical form preserves the sensitivity scenario IDs
+        canon_keys = set(plan.canonical_form()["shocks"].keys())
+        assert canon_keys == {"mortality_0.9", "mortality_1.0", "mortality_1.1"}
+        assert "scenarios=3" in plan.describe()
 
     def test_includes_base_case_when_requested(self):
         """Can include a base case scenario with no shocks."""
@@ -259,6 +260,6 @@ class TestSensitivityAnalysisWorkflow:
 
 def test_import_sensitivity_analysis():
     """sensitivity_analysis should be importable from scenarios module."""
-    from gaspatchio_core.scenarios import sensitivity_analysis as sa
+    from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis as sa
 
     assert callable(sa)

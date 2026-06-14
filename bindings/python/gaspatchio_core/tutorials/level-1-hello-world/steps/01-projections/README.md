@@ -4,9 +4,9 @@ Adds the time dimension to the base model. After this step, each policy has a li
 
 ## What changes from base
 
-One function call transforms everything: `af.date.create_projection_timeline()`.
+One function call declares the time axis: `af.projection.set()`.
 
-Before calling it, every column is a scalar — one value per policy. After calling it, any column you assign becomes a list — one value per policy per month. Existing scalar columns remain scalar and broadcast automatically when you use them in arithmetic with list columns.
+Before calling it, every column is a scalar — one value per policy. After calling it, the frame knows about a projection grid; assigning a list-valued projection accessor (e.g. `af.projection.period_dates()`) produces a list column — one value per policy per month. Existing scalar columns remain scalar and broadcast automatically when you use them in arithmetic with list columns.
 
 ## What is a list column?
 
@@ -25,23 +25,23 @@ A list column stores a Python list in each cell. For a 3-policy model with 12 pr
 
 Each element is one projection period. All 13 months are computed simultaneously — no loops.
 
-## How create_projection_timeline works
+## How `af.projection.set()` works
 
 ```python
-af = af.date.create_projection_timeline(
-    valuation_date=VALUATION_DATE,          # projection starts here
-    projection_end_type="term_months",      # end after a fixed number of months
-    projection_end_value=12,               # 12 months
-    projection_frequency="monthly",         # one period per month
-    output_column="projection_date",        # name of the new date list column
+af = af.projection.set(
+    valuation_date=VALUATION_DATE,    # projection starts here
+    until="term_months",              # end after a fixed number of months
+    until_value=12,                   # 12 months
+    frequency="monthly",              # one period per month
 )
+af.projection_date = af.projection.period_dates()
 ```
 
-This adds a `projection_date` list column — the first day of each projected month. All subsequent column assignments produce list columns automatically.
+`af.projection.set()` declares the projection grid on the frame. Assigning `af.projection.period_dates()` materialises the per-period date vector as a list column — the first day of each projected month.
 
 ## Broadcasting scalars to lists
 
-Scalar arithmetic still works after create_projection_timeline. If `af.annual_premium` is scalar (one value per policy) and `af.month` is a list, then:
+Scalar arithmetic still works after `af.projection.set()`. If `af.annual_premium` is scalar (one value per policy) and `af.month` is a list, then:
 
 ```python
 af.monthly_premium = af.annual_premium / 12.0   # stays scalar

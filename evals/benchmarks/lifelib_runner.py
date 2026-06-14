@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: T201
 """lifelib IntegratedLife runner module.
 
@@ -13,6 +17,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import sys
 import time
 import tracemalloc
 from pathlib import Path
@@ -21,8 +26,13 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     pass
 
-# Default model directory — relative to this file's location
-_DEFAULT_MODEL_DIR = Path(__file__).resolve().parent / "lifelib_ref"
+# Make the repo root importable so `evals.benchmarks._benchmarks_dir` resolves
+# when this module is imported from any cwd (e.g. bindings/python/ in CI).
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from evals.benchmarks._benchmarks_dir import _resolve_benchmarks_dir
 
 # The modelx model name on disk
 _MODEL_NAME = "IntegratedLife"
@@ -130,8 +140,10 @@ def setup_lifelib(
 
     Args:
         model_dir: Directory that contains the ``IntegratedLife`` model
-            folder. Defaults to the ``lifelib_ref`` directory bundled with
-            this benchmark suite.
+            folder. Defaults to the gaspatchio-benchmarks sister repository
+            resolved via ``GASPATCHIO_BENCHMARKS_DIR`` or a sister-checkout
+            at ``../gaspatchio-benchmarks/``. See
+            :func:`evals.benchmarks._benchmarks_dir._resolve_benchmarks_dir`.
         num_scenarios: Number of stochastic scenarios to use. Pass ``1``
             for deterministic / fastest mode.
 
@@ -147,7 +159,7 @@ def setup_lifelib(
         * ``model_dir`` — resolved Path to the model directory.
     """
     if model_dir is None:
-        model_dir = _DEFAULT_MODEL_DIR
+        model_dir = _resolve_benchmarks_dir()
 
     model_dir = Path(model_dir).resolve()
     original_cwd = Path.cwd()
@@ -263,7 +275,7 @@ def swap_model_points_csv(
 
 if __name__ == "__main__":
     print("=== lifelib_runner smoke test ===")
-    print(f"Model directory: {_DEFAULT_MODEL_DIR}")
+    print(f"Model directory: {_resolve_benchmarks_dir()}")
 
     print("\n[1/3] Setting up lifelib (loading model)…")
     ctx = setup_lifelib(num_scenarios=1)

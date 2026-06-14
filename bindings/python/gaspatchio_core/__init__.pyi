@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: F401 - symbols are publicly exposed
 from __future__ import annotations
 
@@ -30,16 +34,26 @@ from .frame import run_model as run_model
 from .functions.conditional import when as when
 
 # Scenarios
-from .scenarios import batch_scenarios as batch_scenarios
-from .scenarios import describe_scenarios as describe_scenarios
-from .scenarios import sensitivity_analysis as sensitivity_analysis
+from .scenarios import AggregatedResult as AggregatedResult
+from .scenarios import PeriodCount as PeriodCount
+from .scenarios import PeriodCTE as PeriodCTE
+from .scenarios import PeriodMax as PeriodMax
+from .scenarios import PeriodMean as PeriodMean
+from .scenarios import PeriodMedian as PeriodMedian
+from .scenarios import PeriodMin as PeriodMin
+from .scenarios import PeriodQuantile as PeriodQuantile
+from .scenarios import PeriodStd as PeriodStd
+from .scenarios import PeriodSum as PeriodSum
+from .scenarios import PeriodVariance as PeriodVariance
+from .scenarios import SpillResult as SpillResult
+from .scenarios import run_aggregated as run_aggregated
+from .scenarios import run_to_parquet as run_to_parquet
 from .scenarios import with_scenarios as with_scenarios
 
 # Utility functions
 from .util import execution_mode as execution_mode
 from .util import get_default_mode as get_default_mode
 from .util import set_default_mode as set_default_mode
-
 
 if TYPE_CHECKING:
     # Make submodules available for type checking if needed, but not strictly part of __all__
@@ -52,21 +66,32 @@ if TYPE_CHECKING:
 # Define __all__ to match __init__.py exactly
 __all__: list[str] = [
     "ActuarialFrame",
+    "AggregatedResult",
     "ColumnProxy",
     "ExpressionProxy",
     "PerformanceWarning",
+    "PeriodCTE",
+    "PeriodCount",
+    "PeriodMax",
+    "PeriodMean",
+    "PeriodMedian",
+    "PeriodMin",
+    "PeriodQuantile",
+    "PeriodStd",
+    "PeriodSum",
+    "PeriodVariance",
+    "SpillResult",
     "Table",
     "TableBuilder",
-    "batch_scenarios",
-    "describe_scenarios",
     "execution_mode",
     "functions",
     "get_default_mode",
     "get_table_metadata",
     "list_tables",
     "list_tables_with_metadata",
+    "run_aggregated",
     "run_model",
-    "sensitivity_analysis",
+    "run_to_parquet",
     "set_default_mode",
     "when",
     "with_scenarios",

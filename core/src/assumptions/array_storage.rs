@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: Multi-dimensional array storage for assumption tables.
 // ABOUTME: Uses dictionary-encoded keys for O(1) array indexing instead of hash lookups.
 
@@ -166,16 +170,16 @@ impl ArrayStorage {
             let mut valid = true;
 
             for k in 0..n_keys {
-                let idx = unsafe { *encoded_cols.get_unchecked(k).get_unchecked(i) };
+                let idx = encoded_cols[k][i];
                 if idx == invalid {
                     valid = false;
                     break;
                 }
-                linear_idx += idx as usize * unsafe { *strides.get_unchecked(k) };
+                linear_idx += idx as usize * strides[k];
             }
 
             if valid && linear_idx < data_len {
-                unsafe { *out.get_unchecked_mut(i) = *data.get_unchecked(linear_idx) };
+                out[i] = data[linear_idx];
             }
         }
 
@@ -216,16 +220,34 @@ impl ArrayStorage {
         vector_len: usize,
         vector_indices: &[usize],
     ) -> PolarsResult<Series> {
-        // Step 1: Get offsets from the first vector column
+        // Step 1: Get offsets from the first vector column.
+        //
+        // Rechunk to a single contiguous chunk so the offsets we read here
+        // and the data the encoder sees after explode are aligned. Without
+        // this, multi-chunk ListChunked (typical under the streaming
+        // engine when downstream operations split the plan) produces
+        // offsets that count across all chunks but per-key encodings
+        // that only see the first chunk — the inner loop then walks past
+        // the encoded buffer and panics.
         let first_vec_idx = vector_indices[0];
-        let first_list = key_cols[first_vec_idx].list()?;
-        let offsets_buf = first_list.offsets()?;
+        let first_list_rechunked = key_cols[first_vec_idx].list()?.rechunk().into_owned();
+        let offsets_buf = first_list_rechunked.offsets()?;
         let offsets = offsets_buf.as_slice();
-        let total_len = offsets[offsets.len() - 1] as usize;
+        // Offsets may be absolute positions into the underlying buffer when
+        // the list column has been sliced (e.g. by the streaming engine
+        // running with-columns in chunks). `explode()` correctly returns
+        // only this chunk's elements, so `total_len` must be the *relative*
+        // length (offsets[last] - offsets[0]), not the absolute final offset.
+        let total_len = (offsets[offsets.len() - 1] - offsets[0]) as usize;
         let outer_len = vector_len;
 
-        // Step 2: Encode all columns to flat u32 index arrays
-        let encoded = self.encode_columns_flat(key_cols, offsets, total_len, outer_len, vector_indices)?;
+        // Step 2: Encode all columns to flat u32 index arrays.
+        // Pass the rechunked first vector column back through key_cols so
+        // the encoder sees the same single-chunk view our offsets came from.
+        let first_vec_series = first_list_rechunked.into_series();
+        let mut key_cols_rechunked: Vec<&Series> = key_cols.to_vec();
+        key_cols_rechunked[first_vec_idx] = &first_vec_series;
+        let encoded = self.encode_columns_flat(&key_cols_rechunked, offsets, total_len, outer_len, vector_indices)?;
 
         // Step 3+4 fused: Compute linear index and gather value in one pass
         let data = &self.data;
@@ -240,16 +262,16 @@ impl ArrayStorage {
             let mut valid = true;
 
             for k in 0..n_keys {
-                let idx = unsafe { *encoded.get_unchecked(k).get_unchecked(i) };
+                let idx = encoded[k][i];
                 if idx == invalid {
                     valid = false;
                     break;
                 }
-                linear_idx += idx as usize * unsafe { *strides.get_unchecked(k) };
+                linear_idx += idx as usize * strides[k];
             }
 
             if valid && linear_idx < data_len {
-                unsafe { *flat_values.get_unchecked_mut(i) = *data.get_unchecked(linear_idx) };
+                flat_values[i] = data[linear_idx];
             }
         }
 
@@ -259,8 +281,12 @@ impl ArrayStorage {
             .ok_or_else(|| polars_err!(ComputeError: "empty chunked array"))?
             .clone();
 
-        // Convert i64 offsets to polars-arrow OffsetsBuffer<i64>
-        let offsets_i64: Vec<i64> = offsets.to_vec();
+        // Convert i64 offsets to polars-arrow OffsetsBuffer<i64>.
+        // Normalise to start at 0 — the input offsets may be absolute
+        // positions into a sliced parent buffer, but the values array we
+        // build from flat_values is relative (length = total_len).
+        let base = offsets[0];
+        let offsets_i64: Vec<i64> = offsets.iter().map(|o| o - base).collect();
         let try_offsets = polars_arrow::offset::OffsetsBuffer::try_from(offsets_i64)
             .map_err(|e| polars_err!(ComputeError: "invalid offsets: {}", e))?;
 
@@ -273,11 +299,7 @@ impl ArrayStorage {
             None,
         );
 
-        let list_chunked = unsafe {
-            ListChunked::from_chunks("lookup_result".into(), vec![Box::new(list_array)])
-        };
-
-        Ok(list_chunked.into_series())
+        Series::from_arrow("lookup_result".into(), Box::new(list_array))
     }
 
     /// Encode all key columns into flat u32 index arrays of length total_len.

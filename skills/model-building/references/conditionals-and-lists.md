@@ -1,59 +1,34 @@
 # Conditionals and List Operations
 
-## The #1 Runtime Error: List/Scalar Mismatch
+## `when().then().otherwise()` is the canonical conditional
 
-This is the single most common gaspatchio error. It crashes at runtime with:
-
-```
-"Unsupported combination of list/scalar inputs"
-```
-
-### What Causes It
-
-`when().then(SCALAR).otherwise(LIST_COLUMN)` — mixing a literal scalar with a list column in the same conditional:
+Use `when().then().otherwise()` as the **default** for all conditional logic. It reads like English, mirrors Excel's `IF()`, and gaspatchio routes it correctly regardless of whether the branches are scalars, list columns, or a mix:
 
 ```python
-# CRASHES — scalar 1.0 mixed with list column af.cso_table
-af.cso_table = when(af.age > 99).then(1.0).otherwise(af.cso_table)
-```
+# All four forms are supported and lower to the same correct result.
 
-### The Fix: Arithmetic Masking
-
-Create a 0/1 flag, then blend with arithmetic:
-
-```python
-# ALWAYS WORKS — arithmetic masking
-af.is_age_over_99 = when(af.real_attained_age > 99).then(1.0).otherwise(0.0)
-af.cso_table = af.cso_table * (1 - af.is_age_over_99) + 1.0 * af.is_age_over_99
-```
-
-The pattern is: `result = original * (1 - flag) + replacement * flag`
-
-### When `when/then/otherwise` IS Safe
-
-It works fine when both branches are the same type:
-
-```python
-# OK — both branches are scalars
+# Both scalars
 af.commission = when(af.duration == 0).then(af.premium).otherwise(0.0)
 
-# OK — both branches are list columns
+# Two list columns
 af.rate = when(af.year <= 10).then(af.select_rate).otherwise(af.ultimate_rate)
 
-# OK — flag creation (both branches are scalar literals)
-af.is_male = when(af.sex == "M").then(1.0).otherwise(0.0)
+# Scalar predicate, list `then`, scalar `otherwise` — broadcasts correctly
+af.cso_table = when(af.age > 99).then(1.0).otherwise(af.cso_table)
+
+# List predicate, mixed branches — element-wise via list_conditional
+af.pols_if = (
+    when(af.duration_mth_t < af.maturity_month)
+    .then(af.survival_prob * af.policy_count)
+    .otherwise(0.0)
+)
 ```
 
-### General Rule
+The dispatch refactor (PRs #99 / #100 / #101) eliminated the old "list/scalar mismatch" failure mode. Earlier docs taught arithmetic-masking blends (`original * (1 - flag) + replacement * flag`) and shape-preserving zeros (`.otherwise(af.duration * 0.0)`) as workarounds for limitations that no longer exist. **Do not write those patterns in new code** — they obscure intent and the underlying issue is gone.
 
-- **Flag creation** (0.0 / 1.0 from a condition): `when/then/otherwise` is fine
-- **Replacing values in a list column**: use arithmetic masking
-- **Choosing between two list columns**: `when/then/otherwise` is fine
-- When in doubt: use arithmetic masking — it never crashes
+### Boolean masking remains a valid optimisation, not a teaching pattern
 
-### Default: Prefer `when/then/otherwise` for Readability
-
-Use `when().then().otherwise()` as the **default** for all conditional logic. It reads like English and mirrors Excel's `IF()`, making models accessible to actuaries who will review and audit the code.
+`value * (predicate)` still works and is occasionally useful in performance-critical paths. It is **not** the recommended style for model code that other actuaries will read or audit:
 
 ```python
 # PREFERRED — reads like a business rule
@@ -63,23 +38,11 @@ af.pols_if = (
     .otherwise(0.0)
 )
 
-# AVOID in teaching/audit code — reads like a programmer's trick
+# AVOID in teaching / audit code — reads like a programmer's trick
 af.pols_if = af.survival_prob * af.policy_count * (af.duration_mth_t < af.maturity_month)
 ```
 
-Boolean masking (`value * condition`) is an **advanced pattern** for performance-critical paths. Do not use it in models that will be reviewed by non-programmers.
-
-### Shape-Preserving Zero in `otherwise()`
-
-When the `then()` branch produces a list column, the `otherwise()` branch must also be list-shaped. A bare `0.0` scalar can cause "Unsupported combination of list/scalar inputs". Use a shape-preserving expression:
-
-```python
-# If both branches involve list columns, this works fine:
-af.x = when(condition).then(af.list_col).otherwise(0.0)  # OK — gaspatchio handles this
-
-# If you get a shape error, use a column expression that preserves shape:
-af.x = when(condition).then(af.list_col).otherwise(af.duration * 0.0)
-```
+The two forms produce identical results.
 
 ---
 

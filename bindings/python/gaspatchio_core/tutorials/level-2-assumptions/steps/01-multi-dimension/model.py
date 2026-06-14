@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 2 → Step 01: Multi-Dimension Table
 
@@ -72,7 +76,7 @@ mort_data = pl.DataFrame(_mort_rows)
 mort_table = Table(
     name="mortality",
     source=mort_data,
-    dimensions={"age": "age", "sex": "sex"},   # both columns are lookup keys
+    dimensions={"age": "age", "sex": "sex"},  # both columns are lookup keys
     value="qx",
 )
 
@@ -104,13 +108,13 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
     )
 
-    af = af.date.create_projection_timeline(
+    af = af.projection.set(
         valuation_date=VALUATION_DATE,
-        projection_end_type="term_months",
-        projection_end_value=PROJECTION_MONTHS,
-        projection_frequency="monthly",
-        output_column="projection_date",
+        until="term_months",
+        until_value=PROJECTION_MONTHS,
+        frequency="monthly",
     )
+    af.projection_date = af.projection.period_dates()
 
     af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
         af.projection_date.dt.month() - VALUATION_DATE.month

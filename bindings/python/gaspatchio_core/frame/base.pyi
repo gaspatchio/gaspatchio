@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
@@ -99,9 +103,6 @@ class ActuarialFrame:
     def __dir__(self) -> list[str]:
         """Provide enhanced list including accessors and eligible column names."""
 
-    def _expr_to_str(self, value: Any) -> str:
-        """Convert an expression to a readable string (simplified)."""
-
     def _convert_to_expr(self, value: Any) -> pl.Expr:
         """Convert a value to a Polars expression."""
 
@@ -112,7 +113,12 @@ class ActuarialFrame:
         """Decorator to capture operations within a function call in optimize mode."""
 
     def collect(self, *, engine: str = "streaming") -> pl.DataFrame:
-        """Execute and materialize the dataframe."""
+        """Execute and materialize the dataframe.
+
+        Public escape hatch from the lazy ``ActuarialFrame`` graph to an
+        eager :class:`polars.DataFrame`. Use inside a stochastic scenario
+        kernel when you need column arrays for a numpy RNG.
+        """
 
     def profile(self) -> tuple[pl.DataFrame, pl.DataFrame]:
         """Execute and materialize the dataframe with profiling, returning (result_df, profile_info)."""

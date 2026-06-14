@@ -1,4 +1,8 @@
-# ABOUTME: Tests for enhanced shock system (GSP-71) including clip, pipeline, where, when.
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# ABOUTME: Tests for enhanced shock system (GSP-71): clip, pipeline, where, when.
 # ABOUTME: Verifies Solvency II SCR scenarios can be expressed declaratively.
 
 """Tests for enhanced shock system (GSP-71).
@@ -13,6 +17,8 @@ This module tests the full range of actuarial stress testing capabilities:
 import polars as pl
 import pytest
 
+from gaspatchio_core.scenarios import ScenarioRun, parse_shock_config
+from gaspatchio_core.scenarios._aggregators import Sum
 from gaspatchio_core.scenarios.shocks import (
     AdditiveShock,
     ClipShock,
@@ -26,7 +32,6 @@ from gaspatchio_core.scenarios.shocks import (
     Shock,
     TimeConditionalShock,
 )
-from gaspatchio_core.scenarios import parse_shock_config, describe_scenarios
 
 
 class TestClipShock:
@@ -153,17 +158,18 @@ class TestFilteredShock:
             where={"product": "TERM"},
         )
 
-        df = pl.DataFrame({
+        rates = pl.DataFrame({
             "product": ["TERM", "WL", "TERM", "WL"],
             "rate": [0.10, 0.05, 0.08, 0.04],
         })
 
-        result = df.with_columns(
+        result = rates.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
         )
 
         # Only TERM products should be shocked
-        assert result["shocked_rate"].to_list() == pytest.approx([0.15, 0.05, 0.12, 0.04])
+        expected = [0.15, 0.05, 0.12, 0.04]
+        assert result["shocked_rate"].to_list() == pytest.approx(expected)
 
     def test_filtered_by_comparison(self):
         """FilteredShock with comparison operator (lte)."""
@@ -172,12 +178,12 @@ class TestFilteredShock:
             where={"duration": {"lte": 3}},
         )
 
-        df = pl.DataFrame({
+        lapse_by_duration = pl.DataFrame({
             "duration": [1, 2, 3, 4, 5],
             "rate": [0.10, 0.08, 0.06, 0.05, 0.04],
         })
 
-        result = df.with_columns(
+        result = lapse_by_duration.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
         )
 
@@ -192,12 +198,12 @@ class TestFilteredShock:
             where={"age": {"between": [30, 50]}},
         )
 
-        df = pl.DataFrame({
+        mortality_by_age = pl.DataFrame({
             "age": [25, 30, 40, 50, 60],
             "rate": [0.001, 0.002, 0.004, 0.008, 0.015],
         })
 
-        result = df.with_columns(
+        result = mortality_by_age.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
         )
 
@@ -212,13 +218,13 @@ class TestFilteredShock:
             where={"sex": "F", "smoker": "NS"},
         )
 
-        df = pl.DataFrame({
+        segment_rates = pl.DataFrame({
             "sex": ["M", "F", "F", "M"],
             "smoker": ["NS", "S", "NS", "NS"],
             "rate": [0.01, 0.02, 0.015, 0.012],
         })
 
-        result = df.with_columns(
+        result = segment_rates.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
         )
 
@@ -248,12 +254,12 @@ class TestTimeConditionalShock:
             when={"t": {"eq": 0}},
         )
 
-        df = pl.DataFrame({
+        lapse_proj = pl.DataFrame({
             "t": [0, 1, 2, 3],
             "rate": [0.05, 0.05, 0.05, 0.05],
         })
 
-        result = df.with_columns(
+        result = lapse_proj.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
         )
 
@@ -268,12 +274,12 @@ class TestTimeConditionalShock:
             when={"t": {"lte": 5}},
         )
 
-        df = pl.DataFrame({
+        lapse_proj = pl.DataFrame({
             "t": [1, 3, 5, 7, 10],
             "rate": [0.10, 0.10, 0.10, 0.10, 0.10],
         })
 
-        result = df.with_columns(
+        result = lapse_proj.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
         )
 
@@ -297,7 +303,7 @@ class TestMaxMinShock:
     """Tests for MaxShock and MinShock."""
 
     def test_max_shock_lapse_down(self):
-        """MaxShock for Solvency II lapse down: max(×0.5, -0.2)."""
+        """MaxShock for Solvency II lapse down: max(x0.5, -0.2)."""
         shock = MaxShock(
             shock_a=MultiplicativeShock(factor=0.5),
             shock_b=AdditiveShock(delta=-0.2),
@@ -322,7 +328,6 @@ class TestMaxMinShock:
             shock_b=OverrideShock(value=0.1),
         )
 
-        # min(rate*1.5, 0.1)
         values = pl.Series("rate", [0.05, 0.07, 0.10])
 
         expr = shock.to_expression(pl.col("rate"))
@@ -447,7 +452,7 @@ class TestSolvency2SCRScenarios:
     """Integration tests for Solvency II SCR scenarios from the issue."""
 
     def test_lapse_up_scenario(self):
-        """Solvency II lapse up: min(lapse × 1.5, 1.0)."""
+        """Solvency II lapse up: min(lapse * 1.5, 1.0)."""
         config = {
             "table": "lapse",
             "pipeline": [
@@ -457,20 +462,20 @@ class TestSolvency2SCRScenarios:
         }
         shock = parse_shock_config(config)
 
-        df = pl.DataFrame({"rate": [0.5, 0.7, 0.9, 1.0]})
-        result = df.with_columns(
+        lapse_rates = pl.DataFrame({"rate": [0.5, 0.7, 0.9, 1.0]})
+        result = lapse_rates.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked")
         )
 
         # 0.5 * 1.5 = 0.75 (no cap)
-        # 0.7 * 1.5 = 1.05 → 1.0 (capped)
-        # 0.9 * 1.5 = 1.35 → 1.0 (capped)
-        # 1.0 * 1.5 = 1.50 → 1.0 (capped)
+        # 0.7 * 1.5 = 1.05 -> 1.0 (capped)
+        # 0.9 * 1.5 = 1.35 -> 1.0 (capped)
+        # 1.0 * 1.5 = 1.50 -> 1.0 (capped)
         expected = [0.75, 1.0, 1.0, 1.0]
         assert result["shocked"].to_list() == pytest.approx(expected)
 
     def test_lapse_down_scenario(self):
-        """Solvency II lapse down: max(lapse × 0.5, lapse - 0.2)."""
+        """Solvency II lapse down: max(lapse * 0.5, lapse - 0.2)."""
         config = {
             "table": "lapse",
             "max": [
@@ -481,8 +486,8 @@ class TestSolvency2SCRScenarios:
         shock = parse_shock_config(config)
 
         # Test at various lapse levels
-        df = pl.DataFrame({"rate": [0.60, 0.30, 0.10, 0.05]})
-        result = df.with_columns(
+        lapse_rates = pl.DataFrame({"rate": [0.60, 0.30, 0.10, 0.05]})
+        result = lapse_rates.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked")
         )
 
@@ -502,11 +507,11 @@ class TestSolvency2SCRScenarios:
         }
         shock = parse_shock_config(config)
 
-        df = pl.DataFrame({
+        lapse_proj = pl.DataFrame({
             "t": [0, 1, 2, 3],
             "rate": [0.05, 0.05, 0.04, 0.04],
         })
-        result = df.with_columns(
+        result = lapse_proj.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked")
         )
 
@@ -522,8 +527,8 @@ class TestSolvency2SCRScenarios:
         }
         shock = parse_shock_config(config)
 
-        df = pl.DataFrame({"rate": [0.02, 0.025, 0.03]})
-        result = df.with_columns(
+        infl_rates = pl.DataFrame({"rate": [0.02, 0.025, 0.03]})
+        result = infl_rates.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked")
         )
 
@@ -539,11 +544,11 @@ class TestSolvency2SCRScenarios:
         }
         shock = parse_shock_config(config)
 
-        df = pl.DataFrame({
+        lapse_by_duration = pl.DataFrame({
             "duration": [1, 2, 3, 4, 5],
             "rate": [0.10, 0.08, 0.06, 0.05, 0.04],
         })
-        result = df.with_columns(
+        result = lapse_by_duration.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked")
         )
 
@@ -570,7 +575,9 @@ class TestParameterShock:
 
     def test_parameter_shock_set(self):
         """ParameterShock with set operation."""
-        shock = ParameterShock(param="mortality_improvement", operation="set", value=0.0)
+        shock = ParameterShock(
+            param="mortality_improvement", operation="set", value=0.0
+        )
 
         result = shock.apply(0.005)
         assert result == 0.0
@@ -648,75 +655,51 @@ class TestBackwardCompatibility:
             parse_shock_config({"multiply": 1.2})
 
 
-class TestDescribeScenariosWithNewShocks:
-    """Tests for describe_scenarios with new shock types."""
+class TestShockDescribeWithNewShocks:
+    """Tests that each enhanced shock type provides a human-readable describe()."""
 
     def test_describe_pipeline_shock(self):
-        """describe_scenarios handles PipelineShock."""
-        scenarios = {
-            "LAPSE_UP": [
-                PipelineShock(
-                    shocks=(
-                        MultiplicativeShock(factor=1.5),
-                        ClipShock(max_value=1.0),
-                    ),
-                    table="lapse",
-                )
-            ],
-        }
-        result = describe_scenarios(scenarios, output_format="dict")
-        assert "LAPSE_UP" in result
-        desc = result["LAPSE_UP"][0]
+        """PipelineShock.describe() shows composition."""
+        shock = PipelineShock(
+            shocks=(
+                MultiplicativeShock(factor=1.5),
+                ClipShock(max_value=1.0),
+            ),
+            table="lapse",
+        )
+        desc = shock.describe()
         assert "pipeline" in desc.lower()
         assert "→" in desc
 
     def test_describe_filtered_shock(self):
-        """describe_scenarios handles FilteredShock."""
-        scenarios = {
-            "EARLY_LAPSE": [
-                FilteredShock(
-                    shock=MultiplicativeShock(factor=1.25),
-                    where={"duration": {"lte": 3}},
-                    table="lapse",
-                )
-            ],
-        }
-        result = describe_scenarios(scenarios, output_format="dict")
-        desc = result["EARLY_LAPSE"][0]
-        assert "WHERE" in desc
+        """FilteredShock.describe() shows the WHERE clause."""
+        shock = FilteredShock(
+            shock=MultiplicativeShock(factor=1.25),
+            where={"duration": {"lte": 3}},
+            table="lapse",
+        )
+        assert "WHERE" in shock.describe()
 
     def test_describe_time_conditional_shock(self):
-        """describe_scenarios handles TimeConditionalShock."""
-        scenarios = {
-            "MASS_LAPSE": [
-                TimeConditionalShock(
-                    shock=AdditiveShock(delta=0.40),
-                    when={"t": {"eq": 0}},
-                    table="lapse",
-                )
-            ],
-        }
-        result = describe_scenarios(scenarios, output_format="dict")
-        desc = result["MASS_LAPSE"][0]
-        assert "WHEN" in desc
+        """TimeConditionalShock.describe() shows the WHEN clause."""
+        shock = TimeConditionalShock(
+            shock=AdditiveShock(delta=0.40),
+            when={"t": {"eq": 0}},
+            table="lapse",
+        )
+        assert "WHEN" in shock.describe()
 
     def test_describe_max_shock(self):
-        """describe_scenarios handles MaxShock."""
-        scenarios = {
-            "LAPSE_DOWN": [
-                MaxShock(
-                    shock_a=MultiplicativeShock(factor=0.5),
-                    shock_b=AdditiveShock(delta=-0.2),
-                    table="lapse",
-                )
-            ],
-        }
-        result = describe_scenarios(scenarios, output_format="dict")
-        desc = result["LAPSE_DOWN"][0]
-        assert "max" in desc.lower()
+        """MaxShock.describe() shows the max combinator."""
+        shock = MaxShock(
+            shock_a=MultiplicativeShock(factor=0.5),
+            shock_b=AdditiveShock(delta=-0.2),
+            table="lapse",
+        )
+        assert "max" in shock.describe().lower()
 
-    def test_describe_full_solvency2_config(self):
-        """describe_scenarios handles complete Solvency II SCR config."""
+    def test_scenario_run_summary_for_solvency2_config(self):
+        """ScenarioRun summarises a complete Solvency II SCR config."""
         scenarios = {
             "BASE": [],
             "LAPSE_UP": [
@@ -744,18 +727,14 @@ class TestDescribeScenariosWithNewShocks:
             ],
         }
 
-        # Markdown format
-        md = describe_scenarios(scenarios, output_format="markdown")
-        assert "# Scenario Configuration" in md
-        assert "## BASE" in md
-        assert "## LAPSE_UP" in md
-        assert "## LAPSE_DOWN" in md
-        assert "## MASS_LAPSE" in md
+        agg = Sum("dummy").alias("dummy")
+        plan = ScenarioRun(shocks=scenarios, base_tables={}, aggregations=(agg,))
+        summary = plan.describe()
+        assert "scenarios=4" in summary
+        assert "sha=sha256:" in summary
 
-        # Text format
-        txt = describe_scenarios(scenarios, output_format="text")
-        assert "Scenario: BASE" in txt
-        assert "Scenario: LAPSE_UP" in txt
+        canon_keys = set(plan.canonical_form()["shocks"].keys())
+        assert canon_keys == {"BASE", "LAPSE_UP", "LAPSE_DOWN", "MASS_LAPSE"}
 
 
 def test_all_shock_types_importable():
@@ -774,11 +753,15 @@ def test_all_shock_types_importable():
         TimeConditionalShock,
     )
 
-    # Verify they're all there
+    # Verify all types are present and non-None
+    assert AdditiveShock is not None
     assert ClipShock is not None
     assert FilteredShock is not None
     assert MaxShock is not None
     assert MinShock is not None
+    assert MultiplicativeShock is not None
+    assert OverrideShock is not None
     assert ParameterShock is not None
     assert PipelineShock is not None
+    assert Shock is not None
     assert TimeConditionalShock is not None

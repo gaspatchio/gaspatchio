@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/column/expression_proxy.py
-# hypothesis_version: 6.135.0
-
-[100, 'ActuarialFrame', 'DateColumnAccessor', 'ExpressionProxy', 'column', 'date', 'finance']

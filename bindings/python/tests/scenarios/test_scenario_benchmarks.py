@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Performance benchmark tests for scenario functionality.
 # ABOUTME: Measures scenario expansion and full model execution at various scales.
 
@@ -6,6 +10,7 @@
 import importlib.util
 import sys
 import types
+from itertools import batched
 from pathlib import Path
 
 import polars as pl
@@ -352,24 +357,13 @@ class TestStreamingComparison:
 
 
 class TestBatchAPIBenchmarks:
-    """Benchmark tests for the batch_scenarios API.
+    """Benchmark tests verifying batched scenario execution bounds memory.
 
-    These tests verify that batching keeps memory bounded when processing
-    large scenario counts.
+    Note: The pre-GSP-100 ``batch_scenarios`` helper has been retired in favour
+    of ``for_each_scenario(batch_size=N)``. These benchmarks still chunk a
+    scenario-id list explicitly via ``itertools.batched`` to drive the
+    classic batch-and-aggregate pattern.
     """
-
-    @pytest.mark.benchmark(group="batch-api")
-    def test_batch_iteration_10k_scenarios(self) -> None:
-        """Verify batch_scenarios correctly chunks 10k scenarios."""
-        from gaspatchio_core.scenarios import batch_scenarios
-
-        scenario_ids = list(range(1, 10001))
-        batches = list(batch_scenarios(scenario_ids, batch_size=1000))
-
-        assert len(batches) == 10
-        assert len(batches[0]) == 1000
-        assert batches[0][0] == 1
-        assert batches[-1][-1] == 10000
 
     @pytest.mark.benchmark(group="batch-api")
     def test_batched_model_1k_x_100_in_batches_of_10(
@@ -380,8 +374,6 @@ class TestBatchAPIBenchmarks:
         This should use significantly less peak memory than processing
         all 100 scenarios at once, since we aggregate per-batch.
         """
-        from gaspatchio_core.scenarios import batch_scenarios
-
         model_module = load_scratch_module("model_applied_life")
         stochastic_module = load_scratch_module("stochastic_scenarios")
 
@@ -391,7 +383,8 @@ class TestBatchAPIBenchmarks:
         all_scenarios = list(range(1, 101))
         batch_aggregates = []
 
-        for batch_ids in batch_scenarios(all_scenarios, batch_size=10):
+        for batch_tuple in batched(all_scenarios, 10):
+            batch_ids = list(batch_tuple)
             # Generate returns only for this batch
             stochastic_returns = generate_returns(
                 n_scenarios=len(batch_ids), n_months=180, seed=12345 + batch_ids[0]
@@ -420,8 +413,6 @@ class TestBatchAPIBenchmarks:
 
         Larger batches = fewer iterations, but more memory per batch.
         """
-        from gaspatchio_core.scenarios import batch_scenarios
-
         model_module = load_scratch_module("model_applied_life")
         stochastic_module = load_scratch_module("stochastic_scenarios")
 
@@ -431,7 +422,8 @@ class TestBatchAPIBenchmarks:
         all_scenarios = list(range(1, 101))
         batch_aggregates = []
 
-        for batch_ids in batch_scenarios(all_scenarios, batch_size=50):
+        for batch_tuple in batched(all_scenarios, 50):
+            batch_ids = list(batch_tuple)
             stochastic_returns = generate_returns(
                 n_scenarios=len(batch_ids), n_months=180, seed=12345 + batch_ids[0]
             )
@@ -488,8 +480,6 @@ class TestBatchedVsUnbatched:
 
         Expected peak memory: ~570 MiB (10x less than unbatched).
         """
-        from gaspatchio_core.scenarios import batch_scenarios
-
         model_module = load_scratch_module("model_applied_life")
         stochastic_module = load_scratch_module("stochastic_scenarios")
 
@@ -499,7 +489,8 @@ class TestBatchedVsUnbatched:
         all_scenarios = list(range(1, 101))
         batch_aggregates = []
 
-        for batch_ids in batch_scenarios(all_scenarios, batch_size=10):
+        for batch_tuple in batched(all_scenarios, 10):
+            batch_ids = list(batch_tuple)
             stochastic_returns = generate_returns(
                 n_scenarios=len(batch_ids), n_months=180, seed=12345 + batch_ids[0]
             )
@@ -538,8 +529,6 @@ class TestSinkThenStream:
         This pattern is more flexible than batch-aggregate because
         you can do any aggregation later, not locked in upfront.
         """
-        from gaspatchio_core.scenarios import batch_scenarios
-
         model_module = load_scratch_module("model_applied_life")
         stochastic_module = load_scratch_module("stochastic_scenarios")
 
@@ -551,9 +540,8 @@ class TestSinkThenStream:
         output_dir.mkdir()
 
         # Phase 1: Run model in batches, sink full results to parquet
-        for batch_num, batch_ids in enumerate(
-            batch_scenarios(all_scenarios, batch_size=10)
-        ):
+        for batch_num, batch_tuple in enumerate(batched(all_scenarios, 10)):
+            batch_ids = list(batch_tuple)
             stochastic_returns = generate_returns(
                 n_scenarios=len(batch_ids), n_months=180, seed=12345 + batch_ids[0]
             )
@@ -589,8 +577,6 @@ class TestSinkThenStream:
         Once data is on disk, you can run any aggregation you want
         without re-running the model.
         """
-        from gaspatchio_core.scenarios import batch_scenarios
-
         model_module = load_scratch_module("model_applied_life")
         stochastic_module = load_scratch_module("stochastic_scenarios")
 
@@ -603,9 +589,8 @@ class TestSinkThenStream:
         output_dir.mkdir()
 
         # Phase 1: Sink results
-        for batch_num, batch_ids in enumerate(
-            batch_scenarios(all_scenarios, batch_size=10)
-        ):
+        for batch_num, batch_tuple in enumerate(batched(all_scenarios, 10)):
+            batch_ids = list(batch_tuple)
             stochastic_returns = generate_returns(
                 n_scenarios=len(batch_ids), n_months=180, seed=12345 + batch_ids[0]
             )
@@ -651,8 +636,6 @@ class TestSinkThenStream:
         Expected disk usage: ~19 GB
         Expected peak memory: ~1-2 GiB per batch (batch_size=10)
         """
-        from gaspatchio_core.scenarios import batch_scenarios
-
         model_module = load_scratch_module("model_applied_life")
         stochastic_module = load_scratch_module("stochastic_scenarios")
 
@@ -664,9 +647,8 @@ class TestSinkThenStream:
         output_dir.mkdir()
 
         # Phase 1: Run model in batches, sink full results to parquet
-        for batch_num, batch_ids in enumerate(
-            batch_scenarios(all_scenarios, batch_size=10)
-        ):
+        for batch_num, batch_tuple in enumerate(batched(all_scenarios, 10)):
+            batch_ids = list(batch_tuple)
             stochastic_returns = generate_returns(
                 n_scenarios=len(batch_ids), n_months=180, seed=12345 + batch_ids[0]
             )

@@ -1,6 +1,9 @@
-# ABOUTME: End-to-end integration test for the complete shock workflow.
-# ABOUTME: Tests sensitivity_analysis -> Table.from_shocks -> describe_scenarios.
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
 
+# ABOUTME: End-to-end integration test for the complete shock workflow.
+# ABOUTME: Tests sensitivity_analysis -> Table.from_shocks -> ScenarioRun.describe.
 """End-to-end integration test for the complete shock workflow."""
 
 from pathlib import Path
@@ -11,10 +14,11 @@ import pytest
 from gaspatchio_core import (
     ActuarialFrame,
     Table,
-    describe_scenarios,
-    sensitivity_analysis,
     with_scenarios,
 )
+from gaspatchio_core.scenarios import ScenarioRun
+from gaspatchio_core.scenarios._aggregators import Sum
+from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
 from gaspatchio_core.scenarios.shocks import (
     AdditiveShock,
     MultiplicativeShock,
@@ -109,8 +113,8 @@ class TestFullShockWorkflow:
             [0.075, 0.105, 0.135]
         )
 
-    def test_describe_scenarios_generates_audit_trail(self):
-        """describe_scenarios produces audit trail from sensitivity_analysis."""
+    def test_scenario_run_describe_generates_audit_trail(self):
+        """ScenarioRun.describe produces an audit summary from sensitivity_analysis."""
         # Generate shocks
         shocks = sensitivity_analysis(
             table="mortality",
@@ -118,20 +122,22 @@ class TestFullShockWorkflow:
             values=[0.9, 1.0, 1.1],
         )
 
-        # Generate audit trail
-        description = describe_scenarios(shocks)
+        # Build a plan and verify summary + canonical form
+        agg = Sum("dummy").alias("dummy")
+        plan = ScenarioRun(shocks=shocks, base_tables={}, aggregations=(agg,))
+        description = plan.describe()
 
-        # Verify audit content
-        assert "mortality_0.9" in description
-        assert "mortality_1.0" in description
-        assert "mortality_1.1" in description
-        assert "mortality" in description.lower()
-        assert "0.9" in description
+        # Summary string includes counts and a SHA
+        assert "scenarios=3" in description
+        assert "sha=sha256:" in description
 
-        # Also test dict format
-        dict_result = describe_scenarios(shocks, output_format="dict")
-        assert len(dict_result) == 3
-        assert all(isinstance(v, list) for v in dict_result.values())
+        # Canonical form exposes per-scenario shock data for audit
+        canon = plan.canonical_form()
+        assert set(canon["shocks"].keys()) == {
+            "mortality_0.9",
+            "mortality_1.0",
+            "mortality_1.1",
+        }
 
 
 class TestShockWorkflowWithScenarios:
@@ -247,53 +253,37 @@ class TestAuditTrailIntegration:
             ],
         }
 
-        # Generate audit trail
-        audit = describe_scenarios(scenarios)
+        agg = Sum("dummy").alias("dummy")
+        plan = ScenarioRun(shocks=scenarios, base_tables={}, aggregations=(agg,))
 
-        # Verify all scenarios documented
-        assert "BASE" in audit
-        assert "MORT_UP_20" in audit
-        assert "MORT_DOWN_20" in audit
-        assert "RATES_UP_100BP" in audit
-        assert "COMBINED_STRESS" in audit
+        # Summary string carries counts + SHA
+        summary = plan.describe()
+        assert "scenarios=5" in summary
+        assert "total_shocks=5" in summary
+        assert "sha=sha256:" in summary
 
-        # Verify shock details included
-        assert "1.2" in audit  # Mortality up factor
-        assert "0.8" in audit  # Mortality down factor
-        assert "0.01" in audit  # Rates delta
-        assert "1.3" in audit  # Combined mortality
-        assert "0.02" in audit  # Combined rates
-
-        # Verify table names included
-        assert "mortality" in audit
-        assert "discount_rates" in audit
-
-    def test_audit_trail_text_format(self):
-        """Audit trail in text format is readable."""
-        shocks = sensitivity_analysis(
-            table="mortality",
-            shock_type="multiplicative",
-            values=[0.9, 1.0, 1.1],
-        )
-
-        text_audit = describe_scenarios(shocks, output_format="text")
-
-        assert isinstance(text_audit, str)
-        assert "Scenario Configuration" in text_audit
-        assert "mortality_0.9" in text_audit
+        # Canonical form preserves every scenario for audit
+        canon = plan.canonical_form()
+        assert set(canon["shocks"].keys()) == {
+            "BASE",
+            "MORT_UP_20",
+            "MORT_DOWN_20",
+            "RATES_UP_100BP",
+            "COMBINED_STRESS",
+        }
 
 
 def test_workflow_imports():
-    """All workflow functions are importable from top level."""
+    """Workflow functions are importable; retired helpers via private paths."""
     from gaspatchio_core import (
         Table,
-        describe_scenarios,
-        sensitivity_analysis,
         with_scenarios,
     )
+    from gaspatchio_core.scenarios import ScenarioRun
+    from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
 
     assert callable(sensitivity_analysis)
-    assert callable(describe_scenarios)
     assert callable(with_scenarios)
+    assert hasattr(ScenarioRun, "describe")
     assert hasattr(Table, "from_shocks")
     assert hasattr(Table, "with_shock")

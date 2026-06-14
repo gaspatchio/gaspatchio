@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Constants for error handling system."""
 
 # Patterns to identify internal framework modules (not user code)

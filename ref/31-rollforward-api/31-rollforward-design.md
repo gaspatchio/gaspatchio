@@ -38,7 +38,7 @@ From `core/project.md` and gaspatchio's established patterns:
 
 ### The Declarative Advantage
 
-Other actuarial tools let the actuary write arbitrary code in a loop. Gaspatchio cannot (Polars plugin constraint). But this constraint enables capabilities that code-based frameworks **structurally cannot offer**:
+Imperative APIs let the actuary write arbitrary code in a loop. Gaspatchio cannot (Polars plugin constraint). But this constraint enables capabilities that code-based frameworks **structurally cannot offer**:
 
 | Capability | Why declarative enables it | Why imperative can't |
 |------------|--------------------------|---------------------|
@@ -48,7 +48,7 @@ Other actuarial tools let the actuary write arbitrary code in a loop. Gaspatchio
 | **Mid-chain assertions** | Validation rules travel with the model | Assertions are separate scripts, disconnected from model logic |
 | **Auto-documentation** | The chain IS the specification | Docs drift from code |
 
-> *"Other tools let you write anything. Gaspatchio lets you write what an actuary would say — and then proves it's correct."*
+> *"Gaspatchio constrains the surface to what an actuary would say — and then proves it's correct."*
 
 ---
 

@@ -881,7 +881,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 **Step 1: Run profiler before changes (baseline)**
 
 ```bash
-cd ~/projects/gaspatchio-models
+cd ../gaspatchio-models
 uv run python basic_term/scratch/profile_for_devs.py --points 1000 > /tmp/profile_before.txt
 ```
 
@@ -897,7 +897,7 @@ Expected: See commits from Tasks 1-5
 **Step 3: Run profiler with Phase 1 changes**
 
 ```bash
-cd ~/projects/gaspatchio-models
+cd ../gaspatchio-models
 uv run python basic_term/scratch/profile_for_devs.py --points 1000 > /tmp/profile_after_phase1.txt
 ```
 
@@ -2187,7 +2187,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 **Step 1: Run profiler with Phase 2 changes**
 
 ```bash
-cd ~/projects/gaspatchio-models
+cd ../gaspatchio-models
 uv run python basic_term/scratch/profile_for_devs.py --points 1000 > /tmp/profile_after_phase2.txt
 ```
 
@@ -2285,7 +2285,7 @@ Create `gaspatchio-core/bindings/python/ref/24-list-pow-list-performance/phase2-
 **Step 5: Run integration test on actual model**
 
 ```bash
-cd ~/projects/gaspatchio-models
+cd ../gaspatchio-models
 uv run python basic_term/model_projection.py --points 1000
 ```
 
@@ -2321,7 +2321,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 **Step 1: Run profiler at 10K points**
 
 ```bash
-cd ~/projects/gaspatchio-models
+cd ../gaspatchio-models
 uv run python basic_term/scratch/profile_for_devs.py --points 10000 > /tmp/profile_10k_after.txt
 ```
 
@@ -2354,7 +2354,7 @@ Expected improvements:
 **Step 1: Run profiler at 100K points**
 
 ```bash
-cd ~/projects/gaspatchio-models
+cd ../gaspatchio-models
 uv run python basic_term/scratch/profile_for_devs.py --points 100000 > /tmp/profile_100k_after.txt
 ```
 

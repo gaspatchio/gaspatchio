@@ -1,7 +1,7 @@
 # Gaspatchio vs Lifelib Comparison Benchmark — Design Spec
 
 **Date**: 2026-03-26
-**Status**: Draft
+**Status**: Superseded (2026-05) — historical record. Lifelib reference data was originally vendored at `evals/benchmarks/lifelib_ref/`; it now lives in the sister **gaspatchio-benchmarks** repository, resolved via `GASPATCHIO_BENCHMARKS_DIR` or a sibling-checkout. Implementation since landed on the current `lifelib_runner.py` + `_benchmarks_dir.py` pair.
 **Branch**: gsp-eval-refinement
 
 ## Problem

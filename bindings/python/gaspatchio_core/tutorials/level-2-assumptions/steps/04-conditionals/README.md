@@ -50,7 +50,7 @@ In Level 1, `when()` operates on scalar columns (one value per policy):
 af.is_profitable = when(af.profit > 0).then("Yes").otherwise("No")
 ```
 
-In Level 2+, after `create_projection_timeline()`, columns become lists.
+In Level 2+, after `af.projection.set()`, columns become lists.
 `when()` operates element-wise across every `(policy, month)` cell:
 
 ```python

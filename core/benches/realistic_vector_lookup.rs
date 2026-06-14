@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /// Realistic vector-lookup benchmarks matching the L4 lifelib model pattern.
 ///
 /// The real model has N rows (policies), where each key column is a List(Int64/Float64)

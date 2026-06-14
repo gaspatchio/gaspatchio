@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Pydantic models for API request/response schemas.
 # ABOUTME: Used by docs and knowledge CLI commands.
 """Pydantic models for Gaspatchio API responses."""

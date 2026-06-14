@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Integration tests for Section 1.4: Update Base Frame with error handling and mixed graph formats.
 

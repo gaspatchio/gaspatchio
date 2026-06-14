@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/frame/graph/filter_handler.py
-# hypothesis_version: 6.135.0
-
-['col', 'date', 'month', 'period', 'pl', 'quarter', 'year', 'year_frac']

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tracing and computation graph utilities for ActuarialFrame
 # ABOUTME: Handles debug mode operation capture and query plan logging
 """Tracing and computation graph utilities for ActuarialFrame."""

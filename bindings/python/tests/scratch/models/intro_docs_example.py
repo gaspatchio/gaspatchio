@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Test file that validates the intro.md vectorized Excel functions example
 # ABOUTME: Ensures the documented code patterns compile and produce valid results
 

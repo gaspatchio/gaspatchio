@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Conditional expressions (when/then/otherwise) for ActuarialFrame
 # ABOUTME: Provides Excel-style IF() with automatic list broadcasting for projections
 """Conditional expressions (when/then/otherwise) for ActuarialFrame.
@@ -294,28 +298,6 @@ class ConditionalProxy:
             return value
         return pl.lit(value)
 
-    def _detect_list_columns(self, otherwise_expr: pl.Expr) -> set[str]:
-        """Detect list columns in the conditional expressions."""
-        if self._parent is None:
-            return set()
-
-        # Import at runtime to avoid circular imports
-        from gaspatchio_core.column import dispatch
-
-        detector = dispatch.ColumnTypeDetector(self._parent)  # type: ignore[attr-defined]
-        list_columns: set[str] = set()
-
-        # Check all expressions for list columns
-        all_exprs = self._conditions + self._values + [otherwise_expr]
-
-        for expr in all_exprs:
-            col_names = self._extract_column_names(expr)
-            for col_name in col_names:
-                if detector.is_list_column(col_name):
-                    list_columns.add(col_name)
-
-        return list_columns
-
     def _extract_column_names(self, expr: pl.Expr) -> list[str]:
         """Extract column names from an expression, returning empty list on failure."""
         try:
@@ -325,38 +307,23 @@ class ConditionalProxy:
             return []
 
     def _condition_has_list_columns(self, condition: Any) -> bool:  # noqa: ANN401
-        """Check if a condition involves any list columns.
+        """Check whether a condition involves a list-shaped operand.
 
-        Args:
-            condition: The condition to check (ConditionExpression, ExpressionProxy,
-                or pl.Expr)
-
-        Returns:
-            True if any column in the condition is a list column
-
+        Reads the resolved shape from the condition (or its proxy) directly via
+        the cached ``shape`` property when wrapped. For bare ``pl.Expr``
+        conditions appended through chained ``.when()`` calls, falls back to
+        ``_shape_from_expr_dtype`` against the parent frame so list-typed
+        Polars predicates still route through ``list_conditional`` instead of
+        colliding with scalar ``pl.when()``.
         """
-        if self._parent is None:
-            return False
-
-        from gaspatchio_core.column import dispatch
         from gaspatchio_core.column.condition_expression import ConditionExpression
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
-        detector = dispatch.ColumnTypeDetector(self._parent)  # type: ignore[attr-defined]
-
-        # For ConditionExpression, check left and right operands
-        if isinstance(condition, ConditionExpression):
-            for expr in [condition.left, condition.right]:
-                col_names = self._extract_column_names(expr)
-                for col_name in col_names:
-                    if detector.is_list_column(col_name):
-                        return True
-            return False
-
-        # For other expressions, extract column names directly
-        col_names = self._extract_column_names(
-            condition._expr if hasattr(condition, "_expr") else condition  # noqa: SLF001
-        )
-        return any(detector.is_list_column(col_name) for col_name in col_names)
+        if isinstance(condition, (ConditionExpression, ExpressionProxy)):
+            return condition.shape == "list"
+        if isinstance(condition, pl.Expr):
+            return self._expr_is_list_shaped(condition)
+        return False
 
     def _any_condition_has_list_columns(self) -> bool:
         """Check if any condition in the chain involves list columns.
@@ -370,94 +337,155 @@ class ConditionalProxy:
                 return True
         return False
 
-    def _build_scalar_conditional(self, otherwise_expr: pl.Expr) -> pl.Expr:
-        """Build conditional expression with proper routing for list vs scalar columns.
+    def _expr_is_list_shaped(self, expr: pl.Expr) -> bool:
+        """Check whether a Polars expression resolves to a list-shaped output.
 
-        Routes to list_conditional plugin for list columns, standard Polars for scalars.
-        Supports chained .when() for scalar columns only.
+        Used by chain-shape detection to decide whether reverse-fold should
+        run in 'list mode' (lifting scalar predicates through list_conditional
+        so a scalar then() doesn't collide with a list-shaped acc).
+
+        Routes through the shape SOT — `_shape_from_expr_dtype` probes the
+        wrapped expression's dtype against the parent frame's `_df`.
         """
-        from gaspatchio_core.column.condition_expression import (
-            ConditionExpression,
-        )
+        if self._parent is None or not isinstance(expr, pl.Expr):
+            return False
+
+        from gaspatchio_core.column.shape import _shape_from_expr_dtype
+
+        return _shape_from_expr_dtype(self._parent, expr) == "list"
+
+    def _lower_one_case(  # noqa: PLR0911
+        self,
+        condition: Any,  # noqa: ANN401
+        then_val: pl.Expr,
+        acc: pl.Expr,
+        *,
+        acc_is_list: bool = False,
+    ) -> tuple[pl.Expr, bool]:
+        """Lower a single (condition, then, else=acc) tuple to a Polars expression.
+
+        Returns (lowered_expr, output_is_list). The caller threads `output_is_list`
+        as `acc_is_list` for the next iteration so the fold knows when the running
+        accumulator becomes list-shaped.
+
+        Routes per the design's per-case lowering rules:
+        - ConditionExpression involving a list column -> list_conditional kernel
+        - ExpressionProxy with _is_boolean_list -> list_conditional with mask
+        - Scalar predicate where any operand (acc or then) is list-shaped ->
+          list_conditional with the scalar predicate broadcast via `repeat_by`
+          so left satisfies the kernel's List-dtype requirement
+        - Otherwise -> native pl.when().then().otherwise()
+        """
+        from gaspatchio_core.column.condition_expression import ConditionExpression
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio_core.functions.vector import list_conditional
 
-        # Check if ANY condition involves list columns
-        has_list_columns = self._any_condition_has_list_columns()
-
-        if has_list_columns:
-            # LIST PATH: Use list_conditional plugin (single condition only)
-            if len(self._conditions) > 1:
-                msg = (
-                    "Multiple chained .when() not yet supported with list columns. "
-                    "Use separate conditionals or combine conditions with & operator."
-                )
-                raise NotImplementedError(msg)
-
-            condition = self._conditions[0]
-            then_val = self._values[0]
-
-            # Case 1a: Direct comparison (ConditionExpression) with list columns
-            if isinstance(condition, ConditionExpression):
-                from gaspatchio_core.functions.vector import list_conditional
-
-                return list_conditional(
-                    left=condition.left,
-                    right=condition.right,
-                    then_val=then_val,
-                    otherwise_val=otherwise_expr,
-                    operator=condition.operator,
-                )
-
-            # Case 1b: Binary operation result (ExpressionProxy with boolean list)
-            if isinstance(condition, ExpressionProxy) and hasattr(
-                condition, "_is_boolean_list"
-            ):
-                from gaspatchio_core.functions.vector import list_conditional
-
-                # Binary ops already converted to boolean list (0.0/1.0)
-                return list_conditional(
-                    left=condition._expr,  # noqa: SLF001
-                    right=pl.lit(1.0),
-                    then_val=then_val,
-                    otherwise_val=otherwise_expr,
-                    operator="eq",
-                )
-
-            # Case 1c: Other expression with list columns - shouldn't happen often
-            msg = (
-                f"Unexpected condition type {type(condition)} with list columns. "
-                "Please use a comparison expression (e.g., af.month == af.term)."
-            )
-            raise TypeError(msg)
-
-        # SCALAR PATH: Use standard Polars when/then/otherwise with chaining support
-        # Extract first condition expression
-        first_condition = self._conditions[0]
-        first_then_val = self._values[0]
-
-        # Get the underlying pl.Expr from the first condition
-        if isinstance(first_condition, (ConditionExpression, ExpressionProxy)):
-            first_cond_expr = first_condition._expr  # noqa: SLF001
-        else:
-            first_cond_expr = first_condition
-
-        # Build the chained when/then/otherwise expression
-        expr = pl.when(first_cond_expr).then(first_then_val)
-
-        # Add any additional when/then pairs (chained conditions)
-        for condition, then_val in zip(
-            self._conditions[1:], self._values[1:], strict=False
+        # Vector comparison predicate (ConditionExpression with list operands).
+        # Normalize operand order so the list-typed side is on `left` (plugin
+        # contract). Handles commuted predicates like (scalar) == af.list_col.
+        if isinstance(condition, ConditionExpression) and self._condition_has_list_columns(
+            condition
         ):
-            # Extract pl.Expr from each condition
+            left, right, operator = condition.normalize_for_list_path()
+            return list_conditional(
+                left=left,
+                right=right,
+                then_val=then_val,
+                otherwise_val=acc,
+                operator=operator,
+            ), True
+
+        # Vector boolean-mask predicate (Float64-list masks from &/|/~ on lists).
+        # `condition.shape == "list"` distinguishes these from native pl.Boolean
+        # masks (e.g. scalar `&`, `is_null`, `is_in`) which would route through
+        # native pl.when() in the scalar branch below.
+        if (
+            isinstance(condition, ExpressionProxy)
+            and condition.kind == "boolean_mask"
+            and condition.shape == "list"
+        ):
+            return list_conditional(
+                left=condition._expr,  # noqa: SLF001
+                right=pl.lit(1.0),
+                then_val=then_val,
+                otherwise_val=acc,
+                operator="eq",
+            ), True
+
+        # Bare ``pl.Expr`` that resolves to a list-shaped boolean mask — e.g.
+        # ``pl.col(list_col).list.eval(pl.element() > k)`` produces ``list[bool]``.
+        # Treat the same way as the proxy boolean_mask path: ``mask == 1.0``
+        # under list_conditional.
+        if (
+            isinstance(condition, pl.Expr)
+            and not isinstance(condition, (ConditionExpression, ExpressionProxy))
+            and self._expr_is_list_shaped(condition)
+        ):
+            return list_conditional(
+                left=condition,
+                right=pl.lit(1.0),
+                then_val=then_val,
+                otherwise_val=acc,
+                operator="eq",
+            ), True
+
+        # Scalar predicate over a list-shaped acc OR list-shaped then-branch:
+        # broadcast via list_conditional. Without this,
+        # `pl.when(scalar).then(scalar).otherwise(list_acc)` or
+        # `pl.when(scalar).then(list).otherwise(scalar_acc)` raises
+        # `SchemaError: failed to determine supertype of f64 and list[f64]`.
+        # We broadcast the scalar predicate to list shape via repeat_by()
+        # using the list-shaped operand's length.
+        then_is_list = self._expr_is_list_shaped(then_val)
+        if acc_is_list or then_is_list:
             if isinstance(condition, (ConditionExpression, ExpressionProxy)):
                 cond_expr = condition._expr  # noqa: SLF001
-            else:
+            elif isinstance(condition, pl.Expr):
                 cond_expr = condition
+            else:
+                msg = (
+                    f"Unexpected condition type {type(condition)} "
+                    "in chained when() lowering"
+                )
+                raise TypeError(msg)
+            length_ref = acc.list.len() if acc_is_list else then_val.list.len()
+            cond_broadcast = cond_expr.cast(pl.Float64).repeat_by(length_ref)
+            return list_conditional(
+                left=cond_broadcast,
+                right=pl.lit(1.0),
+                then_val=then_val,
+                otherwise_val=acc,
+                operator="eq",
+            ), True
 
-            expr = expr.when(cond_expr).then(then_val)
+        # Scalar predicate over a scalar acc — native pl.when().then().otherwise()
+        if isinstance(condition, (ConditionExpression, ExpressionProxy)):
+            return pl.when(condition._expr).then(then_val).otherwise(acc), False  # noqa: SLF001
 
-        # Complete with otherwise
-        return expr.otherwise(otherwise_expr)
+        if isinstance(condition, pl.Expr):
+            return pl.when(condition).then(then_val).otherwise(acc), False
+
+        msg = f"Unexpected condition type {type(condition)} in chained when() lowering"
+        raise TypeError(msg)
+
+    def _build_scalar_conditional(self, otherwise_expr: pl.Expr) -> pl.Expr:
+        """Build conditional expression via per-case lowering + reverse-fold.
+
+        Single-when (n=1) is treated as a degenerate chain — same lowering as
+        the chained case, just one iteration. This means a scalar predicate
+        over a list-shaped ``then`` (or vice versa) routes through
+        ``list_conditional`` instead of native ``pl.when`` which can't resolve
+        the supertype and produces ``Unknown`` dtype downstream.
+        """
+        acc = otherwise_expr
+        acc_is_list = self._expr_is_list_shaped(otherwise_expr)
+        for cond, then_val in reversed(
+            list(zip(self._conditions, self._values, strict=True))
+        ):
+            acc, acc_is_list = self._lower_one_case(
+                cond, then_val, acc, acc_is_list=acc_is_list
+            )
+        return acc
 
     def __repr__(self) -> str:
         """Provide helpful error message for incomplete conditionals."""
@@ -618,10 +646,8 @@ def when(condition: Any) -> ConditionalProxy:  # noqa: ANN401
     if isinstance(condition, ConditionExpression):
         return ConditionalProxy(condition, parent)
 
-    # Pass through ExpressionProxy with _is_boolean_list flag (from binary ops)
-    if isinstance(condition, ExpressionProxy) and getattr(
-        condition, "_is_boolean_list", False
-    ):
+    # Pass through ExpressionProxy with kind="boolean_mask" (from binary ops)
+    if isinstance(condition, ExpressionProxy) and condition.kind == "boolean_mask":
         return ConditionalProxy(condition, parent)
 
     # Convert other conditions to Polars expression

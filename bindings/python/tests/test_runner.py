@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for runner.py - model execution utilities.
 # ABOUTME: Validates policy ID type casting and vector column transposition.
 """Tests for model runner utilities."""

@@ -1,9 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for LLM-friendly scenario config parsing.
 # ABOUTME: Validates conversion of dict/JSON configs to Shock objects.
 """Tests for LLM-friendly scenario config parsing."""
 
 import pytest
 
+from gaspatchio_core.scenarios._aggregators import Sum
 from gaspatchio_core.scenarios.shocks import (
     AdditiveShock,
     MultiplicativeShock,
@@ -196,11 +201,8 @@ class TestLLMWorkflowIntegration:
     """Integration tests for LLM-generated scenario workflow."""
 
     def test_llm_generated_config_to_describe(self):
-        """LLM config can be parsed and described."""
-        from gaspatchio_core.scenarios import (
-            describe_scenarios,
-            parse_scenario_config,
-        )
+        """LLM config can be parsed and wrapped in a ScenarioRun for audit."""
+        from gaspatchio_core.scenarios import ScenarioRun, parse_scenario_config
 
         # LLM generates this JSON-like config
         config = [
@@ -211,20 +213,21 @@ class TestLLMWorkflowIntegration:
             },
         ]
 
-        # Parse and describe
+        # Parse and wrap in an auditable plan
         scenarios = parse_scenario_config(config)
-        description = describe_scenarios(scenarios)
+        agg = Sum("dummy").alias("dummy")
+        plan = ScenarioRun(shocks=scenarios, base_tables={}, aggregations=(agg,))
 
-        assert "BASE" in description
-        assert "RATES_UP_50BPS" in description
-        assert "0.005" in description
+        canon = plan.canonical_form()
+        assert set(canon["shocks"].keys()) == {"BASE", "RATES_UP_50BPS"}
+        # The shock's canonical form retains the rate delta for audit.
+        rates_up_shocks = canon["shocks"]["RATES_UP_50BPS"]
+        assert any(0.005 in s.values() for s in rates_up_shocks)
 
     def test_llm_config_with_sensitivity_analysis(self):
         """Combine LLM config with sensitivity_analysis output."""
-        from gaspatchio_core.scenarios import (
-            parse_scenario_config,
-            sensitivity_analysis,
-        )
+        from gaspatchio_core.scenarios import parse_scenario_config
+        from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
 
         # LLM can generate a sweep using sensitivity_analysis
         sweep_shocks = sensitivity_analysis(

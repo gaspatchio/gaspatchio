@@ -1,9 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Type stubs for date accessors."""
 
-import datetime
-
-import polars as pl
-from typing import TYPE_CHECKING, Literal, Union
+from typing import TYPE_CHECKING
 
 from .base import BaseColumnAccessor, BaseFrameAccessor
 
@@ -28,22 +29,6 @@ class DateFrameAccessor(BaseFrameAccessor):
         date_col: "IntoExprColumn",
         duration_str: str,
         new_col_name: str | None = ...,  # Ellipsis for default
-    ) -> "ActuarialFrame": ...
-    def create_projection_timeline(
-        self,
-        valuation_date: datetime.date,
-        projection_end_type: Literal[
-            "maximum_age", "term_years", "term_months", "fixed_date"
-        ] = ...,
-        projection_end_value: Union[int, datetime.date, str, "pl.Expr"] = ...,
-        issue_age_column: str = ...,
-        projection_frequency: Literal[
-            "monthly", "quarterly", "semi-annual", "annual"
-        ] = ...,
-        projection_start_offset_months: int = ...,
-        store_start_date: bool = ...,
-        store_end_date: bool = ...,
-        output_column: str = ...,
     ) -> "ActuarialFrame": ...
 
 class DateColumnAccessor(BaseColumnAccessor):

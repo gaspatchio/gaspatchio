@@ -1,0 +1,10 @@
+# Canonical author identity for commits across this repository.
+#
+# Git tools (git log, git shortlog, git blame, GitHub UI) honour .mailmap
+# to display a single canonical identity in place of historical variations.
+# Underlying commit SHAs, signatures, and committer fields are unchanged.
+
+Matt Wright <matt@opioinc.com> <matt@sudden.co.nz>
+Matt Wright <matt@opioinc.com> <1277725+mrmattwright@users.noreply.github.com>
+Matt Wright <matt@opioinc.com> <llm@opioinc.com>
+Matt Wright <matt@opioinc.com> Cursor Agent <cursoragent@cursor.com>

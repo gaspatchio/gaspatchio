@@ -2,7 +2,7 @@
 ## Gaspatchio vs Lifelib - All 8 Model Points
 
 **Date:** 2025-12-05
-**Model:** `~/Projects/gaspatchio-models/appliedlife/model_applied_life.py`
+**Model:** `../gaspatchio-models/appliedlife/model_applied_life.py`
 **Model Points:** 8 policies (GMDB/GMAB products, PLAN_A/PLAN_B)
 **Reference:** Lifelib phase 4 results
 
@@ -243,4 +243,4 @@ This validates that:
 ---
 
 *Generated: 2025-12-05*
-*Script: `~/Projects/gaspatchio-models/appliedlife/reconcile_pv_all_points.py`*
+*Script: `../gaspatchio-models/appliedlife/reconcile_pv_all_points.py`*

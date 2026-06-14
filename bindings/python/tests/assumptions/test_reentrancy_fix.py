@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Test for issue #39: load_assumptions reentrancy bug fix."""
 
 import polars as pl

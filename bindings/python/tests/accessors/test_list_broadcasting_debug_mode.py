@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Test list broadcasting conditionals work in debug mode
 # ABOUTME: Verifies when-then-otherwise with list columns traces operations correctly
 # ruff: noqa: S101, PLR2004, ANN201, SLF001, ERA001

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: INP001, T201, D400, D415, ERA001, PGH003, E501
 # type: ignore
 """

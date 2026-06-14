@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Tier 1: Verify test fixtures contain expected anti-patterns.
 
 These tests ensure the model_with_antipatterns.py fixture actually contains

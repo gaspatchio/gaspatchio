@@ -1,14 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Accessors for date-related operations on ActuarialFrame columns/expressions."""
 
 import datetime
-from typing import TYPE_CHECKING, Literal, Union
+from typing import TYPE_CHECKING, Union
 
 import polars as pl
 
 # Import registry decorator
 from ..frame.registry import register_accessor
-# Import validation error handling
-from ..errors.validation import capture_validation_context, raise_validation_error
 
 # Use the new base location
 from .base import BaseColumnAccessor, BaseFrameAccessor
@@ -20,9 +22,6 @@ if TYPE_CHECKING:
     from ..column.expression_proxy import ExpressionProxy
     from ..frame.base import ActuarialFrame
     from ..typing import IntoExprColumn
-
-# ADDED: More imports for moved logic
-from typing import Literal, Union
 
 
 # Add registration decorator
@@ -98,11 +97,13 @@ class DateFrameAccessor(BaseFrameAccessor):
             }
             af = ActuarialFrame(data)
 
-            timeline_af = af.date.create_timeline(af.start_date, af.end_date, freq="1mo", new_col_name="month_end")
+            timeline_af = af.date.create_timeline(
+                af.start_date, af.end_date, freq="1mo", new_col_name="month_end"
+            )
 
             print(timeline_af.collect())
             ```
-            
+
             ```text
             shape: (4, 4)
             ┌───────────┬────────────┬────────────┬────────────┐
@@ -196,11 +197,13 @@ class DateFrameAccessor(BaseFrameAccessor):
 
             data = {
                 "event_date": [datetime.date(2023, 1, 15), datetime.date(2023, 6, 30)],
-                "term_months": [6, 12]
+                "term_months": [6, 12],
             }
             af = ActuarialFrame(data)
 
-            af_plus_1y = af.date.add_duration(af.event_date, "1y", new_col_name="event_plus_1y")
+            af_plus_1y = af.date.add_duration(
+                af.event_date, "1y", new_col_name="event_plus_1y"
+            )
 
             print(af_plus_1y.collect())
             ```
@@ -231,7 +234,7 @@ class DateFrameAccessor(BaseFrameAccessor):
 
             print(af_minus_3m.collect())
             ```
-            
+
             ```text
             shape: (2, 3)
             ┌────────────┬─────────────┬────────────────┐
@@ -267,314 +270,6 @@ class DateFrameAccessor(BaseFrameAccessor):
 
         df_updated = self._frame._df.with_columns(result_expr.alias(target_col_name))
         return ActuarialFrame(df_updated)
-
-    # MOVED & ADAPTED: create_projection_timeline from dates.py
-    @capture_validation_context
-    def create_projection_timeline(
-        self,
-        valuation_date: datetime.date,
-        projection_end_type: Literal[
-            "maximum_age", "term_years", "term_months", "fixed_date"
-        ] = "maximum_age",
-        projection_end_value: Union[int, datetime.date, str, "pl.Expr"] = 100,
-        issue_age_column: str = "issue_age",
-        projection_frequency: Literal[
-            "monthly", "quarterly", "semi-annual", "annual"
-        ] = "monthly",
-        projection_start_offset_months: int = 0,
-        store_start_date: bool = True,
-        store_end_date: bool = True,
-        output_column: str = "proj_dates",
-    ) -> "ActuarialFrame":
-        """
-        Creates a projection timeline for actuarial calculations within the frame.
-
-        This powerful method generates a series of projection dates for each row
-        in the ActuarialFrame based on various actuarial projection methodologies.
-        It can handle projections to a maximum age, for a fixed term (in years or
-        months), or until a specific fixed date. The resulting timeline is added
-        as a new list column to the frame, which can then be exploded for
-        detailed cashflow modeling or analysis.
-
-        !!! note "When to use"
-            *   **Actuarial Projections:** This is a cornerstone function for actuarial modeling. Use it to:
-                - Generate monthly, quarterly, semi-annual, or annual projection dates.
-                - Model policies projecting to a maximum age (e.g., whole life insurance).
-                - Model policies with fixed terms (e.g., term life insurance, annuities certain).
-                - Align projections to specific calendar dates.
-                - Prepare data for per-period calculations like reserves, premiums, or benefits.
-
-        Args:
-            valuation_date: The valuation date from which to project
-            projection_end_type: How to determine the end of the projection:
-                - "maximum_age": Project until the policyholder reaches the maximum age
-                - "term_years": Project for a fixed number of years
-                - "term_months": Project for a fixed number of months
-                - "fixed_date": Project until a specific calendar date
-            projection_end_value: The value corresponding to the projection_end_type.
-
-                Accepts scalars or per-policy column references:
-
-                - ``int`` -- uniform projection for all policies (e.g., ``240``)
-                - ``datetime.date`` -- project to a fixed calendar date
-                - ``str`` -- column name for per-policy values (e.g., ``"remaining_term_months"``)
-                - ``pl.Expr`` -- expression for per-policy values
-                  (e.g., ``pl.col("policy_term") * 12 - pl.col("duration_mth")``)
-
-                Per-policy projections produce variable-length list columns, which
-                use less memory and compute than uniform projections with boundary masking.
-            issue_age_column: The column containing the issue age (needed for "maximum_age")
-            projection_frequency: The frequency of projection points
-            projection_start_offset_months: Months to offset the start date from valuation
-            store_start_date: Whether to store the projection start date
-            store_end_date: Whether to store the projection end date
-            output_column: The name of the column to store the projection dates
-
-        Returns:
-            The updated ActuarialFrame instance (``self._frame``).
-
-            The following columns are added:
-
-            - ``projection_start_date`` (if ``store_start_date=True``)
-            - ``projection_end_date`` (if ``store_end_date=True``)
-            - ``{output_column}`` -- list of projection dates per policy
-            - ``num_proj_months`` -- number of projection points per policy (Int64)
-
-        Examples:
-            ```python no_output_check
-            import datetime
-            from gaspatchio_core import ActuarialFrame
-            data = {
-                "policy_id": ["A1", "B2"],
-                "issue_age": [30, 45], # Needed for maximum_age projection
-                "policy_term_years": [0, 10] # Example, not directly used by max_age
-            }
-            af = ActuarialFrame(data)
-            val_date = datetime.date(2024, 1, 1)
-            
-            # Example 1: Project to maximum age of 65, monthly
-            af_max_age = af.date.create_projection_timeline(
-                valuation_date=val_date,
-                projection_end_type="maximum_age",
-                projection_end_value=32, # Max age of 32 for policy A1 (30+2), 47 for B2 (45+2)
-                issue_age_column="issue_age",
-                projection_frequency="annual", # Simplified for example
-                output_column="projection_dates_max_age"
-            )
-            
-            # Example 2: Project for a fixed term of 2 years, quarterly
-            af_fixed_term = af.date.create_projection_timeline(
-                valuation_date=val_date,
-                projection_end_type="term_years",
-                projection_end_value=2,
-                projection_frequency="quarterly",
-                output_column="projection_dates_fixed_term"
-            )
-            
-            # Example 3: Project to a fixed date, annually
-            fixed_end_date = datetime.date(2025, 12, 31)
-            af_fixed_date = af.date.create_projection_timeline(
-                valuation_date=val_date,
-                projection_end_type="fixed_date",
-                projection_end_value=fixed_end_date,
-                projection_frequency="annual",
-                output_column="projection_dates_fixed_date"
-            )
-
-            # Example 4: Per-policy projection from a remaining-term column
-            data_term = {
-                "policy_id": ["X1", "X2"],
-                "remaining_term_months": [60, 180],
-            }
-            af_term = ActuarialFrame(data_term)
-            af_per_policy = af_term.date.create_projection_timeline(
-                valuation_date=val_date,
-                projection_end_type="term_months",
-                projection_end_value="remaining_term_months",
-                projection_frequency="monthly",
-                output_column="proj_dates"
-            )
-            ```
-        """
-        # Eagerly validate projection_frequency
-        valid_frequencies = ["monthly", "quarterly", "semi-annual", "annual"]
-        if projection_frequency not in valid_frequencies:
-            raise_validation_error(
-                f"Invalid projection frequency: {projection_frequency}",
-                valid_options=valid_frequencies,
-                provided_value=projection_frequency,
-                parameter_name="projection_frequency"
-            )
-
-        # Convert valuation_date to a Polars expression
-        valuation_date_expr = pl.lit(valuation_date)
-
-        # Calculate the projection start date based on offset
-        start_date_expr = valuation_date_expr
-        if projection_start_offset_months != 0:
-            start_date_expr = valuation_date_expr.dt.offset_by(
-                f"{projection_start_offset_months}mo"
-            )
-
-        # --- Resolve projection_end_value to an expression ---
-        if isinstance(projection_end_value, str):
-            end_value_expr: pl.Expr | None = pl.col(projection_end_value)
-        elif isinstance(projection_end_value, pl.Expr):
-            end_value_expr = projection_end_value
-        else:
-            # int or datetime.date — current scalar behavior
-            end_value_expr = None  # signals scalar path below
-
-        # Calculate the projection end date based on the end type
-        if projection_end_type == "maximum_age":
-            # Ensure issue_age_column exists or handle error
-            if issue_age_column not in self._frame._df.collect_schema().names():
-                raise pl.ColumnNotFoundError(
-                    f"Required column '{issue_age_column}' not found for 'maximum_age' projection."
-                )
-            if end_value_expr is not None:
-                # Per-policy: end_value_expr gives max age per row
-                years_to_project_expr = (
-                    end_value_expr - pl.col(issue_age_column)
-                ).cast(pl.Int64)
-                end_date_expr = start_date_expr.dt.offset_by(
-                    pl.concat_str(years_to_project_expr.cast(pl.Utf8), pl.lit("y"))
-                )
-            else:
-                if not isinstance(projection_end_value, int):
-                    raise TypeError(
-                        "projection_end_value must be an integer for 'maximum_age'"
-                    )
-                max_age = projection_end_value
-                years_to_project_expr = (
-                    pl.lit(max_age) - pl.col(issue_age_column)
-                ).cast(pl.Int64)
-                end_date_expr = start_date_expr.dt.offset_by(
-                    pl.concat_str(years_to_project_expr.cast(pl.Utf8), pl.lit("y"))
-                )
-        elif projection_end_type == "term_years":
-            if end_value_expr is not None:
-                # Per-policy: end_value_expr gives years per row
-                end_date_expr = start_date_expr.dt.offset_by(
-                    pl.concat_str(
-                        end_value_expr.cast(pl.Int64).cast(pl.Utf8), pl.lit("y")
-                    )
-                )
-            else:
-                if not isinstance(projection_end_value, int):
-                    raise TypeError(
-                        "projection_end_value must be an integer for 'term_years'"
-                    )
-                end_date_expr = start_date_expr.dt.offset_by(
-                    f"{projection_end_value}y"
-                )
-        elif projection_end_type == "term_months":
-            if end_value_expr is not None:
-                # Per-policy: end_value_expr gives months per row
-                end_date_expr = start_date_expr.dt.offset_by(
-                    pl.concat_str(
-                        end_value_expr.cast(pl.Int64).cast(pl.Utf8), pl.lit("mo")
-                    )
-                )
-            else:
-                if not isinstance(projection_end_value, int):
-                    raise TypeError(
-                        "projection_end_value must be an integer for 'term_months'"
-                    )
-                end_date_expr = start_date_expr.dt.offset_by(
-                    f"{projection_end_value}mo"
-                )
-        elif projection_end_type == "fixed_date":
-            if end_value_expr is not None:
-                raise TypeError(
-                    "Per-policy projection_end_value (str or Expr) is not supported "
-                    "for 'fixed_date' — fixed_date is inherently uniform across all rows."
-                )
-            if not isinstance(projection_end_value, datetime.date):
-                raise TypeError(
-                    "projection_end_value must be a datetime.date for 'fixed_date'"
-                )
-            end_date_expr = pl.lit(projection_end_value)
-        else:
-            valid_end_types = ["maximum_age", "term_years", "term_months", "fixed_date"]
-            raise_validation_error(
-                f"Invalid projection end type: {projection_end_type}",
-                valid_options=valid_end_types,
-                provided_value=projection_end_type,
-                parameter_name="projection_end_type"
-            )
-
-        # --- Apply to frame ---
-        updates = {}
-        if store_start_date:
-            updates["projection_start_date"] = start_date_expr
-        if store_end_date:
-            updates["projection_end_date"] = end_date_expr
-
-        # Apply the updates first to ensure columns exist for timeline generation
-        # Use the calculated expressions directly
-        df_with_dates = self._frame._df.with_columns(**updates)
-
-        # Map frequency string to Polars interval string
-        freq_map = {
-            "monthly": "1mo",
-            "quarterly": "3mo",
-            "semi-annual": "6mo",
-            "annual": "1y",
-        }
-        polars_interval = freq_map[projection_frequency]  # Already validated
-
-        # Use the correct start/end expressions for date_ranges
-        # If dates were stored, use those columns. Otherwise, use the expressions.
-        start_col_ref = (
-            pl.col("projection_start_date") if store_start_date else start_date_expr
-        )
-        end_col_ref = pl.col("projection_end_date") if store_end_date else end_date_expr
-
-        # Generate the projection dates using pl.date_ranges
-        # Use closed='both' to include start and end dates, matching the old logic.
-        timeline_expr = pl.date_ranges(
-            start=start_col_ref,
-            end=end_col_ref,
-            interval=polars_interval,
-            closed="both",  # Include both start and end if they align with frequency
-            eager=False,  # Keep it lazy
-        ).alias(output_column)
-
-        # Add the final timeline column
-        # Operate on the DataFrame that already has start/end dates added
-        self._frame._df = df_with_dates.with_columns(timeline_expr)
-
-        # Generate num_proj_months: the actual number of projection points per policy
-        num_proj_expr = pl.col(output_column).list.len().alias("num_proj_months")
-        self._frame._df = self._frame._df.with_columns(num_proj_expr)
-
-        # No temporary columns were created in this approach, so no dropping needed
-
-        # Update frame's internal state (schema, column order might need refresh)
-        self._frame._schema = self._frame._df.collect_schema()
-        # Be careful modifying column order directly, might be better to recalculate
-        # For now, just add new columns if they weren't already tracked
-        if (
-            store_start_date
-            and "projection_start_date" not in self._frame._column_order
-        ):
-            self._frame._column_order.append("projection_start_date")
-        if store_end_date and "projection_end_date" not in self._frame._column_order:
-            self._frame._column_order.append("projection_end_date")
-        if output_column not in self._frame._column_order:
-            self._frame._column_order.append(output_column)
-        if "num_proj_months" not in self._frame._column_order:
-            self._frame._column_order.append("num_proj_months")
-
-        # Ensure attribute-eligible columns set is refreshed for attribute access
-        try:
-            self._frame._refresh_attr_columns_set()
-        except Exception:
-            # Safe to ignore; attribute access will still work via bracket notation
-            pass
-
-        return self._frame  # Return the modified frame
 
 
 # Add registration decorator
@@ -673,7 +368,7 @@ class DateColumnAccessor(BaseColumnAccessor):
 
             print(af.collect())
             ```
-            
+
             ```text
             shape: (3, 2)
             ┌─────────────────────┬────────────┐
@@ -706,7 +401,7 @@ class DateColumnAccessor(BaseColumnAccessor):
 
         # Import ExpressionProxy from new location
         from ..column.expression_proxy import ExpressionProxy
-        
+
         return ExpressionProxy(period_expr.cast(pl.Date), self._proxy._parent_frame)
 
     def months_between(
@@ -753,14 +448,16 @@ class DateColumnAccessor(BaseColumnAccessor):
         import datetime
         from gaspatchio_core import ActuarialFrame
 
-        af = ActuarialFrame({
-            "policy_id": ["P001", "P002", "P003"],
-            "issue_date": [
-                datetime.date(2020, 3, 15),
-                datetime.date(2018, 11, 1),
-                datetime.date(2023, 7, 20),
-            ],
-        })
+        af = ActuarialFrame(
+            {
+                "policy_id": ["P001", "P002", "P003"],
+                "issue_date": [
+                    datetime.date(2020, 3, 15),
+                    datetime.date(2018, 11, 1),
+                    datetime.date(2023, 7, 20),
+                ],
+            }
+        )
 
         af.duration_months = af.issue_date.date.months_between(
             datetime.date(2025, 1, 1)
@@ -824,9 +521,8 @@ class DateColumnAccessor(BaseColumnAccessor):
             msg = f"other must be ColumnProxy, ExpressionProxy, or datetime.date, got {type(other).__name__}"
             raise TypeError(msg)
 
-        result_expr = (
-            (end_year - start_expr.dt.year()) * 12
-            + (end_month - start_expr.dt.month())
+        result_expr = (end_year - start_expr.dt.year()) * 12 + (
+            end_month - start_expr.dt.month()
         )
 
         return ExpressionProxy(result_expr, parent)

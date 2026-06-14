@@ -1,4 +1,9 @@
 #![allow(clippy::unused_unit)]
+
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use gaspatchio_core_lib::excel::irr::irr_output_type as core_irr_output_type;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;

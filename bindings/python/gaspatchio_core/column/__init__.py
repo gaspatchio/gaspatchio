@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Column submodule, providing proxy classes for interacting with Polars expressions."""
 
 # Import the proxy classes from their respective modules

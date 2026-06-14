@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Worked example of LLM-friendly scenario config parsing.
 # ABOUTME: Shows LLM-generated scenarios from natural language, no Python needed.
 # ruff: noqa: INP001, T201, PLR0915, PGH003

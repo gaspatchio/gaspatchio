@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/column/namespaces/string_proxy.py
-# hypothesis_version: 6.135.0
-
-['ActuarialFrame', 'ExpressionProxy', 'PolarsTemporalType', 'ProxyType', '__', '_df', 'ambiguous', 'cache', 'contains', 'dtype', 'ends_with', 'exact', 'extract', 'extract_all', 'format', 'len_bytes', 'len_chars', 'pad_end', 'pad_start', 'raise', 'replace', 'replace_all', 'slice', 'split', 'starts_with', 'str', 'strict', 'strip_chars', 'strip_chars_start', 'strip_prefix', 'strip_suffix', 'strptime', 'to_lowercase', 'to_uppercase', 'zfill']

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Performance benchmarking script for assumption lookups.
 # ABOUTME: Runs model with .profile() and categorizes timing by LOOKUP vs CALC.
 # ruff: noqa: INP001, T201, D400, D415, E402, PGH003

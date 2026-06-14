@@ -1,0 +1,20 @@
+# osv-scanner ignore list for transitive advisories with no available fix.
+# Each entry is a deliberate, reviewed exception — revisit when upstream ships a
+# fix (track via the linked advisories). Everything else is expected to be
+# remediated by a lockfile bump rather than ignored.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0141"
+reason = "bincode 2.0.1 is a transitive dependency of polars-utils; no fixed version is published. Remediation depends on an upstream polars bump."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0436"
+reason = "paste 1.0.15 is an 'unmaintained crate' advisory (informational, not an exploitable vulnerability); transitive with no maintained drop-in replacement available."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0176"
+reason = "pyo3 out-of-bounds read in PyList/PyTuple nth/nth_back. Fixed only in pyo3 0.29.0; we are on 0.27 and cannot reach 0.29 because the polars bridge (pyo3-polars, max-stable 0.27.0) targets pyo3 0.28 at most — no pyo3 0.29 release exists yet. Our binding code (bindings/python/src) calls none of the affected APIs. Revisit when pyo3-polars ships a pyo3 0.29 build (then bump pyo3+pyo3-polars+polars together and drop this entry)."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0177"
+reason = "pyo3 missing Sync bound on PyCFunction::new_closure. Fixed only in pyo3 0.29.0; blocked by the same pyo3-polars version-lock as RUSTSEC-2026-0176 (no pyo3 0.29-compatible bridge yet). We do not use PyCFunction::new_closure. Revisit when pyo3-polars ships a pyo3 0.29 build."

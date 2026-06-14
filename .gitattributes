@@ -1,2 +1,13 @@
 *.parquet filter=lfs diff=lfs merge=lfs -text
 *.csv filter=lfs diff=lfs merge=lfs -text
+
+# Directories where every fixture is <10KB — kept as regular blobs so
+# clones without git-lfs (e.g. fresh CI/dev agents) can still load them.
+# See bindings/python/conftest.py for the runtime guard.
+bindings/python/gaspatchio_core/tutorials/level-2-assumptions/steps/02-from-files/data/* -filter -diff -merge text
+bindings/python/gaspatchio_core/tutorials/level-2-assumptions/steps/03-lapse/data/* -filter -diff -merge text
+bindings/python/gaspatchio_core/tutorials/level-2-assumptions/steps/04-conditionals/data/* -filter -diff -merge text
+bindings/python/gaspatchio_core/tutorials/level-3-mini-va/steps/01-from-files/data/* -filter -diff -merge text
+bindings/python/jobs/example/assumptions/* -filter -diff -merge text
+bindings/python/tests/scratch/scenarios/assumptions/disc_rates/* -filter -diff -merge text
+ref/04-assumption-lookup/* -filter -diff -merge text

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 1 → Step 02: Cumulative Survival
 
@@ -21,24 +25,24 @@ New concepts introduced here:
       combined = 1 - (1 - mort_mth) * (1 - lapse_mth)
     NOT simply mort_mth + lapse_mth (which double-counts simultaneous exits).
 
-  - Broadcasting scalars to list columns: After create_projection_timeline(),
-    scalar columns stay scalar until combined with a list column. To convert
-    a per-policy scalar to a per-period list, add it to a zero-valued list:
-      af.combined_decrement_list = af.combined_decrement + af.month * 0.0
-    This pattern — "broadcast via month" — gives a constant-valued list where
-    every element equals the original scalar. Use it whenever you need to pass
-    a scalar into a method that expects a list column (like cumulative_survival).
+  - Cumulative survival from a constant decrement: When the decrement rate
+    is constant across periods (as in this introductory model), cumulative
+    survival is the geometric series:
+      pols_if[t] = (1 - d) ** t   for t = 0, 1, 2, ...
+    `**` works directly between scalars and list columns, so:
+      af.pols_if = (1.0 - af.combined_decrement) ** af.month
+    gives [1, (1-d), (1-d)^2, ..., (1-d)^n] — exactly what we want.
 
-  - .projection.cumulative_survival(): takes a per-period decrement rate list
-    and returns the fraction of policies still in force at EACH period. It
-    starts at 1.0 (everyone in force at t=0) and multiplies by (1 - rate)
-    cumulatively:
+  - .projection.cumulative_survival(): the general API for time-varying
+    decrement rates (introduced in Level 2 once Table.lookup gives a
+    per-period rate column). Takes a list of per-period rates and
+    returns the fraction of policies still in force at each period:
       t=0: 1.000                 (start of period — no decrements yet)
-      t=1: (1 - d)               (first decrement applied)
-      t=2: (1 - d)^2             (second decrement applied)
+      t=1: (1 - d[0])            (first decrement applied)
+      t=2: (1 - d[0])(1 - d[1])  (second decrement applied)
       ...
-    This is the vectorised equivalent of lifelib's pols_if(t) or an Excel
-    column of =IF(t=0, 1, prev_cell * (1 - decrement)).
+    For our constant-rate case the geometric closed form above is
+    simpler. Both compute the same numbers when d is constant.
 
   - Once you have pols_if, multiply any per-policy quantity by pols_if to
     weight it by the fraction of policies still active in that period.
@@ -99,17 +103,17 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
 
-    af = af.date.create_projection_timeline(
+    af = af.projection.set(
         valuation_date=VALUATION_DATE,
-        projection_end_type="term_months",
-        projection_end_value=PROJECTION_MONTHS,
-        projection_frequency="monthly",
-        output_column="projection_date",
+        until="term_months",
+        until_value=PROJECTION_MONTHS,
+        frequency="monthly",
     )
+    af.projection_date = af.projection.period_dates()
 
-    af.month = (
-        af.projection_date.dt.year() - VALUATION_DATE.year
-    ) * 12 + (af.projection_date.dt.month() - VALUATION_DATE.month)
+    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
+        af.projection_date.dt.month() - VALUATION_DATE.month
+    )
 
     # =====================================================================
     # SECTION 3: MONTHLY RATES (ACTUARIALLY CORRECT)
@@ -126,20 +130,15 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # =====================================================================
 
     # Combined monthly decrement: probability of leaving the portfolio
-    # (by death OR lapse) in any given month. Still scalar at this point.
+    # (by death OR lapse) in any given month. Scalar — constant across periods.
     af.combined_decrement = 1 - (1 - af.mort_rate_mth) * (1 - af.lapse_rate_mth)
 
-    # .projection.cumulative_survival() requires a list column (one rate per
-    # period). Our combined_decrement is a scalar (one rate per policy).
-    # Broadcast it to a list by adding af.month * 0.0 — this creates a
-    # constant-valued list where every element equals the scalar rate.
-    # Real models avoid this by using Table.lookup(), which naturally
-    # produces list columns (see Level 2). Here we need the explicit broadcast.
-    af.decrement_list = af.combined_decrement + af.month * 0.0
-
-    # Policies in force: cumulative survival from the per-period decrement.
-    # Starts at 1.0 at t=0, decreases each period as policies exit.
-    af.pols_if = af.decrement_list.projection.cumulative_survival()
+    # Policies in force: cumulative survival. With a constant decrement
+    # rate this is the geometric closed form pols_if[t] = (1 - d)**t.
+    # `**` broadcasts the scalar over the list-shaped af.month, giving
+    # [1, (1-d), (1-d)^2, ..., (1-d)^n]. Level 2 introduces
+    # `.projection.cumulative_survival()` for the general time-varying case.
+    af.pols_if = (1.0 - af.combined_decrement) ** af.month
 
     # =====================================================================
     # SECTION 5: WEIGHTED CLAIMS & PREMIUMS

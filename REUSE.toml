@@ -1,0 +1,45 @@
+version = 1
+SPDX-PackageName = "gaspatchio"
+SPDX-PackageSupplier = "Opio Inc."
+SPDX-PackageDownloadLocation = "https://github.com/opioinc/gaspatchio-core"
+
+# Blanket assertion: everything in the repo that REUSE doesn't otherwise see a
+# per-file SPDX header on is Apache-2.0, copyright Opio Inc. Per-file headers
+# (where they exist) take precedence — see `precedence = "aggregate"` semantics
+# in the REUSE 3.3 spec.
+
+[[annotations]]
+path = [
+  "LICENSE",
+  "NOTICE",
+  "**py.typed",
+  "**.python-version",
+  "**.md",
+  "**.toml",
+  "**.yml",
+  "**.yaml",
+  "**.json",
+  "**.jsonl",
+  "**.lock",
+  "**.txt",
+  "**.cfg",
+  "**.ini",
+  "**.csv",
+  "**.parquet",
+  "**.xlsx",
+  "**.xlsm",
+  "**.xls",
+  "**.pdf",
+  "**.png",
+  "**.svg",
+  "**.gitignore",
+  "**.gitattributes",
+  ".mailmap",
+  "**Cargo.toml",
+  "**pyproject.toml",
+  "**uv.lock",
+  "**Cargo.lock",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Opio Inc."
+SPDX-License-Identifier = "Apache-2.0"

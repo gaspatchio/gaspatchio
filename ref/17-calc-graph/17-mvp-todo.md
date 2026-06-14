@@ -55,9 +55,9 @@
 - [ ] Ensure backward compatibility when flag is not used
 
 ### Phase 1.5: Testing Part 1
-- [ ] Test mapping generation with My Model model points
+- [ ] Test mapping generation with the example model points
 - [ ] Test IDE support file generation
-- [ ] Create integration test with My Model model:
+- [ ] Create integration test with the example model:
   - [ ] Copy `model_calculation_vars.py` to `model_calculation_natural.py`
   - [ ] Replace key variable assignments with natural syntax:
     ```python
@@ -153,7 +153,7 @@
 
 ### Phase 2.7: Testing Part 2
 - [ ] Test dependency extraction with mapped variables
-- [ ] Test graph construction with My Model model
+- [ ] Test graph construction with the example model
 - [ ] Test JSON output format matches specification
 - [ ] Test that graph shows natural variable names:
   ```json
@@ -193,7 +193,7 @@
 
 ## Success Checklist
 
-- [ ] My Model model runs with natural variable syntax
+- [ ] the example model runs with natural variable syntax
 - [ ] IDE provides autocomplete for all variables
 - [ ] Generated graph JSON uses natural variable names
 - [ ] No performance regression in normal mode

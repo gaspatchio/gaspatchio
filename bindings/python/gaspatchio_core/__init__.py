@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Gaspatchio Core - Actuarial computation framework."""
 
 # Import key components for easier access
@@ -24,15 +28,37 @@ from .assumptions import (
     list_tables_with_metadata,
 )
 from .column import ColumnProxy, ExpressionProxy
+from .curves import Curve
 from .errors import PerformanceWarning
 from .frame import ActuarialFrame, run_model
 from .functions.conditional import when
-from .rollforward import RollforwardBuilder, Step, StepDef
+from .mortality import MortalityTable
+from .rollforward._builder import RollforwardBuilder
+from .rollforward._collector import RollforwardCollector
+from .rollforward._compile import compile_rollforward
+from .rollforward._compiled import CompiledRollforward
 from .scenarios import (
-    batch_scenarios,
-    describe_scenarios,
-    sensitivity_analysis,
+    AggregatedResult,
+    PeriodCount,
+    PeriodCTE,
+    PeriodMax,
+    PeriodMean,
+    PeriodMedian,
+    PeriodMin,
+    PeriodQuantile,
+    PeriodStd,
+    PeriodSum,
+    PeriodVariance,
+    SpillResult,
+    run_aggregated,
+    run_to_parquet,
     with_scenarios,
+)
+from .schedule import (
+    BusinessDayConvention,
+    Calendar,
+    DayCount,
+    Schedule,
 )
 from .util import (
     execution_mode,  # Context manager
@@ -46,24 +72,42 @@ configure_telemetry(enable=True)
 # Define the public API surface
 __all__ = [
     "ActuarialFrame",
+    "AggregatedResult",
+    "BusinessDayConvention",
+    "Calendar",
     "ColumnProxy",
+    "CompiledRollforward",
+    "Curve",
+    "DayCount",
     "ExpressionProxy",
+    "MortalityTable",
     "PerformanceWarning",
+    "PeriodCTE",
+    "PeriodCount",
+    "PeriodMax",
+    "PeriodMean",
+    "PeriodMedian",
+    "PeriodMin",
+    "PeriodQuantile",
+    "PeriodStd",
+    "PeriodSum",
+    "PeriodVariance",
     "RollforwardBuilder",
-    "Step",
-    "StepDef",
+    "RollforwardCollector",
+    "Schedule",
+    "SpillResult",
     "Table",
     "TableBuilder",
-    "batch_scenarios",
-    "describe_scenarios",
+    "compile_rollforward",
     "execution_mode",
     "functions",
     "get_default_mode",
     "get_table_metadata",
     "list_tables",
     "list_tables_with_metadata",
+    "run_aggregated",
     "run_model",
-    "sensitivity_analysis",
+    "run_to_parquet",
     "set_default_mode",
     "when",
     "with_scenarios",

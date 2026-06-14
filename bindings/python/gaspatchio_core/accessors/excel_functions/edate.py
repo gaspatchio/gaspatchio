@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Excel EDATE function implementation for adding months to dates
 # ABOUTME: Provides Excel-compatible month addition with proper boundary handling
 from __future__ import annotations

@@ -57,7 +57,9 @@ Before writing anything, determine where your calculation belongs. Work through 
 | Question | If Yes | Action |
 |----------|--------|--------|
 | Does a built-in method already exist? | Stop | Use it. Do not reimplement. Check accessors AND frame-level methods (`quantile`, `sum`, `mean`). |
-| Is it a scenario stress or shock to an assumption? | Stop | Use `scenarios/shocks` composables (`MultiplicativeShock`, `PipelineShock`, etc.). Not an accessor. |
+| Is it a scenario stress or shock to an assumption? | Stop | Use the `scenarios/shocks` composables. Not an accessor. The current set is `MultiplicativeShock`, `AdditiveShock`, `OverrideShock`, `ClipShock`, `FilteredShock` (WHERE), `TimeConditionalShock` (WHEN), `PipelineShock` (chain), `MaxShock`, `MinShock`, `RelativeFloorShock`, `ParameterShock` — most stresses compose from these. |
+| Is it a custom mergeable aggregator (skewness, weighted TVaR, a portfolio Sharpe ratio)? | Stop | Subclass `BaseAggregator` with the `@scenario_aggregator("Name")` decorator. Not an accessor. The aggregator carries its own column, alias, `.over()` partition, `.of()` polars escape, and survives YAML round-trip + parallel merge for free. See `concepts/scenarios/custom-aggregators.md` for the contract. |
+| Is it within-period state-machine logic (COI on NAR, IUL floor/cap, GMDB ratchet)? | Stop | Use `af.projection.rollforward(states={…})`. Not an accessor. The kernel handles the within-period balance dependency the loop was working around. |
 | Is it a one-off formula in a single model? | Stop | Use operators inline (`af.x * af.y`). Not an accessor. |
 | Is it too simple for an accessor (single operator like `a / b`)? | Stop | Use operators inline. Accessors are for formulas with branching, parameters, or non-obvious logic. |
 | Does it run once per model (curve fitting, table prep, data loading)? | Stop | Write a Python utility function in the model's setup phase. Not an accessor. |
@@ -99,7 +101,7 @@ Key rules:
 - Register with `@register_accessor("name", kind="column")`
 - Accept `proxy: ColumnProxy | ExpressionProxy` in `__init__`
 - Return `ExpressionProxy` from every method
-- Handle both scalar and list columns using `ColumnTypeDetector`
+- Handle both scalar and list columns by reading the proxy's cached `.shape` (`proxy.shape == "list"`)
 
 ### Frame Accessor (less common)
 
@@ -118,7 +120,7 @@ Templates with real code: [references/accessor-template.md](references/accessor-
 ## Non-Negotiable Rules
 
 1. **Compose Polars expressions.** No `map_elements`, `apply`, `iter_rows`, or Python for-loops. Ever.
-2. **Handle both scalar and list columns.** Use `ColumnTypeDetector` to detect and branch. Never assume one or the other.
+2. **Handle both scalar and list columns.** Read the proxy's cached shape (`proxy.shape == "list"`) to detect and branch. Never assume one or the other.
 3. **Return the correct type.** Column methods return `ExpressionProxy`. Frame methods return `ActuarialFrame`.
 4. **Include a docstring with a working example.** These are tested by `uv run pytest --doctest-modules`.
 5. **Look up existing methods first.** `uv run gspio docs "<method>"` is mandatory before you start writing.
@@ -219,7 +221,7 @@ Extension is complete when:
 - [ ] `_get_polars_expr()` helper defined (for column accessors) — handles both `ColumnProxy` and `ExpressionProxy`
 - [ ] `_parent is None` guard present with clear error message
 - [ ] All methods compose Polars expressions (no `map_elements`, `apply`, for-loops)
-- [ ] Both scalar and list columns handled (verified with `ColumnTypeDetector` from `dispatch` module)
+- [ ] Both scalar and list columns handled (verified via `proxy.shape == "list"` against `ColumnProxy`/`ExpressionProxy`)
 - [ ] Return types are correct (`ExpressionProxy` for column, `ActuarialFrame` for frame)
 - [ ] Docstring uses NumPy style with working example
 - [ ] Mathematical correctness verified against a known reference value

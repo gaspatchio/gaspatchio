@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Actuarial example: Calculate IRR for investment projects using list operations."""
 
 import polars as pl

@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/errors/__init__.py
-# hypothesis_version: 6.135.0
-
-['ColumnInfo', 'DataFrameContext', 'EnhancedError', 'ErrorBoundaryFinder', 'ErrorMetadata', 'ErrorType', 'OperationContext', 'OperationMetadata', 'PerformanceWarning', 'SourceLocation', 'Suggestion', 'SuggestionType', 'TracedOperation', 'ValidationError', '_handle_frame_error']

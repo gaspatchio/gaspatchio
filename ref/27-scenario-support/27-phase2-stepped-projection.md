@@ -1,7 +1,7 @@
 # Phase 2: Stepped Projection for Path-Dependent Products
 
 **Status**: Draft / Design Exploration
-**Author**: Claude (with Mr Gaz Wright)
+**Authors:** Matt Wright, Claude
 **Date**: 2025-12-06
 **Depends on**: RFC 27 (Scenario Support)
 

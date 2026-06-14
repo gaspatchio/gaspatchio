@@ -1,239 +1,200 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
-Level 5 Step 01: Parameter Shocks with Tornado Chart
+Level 5 Step 01: Parameter Shocks via ScenarioRun
 
-Loads a declarative scenarios.json config, applies shocks to assumption
-tables (mortality, lapse, rates, expenses), runs the model once per
-scenario, and produces a tornado chart ranking sensitivities by impact.
+Five scenarios — a base case plus four single-driver stresses — run through
+the L5 mini-VA model. The plan is captured as a ``ScenarioRun``: shocks,
+base tables, and the aggregations to read out of each scenario. The plan
+runs via ``.run()`` which cross-joins the model points with scenarios,
+applies the shocks to the named base tables, and aggregates per scenario.
 
-Key APIs demonstrated:
-  - parse_scenario_config()  -- JSON list -> dict[str, list[Shock]]
-  - Table.with_shock()       -- create a shocked copy of an assumption table
-  - describe_scenarios()     -- audit-trail markdown from shock specs
+What this demonstrates
+----------------------
 
-Usage:
-    uv run python tutorial/level-5-scenarios/steps/01-parameter-shocks/run_scenarios.py
+  * ``ScenarioRun`` — a typed, hashable plan you can serialise, replay, and
+    log alongside your results. The SHA of the plan changes if any shock
+    changes; identical plans produce identical SHAs.
+
+  * ``MultiplicativeShock`` — the workhorse stress: "mortality up 20%",
+    "lapse down 20%". Targets a base table by name.
+
+  * Mergeable aggregators — ``Sum.alias("pv_net_cf")`` etc. carry their
+    own output column name. Each scenario produces one row of aggregates.
+
+  * Audit sidecar — ``.run(audit=True)`` writes a JSON file capturing the
+    plan SHA, model points, runtime, and result alongside the run. The
+    same plan re-run produces the same SHA — change detection for free.
+
+The five scenarios
+------------------
+
+  BASE                    — no shocks (sanity baseline)
+  MORT_UP_20              — mortality_select × 1.2
+  LAPSE_DOWN_20           — lapse_rates × 0.8 (sticky policies hurt margin)
+  SURR_CHARGES_DOWN_50    — surrender_charges × 0.5 (smaller exit penalty)
+  ALL_ADVERSE             — all three combined
+
+Tornado chart ranks the four shocks by absolute impact on pv_net_cf vs BASE.
+
+Run::
+
+    cd tutorial/level-5-scenarios/steps/01-parameter-shocks
+    uv run python run_scenarios.py
 """
 
-import json
 import sys
 import time
 from pathlib import Path
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.scenarios import describe_scenarios, parse_scenario_config
-from gaspatchio_core.scenarios.shocks import Shock
+from gaspatchio_core import ActuarialFrame, MortalityTable
+from gaspatchio_core.scenarios import (
+    MultiplicativeShock,
+    ScenarioRun,
+    Sum,
+)
 
-STEP_DIR = Path(__file__).resolve().parent
-BASE_DIR = STEP_DIR.parent.parent / "base"
-sys.path.insert(0, str(BASE_DIR.parent))  # for charts import
-sys.path.insert(0, str(BASE_DIR))  # for model import
+SCRIPT_DIR = Path(__file__).resolve().parent
+L5_BASE_DIR = SCRIPT_DIR.parent.parent / "base"
+sys.path.insert(0, str(L5_BASE_DIR))
+import model  # noqa: E402 — sys.path manipulation must precede
 
-import charts 
-import model 
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-config_text = (STEP_DIR / "scenarios.json").read_text()
-config = json.loads(config_text)
-scenario_shocks = parse_scenario_config(config)
-
-MODEL_POINTS_PATH = BASE_DIR / "model_points.parquet"
+MODEL_POINTS_PATH = L5_BASE_DIR / "model_points.parquet"
+SELECT_PERIOD = model.SELECT_PERIOD_LEN
 
 # ---------------------------------------------------------------------------
-# Helpers
+# 1. Load assumptions once. Pull out the raw Tables we'll shock.
+# ---------------------------------------------------------------------------
+
+assumptions = model.load_assumptions()
+
+# MortalityTable wraps a raw Table. We shock the raw Table and re-wrap inside
+# the model_fn so the actuarial dispatch (select/ultimate) still works.
+mortality_select_raw = assumptions["mortality"].table
+
+BASE_TABLES = {
+    "mortality_select": mortality_select_raw,
+    "mortality_scalars": assumptions["mortality_scalars"],
+    "lapse_rates": assumptions["lapse_rates"],
+    "surrender_charges": assumptions["surrender_charges"],
+}
+
+# ---------------------------------------------------------------------------
+# 2. Define the five scenarios as shock specs.
+# ---------------------------------------------------------------------------
+
+SHOCKS = {
+    "BASE": [],
+    "MORT_UP_20": [
+        MultiplicativeShock(factor=1.2, table="mortality_select"),
+    ],
+    "LAPSE_DOWN_20": [
+        MultiplicativeShock(factor=0.8, table="lapse_rates"),
+    ],
+    "SURR_CHARGES_DOWN_50": [
+        MultiplicativeShock(factor=0.5, table="surrender_charges"),
+    ],
+    "ALL_ADVERSE": [
+        MultiplicativeShock(factor=1.2, table="mortality_select"),
+        MultiplicativeShock(factor=0.8, table="lapse_rates"),
+        MultiplicativeShock(factor=0.5, table="surrender_charges"),
+    ],
+}
+
+# ---------------------------------------------------------------------------
+# 3. Aggregations: one row per scenario, summed PVs across the portfolio.
+# ---------------------------------------------------------------------------
+
+# ``.over("scenario_id")`` partitions the aggregation per scenario so each
+# alias returns a DataFrame keyed by scenario_id (one row per scenario)
+# instead of collapsing to a single portfolio-wide scalar.
+AGGREGATIONS = (
+    Sum("pv_net_cf").alias("pv_net_cf").over("scenario_id"),
+    Sum("pv_claims").alias("pv_claims").over("scenario_id"),
+    Sum("pv_premiums").alias("pv_premiums").over("scenario_id"),
+    Sum("pv_expenses").alias("pv_expenses").over("scenario_id"),
+    Sum("pv_commissions").alias("pv_commissions").over("scenario_id"),
+)
+
+# ---------------------------------------------------------------------------
+# 4. Model wrapper. Bridges the shocked-Table dict from ScenarioRun into
+#    the model's assumptions_override shape (which expects MortalityTable
+#    around the raw mortality_select Table).
 # ---------------------------------------------------------------------------
 
 
-def _apply_shocks(
-    assumptions: dict[str, object],
-    shocks: list[Shock],
-) -> dict[str, object]:
-    """Apply a list of shocks to assumption tables, returning a modified copy.
-
-    For Table objects the shock is applied via Table.with_shock().
-    For plain DataFrames (e.g. space_params) a column-specific shock is
-    applied directly using the shock's Polars expression.
-    """
-    for shock in shocks:
-        table_name = getattr(shock, "table", None)
-        if not table_name or table_name not in assumptions:
-            continue
-
-        target = assumptions[table_name]
-        column_name = getattr(shock, "column", None)
-
-        if isinstance(target, Table):
-            assumptions[table_name] = target.with_shock(shock)
-        elif isinstance(target, pl.DataFrame) and column_name:
-            # Plain DataFrame with a targeted column (e.g. space_params.expense_maint)
-            original_dtype = target.schema[column_name]
-            assumptions[table_name] = target.with_columns(
-                shock.to_expression(pl.col(column_name))
-                .cast(original_dtype)
-                .alias(column_name)
-            )
-
-    return assumptions
+def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
+    """Rebuild the typed assumptions dict from shocked base tables, then run."""
+    del drivers  # not used in this step
+    overrides = dict(assumptions)  # start from base typed inputs
+    overrides["mortality"] = MortalityTable(
+        table=tables["mortality_select"],
+        age_basis="age_last_birthday",
+        structure="select_ultimate",
+        select_period=SELECT_PERIOD,
+    )
+    overrides["mortality_scalars"] = tables["mortality_scalars"]
+    overrides["lapse_rates"] = tables["lapse_rates"]
+    overrides["surrender_charges"] = tables["surrender_charges"]
+    return model.main(af, assumptions_override=overrides)
 
 
 # ---------------------------------------------------------------------------
-# Run each scenario
+# 5. Build the plan and run.
 # ---------------------------------------------------------------------------
 
-start = time.perf_counter()
+plan = ScenarioRun(
+    shocks=SHOCKS,
+    base_tables=BASE_TABLES,
+    aggregations=AGGREGATIONS,
+)
+
+print(plan.describe())
+print()
 
 mp = pl.read_parquet(MODEL_POINTS_PATH)
-n_points = len(mp)
+af = ActuarialFrame(mp)
 
-results: list[pl.DataFrame] = []
-
-for scenario_id, shocks in scenario_shocks.items():
-    # Fresh assumptions for every scenario so shocks don't stack
-    assumptions = model.load_assumptions()
-    assumptions = _apply_shocks(assumptions, shocks)
-
-    af = ActuarialFrame(mp)
-    result = model.main(af, assumptions_override=assumptions).collect()
-    result = result.with_columns(pl.lit(scenario_id).alias("scenario_id"))
-    results.append(result)
-
-all_results = pl.concat(results)
+start = time.perf_counter()
+result = plan.run(af, model_fn, audit=True)
 runtime = time.perf_counter() - start
 
 # ---------------------------------------------------------------------------
-# Aggregate results
+# 6. Results — table + tornado chart prep
 # ---------------------------------------------------------------------------
 
-scenario_totals = all_results.group_by("scenario_id").agg(
-    pl.col("pv_net_cf").sum(),
-)
+print(f"Runtime: {runtime:.2f}s")
+print(f"Audit sidecar: {result.audit_path}")
+print()
 
-base_pv = scenario_totals.filter(pl.col("scenario_id") == "BASE")["pv_net_cf"][0]
+# Each alias is a per-scenario DataFrame keyed by scenario_id. Join them
+# on scenario_id to produce one row per scenario with all PV components.
+pv_components = ["pv_net_cf", "pv_claims", "pv_premiums", "pv_expenses", "pv_commissions"]
+scenario_table = result.aggregations[pv_components[0]]
+for name in pv_components[1:]:
+    scenario_table = scenario_table.join(result.aggregations[name], on="scenario_id")
+scenario_table = scenario_table.sort("scenario_id")
 
-# ---------------------------------------------------------------------------
-# Chart: Tornado
-# ---------------------------------------------------------------------------
+print("=== Per-Scenario PV Aggregates ===")
+print(scenario_table)
+print()
 
-tornado = charts.tornado_chart(
-    df=scenario_totals,
-    base_scenario="BASE",
-    metric="pv_net_cf",
-    title="Sensitivity: Impact on PV Net Cashflows",
-)
+# Tornado data: delta vs BASE for pv_net_cf
+base_pv = scenario_table.filter(pl.col("scenario_id") == "BASE").get_column("pv_net_cf").item()
 
-report_dir = STEP_DIR / "report"
-report_dir.mkdir(parents=True, exist_ok=True)
-tornado.save(str(report_dir / "tornado.png"), scale_factor=2)
-
-# ---------------------------------------------------------------------------
-# Results summary table
-# ---------------------------------------------------------------------------
-
-summary_table = (
-    scenario_totals.select("scenario_id", "pv_net_cf")
-    .sort("scenario_id")
-    .with_columns(
-        ((pl.col("pv_net_cf") - base_pv) / abs(base_pv)).alias("vs_base_pct"),
-    )
-)
-
-summary_table_display = summary_table.with_columns(
-    pl.col("pv_net_cf")
-    .map_elements(charts.format_number, return_dtype=pl.String)
-    .alias("pv_net_cf"),
-    pl.col("vs_base_pct")
-    .map_elements(charts.format_pct, return_dtype=pl.String)
-    .alias("vs_base_pct"),
-)
-
-# ---------------------------------------------------------------------------
-# Audit trail from describe_scenarios()
-# ---------------------------------------------------------------------------
-
-audit_trail = describe_scenarios(scenario_shocks, output_format="markdown")
-
-# ---------------------------------------------------------------------------
-# Key findings (auto-generated)
-# ---------------------------------------------------------------------------
-
-findings: list[str] = []
-
-# Rank scenarios by absolute impact
-impact_df = (
-    scenario_totals.filter(pl.col("scenario_id") != "BASE")
+deltas = (
+    scenario_table.filter(pl.col("scenario_id") != "BASE")
     .with_columns(
         (pl.col("pv_net_cf") - base_pv).alias("delta"),
+        ((pl.col("pv_net_cf") - base_pv) / abs(base_pv) * 100).alias("delta_pct"),
     )
-    .with_columns(pl.col("delta").abs().alias("abs_delta"))
-    .sort("abs_delta", descending=True)
+    .sort("delta")  # ascending — biggest negative on top of bar chart
+    .select(["scenario_id", "delta", "delta_pct"])
 )
 
-biggest = impact_df.row(0, named=True)
-biggest_pct = (biggest["delta"] / abs(base_pv)) * 100
-findings.append(
-    f"The largest sensitivity is **{biggest['scenario_id']}** "
-    f"({biggest_pct:+.1f}% impact on PV of net cashflows)."
-)
-
-smallest = impact_df.row(-1, named=True)
-smallest_pct = (smallest["delta"] / abs(base_pv)) * 100
-findings.append(
-    f"The smallest sensitivity is **{smallest['scenario_id']}** "
-    f"({smallest_pct:+.1f}% impact)."
-)
-
-# Rate asymmetry check
-rates_up = scenario_totals.filter(pl.col("scenario_id") == "RATES_UP_50BP")
-rates_down = scenario_totals.filter(pl.col("scenario_id") == "RATES_DOWN_50BP")
-if not rates_up.is_empty() and not rates_down.is_empty():
-    up_delta = abs(rates_up["pv_net_cf"][0] - base_pv)
-    down_delta = abs(rates_down["pv_net_cf"][0] - base_pv)
-    if up_delta != down_delta:
-        larger = "UP" if up_delta > down_delta else "DOWN"
-        findings.append(
-            f"Interest rate shocks are asymmetric -- the {larger} shock has a "
-            f"larger absolute impact, reflecting the convexity of discounting."
-        )
-
-# ---------------------------------------------------------------------------
-# Report
-# ---------------------------------------------------------------------------
-
-report_path = charts.write_report(
-    path=STEP_DIR,
-    title="Parameter Shocks -- Sensitivity Analysis",
-    metadata={
-        "points": n_points,
-        "scenarios": len(scenario_shocks),
-        "runtime_s": runtime,
-    },
-    sections=[
-        {
-            "heading": "Scenario Parameters",
-            "content": "```json\n" + config_text + "\n```",
-        },
-        {
-            "heading": "Scenario Configuration (Audit Trail)",
-            "content": audit_trail,
-        },
-        {
-            "heading": "Results Summary",
-            "table": summary_table_display,
-        },
-        {
-            "heading": "Tornado Chart",
-            "chart": "tornado.png",
-        },
-        {
-            "heading": "Key Findings",
-            "findings": findings,
-        },
-    ],
-)
-
-print(f"Report generated in {runtime:.2f}s -> {report_path}")
+print("=== Tornado: Δ pv_net_cf vs BASE ===")
+print(deltas)

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Scratch test showing premium holiday calculation with conditionals.
 # ABOUTME: Demonstrates zeroing premiums at specific months using when/then/otherwise.
 # ruff: noqa: T201, INP001, ANN201, PLR2004

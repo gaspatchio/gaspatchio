@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/assumptions/_strategies.py
-# hypothesis_version: 6.135.0
-
-[200, 1000000, '999', '\\d+', 'cubic', 'linear', 'log-linear', 'term', 'ult', 'ult.', 'ultimate', 'value']

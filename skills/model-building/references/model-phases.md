@@ -50,24 +50,27 @@ def main(af):
     return af
 ```
 
-### Dataclass for Parameters
+### Dataclass for Model-Level Parameters
 
-For models that run multiple scenarios, use a dataclass:
+For per-run *model-level* parameters that don't vary across scenarios — valuation date, projection length, regulatory regime flags, paths to assumption files — a dataclass is a clean way to wire them through `main`:
 
 ```python
 from dataclasses import dataclass
+import datetime
 
-@dataclass
-class ScenarioParams:
-    mortality_factor: float = 1.0
-    discount_rate: float = 0.025
-    inflation_rates: tuple = (0.02, 0.02, 0.02, 0.02, 0.02)
+@dataclass(frozen=True)
+class ModelParams:
+    valuation_date: datetime.date
+    projection_months: int = 240
+    regime: str = "IFRS17"
 
 def main(af, params=None):
     if params is None:
-        params = ScenarioParams()
-    # Use params.mortality_factor, params.discount_rate, etc.
+        params = ModelParams(valuation_date=datetime.date(2025, 1, 1))
+    # Use params.valuation_date etc.
 ```
+
+For **scenario-level** parameters (shocked assumption tables, stress factors, sweep grids), don't reach for `@dataclass` — declare a `ScenarioRun(shocks=…, base_tables=…, aggregations=…)` and use `assumptions_override` on `main` so each scenario gets fresh tables. See the `gaspatchio-model-scenarios` skill for the canonical pattern.
 
 ---
 

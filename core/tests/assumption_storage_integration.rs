@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: Integration tests for assumption table storage backends.
 // ABOUTME: Verifies hash and array storage produce identical results.
 

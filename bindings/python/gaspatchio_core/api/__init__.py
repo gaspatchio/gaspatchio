@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: API client package for Gaspatchio knowledge services.
 # ABOUTME: Exports client and models for docs/knowledge search.
 """Gaspatchio API client package."""

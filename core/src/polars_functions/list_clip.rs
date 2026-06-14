@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Opio Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // ABOUTME: Element-wise clip operation for list columns (list.clip(lower, upper) with column bounds)
 // ABOUTME: Eliminates EXPLODE/GROUP_BY pattern for clipping list elements with per-row bounds
 

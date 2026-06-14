@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for the knowledge API client.
 # ABOUTME: Covers HTTP requests, error handling, and response parsing.
 """Tests for the knowledge API client."""

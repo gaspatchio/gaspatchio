@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: S101, ANN201, D102, S607
 """Tests for the gspio tutorial CLI commands."""
 

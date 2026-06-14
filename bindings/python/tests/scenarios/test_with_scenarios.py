@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for scenario expansion functionality.
 # ABOUTME: Verifies with_scenarios() cross-joins ActuarialFrame with scenario IDs.
 

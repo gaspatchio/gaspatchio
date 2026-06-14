@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Run the L4 model for benchmarking.
 
 L4's model.py has no __main__ block. This script loads model points,

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Proxy for Polars string (str) namespace operations within ActuarialFrame.
 
 This module provides the `StringNamespaceProxy` class, which enables access
@@ -218,7 +222,7 @@ class StringNamespaceProxy:
             Exception: Propagates exceptions from the underlying Polars call.
 
         """
-        from ..dispatch import _unwrap, _wrap
+        from .._dispatch_common import _unwrap, _wrap
 
         base_expr = self._get_base_expr()
         unwrapped_args = [_unwrap(arg) for arg in args]
@@ -2212,7 +2216,7 @@ class StringNamespaceProxy:
             └──────────────────────────────────────────────────┘
             ```
         """
-        from ..dispatch import _ensure_polars_expr_or_literal
+        from .._dispatch_common import _ensure_polars_expr_or_literal
 
         ambiguous_arg = _ensure_polars_expr_or_literal(ambiguous)
 

@@ -1,0 +1,136 @@
+name: Licence Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  reuse-compliance:
+    name: REUSE 3.3 Compliance (SPDX headers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install reuse
+        run: uv tool install reuse
+      - name: Run reuse lint
+        run: uv tool run reuse lint
+
+  python-wheel-licences:
+    name: Python Wheel Runtime Closure
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: bindings/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install workspace + pip-licenses
+        run: |
+          uv sync
+          uv pip install pip-licenses
+      - name: Resolve runtime closure
+        run: |
+          uv pip compile pyproject.toml \
+            --no-emit-package gaspatchio \
+            --quiet \
+            --output-file /tmp/wheel-deps.txt
+          grep -E "^[a-zA-Z0-9_\-]+==" /tmp/wheel-deps.txt \
+            | sed 's/==.*//' \
+            | tr '[:upper:]' '[:lower:]' \
+            | sort -u \
+            > /tmp/wheel-pkgs.txt
+          echo "Runtime-closure package count: $(wc -l < /tmp/wheel-pkgs.txt)"
+      - name: Audit licences for closure packages
+        run: |
+          uv run pip-licenses --from=mixed --format=json > /tmp/venv-licences.json
+          # Normalize both sides to hyphen-form so e.g. venv "pydantic_core" matches wheel-closure "pydantic-core"
+          WHEEL_PKGS_JSON=$(jq -R -s 'split("\n") | map(select(length > 0) | ascii_downcase | gsub("_"; "-"))' /tmp/wheel-pkgs.txt)
+          jq --argjson wheel "$WHEEL_PKGS_JSON" \
+            '[.[] | select((.Name | ascii_downcase | gsub("_"; "-")) as $n | $wheel | index($n))]' \
+            /tmp/venv-licences.json \
+            > /tmp/wheel-licences.json
+          MATCHED=$(jq 'length' /tmp/wheel-licences.json)
+          EXPECTED=$(wc -l < /tmp/wheel-pkgs.txt)
+          echo "Matched $MATCHED / $EXPECTED closure packages"
+          if [ "$MATCHED" -lt "$EXPECTED" ]; then
+            echo "::warning::Some runtime-closure packages were not found in the venv. Audit will proceed against the $MATCHED found; missing packages are listed below for manual review."
+            echo "Missing:"
+            comm -23 <(sort -u /tmp/wheel-pkgs.txt) <(jq -r '.[] | .Name | ascii_downcase | gsub("_"; "-")' /tmp/wheel-licences.json | sort -u)
+          fi
+          jq -r '.[] | .License' /tmp/wheel-licences.json | sort | uniq -c | sort -rn
+      - name: Fail on forbidden licences
+        run: |
+          FORBIDDEN=$(jq -r '.[] | select(.License | test("AGPL|GPL-[23]|^GPL[^a-z]|SSPL|BUSL|EUPL|^RPL"; "i")) | "\(.Name) \(.Version) :: \(.License)"' /tmp/wheel-licences.json)
+          if [ -n "$FORBIDDEN" ]; then
+            echo "::error::Forbidden Python licences in runtime closure:"
+            echo "$FORBIDDEN"
+            exit 1
+          fi
+          echo "No forbidden Python licences in runtime closure."
+      - name: Warn on weak-copyleft / unknown
+        run: |
+          WARN=$(jq -r '.[] | select(.License | test("LGPL|Unknown|UNKNOWN|Proprietary|Custom"; "i")) | "\(.Name) \(.Version) :: \(.License)"' /tmp/wheel-licences.json)
+          if [ -n "$WARN" ]; then
+            echo "::warning::Python packages needing manual review:"
+            echo "$WARN"
+          fi
+      - name: Upload audit JSON
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-wheel-licences
+          path: /tmp/wheel-licences.json
+
+  rust-crate-licences:
+    name: Rust Crate Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-license
+        run: cargo install cargo-license --quiet
+      - name: Audit core/
+        run: |
+          cd core
+          cargo license --json --avoid-build-deps --avoid-dev-deps > /tmp/rust-core-licences.json
+          echo "core/ deps: $(jq 'length' /tmp/rust-core-licences.json)"
+      - name: Audit bindings/python/
+        run: |
+          cd bindings/python
+          cargo license --json --avoid-build-deps --avoid-dev-deps > /tmp/rust-bindings-licences.json
+          echo "bindings/python/ deps: $(jq 'length' /tmp/rust-bindings-licences.json)"
+      - name: Fail on forbidden licences (single-licence GPL/AGPL/SSPL/BUSL)
+        run: |
+          FORBIDDEN=$(jq -r '.[] | select(.license != null) | select(.license | test("^(AGPL|GPL-[23]|SSPL|BUSL|EUPL)"; "i")) | "\(.name) \(.version) :: \(.license)"' /tmp/rust-core-licences.json /tmp/rust-bindings-licences.json | sort -u)
+          if [ -n "$FORBIDDEN" ]; then
+            echo "::error::Forbidden Rust licences (single-licence copyleft):"
+            echo "$FORBIDDEN"
+            exit 1
+          fi
+          echo "No single-licence forbidden Rust crates."
+      - name: Warn on copyleft-in-OR / unknown / null
+        run: |
+          WARN_OR=$(jq -r '.[] | select(.license != null) | select(.license | test("AGPL|GPL-[23]|LGPL|SSPL|BUSL|EUPL|^RPL"; "i")) | "\(.name) \(.version) :: \(.license)"' /tmp/rust-core-licences.json /tmp/rust-bindings-licences.json | sort -u || true)
+          WARN_NULL=$(jq -r '.[] | select(.license == null) | "\(.name) \(.version) :: (no licence field)"' /tmp/rust-core-licences.json /tmp/rust-bindings-licences.json | sort -u | grep -v "^gaspatchio_core_" || true)
+          if [ -n "$WARN_OR" ] || [ -n "$WARN_NULL" ]; then
+            echo "::warning::Rust crates needing manual review:"
+            if [ -n "$WARN_OR" ]; then echo "$WARN_OR"; fi
+            if [ -n "$WARN_NULL" ]; then echo "$WARN_NULL"; fi
+          else
+            echo "No Rust crates needing manual review."
+          fi
+      - name: Upload audit JSON
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rust-crate-licences
+          path: |
+            /tmp/rust-core-licences.json
+            /tmp/rust-bindings-licences.json

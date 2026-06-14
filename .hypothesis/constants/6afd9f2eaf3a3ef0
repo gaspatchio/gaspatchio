@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/column/dispatch.py
-# hypothesis_version: 6.135.0
-
-['ActuarialFrame', 'ProxyType', '_', '__', '__dir__', '__doc__', '_computation_graph', '_expr', '_parent', 'abs', 'add', 'alias', 'arr', 'bin', 'cast', 'cat', 'cbrt', 'ceil', 'clip', 'clip_max', 'clip_min', 'column', 'cum_prod', 'dt', 'exp', 'expected_dtype', 'fill_null', 'floor', 'floordiv', 'gamma', 'is_finite', 'is_infinite', 'is_nan', 'is_not_nan', 'is_not_null', 'is_null', 'list', 'list.', 'ln', 'log', 'log10', 'log1p', 'method', 'mod', 'mul', 'name', 'pow', 'proxy_type', 'round', 'round_sig_figs', 'shift', 'sign', 'sqrt', 'str', 'struct', 'sub', 'truediv']

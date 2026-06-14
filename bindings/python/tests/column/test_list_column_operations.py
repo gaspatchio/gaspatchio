@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Tests for list column operations with column operands (GSP-10)
 # ABOUTME: Verifies list ** scalar_col and list.clip(col, col) work correctly
 """Tests for list column operations with column bounds/exponents.

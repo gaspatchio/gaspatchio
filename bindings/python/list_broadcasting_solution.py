@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: T201, PD901, ANN201, ANN401, PLR0913, E501, PLR2004
 """
 ABOUTME: Demonstration of working solution for list vs scalar conditionals.

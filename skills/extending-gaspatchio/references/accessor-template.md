@@ -79,7 +79,6 @@ class RiskColumnAccessor(BaseColumnAccessor):
         ```
 
         """
-        import gaspatchio_core.column.dispatch as dispatch_module
         from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
@@ -90,13 +89,10 @@ class RiskColumnAccessor(BaseColumnAccessor):
             msg = "hazard_rate() requires the expression to be part of an ActuarialFrame context."
             raise RuntimeError(msg)
 
-        # Detect if this is a list column
-        ColumnTypeDetector = dispatch_module.ColumnTypeDetector  # type: ignore[attr-defined]  # noqa: N806
-        detector = ColumnTypeDetector(parent_frame)
-        is_list = False
-
-        if isinstance(self._proxy, ColumnProxy):
-            is_list = detector.is_list_column(self._proxy.name)
+        # Detect list vs scalar via the proxy's cached shape (the SOT).
+        is_list = (
+            isinstance(self._proxy, ColumnProxy) and self._proxy.shape == "list"
+        )
 
         if is_list:
             result_expr = base_expr.list.eval(
@@ -121,23 +117,19 @@ class RiskColumnAccessor(BaseColumnAccessor):
 
 Most Gaspatchio columns are list columns (each policy has a vector of monthly values). Your accessor must handle both scalar and list columns.
 
-**The standard pattern** (from `finance.py`):
+**The standard pattern** (from `finance.py:522-524`):
 
 ```python
-import gaspatchio_core.column.dispatch as dispatch_module
 from gaspatchio_core.column.column_proxy import ColumnProxy
 
 # Get the underlying expression
 base_expr = self._get_polars_expr()
 parent_frame = self._proxy._parent  # noqa: SLF001
 
-# Detect list vs scalar
-ColumnTypeDetector = dispatch_module.ColumnTypeDetector  # type: ignore[attr-defined]  # noqa: N806
-detector = ColumnTypeDetector(parent_frame)
-is_list = False
-
-if isinstance(self._proxy, ColumnProxy):
-    is_list = detector.is_list_column(self._proxy.name)
+# Detect list vs scalar via the proxy's cached shape (the SOT).
+is_list = (
+    isinstance(self._proxy, ColumnProxy) and self._proxy.shape == "list"
+)
 
 if is_list:
     # List column: apply element-wise inside each list
@@ -148,9 +140,8 @@ else:
 ```
 
 **Important notes:**
-- Import `ColumnTypeDetector` from `gaspatchio_core.column.dispatch` (NOT `type_detector` — that module does not exist).
-- The `# type: ignore[attr-defined]` and `# noqa: N806` comments are required — ruff and mypy flag the dynamic attribute access and PascalCase local variable.
-- List detection only works for `ColumnProxy` (which has a `.name` attribute). For `ExpressionProxy`, `is_list` defaults to `False`. This matches the existing codebase behavior.
+- Read `proxy.shape` directly — it's the source of truth set when the proxy is constructed and cached per schema generation. No detector class, no per-call probe.
+- List detection only works for `ColumnProxy` (which carries `.name` / `.shape`). For an `ExpressionProxy`, `is_list` defaults to `False` here — if you need shape-aware routing for a derived expression, read `expr_proxy.shape` instead. This matches the pattern in the existing codebase.
 
 ### When to Use `list.eval()` vs Direct Operations
 
@@ -287,7 +278,7 @@ class ReportingFrameAccessor(BaseFrameAccessor):
 
 If you want to add methods to an existing namespace (e.g., adding `duration_macaulay` to `finance`), add the method directly to the existing accessor class file. Do NOT create a second accessor with the same name — this will raise a `ValueError`.
 
-**Read the existing file first.** Match its patterns exactly: `_get_polars_expr()`, `ColumnTypeDetector` import, `_parent is None` guard, NumPy-style docstrings.
+**Read the existing file first.** Match its patterns exactly: `_get_polars_expr()`, the `proxy.shape == "list"` check for list/scalar branching, `_parent is None` guard, NumPy-style docstrings.
 
 Location of existing accessors:
 

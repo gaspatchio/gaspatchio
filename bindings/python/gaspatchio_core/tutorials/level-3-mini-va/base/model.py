@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 3: Mini Variable Annuity Model
 
@@ -10,7 +14,8 @@ This model mirrors the structure of the full appliedlife model
 
 Key concepts:
   - ActuarialFrame: a DataFrame where each row is one policy.
-    After create_projection_timeline(), scalar columns become list
+    After af.projection.set(), the frame carries a projection grid;
+    assigning list-valued projection accessors materialises list
     columns — one element per projection month. All arithmetic then
     operates element-wise across the entire projection at once.
 
@@ -25,9 +30,10 @@ Key concepts:
     to Excel's IF(). Works element-wise on list columns so you can
     write business logic that reads like English.
 
-  - .collect(): ActuarialFrame is lazy — operations are queued, not
-    executed immediately. Call .collect() to materialise the result
-    as a standard Polars DataFrame.
+  - .collect(): each assignment records what you want to calculate.
+    Call .collect() when you want the actual numbers — gaspatchio runs
+    all the formulas in one pass and returns the results as a Polars
+    DataFrame.
 
   - Methods under .projection, .finance, .date, .excel are gaspatchio.
     Everything else (.cast(), .clip(), .cum_prod(), .list.sum()) is
@@ -233,14 +239,15 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
     )
 
-    # Create projection timeline
-    af = af.date.create_projection_timeline(
+    # Declare the projection time axis on the frame
+    af = af.projection.set(
         valuation_date=VALUATION_DATE,
-        projection_end_type="term_months",
-        projection_end_value=PROJECTION_MONTHS,
-        projection_frequency="monthly",
-        output_column="projection_date",
+        until="term_months",
+        until_value=PROJECTION_MONTHS,
+        frequency="monthly",
     )
+    # Materialise the per-period date vector as a list column
+    af.projection_date = af.projection.period_dates()
 
     # Month index (0 = valuation date)
     af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
@@ -399,12 +406,9 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # SECTION 9: EXPENSES & COMMISSIONS
     # =====================================================================
 
-    # Inflation factor: (1 + inflation_rate)^(month/12)
-    # We want to raise a scalar (1.01) to a list power (month/12), but
-    # Polars doesn't support scalar ** list directly. The workaround uses
-    # the mathematical identity: a^b = exp(b * ln(a))
+    # Inflation factor: (1 + inflation_rate)^(month/12) per period.
     # Result: [(1.01)^(0/12), (1.01)^(1/12), (1.01)^(2/12), ...]
-    af.inflation_factor = (af.month / 12.0 * math.log(1.0 + INFLATION_RATE)).exp()
+    af.inflation_factor = (1.0 + INFLATION_RATE) ** (af.month / 12.0)
 
     # Acquisition expense: at new business only
     af.expense_acq_total = af.expense_acq * af.pols_new_biz

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Accessors for finance-related operations on ActuarialFrame objects."""
 
 from __future__ import annotations
@@ -505,8 +509,6 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         discount_factor : Calculate discount factors from interest rates
 
         """
-        # Import ColumnTypeDetector using getattr to avoid type-checking issues
-        import gaspatchio_core.column.dispatch as dispatch_module
         from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
@@ -520,14 +522,10 @@ class FinanceColumnAccessor(BaseColumnAccessor):
             )
             raise RuntimeError(msg)
 
-        # Detect if this is a list column
-        # Use getattr since ColumnTypeDetector is not in dispatch.__all__
-        ColumnTypeDetector = dispatch_module.ColumnTypeDetector  # type: ignore[attr-defined]  # noqa: N806
-        detector = ColumnTypeDetector(parent_frame)
-        is_list = False
-
-        if isinstance(self._proxy, ColumnProxy):
-            is_list = detector.is_list_column(self._proxy.name)
+        # Read the proxy's cached shape directly.
+        is_list = (
+            isinstance(self._proxy, ColumnProxy) and self._proxy.shape == "list"
+        )
 
         # Build the conversion expression
         if method == "compound":
@@ -629,15 +627,10 @@ class FinanceColumnAccessor(BaseColumnAccessor):
             )
             raise RuntimeError(msg)
 
-        # Detect if this is a list column
-        import gaspatchio_core.column.dispatch as dispatch_module
-
-        ColumnTypeDetector = dispatch_module.ColumnTypeDetector  # type: ignore[attr-defined]  # noqa: N806
-        detector = ColumnTypeDetector(parent_frame)
-        is_list = False
-
-        if isinstance(self._proxy, ColumnProxy):
-            is_list = detector.is_list_column(self._proxy.name)
+        # Read the proxy's cached shape directly.
+        is_list = (
+            isinstance(self._proxy, ColumnProxy) and self._proxy.shape == "list"
+        )
 
         # Build the compound growth expression: (1 + rate)^(period / periods_per_year)
         if is_list:

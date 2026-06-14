@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Tier 1: Verify skill files exist and have valid structure.
 
 These tests are deterministic, free, and run in milliseconds.

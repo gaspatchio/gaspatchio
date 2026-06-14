@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: INP001, D200, D400, D415, SLF001, E501, PT011
 """Tests for the new Table API (v2) - dimension-based assumption tables."""
 

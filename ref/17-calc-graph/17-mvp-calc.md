@@ -310,7 +310,7 @@ def calc_graph(
 ### Step 1: Dependency Extraction (Week 1)
 - [ ] Implement `extract_dependencies` function
 - [ ] Handle all Polars expression types (binary ops, functions, methods)
-- [ ] Test with complex expressions from My Model model
+- [ ] Test with complex expressions from the example model
 - [ ] Add unit tests for edge cases
 
 ### Step 2: Graph Building (Week 1-2)
@@ -328,7 +328,7 @@ def calc_graph(
 ### Step 4: CLI and Testing (Week 2-3)
 - [ ] Add `calc-graph` command to CLI
 - [ ] Create integration tests with sample models
-- [ ] Test with My Model model
+- [ ] Test with the example model
 - [ ] Document usage and examples
 
 ## Testing Strategy
@@ -386,7 +386,7 @@ def test_calc_graph_generation():
 2. **Graph Structure**: Produces valid DAG with no missing dependencies
 3. **JSON Format**: Output matches specified format and can be visualized
 4. **Performance**: Minimal overhead when running in debug mode
-5. **Coverage**: Handles all expression types used in My Model model
+5. **Coverage**: Handles all expression types used in the example model
 
 ## Future Enhancements (Post-MVP)
 

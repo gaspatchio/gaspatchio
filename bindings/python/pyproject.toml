@@ -1,14 +1,17 @@
 [project]
 name = "gaspatchio"
-version = "0.3.1"
+version = "0.4.0"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
+license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
     "logfire>=3.4.0",
     "loguru>=0.7.3",
     "numpy>=1.24.0,<2.2",
+    "platformdirs>=4.0",
+    "psutil>=5.9",
     "pydantic>=2.0.0",
     "polars==1.38.1",
     "polars[rt64]==1.38.1",
@@ -17,12 +20,15 @@ dependencies = [
     "pyarrow>=15.0.0",
     "thefuzz[speedup]>=0.22.1",
     "python-dateutil>=2.9.0.post0",
+    "holidays>=0.50",
     "markdown-it-py>=3.0.0",
     "docstring-parser>=0.16",
     "fastexcel>=0.14.0",
     "httpx>=0.28.0",
     "python-dotenv>=1.1.0",
     "vl-convert-python>=1.9.0.post1",
+    "altair>=6.1.0",
+    "ddsketch>=3.0.1",
 ]
 
 [dependency-groups]
@@ -32,8 +38,6 @@ dev = [
     "memray>=1.19.1",
     "mypy>=1.15.0",
     "openpyxl>=3.1.0",
-    "pydantic-ai>=0.2.16",
-    "pydantic-evals>=0.2.16",
     "pyright>=1.1.400",
     "pytest>=8.3.4",
     "pytest-accept>=0.1.12",
@@ -42,13 +46,22 @@ dev = [
     "pytest-memray>=1.8.0",
     "ruff>=0.11.10",
     "ty>=0.0.2",
+    "types-PyYAML>=6.0",
     "xlsxwriter>=3.2.9",
 ]
 benchmark = [
     "lifelib>=0.11.0",
     "modelx>=0.28.1",
+    # lifelib's IntegratedLife model imports pandas at runtime, but neither
+    # lifelib nor modelx declares it — so it must be listed here, else the
+    # comparison benchmark fails under `uv sync --no-dev` (fresh CI resolve).
+    "pandas>=2.2.3",
     "openpyxl>=3.1.5",
     "psutil>=5.9.0",
+]
+evals = [
+    "pydantic-ai>=0.2.16",
+    "pydantic-evals>=0.2.16",
 ]
 
 [project.optional-dependencies]
@@ -87,6 +100,37 @@ extend-ignore = [
     "S101",    # asserts are ok in tests
     "ANN201",  # test functions don't need return type annotations
     "PLR2004", # magic values are ok in tests
+]
+"tests/rollforward/**/*.py" = [
+    "S101",    # asserts are ok in tests
+    "ANN201",  # test functions don't need return type annotations
+    "PLR2004", # magic values are ok in tests
+    "PD901",   # `df` is the natural variable name for DataFrame fixtures in tests
+    "D101",    # test classes are descriptive by name
+    "D102",    # test methods are descriptive by name
+    "D103",    # test helper functions are descriptive by name
+    "D104",    # tests/rollforward/__init__.py intentionally empty
+    "B017",    # pytest.raises(Exception) is fine for "any exception" frozen-dataclass tests
+    "PT011",   # ValueError matches are tested via match= where it matters; broad use is intentional in fixture-style helpers
+    "SLF001",  # tests assert on _internal attrs of frozen dataclasses by design
+]
+"gaspatchio_core/rollforward/**/*.py" = [
+    "SLF001",  # _StateHandle is a friend class that mutates RollforwardBuilder._transitions etc. by design
+]
+"benchmarks/**/*.py" = [
+    "INP001",  # benchmarks are standalone scripts, not part of a namespace package
+    "S101",    # asserts are ok in benchmark tests
+    "ANN201",  # benchmark functions don't need return type annotations
+    "PLR2004", # magic values are ok in benchmark thresholds
+    "E501",    # line length relaxed for benchmark docstrings
+]
+"examples/**/*.py" = [
+    "INP001",  # examples are standalone demo scripts
+    "T201",    # print() expected in demo output
+    "S101",    # asserts intentional in smoke scripts
+    "PLR2004", # magic tolerances acceptable in demos
+    "D301",    # backslash-as-line-continuation in module docstrings is fine
+    "D103",    # function docstrings optional for tiny demos
 ]
 "gaspatchio_core/tutorials/**/*.py" = [
     "INP001",  # tutorials are standalone scripts, not part of a namespace package

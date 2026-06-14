@@ -58,7 +58,6 @@ The Solvency Capital Requirement (SCR) is given by a 1-year VaR 99.5%: it is the
 - RBC calculated as excess of Total Asset Requirement above statutory reserves
 - Originally required identical 200 scenarios for all companies, with optional second sensitivity test
 - Academy Interest Rate Generator (AIRG) historically used for real-world scenarios
-- In 2020, NAIC engaged Conning, Inc. to develop new ESG addressing known deficiencies
 
 ### Hedging and Asset-Liability Management (ALM)
 
@@ -212,31 +211,23 @@ Economic scenario generators (ESGs) are comprehensive frameworks that allow actu
 - Libor Market Model (LMM): Models forward LIBOR rates directly
 - Heath-Jarrow-Morton (HJM): Models entire forward curve evolution
 
-### Major ESG Providers
-
-**a commercial provider Economic Scenario Generator (formerly CHESS)**
-- Award-winning solution (Best ESG Software by Insurance ERM)
-- State-of-the-art modeling catalog
-- High-quality data for market-consistent and real-world applications
-- Framework relies on six models: monetary policy, inflation, short rate, term structure, dividend yield, stock returns
+### Regulatory ESG context
 
 **Academy Interest Rate Generator (AIRG)**
-- Most commonly used real-world ESG for US actuaries historically
-- Can generate 50 to 10,000 scenarios
-- User must decide appropriate number for given use case
-- Too few (e.g., 50) may not produce sufficient convergence
-- Too many (e.g., 10,000) may result in infeasible runtimes
-- In 2017, American Academy of Actuaries advised NAIC it could no longer maintain AIRG
-- Conning, Inc. engaged in 2020 to develop replacement
+- The historically prescribed real-world ESG for US statutory work
+- Generates 50 to 10,000 scenarios; user chooses an appropriate number for
+  the use case (too few may not converge; too many can be infeasible at
+  runtime)
+- In 2017, the American Academy of Actuaries advised NAIC it could no
+  longer maintain AIRG; a replacement was contracted in 2020 and is
+  expected to be prescribed for VM-20, VM-21, and C3 Phase II RBC
 
-**MavenBlue ESG**
-- Offers both Risk Neutral and Real World scenario generation
-- Vendor option for companies not using prescribed generators
-
-**Conning ESG (New NAIC Standard)**
-- In development to replace AIRG
-- Anticipated to address known deficiencies in current generators
-- Will be prescribed for VM-20, VM-21, and C3 Phase II RBC
+Beyond the prescribed generator, the actuarial market includes
+commercial ESG vendors and in-house frameworks. Selection criteria
+typically include calibration approach (risk-neutral vs real-world),
+factor coverage (rates, equity, credit, FX, mortality), validation
+discipline, and integration with downstream stochastic projection
+runtimes.
 
 ### Calibration Considerations
 
@@ -979,7 +970,6 @@ When implementing scenario functionality:
 - [Considerations in Market Risk Benefits - Public Policy White Paper](https://actuary.org/wp-content/uploads/2022/12/MRB_white_Paper.pdf)
 
 #### Economic Scenario Generators
-- [a commercial provider Economic Scenario Generator](https://www.a commercial provider.com/en/products/economic-scenario-generator)
 - [Economic Scenario Generators - Actuary.org](https://www.actuary.org/content/economic-scenario-generators)
 - [Economic Scenario Generators – A Practical Guide | SOA](https://www.soa.org/resources/research-reports/2016/2016-economic-scenario-generators/)
 - [Economic Scenario Generators, Part III: In-depth ESG Case Study—Academy Interest Rate Generator](https://www.soa.org/digital-publishing-platform/emerging-topics/economic-scenario-generators-part-iii/)
@@ -999,7 +989,6 @@ When implementing scenario functionality:
 
 #### Nested Stochastic Modeling
 - [Dynamic importance allocated nested simulation for variable annuity risk measurement | Cambridge Core](https://www.cambridge.org/core/journals/annals-of-actuarial-science/article/dynamic-importance-allocated-nested-simulation-for-variable-annuity-risk-measurement/5BE66160C54CF6F715B4D10954418122)
-- [Nested Stochastic Simulations: Bridging Risk & Pricing Models | Numerix](https://www.numerix.com/resources/webinar/nested-stochastic-simulations-bridging-risk-pricing-models)
 - [Nested Stochastic Valuation of Large Variable Annuity Portfolios – DOAJ](https://doaj.org/article/57fe793f99f9405bab0c0522d220ae67)
 
 #### Dynamic Policyholder Behavior

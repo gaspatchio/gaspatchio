@@ -87,8 +87,10 @@ Based on what the user needs, recommend a tutorial:
 | "I need assumption tables (mortality, lapse)" | Level 2 — Assumptions | `tutorial/level-2-assumptions/base/` |
 | "I want a complete variable annuity model" | Level 3 — Mini VA | `tutorial/level-3-mini-va/base/` |
 | "I'm porting from lifelib or another platform" | Level 4 — Lifelib | `tutorial/level-4-lifelib/base/` |
-| "I need deterministic scenario analysis or stress testing" | Level 5 — Scenarios | `tutorial/level-5-scenarios/base/` |
-| "I need Monte Carlo, stochastic scenarios, VaR, CTE, or a Solvency II internal model" | **Not yet available** | Explain that Level 5 covers deterministic scenarios. Stochastic / Monte Carlo capabilities exist in the gaspatchio scenario API but a guided tutorial (Level 6) is not yet built. Point to `bindings/python/tests/scratch/scenarios/stochastic_scenarios.py` as an advanced example. |
+| "I need scenario analysis, stress testing, or a sensitivity sweep" | Level 5 — Scenarios | `tutorial/level-5-scenarios/base/` |
+| "I need VaR, CTE, or Solvency II SCR aggregation" | Level 5 — Scenarios | `tutorial/level-5-scenarios/steps/03-sensitivity/` and `04-scenario-comparison/` — the `CTE` and `Quantile` aggregators on `ScenarioRun` cover this directly. |
+| "I need Monte Carlo / stochastic scenarios" | Level 5 step 05 — Stochastic | `tutorial/level-5-scenarios/steps/05-stochastic/` — `ScenarioRun(master_seed=…)` injects a deterministic per-scenario RNG seed; `drivers["rng_seed"]` flows to the model. Same API runs deterministic and stochastic alike. |
+| "I have UL / IUL / VA with GMxB — charges depend on the running account balance" | Level 3 step 07 + `tutorial/rollforward-patterns/` | The `af.projection.rollforward(states={…})` state-machine kernel — declare the within-period steps (`.add`, `.charge`, `.grow`, `.deduct_nar`, `.ratchet`); the kernel runs in parallel across every policy. Start with `rollforward-patterns/01_single_state_fund.py`, then `02_multistate_ratchet.py` for VA + GMDB, then `03_lapse_stop.py` for GMWB run-off. L3 step 07 shows the migration from `cum_prod` to rollforward on the L3 mini-VA model. |
 
 **Default**: If no data provided and user is just exploring, recommend **Level 1 base**.
 
@@ -100,6 +102,7 @@ Ask the user which level fits, or choose based on the data you inspected in Step
 - Data resembles a VA product with account values and guarantees -> Level 3.
 - User explicitly mentions lifelib or platform porting -> Level 4.
 - User mentions deterministic scenarios, stress testing, or sensitivity -> Level 5.
+- User mentions UL/IUL/VA with COI on NAR, floor/cap on credits, or anniversary ratchets — anything where within-period charges depend on the running balance -> point at `tutorial/rollforward-patterns/` and L3 step 07.
 
 ---
 

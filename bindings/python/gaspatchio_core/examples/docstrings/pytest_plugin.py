@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Pytest plugin for validating Gaspatchio docstring code examples.
 
 ABOUTME: Pytest plugin for validating Gaspatchio docstring code examples
@@ -8,7 +12,6 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
@@ -19,6 +22,7 @@ from .validate import GaspatchioEvalExample
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from pathlib import Path
 
     from .models import DocstringCodeExample, GaspatchioDocstring
 
@@ -103,12 +107,10 @@ def pytest_configure(config) -> None:  # type: ignore[no-untyped-def]
 
 
 def pytest_collect_file(
-    parent,
-    path,  # type: ignore[no-untyped-def]
+    parent,  # type: ignore[no-untyped-def]
+    file_path: Path,
 ) -> DocstringExampleFile | None:
     """Collect docstring examples from Python files matching patterns."""
-    file_path = Path(str(path))
-
     # Flatten list of lists for --gp-docstring-paths
     raw_pattern_groups = parent.session.config.getoption("gp_docstring_paths")
     docstring_paths_patterns = []

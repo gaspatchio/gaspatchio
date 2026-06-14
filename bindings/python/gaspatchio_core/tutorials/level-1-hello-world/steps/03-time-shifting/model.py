@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 1 → Step 03: Time Shifting
 
@@ -91,17 +95,17 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
 
-    af = af.date.create_projection_timeline(
+    af = af.projection.set(
         valuation_date=VALUATION_DATE,
-        projection_end_type="term_months",
-        projection_end_value=PROJECTION_MONTHS,
-        projection_frequency="monthly",
-        output_column="projection_date",
+        until="term_months",
+        until_value=PROJECTION_MONTHS,
+        frequency="monthly",
     )
+    af.projection_date = af.projection.period_dates()
 
-    af.month = (
-        af.projection_date.dt.year() - VALUATION_DATE.year
-    ) * 12 + (af.projection_date.dt.month() - VALUATION_DATE.month)
+    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
+        af.projection_date.dt.month() - VALUATION_DATE.month
+    )
 
     # =====================================================================
     # SECTION 3: MONTHLY RATES
@@ -116,11 +120,9 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     af.combined_decrement = 1 - (1 - af.mort_rate_mth) * (1 - af.lapse_rate_mth)
 
-    # Broadcast scalar to list (see Step 02 for explanation)
-    af.decrement_list = af.combined_decrement + af.month * 0.0
-
-    # Policies in force at beginning of each period (starts at 1.0)
-    af.pols_if = af.decrement_list.projection.cumulative_survival()
+    # Policies in force at beginning of each period (starts at 1.0).
+    # See Step 02 for the geometric closed form (1 - d)**t.
+    af.pols_if = (1.0 - af.combined_decrement) ** af.month
 
     # =====================================================================
     # SECTION 5: PER-PERIOD COUNTS & CASHFLOWS
@@ -168,7 +170,9 @@ if __name__ == "__main__":
     result_af = main(af)
     result = result_af.collect()
 
-    print(result.select(["policy_id", "pols_if", "net_cf", "pv_net_cf", "total_deaths"]))
+    print(
+        result.select(["policy_id", "pols_if", "net_cf", "pv_net_cf", "total_deaths"])
+    )
 
     # pols_if and net_cf are list columns (13 elements each).
     # pv_net_cf and total_deaths are scalar summaries over the projection.

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Integration test demonstrating time-shifting API with actuarial patterns.
 # ABOUTME: Shows inforce rollforward, reserve calculations, and period comparisons.
 # ruff: noqa: INP001, ANN201, S101, PLR2004, T201

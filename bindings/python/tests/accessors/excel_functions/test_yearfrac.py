@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ABOUTME: Tests for yearfrac Python-Rust interface - type marshalling and parameter validation.
 ABOUTME: Does not test Excel calculation logic which is handled by Rust tests."""
 

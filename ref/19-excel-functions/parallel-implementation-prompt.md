@@ -29,8 +29,8 @@ I need you to implement the Excel {{FUNCTION_NAME}} function in Rust following o
 - List columns enable processing entire projection arrays (e.g., 120 monthly values) efficiently
 
 ## Resources to Study
-1. **Reference Implementation**: Read `~/Projects/gaspatchio/gaspatchio-core/core/src/excel/yearfrac.rs` to understand the complete pattern
-2. **Workflow Steps**: Review `~/Projects/gaspatchio/gaspatchio-core/core/ref/19-excel-functions/per-function/steps/` (especially steps 04, 05, 06)
+1. **Reference Implementation**: Read `core/src/excel/yearfrac.rs` to understand the complete pattern
+2. **Workflow Steps**: Review `core/ref/19-excel-functions/per-function/steps/` (especially steps 04, 05, 06)
 3. **Function Documentation**: Check the Microsoft documentation link for {{FUNCTION_NAME}} behavior
 
 ## Implementation Requirements
@@ -63,7 +63,7 @@ Include tests for:
 - Property-based tests for list operations
 
 ## File Location
-Create the implementation at: `~/Projects/gaspatchio/gaspatchio-core/core/src/excel/{{function_name}}.rs`
+Create the implementation at: `core/src/excel/{{function_name}}.rs`
 
 Please implement {{FUNCTION_NAME}} following this pattern exactly. Start by studying the yearfrac implementation thoroughly.
 ```
@@ -104,9 +104,9 @@ I need you to implement the Excel PMT function in Rust following our established
 - List columns enable processing entire projection arrays (e.g., 120 monthly values) efficiently
 
 ## Resources to Study
-1. **Reference Implementation**: Read `~/Projects/gaspatchio/gaspatchio-core/core/src/excel/yearfrac.rs` to understand the complete pattern
-2. **Existing PMT Tests**: Check `~/Projects/gaspatchio/gaspatchio-core/core/src/excel/pmt.rs` for current implementation
-3. **Workflow Steps**: Review `~/Projects/gaspatchio/gaspatchio-core/core/ref/19-excel-functions/per-function/steps/` (especially steps 04, 05, 06)
+1. **Reference Implementation**: Read `core/src/excel/yearfrac.rs` to understand the complete pattern
+2. **Existing PMT Tests**: Check `core/src/excel/pmt.rs` for current implementation
+3. **Workflow Steps**: Review `core/ref/19-excel-functions/per-function/steps/` (especially steps 04, 05, 06)
 
 [Continue with standard requirements...]
 ```

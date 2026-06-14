@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 class SimpleDateTimeProcessor:
     """A simple class that processes date strings.
 

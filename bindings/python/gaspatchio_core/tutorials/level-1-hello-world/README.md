@@ -14,8 +14,9 @@ Start with `base/model.py`. It's about 60 lines and introduces the four things y
 - `.collect()` to materialise the lazy frame as a Polars DataFrame
 
 **steps/01-projections/** — add time dimension
-- `af.date.create_projection_timeline()` — the key transformation that adds a list column per policy
-- How scalar columns become list columns after the timeline is created
+- `af.projection.set()` — declare the projection time axis on the frame
+- `af.projection.period_dates()` — materialise the per-period date vector as a list column
+- How scalar columns combine with list-valued projection accessors to produce list columns
 - Month index derivation from projection dates
 
 **steps/02-survival/** — add policy counts over time

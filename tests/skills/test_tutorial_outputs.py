@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: S101, ANN201, S603, S607, INP001
 """CI test: verify all tutorial models produce expected output.
 

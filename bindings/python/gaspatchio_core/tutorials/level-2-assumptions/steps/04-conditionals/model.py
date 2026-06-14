@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 2 → Step 04: Conditionals on List Columns
 
@@ -11,9 +15,10 @@ Delta from Step 03:
 
 New concept — when/then/otherwise on list columns:
   In Level 1 you used when() on scalar columns (one value per policy).
-  After create_projection_timeline(), columns become lists — one element
-  per projection month. when/then/otherwise works identically, but now
-  applies element-wise across every (policy, month) cell simultaneously.
+  After af.projection.set(), assigning list-valued projection accessors
+  produces list columns — one element per projection month.
+  when/then/otherwise works identically, but now applies element-wise
+  across every (policy, month) cell simultaneously.
 
   Example 1 — zero pols_if after maturity:
     af.pols_if = (
@@ -60,7 +65,7 @@ from gaspatchio_core.assumptions import Table
 DATA_DIR = Path(__file__).parent / "data"
 
 VALUATION_DATE = datetime.date(2024, 1, 1)
-PROJECTION_MONTHS = 24   # 2 years — long enough to show maturity effect
+PROJECTION_MONTHS = 24  # 2 years — long enough to show maturity effect
 
 
 def load_assumptions() -> tuple[Table, Table]:
@@ -113,13 +118,13 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
     )
 
-    af = af.date.create_projection_timeline(
+    af = af.projection.set(
         valuation_date=VALUATION_DATE,
-        projection_end_type="term_months",
-        projection_end_value=PROJECTION_MONTHS,
-        projection_frequency="monthly",
-        output_column="projection_date",
+        until="term_months",
+        until_value=PROJECTION_MONTHS,
+        frequency="monthly",
     )
+    af.projection_date = af.projection.period_dates()
 
     af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
         af.projection_date.dt.month() - VALUATION_DATE.month
@@ -158,9 +163,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     #   - af.maturity_month is a scalar per policy (12 or 24 or 20)
     #   - gaspatchio broadcasts the scalar and evaluates element-wise
     af.pols_if = (
-        when(af.duration_mth_t < af.maturity_month)
-        .then(af.survival_bop)
-        .otherwise(0.0)
+        when(af.duration_mth_t < af.maturity_month).then(af.survival_bop).otherwise(0.0)
     )
 
     # =====================================================================
@@ -175,11 +178,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # af.month is a list; the comparison month < 12 produces a boolean list.
     # when/then/otherwise returns premium_income * 0.50 for months 0–11 and
     # 0.0 for months 12+. This is the list conditional in action.
-    af.commissions = (
-        when(af.month < 12)
-        .then(af.premium_income * 0.50)
-        .otherwise(0.0)
-    )
+    af.commissions = when(af.month < 12).then(af.premium_income * 0.50).otherwise(0.0)
 
     af.net_cf = af.premium_income - af.claims - af.expenses - af.commissions
     af.pv_net_cf = af.net_cf.list.sum()

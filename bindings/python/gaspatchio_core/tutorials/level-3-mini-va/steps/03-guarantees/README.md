@@ -56,7 +56,7 @@ Surrender charges use conditional lookup:
 af.surr_charge_rate = (
     when(af.has_surr_charge)
     .then(surrender_charges.lookup(surr_charge_id=..., duration=...))
-    .otherwise(af.duration * 0.0)
+    .otherwise(0.0)
 )
 af.claims_lapse = af.av_pp_mid_mth * af.pols_lapse - af.surr_charge
 ```

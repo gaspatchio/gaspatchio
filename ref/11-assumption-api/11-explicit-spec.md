@@ -582,7 +582,7 @@ result = df.with_columns(
 
 ```bash
 # Start development in the correct directory
-cd ~/Projects/gaspatchio/gaspatchio-core/bindings/python
+cd bindings/python
 
 # Create new files
 touch gaspatchio_core/assumptions/_api.py  # Will replace api.py

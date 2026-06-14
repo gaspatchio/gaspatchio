@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Defines the ExpressionProxy class."""
 # ruff: noqa: ANN204, ANN401, TID252, E501, ERA001, TRY003, EM102, PLR2004, TRY300, BLE001, D401, N806, EM101, C414
 
@@ -18,6 +22,7 @@ if TYPE_CHECKING:
 
 # Import the registry for accessor lookup
 from ..frame.registry import _ACCESSOR_REGISTRY
+from .shape import _UNSET, Kind, Shape, _kind_from_dtype, _shape_from_expr_dtype
 
 
 class ExpressionProxy:
@@ -28,13 +33,23 @@ class ExpressionProxy:
     _finance_accessor_instance_expr: FinanceColumnAccessor | None = None
     _dynamic_accessor_cache: dict[str, Any]  # Cache for dynamically created accessors
 
-    def __init__(self, expr: pl.Expr, parent: ActuarialFrame | None):
+    def __init__(
+        self,
+        expr: pl.Expr,
+        parent: ActuarialFrame | None,
+        *,
+        kind: str | None = None,
+    ):
         """Initialize an ExpressionProxy.
 
         Args:
             expr: The underlying Polars expression.
             parent: The originating ActuarialFrame, used for context.
                     Can be None if the expression is detached.
+            kind: Optional explicit kind. When provided, overrides dtype-driven
+                    fallback. Used by mask-producing operators (`&`, `|`, `~`)
+                    to assert `kind="boolean_mask"` even when the dtype probe
+                    can't see through the combined expression.
 
         """
         if not isinstance(expr, pl.Expr):
@@ -44,11 +59,31 @@ class ExpressionProxy:
         self._expr = expr
         self._parent = parent
         self._dynamic_accessor_cache = {}  # Initialize cache per instance
-        self._list_broadcast_metadata: dict[str, Any] | None = None  # For conditionals
+        self._kind_explicit: str | None = kind
+        self._shape_cached: tuple[int, str] | object = _UNSET
+        self._kind_cached: tuple[int, str] | object = _UNSET
 
     def _to_expr(self) -> pl.Expr:
         """Return the underlying Polars expression."""
         return self._expr
+
+    @property
+    def shape(self) -> Shape:
+        """Resolved shape of this expression."""
+        gen = getattr(self._parent, "_schema_generation", 0) if self._parent else 0
+        if self._shape_cached is _UNSET or self._shape_cached[0] != gen:  # type: ignore[index]
+            self._shape_cached = (gen, _shape_from_expr_dtype(self._parent, self._expr))
+        return self._shape_cached[1]  # type: ignore[index]
+
+    @property
+    def kind(self) -> Kind:
+        """Resolved kind: explicit override > dtype-driven fallback > value."""
+        if self._kind_explicit is not None:
+            return self._kind_explicit
+        gen = getattr(self._parent, "_schema_generation", 0) if self._parent else 0
+        if self._kind_cached is _UNSET or self._kind_cached[0] != gen:  # type: ignore[index]
+            self._kind_cached = (gen, _kind_from_dtype(self._expr, self._parent))
+        return self._kind_cached[1]  # type: ignore[index]
 
     def __repr__(self) -> str:
         """Provide a concise representation of the proxied expression."""

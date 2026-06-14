@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Integration test script to verify list broadcasting works in debug mode
 # ABOUTME: Tests the real actuarial model pattern from basic_term model
 # ruff: noqa: T201, PLR0911, PLR0912, PLR0915, ANN201, E501, SLF001, BLE001

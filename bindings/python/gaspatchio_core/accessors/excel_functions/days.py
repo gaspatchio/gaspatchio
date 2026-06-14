@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Excel DAYS function implementation for calculating days between dates
 # ABOUTME: Provides Excel-compatible date difference calculations with proper null handling
 from __future__ import annotations

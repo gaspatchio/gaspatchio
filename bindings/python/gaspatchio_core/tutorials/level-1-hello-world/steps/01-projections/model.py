@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Level 1 → Step 01: Projections
 
@@ -9,23 +13,24 @@ Delta from base:
 
 New concepts introduced here:
 
-  - create_projection_timeline(): transforms the ActuarialFrame so that every
-    subsequent column assignment produces a list column — one element per
-    projection month. Before calling it, columns are scalars (one value per
-    policy). After calling it, new columns are lists (one value per policy per
-    month). Existing scalar columns remain scalar and broadcast automatically
-    when combined with list columns in arithmetic.
+  - af.projection.set(): declares the projection time axis on the frame. Every
+    subsequent column assignment that references list-valued projection
+    accessors (e.g. af.projection.period_dates()) produces a list column — one
+    element per projection period. Existing scalar columns remain scalar and
+    broadcast automatically when combined with list columns in arithmetic.
 
   - List columns in practice: af.monthly_premium is a scalar (1 value per
-    policy). After create_projection_timeline(), af.monthly_premium * 1.0 gives
-    a list — 12 copies of the scalar, one per month. This broadcasting is
-    automatic: you never write loops, and you never replicate data manually.
+    policy). After af.projection.set(), af.monthly_premium * 1.0 still gives a
+    scalar; broadcasting to a list happens when it combines with a list-valued
+    expression. This is automatic: you never write loops, and you never
+    replicate data manually.
 
-  - projection_date: the list column produced by create_projection_timeline().
-    Each element is a date — the first day of each projected month. Use
-    af.projection_date.dt.year(), .dt.month(), etc. to extract components.
+  - projection_date: assigning af.projection.period_dates() materialises the
+    per-period date vector as a list column on the frame. Each element is a
+    date — the first day of each projected month. Use af.projection_date.dt.year(),
+    .dt.month(), etc. to extract components.
 
-  - Month index: create_projection_timeline() does not produce a month counter
+  - Month index: af.projection.set() does not produce a month counter
     automatically. Derive it from the projection date and valuation date:
       month = (year - val_year) * 12 + (month - val_month)
 
@@ -83,23 +88,25 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # Parse entry date from string to date type
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
 
-    # create_projection_timeline() is the key transformation.
-    # It adds a list column (projection_date) where each element is the
-    # first day of a projected month. All columns assigned AFTER this call
-    # become list columns automatically.
-    af = af.date.create_projection_timeline(
+    # af.projection.set() is the key transformation. It declares the
+    # projection time axis on the frame; later assignments that reference
+    # list-valued projection accessors become list columns automatically.
+    af = af.projection.set(
         valuation_date=VALUATION_DATE,
-        projection_end_type="term_months",
-        projection_end_value=PROJECTION_MONTHS,
-        projection_frequency="monthly",
-        output_column="projection_date",
+        until="term_months",
+        until_value=PROJECTION_MONTHS,
+        frequency="monthly",
     )
 
+    # Materialise the per-period date vector as a list column. Each element
+    # is the first day of a projected month.
+    af.projection_date = af.projection.period_dates()
+
     # Month index (0 = valuation date, 1 = one month later, ...)
-    # create_projection_timeline() does not produce this automatically.
-    af.month = (
-        af.projection_date.dt.year() - VALUATION_DATE.year
-    ) * 12 + (af.projection_date.dt.month() - VALUATION_DATE.month)
+    # af.projection.set() does not produce this automatically.
+    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
+        af.projection_date.dt.month() - VALUATION_DATE.month
+    )
 
     # =====================================================================
     # SECTION 3: MONTHLY PROJECTIONS
@@ -113,8 +120,8 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # (Step 02 replaces this with the actuarially correct monthly rate)
     af.monthly_mortality = af.mortality_rate / 12.0
 
-    # Expected monthly claims: scalar * scalar = scalar, then broadcasts
-    # to a list when assigned after create_projection_timeline().
+    # Expected monthly claims: scalar * scalar = scalar, broadcasting to
+    # a list when combined with a list-valued projection accessor.
     # Each policy has the same expected claims in every month (no lapse yet).
     af.expected_claims_monthly = af.sum_assured * af.monthly_mortality
 
@@ -126,7 +133,11 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # Profitability flag still works the same way — when/then/otherwise
     # operates element-wise whether columns are scalar or list
-    af.is_profitable = when(af.net_premium_monthly > af.expected_claims_monthly).then("Yes").otherwise("No")
+    af.is_profitable = (
+        when(af.net_premium_monthly > af.expected_claims_monthly)
+        .then("Yes")
+        .otherwise("No")
+    )
 
     return af
 
@@ -141,7 +152,11 @@ if __name__ == "__main__":
     result = result_af.collect()
 
     # Show the month index and monthly cashflows for each policy
-    print(result.select(["policy_id", "month", "expected_claims_monthly", "net_premium_monthly"]))
+    print(
+        result.select(
+            ["policy_id", "month", "expected_claims_monthly", "net_premium_monthly"]
+        )
+    )
 
     # Each row is one policy; month, expected_claims_monthly, and
     # net_premium_monthly are list columns with 13 elements each

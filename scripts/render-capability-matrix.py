@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: T201
 """Render capability matrix HTML from JSON.
 
@@ -72,7 +77,7 @@ a {{ color: #0366d6; }}
 <p><a href="../">← Back to dashboard</a></p>
 <p>LLM model × skill test pass rates. Updated nightly.</p>
 <table>
-<tr><th>Skill</th>{''.join(f'<th>{{n}}</th>' for n in short_names)}</tr>
+<tr><th>Skill</th>{''.join(f'<th>{n}</th>' for n in short_names)}</tr>
 {''.join(rows)}
 </table>
 </body>
@@ -175,11 +180,25 @@ a:hover { text-decoration: underline; }
 <div class="card">
 <h2><a href="dev/bench/">Rust Micro-Benchmarks</a></h2>
 <p>Criterion time-series: assumption lookup speed, vector operations, accumulate plugin.</p>
+<p class="muted">Windows: <a href="dev/bench-windows/">Rust micro-benchmarks on windows-large</a></p>
 </div>
 
 <div class="card">
 <h2><a href="dev/model-bench/">Model Benchmarks</a></h2>
 <p>End-to-end model execution at 8 / 1K / 10K / 100K model points (L4, L5).</p>
+<p class="muted">Windows: <a href="dev/model-bench-windows/">model benchmarks on windows-large</a></p>
+</div>
+
+<div class="card">
+<h2><a href="dev/scenario-bench/">Scenario Performance</a></h2>
+<p>Scenario throughput and memory for the bounded-memory default path.</p>
+<p class="muted">Windows: <a href="dev/scenario-bench-windows/">scenario benchmarks on windows-large</a></p>
+</div>
+
+<div class="card">
+<h2><a href="dev/comparison/">Gaspatchio vs Lifelib</a></h2>
+<p>Matched-scale comparison against the lifelib IntegratedLife reference model.</p>
+<p class="muted">Windows: <a href="dev/comparison-windows/">comparison benchmarks on windows-large</a></p>
 </div>
 
 <div class="card">

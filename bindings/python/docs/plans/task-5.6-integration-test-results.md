@@ -15,7 +15,7 @@ Successfully verified that list broadcasting conditionals work in debug/tracing 
 
 - **Python Version:** 3.12.9
 - **Polars Version:** (from project dependencies)
-- **Test Location:** `~/Projects/gaspatchio/gaspatchio-core/bindings/python/tests/integration/test_list_broadcasting_integration.py`
+- **Test Location:** `bindings/python/tests/integration/test_list_broadcasting_integration.py`
 
 ## Tests Performed
 
@@ -139,7 +139,7 @@ All unit tests in `tests/accessors/test_list_broadcasting_debug_mode.py` pass:
 
 **Recommended Next Step:** Run the full model in a clean environment:
 ```bash
-cd ~/projects/gaspatchio-models/basic_term
+cd ../gaspatchio-models/basic_term
 python model_projection.py --mode debug
 ```
 

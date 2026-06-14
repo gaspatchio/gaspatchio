@@ -1,8 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Type stubs for column_proxy.py."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Literal, Optional
 
 import polars as pl
 from polars.type_aliases import PolarsDataType
@@ -33,6 +37,9 @@ class ColumnProxy(_BaseProxy):
     _finance_accessor_instance_col: Optional[FinanceColumnAccessor]
     _projection_accessor_instance_col: Optional[ProjectionColumnAccessor]
     _dynamic_accessor_cache: Dict[str, Any]
+    _shape_cached: Any
+
+    kind: ClassVar[Literal["value"]]
 
     # Keep specific methods
     def __init__(self, name: str, parent: Optional[ActuarialFrame]) -> None: ...
@@ -43,6 +50,8 @@ class ColumnProxy(_BaseProxy):
     ) -> "ExpressionProxy": ...
 
     # Keep specific properties
+    @property
+    def shape(self) -> Literal["scalar", "list", "unknown"]: ...
     @property
     def date(self) -> "DateColumnAccessor": ...
     @property

@@ -15,18 +15,19 @@ uv run gspio docs "<method name>"
 
 ---
 
-## 2. `when().then(scalar).otherwise(list_column)` — Runtime Crash
+## 2. Arithmetic-masking blends in conditional code (obsolete workaround)
 
 ```python
-# WRONG — crashes with "Unsupported combination of list/scalar inputs"
-af.cso = when(af.age > 99).then(1.0).otherwise(af.cso_table)
-
-# RIGHT — arithmetic masking
+# Don't write this in new code — it's the old workaround.
 af.flag = when(af.real_attained_age > 99).then(1.0).otherwise(0.0)
 af.cso = af.cso_table * (1 - af.flag) + 1.0 * af.flag
+
+# Just write the conditional directly. gaspatchio routes the mixed
+# scalar/list branches correctly via list_conditional.
+af.cso = when(af.age > 99).then(1.0).otherwise(af.cso_table)
 ```
 
-See [conditionals-and-lists.md](conditionals-and-lists.md) for full details.
+The arithmetic-masking blend was the workaround for a list/scalar mismatch that no longer exists (PRs #99 / #100 / #101). Reading code, the `when/then/otherwise` form is auditable; the multi-line flag-and-blend is not. See [conditionals-and-lists.md](conditionals-and-lists.md) for the rest of the story.
 
 ---
 
@@ -173,13 +174,15 @@ When columns are transformed for lookup purposes (e.g., `term_offset`), create a
 When mortality reaches 1.0 (ultimate age), ALL dependent calculations must be guarded:
 
 ```python
-af.is_age_over_99 = when(af.real_attained_age > 99).then(1.0).otherwise(0.0)
-
-# Guard mortality table
-af.cso_table = af.cso_table * (1 - af.is_age_over_99) + af.is_age_over_99
+# Guard mortality table — replace it with 1.0 once age exceeds 99
+af.cso_table = (
+    when(af.real_attained_age > 99).then(1.0).otherwise(af.cso_table)
+)
 
 # Guard surrender charge too — not just mortality
-af.surrender_charge = af.surrender_charge * (1 - af.is_age_over_99)
+af.surrender_charge = (
+    when(af.real_attained_age > 99).then(0.0).otherwise(af.surrender_charge)
+)
 ```
 
 Unguarded formulas past age 100 produce negative survival probabilities that cascade through the entire projection tail.
@@ -266,17 +269,22 @@ Assigning a scalar directly works fine. Gaspatchio handles broadcasting when the
 
 ---
 
-## 19. Power Operations: `scalar ** list_column` (exp/log Identity)
+## 19. Power operations on list columns
+
+Both directions of `**` work directly on list-shaped operands:
 
 ```python
-# WRONG — Polars doesn't support scalar ** list directly
-af.inflation_factor = (1.0 + INFLATION_RATE) ** (af.month / 12.0)  # TypeError
+# scalar ** list_column — works
+af.inflation_factor = (1.0 + INFLATION_RATE) ** (af.month / 12.0)
 
-# RIGHT — use the identity a^b = exp(b * ln(a))
-af.inflation_factor = (af.month / 12.0 * math.log(1.0 + INFLATION_RATE)).exp()
+# list_column ** scalar — works
+af.discount_factor = (1.0 + RATE) ** (-af.month / 12.0)
+
+# list_column ** list_column — works
+af.compound = af.growth_factor ** af.holding_periods
 ```
 
-This is the standard pattern for computing `constant^(list_column)` without breaking the lazy pipeline. Result: `[(1.01)^(0/12), (1.01)^(1/12), (1.01)^(2/12), ...]`
+`__rpow__` and `__pow__` route through the `list_pow` plugin under the hood. The earlier exp/log identity (`(b * log(a)).exp()`) was a workaround for a limitation that no longer exists; it still computes the same value, but the operator form is what new code should use.
 
 See also: Level 3 base model Section 9 (expenses) for a working example.
 
@@ -302,7 +310,7 @@ If you need interpolation, pre-compute the interpolated values and include them 
 
 ---
 
-## 14. `Table` with Multi-String-Key Dimensions Silently Returns NaN
+## 23. `Table` with Multi-String-Key Dimensions Silently Returns NaN
 
 If your Table has 2+ string-type dimension columns (e.g., `sex`, `smoker`, `product_code`), the default `storage_mode="auto"` silently returns NaN on lookup. No error, no warning — the model runs but produces wrong results.
 
@@ -320,23 +328,6 @@ mort = Table(name="mortality", source=df,
 ```
 
 **Rule**: If your Table has 2 or more string-type dimension columns, always pass `storage_mode="hash"`. If lookups return NaN unexpectedly, this is the first thing to check.
-
----
-
-## 15. `when/then/otherwise` with Two List-Column Branches Crashes
-
-Even when both `.then()` and `.otherwise()` are list columns, the conditional can crash with "Unsupported combination of list/scalar inputs." This is a known framework limitation.
-
-```python
-# WRONG — crashes even though both branches are list columns
-af.qx = when(af.duration_yr <= 5).then(af.qx_select).otherwise(af.qx_ultimate)
-
-# RIGHT — use arithmetic masking
-af.flag_select = when(af.duration_yr <= 5).then(1.0).otherwise(0.0)
-af.qx = af.qx_select * af.flag_select + af.qx_ultimate * (1.0 - af.flag_select)
-```
-
-The arithmetic masking pattern is the standard workaround. Create a 0/1 flag, then multiply to select between values. See [conditionals-and-lists.md](conditionals-and-lists.md) for details.
 
 ---
 

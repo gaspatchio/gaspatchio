@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Implementation of with_scenarios() for scenario expansion.
 # ABOUTME: Cross-joins ActuarialFrame with scenario IDs to enable multi-scenario runs.
 # ruff: noqa: SLF001
@@ -80,38 +84,15 @@ def with_scenarios(
     """
     # Import here to avoid circular dependency
     from gaspatchio_core.frame import ActuarialFrame
+    from gaspatchio_core.scenarios._validate import (
+        check_no_duplicate_ids,
+        check_no_scenario_column,
+        check_non_empty,
+    )
 
-    # === Validation ===
-    if not scenario_ids:
-        msg = (
-            "with_scenarios() requires at least one scenario ID. "
-            "For single-scenario models, use: with_scenarios(af, ['DETERMINISTIC'])"
-        )
-        raise ValueError(msg)
-
-    if len(scenario_ids) != len(set(scenario_ids)):
-        # Find duplicates - use set to deduplicate the duplicate list itself
-        seen = set()
-        duplicates = []
-        for s in scenario_ids:
-            if s in seen and s not in duplicates:
-                duplicates.append(s)
-            seen.add(s)
-        msg = (
-            f"with_scenarios() received duplicate scenario IDs: {duplicates}. "
-            "Each scenario ID must be unique."
-        )
-        raise ValueError(msg)
-
-    # Check if scenario_column already exists
-    af_columns = af.get_column_order()
-    if scenario_column in af_columns:
-        msg = (
-            f"Column '{scenario_column}' already exists in ActuarialFrame. "
-            f"Either rename the existing column or use a different "
-            f"scenario_column name. Existing columns: {af_columns}"
-        )
-        raise ValueError(msg)
+    check_non_empty(scenario_ids)  # type: ignore[misc]
+    check_no_duplicate_ids(scenario_ids)  # type: ignore[misc]
+    check_no_scenario_column(af, scenario_column)
 
     # Create scenarios DataFrame
     scenarios_df = pl.DataFrame({scenario_column: scenario_ids})
@@ -122,11 +103,10 @@ def with_scenarios(
             pl.col(scenario_column).cast(pl.Categorical)
         )
 
-    # Collect the ActuarialFrame to DataFrame for cross-join
-    af_df = af.collect()
-
-    # Perform cross-join to expand rows
-    expanded = af_df.join(scenarios_df, how="cross")
+    # Lazy cross-join: keep the plan lazy so downstream streaming/aggregation
+    # can push through without materialising the n_policies × n_scenarios frame.
+    base_df = af._df if af._df is not None else pl.LazyFrame()
+    expanded = base_df.join(scenarios_df.lazy(), how="cross")
 
     # Return as ActuarialFrame, preserving mode
     return ActuarialFrame(expanded, mode=af._mode, verbose=af._verbose)

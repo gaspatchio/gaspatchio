@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 import polars as pl
 import pytest
 from gaspatchio_core import ActuarialFrame

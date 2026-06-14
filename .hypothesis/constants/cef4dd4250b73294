@@ -1,4 +1,0 @@
-# file: ~/projects/gaspatchio/gaspatchio-core/bindings/python/gaspatchio_core/frame/graph/graph_builder.py
-# hypothesis_version: 6.135.0
-
-['computed_nodes', 'dependencies', 'edges', 'input_nodes', 'node_names', 'nodes', 'total_edges', 'total_nodes', 'unknown']

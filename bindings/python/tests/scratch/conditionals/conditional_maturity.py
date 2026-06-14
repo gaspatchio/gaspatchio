@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ABOUTME: Scratch test comparing old map_elements approach vs new when/then/otherwise.
 # ABOUTME: Demonstrates maturity calculation pattern for actuarial projections.
 # ruff: noqa: T201, INP001, ANN201, PLR2004

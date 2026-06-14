@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Test enhanced dispatch system features.
 
 This module tests the enhanced error handling features in the dispatch system,

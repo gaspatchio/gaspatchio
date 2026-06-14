@@ -82,13 +82,22 @@ After examining the source data or specification but BEFORE writing any model co
 | Model Class | Key Signal | Gaspatchio Approach | Key Methods to Look Up |
 |---|---|---|---|
 | **Standard projection** | Per-policy, uniform timeline, decrement-driven (life, annuity, mortgage) | Three-phase pattern (Phase 1 setup → Phase 2 timeline → Phase 3 calculations). This is the default. | `create_projection_timeline`, `cumulative_survival`, `Table.lookup` |
-| **Recursive / path-dependent** | Values at time t depend on state at t-1 (account values, fund balances, cumulative gains, reserves) | Use `accumulate()` for the linear recurrence. Pre-compute multiply and add components as list columns, then accumulate. | `accumulate`, `previous_period` |
+| **Linear recurrence (closed-form)** | Values at time *t* depend on state at *t-1* via a *single* multiply-and-add — fund balances under deterministic returns, cumulative gains, term-life reserve accumulation. Charges DO NOT depend on the running balance. | Use `accumulate()` — pre-compute the multiply and add components as list columns, then walk the recurrence in one closed-form pass. Faster + reads as a closed-form. | `accumulate`, `previous_period`, `cum_prod` |
+| **State-machine rollforward** | Within-period charges depend on the running balance (COI on net amount at risk, IUL floor/cap, GMDB ratchet, multi-state products). The recurrence ISN'T expressible as a single multiply-and-add. | Use `af.projection.rollforward(states={…})` — a typed state-machine builder. Each `.add` / `.charge` / `.grow` / `.deduct_nar` / `.ratchet` declares a within-period step; `compile_rollforward` produces an inspectable, fingerprinted model. | `rollforward`, `RollforwardBuilder`, `compile_rollforward`, `RollforwardCollector` |
 | **Fund / portfolio aggregate** | Per-entity calculations → aggregate → fund-level outputs (NAV, P&L, balance sheet) | Phase 1-3 per-entity using AF, then `group_by` aggregation. Fund-level financials may use sequential operations IF there are cross-line dependencies. | `accumulate`, `group_by`, see [references/aggregate-patterns.md](references/aggregate-patterns.md) |
 | **Cash flow waterfall** | Sequential allocation with priority rules (debt service, distributions) | `when/then/otherwise` chains for priority logic + `accumulate` for running balances | `when/then/otherwise`, `accumulate` |
 
+**Choosing between linear-recurrence and state-machine:**
+
+> "Does the within-period charge depend on the running balance?" — Yes → rollforward. No → accumulate.
+
+A UL fund grown by an interest rate + reduced by an admin fee on the running balance is a state-machine. The same fund grown by an interest rate + reduced by a flat dollar fee is a linear recurrence. The dollar fee can be pre-computed as a list column; the AV-proportional fee can't.
+
 **State your classification explicitly** before writing code. Example:
 
-> "This is a **recursive / fund aggregate** model: per-investor projections with cumulative gains (→ accumulate), then fund-level P&L and balance sheet."
+> "This is a **linear-recurrence / fund aggregate** model: per-investor projections with cumulative gains (→ accumulate), then fund-level P&L and balance sheet."
+>
+> "This is a **state-machine** model: UL with COI on net amount at risk + an admin fee that reduces the running balance (→ rollforward)."
 
 **Then look up every method in the "Key Methods" column** using `uv run gspio docs "<method>"`.
 
@@ -166,10 +175,11 @@ Details: [references/model-phases.md](references/model-phases.md)
 
 ## Column Rules
 
-- **Attribute notation preferred**: `af.mortality_rate` not `af["mortality_rate"]`
-- Bracket notation when necessary: `af["Policy Number"]`, `af["class"]`
-- **No underscore-prefixed names**: `af._flag` will raise an error — use `af.flag` instead
-- **snake_case** for calculated columns; raw input columns may need aliases first
+- **Attribute notation for assignment**: `af.mortality_rate = ...` — concise, reads naturally on the left-hand side.
+- **Bracket notation when reading inside framework calls**: `Table.lookup(age=af["age"])`, `curve.discount_factor(t=af["t"])`, `b["av"].grow(af["rate"])`. The bracket form is the canonical actuary-facing column reference and works everywhere — Table.lookup, Curve methods, the rollforward builder all accept `af["col"]` (ColumnProxy) directly via duck-typed `_to_expr()`. Attribute access (`af.age`) returns the same ColumnProxy and is equally valid, but the bracket form makes the column reference more visually distinct from method calls in the same expression.
+- **Bracket notation also required** for column names that aren't valid Python attribute names: `af["Policy Number"]`, `af["class"]`.
+- **No underscore-prefixed names**: `af._flag` will raise an error — use `af.flag` instead.
+- **snake_case** for calculated columns; raw input columns may need aliases first.
 
 ---
 
@@ -231,7 +241,7 @@ These are the top mistakes from real model-building sessions. Each links to the 
 
 | # | Gotcha | What Goes Wrong | Reference |
 |---|--------|----------------|-----------|
-| 1 | `when().then(scalar).otherwise(list_col)` | Runtime crash: "Unsupported combination of list/scalar inputs" | [conditionals-and-lists.md](references/conditionals-and-lists.md) |
+| 1 | Arithmetic-masking blends in conditional code | Old workaround for a fixed limitation — `when/then/otherwise` now handles mixed scalar/list branches | [conditionals-and-lists.md](references/conditionals-and-lists.md) |
 | 2 | `projection_end_value=99` | Truncates final year; ~3% BEL gap | [model-phases.md](references/model-phases.md) |
 | 3 | `proj_year` vs `year` confusion | Stress scenarios silently wrong — mass lapse never fires | [timing-and-dates.md](references/timing-and-dates.md) |
 | 4 | Assuming `af.t` exists | No built-in period counter — must derive it yourself | [model-phases.md](references/model-phases.md) |
