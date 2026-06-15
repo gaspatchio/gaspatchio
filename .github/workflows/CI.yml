@@ -18,6 +18,13 @@ on:
 permissions:
   contents: read
 
+# Cancel a superseded in-progress run on the same ref (e.g. rapid pushes to a
+# branch or PR). Per-ref, so a tag/release build is its own group and is never
+# cancelled by branch pushes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust-tests:
     name: Rust Tests

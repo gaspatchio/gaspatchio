@@ -24,10 +24,6 @@ jobs:
             runner: ubuntu-latest
             benchmark_name: Rust Benchmarks
             benchmark_path: dev/bench
-          - display: Windows
-            runner: windows-m
-            benchmark_name: Rust Benchmarks (Windows)
-            benchmark_path: dev/bench-windows
     steps:
       - uses: actions/checkout@v4
         with:

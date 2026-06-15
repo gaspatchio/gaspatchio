@@ -10,6 +10,12 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # One grouped PR per week instead of one-per-dependency — collapses the
+    # CI fan-out (each PR otherwise fires CI/CD + Security + Licence).
+    groups:
+      cargo:
+        patterns:
+          - "*"
     labels:
       - dependencies
       - rust
@@ -21,6 +27,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    groups:
+      pip:
+        patterns:
+          - "*"
     labels:
       - dependencies
       - python
@@ -32,6 +42,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     labels:
       - dependencies
       - github-actions

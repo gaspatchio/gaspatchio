@@ -1,112 +1,87 @@
 # Gaspatchio
 
-**High-Performance Actuarial Modeling Framework**
+[![CI](https://github.com/opioinc/gaspatchio-core/actions/workflows/CI.yml/badge.svg)](https://github.com/opioinc/gaspatchio-core/actions/workflows/CI.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://gaspatchio.dev/)
+[![Docs](https://img.shields.io/badge/docs-gaspatchio.dev-blue.svg)](https://gaspatchio.dev/)
 
-Gaspatchio is a next-generation actuarial modeling engine that combines the ease of Python with the raw speed of Rust. It provides a DataFrame-like API specialized for actuarial projections, assumption management, and financial calculations.
+**High-performance actuarial modeling — Python ergonomics, a Rust + Polars engine.**
 
-## Design Principles
+Gaspatchio is a DataFrame-like engine for actuarial work: policy projections, assumption-table
+lookups, and Excel-compatible financial maths over millions of model points. You write models in
+Python that read like the formulas on a spreadsheet, and a Rust core runs them.
 
-The framework evolved over time. Each major decision is documented in the `ref/` directory.
+📖 **Documentation → [gaspatchio.dev](https://gaspatchio.dev/)**
 
-### The Formula IS the Code
+---
 
-Actuaries need to audit every calculation for regulatory compliance. In Gaspatchio, the math is completely visible—no hidden framework magic:
+## Links
+
+| | |
+|---|---|
+| 📖 **Documentation** | **[gaspatchio.dev](https://gaspatchio.dev/)** — guides, tutorials, full API reference, recipes |
+| 🐍 **Python package** | [`bindings/python/`](bindings/python/README.md) — install, the `gspio` CLI, building models · **start here** |
+| 🦀 **Rust engine** | [`core/`](core/README.md) — assumption registry, vector plugins, projection kernels |
+| 📊 **Performance benchmarks** | **[opioinc.github.io/gaspatchio-core](https://opioinc.github.io/gaspatchio-core/)** — live benchmark dashboards |
+
+## The formula IS the code
+
+Actuaries audit every calculation for regulatory compliance, so the maths stays visible — no
+hidden framework magic:
 
 ```python
-# Simple math uses operators directly
+from gaspatchio_core import when
+
+# Simple maths uses operators directly
 af.pols_death = af.pols_if * af.mort_rate_mth
 af.net_cf = af.premiums - af.claims - af.expenses - af.commissions
 
-# Complex operations use named methods
-af.pols_if = af.combined_decrement.projection.cumulative_survival()
+# Complex operations use named, domain-specific methods
+af.survival = af.combined_decrement.projection.cumulative_survival()
 af.reserve_prev = af.reserve.projection.previous_period()
 
-# Business logic reads like English
+# Business logic reads like Excel's IF()
 af.commissions = when(af.duration == 0).then(af.premiums).otherwise(0.0)
 ```
 
-Each line is auditable. The calculation **is** the code.
+Every line is auditable: the calculation **is** the code. A complete, runnable model — data
+loading, the `gspio` CLI, and the projection lifecycle — is in the
+[Python package README](bindings/python/README.md) and the [documentation](https://gaspatchio.dev/).
 
-### Meet You Where You Are
+## Why Gaspatchio
 
-Ergonomics that feel like Python but read like a spreadsheet or pure formulas. Assumption tables respect data however it turns up—you don't need clean data or ETL from other system outputs. Vector shimming handles shape mismatches automatically. Excel function compatibility means familiar semantics.
+- **The formula is the code** — operators for simple maths, named methods for complex operations,
+  `when/then/otherwise` for business rules. Every line auditable; nothing hidden.
+- **Meets your data where it is** — assumption tables accept data however it arrives; vector
+  shimming reconciles scalar/list shapes automatically; Excel function semantics are preserved.
+- **Fast by default** — tight change-test-refine loops with no warmup or JIT; quick on common
+  hardware, scaling to large model-point sets without extra effort.
+- **Built for AI-assisted work** — every public method ships docstring examples tested against
+  their output, with clear error messages and an MCP/plugin surface, so you can use AI coding
+  assistants to build and verify models — while the calculations stay auditable by you.
 
-### Design for AI
+## Repository layout
 
-LLM-native from the ground up: great docs, great error messages, built to be used (and tested with) agentic loops. Includes an MCP server and a free agent for helping you build models.
+- **[`bindings/python/`](bindings/python/README.md)** — the user-facing Python package
+  (`gaspatchio_core`), PyO3 bindings, and the `gspio` CLI. **Model developers start here.**
+- **[`core/`](core/README.md)** — the Rust engine: assumption registry, vector/Excel plugins,
+  projection kernels.
+- **`tutorial/`** — incremental tutorial models (hello-world → reconciled lifelib → scenarios).
+- **`ref/`** — design specs and [architecture notes](ref/ARCHITECTURE.md).
 
-### Default Fast, Nudge to Faster
+## Contributing
 
-Works quickly on your local machine on CPUs, scales with zero extra effort to GPUs. Key benchmarks are:
+Install `cargo` (Rust) and `uv` (Python), then from `bindings/python/`:
 
-- **Change-test-refine loop**: How easy is it to make a change and see the result quickly? No warmup, no JIT, just go. You'll be in that loop for a while, so we make it as tight as possible.
-- **Common hardware first**: Things should run quickly on common hardware. Meet people where they are.
-
-### Amazing Docs
-
-- Every method for every function is documented with examples that have verified output
-- Documentation tailored to actuarial use cases
-- "Recipes" for common actuarial patterns
-- All documentation is built to be used by AI to help build models
-
-## 📂 Repository Structure
-
-This repository contains the complete source code for the Gaspatchio system:
-
-*   **`bindings/python/`**: The main user-facing product. This directory contains the Python package (`gaspatchio_core`) which developers use to build models. It includes the PyO3 bindings that connect to the Rust engine.
-*   **`core/`**: The high-performance Rust engine. This contains the implementation of the Assumption Registry, vector plugins, and core algorithms.
-*   **`ref/`**: Architecture documentation and design notes.
-
-## 🚀 Getting Started
-
-If you are a model developer, start with the **Python Bindings**:
-
-👉 **[Python Package Documentation](bindings/python/README.md)**
-
-### Quick Example
-
-```python
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
-
-# 1. Load Assumptions
-mortality = Table(
-    name="mortality_v1",
-    source="data/mortality.parquet",
-    dimensions={"age": "age"},
-    value="rate"
-)
-
-# 2. Build Model
-def projection(af: ActuarialFrame):
-    # Vectorized date math (using Excel conventions)
-    af.attained_age = af.dob.excel.yearfrac(af.val_date) + af.t
-    
-    # High-speed Assumption Lookup
-    af.qx = mortality.lookup(age=af.attained_age)
-    
-    # Vectorized Projection
-    af.pols_if = af.pols_start * (1 - af.qx - af.w_rate)
-
-# 3. Run
-af = ActuarialFrame(data="model_points.parquet")
-projection(af)
-result = af.collect()
+```bash
+uv sync                 # install dependencies
+maturin develop -uv     # build the Rust extension into the venv
+uv run pytest           # run the tests
 ```
 
-## 📖 Architecture
+See [`core/README.md`](core/README.md) for the Rust engine, and the per-directory `AGENTS.md`
+files for contributor rules and coding standards.
 
-For a deep dive into how Gaspatchio works under the hood, see:
+## License
 
-👉 **[Architecture Guide](ref/ARCHITECTURE.md)**
-
-## 🛠 For Contributors
-
-To work on the core engine:
-
-1.  Ensure you have `cargo` (Rust) and `uv` (Python) installed.
-2.  Navigate to `bindings/python`.
-3.  Run `uv sync` to install dependencies.
-4.  Run `maturin develop -uv` to build the Rust extensions and install them into the virtual environment.
-
-See `core/README.md` for more details on the Rust implementation.
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
