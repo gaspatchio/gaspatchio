@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.1] — First PyPI release (docs + packaging)
+
+Same engine as 0.4.0 — that tag was cut but never published to PyPI (a CI billing block
+stopped the wheel build). 0.4.1 is the first published release: identical computation, plus
+the documentation and CI tidy-up landed since the 0.4.0 tag. No API or behaviour changes.
+
+### Documentation
+- Single canonical root `README.md` (the duplicate `readme.md` case-collision that left GitHub rendering a stale landing page is removed).
+- Pydantic-style rewrites of the root, Python, and Rust READMEs — badges, docs-forward, cross-linked to [gaspatchio.dev](https://gaspatchio.dev/) and the [benchmark dashboards](https://opioinc.github.io/gaspatchio-core/).
+- `ref/ARCHITECTURE.md` brought current: projection axis (jagged timelines + rollforward kernel), the scenarios/aggregation layer, and the streaming engine.
+
+### Infrastructure
+- Cut Actions spend: benchmark/eval jobs run on push to `main` (plus schedule / `benchmark` label / dispatch) instead of every push to `develop`; dropped the `windows-m` leg from the per-PR benchmark; grouped Dependabot updates into one PR per ecosystem; per-ref CI concurrency cancellation.
+
+---
+
 ## [0.4.0] — Unified aggregation surface + jagged timelines
 
 Everything merged to `develop` since v0.3.1 (#99–#114). The headline is a single aggregation
