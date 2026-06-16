@@ -1,10 +1,13 @@
 # Changelog
 
-## [0.4.1] — First PyPI release (docs + packaging)
+## [0.4.2] — First published release (docs + packaging)
 
-Same engine as 0.4.0 — that tag was cut but never published to PyPI (a CI billing block
-stopped the wheel build). 0.4.1 is the first published release: identical computation, plus
-the documentation and CI tidy-up landed since the 0.4.0 tag. No API or behaviour changes.
+Same engine as the v0.4.0 and v0.4.1 tags — neither shipped a populated release (0.4.0's
+wheel build was blocked by a CI billing limit; 0.4.1's tag was burned when the release job
+created an empty release under the org's immutable-releases policy). 0.4.2 is the first
+published GitHub Release carrying wheels: identical computation, plus the documentation and
+CI tidy-up landed since the 0.4.0 tag. No API or behaviour changes. (Distributed via GitHub
+Release assets; PyPI publishing is not yet wired up.)
 
 ### Documentation
 - Single canonical root `README.md` (the duplicate `readme.md` case-collision that left GitHub rendering a stale landing page is removed).
@@ -13,6 +16,7 @@ the documentation and CI tidy-up landed since the 0.4.0 tag. No API or behaviour
 
 ### Infrastructure
 - Cut Actions spend: benchmark/eval jobs run on push to `main` (plus schedule / `benchmark` label / dispatch) instead of every push to `develop`; dropped the `windows-m` leg from the per-PR benchmark; grouped Dependabot updates into one PR per ecosystem; per-ref CI concurrency cancellation.
+- Release job now creates a draft, attaches the wheels, then publishes — compatible with the org's immutable-releases policy, which locks a published release's assets at publish time.
 
 ---
 
