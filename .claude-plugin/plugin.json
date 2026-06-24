@@ -7,7 +7,7 @@
     "url": "https://github.com/opioinc/gaspatchio-core"
   },
   "repository": "https://github.com/opioinc/gaspatchio-core",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["actuarial", "modeling", "polars", "insurance", "projections"],
   "skills": "./skills/"
 }

@@ -84,3 +84,8 @@ gaspatchio_audit/
 bindings/python/gaspatchio_audit/
 bindings/python/gaspatchio_core/tutorials/**/report/
 bindings/python/gaspatchio_core/tutorials/**/gaspatchio_audit/
+
+# Local dogfooding / stress scratch dirs (probes & generated outputs, never shipped)
+/bindings/python/tests/scratch/gsp*/
+/evals/benchmarks/aggregated_results/
+/evals/benchmarks/batch_search_results/
