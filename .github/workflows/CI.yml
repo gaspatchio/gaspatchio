@@ -228,9 +228,9 @@ jobs:
       id-token: write   # PyPI Trusted Publishing (OIDC) + PEP 740 attestation signing
       contents: write   # create/publish the GitHub Release
     steps:
-      - uses: actions/checkout@v4            # needed so syft can read Cargo.lock / pyproject at the tag
-      - uses: astral-sh/setup-uv@v6          # provides `uvx` for `twine check`
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5   # v4 — so syft can read Cargo.lock / pyproject at the tag
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e   # v6 — provides `uvx` for `twine check`
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093   # v4
         with:
           pattern: wheels-*
           merge-multiple: true
@@ -239,7 +239,7 @@ jobs:
         run: ls -l dist
 
       - name: Generate CycloneDX SBOM
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610   # v0
         with:
           path: .                       # captures Cargo.lock, pyproject, and the wheels now in dist/
           format: cyclonedx-json
@@ -251,7 +251,7 @@ jobs:
 
       - name: Publish to PyPI (Trusted Publishing)
         if: github.repository == 'gaspatchio/gaspatchio'
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b   # v1.14.0
         with:
           packages-dir: dist
           # OIDC Trusted Publishing — no token. PEP 740 attestations are generated automatically.
