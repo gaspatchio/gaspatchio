@@ -237,6 +237,14 @@ jobs:
           path: dist
       - name: List distributions
         run: ls -l dist
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .                       # captures Cargo.lock, pyproject, and the wheels now in dist/
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-release-assets: false  # we attach it manually in the release step
       # The org enforces immutable releases: a published release's assets are
       # locked at publish time, so they cannot be uploaded after the fact. Create
       # the release as a DRAFT (mutable), attach every wheel, then publish — the
