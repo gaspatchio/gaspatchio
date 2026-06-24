@@ -43,3 +43,20 @@ path = [
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Opio Inc."
 SPDX-License-Identifier = "Apache-2.0"
+
+# The Level 4 tutorial reconciles a gaspatchio-native model against lifelib's
+# "IntegratedLife" example. The reference outputs and the assumption /
+# model-point data under that tutorial are derived from lifelib
+# (https://github.com/lifelib-dev/lifelib), which is MIT-licensed. Only the
+# lifelib-derived *data* is marked MIT here, overriding the Apache-2.0 blanket
+# above; the tutorial's own code keeps its Opio Apache-2.0 SPDX headers. See the
+# NOTICE file for the full attribution and licence text.
+[[annotations]]
+path = [
+  "bindings/python/gaspatchio_core/tutorials/level-4-lifelib/reference/**.parquet",
+  "bindings/python/gaspatchio_core/tutorials/level-4-lifelib/base/assumptions/**.parquet",
+  "bindings/python/gaspatchio_core/tutorials/level-4-lifelib/base/model_points*.parquet",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 2022 lifelib Developers"
+SPDX-License-Identifier = "MIT"
