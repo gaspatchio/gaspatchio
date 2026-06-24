@@ -870,7 +870,7 @@ Deferred to follow-up tickets (v0.2 candidates):
 - [pola-rs/polars#20851](https://github.com/pola-rs/polars/issues/20851) — Memory leakage in with_columns and computation of statistics.
 - [pola-rs/polars#22871](https://github.com/pola-rs/polars/issues/22871) — Memory leak (starting from polars 1.28).
 - [pola-rs/polars#27012](https://github.com/pola-rs/polars/issues/27012) — No ability to inspect memory usage of jemalloc or mimalloc (open, March 2026). Future Rust-side allocator stats path.
-- [a ratings agency's — Equivalent Confidence Level for the IFRS 17 Risk Adjustment](https://www.a ratings agencys.com/web/en/us/insights/resources/equivalent-confidence-level-for-the-IFRS-17-risk-adjustment.pdf) — IFRS 17 §119 confidence-level disclosure requirement justifying `QuantileRank`.
+- IFRS 17 §119 — equivalent-confidence-level disclosure requirement for the risk adjustment, justifying `QuantileRank`.
 - [NAIC Valuation Manual Jan. 1, 2026 Edition](https://content.naic.org/sites/default/files/pbr_data_valuation_manual_current_edition.pdf) — VM-21 CTE(70) requirement for variable annuity stochastic reserves.
 - [CRO Forum — ORSA Stress and Scenario Testing](https://www.thecroforum.org/wp-content/uploads/2023/02/CRO-ORSA-stress-and-scenario-testing.pdf) — reverse stress testing motivation for `ArgMin` / `ArgMax`.
 

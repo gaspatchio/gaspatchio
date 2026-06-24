@@ -125,7 +125,7 @@ lapse_rate = factor * base_lapse_rate
 
 Both formulas apply a floor to prevent negative lapse rates.
 
-**Source**: SOA "Modeling of Policyholder Behavior for Life Insurance and Annuity Products", a commercial provider "Variable Annuity Dynamic Lapse Study"
+**Source**: SOA "Modeling of Policyholder Behavior for Life Insurance and Annuity Products"
 
 ### Account Value Mechanics
 
