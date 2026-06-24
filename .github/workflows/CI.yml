@@ -245,6 +245,16 @@ jobs:
           format: cyclonedx-json
           output-file: sbom.cdx.json
           upload-release-assets: false  # we attach it manually in the release step
+
+      - name: Check distribution metadata
+        run: uvx twine check --strict dist/*
+
+      - name: Publish to PyPI (Trusted Publishing)
+        if: github.repository == 'gaspatchio/gaspatchio'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          # OIDC Trusted Publishing — no token. PEP 740 attestations are generated automatically.
       # The org enforces immutable releases: a published release's assets are
       # locked at publish time, so they cannot be uploaded after the fact. Create
       # the release as a DRAFT (mutable), attach every wheel, then publish — the
