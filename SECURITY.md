@@ -26,6 +26,18 @@ where possible, a minimal reproduction.
 gaspatchio is pre-1.0; security fixes are released against the **latest** version
 published on PyPI. We recommend always tracking the latest release.
 
+## Software Bill of Materials (SBOM)
+
+Every release ships a CycloneDX SBOM (`sbom.cdx.json`, covering both the Rust and Python
+dependency graphs) as a GitHub Release asset. Fetch it with:
+
+```bash
+gh release download <tag> --repo gaspatchio/gaspatchio --pattern 'sbom.cdx.json'
+```
+
+Wheels published to PyPI carry [PEP 740](https://peps.python.org/pep-0740/) build-provenance
+attestations, generated automatically via PyPI Trusted Publishing.
+
 ## Disclosure
 
 Confirmed vulnerabilities are published as GitHub Security Advisories on this

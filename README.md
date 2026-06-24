@@ -82,6 +82,21 @@ uv run pytest           # run the tests
 See [`core/README.md`](core/README.md) for the Rust engine, and the per-directory `AGENTS.md`
 files for contributor rules and coding standards.
 
+## Security & supply chain
+
+- **Reporting a vulnerability** — see [SECURITY.md](SECURITY.md). Report privately via GitHub's
+  "Report a vulnerability" button, not public issues.
+- **SBOM** — every release ships a CycloneDX Software Bill of Materials (`sbom.cdx.json`, covering
+  both the Rust and Python dependency graphs) as a
+  [release](https://github.com/gaspatchio/gaspatchio/releases) asset. Fetch it with:
+
+  ```bash
+  gh release download <tag> --repo gaspatchio/gaspatchio --pattern 'sbom.cdx.json'
+  ```
+- **Build provenance** — wheels are published to PyPI via
+  [Trusted Publishing](https://docs.pypi.org/trusted-publishers/), so each release carries
+  [PEP 740](https://peps.python.org/pep-0740/) digital attestations on its PyPI files.
+
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
