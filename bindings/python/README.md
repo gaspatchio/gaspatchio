@@ -88,6 +88,5 @@ and contributor coding standards live in [`AGENTS.md`](AGENTS.md).
 ## Learn more
 
 - 📖 [Documentation](https://gaspatchio.dev/) — guides, tutorials, full API + CLI reference
-- 📊 [Performance benchmarks](https://opioinc.github.io/gaspatchio-core/) — live dashboards
 - 🦀 [Rust engine](../../core/README.md) — the core that powers this package
 - 🏠 [Project overview](../../README.md)

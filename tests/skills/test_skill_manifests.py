@@ -95,7 +95,7 @@ def test_plugin_meta_loads() -> None:
     assert meta["name"] == "gaspatchio"
     assert meta["license"] == "Apache-2.0"
     assert meta["version"]  # semver string present
-    assert meta["repository"].endswith("opioinc/gaspatchio-core")
+    assert meta["repository"].endswith("gaspatchio/gaspatchio")
 
 
 def test_cursor_manifest_points_at_one_tree() -> None:
@@ -136,5 +136,5 @@ def test_license_consistent_across_manifests() -> None:
 
 def test_agents_md_npx_slug_is_correct() -> None:
     text = (REPO_ROOT / "bindings" / "python" / "AGENTS.md").read_text(encoding="utf-8")
-    assert "npx skills add opioinc/gaspatchio-core" in text
+    assert "npx skills add gaspatchio/gaspatchio" in text
     assert "npx skills add gaspatchio/gaspatchio-core" not in text

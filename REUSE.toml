@@ -1,7 +1,7 @@
 version = 1
 SPDX-PackageName = "gaspatchio"
 SPDX-PackageSupplier = "Opio Inc."
-SPDX-PackageDownloadLocation = "https://github.com/opioinc/gaspatchio-core"
+SPDX-PackageDownloadLocation = "https://github.com/gaspatchio/gaspatchio"
 
 # Blanket assertion: everything in the repo that REUSE doesn't otherwise see a
 # per-file SPDX header on is Apache-2.0, copyright Opio Inc. Per-file headers

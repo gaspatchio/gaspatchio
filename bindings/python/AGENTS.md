@@ -316,7 +316,7 @@ Gaspatchio ships as a plugin for AI coding agents. Install once to get 7 actuari
 
 ### Claude Code (recommended)
 ```
-/plugin marketplace add opioinc/gaspatchio-core
+/plugin marketplace add gaspatchio/gaspatchio
 /plugin install gaspatchio@gaspatchio
 ```
 
@@ -324,7 +324,7 @@ Gaspatchio ships as a plugin for AI coding agents. Install once to get 7 actuari
 Search `@agentPlugins gaspatchio` in VS Code, or add to user settings:
 ```json
 {
-  "chat.plugins.marketplaces": ["opioinc/gaspatchio-core"]
+  "chat.plugins.marketplaces": ["gaspatchio/gaspatchio"]
 }
 ```
 Requires `"chat.plugins.enabled": true` (Agent Plugins is in preview).
@@ -334,7 +334,7 @@ Open any gaspatchio project — the `.cursor-plugin/` directory is auto-detected
 
 ### Any Agent (universal)
 ```bash
-npx skills add opioinc/gaspatchio-core
+npx skills add gaspatchio/gaspatchio
 # Windows: append --copy (symlinks need Developer Mode)
 ```
 

@@ -4,10 +4,10 @@
   "description": "Actuarial modeling skills for gaspatchio (Python + Rust/Polars).",
   "author": {
     "name": "Opio Inc.",
-    "url": "https://github.com/opioinc"
+    "url": "https://github.com/gaspatchio"
   },
-  "homepage": "https://github.com/opioinc/gaspatchio-core",
-  "repository": "https://github.com/opioinc/gaspatchio-core",
+  "homepage": "https://github.com/gaspatchio/gaspatchio",
+  "repository": "https://github.com/gaspatchio/gaspatchio",
   "license": "Apache-2.0",
   "keywords": [
     "actuarial",

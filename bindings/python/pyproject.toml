@@ -31,6 +31,12 @@ dependencies = [
     "ddsketch>=3.0.1",
 ]
 
+[project.urls]
+Homepage = "https://gaspatchio.dev/"
+Documentation = "https://gaspatchio.dev/"
+Repository = "https://github.com/gaspatchio/gaspatchio"
+Issues = "https://github.com/gaspatchio/gaspatchio/issues"
+
 [dependency-groups]
 dev = [
     "ai-code-tracker>=0.1.1",

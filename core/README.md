@@ -44,9 +44,6 @@ Criterion benchmarks track performance across releases:
 cargo bench --bench realistic_vector_lookup
 ```
 
-Live results are published to the
-**[benchmark dashboards](https://opioinc.github.io/gaspatchio-core/)**.
-
 ## Contributing
 
 Rust coding standards, the Polars-plugin guidelines, and the streaming-engine rules are in

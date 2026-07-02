@@ -73,7 +73,6 @@ sibling `CLAUDE.md` import shim. Applies to all `*.rs` files under `core/`.
 
 - Benchmarks in `/benches` track performance with different data sizes
 - Performance results documented in `benches/perf_results.md`
-- CI benchmark dashboard: https://opioinc.github.io/gaspatchio-core/dev/model-bench/
 
 #### Benchmark Suites
 

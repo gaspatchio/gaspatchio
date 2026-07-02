@@ -1,6 +1,6 @@
 # Gaspatchio
 
-[![CI](https://github.com/opioinc/gaspatchio-core/actions/workflows/CI.yml/badge.svg)](https://github.com/opioinc/gaspatchio-core/actions/workflows/CI.yml)
+[![CI](https://github.com/gaspatchio/gaspatchio/actions/workflows/CI.yml/badge.svg)](https://github.com/gaspatchio/gaspatchio/actions/workflows/CI.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://gaspatchio.dev/)
 [![Docs](https://img.shields.io/badge/docs-gaspatchio.dev-blue.svg)](https://gaspatchio.dev/)
@@ -22,7 +22,6 @@ Python that read like the formulas on a spreadsheet, and a Rust core runs them.
 | 📖 **Documentation** | **[gaspatchio.dev](https://gaspatchio.dev/)** — guides, tutorials, full API reference, recipes |
 | 🐍 **Python package** | [`bindings/python/`](bindings/python/README.md) — install, the `gspio` CLI, building models · **start here** |
 | 🦀 **Rust engine** | [`core/`](core/README.md) — assumption registry, vector plugins, projection kernels |
-| 📊 **Performance benchmarks** | **[opioinc.github.io/gaspatchio-core](https://opioinc.github.io/gaspatchio-core/)** — live benchmark dashboards |
 
 ## The formula IS the code
 
