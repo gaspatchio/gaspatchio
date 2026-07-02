@@ -92,30 +92,111 @@ mod tests {
         assert_eq!(first_f64.get(1), None);
         assert_eq!(first_f64.get(2), Some(9.0));
     }
+
+    #[test]
+    fn test_list_pow_scalar_base() {
+        // Scalar-column (Float64) base, Float64 exponent → Float64 output.
+        // [2.0^2.0, 3.0^3.0] = [4.0, 27.0]
+        let base = Series::new("".into(), vec![2.0_f64, 3.0]);
+        let exp = Series::new("".into(), vec![2.0_f64, 3.0]);
+
+        let result = list_pow(&[base, exp]).unwrap();
+
+        // Output must be a flat Float64 series, not a List.
+        assert_eq!(
+            result.dtype(),
+            &DataType::Float64,
+            "scalar base → Float64 out"
+        );
+
+        let v = result.f64().unwrap();
+        assert_eq!(v.get(0), Some(4.0));
+        assert_eq!(v.get(1), Some(27.0));
+    }
+
+    #[test]
+    fn test_list_pow_scalar_base_length_mismatch_errors() {
+        let base = Series::new("".into(), vec![2.0, 3.0, 4.0]);
+        let exp = Series::new("".into(), vec![2.0, 3.0]);
+        assert!(list_pow(&[base, exp]).is_err());
+    }
+
+    #[test]
+    fn test_list_pow_scalar_base_broadcast_exp() {
+        // length-1 exponent broadcasts across the base
+        let base = Series::new("".into(), vec![2.0, 3.0, 4.0]);
+        let exp = Series::new("".into(), vec![2.0]);
+        let out = list_pow(&[base, exp]).unwrap();
+        let v = out.f64().unwrap();
+        assert_eq!(v.get(0), Some(4.0));
+        assert_eq!(v.get(2), Some(16.0));
+    }
 }
 
-/// Element-wise power operation on list columns
+/// Element-wise power operation on list or scalar columns
 ///
 /// Supports:
-/// - list ** list (pairwise, same lengths)
-/// - list ** scalar (broadcast scalar to each element)
+/// - list ** list (pairwise, same inner lengths)
+/// - list ** scalar (broadcast scalar exponent to each element)
+/// - Float64 ** Float64 (element-wise; returns a flat `Float64` series, not a `List`)
+///
+/// For the Float64-base case a length-1 operand on either side broadcasts across
+/// the other; a true length mismatch (neither is length 1) returns an error.
 ///
 /// Always promotes to Float64 output.
 ///
 /// # Arguments
-/// * `inputs[0]` - Base values (List column)
-/// * `inputs[1]` - Exponent values (List column or scalar)
+/// * `inputs[0]` - Base values (List column or Float64 scalar column)
+/// * `inputs[1]` - Exponent values (List column, scalar column, or expression)
 ///
 /// # Returns
-/// List column with element-wise power results
+/// - `Float64` series when the base is a Float64 scalar column
+/// - `List<Float64>` series when the base is a List column
 ///
 /// # Errors
 /// Returns error if:
-/// - Base is not a List type
+/// - Base is a Float64 scalar column and lengths differ (neither is length 1)
 /// - Inner list lengths don't match (for list ** list)
 pub fn list_pow(inputs: &[Series]) -> PolarsResult<Series> {
     let lhs = &inputs[0];
     let rhs = &inputs[1];
+
+    // Scalar-column (Float64) base: element-wise pow, Float64 output. Used by the
+    // Curve discount_factor scalar-column Expr path; mirrors the list-base semantics.
+    if !matches!(lhs.dtype(), DataType::List(_)) {
+        let l = lhs.cast(&DataType::Float64)?;
+        let r = rhs.cast(&DataType::Float64)?;
+        let l_ca = l.f64()?;
+        let r_ca = r.f64()?;
+        let l_broadcast = l_ca.len() == 1;
+        let r_broadcast = r_ca.len() == 1;
+        if !l_broadcast && !r_broadcast && l_ca.len() != r_ca.len() {
+            return Err(polars_err!(
+                ComputeError: "list_pow: base and exponent lengths differ ({} vs {})",
+                l_ca.len(), r_ca.len()
+            ));
+        }
+        let n = l_ca.len().max(r_ca.len());
+        let out: Float64Chunked = (0..n)
+            .map(|i| {
+                let b = if l_broadcast {
+                    l_ca.get(0)
+                } else {
+                    l_ca.get(i)
+                };
+                let e = if r_broadcast {
+                    r_ca.get(0)
+                } else {
+                    r_ca.get(i)
+                };
+                match (b, e) {
+                    (Some(b), Some(e)) => Some(b.powf(e)),
+                    _ => None,
+                }
+            })
+            .collect();
+        return Ok(out.into_series());
+    }
 
     // Ensure lhs is a List
     let lhs_list = lhs

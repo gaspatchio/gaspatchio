@@ -5,13 +5,47 @@
 """
 Level 5 Typed Base: Interest Rate Scenarios (BASE / UP / DOWN)
 
-Uses ``with_scenarios()`` to cross-join model points with scenario IDs,
-then runs the typed-input model.  Scenario-aware discount-factor dispatch
-is handled inside ``model.main()`` via three ``Curve`` instances.
+Three interest-rate scenarios run through the typed L5 mini-VA model. The plan
+is captured as a :class:`ScenarioRun` — the typed, hashable default for
+scenario work. ``.run()`` cross-joins the model points with the scenarios,
+hands each batch to the model, and folds the requested aggregations into one
+row per scenario. The headline is the per-scenario PV comparison: BASE vs UP
+vs DOWN.
+
+What this demonstrates
+----------------------
+
+  * ``ScenarioRun`` — the typed scenario plan, and the default for scenario
+    work. Even when the per-scenario variation is a rate curve rather than a
+    table shock, the plan still carries the scenario ids, the base tables (for
+    the audit SHA), and the aggregations to read out of each scenario.
+
+  * Rate scenarios live *inside* the model. ``model.main()`` holds three
+    ``Curve`` instances (BASE / UP / DOWN zero curves) and dispatches the
+    right one per row on the ``scenario_id`` column that ``ScenarioRun``
+    cross-joins onto the frame. No table is shocked here — the scenario shock
+    lists are empty — so this is a pure rate-curve sweep.
+
+  * Mergeable aggregators — ``Sum(...).alias(...).over("scenario_id")`` fold
+    the portfolio into one summed row per scenario. Reading off a portfolio
+    aggregate is exactly what ``ScenarioRun`` is for; you never materialise
+    the per-policy grid for the headline numbers.
+
+``with_scenarios()`` is the lower-level primitive underneath — ``ScenarioRun``
+cross-joins via it internally. Reach for ``with_scenarios`` directly only when
+you want the raw expanded frame without the typed plan / aggregations.
+
+Per-policy detail (the debugging view) is intentionally not printed here — run
+a single policy through the model when you need it::
+
+    uv run gspio run-single-policy model.py model_points.parquet 1
+
+``model.py``'s own ``__main__`` also prints the reconciled per-policy BASE
+block against ``expected_output.txt``.
 
 Usage::
 
-    cd tutorial/level-5-scenarios-typed/base
+    cd tutorial/level-5-scenarios/base
     uv run python run_scenarios.py
 
 Parity note:
@@ -32,8 +66,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 # model.py lives in the same directory
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import with_scenarios
+from gaspatchio_core import ActuarialFrame, MortalityTable, ScenarioRun
+from gaspatchio_core.scenarios import Sum
 
 import model
 
@@ -41,10 +75,18 @@ import model
 # Configuration
 # ---------------------------------------------------------------------------
 
-SCENARIOS = ["BASE", "UP", "DOWN"]
 MODEL_POINTS_PATH = SCRIPT_DIR / "model_points.parquet"
 
+# The three rate scenarios. Shock lists are empty: the per-scenario variation
+# is the discount curve, which model.main() selects internally on scenario_id.
+SCENARIOS: dict[str, list] = {
+    "BASE": [],
+    "UP": [],
+    "DOWN": [],
+}
+
 PV_COMPONENTS = [
+    "pv_net_cf",
     "pv_claims",
     "pv_expenses",
     "pv_inv_income",
@@ -54,54 +96,91 @@ PV_COMPONENTS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Run
+# 1. Load assumptions once. Carry the raw Tables for the plan's audit identity.
 # ---------------------------------------------------------------------------
 
-start = time.perf_counter()
+assumptions = model.load_assumptions()
+SELECT_PERIOD = model.SELECT_PERIOD_LEN
 
-# 1. Load model points (shared with untyped L5)
+# MortalityTable wraps a raw Table; the plan tracks the raw Table.
+mortality_select_raw = assumptions["mortality"].table
+
+BASE_TABLES = {
+    "mortality_select": mortality_select_raw,
+    "mortality_scalars": assumptions["mortality_scalars"],
+    "lapse_rates": assumptions["lapse_rates"],
+    "surrender_charges": assumptions["surrender_charges"],
+}
+
+
+# ---------------------------------------------------------------------------
+# 2. Model wrapper. No tables are shocked here, so the model runs on its own
+#    typed assumptions; the scenario_id column drives Curve dispatch inside
+#    model.main(). Re-wrap mortality so select/ultimate dispatch still works.
+# ---------------------------------------------------------------------------
+
+
+def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
+    """Run the typed L5 model for one batch of scenarios."""
+    del drivers  # rate scenarios carry no per-scenario drivers
+    overrides = dict(assumptions)
+    overrides["mortality"] = MortalityTable(
+        table=tables["mortality_select"],
+        age_basis="age_last_birthday",
+        structure="select_ultimate",
+        select_period=SELECT_PERIOD,
+    )
+    overrides["mortality_scalars"] = tables["mortality_scalars"]
+    overrides["lapse_rates"] = tables["lapse_rates"]
+    overrides["surrender_charges"] = tables["surrender_charges"]
+    return model.main(af, assumptions_override=overrides)
+
+
+# ---------------------------------------------------------------------------
+# 3. Aggregations: one row per scenario, summed PVs across the portfolio.
+# ---------------------------------------------------------------------------
+
+# ``.over("scenario_id")`` partitions each aggregation per scenario so each
+# alias returns a DataFrame keyed by scenario_id (one row per scenario).
+AGGREGATIONS = tuple(
+    Sum(component).alias(component).over("scenario_id") for component in PV_COMPONENTS
+)
+
+# ---------------------------------------------------------------------------
+# 4. Build the plan and run.
+# ---------------------------------------------------------------------------
+
+plan = ScenarioRun(
+    shocks=SCENARIOS,
+    base_tables=BASE_TABLES,
+    aggregations=AGGREGATIONS,
+)
+
+print(plan.describe())
+print()
+
 mp = pl.read_parquet(MODEL_POINTS_PATH)
 n_points = len(mp)
-
-# 2. Expand across scenarios (8 points x 3 scenarios = 24 rows)
 af = ActuarialFrame(mp)
-af = with_scenarios(af, SCENARIOS)
 
-# 3. Run typed model — scenario_id flows through to Curve dispatch
-result_af = model.main(af)
-result = result_af.collect()
-
+start = time.perf_counter()
+result = plan.run(af, model_fn)
 runtime = time.perf_counter() - start
 
 # ---------------------------------------------------------------------------
-# Results
+# 5. Results — per-scenario PV totals (BASE vs UP vs DOWN)
 # ---------------------------------------------------------------------------
 
-print(f"\nTyped L5 run: {n_points} model points x {len(SCENARIOS)} scenarios = {n_points * len(SCENARIOS)} rows")
+print(
+    f"\nTyped L5 run: {n_points} model points x {len(SCENARIOS)} scenarios = "
+    f"{n_points * len(SCENARIOS)} rows"
+)
 print(f"Runtime: {runtime:.2f}s\n")
 
-# Per-scenario totals
-scenario_totals = result.group_by("scenario_id").agg(
-    pl.col("pv_net_cf").sum(),
-    *[pl.col(c).sum() for c in PV_COMPONENTS],
-)
+# Per-scenario totals — join the per-scenario aggregator outputs on scenario_id.
+scenario_totals = result.aggregations[PV_COMPONENTS[0]]
+for name in PV_COMPONENTS[1:]:
+    scenario_totals = scenario_totals.join(result.aggregations[name], on="scenario_id")
 
-print("=== Per-Scenario Totals ===")
+print("=== Per-Scenario Totals (PV by component) ===")
 print(scenario_totals.sort("scenario_id"))
-print()
-
-# Per-scenario x policy detail (BASE only — matches expected_output.txt format)
-base_result = result.filter(pl.col("scenario_id") == "BASE")
-up_result = result.filter(pl.col("scenario_id") == "UP")
-down_result = result.filter(pl.col("scenario_id") == "DOWN")
-
-print("=== BASE Scenario (per-policy) ===")
-print(base_result.select(["point_id", "product_id", "plan_id", "pv_net_cf", "pv_claims"]))
-print()
-
-print("=== UP Scenario (per-policy) ===")
-print(up_result.select(["point_id", "product_id", "plan_id", "pv_net_cf", "pv_claims"]))
-print()
-
-print("=== DOWN Scenario (per-policy) ===")
-print(down_result.select(["point_id", "product_id", "plan_id", "pv_net_cf", "pv_claims"]))

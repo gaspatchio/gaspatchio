@@ -75,8 +75,9 @@ fn bench_accumulate_varying_projection_length(c: &mut Criterion) {
 
                 let add_data: Vec<_> = (0..num_rows)
                     .map(|_| {
-                        let values: Vec<f64> =
-                            (0..projection_length).map(|i| 10.0 + (i as f64 * 0.1)).collect();
+                        let values: Vec<f64> = (0..projection_length)
+                            .map(|i| 10.0 + (i as f64 * 0.1))
+                            .collect();
                         Some(Series::new("".into(), values))
                     })
                     .collect();
@@ -111,7 +112,7 @@ fn bench_accumulate_uniform_vs_variable(c: &mut Criterion) {
 
     // Per-policy projection lengths: uniformly distributed 60..=600
     let per_policy_lengths: Vec<usize> = (0..num_rows)
-        .map(|i| 60 + (i % 541))  // 60 to 600 inclusive
+        .map(|i| 60 + (i % 541)) // 60 to 600 inclusive
         .collect();
 
     let total_uniform_elements: usize = num_rows * max_projection;
@@ -129,7 +130,9 @@ fn bench_accumulate_uniform_vs_variable(c: &mut Criterion) {
         .collect();
     let add_uniform: Vec<_> = (0..num_rows)
         .map(|_| {
-            let values: Vec<f64> = (0..max_projection).map(|i| 10.0 + (i as f64 * 0.1)).collect();
+            let values: Vec<f64> = (0..max_projection)
+                .map(|i| 10.0 + (i as f64 * 0.1))
+                .collect();
             Some(Series::new("".into(), values))
         })
         .collect();

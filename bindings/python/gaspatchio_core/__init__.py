@@ -49,16 +49,26 @@ from .scenarios import (
     PeriodStd,
     PeriodSum,
     PeriodVariance,
+    ScenarioRun,
     SpillResult,
     run_aggregated,
     run_to_parquet,
     with_scenarios,
 )
 from .schedule import (
+    TARGET,
+    Actual360,
+    Actual365Fixed,
+    ActualActualISDA,
     BusinessDayConvention,
     Calendar,
     DayCount,
+    NullCalendar,
+    OneTwelfth,
     Schedule,
+    Thirty360,
+    UnitedKingdom,
+    UnitedStates,
 )
 from .util import (
     execution_mode,  # Context manager
@@ -71,6 +81,10 @@ configure_telemetry(enable=True)
 
 # Define the public API surface
 __all__ = [
+    "TARGET",
+    "Actual360",
+    "Actual365Fixed",
+    "ActualActualISDA",
     "ActuarialFrame",
     "AggregatedResult",
     "BusinessDayConvention",
@@ -81,6 +95,8 @@ __all__ = [
     "DayCount",
     "ExpressionProxy",
     "MortalityTable",
+    "NullCalendar",
+    "OneTwelfth",
     "PerformanceWarning",
     "PeriodCTE",
     "PeriodCount",
@@ -94,10 +110,14 @@ __all__ = [
     "PeriodVariance",
     "RollforwardBuilder",
     "RollforwardCollector",
+    "ScenarioRun",
     "Schedule",
     "SpillResult",
     "Table",
     "TableBuilder",
+    "Thirty360",
+    "UnitedKingdom",
+    "UnitedStates",
     "compile_rollforward",
     "execution_mode",
     "functions",

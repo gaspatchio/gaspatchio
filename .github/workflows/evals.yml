@@ -460,7 +460,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: capability-matrix
-          path: evals/results/capability-matrix.json  # relative to repo root
+          path: |
+            evals/results/capability-matrix.json
+            evals/results/lift-matrix.json
       - name: Clean working tree for gh-pages push
         run: git checkout -- .
         working-directory: .

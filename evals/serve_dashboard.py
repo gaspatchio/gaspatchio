@@ -91,6 +91,9 @@ def _parse_bencher_output(path: Path) -> list[dict]:
 
 def prepare_preview() -> None:
     """Build the dev-preview directory from local results."""
+    # Dashboard data artifacts: capability-matrix.json (with-skill scores) and
+    # lift-matrix.json (per-model with-minus-without). skills.html on gh-pages
+    # renders both; rendering changes live on the gh-pages branch, not here.
     # Ensure structure
     for sub in ["dev/bench", "dev/model-bench", "dev/evals", "dev/capability"]:
         (PREVIEW_DIR / sub).mkdir(parents=True, exist_ok=True)
@@ -123,6 +126,12 @@ def prepare_preview() -> None:
     if cap_matrix.exists():
         shutil.copy2(cap_matrix, PREVIEW_DIR / "dev" / "capability" / "capability-matrix.json")
         print(f"  Capability Matrix: loaded from {cap_matrix}")
+
+    # Lift matrix (with-skill minus without-skill, per model)
+    lift_matrix = RESULTS_DIR / "lift-matrix.json"
+    if lift_matrix.exists():
+        shutil.copy2(lift_matrix, PREVIEW_DIR / "dev" / "capability" / "lift-matrix.json")  # noqa: E501
+        print(f"  Lift Matrix: loaded from {lift_matrix}")
 
     # Model benchmark results
     model_bench = REPO_ROOT / "evals" / "benchmarks" / "model_points" / "benchmark-results.json"

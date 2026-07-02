@@ -47,7 +47,7 @@ def _fan_series(l5, mp: pl.DataFrame, returns: pl.DataFrame, n_fan: int) -> dict
     FOLLOW-UP (investigate — possible non-idiomatic pattern): this drops the
     per-policy list columns to long format via ``explode(["month", "net_cf"])``
     then ``group_by`` + ``quantile``. ``explode`` + ``group_by`` IS the documented
-    Phase-4 fund-aggregation pattern (skills/model-building/references/
+    Phase-4 fund-aggregation pattern (skills/gaspatchio-model-building/references/
     aggregate-patterns.md), so it is not categorically wrong. BUT in the *scenario*
     context, exploding the scenarios x policies x months grid to long format is
     exactly what the bounded-memory ``for_each_scenario`` loop avoids elsewhere —

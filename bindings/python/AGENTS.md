@@ -312,11 +312,12 @@ LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true gspio run-model model.py data.parquet
 
 ## AI Plugin Installation
 
-Gaspatchio ships as a plugin for AI coding agents. Install once to get 6 actuarial modeling skills and always-loaded framework knowledge.
+Gaspatchio ships as a plugin for AI coding agents. Install once to get 7 actuarial modeling skills and always-loaded framework knowledge.
 
 ### Claude Code (recommended)
 ```
 /plugin marketplace add opioinc/gaspatchio-core
+/plugin install gaspatchio@gaspatchio
 ```
 
 ### VS Code / GitHub Copilot
@@ -333,14 +334,15 @@ Open any gaspatchio project — the `.cursor-plugin/` directory is auto-detected
 
 ### Any Agent (universal)
 ```bash
-npx skills add gaspatchio/gaspatchio-core
+npx skills add opioinc/gaspatchio-core
+# Windows: append --copy (symlinks need Developer Mode)
 ```
 
 ### Firewalled / Offline
 Clone the repo. Editors auto-detect plugin directories when the project is opened.
 
 ### What You Get
-- **6 skills**: quickstart, model-discovery, model-building, model-reconciliation, model-review, model-scenarios
+- **7 skills**: gaspatchio-quickstart, gaspatchio-model-discovery, gaspatchio-model-building, gaspatchio-model-reconciliation, gaspatchio-model-review, gaspatchio-model-scenarios, gaspatchio-extending
 - **AGENTS.md**: Always-loaded framework knowledge (API patterns, CLI reference, gotchas)
 
 ## High-Level Architecture

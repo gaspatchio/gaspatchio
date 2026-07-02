@@ -60,11 +60,34 @@ Read the docstring, read the code section by section, then run it. Once you unde
 
 | Step | Name | What it adds |
 |---|---|---|
-| Base | Interest Rate Scenarios | `with_scenarios()` for BASE/UP/DOWN, grouped bar + waterfall charts |
+| Base | Interest Rate Scenarios | `ScenarioRun` plan for BASE/UP/DOWN, grouped bar + waterfall charts |
 | 01 | Parameter Shocks | Declarative JSON shocks, `Table.with_shock()`, tornado chart |
 | 02 | Conditional Shocks | `where` filters, `when` time conditions, `pipeline` chains, cashflow line charts |
-| 03 | Sensitivity Analysis | 1D sweeps via `sensitivity_analysis()`, 2D heatmap interaction grid |
+| 03 | Sensitivity Analysis | 1D/2D parameter sweeps built as a list comprehension of `ScenarioRun` scenarios (one driver varies), 2D heatmap interaction grid |
 | 04 | Scenario Comparison | Named regulatory scenarios, audit trail, full stress test report |
+
+## Concept guides (`patterns/`)
+
+The numbered **levels** above are a learning ladder — start to finish, one model growing in
+complexity. The **`patterns/`** directory is a parallel layer of concept-focused guides: each
+is a folder of small, self-contained scripts that demonstrate one API concept and **assert
+against a closed-form or hand-computed expectation** — a clean run *is* the test. Reach for
+these when you want a runnable reference for a specific concept rather than a full model
+walkthrough.
+
+| Guide | Concept | Key API |
+|---|---|---|
+| `patterns/rollforward-patterns/` | Stateful per-period rollforward (fund growth, GMDB ratchet, lapse stop) | `af.projection.rollforward(...)`, `compile_rollforward` |
+| `patterns/aggregate-at-scale/` | Memory-bounded portfolio runs — batched aggregation **==** full | `run_aggregated`, `run_to_parquet`, `AggregatedResult`, `SpillResult` |
+| `patterns/period-aggregators/` | Per-period term structures (CTE / quantile regulatory risk measures) | `PeriodSum`, `PeriodMean`, `PeriodCTE`, `PeriodQuantile` |
+| `patterns/curves-and-scheduling/` | Term-structure discounting + day-count / schedule conventions | `Curve`, `Schedule`, `ActualActualISDA`, `OneTwelfth` |
+
+Each guide's `README.md` carries a `File | Pattern | Asserts` table, a "Running" block, and
+the exact API surface it exercises. Run any script standalone:
+
+```bash
+uv run python tutorial/patterns/aggregate-at-scale/01_run_aggregated.py
+```
 
 ## Running models
 
@@ -171,4 +194,9 @@ tutorial/
         ├── 02-conditional-shocks/ <- where/when/pipeline shocks
         ├── 03-sensitivity/      <- 1D sweep + 2D heatmap
         └── 04-scenario-comparison/ <- regulatory stress test report
+└── patterns/                   <- concept guides (each asserts against a closed form)
+    ├── rollforward-patterns/   <- stateful per-period rollforward
+    ├── aggregate-at-scale/     <- run_aggregated / run_to_parquet / batching
+    ├── period-aggregators/     <- Period* term-structure risk measures
+    └── curves-and-scheduling/  <- Curve + Schedule + day-counts
 ```

@@ -119,10 +119,10 @@ fn test_auto_mode_uses_array_for_multi_string_keys() -> PolarsResult<()> {
     let result = table.lookup_series(&[&products, &regions])?;
     let vals: Vec<Option<f64>> = result.f64()?.into_iter().collect();
 
-    assert_eq!(vals[0], Some(0.01));   // TERM, US
-    assert_eq!(vals[1], Some(0.02));   // WL, EU
-    assert_eq!(vals[2], Some(0.015));  // UL, US
-    assert_eq!(vals[3], Some(0.022));  // TERM, EU
+    assert_eq!(vals[0], Some(0.01)); // TERM, US
+    assert_eq!(vals[1], Some(0.02)); // WL, EU
+    assert_eq!(vals[2], Some(0.015)); // UL, US
+    assert_eq!(vals[3], Some(0.022)); // TERM, EU
 
     Ok(())
 }

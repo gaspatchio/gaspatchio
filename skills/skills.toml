@@ -1,0 +1,36 @@
+# Canonical, ordered registry of gaspatchio agent skills.
+#
+# THIS IS THE SINGLE SOURCE OF TRUTH for the skill set and its routing order.
+# The Cursor/Copilot plugin manifests, the bindings/python/AGENTS.md install
+# count+list, and the structural-test EXPECTED_SKILLS are all generated from or
+# checked against this list.
+#
+# To add a skill:
+#   1. create skills/<dir>/SKILL.md
+#   2. add "<dir>" to `order` below, in its routing position
+#   3. run: uv run python scripts/gen_skill_manifests.py
+#   4. commit the regenerated manifests
+#
+# The Claude Code manifest (.claude-plugin/plugin.json) globs ./skills/ and is
+# intentionally not listed here.
+order = [
+    "gaspatchio-quickstart",
+    "gaspatchio-model-discovery",
+    "gaspatchio-model-building",
+    "gaspatchio-model-reconciliation",
+    "gaspatchio-model-review",
+    "gaspatchio-model-scenarios",
+    "gaspatchio-extending",
+]
+
+[plugin]
+name         = "gaspatchio"
+display_name = "Gaspatchio"
+description  = "Actuarial modeling skills for gaspatchio (Python + Rust/Polars)."
+version      = "1.0.0"
+author_name  = "Opio Inc."
+author_url   = "https://github.com/opioinc"
+homepage     = "https://github.com/opioinc/gaspatchio-core"
+repository   = "https://github.com/opioinc/gaspatchio-core"
+license      = "Apache-2.0"
+keywords     = ["actuarial", "polars", "insurance", "ifrs17", "solvency-ii", "rust"]

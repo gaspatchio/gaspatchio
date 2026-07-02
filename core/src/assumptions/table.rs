@@ -179,8 +179,8 @@ impl AssumptionTable {
             match series.dtype() {
                 DataType::String => {
                     // Auto-cast string columns to categorical
-                    let categorical_series = series
-                        .cast(&DataType::from_categories(Categories::global()))?;
+                    let categorical_series =
+                        series.cast(&DataType::from_categories(Categories::global()))?;
 
                     // Extract the mapping: string -> physical index
                     let mapping = Self::extract_categorical_mapping(&categorical_series)?;
@@ -917,10 +917,9 @@ mod tests {
         )?;
 
         // Build table with manually categorized keys
-        let df_categorical = df.lazy()
-            .with_column(
-                col("gender").cast(DataType::from_categories(Categories::global()))
-            )
+        let df_categorical = df
+            .lazy()
+            .with_column(col("gender").cast(DataType::from_categories(Categories::global())))
             .collect()?;
 
         let table_categorical = AssumptionTable::build_with_mode(
@@ -953,8 +952,8 @@ mod tests {
         let string_elapsed = start.elapsed();
 
         // Time categorical lookup
-        let gender_categorical = gender_series
-            .cast(&DataType::from_categories(Categories::global()))?;
+        let gender_categorical =
+            gender_series.cast(&DataType::from_categories(Categories::global()))?;
         let start = Instant::now();
         for _ in 0..iterations {
             let result = table_categorical.lookup_series(&[&age_series, &gender_categorical])?;
@@ -962,13 +961,24 @@ mod tests {
         }
         let categorical_elapsed = start.elapsed();
 
-        let string_per_lookup_ns = string_elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
-        let categorical_per_lookup_ns = categorical_elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
+        let string_per_lookup_ns =
+            string_elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
+        let categorical_per_lookup_ns =
+            categorical_elapsed.as_nanos() as f64 / (iterations as f64 * 10_000.0);
 
         eprintln!("\nString auto-cast performance:");
-        eprintln!("  String keys (auto-cast): {:.2}ns per lookup", string_per_lookup_ns);
-        eprintln!("  Categorical keys (manual): {:.2}ns per lookup", categorical_per_lookup_ns);
-        eprintln!("  Ratio: {:.2}x", string_per_lookup_ns / categorical_per_lookup_ns);
+        eprintln!(
+            "  String keys (auto-cast): {:.2}ns per lookup",
+            string_per_lookup_ns
+        );
+        eprintln!(
+            "  Categorical keys (manual): {:.2}ns per lookup",
+            categorical_per_lookup_ns
+        );
+        eprintln!(
+            "  Ratio: {:.2}x",
+            string_per_lookup_ns / categorical_per_lookup_ns
+        );
 
         // Auto-cast should be within 10x of manual categorical
         // (The conversion overhead is acceptable given the convenience)
@@ -993,10 +1003,9 @@ mod tests {
         }?;
 
         // Manually cast to categorical before building
-        let df_categorical = df.lazy()
-            .with_column(
-                col("gender").cast(DataType::from_categories(Categories::global()))
-            )
+        let df_categorical = df
+            .lazy()
+            .with_column(col("gender").cast(DataType::from_categories(Categories::global())))
             .collect()?;
 
         let table = AssumptionTable::build_with_mode(

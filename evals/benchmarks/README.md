@@ -151,7 +151,7 @@ Time goes up because the kernel changed; memory goes down because the
 bool-cast intermediate column is no longer materialised.
 
 The trade was deliberate: the `value * (cond)` shortcut is flagged in
-`skills/model-building/references/conditionals-and-lists.md` as
+`skills/gaspatchio-model-building/references/conditionals-and-lists.md` as
 unfamiliar to actuaries reviewing models, and the L4/L5 tutorials are
 the canonical lifelib reconciliation answer keys. The cost lives in the
 benchmarks because the benchmarks run those exact files. Do not revert

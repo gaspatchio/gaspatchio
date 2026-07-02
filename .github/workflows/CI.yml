@@ -194,6 +194,8 @@ jobs:
         run: uv sync
       - name: Run skill structure tests
         run: uv run pytest ../../tests/skills/ -v
+      - name: Skill manifests in sync (generated, no drift)
+        run: uv run python ../../scripts/gen_skill_manifests.py --check
 
   tutorial-smoke-tests:
     name: Tutorial Smoke Tests

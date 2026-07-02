@@ -1,16 +1,20 @@
-# Test cases for model-building skill evaluation.
+# Building skill: emit a model; oracle runs it and checks expected columns.
 cases:
-  - name: uses_gspio_docs_before_code
-    inputs: |
-      I need to add mortality lookup to my model. The mortality rates are in
-      a parquet file with columns: age, sex, qx. How do I load this and
-      look up rates per policy?
-    evaluators:
-      - LLMJudge:
-          rubric: |
-            Does the response recommend using `gspio docs` to look up Table.lookup()
-            or similar API methods before writing code? The building skill's hard gate
-            requires verifying method signatures via gspio docs. Score 1.0 if gspio docs
-            is mentioned, 0.5 if correct API is used but without mentioning lookup,
-            0.0 if it guesses the API without verification.
-          include_input: true
+  - name: expected_claims
+    prompt: |
+      Write a complete gaspatchio model. The input parquet model_points.parquet
+      has columns: "Policy number" (str), sum_assured (f64), mortality_rate (f64),
+      annual_premium (f64). Define `def main(af): ...` that adds a column
+      `expected_claims` = sum_assured * mortality_rate. Return a single python
+      code block.
+    fixture_data: building/model_points.parquet
+    expected_columns: ["expected_claims"]
+  - name: net_premium_and_claims
+    prompt: |
+      Write a complete gaspatchio model over model_points.parquet (columns:
+      "Policy number", sum_assured, mortality_rate, annual_premium). Add
+      `expected_claims` = sum_assured * mortality_rate and `net_premium` =
+      annual_premium - expected_claims. Return one python code block defining
+      `def main(af): ...`.
+    fixture_data: building/model_points.parquet
+    expected_columns: ["expected_claims", "net_premium"]

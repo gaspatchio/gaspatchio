@@ -4,53 +4,36 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# ruff: noqa: T201
-"""Run all skill evals across all models, output results.
+# ruff: noqa: T201, E402
+"""Run skill effectiveness evals: with/without-skill, per-model lift.
 
-Usage:
-    uv run python evals/run_evals.py                    # all models
-    uv run python evals/run_evals.py --model anthropic:claude-sonnet-4-6  # single model
-    uv run python evals/run_evals.py --skill review     # single skill
+uv run python evals/run_evals.py                          # all skills, all models
+uv run python evals/run_evals.py --skill building          # one skill
+uv run python evals/run_evals.py --model anthropic:claude-haiku-4-5 --trials 1
 """
+
+from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
-# Ensure the gaspatchio-core root is on the path when run as a script.
+import yaml
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from pydantic_evals import Dataset
+from evals.agents import SKILL_DIRS, make_agent
+from evals.comparator import lift
+from evals.oracles.registry import oracle_for
 
-from evals.agents import AGENT_FACTORIES, make_agent
-from evals.evaluators import (
-    HasQuestionsBeforeCode,
-    IdentifiesReference,
-    InvestigatesMismatch,
-    ListColumnHandling,
-    NoAntiPattern,
-    NoCriticalIssues,
-    NoCodeWritten,
-    PlacementCorrect,
-    SeverityClassification,
-    TwoScriptPattern,
-)
-
-CUSTOM_EVALUATOR_TYPES = [
-    SeverityClassification,
-    NoCriticalIssues,
-    NoCodeWritten,
-    HasQuestionsBeforeCode,
-    IdentifiesReference,
-    InvestigatesMismatch,
-    TwoScriptPattern,
-    PlacementCorrect,
-    NoAntiPattern,
-    ListColumnHandling,
-]
+DATASETS = _REPO_ROOT / "evals" / "datasets"
+FIXTURES = _REPO_ROOT / "evals" / "fixtures"
+RESULTS = _REPO_ROOT / "evals" / "results"
 
 MODELS = [
     "anthropic:claude-sonnet-4-6",
@@ -59,113 +42,82 @@ MODELS = [
     "openai:gpt-5.4-mini",
 ]
 
-DATASETS_DIR = Path(__file__).resolve().parent / "datasets"
-RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
-SKILL_NAMES = list(AGENT_FACTORIES.keys())
-
-
-def compute_pass_rate(report) -> float:
-    """Compute overall pass rate from an eval report.
-
-    A case passes if all assertions are True and average score >= 0.7.
-    Cases with only assertions (no scores) pass if all assertions pass.
-    """
-    if not report.cases:
-        return 1.0
-    passed = 0
-    for case_result in report.cases:
-        # Check assertions (bool evaluators)
-        assertions = [a.value for a in case_result.assertions.values() if a is not None]
-        assertions_ok = all(assertions) if assertions else True
-
-        # Check scores (numeric evaluators)
-        scores = [s.value for s in case_result.scores.values() if s is not None]
-        scores_ok = (sum(scores) / len(scores)) >= 0.5 if scores else True
-
-        if assertions_ok and scores_ok:
-            passed += 1
-    return passed / len(report.cases)
-
-
-def run_skill_eval(skill_name: str, model: str) -> float:
-    """Run a single skill's dataset against a single model. Returns pass rate."""
-    dataset_path = DATASETS_DIR / f"{skill_name}.yaml"
-    if not dataset_path.exists():
-        print(f"  SKIP {skill_name} (no dataset)")
-        return 1.0
-
-    dataset = Dataset.from_file(
-        str(dataset_path),
-        custom_evaluator_types=CUSTOM_EVALUATOR_TYPES,
-    )
-    agent = make_agent(skill_name, model)
-
-    # Wrap agent.run (async) for evaluate_sync compatibility
-    async def task(inputs: str):
-        result = await agent.run(inputs)
-        return result.output
-
-    report = dataset.evaluate_sync(task)
-    report.print()
-
-    return compute_pass_rate(report)
+def _score_arm(skill: str, model: str, *, with_skill: bool, trials: int) -> float:
+    """Mean oracle score for one skill/model/arm over its dataset cases x trials."""
+    cases = yaml.safe_load((DATASETS / f"{skill}.yaml").read_text())["cases"]
+    agent = make_agent(skill, model, with_skill=with_skill)
+    grade = oracle_for(skill)
+    scores: list[float] = []
+    for case in cases:
+        for _ in range(trials):
+            with tempfile.TemporaryDirectory() as td:
+                workdir = Path(td)
+                # Build a fresh per-trial case from the original (never mutate
+                # `case` in place — trial 2 would then see a basename path).
+                run_case = dict(case)
+                if case.get("fixture_data"):
+                    name = Path(case["fixture_data"]).name
+                    shutil.copy(FIXTURES / case["fixture_data"], workdir / name)
+                    run_case["fixture_data"] = name
+                if case.get("reference"):
+                    name = Path(case["reference"]).name
+                    shutil.copy(FIXTURES / case["reference"], workdir / name)
+                    run_case["reference"] = name
+                artifact = agent.run_sync(run_case["prompt"]).output
+                scores.append(grade(artifact, run_case, workdir).score)
+    return sum(scores) / len(scores) if scores else 0.0
 
 
 def main() -> None:
-    """Run evals and write results."""
-    parser = argparse.ArgumentParser(description="Run gaspatchio skill evals")
-    parser.add_argument("--model", help="Single model to test")
-    parser.add_argument("--skill", help="Single skill to test")
-    args = parser.parse_args()
+    """Run evals, write capability + lift matrices."""
+    ap = argparse.ArgumentParser(description="Skill effectiveness evals")
+    ap.add_argument("--model")
+    ap.add_argument("--skill")
+    ap.add_argument("--trials", type=int, default=1)
+    args = ap.parse_args()
 
     models = [args.model] if args.model else MODELS
-    skills = [args.skill] if args.skill else SKILL_NAMES
+    skills = [args.skill] if args.skill else list(SKILL_DIRS)
 
-    all_results: dict[str, dict[str, float]] = {}
-    benchmark_entries: list[dict] = []
+    capability: dict[str, dict[str, float]] = {}
+    with_by_model: dict[str, dict[str, list[float]]] = {}
+    without_by_model: dict[str, dict[str, list[float]]] = {}
 
     for model in models:
-        print(f"\n{'=' * 60}")
-        print(f"Model: {model}")
-        print(f"{'=' * 60}")
+        capability[model] = {}
+        for skill in skills:
+            w = _score_arm(skill, model, with_skill=True, trials=args.trials)
+            b = _score_arm(skill, model, with_skill=False, trials=args.trials)
+            capability[model][skill] = w
+            with_by_model.setdefault(skill, {})[model] = [w]
+            without_by_model.setdefault(skill, {})[model] = [b]
+            print(f"{model} / {skill}: with={w:.2f} without={b:.2f} lift={w - b:+.2f}")
 
-        model_results: dict[str, float] = {}
-        for skill_name in skills:
-            print(f"\n--- {skill_name} ---")
-            pass_rate = run_skill_eval(skill_name, model)
-            model_results[skill_name] = pass_rate
-            print(f"  Pass rate: {pass_rate:.0%}")
+    lift_matrix = {
+        skill: lift(with_by_model[skill], without_by_model[skill]) for skill in skills
+    }
 
-            benchmark_entries.append({
-                "name": f"{skill_name}/{model.split(':')[-1]}",
-                "unit": "Percent",
-                "value": round(pass_rate * 100, 1),
-            })
+    benchmark_entries = [
+        {
+            "name": f"{skill}/{model.split(':')[-1]}",
+            "unit": "Percent",
+            "value": round(capability[model][skill] * 100, 1),
+        }
+        for model in capability
+        for skill in capability[model]
+    ]
 
-        all_results[model] = model_results
-
-    # Write outputs
-    RESULTS_DIR.mkdir(exist_ok=True)
-    (RESULTS_DIR / "benchmark-results.json").write_text(
+    RESULTS.mkdir(exist_ok=True)
+    (RESULTS / "capability-matrix.json").write_text(json.dumps(capability, indent=2))
+    (RESULTS / "lift-matrix.json").write_text(json.dumps(lift_matrix, indent=2))
+    (RESULTS / "benchmark-results.json").write_text(
         json.dumps(benchmark_entries, indent=2)
     )
-    (RESULTS_DIR / "capability-matrix.json").write_text(
-        json.dumps(all_results, indent=2)
+    print(
+        f"\nWrote capability-matrix.json + lift-matrix.json"
+        f" + benchmark-results.json to {RESULTS}/"
     )
-
-    print(f"\nResults written to {RESULTS_DIR}/")
-
-    # Report low scores but don't fail CI — evals are informational
-    # LLM outputs have inherent variance; the dashboard tracks trends
-    has_warnings = False
-    for model, results in all_results.items():
-        for skill, rate in results.items():
-            if rate < 0.5:
-                print(f"WARN: {skill} on {model} = {rate:.0%} < 50%")
-                has_warnings = True
-    if has_warnings:
-        print("\nSome skills scored below 50% — check the dashboard for details.")
 
 
 if __name__ == "__main__":

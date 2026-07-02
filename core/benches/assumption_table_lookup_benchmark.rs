@@ -1003,7 +1003,10 @@ fn benchmark_vector_hash_vs_array_100k(c: &mut Criterion) {
     let df_model_points = match load_model_points_100k() {
         Ok(df) => df,
         Err(e) => {
-            eprintln!("Failed to load 100k model points for vector benchmark: {}", e);
+            eprintln!(
+                "Failed to load 100k model points for vector benchmark: {}",
+                e
+            );
             return;
         }
     };

@@ -1,13 +1,11 @@
 {
   "name": "gaspatchio",
   "version": "1.0.0",
-  "description": "Actuarial modeling toolkit — skills for building, reconciling, and reviewing gaspatchio models",
-  "skills": [
-    "../skills/quickstart",
-    "../skills/model-discovery",
-    "../skills/model-building",
-    "../skills/model-reconciliation",
-    "../skills/model-review",
-    "../skills/model-scenarios"
-  ]
+  "description": "Actuarial modeling skills for gaspatchio (Python + Rust/Polars).",
+  "author": {
+    "name": "Opio Inc.",
+    "url": "https://github.com/opioinc"
+  },
+  "license": "Apache-2.0",
+  "skills": "./skills/"
 }

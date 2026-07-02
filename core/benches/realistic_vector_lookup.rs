@@ -29,9 +29,8 @@ fn load_table(
     mode: StorageMode,
 ) -> PolarsResult<AssumptionTable> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("benches/fixtures/{filename}"));
-    let file = File::open(&path).map_err(|e| {
-        PolarsError::ComputeError(format!("Failed to open {filename}: {e}").into())
-    })?;
+    let file = File::open(&path)
+        .map_err(|e| PolarsError::ComputeError(format!("Failed to open {filename}: {e}").into()))?;
     let df = ParquetReader::new(file).finish()?;
     AssumptionTable::build_with_mode(df, keys, value.to_string(), mode)
 }
@@ -39,11 +38,7 @@ fn load_table(
 fn load_mortality_select(mode: StorageMode) -> PolarsResult<AssumptionTable> {
     load_table(
         "mortality_select.parquet",
-        vec![
-            "table_id".into(),
-            "attained_age".into(),
-            "duration".into(),
-        ],
+        vec!["table_id".into(), "attained_age".into(), "duration".into()],
         "mort_rate",
         mode,
     )
@@ -98,7 +93,11 @@ fn make_list_i64(
 }
 
 /// Creates a String scalar column: `n_policies` rows, each a single string value.
-fn make_scalar_str(name: &str, n_policies: usize, value_fn: impl Fn(usize) -> &'static str) -> Series {
+fn make_scalar_str(
+    name: &str,
+    n_policies: usize,
+    value_fn: impl Fn(usize) -> &'static str,
+) -> Series {
     let vals: Vec<&str> = (0..n_policies).map(|p| value_fn(p)).collect();
     Series::new(name.into(), vals)
 }
@@ -118,9 +117,8 @@ fn bench_mortality_select_vector(c: &mut Criterion) {
 
     for &n_policies in &[1_000, 10_000] {
         // Build keys matching the real model shape
-        let table_id_col = make_scalar_str("table_id", n_policies, |p| {
-            table_ids[p % table_ids.len()]
-        });
+        let table_id_col =
+            make_scalar_str("table_id", n_policies, |p| table_ids[p % table_ids.len()]);
         let age_col = make_list_i64("attained_age", n_policies, months, |p, m| {
             let base_age = 30 + (p % 50) as i64;
             base_age + (m as i64 / 12)
@@ -169,9 +167,8 @@ fn bench_lapse_rates_vector(c: &mut Criterion) {
             let base_dur = (p % 10) as i64;
             (base_dur + m as i64 / 12).min(14)
         });
-        let lapse_id_col = make_scalar_str("lapse_id", n_policies, |p| {
-            lapse_ids[p % lapse_ids.len()]
-        });
+        let lapse_id_col =
+            make_scalar_str("lapse_id", n_policies, |p| lapse_ids[p % lapse_ids.len()]);
 
         let keys: Vec<&Series> = vec![&duration_col, &lapse_id_col];
 
@@ -290,9 +287,8 @@ fn bench_combined_model_lookups(c: &mut Criterion) {
 
     for &n_policies in &[1_000, 10_000] {
         // Mortality select keys
-        let mort_table_id = make_scalar_str("table_id", n_policies, |p| {
-            table_ids[p % table_ids.len()]
-        });
+        let mort_table_id =
+            make_scalar_str("table_id", n_policies, |p| table_ids[p % table_ids.len()]);
         let mort_age = make_list_i64("attained_age", n_policies, months, |p, m| {
             let base_age = 30 + (p % 50) as i64;
             base_age + (m as i64 / 12)
@@ -308,9 +304,7 @@ fn bench_combined_model_lookups(c: &mut Criterion) {
             let base_dur = (p % 10) as i64;
             (base_dur + m as i64 / 12).min(14)
         });
-        let lapse_id = make_scalar_str("lapse_id", n_policies, |p| {
-            lapse_ids[p % lapse_ids.len()]
-        });
+        let lapse_id = make_scalar_str("lapse_id", n_policies, |p| lapse_ids[p % lapse_ids.len()]);
         let lapse_keys: Vec<&Series> = vec![&lapse_duration, &lapse_id];
 
         // Surrender charge keys
@@ -336,8 +330,7 @@ fn bench_combined_model_lookups(c: &mut Criterion) {
                 StorageMode::Auto => "auto",
             };
 
-            let mort_table =
-                load_mortality_select(mode).expect("Failed to load mortality_select");
+            let mort_table = load_mortality_select(mode).expect("Failed to load mortality_select");
             let lapse_table = load_lapse_rates(mode).expect("Failed to load lapse_rates");
             let surr_table =
                 load_surrender_charges(mode).expect("Failed to load surrender_charges");

@@ -1,0 +1,15 @@
+{
+  "name": "gaspatchio",
+  "owner": {
+    "name": "Opio Inc."
+  },
+  "description": "Actuarial modeling skills for gaspatchio (Python + Rust/Polars).",
+  "plugins": [
+    {
+      "name": "gaspatchio",
+      "source": "./",
+      "description": "Actuarial modeling skills for gaspatchio (Python + Rust/Polars).",
+      "version": "1.0.0"
+    }
+  ]
+}

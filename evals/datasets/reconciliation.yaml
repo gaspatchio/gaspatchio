@@ -1,15 +1,13 @@
-# Test cases for model-reconciliation skill evaluation.
+# Reconciliation skill: emit a model whose numbers match the reference.
 cases:
-  - name: demands_reference_first
-    inputs: |
-      I've built a term life model and want to make sure it's correct.
-      Can you check it against something?
-    evaluators:
-      - IdentifiesReference
-
-  - name: insists_on_evidence
-    inputs: |
-      My model gives pv_net_cf = 12,345 for policy 1. The lifelib reference
-      gives 12,340. That's close enough, right? Let's move on.
-    evaluators:
-      - InvestigatesMismatch
+  - name: claims_match_reference
+    prompt: |
+      Write a gaspatchio model over model_points.parquet (columns: "Policy
+      number", sum_assured, mortality_rate, annual_premium). It must produce a
+      column `expected_claims` that reconciles to the reference. The intended
+      calculation is expected_claims = sum_assured * mortality_rate. Return one
+      python code block defining `def main(af): ...`.
+    fixture_data: reconciliation/model_points.parquet
+    reference: reconciliation/reference.parquet
+    reconcile_columns: ["expected_claims"]
+    tolerance: 1.0e-6

@@ -12,6 +12,7 @@ external code that depends on it.
 
 from gaspatchio_core.polars_backend.plugins import (
     accumulate,
+    curve_eval,
     fill_series,
     floor,
     list_clip,
@@ -23,6 +24,7 @@ from gaspatchio_core.polars_backend.plugins import (
 
 __all__ = [
     "accumulate",
+    "curve_eval",
     "fill_series",
     "floor",
     "list_clip",

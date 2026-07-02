@@ -1,13 +1,21 @@
 {
   "name": "gaspatchio",
   "version": "1.0.0",
-  "description": "Actuarial modeling toolkit — skills for building, reconciling, and reviewing gaspatchio models",
+  "description": "Actuarial modeling skills for gaspatchio (Python + Rust/Polars).",
   "author": {
-    "name": "Gaspatchio",
-    "url": "https://github.com/opioinc/gaspatchio-core"
+    "name": "Opio Inc.",
+    "url": "https://github.com/opioinc"
   },
+  "homepage": "https://github.com/opioinc/gaspatchio-core",
   "repository": "https://github.com/opioinc/gaspatchio-core",
   "license": "Apache-2.0",
-  "keywords": ["actuarial", "modeling", "polars", "insurance", "projections"],
+  "keywords": [
+    "actuarial",
+    "polars",
+    "insurance",
+    "ifrs17",
+    "solvency-ii",
+    "rust"
+  ],
   "skills": "./skills/"
 }

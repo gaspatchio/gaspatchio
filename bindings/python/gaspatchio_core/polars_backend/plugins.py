@@ -178,24 +178,32 @@ def accumulate(initial: pl.Expr, multiply: pl.Expr, add: pl.Expr) -> pl.Expr:
 
 
 def list_pow(base: pl.Expr, exp: pl.Expr) -> pl.Expr:
-    """Element-wise power operation on list columns.
+    """Element-wise power operation on list or scalar columns.
 
-    Computes base ** exp element-wise for list columns, eliminating the need
-    for EXPLODE/GROUP_BY pattern. Always returns Float64 values.
+    Computes base ** exp element-wise, eliminating the need for the
+    EXPLODE/GROUP_BY pattern. Always returns Float64 values.
 
     Supports:
         - list ** list (pairwise, requires same inner lengths)
-        - list ** scalar (broadcasts scalar to each element)
+        - list ** scalar (broadcasts scalar exponent to each element)
+        - Float64 ** Float64 (element-wise scalar columns; output is a flat
+          Float64 series, not a List — the output dtype mirrors the base shape)
+
+    For the Float64-base case a length-1 operand on either side broadcasts
+    across the other; a true length mismatch returns a ComputeError.
 
     Args:
-        base: Base values (List column or expression)
+        base: Base values (List column, Float64 scalar column, or expression)
         exp: Exponent values (List column, scalar column, or expression)
 
     Returns:
-        Expression with element-wise power results as List<Float64>
+        Expression with element-wise power results. Returns ``List<Float64>``
+        when the base is a List column; returns a flat ``Float64`` series when
+        the base is a Float64 scalar column.
 
     Raises:
-        ComputeError: If base is not a List type
+        ComputeError: If base is a Float64 scalar column and lengths differ
+            (neither operand is length 1)
         ComputeError: If inner list lengths don't match (for list ** list)
 
     Examples:
@@ -279,6 +287,88 @@ def list_clip(values: pl.Expr, lower: pl.Expr, upper: pl.Expr) -> pl.Expr:
         function_name="list_clip",
         args=[values, lower, upper],
         is_elementwise=True,
+    )
+
+
+def curve_eval(
+    t: pl.Expr,
+    *,
+    method: str,
+    xs: list[float] | None = None,
+    ys: list[float] | None = None,
+    slopes: list[float] | None = None,
+    extrapolation: str = "flat",
+    b0: float | None = None,
+    b1: float | None = None,
+    b2: float | None = None,
+    b3: float | None = None,
+    tau1: float | None = None,
+    tau2: float | None = None,
+    u: list[float] | None = None,
+    zeta: list[float] | None = None,
+    omega: float | None = None,
+    alpha: float | None = None,
+) -> pl.Expr:
+    """Evaluate a yield curve over a column of year-fractions.
+
+    Dispatch on ``method``; each method reads only its relevant kwargs. The
+    result is annually-compounded spot rates, shape-polymorphic in ``t``: a
+    ``Float64`` column in, a ``Float64`` column out; a ``List<Float64>`` column
+    in, a ``List<Float64>`` column out.
+
+    Args:
+        t: Year-fraction column — either a scalar ``Float64`` column or a
+            ``List<Float64>`` column (one list per row).
+        method: Curve method: ``"linear"``, ``"log_linear"``, ``"pchip"``,
+            ``"svensson"``, or ``"smith_wilson"``.
+        xs: Knot tenors (year-fractions) for the knot-based methods
+            (``linear``, ``log_linear``, ``pchip``).
+        ys: Knot values at each ``xs`` — rates for ``linear`` / ``pchip``,
+            log-discount-factors for ``log_linear``.
+        slopes: Per-knot slopes for the ``pchip`` monotone-cubic Hermite
+            interpolant.
+        extrapolation: Extrapolation mode outside the knot range. ``"flat"``
+            (the only supported value) clamps to the nearest knot.
+        b0: Nelson-Siegel-Svensson level parameter (``svensson``).
+        b1: Nelson-Siegel-Svensson slope parameter (``svensson``).
+        b2: Nelson-Siegel-Svensson first-curvature parameter (``svensson``).
+        b3: Nelson-Siegel-Svensson second-curvature parameter (``svensson``).
+        tau1: Nelson-Siegel-Svensson first decay factor (``svensson``).
+        tau2: Nelson-Siegel-Svensson second decay factor (``svensson``).
+        u: Smith-Wilson knot tenors used in the Wilson solve (``smith_wilson``).
+        zeta: Smith-Wilson weight vector from the Wilson solve (``smith_wilson``).
+        omega: ``log(1 + UFR)`` — the continuously-compounded ultimate forward
+            rate (``smith_wilson``).
+        alpha: Smith-Wilson mean-reversion / convergence speed (``smith_wilson``).
+
+    Returns:
+        Expression producing annually-compounded spot rates with the same
+        per-row shape as ``t`` — ``Float64`` for a scalar column,
+        ``List<Float64>`` for a list column.
+
+    """
+    return register_plugin_function(
+        plugin_path=_get_lib(),
+        function_name="curve_eval",
+        args=[t],
+        is_elementwise=True,
+        kwargs={
+            "method": method,
+            "xs": xs,
+            "ys": ys,
+            "slopes": slopes,
+            "extrapolation": extrapolation,
+            "b0": b0,
+            "b1": b1,
+            "b2": b2,
+            "b3": b3,
+            "tau1": tau1,
+            "tau2": tau2,
+            "u": u,
+            "zeta": zeta,
+            "omega": omega,
+            "alpha": alpha,
+        },
     )
 
 

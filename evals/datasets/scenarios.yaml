@@ -1,28 +1,11 @@
-# Test cases for model-scenarios skill evaluation.
-# Custom evaluator types: evals.evaluators.TwoScriptPattern
+# Scenarios skill: emit a model applying a mortality shock; oracle runs it.
 cases:
-  - name: enforces_two_script_pattern
-    inputs: |
-      I want to add interest rate sensitivity analysis to my model.
-      Should I modify model.py to accept a rate parameter?
-    evaluators:
-      - LLMJudge:
-          rubric: |
-            Does the response enforce the two-script pattern: model.py stays unchanged,
-            scenario logic goes in run_scenarios.py? Score 1.0 if two-script is clearly
-            stated, 0.5 if separation is implied, 0.0 if it suggests modifying model.py.
-          include_input: true
-
-  - name: recommends_appropriate_chart
-    inputs: |
-      I'm running 6 parameter shocks (mortality up/down, lapse up/down,
-      rates up/down) and want to visualize which has the biggest impact
-      on pv_net_cf.
-    evaluators:
-      - LLMJudge:
-          rubric: |
-            Does the response recommend a tornado chart for ranked sensitivities?
-            The scenarios skill specifies tornado charts for parameter shock comparisons.
-            Score 1.0 if tornado chart is recommended, 0.5 if any appropriate chart
-            is suggested, 0.0 if no visualization guidance is given.
-          include_input: true
+  - name: mortality_shock_column
+    prompt: |
+      Write a complete gaspatchio model over model_points.parquet (columns:
+      "Policy number", sum_assured, mortality_rate, annual_premium). Apply a
+      +20% mortality stress: add a column `claims_stressed` =
+      sum_assured * mortality_rate * 1.2. Return one python code block defining
+      `def main(af): ...`.
+    fixture_data: building/model_points.parquet
+    expected_columns: ["claims_stressed"]

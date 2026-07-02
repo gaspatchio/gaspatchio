@@ -29,15 +29,14 @@ fn int64_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(name.clone(), output_type))
 }
 
-/// Output type for list_pow: List<Float64>
+/// Output type for list_pow: mirrors base shape (List<Float64> for list base, Float64 for scalar base).
 fn list_pow_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let name = input_fields
-        .get(0)
-        .map(|f| f.name().clone())
-        .unwrap_or_else(|| PlSmallStr::from_static("list_pow"));
-
-    // Always return List<Float64>
-    Ok(Field::new(name, DataType::List(Box::new(DataType::Float64))))
+    let field = &input_fields[0];
+    let dtype = match field.dtype() {
+        DataType::List(_) => DataType::List(Box::new(DataType::Float64)),
+        _ => DataType::Float64,
+    };
+    Ok(Field::new(field.name().clone(), dtype))
 }
 
 #[polars_expr(output_type_func = list_int64_output)]
@@ -165,4 +164,23 @@ pub fn rollforward(
     kwargs: gaspatchio_core_lib::RollforwardKwargs,
 ) -> PolarsResult<Series> {
     gaspatchio_core_lib::polars_functions::rollforward::rollforward_kernel(inputs, &kwargs)
+}
+
+/// Output type for curve_eval: mirrors input shape (List<Float64> for list input, Float64 for scalar).
+fn curve_eval_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    let field = &input_fields[0];
+    let dtype = match field.dtype() {
+        DataType::List(_) => DataType::List(Box::new(DataType::Float64)),
+        _ => DataType::Float64,
+    };
+    Ok(Field::new(field.name().clone(), dtype))
+}
+
+/// PyO3 wrapper for curve_eval — yield-curve evaluation over list columns of year-fractions.
+#[polars_expr(output_type_func = curve_eval_output)]
+pub fn curve_eval(
+    inputs: &[Series],
+    kwargs: gaspatchio_core_lib::polars_functions::CurveEvalKwargs,
+) -> PolarsResult<Series> {
+    gaspatchio_core_lib::polars_functions::curve_eval::curve_eval(inputs, &kwargs)
 }

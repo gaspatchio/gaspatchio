@@ -26,11 +26,7 @@ impl ArrayStorage {
     /// Returns None if table is too sparse (< 30% density).
     /// If string_mappings is provided, creates CategoricalWithStringFallback encoders
     /// for columns that have mappings, enabling transparent string lookup.
-    pub fn build(
-        df: &DataFrame,
-        keys: &[String],
-        value: &str,
-    ) -> PolarsResult<Option<Self>> {
+    pub fn build(df: &DataFrame, keys: &[String], value: &str) -> PolarsResult<Option<Self>> {
         Self::build_with_mappings(df, keys, value, None)
     }
 
@@ -247,7 +243,13 @@ impl ArrayStorage {
         let first_vec_series = first_list_rechunked.into_series();
         let mut key_cols_rechunked: Vec<&Series> = key_cols.to_vec();
         key_cols_rechunked[first_vec_idx] = &first_vec_series;
-        let encoded = self.encode_columns_flat(&key_cols_rechunked, offsets, total_len, outer_len, vector_indices)?;
+        let encoded = self.encode_columns_flat(
+            &key_cols_rechunked,
+            offsets,
+            total_len,
+            outer_len,
+            vector_indices,
+        )?;
 
         // Step 3+4 fused: Compute linear index and gather value in one pass
         let data = &self.data;
@@ -277,7 +279,9 @@ impl ArrayStorage {
 
         // Step 5: Zero-copy reshape — build ListChunked from flat Float64Chunked + offsets
         let values_chunked = Float64Chunked::from_vec("".into(), flat_values);
-        let values_array = values_chunked.downcast_iter().next()
+        let values_array = values_chunked
+            .downcast_iter()
+            .next()
             .ok_or_else(|| polars_err!(ComputeError: "empty chunked array"))?
             .clone();
 
@@ -292,7 +296,11 @@ impl ArrayStorage {
 
         let list_array = polars_arrow::array::ListArray::new(
             polars_arrow::datatypes::ArrowDataType::LargeList(Box::new(
-                polars_arrow::datatypes::Field::new("inner".into(), polars_arrow::datatypes::ArrowDataType::Float64, true),
+                polars_arrow::datatypes::Field::new(
+                    "inner".into(),
+                    polars_arrow::datatypes::ArrowDataType::Float64,
+                    true,
+                ),
             )),
             try_offsets,
             Box::new(values_array),
@@ -322,7 +330,10 @@ impl ArrayStorage {
                 // Vector column: explode then encode
                 // (Explode is cheap for contiguous arrow arrays — just strips the list wrapper)
                 let list_chunked = series.list()?;
-                let exploded = list_chunked.explode(ExplodeOptions { empty_as_null: false, keep_nulls: false })?;
+                let exploded = list_chunked.explode(ExplodeOptions {
+                    empty_as_null: false,
+                    keep_nulls: false,
+                })?;
                 let encoded = encoder.encode_column(&exploded)?;
                 encoded_expanded.push(encoded);
             } else {
@@ -787,11 +798,8 @@ mod tests {
         let vector_len = 3;
 
         // Call both methods
-        let current_result = storage.lookup_vector(
-            &[&age_series, &gender_series],
-            vector_len,
-            &vector_indices,
-        )?;
+        let current_result =
+            storage.lookup_vector(&[&age_series, &gender_series], vector_len, &vector_indices)?;
 
         let batch_result = storage.lookup_vector_batch(
             &[&age_series, &gender_series],

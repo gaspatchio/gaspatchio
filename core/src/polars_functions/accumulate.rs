@@ -20,10 +20,8 @@ mod tests {
         // out[1] = 111.0 * 1.01 + 10 = 122.11
         // out[2] = 122.11 * 1.01 + 10 = 133.3311
         let initial = Series::new("initial".into(), vec![100.0_f64]);
-        let multiply = ListChunked::from_iter([Some(Series::new(
-            "".into(),
-            vec![1.01, 1.01, 1.01],
-        ))]);
+        let multiply =
+            ListChunked::from_iter([Some(Series::new("".into(), vec![1.01, 1.01, 1.01]))]);
         let add = ListChunked::from_iter([Some(Series::new("".into(), vec![10.0, 10.0, 10.0]))]);
 
         let result = accumulate(&[initial, multiply.into_series(), add.into_series()]).unwrap();
@@ -44,8 +42,7 @@ mod tests {
         // out[1] = 200 * 3 + 0 = 600
         // out[2] = 600 * 4 + 0 = 2400
         let initial = Series::new("initial".into(), vec![100.0_f64]);
-        let multiply =
-            ListChunked::from_iter([Some(Series::new("".into(), vec![2.0, 3.0, 4.0]))]);
+        let multiply = ListChunked::from_iter([Some(Series::new("".into(), vec![2.0, 3.0, 4.0]))]);
         let add = ListChunked::from_iter([Some(Series::new("".into(), vec![0.0, 0.0, 0.0]))]);
 
         let result = accumulate(&[initial, multiply.into_series(), add.into_series()]).unwrap();
@@ -66,8 +63,7 @@ mod tests {
         // out[1] = 110 * 1 + 20 = 130
         // out[2] = 130 * 1 + 30 = 160
         let initial = Series::new("initial".into(), vec![100.0_f64]);
-        let multiply =
-            ListChunked::from_iter([Some(Series::new("".into(), vec![1.0, 1.0, 1.0]))]);
+        let multiply = ListChunked::from_iter([Some(Series::new("".into(), vec![1.0, 1.0, 1.0]))]);
         let add = ListChunked::from_iter([Some(Series::new("".into(), vec![10.0, 20.0, 30.0]))]);
 
         let result = accumulate(&[initial, multiply.into_series(), add.into_series()]).unwrap();
@@ -84,8 +80,7 @@ mod tests {
     fn test_null_initial() {
         // Null initial should produce null output row
         let initial = Series::new("initial".into(), &[None::<f64>]);
-        let multiply =
-            ListChunked::from_iter([Some(Series::new("".into(), vec![1.01, 1.01]))]);
+        let multiply = ListChunked::from_iter([Some(Series::new("".into(), vec![1.01, 1.01]))]);
         let add = ListChunked::from_iter([Some(Series::new("".into(), vec![10.0, 10.0]))]);
 
         let result = accumulate(&[initial, multiply.into_series(), add.into_series()]).unwrap();
@@ -289,13 +284,11 @@ fn accumulate_fast(
     let add_offsets = add_arr.offsets();
 
     // Wrap the inner Arrow value arrays as Series, then cast to Float64.
-    let mul_values_series =
-        Series::from_arrow(PlSmallStr::EMPTY, mul_arr.values().clone())?
-            .cast(&DataType::Float64)?;
+    let mul_values_series = Series::from_arrow(PlSmallStr::EMPTY, mul_arr.values().clone())?
+        .cast(&DataType::Float64)?;
 
-    let add_values_series =
-        Series::from_arrow(PlSmallStr::EMPTY, add_arr.values().clone())?
-            .cast(&DataType::Float64)?;
+    let add_values_series = Series::from_arrow(PlSmallStr::EMPTY, add_arr.values().clone())?
+        .cast(&DataType::Float64)?;
 
     let mul_values = mul_values_series.f64()?;
     let add_values = add_values_series.f64()?;

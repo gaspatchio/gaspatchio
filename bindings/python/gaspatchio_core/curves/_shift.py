@@ -34,7 +34,7 @@ def shift_parallel(curve: Curve, bps: float) -> Curve:
         >>> from gaspatchio_core.curves._curve import Curve
         >>> c = Curve.from_zero_rates(tenors=[1.0, 5.0, 10.0], rates=[0.03, 0.04, 0.05])
         >>> up = shift_parallel(c, bps=100)
-        >>> up.rates
+        >>> tuple(round(r, 4) for r in up.rates)
         (0.04, 0.05, 0.06)
 
     """

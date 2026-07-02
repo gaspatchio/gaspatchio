@@ -1,112 +1,12 @@
-# Test cases for extending-gaspatchio skill evaluation.
-# Custom evaluator types: evals.evaluators.PlacementCorrect, NoAntiPattern, ListColumnHandling
-#
-# Reliability notes:
-# - PlacementCorrect, NoAntiPattern, ListColumnHandling are deterministic (structured field checks)
-# - LLMJudge is non-deterministic but used only as confirmatory checks alongside structured evaluators
-# - Every case has at least one deterministic evaluator as its primary gate
+# Extending skill: emit accessor/helper code; oracle scans for anti-patterns.
 cases:
-  # --- Level 5: Should build column accessor ---
-
-  - name: accessor_to_continuous
-    inputs: |
-      Add a to_continuous() method to the finance accessor that converts
-      annual rates to continuously compounded rates using ln(1 + r).
-    evaluators:
-      - PlacementCorrect:
-          expected_level: 5
-      - NoAntiPattern
-      - ListColumnHandling
-
-  - name: accessor_duration_macaulay
-    inputs: |
-      Add Macaulay duration to Gaspatchio. The formula is
-      sum(t * cf * v^t) / sum(cf * v^t) where v = 1/(1+y).
-      Cashflows are list columns, yield is scalar per policy.
-    evaluators:
-      - PlacementCorrect:
-          expected_level: 5
-      - NoAntiPattern
-      - ListColumnHandling
-
-  - name: accessor_gompertz_hazard
-    inputs: |
-      Add a Gompertz mortality hazard function: a * exp(b * age).
-      This should be reusable across models.
-    evaluators:
-      - PlacementCorrect:
-          expected_level: 5
-      - NoAntiPattern
-      - ListColumnHandling
-
-  # --- Level 1: Already exists ---
-
-  - name: finds_existing_reserve
-    inputs: |
-      Add backward reserve recursion to Gaspatchio:
-      V(t) = v * (q(t) * benefit + p(t) * V(t+1)), starting from V(n) = 0.
-    evaluators:
-      - PlacementCorrect:
-          expected_level: 1
-      - LLMJudge:
-          rubric: |
-            The response must identify that this calculation already exists in
-            Gaspatchio via projection.prospective_value() or projection.accumulate().
-            Score 1.0 if it recommends using an existing method. Score 0.0 if it
-            attempts to build a new implementation from scratch.
-          include_input: true
-
-  - name: finds_existing_var
-    inputs: |
-      Add a Value at Risk calculation at 99.5% confidence for Solvency II SCR.
-      Given a column of simulated losses, compute the 99.5th percentile.
-    evaluators:
-      - PlacementCorrect:
-          expected_level: 1
-      - LLMJudge:
-          rubric: |
-            The response must identify that a quantile/percentile method already
-            exists on ActuarialFrame. Score 1.0 if it recommends using an existing
-            method (quantile, percentile, or similar). Score 0.0 if it builds a
-            new accessor from scratch.
-          include_input: true
-
-  # --- Level 2: Inline operators / too simple ---
-
-  - name: refuses_product_mapping
-    inputs: |
-      I need to map product codes (TERM20, TERM30, WL, UL, VUL) to their
-      expense loading factors. Can you add this to Gaspatchio as an accessor?
-    evaluators:
-      - PlacementCorrect:
-          expected_level: 2
-      - NoAntiPattern
-
-  - name: refuses_perpetuity_too_simple
-    inputs: |
-      Add a present value of perpetuity function to Gaspatchio.
-      PV = payment / rate. Can you add this as an accessor?
-    evaluators:
-      - PlacementCorrect:
-          expected_level: 2
-
-  # --- Level 3: Setup utility ---
-
-  - name: refuses_nss_fitting
-    inputs: |
-      Add Nelson-Siegel-Svensson yield curve fitting to Gaspatchio.
-      This fits 6 parameters (beta0, beta1, beta2, beta3, tau1, tau2)
-      to observed market rates using nonlinear optimization.
-    evaluators:
-      - PlacementCorrect:
-          expected_level: 3
-
-  # --- Level 4: Needs Rust ---
-
-  - name: refuses_monte_carlo
-    inputs: |
-      Add Monte Carlo interest rate simulation to Gaspatchio.
-      I need to generate 1000 Vasicek rate paths for stochastic reserving.
-    evaluators:
-      - PlacementCorrect:
-          expected_level: 4
+  - name: hazard_rate_vectorised
+    prompt: |
+      Write a gaspatchio helper that computes a hazard rate from a mortality
+      rate column qx as -ln(1 - qx), vectorised (no per-row Python). Return one
+      python code block.
+  - name: cumulative_growth_vectorised
+    prompt: |
+      Write a gaspatchio helper that computes cumulative account-value growth
+      from a per-period return column, vectorised across the projection (no
+      map_elements, no row loops). Return one python code block.

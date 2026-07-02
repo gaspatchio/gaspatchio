@@ -153,10 +153,7 @@ struct OwnedListSlice {
 
 /// Plugin entry point — the function Polars discovers via the
 /// `#[polars_expr]` wrapper in `bindings/python/src/vector.rs`.
-pub fn rollforward_kernel(
-    inputs: &[Series],
-    kwargs: &RollforwardKwargs,
-) -> PolarsResult<Series> {
+pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> PolarsResult<Series> {
     let n_states = kwargs.n_states;
     let n_points = kwargs.n_points;
     let n_periods = kwargs.n_periods;
@@ -248,9 +245,8 @@ pub fn rollforward_kernel(
             )
         })?;
         let offsets = arr.offsets().as_slice().to_vec();
-        let values_series =
-            Series::from_arrow(PlSmallStr::EMPTY, arr.values().clone())?
-                .cast(&DataType::Float64)?;
+        let values_series = Series::from_arrow(PlSmallStr::EMPTY, arr.values().clone())?
+            .cast(&DataType::Float64)?;
         let values_f64 = values_series.f64()?;
         if values_f64.null_count() > 0 {
             return Err(PolarsError::ComputeError(
@@ -290,11 +286,16 @@ pub fn rollforward_kernel(
                     "rollforward: null per-policy length not supported".into(),
                 ));
             }
-            Some(ca.rechunk().cont_slice().map_err(|_| {
-                PolarsError::ComputeError(
-                    "rollforward: per-policy lengths not contiguous".into(),
-                )
-            })?.to_vec())
+            Some(
+                ca.rechunk()
+                    .cont_slice()
+                    .map_err(|_| {
+                        PolarsError::ComputeError(
+                            "rollforward: per-policy lengths not contiguous".into(),
+                        )
+                    })?
+                    .to_vec(),
+            )
         }
         None => None,
     };
@@ -390,7 +391,11 @@ pub fn rollforward_kernel(
         // Initialise the per-row state buffer (sized to this policy's length).
         let mut state: Vec<f64> = vec![0.0; n_states * n_points * row_periods];
         for (s, (slice, is_broadcast)) in init_slices.iter().enumerate() {
-            let init_val = if *is_broadcast { slice[0] } else { slice[row_idx] };
+            let init_val = if *is_broadcast {
+                slice[0]
+            } else {
+                slice[row_idx]
+            };
             // state[s][bop][0] = init
             state[s * stride_state + bop_idx * stride_point] = init_val;
         }
@@ -445,10 +450,18 @@ pub fn rollforward_kernel(
             // (state, target_point) value to all later points in declared
             // order so subsequent Ops chain correctly.
             for op in &kwargs.ops {
-                apply_op(op, &mut state, t, &owned_slices, row_idx, stride_state, stride_point)?;
+                apply_op(
+                    op,
+                    &mut state,
+                    t,
+                    &owned_slices,
+                    row_idx,
+                    stride_state,
+                    stride_point,
+                )?;
                 let (op_target_state, op_target_point) = op_target(op);
-                let new_val = state
-                    [op_target_state * stride_state + op_target_point * stride_point + t];
+                let new_val =
+                    state[op_target_state * stride_state + op_target_point * stride_point + t];
                 for p in (op_target_point + 1)..n_points {
                     state[op_target_state * stride_state + p * stride_point + t] = new_val;
                 }
@@ -459,9 +472,10 @@ pub fn rollforward_kernel(
             // kept (the lapse triggers at this boundary), and all subsequent
             // periods are zeroed.
             if !kwargs.lapse_state_indices.is_empty() {
-                let all_lapsed = kwargs.lapse_state_indices.iter().all(|&s| {
-                    state[s * stride_state + eop_idx * stride_point + t] <= 0.0
-                });
+                let all_lapsed = kwargs
+                    .lapse_state_indices
+                    .iter()
+                    .all(|&s| state[s * stride_state + eop_idx * stride_point + t] <= 0.0);
                 if all_lapsed {
                     stopped = true;
                 }
@@ -514,7 +528,15 @@ fn apply_op(
             expr_arg,
             ..
         } => {
-            let v = resolve_arg(*expr_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let v = resolve_arg(
+                *expr_arg,
+                owned_slices,
+                state,
+                row_idx,
+                t,
+                stride_state,
+                stride_point,
+            );
             let i = *target_state * stride_state + *target_point * stride_point + t;
             state[i] += v;
             Ok(())
@@ -525,7 +547,15 @@ fn apply_op(
             expr_arg,
             ..
         } => {
-            let v = resolve_arg(*expr_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let v = resolve_arg(
+                *expr_arg,
+                owned_slices,
+                state,
+                row_idx,
+                t,
+                stride_state,
+                stride_point,
+            );
             let i = *target_state * stride_state + *target_point * stride_point + t;
             state[i] -= v;
             Ok(())
@@ -536,7 +566,15 @@ fn apply_op(
             rate_arg,
             ..
         } => {
-            let r = resolve_arg(*rate_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let r = resolve_arg(
+                *rate_arg,
+                owned_slices,
+                state,
+                row_idx,
+                t,
+                stride_state,
+                stride_point,
+            );
             let i = *target_state * stride_state + *target_point * stride_point + t;
             state[i] *= 1.0 - r;
             Ok(())
@@ -549,7 +587,15 @@ fn apply_op(
         } => {
             // schedule dt is not threaded through yet — rates are taken
             // as-quoted on the input list, period-by-period.
-            let r = resolve_arg(*rate_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let r = resolve_arg(
+                *rate_arg,
+                owned_slices,
+                state,
+                row_idx,
+                t,
+                stride_state,
+                stride_point,
+            );
             let i = *target_state * stride_state + *target_point * stride_point + t;
             state[i] *= 1.0 + r;
             Ok(())
@@ -574,9 +620,33 @@ fn apply_op(
             ..
         } => {
             // schedule dt is not threaded through yet.
-            let r = resolve_arg(*rate_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
-            let f = resolve_arg(*floor_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
-            let c = resolve_arg(*cap_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let r = resolve_arg(
+                *rate_arg,
+                owned_slices,
+                state,
+                row_idx,
+                t,
+                stride_state,
+                stride_point,
+            );
+            let f = resolve_arg(
+                *floor_arg,
+                owned_slices,
+                state,
+                row_idx,
+                t,
+                stride_state,
+                stride_point,
+            );
+            let c = resolve_arg(
+                *cap_arg,
+                owned_slices,
+                state,
+                row_idx,
+                t,
+                stride_state,
+                stride_point,
+            );
             let clamped = r.clamp(f, c);
             let i = *target_state * stride_state + *target_point * stride_point + t;
             state[i] *= 1.0 + clamped;
@@ -589,8 +659,24 @@ fn apply_op(
             death_benefit_arg,
             ..
         } => {
-            let coi = resolve_arg(*coi_rate_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
-            let db = resolve_arg(*death_benefit_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+            let coi = resolve_arg(
+                *coi_rate_arg,
+                owned_slices,
+                state,
+                row_idx,
+                t,
+                stride_state,
+                stride_point,
+            );
+            let db = resolve_arg(
+                *death_benefit_arg,
+                owned_slices,
+                state,
+                row_idx,
+                t,
+                stride_state,
+                stride_point,
+            );
             let i = *target_state * stride_state + *target_point * stride_point + t;
             // Net amount at risk = death_benefit - state; charge coi over NAR.
             state[i] -= coi * (db - state[i]);
@@ -604,11 +690,29 @@ fn apply_op(
             ..
         } => {
             let fire = match when_arg {
-                Some(arg) => resolve_arg(*arg, owned_slices, state, row_idx, t, stride_state, stride_point) != 0.0,
+                Some(arg) => {
+                    resolve_arg(
+                        *arg,
+                        owned_slices,
+                        state,
+                        row_idx,
+                        t,
+                        stride_state,
+                        stride_point,
+                    ) != 0.0
+                }
                 None => true,
             };
             if fire {
-                let to_val = resolve_arg(*to_arg, owned_slices, state, row_idx, t, stride_state, stride_point);
+                let to_val = resolve_arg(
+                    *to_arg,
+                    owned_slices,
+                    state,
+                    row_idx,
+                    t,
+                    stride_state,
+                    stride_point,
+                );
                 let i = *target_state * stride_state + *target_point * stride_point + t;
                 if to_val > state[i] {
                     state[i] = to_val;
@@ -640,9 +744,7 @@ fn resolve_arg(
 ) -> f64 {
     match arg {
         ArgRef::Input { idx } => read_list_at(owned_slices, idx, row_idx, t),
-        ArgRef::State { state: s, point: p } => {
-            state[s * stride_state + p * stride_point + t]
-        }
+        ArgRef::State { state: s, point: p } => state[s * stride_state + p * stride_point + t],
     }
 }
 
@@ -699,12 +801,7 @@ fn op_target(op: &OpV2) -> (usize, usize) {
 }
 
 /// Read a list-arg's value at (row_idx, t).
-fn read_list_at(
-    owned_slices: &[OwnedListSlice],
-    arg_idx: usize,
-    row_idx: usize,
-    t: usize,
-) -> f64 {
+fn read_list_at(owned_slices: &[OwnedListSlice], arg_idx: usize, row_idx: usize, t: usize) -> f64 {
     let slice = &owned_slices[arg_idx];
     let flat_idx = slice.offsets[row_idx] as usize + t;
     // Jagged-safety: t must stay within THIS row's slice (offsets[row]..offsets[row+1]).
@@ -760,9 +857,9 @@ fn decode_point_names(ir: &serde_json::Value) -> PolarsResult<Vec<String>> {
     })?;
     let mut names = Vec::with_capacity(points.len());
     for p in points {
-        let name = p
-            .as_str()
-            .ok_or_else(|| PolarsError::ComputeError("rollforward: ir.points entry not str".into()))?;
+        let name = p.as_str().ok_or_else(|| {
+            PolarsError::ComputeError("rollforward: ir.points entry not str".into())
+        })?;
         names.push(name.to_string());
     }
     Ok(names)
@@ -791,7 +888,10 @@ mod tests {
         }"#;
         let kwargs: RollforwardKwargs = serde_json::from_str(json).unwrap();
         assert_eq!(kwargs.captures.len(), 1);
-        assert_eq!(kwargs.captures[0], vec!["av".to_string(), "eop".to_string()]);
+        assert_eq!(
+            kwargs.captures[0],
+            vec!["av".to_string(), "eop".to_string()]
+        );
         assert!(!kwargs.track_increments);
         assert!(kwargs.lapse_when_all_non_positive.is_empty());
         assert!(kwargs.contract_boundary.is_none());
@@ -1023,7 +1123,10 @@ mod tests {
             (0..f.len()).map(|i| f.get(i).unwrap()).collect()
         };
         assert_eq!(row(0), vec![110.0, 130.0]);
-        assert!(row(1).is_empty(), "zero-period policy must emit an empty list");
+        assert!(
+            row(1).is_empty(),
+            "zero-period policy must emit an empty list"
+        );
         assert_eq!(row(2), vec![110.0, 130.0, 160.0]);
     }
 }

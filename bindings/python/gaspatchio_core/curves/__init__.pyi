@@ -8,9 +8,10 @@ import numpy as np
 import numpy.typing as npt
 import polars as pl
 
+from gaspatchio_core.curves._curve import ParametricPayload
 from gaspatchio_core.schedule import DayCount
 
-type InterpolationMethod = Literal["linear"]
+type InterpolationMethod = Literal["linear", "log_linear", "pchip"]
 type TimeInput = (
     float | int | list[float] | npt.NDArray[np.float64] | pl.Series | pl.Expr
 )
@@ -20,6 +21,7 @@ class Curve:
     rates: tuple[float, ...]
     day_count: DayCount
     interpolation: InterpolationMethod
+    parametric: ParametricPayload | None
 
     def __init__(
         self,
@@ -27,6 +29,7 @@ class Curve:
         rates: tuple[float, ...],
         day_count: DayCount,
         interpolation: InterpolationMethod = ...,
+        parametric: ParametricPayload | None = ...,
     ) -> None: ...
     @classmethod
     def from_zero_rates(
@@ -45,6 +48,37 @@ class Curve:
         par_rates: list[float],
         day_count: DayCount | None = ...,
         interpolation: InterpolationMethod = ...,
+    ) -> Curve: ...
+    @classmethod
+    def from_svensson(
+        cls,
+        *,
+        b0: float,
+        b1: float,
+        b2: float,
+        b3: float,
+        tau1: float,
+        tau2: float,
+        day_count: DayCount | None = ...,
+    ) -> Curve: ...
+    @classmethod
+    def fit_svensson(
+        cls,
+        *,
+        tenors: list[float],
+        rates: list[float],
+        day_count: DayCount | None = ...,
+    ) -> Curve: ...
+    @classmethod
+    def fit_smith_wilson(
+        cls,
+        *,
+        tenors: list[float],
+        rates: list[float],
+        ufr: float = ...,
+        llp: float | None = ...,
+        alpha: float | None = ...,
+        day_count: DayCount | None = ...,
     ) -> Curve: ...
     def spot_rate(
         self,
