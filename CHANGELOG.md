@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.1] — CLI model-points loading
+
+Bug-fix release for the `gspio` CLI and assumption-file loading. No engine or API
+changes. (#5)
+
+### Fixed
+- `run-model`, `run-single-policy`, and `calc-graph` load model points from CSV as well
+  as Parquet — the loader was Parquet-only despite the `--help` text; unsupported
+  extensions now raise a clear error.
+- Model points may live in any directory: the CLI previously kept only the file's
+  basename and looked for it next to the model, so a path elsewhere failed with
+  `FileNotFoundError`.
+- `Table.from_scenario_files()` and `from_scenario_template()` accept CSV, Parquet, or a
+  mix, matching the other assumption loaders (which were already format-agnostic).
+- `run-single-policy` auto-detects the policy-ID column (`policy_id`, `policy_number`, …)
+  when `--policy-id-column` is omitted, honouring an explicit name case-insensitively.
+
 ## [0.4.2] — First published release (docs + packaging)
 
 Same engine as the v0.4.0 and v0.4.1 tags — neither shipped a populated release (0.4.0's
