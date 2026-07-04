@@ -15,9 +15,40 @@ import pytest
 from gaspatchio_core.runner import (
     ModelRunConfig,
     _cast_policy_id,
+    _resolve_id_column,
     run_single_policy,
     transpose_single_policy_result,
 )
+
+
+class TestResolveIdColumn:
+    """Tests for _resolve_id_column (policy-ID column resolution)."""
+
+    def test_auto_detects_policy_id(self):
+        """policy_id is picked up when no column is requested."""
+        assert _resolve_id_column(["policy_id", "age"], None) == "policy_id"
+
+    def test_auto_detects_policy_number(self):
+        """Legacy 'Policy number' is still auto-detected (case-insensitive)."""
+        assert _resolve_id_column(["Policy number", "age"], None) == "Policy number"
+
+    def test_explicit_exact_match(self):
+        """An explicit column that exists is used verbatim."""
+        assert _resolve_id_column(["pol", "age"], "pol") == "pol"
+
+    def test_explicit_case_insensitive_match(self):
+        """An explicit column is matched case-insensitively to the real name."""
+        assert _resolve_id_column(["Policy_ID", "age"], "policy_id") == "Policy_ID"
+
+    def test_missing_explicit_raises(self):
+        """A requested column that is absent raises with the available columns."""
+        with pytest.raises(ValueError, match="not found in the model points"):
+            _resolve_id_column(["policy_id"], "nope")
+
+    def test_no_detectable_column_raises(self):
+        """When nothing matches, the error suggests --policy-id-column."""
+        with pytest.raises(ValueError, match="auto-detect"):
+            _resolve_id_column(["age", "sex"], None)
 
 
 class TestTransposeSinglePolicyResult:

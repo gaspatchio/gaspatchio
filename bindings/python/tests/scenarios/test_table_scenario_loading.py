@@ -136,6 +136,47 @@ class TestTableFromScenarioFiles:
         # Assert
         assert len(table.to_dataframe()) == 9
 
+    def test_loads_csv_scenario_files(self, tmp_path: Path):
+        """Should load per-scenario CSV files, not just Parquet."""
+        # Arrange: write the scenario rate files as CSV
+        base_path = tmp_path / "base_rates.csv"
+        pl.DataFrame({"year": [1, 2, 3], "rate": [0.03, 0.035, 0.04]}).write_csv(base_path)
+        up_path = tmp_path / "up_rates.csv"
+        pl.DataFrame({"year": [1, 2, 3], "rate": [0.035, 0.04, 0.045]}).write_csv(up_path)
+
+        # Act
+        table = Table.from_scenario_files(
+            scenario_files={"BASE": base_path, "UP": up_path},
+            scenario_column="scenario_id",
+            dimensions={"year": "year"},
+            value="rate",
+            name="discount_rates_csv",
+        )
+
+        # Assert
+        result_df = table.to_dataframe()
+        assert len(result_df) == 6  # 2 scenarios x 3 years
+        assert set(result_df["scenario_id"].unique().to_list()) == {"BASE", "UP"}
+
+    def test_mixes_csv_and_parquet_scenario_files(self, tmp_path: Path):
+        """Scenario files may mix formats — each is read by its own extension."""
+        # Arrange: one CSV, one Parquet
+        csv_path = tmp_path / "base_rates.csv"
+        pl.DataFrame({"year": [1, 2], "rate": [0.03, 0.035]}).write_csv(csv_path)
+        pq_path = tmp_path / "up_rates.parquet"
+        pl.DataFrame({"year": [1, 2], "rate": [0.04, 0.045]}).write_parquet(pq_path)
+
+        # Act
+        table = Table.from_scenario_files(
+            scenario_files={"BASE": csv_path, "UP": pq_path},
+            scenario_column="scenario_id",
+            dimensions={"year": "year"},
+            value="rate",
+        )
+
+        # Assert
+        assert len(table.to_dataframe()) == 4  # 2 scenarios x 2 years
+
 
 class TestTableFromScenarioTemplate:
     """Tests for Table.from_scenario_template() classmethod."""

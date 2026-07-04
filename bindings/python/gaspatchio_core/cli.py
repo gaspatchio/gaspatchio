@@ -23,6 +23,7 @@ from .api import APIConnectionError, KnowledgeAPIClient
 from .runner import (  # Changed to relative import
     ModelRunConfig,
     RunMetrics,
+    _resolve_id_column,
     transpose_single_policy_result,
 )
 from .runner import (
@@ -201,7 +202,7 @@ def run_model(
         config = ModelRunConfig(
             directory=code_path.parent,
             model_file=code_path.name,
-            model_points_file=model_points_path.name,
+            model_points_file=str(model_points_path),
             mode=mode,  # type: ignore[arg-type]
         )
     # Call the imported run_model directly
@@ -333,13 +334,13 @@ def run_single_policy(
         ),
     ] = "debug",
     policy_id_column: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--policy-id-column",
-            help="Name of the policy ID column in the model points file",
+            help="Name of the policy ID column (auto-detected if omitted)",
             rich_help_panel="Execution Options",
         ),
-    ] = "Policy number",
+    ] = None,
     first_n: Annotated[
         int,
         typer.Option(
@@ -409,7 +410,7 @@ def run_single_policy(
         config = ModelRunConfig(
             directory=code_path.parent,
             model_file=code_path.name,
-            model_points_file=model_points_path.name,
+            model_points_file=str(model_points_path),
             mode=mode,  # type: ignore[arg-type]
             id_column_name=policy_id_column,
         )
@@ -991,13 +992,13 @@ def calc_graph(
         ),
     ] = None,
     policy_id_column: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--policy-id-column",
-            help="Name of the policy ID column in the model points file",
+            help="Name of the policy ID column (auto-detected if omitted)",
             rich_help_panel="Execution Options",
         ),
-    ] = "Policy number",
+    ] = None,
     filter_expr: Annotated[
         str | None,
         typer.Option(
@@ -1032,7 +1033,7 @@ def calc_graph(
         config = ModelRunConfig(
             directory=code_path.parent,
             model_file=code_path.name,
-            model_points_file=model_points_path.name,
+            model_points_file=str(model_points_path),
             mode="debug",  # Must be debug to capture graph
             id_column_name=policy_id_column,
         )
@@ -1077,10 +1078,19 @@ def calc_graph(
         else:
             df = pl.read_csv(data_path)
 
+        # Resolve the policy-ID column (honour an explicit name, else auto-detect).
+        # calc-graph can run without a policy filter, so fall back gracefully.
+        try:
+            id_column = _resolve_id_column(df.columns, config.id_column_name)
+        except ValueError:
+            if policy_id:
+                raise
+            id_column = config.id_column_name or "Policy number"
+
         # Filter for single policy if specified
         if policy_id:
             # Convert policy_id to appropriate type based on column dtype
-            id_col_dtype = df[config.id_column_name].dtype
+            id_col_dtype = df[id_column].dtype
             if id_col_dtype in [pl.Int32, pl.Int64, pl.UInt32, pl.UInt64]:
                 try:
                     policy_id_typed = int(policy_id)
@@ -1088,7 +1098,7 @@ def calc_graph(
                     policy_id_typed = policy_id
             else:
                 policy_id_typed = str(policy_id)
-            df = df.filter(pl.col(config.id_column_name) == policy_id_typed)
+            df = df.filter(pl.col(id_column) == policy_id_typed)
 
         # Create ActuarialFrame in debug mode
         af = ActuarialFrame(df, mode="debug")
@@ -1104,7 +1114,7 @@ def calc_graph(
         # Create export configuration
         export_config = GraphExportConfig(
             policy_id=policy_id,
-            policy_id_column=config.id_column_name,
+            policy_id_column=id_column,
             filter_expr=filter_expr,
             include_traces=True,
         )

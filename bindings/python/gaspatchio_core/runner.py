@@ -28,7 +28,7 @@ class ModelRunConfig(BaseModel):
     model_points_file: str = "model-points.parquet"
     mode: Literal["debug", "optimize"] = "debug"
     model_function_name: str = "main"
-    id_column_name: str = "Policy number"
+    id_column_name: str | None = None
 
 
 class RunMetrics(BaseModel):
@@ -334,6 +334,57 @@ def _cast_policy_id(policy_id: str, col_dtype: pl.DataType) -> int | str:
     return policy_id
 
 
+# Common names for the policy-identifier column, tried in order when the caller
+# does not name one explicitly. Matched case-insensitively against the data.
+_ID_COLUMN_CANDIDATES = (
+    "policy_id",
+    "policy_number",
+    "policy number",
+    "policyid",
+    "pol_id",
+    "id",
+)
+
+
+def _resolve_id_column(available: list[str], requested: str | None) -> str:
+    """Resolve the policy-ID column, honouring an explicit name or auto-detecting.
+
+    An explicit ``requested`` name must exist in the model points (matched
+    case-insensitively); otherwise a ``ValueError`` lists the available columns.
+    When ``requested`` is ``None``, the first common id-column name present in the
+    data is used (``policy_id``, ``policy_number``, ...).
+
+    Args:
+        available: Column names present in the model points.
+        requested: The column the caller asked for, or None to auto-detect.
+
+    Returns:
+        The resolved column name, as it appears in the data.
+
+    Raises:
+        ValueError: If the requested column is absent, or none can be detected.
+
+    """
+    by_lower = {c.lower(): c for c in available}
+    if requested is not None:
+        if requested in available:
+            return requested
+        if requested.lower() in by_lower:
+            return by_lower[requested.lower()]
+        raise ValueError(
+            f"Policy ID column '{requested}' not found in the model points. "
+            f"Available columns: {available}",
+        )
+    for candidate in _ID_COLUMN_CANDIDATES:
+        if candidate in by_lower:
+            return by_lower[candidate]
+    raise ValueError(
+        "Could not auto-detect a policy ID column from the model points "
+        f"(looked for {list(_ID_COLUMN_CANDIDATES)}). Available columns: {available}. "
+        "Pass --policy-id-column to name it explicitly.",
+    )
+
+
 def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
     """Run actuarial model for a single policy and return results."""
     logger.debug(
@@ -357,34 +408,39 @@ def run_single_policy(config: ModelRunConfig, policy_id: str) -> ModelRunResult:
     logger.info("Reading model points data from {}", model_points_path)
     data_lazy = read_model_points(model_points_path)
 
-    # 4. Determine column dtype and cast policy_id appropriately
-    col_dtype = data_lazy.collect_schema()[config.id_column_name]
+    # 4. Resolve the policy-ID column (honour an explicit name, else auto-detect)
+    schema = data_lazy.collect_schema()
+    id_column = _resolve_id_column(list(schema.names()), config.id_column_name)
+
+    # Cast the requested policy_id to match the column dtype
+    col_dtype = schema[id_column]
     policy_id_typed = _cast_policy_id(policy_id, col_dtype)
     logger.debug(
-        "Filtering for single policy with ID: {} (cast to {} from dtype {})",
+        "Filtering for single policy with ID: {} (cast to {} from dtype {}) in column '{}'",
         policy_id_typed,
         type(policy_id_typed).__name__,
         col_dtype,
+        id_column,
     )
 
     # Check if policy exists before filtering (on the full dataset)
     existing_ids = (
-        data_lazy.select(config.id_column_name)
+        data_lazy.select(id_column)
         .unique()
         .lazy()
         .collect()
-        .get_column(config.id_column_name)
+        .get_column(id_column)
     )
     if policy_id_typed not in existing_ids:
         err_msg = (
-            f"Policy ID '{policy_id}' not found in column '{config.id_column_name}'. "
+            f"Policy ID '{policy_id}' not found in column '{id_column}'. "
             f"Available IDs preview: {existing_ids[:10].to_list()}"
         )
         logger.error(err_msg)
         raise ValueError(err_msg)
 
     filtered_data_lazy = data_lazy.filter(
-        pl.col(config.id_column_name) == policy_id_typed,
+        pl.col(id_column) == policy_id_typed,
     )
 
     # Delegate execution to helper - let enhanced error handling work
