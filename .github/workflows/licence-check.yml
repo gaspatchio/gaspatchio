@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - name: Install reuse
         run: uv tool install reuse
       - name: Run reuse lint
@@ -28,8 +28,8 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - name: Install workspace + pip-licenses
         run: |
           uv sync
@@ -81,7 +81,7 @@ jobs:
             echo "$WARN"
           fi
       - name: Upload audit JSON
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: python-wheel-licences
@@ -92,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-license
         run: cargo install cargo-license --quiet
@@ -127,7 +127,7 @@ jobs:
             echo "No Rust crates needing manual review."
           fi
       - name: Upload audit JSON
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: rust-crate-licences

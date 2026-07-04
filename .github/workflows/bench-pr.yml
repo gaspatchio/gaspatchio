@@ -25,11 +25,11 @@ jobs:
             benchmark_name: Rust Benchmarks
             benchmark_path: dev/bench
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
