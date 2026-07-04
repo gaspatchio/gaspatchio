@@ -313,9 +313,9 @@ class Table:
 
         dfs = []
         for scenario_id, path in scenario_files.items():
-            # Load the file
+            # Load the file (Parquet or CSV, chosen by extension)
             file_path = Path(path) if isinstance(path, str) else path
-            scenario_df = pl.read_parquet(file_path)
+            scenario_df = _materialise(file_path)
 
             # Add scenario column
             scenario_df = scenario_df.with_columns(
