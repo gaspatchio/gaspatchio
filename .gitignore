@@ -89,3 +89,9 @@ bindings/python/gaspatchio_core/tutorials/**/gaspatchio_audit/
 /bindings/python/tests/scratch/gsp*/
 /evals/benchmarks/aggregated_results/
 /evals/benchmarks/batch_search_results/
+
+# uv lockfile — dev/CI resolves fresh via `uv sync`; not tracked (matches the core repo).
+# Distribution is via the built wheel, whose deps come from pyproject.toml, so consumers
+# never see this file. Commit it deliberately (with CI `uv sync --frozen`) if you later
+# want pinned/reproducible dev environments.
+/bindings/python/uv.lock
