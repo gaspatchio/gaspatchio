@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import polars as pl
+import pytest
+
 from gaspatchio_core.scenarios.shocks import (
     AdditiveShock,
     ClipShock,
@@ -119,6 +122,18 @@ def test_relative_floor_canonical_form():
     """RelativeFloorShock encodes its delta field."""
     shock = RelativeFloorShock(delta=0.001, table="rates", column=None)
     assert shock.canonical_form()["kind"] == "RelativeFloorShock"
+
+
+def test_relative_floor_to_expression_raises_not_implemented():
+    """RelativeFloorShock.to_expression must fail loud, not silently no-op (F9c).
+
+    The old placeholder floored at ``col - delta`` on the already-shocked value,
+    so the condition was never true and the shock did nothing. It now raises and
+    points to MaxShock as the correct way to express max(shocked, original-delta).
+    """
+    shock = RelativeFloorShock(delta=0.2, table="lapse", column=None)
+    with pytest.raises(NotImplementedError, match="MaxShock"):
+        shock.to_expression(pl.col("lapse"))
 
 
 def test_canonical_form_keys_sorted():
