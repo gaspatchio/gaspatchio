@@ -111,6 +111,44 @@ def _reduce_by_period_over(
     return reduced.partition_by(*by, as_dict=True, include_key=False)
 
 
+def _reduce_by_period_within(
+    frame: pl.DataFrame,
+    period: str,
+    column: str,
+    within_by: tuple[str, ...],
+    *aggs: pl.Expr,
+) -> pl.DataFrame:
+    """Two-stage per-period reduce for the scenario axis (reduce ACROSS scenarios).
+
+    Stage 1 collapses the inner axis (policies) by SUMMING ``column`` within each
+    ``within_by`` group (``scenario_id``) per period, giving each scenario its
+    per-period total. Stage 2 applies ``aggs`` ACROSS those per-scenario totals per
+    period. So a ``Period*`` aggregator on the scenario axis computes its statistic
+    across scenarios of each scenario's per-period total — mirroring the scalar
+    aggregator convention (which groups by ``scenario_id`` first) — instead of
+    reducing over every policy x scenario cell.
+
+    ``within_by`` groups are disjoint across batches (every scenario appears in
+    exactly one batch and sees every policy), so stage 1 fully reduces each scenario
+    within its batch; the per-period partials then fold across batches correctly via
+    the aggregator's own ``add_input``/``merge_accumulators``.
+
+    Null periods (from an empty ``[]`` projection) are dropped exactly as in
+    :func:`_reduce_by_period`, so no phantom leading bucket is inserted. Stage 1
+    sums the column, so its output keeps the name ``column`` and the caller's
+    ``aggs`` (written against ``pl.col(column)``) apply unchanged in stage 2.
+    """
+    stage1 = (
+        frame.lazy()
+        .select(*[pl.col(b) for b in within_by], pl.col(period), pl.col(column))
+        .explode([period, column])
+        .filter(pl.col(period).is_not_null())
+        .group_by([*within_by, period])
+        .agg(pl.col(column).sum())
+    )
+    return stage1.group_by(period).agg(*aggs).sort(period).collect()
+
+
 def _tidy_partitioned_vector(
     df: pl.DataFrame, *, by: tuple[str, ...], alias: str
 ) -> pl.DataFrame:
@@ -169,6 +207,23 @@ class VectorAggregator(_BaseAggregator):
             frame, period, self.column, by, *self._period_aggs()
         )
         return {key: self._assemble_partial(sub) for key, sub in parts.items()}
+
+    def batch_reduce_within(
+        self, frame: pl.DataFrame, period: str, within_by: tuple[str, ...]
+    ) -> Any:  # noqa: ANN401
+        """Reduce ACROSS ``within_by`` groups per period after summing within each.
+
+        Stage 1 sums ``column`` within each ``within_by`` group (``scenario_id``)
+        per period; stage 2 applies this aggregator's per-period statistic across
+        those per-group totals. Used on the scenario axis so ``Period*`` reduces
+        across scenarios of each scenario's per-period total, not over every
+        policy x scenario cell. See :func:`_reduce_by_period_within`.
+        """
+        return self._assemble_partial(
+            _reduce_by_period_within(
+                frame, period, self.column, within_by, *self._period_aggs()
+            )
+        )
 
     def within_expr(self) -> pl.Expr:
         """Not supported — vector aggregators reduce via batch_reduce()."""

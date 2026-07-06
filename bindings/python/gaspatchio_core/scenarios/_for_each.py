@@ -388,6 +388,14 @@ def _fold_vector_aggregators(
     each aggregator's own list column (jagged columns each get the right index), then
     the whole batch folds together (the accumulator accumulates across batches). A
     ``.over()`` aggregator folds per partition via ``batch_reduce_over``.
+
+    Axis-awareness: on the scenario axis a non-partitioned ``Period*`` must reduce
+    ACROSS scenarios of each scenario's per-period total (two-stage), not over every
+    policy x scenario cell — otherwise ``PeriodMean``/``PeriodCount`` blow up by the
+    policy count. The scenario axis is detected by the presence of a ``scenario_id``
+    column (``for_each_scenario`` always cross-joins it in; the policy-axis
+    ``run_aggregated`` has no such column and uses its own fold that calls
+    ``batch_reduce`` directly, so it is unaffected).
     """
     period = "__period"
     for alias, agg in zip(aliases, aggregations, strict=True):
@@ -403,9 +411,11 @@ def _fold_vector_aggregators(
             for key, partial in vec.batch_reduce_over(proj_p, period, agg.by).items():
                 accumulators[alias] = agg.add_input(accumulators[alias], (key, partial))
         else:
-            accumulators[alias] = inner_agg.add_input(
-                accumulators[alias], vec.batch_reduce(proj_p, period)
-            )
+            if "scenario_id" in proj_p.columns:
+                partial = vec.batch_reduce_within(proj_p, period, ("scenario_id",))
+            else:
+                partial = vec.batch_reduce(proj_p, period)
+            accumulators[alias] = inner_agg.add_input(accumulators[alias], partial)
 
 
 def _fold_batch(

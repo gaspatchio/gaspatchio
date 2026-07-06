@@ -14,6 +14,8 @@ from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.scenarios import (
     ArgMax,
     Count,
+    PeriodCount,
+    PeriodMean,
     PeriodMedian,
     PeriodQuantile,
     PeriodSum,
@@ -377,6 +379,42 @@ def test_period_aggregator_runs_in_for_each_scenario() -> None:
         aggregations=[PeriodSum("cf").alias("cf")],
     )
     assert np.asarray(result.aggregations["cf"]).tolist() == [3.0, 6.0, 9.0]
+
+
+def test_policy_axis_period_reduces_over_all_policies_unchanged() -> None:
+    """Policy axis (run_aggregated) reduces across ALL policies per period.
+
+    F9a control: the scenario-axis two-stage fix must NOT touch the policy axis
+    (there is no scenario_id here). PeriodMean means over all 4 policies per
+    period, PeriodCount counts all 4 policies -- no scenario double-reduction.
+
+    model: cf[policy] = [value, value*2]; value = [1,2,3,4].
+      period0 values across policies = [1, 2, 3, 4]
+      period1 values across policies = [2, 4, 6, 8]
+    """
+    mp = pl.DataFrame({"value": [1.0, 2.0, 3.0, 4.0]})
+
+    def model(af: ActuarialFrame) -> ActuarialFrame:
+        return ActuarialFrame(
+            af._df.with_columns(  # noqa: SLF001
+                pl.concat_list([pl.col("value"), pl.col("value") * 2]).alias("cf")
+            )
+        )
+
+    for bs in (1, 4):
+        res = run_aggregated(
+            model,
+            mp,
+            [
+                PeriodSum("cf").alias("sum"),
+                PeriodMean("cf").alias("mean"),
+                PeriodCount("cf").alias("count"),
+            ],
+            batch_size=bs,
+        )
+        assert res.sum.tolist() == [10.0, 20.0]  # 1+2+3+4, 2+4+6+8
+        assert res.mean.tolist() == [2.5, 5.0]  # mean over 4 policies (NOT /1)
+        assert res.count.tolist() == [4.0, 4.0]  # counts policies (NOT scenarios)
 
 
 # ---------------------------------------------------------------------------
