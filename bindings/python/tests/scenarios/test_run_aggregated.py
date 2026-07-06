@@ -531,3 +531,52 @@ def test_scalar_non_additive_aggregators_are_batch_invariant() -> None:
     # Variance must be identical across batch sizes (ddof-agnostic invariance).
     assert results[1][1] == pytest.approx(results[4][1])
     assert results[2][1] == pytest.approx(results[4][1])
+
+
+def test_scalar_partitioned_non_additive_aggregators_are_batch_invariant() -> None:
+    """Mean.over()/Median.over() on the policy axis must be batch-invariant.
+
+    The scalar ``.over()`` fold grouped each batch by the partition column and
+    collapsed every group to one ``within_expr`` value, then ``add_input``'d that
+    single value into the partition's accumulator. So a non-additive inner
+    aggregator (Mean/Variance/Std/Median/CTE) divided by the number of BATCHES a
+    partition spanned, not the number of policies in it — batch-dependent, wrong.
+    (Same class as F9b, per partition.) Sum.over() is the additive control.
+
+    The policy layout interleaves partitions across batch boundaries so that, at
+    batch_size=2, partition A spans batches 0-1 and partition B spans batches 1-2,
+    exercising the cross-batch per-partition merge that the old fold got wrong.
+    """
+    mp = pl.DataFrame(
+        {
+            "value": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+            "product": ["A", "A", "A", "B", "B", "B"],
+        },
+    )
+
+    def model(af: ActuarialFrame) -> ActuarialFrame:
+        return ActuarialFrame(af._df.with_columns(pl.col("value").alias("pv")))  # noqa: SLF001
+
+    def _val(df: pl.DataFrame, product: str, col: str) -> float:
+        return df.filter(pl.col("product") == product)[col].item()
+
+    for bs in (1, 2, 3, 6):
+        res = run_aggregated(
+            model,
+            mp,
+            [
+                Mean("pv").alias("mean").over("product"),
+                Median("pv").alias("median").over("product"),
+                Sum("pv").alias("sum").over("product"),
+            ],
+            batch_size=bs,
+        )
+        # A = mean(10,20,30) = 20 ; B = mean(40,50,60) = 50
+        assert _val(res.mean, "A", "mean") == pytest.approx(20.0), f"A mean wrong at bs={bs}"
+        assert _val(res.mean, "B", "mean") == pytest.approx(50.0), f"B mean wrong at bs={bs}"
+        # additive control — already batch-invariant
+        assert _val(res.sum, "A", "sum") == pytest.approx(60.0), f"A sum wrong at bs={bs}"
+        assert _val(res.sum, "B", "sum") == pytest.approx(150.0), f"B sum wrong at bs={bs}"
+        # DDSketch median is approximate
+        assert _val(res.median, "A", "median") == pytest.approx(20.0, rel=0.06)
+        assert _val(res.median, "B", "median") == pytest.approx(50.0, rel=0.06)

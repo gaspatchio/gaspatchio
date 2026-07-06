@@ -160,17 +160,27 @@ def _fold_batch(
                         accumulators[alias], (key, partial)
                     )
             else:
-                # scalar .over(): group_by(by), within_expr per group
-                reduced = proj.group_by(by).agg(
-                    agg.inner.within_expr().alias(alias)
+                # scalar .over(): build a per-batch partial accumulator PER
+                # partition by folding each policy's raw value, then merge across
+                # batches. The old code grouped by the partition column and
+                # collapsed each group to one within_expr value per batch, then
+                # add_input'd that single value — so a non-additive inner
+                # aggregator (Mean/Variance/Std/Median/CTE) divided by the number
+                # of BATCHES a partition spanned, not the policy count within it.
+                # Batch-dependent and wrong. (Same class as F9b, per partition.)
+                inner = agg.inner
+                inner_col: str = inner.column
+                n_by = len(by)
+                batch_state: dict[tuple[Any, ...], Any] = {}
+                for row in proj.select([*by, inner_col]).iter_rows():
+                    key = row[:n_by]
+                    value = row[n_by]
+                    if key not in batch_state:
+                        batch_state[key] = inner.create_accumulator()
+                    batch_state[key] = inner.add_input(batch_state[key], value)
+                accumulators[alias] = agg.merge_accumulators(
+                    accumulators[alias], batch_state
                 )
-                key_pos = [reduced.columns.index(b) for b in by]
-                val_pos = reduced.columns.index(alias)
-                for row in reduced.iter_rows():
-                    key = tuple(row[p] for p in key_pos)
-                    accumulators[alias] = agg.add_input(
-                        accumulators[alias], (key, row[val_pos])
-                    )
             continue
         if hasattr(agg, "batch_reduce"):
             # Vector aggregator (PeriodSum, PeriodCount, etc.) — batch_reduce path.
