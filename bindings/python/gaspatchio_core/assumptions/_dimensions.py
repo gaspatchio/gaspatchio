@@ -141,27 +141,14 @@ class MeltDimension(Dimension):
 
         # Apply fill strategy if specified
         if self.fill is not None:
-            # Group by non-dimension columns and apply fill within each group
-            if other_columns:
-                # Filter to only string column names (not expressions)
-                valid_group_columns = [
-                    col for col in other_columns if isinstance(col, str)
-                ]
-
-                if valid_group_columns:
-                    try:
-                        result = result.group_by(valid_group_columns).map_groups(
-                            lambda group: self.fill.apply(group),
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Group-by fill failed ({e}), applying fill globally",
-                        )
-                        result = self.fill.apply(result)
-                else:
-                    result = self.fill.apply(result)
-            else:
-                result = self.fill.apply(result)
+            # Fill within each group defined by the non-dimension columns, so a
+            # null in one group is never filled from a neighbouring group's
+            # value. The strategy applies a window (`.over(group_columns)`)
+            # expression; passing no group columns fills globally.
+            valid_group_columns = [
+                col for col in other_columns if isinstance(col, str)
+            ]
+            result = self.fill.apply(result, group_columns=valid_group_columns)
             logger.debug(f"Applied fill strategy to dimension '{self.name}'")
 
         return result
