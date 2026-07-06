@@ -590,14 +590,17 @@ class TestProspectiveValue:
         result = af.collect()
         pv = result["pv"][0]
 
-        # At t=2 (last period): PV = CF[2] = 100
-        # At t=1: PV = CF[1] + CF[2]/(1+r) = 100 + 100/1.05 = 195.238...
-        # At t=0: PV = CF[0] + (CF[1] + CF[2]/(1+r))/(1+r)
-        #       = 100 + 195.238.../1.05 = 285.941...
+        # F4 Excel-alignment (BREAKING): default timing is "end_of_period" =
+        # ordinary annuity (Excel type=0). Every cashflow is discounted a full
+        # period, so at each t: PV(t) = sum_{s>=t} CF[s] * v^(s-t+1), v = 1/1.05.
+        #   t=2: 100*v                   =  95.238...
+        #   t=1: 100*v + 100*v^2         = 185.941...
+        #   t=0: 100*v + 100*v^2 + 100*v^3 = 272.325...
+        v = 1 / 1.05
         assert len(pv) == 3
-        assert pytest.approx(pv[2], abs=1e-2) == 100.0
-        assert pytest.approx(pv[1], abs=1e-2) == 100.0 + 100.0 / 1.05
-        assert pytest.approx(pv[0], abs=1e-2) == 100.0 + (100.0 + 100.0 / 1.05) / 1.05
+        assert pytest.approx(pv[2], abs=1e-2) == 100.0 * v
+        assert pytest.approx(pv[1], abs=1e-2) == 100.0 * v + 100.0 * v**2
+        assert pytest.approx(pv[0], abs=1e-2) == 100.0 * v + 100.0 * v**2 + 100.0 * v**3
 
     def test_list_column_discount_rate(self):
         """Test prospective_value with per-period discount rates (list column).
@@ -618,13 +621,18 @@ class TestProspectiveValue:
         result = af.collect()
         pv = result["pv"][0]
 
-        # At t=2: PV = 100 (last cashflow, no future to discount)
-        # At t=1: PV = 100 + 100/(1+r[1]) = 100 + 100/1.05 = 195.24
-        # At t=0: PV = 100 + 195.24/(1+r[0]) = 100 + 195.24/1.04 = 287.73
+        # F4 Excel-alignment (BREAKING): default timing is "end_of_period" =
+        # ordinary annuity (Excel type=0). The annuity-due value at t is
+        #   due(t) = CF[t] + CF[t+1]*v[t] + CF[t+2]*v[t]*v[t+1] + ...
+        # and the ordinary value applies one extra per-period discount v[t]=1/(1+r[t]):
+        #   pv(t) = due(t) * v[t].
+        #   t=2: 100 / 1.06                                =  94.34
+        #   t=1: (100 + 100/1.05) / 1.05                   = 185.94
+        #   t=0: (100 + 100/1.04 + 100/(1.04*1.05)) / 1.04 = 276.66
         assert len(pv) == 3
-        assert pytest.approx(pv[2], abs=1e-2) == 100.0
-        assert pytest.approx(pv[1], abs=1e-2) == 100.0 + 100.0 / 1.05
-        expected_pv0 = 100.0 + (100.0 + 100.0 / 1.05) / 1.04
+        assert pytest.approx(pv[2], abs=1e-2) == 100.0 / 1.06
+        assert pytest.approx(pv[1], abs=1e-2) == (100.0 + 100.0 / 1.05) / 1.05
+        expected_pv0 = (100.0 + 100.0 / 1.04 + 100.0 / (1.04 * 1.05)) / 1.04
         assert pytest.approx(pv[0], abs=1e-2) == expected_pv0
 
     def test_with_discount_factor(self):
@@ -641,10 +649,12 @@ class TestProspectiveValue:
         result = af.collect()
         pv = result["pv"][0]
 
-        # With discount factors, the calculation uses the provided v^t directly
+        # With discount factors, the calculation uses the provided v^t directly.
+        # F4 Excel-alignment (BREAKING): default timing is "end_of_period" =
+        # ordinary annuity, so the last period's cashflow is discounted a full
+        # period: pv[2] = CF[2] * (v[2]/v[1]) = 100 * (1/1.05) = 95.238.
         assert len(pv) == 3
-        # Last period: just the cashflow
-        assert pytest.approx(pv[2], abs=1e-2) == 100.0
+        assert pytest.approx(pv[2], abs=1e-2) == 100.0 / 1.05
 
     def test_timing_end_of_period(self):
         """Test prospective_value with end_of_period timing (benefits)."""
@@ -653,7 +663,8 @@ class TestProspectiveValue:
         }
         af = ActuarialFrame(data)
 
-        # End of period: cashflow at t is discounted by v^t
+        # End of period (Excel type=0, ordinary annuity): cashflow at t is paid at
+        # the end of the period, so it is discounted a full period.
         af.pv = af.benefit.projection.prospective_value(
             discount_rate=0.05, timing="end_of_period"
         )
@@ -667,12 +678,15 @@ class TestProspectiveValue:
     def test_timing_beginning_of_period(self):
         """Test prospective_value with beginning_of_period timing (premiums).
 
-        For beginning_of_period, cashflows are paid at the START of each period.
-        This means they should be discounted one additional period compared to
-        end_of_period:
-            beginning_of_period[t] = end_of_period[t] * v
+        F4 Excel-alignment (BREAKING): beginning_of_period is now the annuity-DUE
+        value (Excel type=1) where the cashflow at t is paid at the START of the
+        period and is therefore undiscounted, while end_of_period is the ordinary
+        annuity (Excel type=0) where the cashflow is discounted one FULL extra
+        period. So the due value is LARGER and the relationship is:
+            end_of_period[t] = beginning_of_period[t] * v
 
-        GSP-70: This test verifies that t=0 is also correctly discounted.
+        Previously these labels were inverted (end_of_period returned the larger,
+        annuity-due value); this test now pins the corrected, Excel-aligned direction.
         """
         data = {
             "premium": [[100.0, 100.0, 100.0]],
@@ -693,17 +707,22 @@ class TestProspectiveValue:
 
         v = 1 / 1.05  # Per-period discount factor
 
-        # Beginning-of-period should be end-of-period * v at EVERY time t
-        # GSP-70: The bug was that t=0 wasn't discounted (fill_value=1.0 in shift)
+        # Annuity-due (beginning) must exceed ordinary (end) for a positive stream,
+        # and end_of_period = beginning_of_period * v at EVERY time t.
         assert len(pv_bop) == 3
-        assert pytest.approx(pv_bop[0], abs=1e-2) == pv_eop[0] * v
-        assert pytest.approx(pv_bop[1], abs=1e-2) == pv_eop[1] * v
-        assert pytest.approx(pv_bop[2], abs=1e-2) == pv_eop[2] * v
+        assert pv_bop[0] > pv_eop[0]
+        assert pytest.approx(pv_eop[0], abs=1e-2) == pv_bop[0] * v
+        assert pytest.approx(pv_eop[1], abs=1e-2) == pv_bop[1] * v
+        assert pytest.approx(pv_eop[2], abs=1e-2) == pv_bop[2] * v
 
     def test_timing_beginning_of_period_with_list_rates(self):
         """Test beginning_of_period timing with per-period discount rates.
 
-        GSP-70: Ensure the fix works with list column rates, not just scalar.
+        F4 Excel-alignment (BREAKING): with list rates the ordinary (end_of_period)
+        value applies one extra per-period discount v[t]=1/(1+r[t]) relative to the
+        annuity-due (beginning_of_period) value, so:
+            end_of_period[t] = beginning_of_period[t] * v[t]
+        (previously the labels were inverted).
         """
         data = {
             "premium": [[100.0, 100.0, 100.0]],
@@ -725,10 +744,60 @@ class TestProspectiveValue:
         # Per-period discount factors
         v = [1 / 1.04, 1 / 1.05, 1 / 1.06]
 
-        # BOP should be EOP * v[t] at each time t
-        assert pytest.approx(pv_bop[0], abs=1e-2) == pv_eop[0] * v[0]
-        assert pytest.approx(pv_bop[1], abs=1e-2) == pv_eop[1] * v[1]
-        assert pytest.approx(pv_bop[2], abs=1e-2) == pv_eop[2] * v[2]
+        # EOP (ordinary) = BOP (due) * v[t] at each time t; due is the larger value.
+        assert pv_bop[0] > pv_eop[0]
+        assert pytest.approx(pv_eop[0], abs=1e-2) == pv_bop[0] * v[0]
+        assert pytest.approx(pv_eop[1], abs=1e-2) == pv_bop[1] * v[1]
+        assert pytest.approx(pv_eop[2], abs=1e-2) == pv_bop[2] * v[2]
+
+    def test_timing_excel_convention_bop_gt_eop_exact(self):
+        """Pin the Excel annuity convention with exact hand-computed values (F4).
+
+        F4 Excel-alignment (BREAKING): match Excel's PV/annuity convention where
+        ``type=1`` (beginning_of_period, annuity-due) yields the LARGER value and
+        ``type=0`` (end_of_period, ordinary annuity) yields the SMALLER value.
+        Previously the labels were inverted.
+
+        Hand-computed for CF=[100, 100, 100] at i=5% (v = 1/1.05):
+          end_of_period (ordinary, every CF discounted a full period):
+            t=0: 100*v + 100*v^2 + 100*v^3 = 272.324803
+            t=1: 100*v + 100*v^2           = 185.941043
+            t=2: 100*v                     =  95.238095
+          beginning_of_period (due, first CF undiscounted):
+            t=0: 100 + 100*v + 100*v^2     = 285.941043
+            t=1: 100 + 100*v               = 195.238095
+            t=2: 100                       = 100.000000
+        """
+        data = {"cf": [[100.0, 100.0, 100.0]]}
+        af = ActuarialFrame(data)
+
+        af.eop = af.cf.projection.prospective_value(
+            discount_rate=0.05, timing="end_of_period"
+        )
+        af.bop = af.cf.projection.prospective_value(
+            discount_rate=0.05, timing="beginning_of_period"
+        )
+
+        result = af.collect()
+        eop = result["eop"][0]
+        bop = result["bop"][0]
+
+        v = 1 / 1.05
+
+        # Ordinary annuity (end_of_period): every cashflow discounted a full period.
+        assert pytest.approx(eop[0], abs=1e-6) == 100 * v + 100 * v**2 + 100 * v**3
+        assert pytest.approx(eop[1], abs=1e-6) == 100 * v + 100 * v**2
+        assert pytest.approx(eop[2], abs=1e-6) == 100 * v
+
+        # Annuity-due (beginning_of_period): first cashflow undiscounted.
+        assert pytest.approx(bop[0], abs=1e-6) == 100 + 100 * v + 100 * v**2
+        assert pytest.approx(bop[1], abs=1e-6) == 100 + 100 * v
+        assert pytest.approx(bop[2], abs=1e-6) == 100
+
+        # The whole point of F4: due (beginning) > ordinary (end) at every period.
+        assert bop[0] > eop[0]
+        assert bop[1] > eop[1]
+        assert bop[2] > eop[2]
 
     def test_multiple_policies(self):
         """Test prospective_value with multiple policies."""

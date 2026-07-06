@@ -1258,10 +1258,15 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
             Cannot be specified together with `discount_rate`.
         timing : {"beginning_of_period", "end_of_period"}, default "end_of_period"
-            When cashflows occur within each period:
+            When cashflows occur within each period, following the Excel PV/annuity
+            convention:
 
-            - ``"end_of_period"``: Cashflow at t paid at end of period (benefits)
-            - ``"beginning_of_period"``: Cashflow at t paid at start (premiums)
+            - ``"end_of_period"`` (Excel ``type=0``, ordinary annuity): the cashflow at
+              ``t`` is paid at the end of the period, so every cashflow is discounted a
+              full period. This is the SMALLER value. Typical for benefits.
+            - ``"beginning_of_period"`` (Excel ``type=1``, annuity-due): the cashflow at
+              ``t`` is paid at the start of the period, so the first cashflow is
+              undiscounted. This is the LARGER value. Typical for premiums.
 
         Returns
         -------
@@ -1286,7 +1291,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         }
         af = ActuarialFrame(data)
 
-        # Calculate prospective value at 5% discount rate
+        # Calculate prospective value at 5% discount rate.
+        # Default timing is "end_of_period" (Excel type=0, ordinary annuity):
+        # every cashflow is discounted a full period, e.g. at t=0
+        # 100/1.05 + 100/1.05^2 + 100/1.05^3 = 272.32.
         af.pv_benefits = af.death_benefit.projection.prospective_value(
             discount_rate=0.05
         )
@@ -1301,7 +1309,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         │ ---                ┆ ---                         │
         │ list[f64]          ┆ list[f64]                   │
         ╞════════════════════╪═════════════════════════════╡
-        │ [100.0, 100.0, ... ┆ [285.94, 195.24, 100.0]     │
+        │ [100.0, 100.0, ... ┆ [272.32, 185.94, 95.24]     │
         └────────────────────┴─────────────────────────────┘
         ```
 
@@ -1402,40 +1410,51 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             .list.reverse()
         )
 
-        # Apply timing adjustment: end_of_period gives PV with no extra discounting,
-        # beginning_of_period multiplies by per-period v[t] (one extra discount period)
-        end_of_period_result = remaining_pv / v_expr
+        # Timing adjustment (F4 Excel-alignment fix).
+        #
+        # `remaining_pv / v_expr` leaves the cashflow at time t undiscounted, so it is
+        # the annuity-DUE value: the cashflow at t is paid at the START of the period,
+        # worth its full face value at the valuation point t, and only later cashflows
+        # are discounted. Multiplying by one extra per-period discount v[t] pushes every
+        # cashflow a full period into the future, giving the ORDINARY annuity value
+        # (cashflow at t paid at the END of the period).
+        #
+        # Excel PV/annuity convention:
+        #   type=1 / beginning_of_period -> annuity-DUE (LARGER, first CF undiscounted)
+        #   type=0 / end_of_period       -> ordinary    (SMALLER, each CF discounted a
+        #                                                 full period)
+        due_result = remaining_pv / v_expr
+
+        # Per-period discount factor v[t] = 1/(1+r[t]) used to convert DUE -> ordinary.
+        if isinstance(discount_rate, (int, float)):
+            # Scalar rate: constant v
+            per_period_v = 1.0 / (1.0 + discount_rate)
+        elif discount_rate is not None:
+            # List column of rates: v[t] = 1/(1+r[t])
+            from gaspatchio_core.column.column_proxy import ColumnProxy
+            from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+            if isinstance(discount_rate, ExpressionProxy):
+                rate_expr = discount_rate._expr  # noqa: SLF001
+            elif isinstance(discount_rate, ColumnProxy):
+                rate_expr = pl.col(discount_rate.name)
+            else:
+                rate_expr = discount_rate
+            per_period_v = rate_expr.list.eval(1.0 / (1.0 + pl.element()))
+        else:
+            # discount_factor provided: derive per-period v as v[t]/v[t-1].
+            # At t=0: v[0]/v[-1] = v[0]/1 = v[0]; at t=1: v[1]/v[0]; ...
+            v_prev = v_expr.list.eval(pl.element().shift(1, fill_value=1.0))
+            per_period_v = v_expr / v_prev
+
+        ordinary_result = due_result * per_period_v
 
         if timing == "end_of_period":
-            result_expr = end_of_period_result
+            # Ordinary annuity: every cashflow discounted a full period (SMALLER).
+            result_expr = ordinary_result
         elif timing == "beginning_of_period":
-            # Compute per-period discount factor v[t] = 1/(1+r[t])
-            # GSP-70 fix: multiply by v[t] at ALL periods including t=0
-            if isinstance(discount_rate, (int, float)):
-                # Scalar rate: constant v
-                per_period_v = 1.0 / (1.0 + discount_rate)
-                result_expr = end_of_period_result * per_period_v
-            elif discount_rate is not None:
-                # List column of rates: v[t] = 1/(1+r[t])
-                from gaspatchio_core.column.column_proxy import ColumnProxy
-                from gaspatchio_core.column.expression_proxy import ExpressionProxy
-
-                if isinstance(discount_rate, ExpressionProxy):
-                    rate_expr = discount_rate._expr  # noqa: SLF001
-                elif isinstance(discount_rate, ColumnProxy):
-                    rate_expr = pl.col(discount_rate.name)
-                else:
-                    rate_expr = discount_rate
-                per_period_v = rate_expr.list.eval(1.0 / (1.0 + pl.element()))
-                result_expr = end_of_period_result * per_period_v
-            else:
-                # discount_factor provided: derive v from v[t]/v[t-1]
-                # For BOP, we need the per-period v, which is v[t]/v[t-1]
-                # At t=0: v[0]/v[-1] = v[0]/1 = v[0]
-                # At t=1: v[1]/v[0]
-                v_prev = v_expr.list.eval(pl.element().shift(1, fill_value=1.0))
-                per_period_v = v_expr / v_prev
-                result_expr = end_of_period_result * per_period_v
+            # Annuity-due: first cashflow undiscounted (LARGER).
+            result_expr = due_result
         else:
             msg = (
                 f"Invalid timing value: {timing!r}. "
