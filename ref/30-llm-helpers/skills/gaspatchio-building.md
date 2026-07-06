@@ -144,7 +144,7 @@ These are the top mistakes from real model-building sessions. Each links to the 
 | 4 | Assuming `af.t` exists | No built-in period counter — must derive it yourself | [model-phases.md](references/model-phases.md) |
 | 5 | `python3` instead of `uv run python3` | `ModuleNotFoundError: No module named 'polars'` | (this file, Environment section) |
 | 6 | `--policy-id` flag | It's a positional arg, not a flag. `--policy-id-column` is a different thing | (this file, Environment section) |
-| 7 | `prospective_value` timing | "end_of_period" is actually BOP timing (v^t) — names are misleading | [timing-and-dates.md](references/timing-and-dates.md) |
+| 7 | `prospective_value` timing | `end_of_period` = ordinary annuity (Excel type 0), `beginning_of_period` = annuity-due (type 1); BoP is worth more | [timing-and-dates.md](references/timing-and-dates.md) |
 | 8 | `ceil(t/12)` for proj_year | Leap years cause 1-month offset that compounds under stress | [timing-and-dates.md](references/timing-and-dates.md) |
 | 9 | Column name case mismatch | Polars is case-sensitive; always check `df.columns` first | [common-mistakes.md](references/common-mistakes.md) |
 | 10 | Guessing method signatures | Agents get it wrong ~70% of the time — `gspio docs` first | (this file, MANDATORY section) |
