@@ -312,6 +312,34 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         init_slices[0].0.len()
     };
 
+    // ---- 3b. Uniform-schedule footgun guard ----
+    // A uniform (non per-policy-grid) schedule means every policy shares one
+    // horizon = n_periods. If EVERY policy's input lists instead share one
+    // length L that disagrees with n_periods, that is almost certainly a
+    // uniform book fed stale/short inputs — fail loudly rather than silently
+    // truncating the whole projection to L. Genuinely jagged books have inputs
+    // whose lengths VARY across policies (handled per-row below), so they are
+    // deliberately left untouched by this check.
+    if per_policy_lengths.is_none() && !owned_slices.is_empty() && num_rows > 0 {
+        let first = &owned_slices[0];
+        let row_len = |r: usize| (first.offsets[r + 1] - first.offsets[r]) as usize;
+        let l0 = row_len(0);
+        if (1..num_rows).all(|r| row_len(r) == l0) && l0 != n_periods {
+            return Err(PolarsError::ComputeError(
+                format!(
+                    "rollforward: every policy's input lists have length {l0}, but the \
+                     schedule's n_periods is {n_periods}. For a uniform book the input list \
+                     columns must have n_periods = {n_periods} elements per policy. Fix: set \
+                     the Schedule's n_periods to {l0}, or build the inputs with {n_periods} \
+                     elements per policy. If policies genuinely have different horizons, use a \
+                     per-policy grid (af.projection.set(..., per_policy=True)) so input lengths \
+                     may vary across policies."
+                )
+                .into(),
+            ));
+        }
+    }
+
     // ---- 4. Decode state names (for output field names) ----
     let state_names: Vec<String> = decode_state_names(&kwargs.ir)?;
     let point_names: Vec<String> = decode_point_names(&kwargs.ir)?;
