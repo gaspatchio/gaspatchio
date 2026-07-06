@@ -35,6 +35,27 @@ class TestSetKwargsPath:
         # 70 years × 12 months
         assert result["num_proj_months"][0] == 70 * 12 + 1  # +1 for start boundary
 
+    def test_maximum_age_sizes_grid_from_youngest_life(self) -> None:
+        """A shared max-age grid must be long enough for the YOUNGEST life.
+
+        Regression for F1: the integer branch sized the uniform grid from
+        ``max(issue_age)`` (the OLDEST life), giving the fewest months and
+        truncating every younger cohort. For issue ages {30, 70} with
+        ``until_value=100`` the grid must let the age-30 life reach attained
+        age 100 -> 70 years -> 840 monthly periods (not 30 years / 360).
+        """
+        af = ActuarialFrame({"policy_id": ["P1", "P2"], "issue_age": [30, 70]})
+        af = af.projection.set(
+            valuation_date=date(2025, 1, 1),
+            until="maximum_age",
+            until_value=100,
+            frequency="monthly",
+        )
+        # Youngest life (age 30) reaches age 100 -> 70y -> 840 monthly periods.
+        assert af._projection.n_periods == 70 * 12
+        result = af.collect()
+        assert result["num_proj_months"][0] == 70 * 12 + 1
+
     def test_term_years_uniform(self) -> None:
         af = ActuarialFrame({"policy_id": ["P1"]})
         af = af.projection.set(
