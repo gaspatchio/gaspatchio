@@ -182,10 +182,25 @@ def _fold_batch(
             )
             partial2 = agg.batch_reduce(proj_p2, _PERIOD)
             accumulators[alias] = agg.add_input(accumulators[alias], partial2)
-        else:
-            # Scalar aggregator (Sum, Mean, etc.) — within_expr path.
+        elif agg.within_expr_override is not None:
+            # Custom within-reduction (.of): there is no per-policy column to
+            # fold, so the override defines the batch's single contribution.
             value = proj.select(agg.within_expr().alias(alias)).item()
             accumulators[alias] = agg.add_input(accumulators[alias], value)
+        else:
+            # Scalar aggregator over the policy axis: every POLICY is a data
+            # point. Fold each policy value into a per-batch partial accumulator,
+            # then merge across batches. The old code collapsed the batch to one
+            # within_expr value and add_input'd it, so non-additive aggregators
+            # (Mean/Variance/Std/Median/CTE) divided by the BATCH count instead
+            # of the policy count — batch-dependent, wrong. Additive aggregators
+            # (Sum/Min/Max) are unaffected by the change.
+            batch_acc = agg.create_accumulator()
+            for value in proj.get_column(agg.column):
+                batch_acc = agg.add_input(batch_acc, value)
+            accumulators[alias] = agg.merge_accumulators(
+                accumulators[alias], batch_acc
+            )
 
 
 def _check_period_origin(af: ActuarialFrame, align: str | None) -> None:

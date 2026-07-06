@@ -14,12 +14,15 @@ from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.scenarios import (
     ArgMax,
     Count,
+    Mean,
+    Median,
     PeriodCount,
     PeriodMean,
     PeriodMedian,
     PeriodQuantile,
     PeriodSum,
     Sum,
+    Variance,
 )
 from gaspatchio_core.scenarios._aggregated import AggregatedResult, run_aggregated
 
@@ -488,3 +491,43 @@ def test_run_aggregated_period_quantile_over_not_supported() -> None:
             mp,
             [PeriodQuantile("cf").alias("q").over("product")],
         )
+
+
+def test_scalar_non_additive_aggregators_are_batch_invariant() -> None:
+    """F9b: scalar Mean/Variance/Median over the policy axis must be batch-invariant.
+
+    The fold collapsed each batch to one within_expr value and add_input'd it, so
+    the non-additive scalar aggregators divided by the BATCH count — e.g. Mean over
+    [10,20,30,40] returned the portfolio SUM (100) at one batch and the true mean
+    (25) only when every policy was its own batch. Sum is the additive control.
+    """
+    mp = pl.DataFrame({"value": [10.0, 20.0, 30.0, 40.0]})
+
+    def model(af: ActuarialFrame) -> ActuarialFrame:
+        return ActuarialFrame(
+            af._df.with_columns(pl.col("value").alias("pv")),  # noqa: SLF001
+        )
+
+    results = {}
+    for bs in (1, 2, 4):
+        res = run_aggregated(
+            model,
+            mp,
+            [
+                Mean("pv").alias("mean"),
+                Variance("pv").alias("var"),
+                Median("pv").alias("median"),
+                Sum("pv").alias("sum"),
+            ],
+            batch_size=bs,
+        )
+        results[bs] = (res.mean, res.var, res.median, res.sum)
+
+    for bs in (1, 2, 4):
+        mean, _var, median, total = results[bs]
+        assert mean == pytest.approx(25.0), f"mean wrong at batch_size={bs}"
+        assert total == pytest.approx(100.0), f"sum control wrong at batch_size={bs}"
+        assert median == pytest.approx(25.0, rel=0.06)  # DDSketch is approximate
+    # Variance must be identical across batch sizes (ddof-agnostic invariance).
+    assert results[1][1] == pytest.approx(results[4][1])
+    assert results[2][1] == pytest.approx(results[4][1])
