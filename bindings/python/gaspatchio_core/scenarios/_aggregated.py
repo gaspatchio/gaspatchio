@@ -168,7 +168,11 @@ def _fold_batch(
                 # aggregator (Mean/Variance/Std/Median/CTE) divided by the number
                 # of BATCHES a partition spanned, not the policy count within it.
                 # Batch-dependent and wrong. (Same class as F9b, per partition.)
-                inner = agg.inner
+                # agg is narrowed to _Partitioned here, so agg.inner is typed as
+                # the partition-blind Aggregator Protocol, which does not declare
+                # `column` (a concrete-aggregator field). Cast to Any to read it,
+                # mirroring the vector branch's cast of agg.inner.
+                inner = cast("Any", agg.inner)
                 inner_col: str = inner.column
                 n_by = len(by)
                 batch_state: dict[tuple[Any, ...], Any] = {}
