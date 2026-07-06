@@ -160,28 +160,26 @@ def _fold_batch(
                         accumulators[alias], (key, partial)
                     )
             else:
-                # scalar .over(): build a per-batch partial accumulator PER
-                # partition by folding each policy's raw value, then merge across
-                # batches. The old code grouped by the partition column and
-                # collapsed each group to one within_expr value per batch, then
-                # add_input'd that single value — so a non-additive inner
-                # aggregator (Mean/Variance/Std/Median/CTE) divided by the number
-                # of BATCHES a partition spanned, not the policy count within it.
-                # Batch-dependent and wrong. (Same class as F9b, per partition.)
-                # agg is narrowed to _Partitioned here, so agg.inner is typed as
-                # the partition-blind Aggregator Protocol, which does not declare
-                # `column` (a concrete-aggregator field). Cast to Any to read it,
-                # mirroring the vector branch's cast of agg.inner.
+                # scalar .over(): fold each partition's values with add_batch.
+                # group_by yields one (key, group) per partition — O(partitions)
+                # Python iterations, versus O(policies) from the old iter_rows
+                # loop — and add_batch vectorises the per-partition reduction for
+                # additive/Welford aggregators. Correctness is unchanged: every
+                # policy in a partition is one data point folded into that
+                # partition's accumulator, then merged across batches. A
+                # non-additive inner aggregator therefore divides by the policy
+                # count within the partition, not the batch count. (F9b, per
+                # partition.) agg is narrowed to _Partitioned here, so agg.inner
+                # is typed as the partition-blind Aggregator Protocol (no
+                # `column` field); cast to Any, mirroring the vector branch.
                 inner = cast("Any", agg.inner)
                 inner_col: str = inner.column
-                n_by = len(by)
                 batch_state: dict[tuple[Any, ...], Any] = {}
-                for row in proj.select([*by, inner_col]).iter_rows():
-                    key = row[:n_by]
-                    value = row[n_by]
-                    if key not in batch_state:
-                        batch_state[key] = inner.create_accumulator()
-                    batch_state[key] = inner.add_input(batch_state[key], value)
+                for key, group in proj.group_by(by):
+                    key_tuple = key if isinstance(key, tuple) else (key,)
+                    batch_state[key_tuple] = inner.add_batch(
+                        inner.create_accumulator(), group.get_column(inner_col)
+                    )
                 accumulators[alias] = agg.merge_accumulators(
                     accumulators[alias], batch_state
                 )
@@ -203,17 +201,14 @@ def _fold_batch(
             accumulators[alias] = agg.add_input(accumulators[alias], value)
         else:
             # Scalar aggregator over the policy axis: every POLICY is a data
-            # point. Fold each policy value into a per-batch partial accumulator,
-            # then merge across batches. The old code collapsed the batch to one
-            # within_expr value and add_input'd it, so non-additive aggregators
-            # (Mean/Variance/Std/Median/CTE) divided by the BATCH count instead
-            # of the policy count — batch-dependent, wrong. Additive aggregators
-            # (Sum/Min/Max) are unaffected by the change.
-            batch_acc = agg.create_accumulator()
-            for value in proj.get_column(agg.column):
-                batch_acc = agg.add_input(batch_acc, value)
-            accumulators[alias] = agg.merge_accumulators(
-                accumulators[alias], batch_acc
+            # point. Fold the whole batch column in one add_batch call, which
+            # vectorises for the additive/Welford aggregators (a single Polars
+            # reduction) and skips nulls to match within_expr semantics. The old
+            # code collapsed the batch to one within_expr value and add_input'd
+            # it, so non-additive aggregators (Mean/Variance/Std/Median/CTE)
+            # divided by the BATCH count instead of the policy count.
+            accumulators[alias] = agg.add_batch(
+                accumulators[alias], proj.get_column(agg.column)
             )
 
 

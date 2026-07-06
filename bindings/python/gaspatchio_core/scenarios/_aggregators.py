@@ -146,6 +146,21 @@ class _BaseAggregator:
             return self.within_expr_override
         return _within_to_expr(self.column, self.within)
 
+    def add_batch(self, state: Any, values: pl.Series) -> Any:  # noqa: ANN401
+        """Fold an entire batch of per-policy values into ``state`` at once.
+
+        Optional vectorisation hook used by the policy-axis driver
+        (``run_aggregated``). The default folds each non-null value with
+        ``add_input``; concrete aggregators that can reduce a whole Series in a
+        single pass (Sum, Min, Max, Mean, Variance, Std) override this. Nulls
+        are skipped, matching the null-dropping semantics of the ``within_expr``
+        reductions this replaced.
+        """
+        agg = cast("Aggregator", self)
+        for value in values.drop_nulls():
+            state = agg.add_input(state, value)
+        return state
+
     def alias(self, name: str) -> _BaseAggregator:
         return replace(self, alias_=name)
 
@@ -219,6 +234,16 @@ class Sum(_BaseAggregator):
         merge_c = ((sa - t) + sb) if abs(sa) >= abs(sb) else ((sb - t) + sa)
         return (t, ca + cb + merge_c)
 
+    def add_batch(
+        self,
+        state: tuple[float, float],
+        values: pl.Series,
+    ) -> tuple[float, float]:
+        non_null = values.drop_nulls()
+        if non_null.len() == 0:
+            return state
+        return self.merge_accumulators(state, (float(cast("float", non_null.sum())), 0.0))
+
     def extract_output(self, state: tuple[float, float]) -> float:
         s, c = state
         return float(s + c)
@@ -276,6 +301,12 @@ class Min(_BaseAggregator):
             return a
         return min(a, b)
 
+    def add_batch(self, state: float | None, values: pl.Series) -> float | None:
+        non_null = values.drop_nulls()
+        if non_null.len() == 0:
+            return state
+        return self.merge_accumulators(state, float(cast("float", non_null.min())))
+
     def extract_output(self, state: float | None) -> float:
         return float("nan") if state is None else float(state)
 
@@ -307,6 +338,12 @@ class Max(_BaseAggregator):
         if b is None:
             return a
         return max(a, b)
+
+    def add_batch(self, state: float | None, values: pl.Series) -> float | None:
+        non_null = values.drop_nulls()
+        if non_null.len() == 0:
+            return state
+        return self.merge_accumulators(state, float(cast("float", non_null.max())))
 
     def extract_output(self, state: float | None) -> float:
         return float("nan") if state is None else float(state)
@@ -454,6 +491,23 @@ def _welford_merge(
     return {"n": n, "mean": mean, "m2": m2}
 
 
+def _welford_from_series(values: pl.Series) -> dict[str, float]:
+    """Build a Welford accumulator from a whole Series in two vectorised passes.
+
+    The two-pass (mean, then summed squared deviations) form is at least as
+    accurate as streaming ``_welford_add`` and combines with ``_welford_merge``
+    to give a result independent of how the observations were split into
+    batches. Nulls are dropped to match ``pl.col(c).mean()`` semantics.
+    """
+    non_null = values.drop_nulls()
+    n = non_null.len()
+    if n == 0:
+        return _welford_create()
+    mean = float(cast("float", non_null.mean()))
+    m2 = float(cast("float", (non_null - mean).pow(2).sum()))
+    return {"n": n, "mean": mean, "m2": m2}
+
+
 # ---- Mean ----
 
 
@@ -478,6 +532,13 @@ class Mean(_BaseAggregator):
         b: dict[str, float],
     ) -> dict[str, float]:
         return _welford_merge(a, b)
+
+    def add_batch(
+        self,
+        state: dict[str, float],
+        values: pl.Series,
+    ) -> dict[str, float]:
+        return _welford_merge(state, _welford_from_series(values))
 
     def extract_output(self, state: dict[str, float]) -> float:
         return float("nan") if state["n"] == 0 else float(state["mean"])
@@ -514,6 +575,13 @@ class Variance(_BaseAggregator):
         b: dict[str, float],
     ) -> dict[str, float]:
         return _welford_merge(a, b)
+
+    def add_batch(
+        self,
+        state: dict[str, float],
+        values: pl.Series,
+    ) -> dict[str, float]:
+        return _welford_merge(state, _welford_from_series(values))
 
     def extract_output(self, state: dict[str, float]) -> float:
         if state["n"] < _MIN_N_FOR_SAMPLE_VARIANCE:
@@ -552,6 +620,13 @@ class Std(_BaseAggregator):
         b: dict[str, float],
     ) -> dict[str, float]:
         return _welford_merge(a, b)
+
+    def add_batch(
+        self,
+        state: dict[str, float],
+        values: pl.Series,
+    ) -> dict[str, float]:
+        return _welford_merge(state, _welford_from_series(values))
 
     def extract_output(self, state: dict[str, float]) -> float:
         if state["n"] < _MIN_N_FOR_SAMPLE_VARIANCE:

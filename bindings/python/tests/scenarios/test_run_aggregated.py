@@ -580,3 +580,34 @@ def test_scalar_partitioned_non_additive_aggregators_are_batch_invariant() -> No
         # DDSketch median is approximate
         assert _val(res.median, "A", "median") == pytest.approx(20.0, rel=0.06)
         assert _val(res.median, "B", "median") == pytest.approx(50.0, rel=0.06)
+
+
+def test_add_batch_skips_nulls_and_stays_batch_invariant() -> None:
+    """Vectorised add_batch fold: nulls are dropped and results batch-invariant.
+
+    The pre-vectorisation per-row fold passed every value (including None)
+    straight to add_input, which crashed the Welford/sketch aggregators on a
+    null. add_batch drops nulls like ``pl.col(c).mean()`` and reduces each batch
+    in one pass, so the non-null values [10,20,30,40] give mean 25 / sum 100
+    regardless of batch size — even when a whole batch is null-only (bs=1 puts
+    the null in its own batch).
+    """
+    mp = pl.DataFrame({"value": [10.0, 20.0, None, 30.0, 40.0]})
+
+    def model(af: ActuarialFrame) -> ActuarialFrame:
+        return ActuarialFrame(af._df.with_columns(pl.col("value").alias("pv")))  # noqa: SLF001
+
+    for bs in (1, 2, 5):
+        res = run_aggregated(
+            model,
+            mp,
+            [
+                Mean("pv").alias("mean"),
+                Sum("pv").alias("sum"),
+                Median("pv").alias("median"),
+            ],
+            batch_size=bs,
+        )
+        assert res.mean == pytest.approx(25.0), f"mean wrong at bs={bs}"
+        assert res.sum == pytest.approx(100.0), f"sum wrong at bs={bs}"
+        assert res.median == pytest.approx(25.0, rel=0.06), f"median wrong at bs={bs}"
