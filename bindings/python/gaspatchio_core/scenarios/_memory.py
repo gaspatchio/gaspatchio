@@ -31,6 +31,13 @@ class SizingDefaults:
     # Streaming-batch search (shape-aware driver) + policy-axis budget sizer:
     ladder: tuple[int, ...] = (1, 4, 16, 64)  # geometric rungs to probe
     safety_margin: float = 1.3  # inflate measured/predicted peak before the budget comparison
+    # Probe-gate inflation for the scenario cross-join under the STREAMING engine:
+    # peak is NOT linear-in-batch at high policy counts (Polars #20786) -- a CI cell
+    # measured the b=4 rung at ~8.6x the b=1 rung (2.2x above linear extrapolation).
+    # The gate multiplies its linear prediction by this factor so it errs toward
+    # skipping a rung (costing at most a smaller batch) rather than launching a
+    # probe that exceeds physical memory (costing the process a kernel OOM-kill).
+    streaming_batch_inflation: float = 3.0
     # Bounds the per-item-cost measurement sample so the seed never OOMs at large n
     # (per-item cost is linear -> a few thousand items estimate it as well as 10% of n).
     seed_sample_cap: int = 4096

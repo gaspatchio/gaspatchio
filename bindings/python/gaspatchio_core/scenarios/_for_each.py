@@ -837,22 +837,29 @@ def for_each_scenario(  # noqa: C901, PLR0912, PLR0913, PLR0915
                 break
             if probed:
                 # Gate: predict this rung from the last measured one before running it.
-                # Peak grows at most linearly in batch size for the scenario cross-join
-                # (measured ratios are sub-linear), so this over-estimates conservatively.
                 # A rung whose predicted peak already fails the fits test could never be
                 # selected -- probing it would pay an unbounded memory cost for zero
                 # information, and is exactly the kernel-OOM path: a probe that exceeds
                 # physical memory dies mid-collect, before its peak is ever recorded and
-                # before any back-off logic can run (GSP: 10sc x 100K cell, the b=4
-                # streaming probe demanded ~11.5 GB on a 16 GB runner after b=1 measured
-                # 3.1 GB against a 7.7 GB budget).
+                # before any back-off logic can run.
+                # The prediction is linear-in-batch TIMES streaming_batch_inflation:
+                # under the streaming engine the scenario cross-join peak is super-linear
+                # in batch at high policy counts (Polars #20786). Measured on the CI
+                # 10sc x 100K cell: b=1 ~1.3 GB but b=4 ~11.5 GB -- 8.6x for a 4x batch
+                # step, 2.2x above linear -- so a bare linear gate passed b=4 against a
+                # 7.7 GB budget and the probe killed a 16 GB runner. Over-predicting
+                # costs at most a smaller batch; under-predicting costs the process.
                 # peak_mb is None only for a rung that could not be measured, and
                 # such a rung is fits=False, which breaks the loop before a next
                 # iteration -- so this is unreachable in practice; it satisfies the
                 # ProbeResult type and degrades to "no gate" if that ever changes.
                 last = probed[-1]
                 if last.peak_mb is not None:
-                    predicted_mb = last.peak_mb * (b / last.batch)
+                    predicted_mb = (
+                        last.peak_mb
+                        * (b / last.batch)
+                        * DEFAULTS.streaming_batch_inflation
+                    )
                     if predicted_mb * DEFAULTS.safety_margin > budget_mb:
                         break  # larger rungs are heavier -> nothing above fits either
             peak, wall = _process_one(nxt, engine="streaming")

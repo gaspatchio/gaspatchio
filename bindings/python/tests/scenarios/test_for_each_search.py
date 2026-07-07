@@ -222,3 +222,34 @@ def test_gate_allows_rungs_predicted_within_budget(monkeypatch):
     streaming = [p.batch for p in r.selection.probed if p.engine == "streaming"]
     assert streaming == [1, 4, 16]
     assert _checksum(r) == 40 * 400.0
+
+
+def test_gate_prediction_includes_streaming_batch_inflation(monkeypatch):
+    """The gate predicts super-linearly: linear-alone would probe, inflated skips.
+
+    Field regression guard: on the CI 10sc x 100K cell, b=1 measured ~1.3 GB
+    against a 7.7 GB budget -- a bare linear gate predicted b=4 within budget and
+    launched a probe that demanded ~11.5 GB (8.6x the b=1 rung; Polars #20786
+    cross-join inflation) and killed the 16 GB runner. With peak=100 MB and a
+    1 GB budget, linear predicts 100*4*1.3 = 520 MB (would probe b=4); inflated
+    predicts 100*4*3.0*1.3 = 1560 MB (must skip).
+    """
+    from gaspatchio_core.scenarios import _for_each
+
+    _patch_constant_peak(monkeypatch, 100.0)
+    monkeypatch.setattr(
+        _for_each, "memory_budget_bytes", lambda *a, **k: 1024**3
+    )  # 1 GB: fits b=1 (100*1.3), passes a bare-linear b=4 gate, fails the inflated one
+
+    r = for_each_scenario(
+        _af(),
+        scenarios=list(range(1, 41)),
+        model_fn=_model_fn,
+        aggregations=(Sum("payoff").alias("total").over("scenario_id"),),
+        batch_size="auto",
+    )
+    assert r.selection is not None
+    streaming = [p.batch for p in r.selection.probed if p.engine == "streaming"]
+    assert streaming == [1]  # b=4 gated by the inflation factor, never probed
+    assert r.batch_size == 1
+    assert _checksum(r) == 40 * 400.0
