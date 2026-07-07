@@ -1,82 +1,1389 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gaspatchio Performance Benchmarks</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥫</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand:   { DEFAULT: '#ff3b30', light: '#ff7066', dark: '#e61a0f' },
+            surface: '#f5f5f5',
+            muted:   '#6b7280',
+            ok:      '#16a34a',
+            warn:    '#ca8a04',
+            fail:    '#dc2626',
+            blue:    '#2563eb',
+            purple:  '#7c3aed',
+          },
+          fontFamily: {
+            heading: ['Chivo', 'sans-serif'],
+            body: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
   <style>
-    :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --fg:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-           background: var(--bg); color: var(--fg); line-height: 1.55; }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
-    header h1 { font-size: 1.9rem; margin: 0 0 .4rem; letter-spacing: -.02em; }
-    header p { color: var(--muted); margin: .2rem 0; max-width: 60ch; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); margin-top: 2rem; }
-    .card { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-            padding: 1.1rem 1.2rem; transition: border-color .15s ease, transform .15s ease; }
-    .card:hover { border-color: var(--accent); transform: translateY(-2px); text-decoration: none; }
-    .card h2 { font-size: 1.05rem; margin: 0 0 .35rem; color: var(--fg); }
-    .card p { margin: 0; color: var(--muted); font-size: .9rem; }
-    .card .plat { margin-top: .7rem; font-size: .8rem; color: var(--muted); }
-    .card .plat a { margin-right: .8rem; }
-    .section-title { margin: 2.5rem 0 .5rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-    footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
-    code { background: #0b1220; padding: .1rem .35rem; border-radius: 5px; font-size: .85em; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+    h1, h2, h3, h4 { font-family: 'Chivo', sans-serif; letter-spacing: -0.3px; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeUp 0.35s ease both; }
+    .animate-in:nth-child(2) { animation-delay: 0.06s; }
+    .animate-in:nth-child(3) { animation-delay: 0.12s; }
+    .animate-in:nth-child(4) { animation-delay: 0.18s; }
+    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .dot-pulse { animation: pulse-dot 1.5s ease-in-out infinite; }
   </style>
 </head>
-<body>
-  <div class="wrap">
-    <header>
-      <h1>Gaspatchio Performance Benchmarks</h1>
-      <p>Continuous performance tracking for
-         <a href="https://github.com/gaspatchio/gaspatchio">gaspatchio/gaspatchio</a>.
-         Each dashboard charts a benchmark suite over time; a new data point is recorded
-         on every push to <code>main</code>.</p>
-      <p>Powered by
-         <a href="https://github.com/benchmark-action/github-action-benchmark">github-action-benchmark</a>.
-         Regressions past the alert threshold are commented on the triggering commit.</p>
-    </header>
+<body class="bg-white text-gray-900 min-h-screen">
 
-    <div class="section-title">Rust core</div>
-    <div class="grid">
-      <a class="card" href="dev/bench/">
-        <h2>Criterion micro-benchmarks</h2>
-        <p>Assumption-table lookups, vector kernels, and hot-path Rust routines measured with Criterion.</p>
-        <div class="plat"><a href="dev/bench/">Linux</a><a href="dev/bench-windows/">Windows</a></div>
-      </a>
-    </div>
-
-    <div class="section-title">Model &amp; aggregation</div>
-    <div class="grid">
-      <a class="card" href="dev/model-bench/">
-        <h2>End-to-end model benchmarks</h2>
-        <p>Full projection over a 100k-policy book — wall-clock and peak memory for a realistic model run.</p>
-        <div class="plat"><a href="dev/model-bench/">Linux</a><a href="dev/model-bench-windows/">Windows</a></div>
-      </a>
-      <a class="card" href="dev/aggregated-bench/">
-        <h2>Aggregation surface</h2>
-        <p>Scenario aggregation paths — materialise-then-aggregate vs <code>run_aggregated</code> vs spill.</p>
-        <div class="plat"><a href="dev/aggregated-bench/">Linux</a></div>
-      </a>
-    </div>
-
-    <div class="section-title">Reconciliation</div>
-    <div class="grid">
-      <a class="card" href="dev/comparison/">
-        <h2>Gaspatchio vs Lifelib</h2>
-        <p>A production variable-annuity model reconciled against
-           <a href="https://lifelib.io">lifelib</a> — tracks run-time head-to-head over releases.</p>
-        <div class="plat"><a href="dev/comparison/">Linux</a><a href="dev/comparison-windows/">Windows</a></div>
-      </a>
-    </div>
-
-    <footer>
-      Source: <a href="https://github.com/gaspatchio/gaspatchio">github.com/gaspatchio/gaspatchio</a> ·
-      Docs: <a href="https://gaspatchio.dev">gaspatchio.dev</a>
-    </footer>
+<!-- Header — matches gaspatchio.dev Material red bar -->
+<header class="bg-brand text-white" style="box-shadow: 0 0 4px 0 rgba(0,0,0,.1), 0 4px 8px 0 rgba(0,0,0,.2);">
+  <div class="max-w-7xl mx-auto px-6 h-12 flex items-center justify-between">
+    <a href="." class="flex items-center gap-3 no-underline text-white">
+      <span class="text-xl">🥫</span>
+      <h1 class="text-sm font-bold tracking-tight">Gaspatchio <span class="font-normal text-white/70 ml-1">Dev Dashboard</span></h1>
+    </a>
+    <nav class="flex gap-6 text-sm">
+      <a href="index.html" class="text-white underline underline-offset-4 font-medium hover:text-white transition-colors">Benchmarks</a>
+      <a href="rust.html" class="text-white/70 hover:text-white transition-colors">Rust Core</a>
+      <a href="https://gaspatchio.dev" class="text-white/70 hover:text-white transition-colors">Docs</a>
+      <a href="https://github.com/gaspatchio/gaspatchio" class="text-white/70 hover:text-white transition-colors">GitHub</a>
+    </nav>
   </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8">
+
+  <!-- Status chips -->
+  <div class="flex flex-wrap gap-3 mb-8" id="status-bar">
+    <div class="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-md text-xs border border-gray-200">
+      <span class="w-2 h-2 rounded-full bg-gray-400 dot-pulse" id="dot-model"></span>
+      <span id="label-model">Model Benchmarks: loading...</span>
+    </div>
+    <div class="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-md text-xs border border-gray-200">
+      <span class="w-2 h-2 rounded-full bg-gray-400 dot-pulse" id="dot-comparison"></span>
+      <span id="label-comparison">Comparison: loading...</span>
+    </div>
+  </div>
+
+  <div class="flex flex-col gap-6">
+
+    <!-- Section 1: Model Benchmarks (HERO) -->
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow animate-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <h2 class="text-base font-semibold text-gray-900 mb-1">Model Benchmarks</h2>
+          <p class="text-sm text-gray-500 leading-relaxed max-w-3xl">
+            End-to-end execution time for the Level 4 IntegratedLife variable annuity model — a production-grade projection with select/ultimate mortality, GMDB/GMAB guarantees, dynamic lapse, account value rollforward, and present value discounting. Measures complete wall-clock time from model points to PV results.
+          </p>
+          <p class="text-[11px] text-gray-400 mt-2">All benchmarks on GitHub-hosted ubuntu-latest / windows-latest runners</p>
+        </div>
+        <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold tabular shrink-0" id="badge-model">--</span>
+      </div>
+      <div class="p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <p class="text-[11px] text-gray-400 mb-2 font-semibold uppercase tracking-wider">Throughput (higher is better)</p>
+            <div class="relative h-56"><canvas id="chart-model-throughput"></canvas></div>
+          </div>
+          <div>
+            <p class="text-[11px] text-gray-400 mb-2 font-semibold uppercase tracking-wider">Wall-clock time (lower is better)</p>
+            <div class="relative h-56"><canvas id="chart-model-time"></canvas></div>
+          </div>
+        </div>
+        <div class="hidden flex-col items-center justify-center h-48 text-gray-400 text-sm" id="empty-model">
+          <span class="text-3xl mb-2 opacity-40">📋</span>
+          <span>No benchmark data yet</span>
+          <span class="text-xs text-gray-300 mt-1">Data appears after the first successful model benchmark run</span>
+        </div>
+      </div>
+      <div class="border-t border-gray-100 overflow-x-auto" id="table-model"></div>
+      <div class="px-5 py-2 text-[10px] text-gray-300" id="provenance-model"></div>
+      <!-- Performance History (trends over time) -->
+      <div class="border-t border-gray-100 px-6 py-4" id="trend-section" style="display:none">
+        <p class="text-[11px] text-gray-400 mb-3 font-semibold uppercase tracking-wider">Performance History — VA Model throughput &amp; data memory over time</p>
+        <div class="relative h-56"><canvas id="chart-model-trend"></canvas></div>
+        <p class="text-[10px] text-gray-300 mt-2">Throughput at 1K / 10K / 100K model points (left axis) - Linux solid, Windows dashed (GitHub-hosted ubuntu-latest vs windows-latest). Data memory = dotted, right axis. Memory = total f64 list elements. Regressions trigger CI alerts.</p>
+      </div>
+    </div>
+
+    <!-- Section 2: Gaspatchio vs Lifelib (MIDDLE) -->
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow animate-in" id="comparison-card">
+      <div class="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <h2 class="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            Gaspatchio vs Lifelib — IntegratedLife VA Model
+            <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-blue-50 text-blue-700" id="badge-comparison">--</span>
+          </h2>
+          <p class="text-[11px] text-gray-400 leading-relaxed max-w-3xl">
+            Both engines produce identical results — 0.0000% reconciliation across 9 million data points. This comparison measures execution speed only. lifelib is designed for formula transparency and auditability via modelx's cell-based execution model. Gaspatchio is designed as an LLM-first actuarial framework — its primary goal is enabling AI agents to build and run actuarial models, with high performance as a natural consequence of its Rust/Polars architecture. These are complementary tools optimizing for different goals. Learn more about lifelib at <a href="https://lifelib.io" class="underline hover:text-gray-600 transition-colors">lifelib.io</a>
+          </p>
+        </div>
+      </div>
+      <div class="p-6">
+        <div class="relative h-72"><canvas id="chart-comparison"></canvas></div>
+        <div class="hidden flex-col items-center justify-center h-48 text-gray-400 text-sm" id="empty-comparison">
+          <span class="text-3xl mb-2 opacity-40">🚀</span>
+          <span>No comparison data yet</span>
+          <span class="text-xs text-gray-300 mt-1">Data appears after the first successful comparison run</span>
+        </div>
+      </div>
+      <div class="border-t border-gray-100 overflow-x-auto" id="table-comparison"></div>
+      <div class="px-5 py-2 text-[10px] text-gray-300" id="provenance-comparison"></div>
+    </div>
+
+  </div>
+</main>
+
+<footer class="border-t border-gray-200 text-center py-6 text-xs text-gray-400 mt-8">
+  Gaspatchio &mdash; High-performance actuarial modeling &mdash;
+  <a href="https://gaspatchio.dev" class="text-gray-400 hover:text-brand transition-colors">gaspatchio.dev</a> &mdash;
+  <a href="https://github.com/gaspatchio/gaspatchio" class="text-gray-400 hover:text-brand transition-colors">gaspatchio/gaspatchio</a>
+</footer>
+
+<script>
+  // ---------- Chart.js global config ----------
+  Chart.defaults.color = '#9ca3af';
+  Chart.defaults.borderColor = '#f3f4f6';
+  Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+  Chart.defaults.font.size = 11;
+
+  var COLORS = [
+    { line: '#2563eb', fill: 'rgba(37, 99, 235, 0.06)' },
+    { line: '#ff3b30', fill: 'rgba(255, 59, 48, 0.06)' },
+    { line: '#16a34a', fill: 'rgba(22, 163, 74, 0.06)' },
+    { line: '#ca8a04', fill: 'rgba(202, 138, 4, 0.06)' },
+    { line: '#7c3aed', fill: 'rgba(124, 58, 237, 0.06)' },
+    { line: '#db2777', fill: 'rgba(219, 39, 119, 0.06)' },
+    { line: '#0891b2', fill: 'rgba(8, 145, 178, 0.06)' },
+    { line: '#ea580c', fill: 'rgba(234, 88, 12, 0.06)' },
+  ];
+
+  // ---------- Helpers ----------
+
+  function setStatus(key, state, label) {
+    var dot = document.getElementById('dot-' + key);
+    var lbl = document.getElementById('label-' + key);
+    var badge = document.getElementById('badge-' + key);
+    if (dot) dot.className = 'w-2 h-2 rounded-full';
+    if (dot && state === 'ok')    { dot.classList.add('bg-green-500'); }
+    if (dot && state === 'warn')  { dot.classList.add('bg-yellow-500'); }
+    if (dot && state === 'error') { dot.classList.add('bg-gray-300'); }
+    if (badge) {
+      if (state === 'ok')    { badge.textContent = 'OK';      badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-green-50 text-green-700'; }
+      if (state === 'warn')  { badge.textContent = 'WARN';    badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-yellow-50 text-yellow-700'; }
+      if (state === 'error') { badge.textContent = 'NO DATA'; badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-gray-100 text-gray-500'; }
+    }
+    if (lbl) lbl.textContent = label;
+  }
+
+  function fmtVal(v) {
+    if (v == null) return '--';
+    if (Math.abs(v) >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+    if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (Math.abs(v) >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+    return v.toFixed(2);
+  }
+
+  function delta(curr, prev) {
+    if (prev == null || prev === 0) return { text: '--', cls: 'text-gray-400', bg: '' };
+    var pct = ((curr - prev) / prev) * 100;
+    if (Math.abs(pct) < 2.0) return { text: '~0%', cls: 'text-gray-500', bg: 'bg-gray-50' };
+    var sign = pct > 0 ? '+' : '';
+    return {
+      text: sign + pct.toFixed(1) + '%',
+      cls: pct > 0 ? 'text-green-700' : 'text-red-600',
+      bg: pct > 0 ? 'bg-green-50' : 'bg-red-50',
+    };
+  }
+
+  function flipDelta(d) {
+    if (d.cls === 'text-green-700') return { text: d.text, cls: 'text-red-600', bg: 'bg-red-50' };
+    if (d.cls === 'text-red-600')   return { text: d.text, cls: 'text-green-700', bg: 'bg-green-50' };
+    return d;
+  }
+
+  // ---------- Benchmark data table ----------
+
+  function renderTable(containerId, entries, unit, smallerIsBetter) {
+    var el = document.getElementById(containerId);
+    if (!entries || entries.length < 1) { if (el) el.style.display = 'none'; return; }
+
+    var names = []; var seen = {};
+    entries.forEach(function(run) { run.benches.forEach(function(b) { if (!seen[b.name]) { names.push(b.name); seen[b.name] = true; } }); });
+
+    var latest = entries[entries.length - 1];
+    var prev = entries.length > 1 ? entries[entries.length - 2] : null;
+    var oldest = entries[0];
+
+    var html = '<table class="w-full text-xs">';
+    html += '<thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">';
+    html += '<th class="px-5 py-2 font-semibold">Benchmark</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Latest</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">vs prev</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">vs first</th>';
+    html += '<th class="px-3 py-2 font-semibold">Trend</th>';
+    html += '</tr></thead><tbody>';
+
+    names.forEach(function(name, idx) {
+      var lb = latest.benches.find(function(b) { return b.name === name; });
+      var pb = prev ? prev.benches.find(function(b) { return b.name === name; }) : null;
+      var ob = oldest.benches.find(function(b) { return b.name === name; });
+      var val = lb ? lb.value : null;
+      var dPrev = delta(val, pb ? pb.value : null);
+      var dFirst = delta(val, ob ? ob.value : null);
+      if (smallerIsBetter) { dPrev = flipDelta(dPrev); dFirst = flipDelta(dFirst); }
+
+      var spark = entries.slice(-20).map(function(run) {
+        var b = run.benches.find(function(b2) { return b2.name === name; });
+        return b ? b.value : null;
+      }).filter(function(v) { return v !== null; });
+
+      var shortName = name.length > 50 ? name.slice(0, 47) + '...' : name;
+      var stripe = idx % 2 === 0 ? '' : 'bg-gray-50/50';
+
+      html += '<tr class="border-t border-gray-100 hover:bg-gray-50 transition-colors ' + stripe + '">';
+      html += '<td class="px-5 py-2.5 font-medium text-gray-700 truncate max-w-[260px]" title="' + name + '">' + shortName + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + fmtVal(val) + (unit ? ' <span class="text-gray-400 font-normal">' + unit + '</span>' : '') + '</td>';
+      html += '<td class="px-3 py-2.5 text-right"><span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular ' + dPrev.bg + ' ' + dPrev.cls + '">' + dPrev.text + '</span></td>';
+      html += '<td class="px-3 py-2.5 text-right"><span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular ' + dFirst.bg + ' ' + dFirst.cls + '">' + dFirst.text + '</span></td>';
+      html += '<td class="px-3 py-2.5"><canvas class="spark" data-values="' + spark.join(',') + '" width="80" height="24"></canvas></td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
+
+    el.querySelectorAll('.spark').forEach(function(c) {
+      var vals = c.dataset.values.split(',').map(Number).filter(function(v) { return !isNaN(v); });
+      if (vals.length < 2) return;
+      var ctx = c.getContext('2d');
+      var w = c.width, h = c.height;
+      var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+      var range = max - min || 1;
+      ctx.beginPath();
+      ctx.strokeStyle = '#2563eb';
+      ctx.lineWidth = 1.5;
+      ctx.lineJoin = 'round';
+      vals.forEach(function(v, i) {
+        var x = (i / (vals.length - 1)) * w;
+        var y = h - 2 - ((v - min) / range) * (h - 4);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      var lastX = w, lastY = h - 2 - ((vals[vals.length - 1] - min) / range) * (h - 4);
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#2563eb';
+      ctx.fill();
+    });
+  }
+
+  // ---------- Chart rendering ----------
+
+  function createGradient(ctx, fillColor) {
+    var g = ctx.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, fillColor.replace('0.06', '0.15'));
+    g.addColorStop(1, fillColor.replace('0.06', '0.0'));
+    return g;
+  }
+
+  function renderChart(canvasId, emptyId, entries, unit) {
+    var canvas = document.getElementById(canvasId);
+    var empty = document.getElementById(emptyId);
+
+    if (!entries || entries.length === 0) {
+      if (canvas) canvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      return;
+    }
+
+    var ctx = canvas.getContext('2d');
+    var benchNames = []; var seen = {};
+    entries.forEach(function(run) { run.benches.forEach(function(b) { if (!seen[b.name]) { benchNames.push(b.name); seen[b.name] = true; } }); });
+
+    var labels = entries.map(function(run) {
+      var d = new Date(run.date);
+      var hash = run.commit && run.commit.id ? run.commit.id.slice(0, 7) : '';
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    });
+
+    var datasets = benchNames.map(function(name, ci) {
+      var color = COLORS[ci % COLORS.length];
+      var data = entries.map(function(run) {
+        var b = run.benches.find(function(b2) { return b2.name === name; });
+        return b ? b.value : null;
+      });
+      var shortName = name.length > 40 ? name.slice(0, 37) + '...' : name;
+      return {
+        label: shortName,
+        data: data,
+        borderColor: color.line,
+        backgroundColor: createGradient(ctx, color.fill),
+        tension: 0.35,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: color.line,
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+        borderWidth: 2,
+        fill: true,
+      };
+    });
+
+    new Chart(canvas, {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 700, easing: 'easeOutQuart' },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 8, boxHeight: 8, padding: 14, font: { size: 10 }, usePointStyle: true, pointStyle: 'circle' },
+          },
+          tooltip: {
+            backgroundColor: '#fff',
+            titleColor: '#111827',
+            bodyColor: '#6b7280',
+            borderColor: '#e5e7eb',
+            borderWidth: 1,
+            padding: 10,
+            cornerRadius: 6,
+            boxWidth: 8, boxHeight: 8, boxPadding: 4,
+            usePointStyle: true,
+            callbacks: {
+              title: function(items) {
+                var idx = items[0].dataIndex;
+                var run = entries[idx];
+                var hash = run.commit && run.commit.id ? run.commit.id.slice(0, 7) : '';
+                var msg = run.commit && run.commit.message ? run.commit.message.split('\n')[0] : '';
+                if (msg.length > 60) msg = msg.slice(0, 57) + '...';
+                return items[0].label + (hash ? '  ·  ' + hash : '') + (msg ? '\n' + msg : '');
+              },
+              label: function(ctx) { return ctx.dataset.label + ': ' + fmtVal(ctx.parsed.y) + (unit ? ' ' + unit : ''); }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: false,
+            grid: { color: '#f3f4f6', lineWidth: 1 },
+            ticks: { maxTicksLimit: 5, callback: function(v) { return fmtVal(v); } },
+          },
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }
+        }
+      }
+    });
+  }
+
+  // ---------- Comparison chart & table ----------
+
+  function renderComparisonChart(entries, run) {
+    var canvas = document.getElementById('chart-comparison');
+    var empty = document.getElementById('empty-comparison');
+
+    if (!entries || entries.length === 0) {
+      if (canvas) canvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      return;
+    }
+
+    // Populate provenance
+    var provEl = document.getElementById('provenance-comparison');
+    if (provEl && run) provEl.innerHTML = formatProvenance(run);
+
+    var ctx = canvas.getContext('2d');
+
+    var scales = [];
+    var scaleSet = {};
+    entries.forEach(function(e) {
+      var m = e.name.match(/^gaspatchio\/([^-]+)-points$/);
+      if (m && !scaleSet[m[1]]) { scales.push(m[1]); scaleSet[m[1]] = true; }
+    });
+    // Sort by numeric value: "8" < "1K" < "10K" < "100K"
+    function parseScale(s) {
+      var m = s.match(/^(\d+)(K|M)?$/i);
+      if (!m) return 0;
+      var n = parseInt(m[1]);
+      if (m[2] === 'K' || m[2] === 'k') n *= 1000;
+      if (m[2] === 'M' || m[2] === 'm') n *= 1000000;
+      return n;
+    }
+    scales.sort(function(a, b) { return parseScale(a) - parseScale(b); });
+
+    var gspThroughput = scales.map(function(s) {
+      var e = entries.find(function(e2) { return e2.name === 'gaspatchio/' + s + '-throughput'; });
+      return e ? e.value : null;
+    });
+    var libThroughput = scales.map(function(s) {
+      var e = entries.find(function(e2) { return e2.name === 'lifelib/' + s + '-throughput'; });
+      return e ? e.value : null;
+    });
+
+    new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: scales,
+        datasets: [
+          {
+            label: 'Gaspatchio',
+            data: gspThroughput,
+            backgroundColor: 'rgba(255, 59, 48, 0.85)',
+            borderColor: '#ff3b30',
+            borderWidth: 1,
+            borderRadius: 3,
+          },
+          {
+            label: 'lifelib',
+            data: libThroughput,
+            backgroundColor: 'rgba(107, 114, 128, 0.60)',
+            borderColor: '#6b7280',
+            borderWidth: 1,
+            borderRadius: 3,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 700, easing: 'easeOutQuart' },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 8, boxHeight: 8, padding: 14, font: { size: 10 }, usePointStyle: true, pointStyle: 'circle' },
+          },
+          tooltip: {
+            backgroundColor: '#fff',
+            titleColor: '#111827',
+            bodyColor: '#6b7280',
+            borderColor: '#e5e7eb',
+            borderWidth: 1,
+            padding: 10,
+            cornerRadius: 6,
+            boxWidth: 8, boxHeight: 8, boxPadding: 4,
+            usePointStyle: true,
+            callbacks: {
+              title: run ? tooltipTitleWithCommit(run) : undefined,
+              label: function(ctx) {
+                var v = ctx.parsed.y;
+                if (v == null) return ctx.dataset.label + ': --';
+                return ctx.dataset.label + ': ' + fmtVal(v) + ' pts/sec';
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: '#f3f4f6', lineWidth: 1 },
+            title: { display: true, text: 'model points / second (higher is better)', font: { size: 10 }, color: '#9ca3af' },
+            ticks: {
+              maxTicksLimit: 6,
+              callback: function(v) {
+                return fmtVal(v);
+              }
+            }
+          },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  function renderComparisonTable(entries, run) {
+    var el = document.getElementById('table-comparison');
+    if (!el) return;
+
+    var scales = [];
+    var scaleSet = {};
+    entries.forEach(function(e) {
+      var m = e.name.match(/^gaspatchio\/([^-]+)-points$/);
+      if (m && !scaleSet[m[1]]) { scales.push(m[1]); scaleSet[m[1]] = true; }
+    });
+    function parseScale(s) {
+      var m = s.match(/^(\d+)(K|M)?$/i);
+      if (!m) return 0;
+      var n = parseInt(m[1]);
+      if (m[2] === 'K' || m[2] === 'k') n *= 1000;
+      if (m[2] === 'M' || m[2] === 'm') n *= 1000000;
+      return n;
+    }
+    scales.sort(function(a, b) { return parseScale(a) - parseScale(b); });
+
+    function findVal(name) {
+      var e = entries.find(function(e2) { return e2.name === name; });
+      return e ? e.value : null;
+    }
+
+    function fmtTime(v) {
+      if (v == null) return '--';
+      return v.toFixed(2) + ' s';
+    }
+
+    function fmtThroughput(v) {
+      if (v == null) return '--';
+      if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M pts/s';
+      if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K pts/s';
+      return v.toFixed(0) + ' pts/s';
+    }
+
+    var html = '<table class="w-full text-xs">';
+    html += '<thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">';
+    html += '<th class="px-5 py-2 font-semibold">Scale</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Gaspatchio</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">lifelib</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Gaspatchio Throughput</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">lifelib Throughput</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Speedup</th>';
+    html += '</tr></thead><tbody>';
+
+    scales.forEach(function(s, idx) {
+      var gTime = findVal('gaspatchio/' + s + '-points');
+      var lTime = findVal('lifelib/' + s + '-points');
+      var gThroughput = findVal('gaspatchio/' + s + '-throughput');
+      var lThroughput = findVal('lifelib/' + s + '-throughput');
+      var speedup = findVal('speedup/' + s);
+      var stripe = idx % 2 === 0 ? '' : 'bg-gray-50/50';
+
+      html += '<tr class="border-t border-gray-100 hover:bg-gray-50 transition-colors ' + stripe + '">';
+      html += '<td class="px-5 py-2.5 text-gray-700 tabular">' + s + ' pts</td>';
+      html += '<td class="px-3 py-2.5 text-right text-gray-700 tabular">' + fmtTime(gTime) + '</td>';
+      html += '<td class="px-3 py-2.5 text-right text-gray-700 tabular">' + fmtTime(lTime) + '</td>';
+      html += '<td class="px-3 py-2.5 text-right text-gray-700 tabular">' + fmtThroughput(gThroughput) + '</td>';
+      html += '<td class="px-3 py-2.5 text-right text-gray-700 tabular">' + fmtThroughput(lThroughput) + '</td>';
+      if (speedup != null) {
+        html += '<td class="px-3 py-2.5 text-right"><span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular bg-green-50 text-green-700">' + speedup.toFixed(1) + 'x</span></td>';
+      } else {
+        html += '<td class="px-3 py-2.5 text-right text-gray-400">--</td>';
+      }
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  }
+
+  // ---------- Data loading ----------
+
+  async function loadBenchmarkData(path) {
+    try {
+      var resp = await fetch(path);
+      if (!resp.ok) return null;
+      var text = await resp.text();
+      var match = text.match(/window\.BENCHMARK_DATA\s*=\s*(\{[\s\S]*\});?\s*$/);
+      if (!match) return null;
+      return JSON.parse(match[1]);
+    } catch(e) { return null; }
+  }
+
+  async function loadComparisonData(path) {
+    try {
+      var resp = await fetch(path);
+      if (!resp.ok) return null;
+      var text = await resp.text();
+      var match = text.match(/window\.(?:COMPARISON_DATA|BENCHMARK_DATA)\s*=\s*(\{[\s\S]*\});?\s*$/);
+      if (!match) return null;
+      return JSON.parse(match[1]);
+    } catch(e) { return null; }
+  }
+
+  // ---------- Provenance helper ----------
+
+  function formatProvenance(entry) {
+    if (!entry) return '';
+    var d = new Date(entry.date);
+    var dateStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var hash = entry.commit && entry.commit.id ? entry.commit.id.slice(0, 7) : '';
+    var msg = entry.commit && entry.commit.message ? entry.commit.message.split('\n')[0] : '';
+    if (msg.length > 80) msg = msg.slice(0, 77) + '...';
+    var url = entry.commit && entry.commit.url ? entry.commit.url : '';
+    var hashLink = hash && url ? '<a href="' + url + '" class="underline hover:text-gray-500">' + hash + '</a>' : hash;
+    return 'Data from ' + dateStr + (hash ? ' · commit ' + hashLink : '') + (msg ? ' — ' + msg : '');
+  }
+
+  function tooltipTitleWithCommit(entry) {
+    return function(items) {
+      var d = new Date(entry.date);
+      var dateStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      var hash = entry.commit && entry.commit.id ? entry.commit.id.slice(0, 7) : '';
+      return items[0].label + (hash ? '  ·  ' + hash : '');
+    };
+  }
+
+  // ---------- Model Benchmarks: custom throughput + time charts ----------
+
+  function renderModelCharts(entries) {
+    if (!entries || entries.length === 0) return;
+    var latest = entries[entries.length - 1];
+    var benches = latest.benches || [];
+
+    // Populate provenance
+    var provEl = document.getElementById('provenance-model');
+    if (provEl) provEl.innerHTML = formatProvenance(latest);
+
+    // Group by model name: "VA Model (GMDB/GMAB)/1K-throughput" → model="VA Model (GMDB/GMAB)", scale="1K"
+    var models = {}; var scales = [];
+    benches.forEach(function(b) {
+      var slash = b.name.lastIndexOf('/');
+      if (slash < 0) return;
+      var model = b.name.slice(0, slash);
+      var rest = b.name.slice(slash + 1);
+      if (!models[model]) models[model] = {};
+      models[model][rest] = b.value;
+      // Collect scale labels from throughput entries
+      if (rest.endsWith('-throughput')) {
+        var scale = rest.replace('-throughput', '');
+        if (scales.indexOf(scale) < 0) scales.push(scale);
+      }
+    });
+
+    var modelNames = Object.keys(models);
+    var mColors = ['#2563eb', '#7c3aed', '#0891b2', '#ea580c'];
+
+    // Throughput chart (higher is better)
+    var tpCanvas = document.getElementById('chart-model-throughput');
+    if (tpCanvas && scales.length > 0) {
+      new Chart(tpCanvas, {
+        type: 'bar',
+        data: {
+          labels: scales.map(function(s) { return s + ' points'; }),
+          datasets: modelNames.map(function(name, i) {
+            return {
+              label: name,
+              data: scales.map(function(s) { return models[name][s + '-throughput'] || 0; }),
+              backgroundColor: mColors[i % mColors.length],
+              borderRadius: 4,
+            };
+          })
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: { duration: 600 },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 10 }, usePointStyle: true, pointStyle: 'circle' } },
+            tooltip: {
+              backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280',
+              borderColor: '#e5e7eb', borderWidth: 1, padding: 10, cornerRadius: 6,
+              callbacks: {
+                title: tooltipTitleWithCommit(latest),
+                label: function(ctx) { return ctx.dataset.label + ': ' + fmtVal(ctx.parsed.y) + ' pts/sec'; }
+              }
+            }
+          },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#f3f4f6' }, title: { display: true, text: 'pts/sec', font: { size: 10 }, color: '#9ca3af' }, ticks: { callback: function(v) { return fmtVal(v); } } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    // Time chart (lower is better)
+    var timeCanvas = document.getElementById('chart-model-time');
+    if (timeCanvas && scales.length > 0) {
+      new Chart(timeCanvas, {
+        type: 'bar',
+        data: {
+          labels: scales.map(function(s) { return s + ' points'; }),
+          datasets: modelNames.map(function(name, i) {
+            return {
+              label: name,
+              data: scales.map(function(s) { return models[name][s + '-points'] || 0; }),
+              backgroundColor: mColors[i % mColors.length] + '88',
+              borderColor: mColors[i % mColors.length],
+              borderWidth: 1,
+              borderRadius: 4,
+            };
+          })
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: { duration: 600 },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 10 }, usePointStyle: true, pointStyle: 'circle' } },
+            tooltip: {
+              backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280',
+              borderColor: '#e5e7eb', borderWidth: 1, padding: 10, cornerRadius: 6,
+              callbacks: {
+                title: tooltipTitleWithCommit(latest),
+                label: function(ctx) { return ctx.dataset.label + ': ' + fmtVal(ctx.parsed.y) + 's'; }
+              }
+            }
+          },
+          scales: {
+            y: { grid: { color: '#f3f4f6' }, title: { display: true, text: 'seconds', font: { size: 10 }, color: '#9ca3af' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    // Update badge with peak throughput
+    var peakTp = 0;
+    modelNames.forEach(function(name) {
+      scales.forEach(function(s) {
+        var tp = models[name][s + '-throughput'] || 0;
+        if (tp > peakTp) peakTp = tp;
+      });
+    });
+    if (peakTp > 0) {
+      var badge = document.getElementById('badge-model');
+      badge.textContent = fmtVal(peakTp) + ' pts/sec peak';
+      badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-blue-50 text-blue-700 shrink-0';
+    }
+  }
+
+  function drawModelSparkline(canvas, vals, color) {
+    if (vals.length < 2) return;
+    var ctx = canvas.getContext('2d');
+    var w = canvas.width, h = canvas.height;
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    var range = max - min || 1;
+    // Area fill
+    ctx.beginPath();
+    vals.forEach(function(v, i) {
+      var x = (i / (vals.length - 1)) * w;
+      var y = h - 2 - ((v - min) / range) * (h - 4);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+    ctx.fillStyle = color + '15';
+    ctx.fill();
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    vals.forEach(function(v, i) {
+      var x = (i / (vals.length - 1)) * w;
+      var y = h - 2 - ((v - min) / range) * (h - 4);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    // End dot
+    var lastY = h - 2 - ((vals[vals.length - 1] - min) / range) * (h - 4);
+    ctx.beginPath(); ctx.arc(w - 1, lastY, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+  }
+
+  function renderModelTable(entries) {
+    var el = document.getElementById('table-model');
+    if (!el || !entries || entries.length < 1) { if (el) el.style.display = 'none'; return; }
+
+    var latest = entries[entries.length - 1];
+    var prev = entries.length > 1 ? entries[entries.length - 2] : null;
+    var benches = latest.benches || [];
+    var prevBenches = prev ? prev.benches || [] : [];
+
+    function historyOf(benchName) {
+      return entries.slice(-20).map(function(run) {
+        var b = run.benches.find(function(b2) { return b2.name === benchName; });
+        return b ? b.value : null;
+      }).filter(function(v) { return v !== null; });
+    }
+    function prevOf(benchName) {
+      var b = prevBenches.find(function(b2) { return b2.name === benchName; });
+      return b ? b.value : null;
+    }
+
+    // Parse into structured rows: model × scale → {time, throughput, memory, ...}
+    var models = {}; var scales = [];
+    benches.forEach(function(b) {
+      var slash = b.name.lastIndexOf('/');
+      if (slash < 0) return;
+      var model = b.name.slice(0, slash);
+      var rest = b.name.slice(slash + 1);
+      if (!models[model]) models[model] = {};
+
+      if (rest.endsWith('-points')) {
+        var scale = rest.replace('-points', '');
+        if (!models[model][scale]) models[model][scale] = {};
+        models[model][scale].time = b.value;
+        models[model][scale].timePrev = prevOf(b.name);
+        if (scales.indexOf(scale) < 0) scales.push(scale);
+      } else if (rest.endsWith('-throughput')) {
+        var scale = rest.replace('-throughput', '');
+        if (!models[model][scale]) models[model][scale] = {};
+        models[model][scale].throughput = b.value;
+        models[model][scale].tpPrev = prevOf(b.name);
+        models[model][scale].tpHist = historyOf(b.name);
+      } else if (rest.endsWith('-data-mb')) {
+        var scale = rest.replace('-data-mb', '');
+        if (!models[model][scale]) models[model][scale] = {};
+        models[model][scale].dataMb = b.value;
+        models[model][scale].dmPrev = prevOf(b.name);
+        models[model][scale].dmHist = historyOf(b.name);
+      } else if (rest.endsWith('-memory')) {
+        var scale = rest.replace('-memory', '');
+        if (!models[model][scale]) models[model][scale] = {};
+        models[model][scale].memory = b.value;
+      } else if (rest.endsWith('-cores')) {
+        var scale = rest.replace('-cores', '');
+        if (!models[model][scale]) models[model][scale] = {};
+        models[model][scale].cores = b.value;
+      } else if (rest.endsWith('-cpu-avg')) {
+        var scale = rest.replace('-cpu-avg', '');
+        if (!models[model][scale]) models[model][scale] = {};
+        models[model][scale].cpuAvg = b.value;
+      }
+    });
+
+    var modelNames = Object.keys(models);
+
+    var html = '<table class="w-full text-xs">';
+    html += '<thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">';
+    html += '<th class="px-5 py-2 font-semibold">Model</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Scale</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Time</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Throughput</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">vs prev</th>';
+    html += '<th class="px-3 py-2 font-semibold">Trend</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Data MB</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">vs prev</th>';
+    html += '<th class="px-3 py-2 font-semibold">Trend</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">CPU</th>';
+    html += '</tr></thead><tbody>';
+
+    var rowIdx = 0;
+    modelNames.forEach(function(model) {
+      scales.forEach(function(scale) {
+        var d = models[model][scale] || {};
+        var stripe = rowIdx % 2 === 0 ? '' : 'bg-gray-50/50';
+        var tpD = delta(d.throughput, d.tpPrev);
+        var dmD = d.dataMb != null ? flipDelta(delta(d.dataMb, d.dmPrev)) : { text: '--', cls: 'text-gray-400', bg: '' };
+        var tpSpark = d.tpHist ? d.tpHist.join(',') : '';
+        var dmSpark = d.dmHist ? d.dmHist.join(',') : '';
+        var dataMbStr = '--';
+        if (d.dataMb != null) dataMbStr = d.dataMb >= 1000 ? (d.dataMb / 1000).toFixed(1) + ' GB' : d.dataMb.toFixed(1) + ' MB';
+        var cpuStr = '--';
+        if (d.cores != null) { cpuStr = d.cores + ' cores'; if (d.cpuAvg != null) cpuStr += ' (' + d.cpuAvg + '%)'; }
+
+        html += '<tr class="border-t border-gray-100 hover:bg-gray-50 transition-colors ' + stripe + '">';
+        html += '<td class="px-5 py-2.5 font-medium text-gray-700">' + model + '</td>';
+        html += '<td class="px-3 py-2.5 text-right tabular text-gray-600">' + scale + '</td>';
+        html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + (d.time != null ? d.time.toFixed(2) + 's' : '--') + '</td>';
+        // Use model-consistent color for sparklines (first model=blue, second=purple)
+        var modelIdx = modelNames.indexOf(model);
+        var modelColor = modelIdx === 0 ? '#2563eb' : '#7c3aed';
+        html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + (d.throughput != null ? fmtVal(d.throughput) + ' pts/s' : '--') + '</td>';
+        html += '<td class="px-3 py-2.5 text-right"><span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular ' + tpD.bg + ' ' + tpD.cls + '">' + tpD.text + '</span></td>';
+        html += '<td class="px-3 py-2.5">' + (tpSpark ? '<canvas class="mspark" data-v="' + tpSpark + '" data-c="' + modelColor + '" width="72" height="20"></canvas>' : '') + '</td>';
+        html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + dataMbStr + '</td>';
+        html += '<td class="px-3 py-2.5 text-right">' + (d.dataMb != null ? '<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular ' + dmD.bg + ' ' + dmD.cls + '">' + dmD.text + '</span>' : '') + '</td>';
+        html += '<td class="px-3 py-2.5">' + (dmSpark ? '<canvas class="mspark" data-v="' + dmSpark + '" data-c="' + modelColor + '" width="72" height="20"></canvas>' : '') + '</td>';
+        html += '<td class="px-3 py-2.5 text-right tabular text-gray-500">' + cpuStr + '</td>';
+        html += '</tr>';
+        rowIdx++;
+      });
+    });
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
+
+    // Draw all model sparklines
+    el.querySelectorAll('.mspark').forEach(function(c) {
+      var vals = c.dataset.v.split(',').map(Number).filter(function(v) { return !isNaN(v); });
+      drawModelSparkline(c, vals, c.dataset.c);
+    });
+  }
+
+  function renderModelTrend(linEntries, winEntries) {
+    // Need 1+ Linux run to show a trend; Windows is overlaid when present.
+    var section = document.getElementById('trend-section');
+    if (!linEntries || linEntries.length < 1) return;
+    section.style.display = '';
+
+    var canvas = document.getElementById('chart-model-trend');
+    var ctx = canvas.getContext('2d');
+
+    // Unified, date-sorted timeline across both OSes (their runs fire at
+    // different times). Each run is tagged _os; spanGaps connects sparse lines.
+    var allEntries = (linEntries || []).map(function(r) { r._os = 'Linux'; return r; })
+      .concat((winEntries || []).map(function(r) { r._os = 'Windows'; return r; }))
+      .sort(function(a, b) { return new Date(a.date) - new Date(b.date); });
+
+    // Track VA Model throughput at key scales across runs
+    // Bench name pattern: "VA Model (GMDB/GMAB)/1K-throughput"
+    var trackScales = ['1K', '10K', '100K'];
+    var scaleColors = [
+      { line: '#2563eb', fill: 'rgba(37, 99, 235, 0.06)' },   // blue — 1K
+      { line: '#ea580c', fill: 'rgba(234, 88, 12, 0.06)' },    // orange — 10K
+      { line: '#16a34a', fill: 'rgba(22, 163, 74, 0.06)' },    // green — 100K
+    ];
+
+    var labels = allEntries.map(function(run) {
+      var d = new Date(run.date);
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    });
+
+    function osSeries(os, benchName) {
+      return allEntries.map(function(run) {
+        if (run._os !== os) return null;
+        var b = run.benches.find(function(b2) { return b2.name === benchName; });
+        return b ? b.value : null;
+      });
+    }
+
+    var datasets = [];
+    trackScales.forEach(function(scale, i) {
+      var benchName = 'VA Model (GMDB/GMAB)/' + scale + '-throughput';
+
+      // Linux: solid line with gradient fill.
+      var linData = osSeries('Linux', benchName);
+      if (linData.some(function(v) { return v !== null; })) {
+        var g = ctx.createLinearGradient(0, 0, 0, 192);
+        g.addColorStop(0, scaleColors[i].fill.replace('0.06', '0.15'));
+        g.addColorStop(1, scaleColors[i].fill.replace('0.06', '0.0'));
+        datasets.push({
+          label: 'Linux ' + scale, data: linData,
+          borderColor: scaleColors[i].line, backgroundColor: g,
+          tension: 0.35, pointRadius: allEntries.length < 10 ? 3 : 0, pointHoverRadius: 5,
+          pointHoverBackgroundColor: scaleColors[i].line, pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2,
+          borderWidth: 2, fill: true, spanGaps: true,
+        });
+      }
+
+      // Windows: same hue, dashed, no fill.
+      var winData = osSeries('Windows', benchName);
+      if (winData.some(function(v) { return v !== null; })) {
+        datasets.push({
+          label: 'Windows ' + scale, data: winData,
+          borderColor: scaleColors[i].line, backgroundColor: 'transparent',
+          tension: 0.35, pointRadius: 4, pointHoverRadius: 6,
+          pointHoverBackgroundColor: scaleColors[i].line, pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2,
+          borderWidth: 2, borderDash: [6, 4], fill: false, spanGaps: true,
+        });
+      }
+    });
+
+    // Add data-mb memory trend lines (dashed, right y-axis)
+    var memScales = ['100K'];
+    var memModels = ['VA Model (GMDB/GMAB)', 'VA + Scenarios (3x)'];
+    // Same colors as throughput — line style (dashed) distinguishes the metric
+    var memModelColors = ['#2563eb', '#7c3aed'];
+
+    memModels.forEach(function(modelName, mi) {
+      memScales.forEach(function(scale) {
+        var benchName = modelName + '/' + scale + '-data-mb';
+        var data = allEntries.map(function(run) {
+          if (run._os !== 'Linux') return null;  // data-mb is OS-independent
+          var b = run.benches.find(function(b2) { return b2.name === benchName; });
+          return b ? b.value : null;
+        });
+        var hasData = data.some(function(v) { return v !== null; });
+        if (!hasData) return;
+        datasets.push({
+          label: modelName.split(' (')[0] + ' memory (' + scale + ')',
+          data: data,
+          borderColor: memModelColors[mi],
+          backgroundColor: 'transparent',
+          tension: 0.35,
+          pointRadius: 5,
+          pointHoverRadius: 8,
+          pointHitRadius: 12,
+          pointStyle: 'rectRot',
+          pointHoverBackgroundColor: memModelColors[mi],
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
+          borderWidth: 2,
+          borderDash: [2, 2],
+          fill: false,
+          yAxisID: 'y1',
+          spanGaps: true,
+        });
+      });
+    });
+
+    if (datasets.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    var hasMemory = datasets.some(function(ds) { return ds.yAxisID === 'y1'; });
+
+    new Chart(canvas, {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 600 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 8, boxHeight: 8, padding: 14, font: { size: 10 }, usePointStyle: true, pointStyle: 'circle' },
+          },
+          tooltip: {
+            backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280',
+            borderColor: '#e5e7eb', borderWidth: 1, padding: 10, cornerRadius: 6,
+            boxWidth: 8, boxHeight: 8, boxPadding: 4, usePointStyle: true,
+            filter: function(item) { return item.parsed.y != null; },
+            callbacks: {
+              title: function(items) {
+                var idx = items[0].dataIndex;
+                var run = allEntries[idx];
+                var hash = run.commit && run.commit.id ? run.commit.id.slice(0, 7) : '';
+                var msg = run.commit && run.commit.message ? run.commit.message.split('\n')[0] : '';
+                if (msg.length > 60) msg = msg.slice(0, 57) + '...';
+                return items[0].label + (hash ? '  ·  ' + hash : '') + (msg ? '\n' + msg : '');
+              },
+              label: function(ctx) {
+                var v = ctx.parsed.y;
+                if (ctx.dataset.yAxisID === 'y1') return ctx.dataset.label + ': ' + (v != null ? (v >= 1000 ? (v/1000).toFixed(1) + ' GB' : v + ' MB') : '--');
+                return ctx.dataset.label + ': ' + (v != null ? fmtVal(v) + ' pts/sec' : '--');
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            position: 'left',
+            beginAtZero: false,
+            grid: { color: '#f3f4f6', lineWidth: 1 },
+            title: { display: true, text: 'Throughput (pts/sec)', font: { size: 10, weight: 'bold' }, color: '#2563eb' },
+            ticks: { maxTicksLimit: 5, callback: function(v) { return fmtVal(v); } },
+          },
+          y1: hasMemory ? {
+            position: 'right',
+            beginAtZero: true,
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: 'Data Memory (MB)', font: { size: 10, weight: 'bold' }, color: '#6b7280' },
+            ticks: { maxTicksLimit: 5, callback: function(v) { return v >= 1000 ? (v/1000).toFixed(1) + ' GB' : v + ' MB'; } },
+          } : undefined,
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }
+        }
+      }
+    });
+  }
+
+  // ---------- Scenario Benchmarks: throughput + peak-RSS per cell ----------
+
+  // Bench name pattern: "{arm}/{pts}pts-{NNNN}sc-{metric}" where metric is
+  // wall | rss | throughput | batch. Parse the latest run into ordered cells.
+  function scenarioPointsNum(label) {
+    var m = label.match(/^(\d+)(K|M)?$/i);
+    if (!m) return 0;
+    var n = parseInt(m[1], 10);
+    if (/k/i.test(m[2] || '')) n *= 1000;
+    if (/m/i.test(m[2] || '')) n *= 1000000;
+    return n;
+  }
+
+  function parseScenarioCells(benches) {
+    var cells = {};
+    benches.forEach(function(b) {
+      var m = b.name.match(/^(.+)\/(\d+[KM]?)pts-(\d+)sc-(wall|rss|throughput|batch)$/i);
+      if (!m) return;
+      var arm = m[1], pts = m[2], scen = parseInt(m[3], 10), metric = m[4];
+      var key = arm + '|' + pts + '|' + scen;
+      if (!cells[key]) cells[key] = { arm: arm, pts: pts, ptsNum: scenarioPointsNum(pts), scen: scen, label: pts + ' × ' + scen };
+      cells[key][metric] = b.value;
+    });
+    return Object.keys(cells).map(function(k) { return cells[k]; }).sort(function(a, b) {
+      return a.ptsNum - b.ptsNum || a.scen - b.scen;
+    });
+  }
+
+  function fmtMem(v) {
+    if (v == null) return '--';
+    return v >= 1000 ? (v / 1000).toFixed(2) + ' GB' : v.toFixed(0) + ' MB';
+  }
+
+  // scen-scaling = blue, port-scaling = purple; per-bar colours keyed by arm.
+  function scenarioBarColor(arm) { return /port/i.test(arm) ? '#7c3aed' : '#2563eb'; }
+
+  function renderScenarioCharts(entries) {
+    var empty = document.getElementById('empty-scenario');
+    var tpCanvas = document.getElementById('chart-scenario-throughput');
+    var rssCanvas = document.getElementById('chart-scenario-rss');
+    if (!entries || entries.length === 0) {
+      if (tpCanvas) tpCanvas.style.display = 'none';
+      if (rssCanvas) rssCanvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      return;
+    }
+
+    var latest = entries[entries.length - 1];
+    var provEl = document.getElementById('provenance-scenario');
+    if (provEl) provEl.innerHTML = formatProvenance(latest);
+
+    var cells = parseScenarioCells(latest.benches || []);
+    if (cells.length === 0) {
+      if (tpCanvas) tpCanvas.style.display = 'none';
+      if (rssCanvas) rssCanvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      return;
+    }
+
+    var labels = cells.map(function(c) { return c.label; });
+    var barColors = cells.map(function(c) { return scenarioBarColor(c.arm); });
+
+    // Throughput (higher is better)
+    new Chart(tpCanvas, {
+      type: 'bar',
+      data: { labels: labels, datasets: [{ label: 'Throughput', data: cells.map(function(c) { return c.throughput || 0; }), backgroundColor: barColors, borderRadius: 4 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280',
+            borderColor: '#e5e7eb', borderWidth: 1, padding: 10, cornerRadius: 6,
+            callbacks: {
+              title: tooltipTitleWithCommit(latest),
+              label: function(ctx) {
+                var c = cells[ctx.dataIndex];
+                return [c.arm + '  (' + c.pts + ' pts × ' + c.scen + ' scen)', fmtVal(ctx.parsed.y) + ' scenario-pts/sec'];
+              }
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#f3f4f6' }, title: { display: true, text: 'scenario-points/sec', font: { size: 10 }, color: '#9ca3af' }, ticks: { callback: function(v) { return fmtVal(v); } } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    // Peak RSS (lower is better)
+    new Chart(rssCanvas, {
+      type: 'bar',
+      data: { labels: labels, datasets: [{ label: 'Peak RSS', data: cells.map(function(c) { return c.rss || 0; }), backgroundColor: barColors.map(function(c) { return c + '88'; }), borderColor: barColors, borderWidth: 1, borderRadius: 4 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280',
+            borderColor: '#e5e7eb', borderWidth: 1, padding: 10, cornerRadius: 6,
+            callbacks: {
+              title: tooltipTitleWithCommit(latest),
+              label: function(ctx) {
+                var c = cells[ctx.dataIndex];
+                return [c.arm + '  (' + c.pts + ' pts × ' + c.scen + ' scen)', 'peak RSS ' + fmtMem(ctx.parsed.y) + '  ·  batch ' + (c.batch != null ? c.batch : '--')];
+              }
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#f3f4f6' }, title: { display: true, text: 'peak RSS', font: { size: 10 }, color: '#9ca3af' }, ticks: { callback: function(v) { return fmtMem(v); } } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    // Badge = peak throughput across cells
+    var peakTp = cells.reduce(function(mx, c) { return Math.max(mx, c.throughput || 0); }, 0);
+    if (peakTp > 0) {
+      var badge = document.getElementById('badge-scenario');
+      badge.textContent = fmtVal(peakTp) + ' scen-pts/sec peak';
+      badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-blue-50 text-blue-700 shrink-0';
+    }
+  }
+
+  function renderScenarioTable(entries) {
+    var el = document.getElementById('table-scenario');
+    if (!el || !entries || entries.length < 1) { if (el) el.style.display = 'none'; return; }
+
+    var latest = entries[entries.length - 1];
+    var cells = parseScenarioCells(latest.benches || []);
+    if (cells.length === 0) { el.style.display = 'none'; return; }
+
+    var html = '<table class="w-full text-xs">';
+    html += '<thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">';
+    html += '<th class="px-5 py-2 font-semibold">Arm</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Points</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Scenarios</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Wall</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Peak RSS</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Throughput</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Batch</th>';
+    html += '</tr></thead><tbody>';
+
+    cells.forEach(function(c, idx) {
+      var stripe = idx % 2 === 0 ? '' : 'bg-gray-50/50';
+      var dot = scenarioBarColor(c.arm);
+      html += '<tr class="border-t border-gray-100 hover:bg-gray-50 transition-colors ' + stripe + '">';
+      html += '<td class="px-5 py-2.5 font-medium text-gray-700"><span class="inline-block w-2 h-2 rounded-full mr-2 align-middle" style="background:' + dot + '"></span>' + c.arm + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular text-gray-600">' + c.pts + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular text-gray-600">' + c.scen + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + (c.wall != null ? c.wall.toFixed(1) + 's' : '--') + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + fmtMem(c.rss) + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + (c.throughput != null ? fmtVal(c.throughput) + ' <span class="text-gray-400 font-normal">pts/s</span>' : '--') + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular text-gray-600">' + (c.batch != null ? c.batch : '--') + '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  }
+
+  // Per-commit history: throughput (solid, left) + peak RSS (dashed, right) per cell.
+  function renderScenarioTrend(allEntries) {
+    var section = document.getElementById('scenario-trend-section');
+    if (!section || !allEntries || allEntries.length < 1) { if (section) section.style.display = 'none'; return; }
+
+    // Cells come from the latest run; reconstruct the bench-name stub for each.
+    var cells = parseScenarioCells(allEntries[allEntries.length - 1].benches || []);
+    if (cells.length === 0) { section.style.display = 'none'; return; }
+    section.style.display = '';
+
+    var canvas = document.getElementById('chart-scenario-trend');
+    var ctx = canvas.getContext('2d');
+
+    var labels = allEntries.map(function(run) {
+      var d = new Date(run.date);
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    });
+
+    function stub(c) { return c.arm + '/' + c.pts + 'pts-' + ('0000' + c.scen).slice(-4) + 'sc'; }
+    function series(benchName) {
+      return allEntries.map(function(run) {
+        var b = run.benches.find(function(b2) { return b2.name === benchName; });
+        return b ? b.value : null;
+      });
+    }
+
+    var manyPoints = allEntries.length >= 10;
+    var datasets = [];
+    cells.forEach(function(c, i) {
+      var color = COLORS[i % COLORS.length];
+      // Throughput — solid, left axis
+      var g = ctx.createLinearGradient(0, 0, 0, 224);
+      g.addColorStop(0, color.fill.replace('0.06', '0.12'));
+      g.addColorStop(1, color.fill.replace('0.06', '0.0'));
+      datasets.push({
+        label: c.label + ' tput',
+        data: series(stub(c) + '-throughput'),
+        borderColor: color.line, backgroundColor: g,
+        tension: 0.35, pointRadius: manyPoints ? 0 : 3, pointHoverRadius: 5,
+        pointHoverBackgroundColor: color.line, pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2,
+        borderWidth: 2, fill: true, yAxisID: 'y',
+      });
+      // Peak RSS — dashed, right axis
+      datasets.push({
+        label: c.label + ' RSS',
+        data: series(stub(c) + '-rss'),
+        borderColor: color.line, backgroundColor: 'transparent',
+        tension: 0.35, pointRadius: manyPoints ? 0 : 4, pointHoverRadius: 7, pointHitRadius: 12,
+        pointStyle: 'rectRot', pointHoverBackgroundColor: color.line, pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2,
+        borderWidth: 2, borderDash: [6, 3], fill: false, yAxisID: 'y1',
+      });
+    });
+
+    new Chart(canvas, {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 8, boxHeight: 8, padding: 12, font: { size: 9 }, usePointStyle: true, pointStyle: 'circle' } },
+          tooltip: {
+            backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280',
+            borderColor: '#e5e7eb', borderWidth: 1, padding: 10, cornerRadius: 6,
+            boxWidth: 8, boxHeight: 8, boxPadding: 4, usePointStyle: true,
+            callbacks: {
+              title: function(items) {
+                var run = allEntries[items[0].dataIndex];
+                var hash = run.commit && run.commit.id ? run.commit.id.slice(0, 7) : '';
+                var msg = run.commit && run.commit.message ? run.commit.message.split('\n')[0] : '';
+                if (msg.length > 60) msg = msg.slice(0, 57) + '...';
+                return items[0].label + (hash ? '  ·  ' + hash : '') + (msg ? '\n' + msg : '');
+              },
+              label: function(ctx) {
+                var v = ctx.parsed.y;
+                if (ctx.dataset.yAxisID === 'y1') return ctx.dataset.label + ': ' + fmtMem(v);
+                return ctx.dataset.label + ': ' + (v != null ? fmtVal(v) + ' pts/sec' : '--');
+              }
+            }
+          }
+        },
+        scales: {
+          y: { position: 'left', beginAtZero: false, grid: { color: '#f3f4f6', lineWidth: 1 }, title: { display: true, text: 'Throughput (scen-pts/sec)', font: { size: 10, weight: 'bold' }, color: '#2563eb' }, ticks: { maxTicksLimit: 5, callback: function(v) { return fmtVal(v); } } },
+          y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Peak RSS', font: { size: 10, weight: 'bold' }, color: '#6b7280' }, ticks: { maxTicksLimit: 5, callback: function(v) { return fmtMem(v); } } },
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }
+        }
+      }
+    });
+  }
+
+  async function init() {
+    var results = await Promise.all([
+      loadBenchmarkData('dev/model-bench/data.js'),
+      loadComparisonData('dev/comparison/data.js'),
+      loadBenchmarkData('dev/model-bench-windows/data.js'),
+    ]);
+
+    var modelData = results[0], comparisonData = results[1], modelWinData = results[2];
+
+    // Model Benchmarks (hero) — custom throughput + time charts
+    if (modelData && modelData.entries) {
+      var key = Object.keys(modelData.entries)[0];
+      var entries = modelData.entries[key] || [];
+      var winEntries = (modelWinData && modelWinData.entries) ? (modelWinData.entries[Object.keys(modelWinData.entries)[0]] || []) : [];
+      renderModelCharts(entries);
+      renderModelTable(entries);
+      renderModelTrend(entries, winEntries);
+      setStatus('model', 'ok', 'Model Benchmarks: ' + entries.length + ' runs');
+    } else {
+      document.getElementById('chart-model-throughput').style.display = 'none';
+      document.getElementById('chart-model-time').style.display = 'none';
+      document.getElementById('empty-model').style.display = 'flex';
+      var tbl = document.getElementById('table-model');
+      if (tbl) tbl.style.display = 'none';
+      setStatus('model', 'error', 'Model Benchmarks: no data');
+    }
+
+    // Gaspatchio vs Lifelib Comparison
+    if (comparisonData && comparisonData.entries) {
+      var compKey = Object.keys(comparisonData.entries)[0];
+      var compEntries = comparisonData.entries[compKey] || [];
+      var latestComp = compEntries.length > 0 ? compEntries[compEntries.length - 1] : null;
+      if (latestComp && latestComp.benches && latestComp.benches.length > 0) {
+        renderComparisonChart(latestComp.benches, latestComp);
+        renderComparisonTable(latestComp.benches, latestComp);
+        var speedupEntries = latestComp.benches.filter(function(e) { return e.name.startsWith('speedup/'); });
+        if (speedupEntries.length > 0) {
+          var avgSpeedup = speedupEntries.reduce(function(sum, e) { return sum + e.value; }, 0) / speedupEntries.length;
+          document.getElementById('badge-comparison').textContent = avgSpeedup.toFixed(1) + 'x faster';
+        }
+        setStatus('comparison', 'ok', 'Comparison: data loaded (' + speedupEntries.length + ' scales)');
+      } else {
+        var canvas = document.getElementById('chart-comparison');
+        var empty = document.getElementById('empty-comparison');
+        if (canvas) canvas.style.display = 'none';
+        if (empty) empty.style.display = 'flex';
+        setStatus('comparison', 'error', 'Comparison: no data');
+      }
+    } else {
+      var canvas = document.getElementById('chart-comparison');
+      var empty = document.getElementById('empty-comparison');
+      if (canvas) canvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      setStatus('comparison', 'error', 'Comparison: no data');
+    }
+
+  }
+
+  init();
+</script>
+
 </body>
 </html>
