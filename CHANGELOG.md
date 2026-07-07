@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.5.2] — Post-release correctness fixes
+
+Correctness and robustness fixes surfaced by a thorough onboarding and
+due-diligence review, plus a vectorised aggregation fold and a dependency
+security bump. (#7)
+
+### Changed
+- **`prospective_value` timing now follows the Excel annuity convention.**
+  `end_of_period` is the ordinary annuity (Excel `PV` type 0) and
+  `beginning_of_period` is the annuity-due (type 1); the two labels were
+  previously inverted. Models that passed a timing argument will see their
+  present values change — re-check any `prospective_value` timing against the
+  Excel convention.
+
+### Fixed
+- `maximum_age` projection grids are sized from the *youngest* life in the book,
+  so no policy's horizon is silently truncated.
+- Excel `pv` is computed per policy instead of broadcasting the first row's
+  `nper`/`pmt`/`rate` across the whole frame.
+- Assumption-table dimension null-fills stay within their group instead of
+  bleeding across partitions.
+- Re-registering a table under an existing name with *different* data now warns
+  instead of silently keeping the first table.
+- `Period*` scenario aggregators reduce across scenarios per period on the
+  scenario axis.
+- Non-additive `run_aggregated` aggregators (`Mean`, `Variance`, `Std`,
+  `Median`, `CTE`) are batch-invariant — both the plain and partitioned
+  `.over()` folds divide by the policy count, not the number of batches.
+- `RelativeFloorShock` raises with guidance instead of silently doing nothing.
+- A uniform book whose input lists all disagree with the schedule's `n_periods`
+  now fails loudly instead of truncating to the wrong horizon; variable-horizon
+  ("jagged") books are unaffected.
+
+### Performance
+- `run_aggregated` batch folds are vectorised: `Sum`/`Min`/`Max`/`Mean`/
+  `Variance`/`Std` reduce each batch in a single Polars pass, and the
+  partitioned `.over()` path folds per group rather than iterating per policy.
+
+### Security
+- Bumped `crossbeam-epoch` 0.9.18 → 0.9.20 (RUSTSEC-2026-0204).
+
+### Documentation
+- The install page explains how to install `uv` and adds a verify step; the
+  rollforward inspection page and the bundled model-building skill were corrected.
+
 ## [0.5.1] — CLI model-points loading
 
 Bug-fix release for the `gspio` CLI and assumption-file loading. No engine or API
