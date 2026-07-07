@@ -151,3 +151,74 @@ def test_auto_search_hard_ceiling_raises_when_remainder_cannot_fit(monkeypatch):
             aggregations=(Sum("payoff").alias("total").over("scenario_id"),),
             batch_size="auto",
         )
+
+
+def _patch_constant_peak(monkeypatch, peak_mb: float) -> None:
+    """Make every batch collect report a fixed synthetic transient peak.
+
+    Collections still run for real (tiny frames), so folds stay correct; only
+    the measured peak is synthetic, which lets a test place each ladder rung
+    deterministically above or below the budget.
+    """
+    from gaspatchio_core.scenarios import _for_each
+
+    real = _for_each._collect_with_peak  # noqa: SLF001
+
+    def fake(lazy, *, engine=None):
+        frame, _ = real(lazy, engine=engine)
+        return frame, int(peak_mb * 1024**2)
+
+    monkeypatch.setattr(_for_each, "_collect_with_peak", fake)
+
+
+def test_gate_skips_rung_predicted_over_budget(monkeypatch):
+    """A rung whose linearly-extrapolated peak busts the budget is never probed.
+
+    This is the kernel-OOM regression guard: with b=1 measured at 100 MB against a
+    200 MB budget, b=4 predicts 400 MB * 1.3 > 200 MB. The old search ran that
+    probe anyway (and died when the real rung exceeded physical memory); the gate
+    must stop the ladder at b=1 without ever launching b=4.
+    """
+    from gaspatchio_core.scenarios import _for_each
+
+    _patch_constant_peak(monkeypatch, 100.0)  # every collect "peaks" at 100 MB
+    monkeypatch.setattr(
+        _for_each, "memory_budget_bytes", lambda *a, **k: 200 * 1024**2
+    )  # 100*1.3 <= 200 fits; predicted 400*1.3 > 200 must gate b=4
+
+    r = for_each_scenario(
+        _af(),
+        scenarios=list(range(1, 41)),
+        model_fn=_model_fn,
+        aggregations=(Sum("payoff").alias("total").over("scenario_id"),),
+        batch_size="auto",
+    )
+    assert r.selection is not None
+    streaming = [p for p in r.selection.probed if p.engine == "streaming"]
+    assert [p.batch for p in streaming] == [1]  # b=4 was gated, not probed
+    assert r.batch_size == 1
+    assert r.selection.engine == "streaming"
+    # 40 scenarios * 200 policies * payoff 2.0 -- the run still completes correctly.
+    assert _checksum(r) == 40 * 400.0
+
+
+def test_gate_allows_rungs_predicted_within_budget(monkeypatch):
+    """A generous budget gates nothing: the full ladder is still probed."""
+    from gaspatchio_core.scenarios import _for_each
+
+    _patch_constant_peak(monkeypatch, 100.0)
+    monkeypatch.setattr(
+        _for_each, "memory_budget_bytes", lambda *a, **k: 10 * 1024**3
+    )  # 10 GB: every predicted rung fits
+
+    r = for_each_scenario(
+        _af(),
+        scenarios=list(range(1, 41)),  # ladder for n=40 -> [1, 4, 16]
+        model_fn=_model_fn,
+        aggregations=(Sum("payoff").alias("total").over("scenario_id"),),
+        batch_size="auto",
+    )
+    assert r.selection is not None
+    streaming = [p.batch for p in r.selection.probed if p.engine == "streaming"]
+    assert streaming == [1, 4, 16]
+    assert _checksum(r) == 40 * 400.0

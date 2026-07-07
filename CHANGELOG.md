@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- `for_each_scenario(batch_size="auto")` no longer risks a kernel OOM-kill
+  while *measuring* candidate batch sizes. The streaming-batch search now
+  predicts each ladder rung from the last measured one (linear in batch size,
+  which over-estimates) and never launches a probe whose predicted peak
+  already exceeds the memory budget. Previously the search ran every rung
+  unconditionally and checked the budget only after the fact — a probe larger
+  than physical memory died mid-`collect()`, before any back-off logic could
+  run (observed as a CI runner death on a 10-scenario × 100K-policy cell,
+  where the b=4 streaming probe demanded ~11.5 GB on a 16 GB box).
+
 ## [0.5.2] — Post-release correctness fixes
 
 Correctness and robustness fixes surfaced by a thorough onboarding and

@@ -819,7 +819,13 @@ def for_each_scenario(  # noqa: C901, PLR0912, PLR0913, PLR0915
         resolved_size, resolution, winner_engine = 1, "auto_search", "in-memory"
         selection = SelectionDecision("in-memory", 1, "single_scenario", [])
     else:
-        # Auto: coarse streaming-batch search on real folded passes.
+        # Auto: coarse streaming-batch search on real folded passes. Rungs after the
+        # first are gated by linear extrapolation from the last measured rung, so the
+        # search never launches a probe it can predict is unaffordable. Residual risk:
+        # the FIRST rung (streaming b=1) has no prior measurement to predict from; if
+        # even that exceeds physical memory the kernel kills the process before the
+        # search can back off (a seed-slice estimator, as on the policy axis, would be
+        # the escalation if that case is ever observed in practice).
         resolution = "auto_search"
         budget_mb = memory_budget_bytes(target_memory_fraction) / 1024**2
         ladder = build_ladder(
@@ -829,6 +835,26 @@ def for_each_scenario(  # noqa: C901, PLR0912, PLR0913, PLR0915
             nxt = sids[len(folded) : len(folded) + b]
             if len(nxt) < b:  # not enough scenarios left to measure this rung honestly
                 break
+            if probed:
+                # Gate: predict this rung from the last measured one before running it.
+                # Peak grows at most linearly in batch size for the scenario cross-join
+                # (measured ratios are sub-linear), so this over-estimates conservatively.
+                # A rung whose predicted peak already fails the fits test could never be
+                # selected -- probing it would pay an unbounded memory cost for zero
+                # information, and is exactly the kernel-OOM path: a probe that exceeds
+                # physical memory dies mid-collect, before its peak is ever recorded and
+                # before any back-off logic can run (GSP: 10sc x 100K cell, the b=4
+                # streaming probe demanded ~11.5 GB on a 16 GB runner after b=1 measured
+                # 3.1 GB against a 7.7 GB budget).
+                # peak_mb is None only for a rung that could not be measured, and
+                # such a rung is fits=False, which breaks the loop before a next
+                # iteration -- so this is unreachable in practice; it satisfies the
+                # ProbeResult type and degrades to "no gate" if that ever changes.
+                last = probed[-1]
+                if last.peak_mb is not None:
+                    predicted_mb = last.peak_mb * (b / last.batch)
+                    if predicted_mb * DEFAULTS.safety_margin > budget_mb:
+                        break  # larger rungs are heavier -> nothing above fits either
             peak, wall = _process_one(nxt, engine="streaming")
             pr = ProbeResult(
                 b,
