@@ -3,16 +3,80 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gaspatchio — Benchmarks</title>
+  <title>Gaspatchio Performance Benchmarks</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --fg:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+           background: var(--bg); color: var(--fg); line-height: 1.55; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+    header h1 { font-size: 1.9rem; margin: 0 0 .4rem; letter-spacing: -.02em; }
+    header p { color: var(--muted); margin: .2rem 0; max-width: 60ch; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); margin-top: 2rem; }
+    .card { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+            padding: 1.1rem 1.2rem; transition: border-color .15s ease, transform .15s ease; }
+    .card:hover { border-color: var(--accent); transform: translateY(-2px); text-decoration: none; }
+    .card h2 { font-size: 1.05rem; margin: 0 0 .35rem; color: var(--fg); }
+    .card p { margin: 0; color: var(--muted); font-size: .9rem; }
+    .card .plat { margin-top: .7rem; font-size: .8rem; color: var(--muted); }
+    .card .plat a { margin-right: .8rem; }
+    .section-title { margin: 2.5rem 0 .5rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+    code { background: #0b1220; padding: .1rem .35rem; border-radius: 5px; font-size: .85em; }
+  </style>
 </head>
 <body>
-  <h1>Gaspatchio benchmark data</h1>
-  <p>
-    This branch stores continuous-benchmark history for
-    <a href="https://github.com/gaspatchio/gaspatchio">gaspatchio/gaspatchio</a>,
-    consumed by
-    <a href="https://github.com/benchmark-action/github-action-benchmark">github-action-benchmark</a>.
-    Trend data accumulates under <code>dev/bench/</code> as benchmarks run on the default branch.
-  </p>
+  <div class="wrap">
+    <header>
+      <h1>Gaspatchio Performance Benchmarks</h1>
+      <p>Continuous performance tracking for
+         <a href="https://github.com/gaspatchio/gaspatchio">gaspatchio/gaspatchio</a>.
+         Each dashboard charts a benchmark suite over time; a new data point is recorded
+         on every push to <code>main</code>.</p>
+      <p>Powered by
+         <a href="https://github.com/benchmark-action/github-action-benchmark">github-action-benchmark</a>.
+         Regressions past the alert threshold are commented on the triggering commit.</p>
+    </header>
+
+    <div class="section-title">Rust core</div>
+    <div class="grid">
+      <a class="card" href="dev/bench/">
+        <h2>Criterion micro-benchmarks</h2>
+        <p>Assumption-table lookups, vector kernels, and hot-path Rust routines measured with Criterion.</p>
+        <div class="plat"><a href="dev/bench/">Linux</a><a href="dev/bench-windows/">Windows</a></div>
+      </a>
+    </div>
+
+    <div class="section-title">Model &amp; aggregation</div>
+    <div class="grid">
+      <a class="card" href="dev/model-bench/">
+        <h2>End-to-end model benchmarks</h2>
+        <p>Full projection over a 100k-policy book — wall-clock and peak memory for a realistic model run.</p>
+        <div class="plat"><a href="dev/model-bench/">Linux</a><a href="dev/model-bench-windows/">Windows</a></div>
+      </a>
+      <a class="card" href="dev/aggregated-bench/">
+        <h2>Aggregation surface</h2>
+        <p>Scenario aggregation paths — materialise-then-aggregate vs <code>run_aggregated</code> vs spill.</p>
+        <div class="plat"><a href="dev/aggregated-bench/">Linux</a></div>
+      </a>
+    </div>
+
+    <div class="section-title">Reconciliation</div>
+    <div class="grid">
+      <a class="card" href="dev/comparison/">
+        <h2>Gaspatchio vs Lifelib</h2>
+        <p>A production variable-annuity model reconciled against
+           <a href="https://lifelib.io">lifelib</a> — tracks run-time head-to-head over releases.</p>
+        <div class="plat"><a href="dev/comparison/">Linux</a><a href="dev/comparison-windows/">Windows</a></div>
+      </a>
+    </div>
+
+    <footer>
+      Source: <a href="https://github.com/gaspatchio/gaspatchio">github.com/gaspatchio/gaspatchio</a> ·
+      Docs: <a href="https://gaspatchio.dev">gaspatchio.dev</a>
+    </footer>
+  </div>
 </body>
 </html>
