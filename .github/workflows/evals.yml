@@ -68,12 +68,12 @@ jobs:
         include:
           - os: linux
             display: Linux
-            runner: ubuntu-latest-m
+            runner: ubuntu-latest
             benchmark_name: Rust Benchmarks
             benchmark_path: dev/bench
           - os: windows
             display: Windows
-            runner: windows-m
+            runner: windows-latest
             benchmark_name: Rust Benchmarks (Windows)
             benchmark_path: dev/bench-windows
     steps:
@@ -123,12 +123,12 @@ jobs:
         include:
           - os: linux
             display: Linux
-            runner: ubuntu-latest-m
+            runner: ubuntu-latest
             benchmark_name: Model Benchmarks
             benchmark_path: dev/model-bench
           - os: windows
             display: Windows
-            runner: windows-m
+            runner: windows-latest
             benchmark_name: Model Benchmarks (Windows)
             benchmark_path: dev/model-bench-windows
     steps:
@@ -167,7 +167,7 @@ jobs:
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event.label.name == 'benchmark' ||
       github.event.label.name == 'performance'
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
@@ -198,14 +198,9 @@ jobs:
 
   comparison-benchmarks:
     name: Gaspatchio vs Lifelib (${{ matrix.display }})
-    if: >-
-      (github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      github.event.label.name == 'benchmark') &&
-      (github.event_name != 'workflow_dispatch' ||
-      inputs.suite == 'all' ||
-      inputs.suite == 'benchmarks')
+    # Private-repo only: clones the private opioinc/gaspatchio-benchmarks lifelib
+    # reference data via a deploy key that is not present on the public repo.
+    if: github.repository == 'opioinc/gaspatchio-core'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
@@ -221,12 +216,12 @@ jobs:
         include:
           - os: linux
             display: Linux
-            runner: ubuntu-latest-m
+            runner: ubuntu-latest
             benchmark_name: Gaspatchio vs Lifelib
             benchmark_path: dev/comparison
           - os: windows
             display: Windows
-            runner: windows-m
+            runner: windows-latest
             benchmark_name: Gaspatchio vs Lifelib (Windows)
             benchmark_path: dev/comparison-windows
     steps:
@@ -288,12 +283,12 @@ jobs:
         include:
           - os: linux
             display: Linux
-            runner: ubuntu-latest-m
+            runner: ubuntu-latest
             benchmark_name: Scenario Benchmarks
             benchmark_path: dev/scenario-bench
           - os: windows
             display: Windows
-            runner: windows-m
+            runner: windows-latest
             benchmark_name: Scenario Benchmarks (Windows)
             benchmark_path: dev/scenario-bench-windows
     steps:
@@ -331,7 +326,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
       github.event.label.name == 'performance')
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
       run:
@@ -372,7 +367,7 @@ jobs:
       (github.event_name != 'workflow_dispatch' ||
       ((inputs.suite == 'all' || inputs.suite == 'performance') &&
       inputs.platform != 'windows'))
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
       run:
@@ -404,7 +399,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
       github.event.label.name == 'performance')
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
       run:
@@ -432,15 +427,11 @@ jobs:
 
   skill-evals:
     name: Skill Evals (4 models)
-    if: >-
-      (github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      github.event.label.name == 'benchmark') &&
-      (github.event_name != 'workflow_dispatch' ||
-      (inputs.suite == 'all' && inputs.platform == 'all'))
+    # Private-repo only: needs ANTHROPIC_API_KEY / OPENAI_API_KEY secrets (paid,
+    # per-run cost) that are not configured on the public repo.
+    if: github.repository == 'opioinc/gaspatchio-core'
     needs: [rust-benchmarks, model-benchmarks, comparison-benchmarks]
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: bindings/python
@@ -481,13 +472,8 @@ jobs:
 
   capability-matrix:
     name: Update Capability Matrix
-    if: >-
-      (github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      github.event.label.name == 'benchmark') &&
-      (github.event_name != 'workflow_dispatch' ||
-      (inputs.suite == 'all' && inputs.platform == 'all'))
+    # Private-repo only: renders the capability matrix from skill-evals output.
+    if: github.repository == 'opioinc/gaspatchio-core'
     needs: skill-evals
     runs-on: ubuntu-latest
     steps:
