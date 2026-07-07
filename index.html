@@ -79,6 +79,10 @@
       <span class="w-2 h-2 rounded-full bg-gray-400 dot-pulse" id="dot-aggregated"></span>
       <span id="label-aggregated">Aggregation: loading...</span>
     </div>
+    <div class="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-md text-xs border border-gray-200">
+      <span class="w-2 h-2 rounded-full bg-gray-400 dot-pulse" id="dot-scenario"></span>
+      <span id="label-scenario">Scenario Benchmarks: loading...</span>
+    </div>
   </div>
 
   <div class="flex flex-col gap-6">
@@ -178,6 +182,46 @@
       </div>
       <div class="border-t border-gray-100 overflow-x-auto" id="table-aggregated"></div>
       <div class="px-5 py-2 text-[10px] text-gray-300" id="provenance-aggregated"></div>
+    </div>
+
+
+    <!-- Section 3: Scenario Benchmarks (BOTTOM) -->
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow animate-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <h2 class="text-base font-semibold text-gray-900 mb-1">Scenario Benchmarks</h2>
+          <p class="text-sm text-gray-500 leading-relaxed max-w-3xl">
+            Bounded-memory stochastic scenario projections via <code class="text-[12px] bg-gray-100 px-1 py-0.5 rounded">for_each_scenario(batch_size="auto")</code> on the Level 5 variable annuity model. Each cell runs N scenarios over a portfolio of model points; the auto-sizer picks a batch that caps peak memory. Two arms: scenario-scaling (fixed 1K points) and portfolio-scaling (fixed 10 scenarios).
+          </p>
+          <p class="text-[11px] text-gray-400 mt-2">All benchmarks on GitHub-hosted ubuntu-latest / windows-latest runners</p>
+        </div>
+        <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold tabular shrink-0" id="badge-scenario">--</span>
+      </div>
+      <div class="p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <p class="text-[11px] text-gray-400 mb-2 font-semibold uppercase tracking-wider">Throughput (higher is better)</p>
+            <div class="relative h-56"><canvas id="chart-scenario-throughput"></canvas></div>
+          </div>
+          <div>
+            <p class="text-[11px] text-gray-400 mb-2 font-semibold uppercase tracking-wider">Peak RSS (lower is better)</p>
+            <div class="relative h-56"><canvas id="chart-scenario-rss"></canvas></div>
+          </div>
+        </div>
+        <div class="hidden flex-col items-center justify-center h-48 text-gray-400 text-sm" id="empty-scenario">
+          <span class="text-3xl mb-2 opacity-40">🎲</span>
+          <span>No scenario benchmark data yet</span>
+          <span class="text-xs text-gray-300 mt-1">Data appears after the first successful scenario benchmark run</span>
+        </div>
+      </div>
+      <div class="border-t border-gray-100 overflow-x-auto" id="table-scenario"></div>
+      <div class="px-5 py-2 text-[10px] text-gray-300" id="provenance-scenario"></div>
+      <!-- Performance History (trends over time, per commit) -->
+      <div class="border-t border-gray-100 px-6 py-4" id="scenario-trend-section" style="display:none">
+        <p class="text-[11px] text-gray-400 mb-3 font-semibold uppercase tracking-wider">Performance History — scenario throughput &amp; peak RSS over time</p>
+        <div class="relative h-56"><canvas id="chart-scenario-trend"></canvas></div>
+        <p class="text-[10px] text-gray-300 mt-2">Throughput (solid, left axis) and peak RSS (dashed, right axis) per scenario cell, one point per commit. Regressions trigger CI alerts.</p>
+      </div>
     </div>
 
   </div>
@@ -1508,15 +1552,264 @@
     });
   }
 
+  function scenarioPointsNum(label) {
+    var m = label.match(/^(\d+)(K|M)?$/i);
+    if (!m) return 0;
+    var n = parseInt(m[1], 10);
+    if (/k/i.test(m[2] || '')) n *= 1000;
+    if (/m/i.test(m[2] || '')) n *= 1000000;
+    return n;
+  }
+
+  function parseScenarioCells(benches) {
+    var cells = {};
+    benches.forEach(function(b) {
+      var m = b.name.match(/^(.+)\/(\d+[KM]?)pts-(\d+)sc-(wall|rss|throughput|batch)$/i);
+      if (!m) return;
+      var arm = m[1], pts = m[2], scen = parseInt(m[3], 10), metric = m[4];
+      var key = arm + '|' + pts + '|' + scen;
+      if (!cells[key]) cells[key] = { arm: arm, pts: pts, ptsNum: scenarioPointsNum(pts), scen: scen, label: pts + ' × ' + scen };
+      cells[key][metric] = b.value;
+    });
+    return Object.keys(cells).map(function(k) { return cells[k]; }).sort(function(a, b) {
+      return a.ptsNum - b.ptsNum || a.scen - b.scen;
+    });
+  }
+
+  function fmtMem(v) {
+    if (v == null) return '--';
+    return v >= 1000 ? (v / 1000).toFixed(2) + ' GB' : v.toFixed(0) + ' MB';
+  }
+
+  // scen-scaling = blue, port-scaling = purple; per-bar colours keyed by arm.
+  function scenarioBarColor(arm) { return /port/i.test(arm) ? '#7c3aed' : '#2563eb'; }
+
+  function renderScenarioCharts(entries) {
+    var empty = document.getElementById('empty-scenario');
+    var tpCanvas = document.getElementById('chart-scenario-throughput');
+    var rssCanvas = document.getElementById('chart-scenario-rss');
+    if (!entries || entries.length === 0) {
+      if (tpCanvas) tpCanvas.style.display = 'none';
+      if (rssCanvas) rssCanvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      return;
+    }
+
+    var latest = entries[entries.length - 1];
+    var provEl = document.getElementById('provenance-scenario');
+    if (provEl) provEl.innerHTML = formatProvenance(latest);
+
+    var cells = parseScenarioCells(latest.benches || []);
+    if (cells.length === 0) {
+      if (tpCanvas) tpCanvas.style.display = 'none';
+      if (rssCanvas) rssCanvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      return;
+    }
+
+    var labels = cells.map(function(c) { return c.label; });
+    var barColors = cells.map(function(c) { return scenarioBarColor(c.arm); });
+
+    // Throughput (higher is better)
+    new Chart(tpCanvas, {
+      type: 'bar',
+      data: { labels: labels, datasets: [{ label: 'Throughput', data: cells.map(function(c) { return c.throughput || 0; }), backgroundColor: barColors, borderRadius: 4 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280',
+            borderColor: '#e5e7eb', borderWidth: 1, padding: 10, cornerRadius: 6,
+            callbacks: {
+              title: tooltipTitleWithCommit(latest),
+              label: function(ctx) {
+                var c = cells[ctx.dataIndex];
+                return [c.arm + '  (' + c.pts + ' pts × ' + c.scen + ' scen)', fmtVal(ctx.parsed.y) + ' scenario-pts/sec'];
+              }
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#f3f4f6' }, title: { display: true, text: 'scenario-points/sec', font: { size: 10 }, color: '#9ca3af' }, ticks: { callback: function(v) { return fmtVal(v); } } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    // Peak RSS (lower is better)
+    new Chart(rssCanvas, {
+      type: 'bar',
+      data: { labels: labels, datasets: [{ label: 'Peak RSS', data: cells.map(function(c) { return c.rss || 0; }), backgroundColor: barColors.map(function(c) { return c + '88'; }), borderColor: barColors, borderWidth: 1, borderRadius: 4 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280',
+            borderColor: '#e5e7eb', borderWidth: 1, padding: 10, cornerRadius: 6,
+            callbacks: {
+              title: tooltipTitleWithCommit(latest),
+              label: function(ctx) {
+                var c = cells[ctx.dataIndex];
+                return [c.arm + '  (' + c.pts + ' pts × ' + c.scen + ' scen)', 'peak RSS ' + fmtMem(ctx.parsed.y) + '  ·  batch ' + (c.batch != null ? c.batch : '--')];
+              }
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#f3f4f6' }, title: { display: true, text: 'peak RSS', font: { size: 10 }, color: '#9ca3af' }, ticks: { callback: function(v) { return fmtMem(v); } } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    // Badge = peak throughput across cells
+    var peakTp = cells.reduce(function(mx, c) { return Math.max(mx, c.throughput || 0); }, 0);
+    if (peakTp > 0) {
+      var badge = document.getElementById('badge-scenario');
+      badge.textContent = fmtVal(peakTp) + ' scen-pts/sec peak';
+      badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-blue-50 text-blue-700 shrink-0';
+    }
+  }
+
+  function renderScenarioTable(entries) {
+    var el = document.getElementById('table-scenario');
+    if (!el || !entries || entries.length < 1) { if (el) el.style.display = 'none'; return; }
+
+    var latest = entries[entries.length - 1];
+    var cells = parseScenarioCells(latest.benches || []);
+    if (cells.length === 0) { el.style.display = 'none'; return; }
+
+    var html = '<table class="w-full text-xs">';
+    html += '<thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">';
+    html += '<th class="px-5 py-2 font-semibold">Arm</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Points</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Scenarios</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Wall</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Peak RSS</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Throughput</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Batch</th>';
+    html += '</tr></thead><tbody>';
+
+    cells.forEach(function(c, idx) {
+      var stripe = idx % 2 === 0 ? '' : 'bg-gray-50/50';
+      var dot = scenarioBarColor(c.arm);
+      html += '<tr class="border-t border-gray-100 hover:bg-gray-50 transition-colors ' + stripe + '">';
+      html += '<td class="px-5 py-2.5 font-medium text-gray-700"><span class="inline-block w-2 h-2 rounded-full mr-2 align-middle" style="background:' + dot + '"></span>' + c.arm + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular text-gray-600">' + c.pts + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular text-gray-600">' + c.scen + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + (c.wall != null ? c.wall.toFixed(1) + 's' : '--') + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + fmtMem(c.rss) + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + (c.throughput != null ? fmtVal(c.throughput) + ' <span class="text-gray-400 font-normal">pts/s</span>' : '--') + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular text-gray-600">' + (c.batch != null ? c.batch : '--') + '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  }
+
+  // Per-commit history: throughput (solid, left) + peak RSS (dashed, right) per cell.
+  function renderScenarioTrend(allEntries) {
+    var section = document.getElementById('scenario-trend-section');
+    if (!section || !allEntries || allEntries.length < 1) { if (section) section.style.display = 'none'; return; }
+
+    // Cells come from the latest run; reconstruct the bench-name stub for each.
+    var cells = parseScenarioCells(allEntries[allEntries.length - 1].benches || []);
+    if (cells.length === 0) { section.style.display = 'none'; return; }
+    section.style.display = '';
+
+    var canvas = document.getElementById('chart-scenario-trend');
+    var ctx = canvas.getContext('2d');
+
+    var labels = allEntries.map(function(run) {
+      var d = new Date(run.date);
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    });
+
+    function stub(c) { return c.arm + '/' + c.pts + 'pts-' + ('0000' + c.scen).slice(-4) + 'sc'; }
+    function series(benchName) {
+      return allEntries.map(function(run) {
+        var b = run.benches.find(function(b2) { return b2.name === benchName; });
+        return b ? b.value : null;
+      });
+    }
+
+    var manyPoints = allEntries.length >= 10;
+    var datasets = [];
+    cells.forEach(function(c, i) {
+      var color = COLORS[i % COLORS.length];
+      // Throughput — solid, left axis
+      var g = ctx.createLinearGradient(0, 0, 0, 224);
+      g.addColorStop(0, color.fill.replace('0.06', '0.12'));
+      g.addColorStop(1, color.fill.replace('0.06', '0.0'));
+      datasets.push({
+        label: c.label + ' tput',
+        data: series(stub(c) + '-throughput'),
+        borderColor: color.line, backgroundColor: g,
+        tension: 0.35, pointRadius: manyPoints ? 0 : 3, pointHoverRadius: 5,
+        pointHoverBackgroundColor: color.line, pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2,
+        borderWidth: 2, fill: true, yAxisID: 'y',
+      });
+      // Peak RSS — dashed, right axis
+      datasets.push({
+        label: c.label + ' RSS',
+        data: series(stub(c) + '-rss'),
+        borderColor: color.line, backgroundColor: 'transparent',
+        tension: 0.35, pointRadius: manyPoints ? 0 : 4, pointHoverRadius: 7, pointHitRadius: 12,
+        pointStyle: 'rectRot', pointHoverBackgroundColor: color.line, pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2,
+        borderWidth: 2, borderDash: [6, 3], fill: false, yAxisID: 'y1',
+      });
+    });
+
+    new Chart(canvas, {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 8, boxHeight: 8, padding: 12, font: { size: 9 }, usePointStyle: true, pointStyle: 'circle' } },
+          tooltip: {
+            backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280',
+            borderColor: '#e5e7eb', borderWidth: 1, padding: 10, cornerRadius: 6,
+            boxWidth: 8, boxHeight: 8, boxPadding: 4, usePointStyle: true,
+            callbacks: {
+              title: function(items) {
+                var run = allEntries[items[0].dataIndex];
+                var hash = run.commit && run.commit.id ? run.commit.id.slice(0, 7) : '';
+                var msg = run.commit && run.commit.message ? run.commit.message.split('\n')[0] : '';
+                if (msg.length > 60) msg = msg.slice(0, 57) + '...';
+                return items[0].label + (hash ? '  ·  ' + hash : '') + (msg ? '\n' + msg : '');
+              },
+              label: function(ctx) {
+                var v = ctx.parsed.y;
+                if (ctx.dataset.yAxisID === 'y1') return ctx.dataset.label + ': ' + fmtMem(v);
+                return ctx.dataset.label + ': ' + (v != null ? fmtVal(v) + ' pts/sec' : '--');
+              }
+            }
+          }
+        },
+        scales: {
+          y: { position: 'left', beginAtZero: false, grid: { color: '#f3f4f6', lineWidth: 1 }, title: { display: true, text: 'Throughput (scen-pts/sec)', font: { size: 10, weight: 'bold' }, color: '#2563eb' }, ticks: { maxTicksLimit: 5, callback: function(v) { return fmtVal(v); } } },
+          y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Peak RSS', font: { size: 10, weight: 'bold' }, color: '#6b7280' }, ticks: { maxTicksLimit: 5, callback: function(v) { return fmtMem(v); } } },
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }
+        }
+      }
+    });
+  }
+
   async function init() {
     var results = await Promise.all([
       loadBenchmarkData('dev/model-bench/data.js'),
       loadComparisonData('dev/comparison/data.js'),
       loadBenchmarkData('dev/model-bench-windows/data.js'),
       loadBenchmarkData('dev/aggregated-bench/data.js'),
+      loadBenchmarkData('dev/scenario-bench/data.js'),
     ]);
 
-    var modelData = results[0], comparisonData = results[1], modelWinData = results[2], aggData = results[3];
+    var modelData = results[0], comparisonData = results[1], modelWinData = results[2], aggData = results[3], scenarioData = results[4];
 
     // Model Benchmarks (hero) — custom throughput + time charts
     if (modelData && modelData.entries) {
@@ -1587,6 +1880,20 @@
       setStatus('aggregated', 'error', 'Aggregation: no data');
     }
 
+    // Scenario Benchmarks (bottom)
+    if (scenarioData && scenarioData.entries) {
+      var key = Object.keys(scenarioData.entries)[0];
+      var entries = scenarioData.entries[key] || [];
+      renderScenarioCharts(entries);
+      renderScenarioTable(entries);
+      renderScenarioTrend(entries);
+      setStatus('scenario', 'ok', 'Scenario Benchmarks: ' + entries.length + ' runs');
+    } else {
+      renderScenarioCharts([]);
+      var tbl = document.getElementById('table-scenario');
+      if (tbl) tbl.style.display = 'none';
+      setStatus('scenario', 'error', 'Scenario Benchmarks: no data');
+    }
   }
 
   init();
