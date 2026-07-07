@@ -198,9 +198,17 @@ jobs:
 
   comparison-benchmarks:
     name: Gaspatchio vs Lifelib (${{ matrix.display }})
-    # Private-repo only: clones the private opioinc/gaspatchio-benchmarks lifelib
-    # reference data via a deploy key that is not present on the public repo.
-    if: github.repository == 'opioinc/gaspatchio-core'
+    # Clones the private opioinc/gaspatchio-benchmarks lifelib reference data via
+    # the BENCHMARKS_DEPLOY_KEY secret (read-only deploy key), configured on both
+    # the private and public repos.
+    if: >-
+      (github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event.label.name == 'benchmark') &&
+      (github.event_name != 'workflow_dispatch' ||
+      inputs.suite == 'all' ||
+      inputs.suite == 'benchmarks')
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
