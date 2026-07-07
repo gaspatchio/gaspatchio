@@ -253,3 +253,35 @@ def test_gate_prediction_includes_streaming_batch_inflation(monkeypatch):
     assert streaming == [1]  # b=4 gated by the inflation factor, never probed
     assert r.batch_size == 1
     assert _checksum(r) == 40 * 400.0
+
+
+def test_probe_peak_floored_by_frame_size(monkeypatch):
+    """A probe whose RSS delta reads ~0 still gates on the materialised frame size.
+
+    Field regression guard: in a process with retained allocator pools, a batch
+    can be served entirely from pooled memory -- RSS never grows and the sampler
+    reads ~0 (observed live: ``probes: [b1/streaming=0MB+fits]``). The gate then
+    predicted 0 for every larger rung and launched an unaffordable probe. The
+    rung's effective peak must be floored by the collected frame's size, which
+    is real live memory regardless of where the allocator got it.
+    """
+    from gaspatchio_core.scenarios import _for_each
+
+    _patch_constant_peak(monkeypatch, 0.0)  # the pool-reuse lie: sampler sees nothing
+    monkeypatch.setattr(
+        _for_each, "memory_budget_bytes", lambda *a, **k: 50 * 1024
+    )  # 50 KB: the ~6 KB test frame fits at b=1; frame*4*3.0*1.3 must gate b=4
+
+    r = for_each_scenario(
+        _af(),
+        scenarios=list(range(1, 41)),
+        model_fn=_model_fn,
+        aggregations=(Sum("payoff").alias("total").over("scenario_id"),),
+        batch_size="auto",
+    )
+    assert r.selection is not None
+    streaming = [p for p in r.selection.probed if p.engine == "streaming"]
+    assert [p.batch for p in streaming] == [1]  # b=4 gated despite the 0 MB reading
+    assert all(p.peak_mb > 0 for p in streaming)  # the floor, not the lie, was recorded
+    assert r.batch_size == 1
+    assert _checksum(r) == 40 * 400.0

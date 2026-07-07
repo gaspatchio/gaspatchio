@@ -721,6 +721,15 @@ def for_each_scenario(  # noqa: C901, PLR0912, PLR0913, PLR0915
             master_seed=master_seed,
             engine=engine,
         )
+        # Pool-reuse floor: a batch that materialises an N-byte frame holds at
+        # least N live bytes at peak, even when the allocator served it entirely
+        # from retained pools and the RSS sampler saw no growth. In a process
+        # that has already run other collects, delta-over-baseline reads ~0 for
+        # such a batch (observed live: a probe measured 0 MB, so the gate
+        # predicted 0 for every larger rung and let an unaffordable probe
+        # through). Mirrors the policy axis, which floors its seed measurement
+        # with the frame size for the same reason (_spill/_aggregated).
+        batch_peak = max(batch_peak, int(proj_eager.estimated_size()))
         max_batch_peak = max(max_batch_peak, batch_peak)
         _fold_batch(
             proj_eager,
