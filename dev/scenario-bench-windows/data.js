@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783419696022,
+  "lastUpdate": 1783460578954,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks (Windows)": [
@@ -238,6 +238,128 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 4513.2,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Matt Wright",
+            "username": "mrmattwright",
+            "email": "1277725+mrmattwright@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "346d4662b985d7a4a128252ba7c83d468ed010a0",
+          "message": "fix(scenarios): probe gate predicts super-linear streaming cross-join peaks (#10)\n\nThe gate from the previous fix extrapolated a rung's peak linearly in\nbatch size from the last measured rung. Field falsification on the CI\n10sc x 100K cell: b=1 measured ~1.3 GB on the 4-core runner, so a linear\nprediction put b=4 within the 7.7 GB budget -- but the actual b=4 demand\nwas ~11.5 GB (8.6x the b=1 rung, 2.2x ABOVE linear; the Polars #20786\ncross-join inflation is super-linear in batch at high policy counts) and\nthe probe killed the runner again. Locally-measured 1K-10K ratios\n(3.0-3.7x, sub-linear) do not extrapolate to 100K: the scaling law\nitself changes with scale.\n\nMultiply the gate's linear prediction by streaming_batch_inflation\n(3.0, a named SizingDefaults constant chosen above the worst observed\n2.2x excess). Checked against every measured cell: 1K/10K cells keep\ntheir current batch choices; the 100K killer rung is now gated; the one\nbehavioral downgrade is 1000sc x 1K picking b=16 over b=64 (~8% slower)\n-- reliability over peak throughput. Over-predicting costs at most a\nsmaller batch; under-predicting costs the process.\n\nNew test pins the factor: a budget that a bare-linear gate would pass\n(100 MB peak, 1 GB budget -> linear 520 MB) must still skip the b=4\nprobe (inflated 1560 MB).",
+          "timestamp": "2026-07-07T21:21:41Z",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/346d4662b985d7a4a128252ba7c83d468ed010a0"
+        },
+        "date": 1783460576089,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 3.412,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 162.8,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 2931.1,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 30.394,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 495.8,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 3290.1,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-wall",
+            "value": 481.385,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-rss",
+            "value": 225.7,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-throughput",
+            "value": 2077.3,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 21.249,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 369.4,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 4706,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 213.086,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 5922.4,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 4692.9,
             "unit": "scenario-points/sec"
           },
           {
