@@ -5,13 +5,19 @@
 ### Fixed
 - `for_each_scenario(batch_size="auto")` no longer risks a kernel OOM-kill
   while *measuring* candidate batch sizes. The streaming-batch search now
-  predicts each ladder rung from the last measured one (linear in batch size,
-  which over-estimates) and never launches a probe whose predicted peak
-  already exceeds the memory budget. Previously the search ran every rung
-  unconditionally and checked the budget only after the fact — a probe larger
-  than physical memory died mid-`collect()`, before any back-off logic could
-  run (observed as a CI runner death on a 10-scenario × 100K-policy cell,
-  where the b=4 streaming probe demanded ~11.5 GB on a 16 GB box).
+  predicts each ladder rung from the last measured one and never launches a
+  probe whose predicted peak already exceeds the memory budget. Previously
+  the search ran every rung unconditionally and checked the budget only after
+  the fact — a probe larger than physical memory died mid-`collect()`, before
+  any back-off logic could run (observed as a CI runner death on a
+  10-scenario × 100K-policy cell, where the b=4 streaming probe demanded
+  ~11.5 GB on a 16 GB box). The prediction is linear-in-batch times
+  `streaming_batch_inflation` (3.0): under the streaming engine the scenario
+  cross-join peak is *super-linear* in batch at high policy counts
+  (Polars #20786; the same cell measured b=4 at ~8.6× the b=1 rung, 2.2×
+  above linear), so a bare linear gate still under-predicted the killer rung.
+  Over-predicting costs at most a smaller batch; under-predicting costs the
+  process.
 
 ## [0.5.2] — Post-release correctness fixes
 
