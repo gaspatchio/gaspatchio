@@ -19,6 +19,7 @@ from gaspatchio_core.assumptions._dimensions import (
 from gaspatchio_core.assumptions._strategies import (
     ExtendOverflow,
     FillConstant,
+    FillForward,
     LinearInterpolate,
 )
 
@@ -214,6 +215,71 @@ class TestMeltDimension:
         assert result["value"].null_count() == 0
         # Null values should be replaced with 0.0
         assert 0.0 in result["value"].to_list()
+
+    def test_melt_dimension_fillforward_is_within_group(self):
+        """FillForward must carry a group's OWN prior value, not a neighbour's.
+
+        Regression for F11: the per-group fill fell back to a single GLOBAL
+        forward-fill over the melted column, so age 31's null d1 was filled
+        from age 30's d1 (0.11) instead of carrying age 31's own d0 (0.20).
+        """
+        wide = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "d0": [0.10, 0.20],
+                "d1": [0.11, None],
+                "d2": [0.12, None],
+                "d3": [0.13, 0.23],
+            },
+        )
+        md = MeltDimension(
+            columns=["d0", "d1", "d2", "d3"],
+            name="duration",
+            fill=FillForward(),
+        )
+        res = md.process(wide)
+
+        def val(age: int, dur: str) -> float:
+            return res.filter(
+                (pl.col("age") == age) & (pl.col("duration") == dur),
+            )["value"][0]
+
+        # Within-group ffill carries age 31's own d0 (0.20), NOT age 30's rates.
+        assert val(31, "d1") == 0.20
+        assert val(31, "d2") == 0.20
+        # Age 30 is untouched.
+        assert val(30, "d1") == 0.11
+
+    def test_melt_dimension_interpolate_is_within_group(self):
+        """LinearInterpolate must interpolate within each group only.
+
+        Regression for F11: age 31 (own rates d0=0.20, d3=0.23) must give
+        d1=0.21, d2=0.22 — interpolated between age 31's OWN endpoints — not
+        0.115/0.125 (interpolations of age 30's neighbouring rates).
+        """
+        wide = pl.DataFrame(
+            {
+                "age": [30, 31],
+                "d0": [0.10, 0.20],
+                "d1": [0.11, None],
+                "d2": [0.12, None],
+                "d3": [0.13, 0.23],
+            },
+        )
+        md = MeltDimension(
+            columns=["d0", "d1", "d2", "d3"],
+            name="duration",
+            fill=LinearInterpolate(method="linear"),
+        )
+        res = md.process(wide)
+
+        def val(age: int, dur: str) -> float:
+            return res.filter(
+                (pl.col("age") == age) & (pl.col("duration") == dur),
+            )["value"][0]
+
+        assert val(31, "d1") == pytest.approx(0.21)
+        assert val(31, "d2") == pytest.approx(0.22)
 
     def test_melt_dimension_validation_missing_columns(self):
         """Test validation error when melt columns don't exist"""
@@ -550,8 +616,18 @@ class TestDimensionEdgeCases:
         actual_durations = set(result["duration"].unique().to_list())
         assert actual_durations == expected_durations
 
-        # Should have no null values after fill
-        assert result["value"].null_count() == 0
+        # Fill is now applied per-group (F11). Age 30 has all its own rates, so
+        # it is fully filled.
+        age30 = result.filter(pl.col("age") == 30)
+        assert age30["value"].null_count() == 0
+        # Age 31's only null is its LEADING duration "1"; within its own group
+        # there is no left anchor to interpolate from, so it correctly stays
+        # null rather than bleeding age 30's 0.001 (the old global fallback
+        # produced 0.0015 here by interpolating across groups).
+        age31_d1 = result.filter(
+            (pl.col("age") == 31) & (pl.col("duration") == "1"),
+        )["value"][0]
+        assert age31_d1 is None
 
     def test_dimensions_preserve_other_columns(self):
         """Test that dimensions preserve other columns in the DataFrame"""

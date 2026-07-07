@@ -42,11 +42,20 @@ class FillStrategy(ABC):
     """Base class for fill strategies"""
 
     @abstractmethod
-    def apply(self, df: pl.DataFrame) -> pl.DataFrame:
+    def apply(
+        self,
+        df: pl.DataFrame,
+        group_columns: list[str] | None = None,
+    ) -> pl.DataFrame:
         """Apply fill strategy to the DataFrame
 
         Args:
             df: DataFrame to process
+            group_columns: Column names identifying the group each row belongs
+                to. When provided, the fill is applied independently *within*
+                each group via a window (``.over(...)``) expression, so values
+                never bleed across groups. When ``None`` or empty, the fill is
+                applied globally across the whole ``value`` column.
 
         Returns:
             Processed DataFrame with missing values filled
@@ -256,31 +265,34 @@ class LinearInterpolate(FillStrategy):
     fill_gaps: bool = True
     extrapolate: bool = False
 
-    def apply(self, df: pl.DataFrame) -> pl.DataFrame:
+    def apply(
+        self,
+        df: pl.DataFrame,
+        group_columns: list[str] | None = None,
+    ) -> pl.DataFrame:
         """Apply interpolation to fill missing values"""
         if df.is_empty():
             return df
 
         if self.method == "linear":
-            result = df.with_columns(
-                pl.col("value").interpolate().alias("value"),
-            )
+            expr = pl.col("value").interpolate()
         elif self.method == "log-linear":
             # Log-linear interpolation: log -> interpolate -> exp
             # Apply to the whole column after handling zeros/negatives
-            result = df.with_columns(
-                pl.col("value").log().interpolate().exp().alias("value"),
-            )
+            expr = pl.col("value").log().interpolate().exp()
         elif self.method == "cubic":
             # Polars doesn't have cubic interpolation, fall back to linear
             logger.warning(
                 "Cubic interpolation not available, using linear interpolation",
             )
-            result = df.with_columns(
-                pl.col("value").interpolate().alias("value"),
-            )
+            expr = pl.col("value").interpolate()
         else:
             raise ValueError(f"Unknown interpolation method: {self.method}")
+
+        # Interpolate within each group so values never bleed across groups.
+        if group_columns:
+            expr = expr.over(group_columns)
+        result = df.with_columns(expr.alias("value"))
 
         logger.debug(f"Applied {self.method} interpolation to fill missing values")
         return result
@@ -292,8 +304,16 @@ class FillConstant(FillStrategy):
 
     value: Any
 
-    def apply(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Apply constant fill to missing values"""
+    def apply(
+        self,
+        df: pl.DataFrame,
+        group_columns: list[str] | None = None,  # noqa: ARG002
+    ) -> pl.DataFrame:
+        """Apply constant fill to missing values.
+
+        ``group_columns`` is accepted for interface consistency but ignored:
+        filling nulls with a scalar constant is independent of any grouping.
+        """
         if df.is_empty():
             return df
 
@@ -315,7 +335,11 @@ class FillForward(FillStrategy):
 
     limit: int | None = None
 
-    def apply(self, df: pl.DataFrame) -> pl.DataFrame:
+    def apply(
+        self,
+        df: pl.DataFrame,
+        group_columns: list[str] | None = None,
+    ) -> pl.DataFrame:
         """Apply forward fill to missing values"""
         if df.is_empty():
             return df
@@ -329,9 +353,12 @@ class FillForward(FillStrategy):
                 f"Using unlimited forward fill.",
             )
 
-        result = df.with_columns(
-            pl.col("value").forward_fill().alias("value"),
-        )
+        # Forward-fill within each group so a group never inherits a
+        # neighbouring group's trailing value.
+        expr = pl.col("value").forward_fill()
+        if group_columns:
+            expr = expr.over(group_columns)
+        result = df.with_columns(expr.alias("value"))
 
         logger.debug("Applied forward fill to missing values")
         return result

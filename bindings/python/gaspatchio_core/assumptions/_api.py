@@ -15,6 +15,8 @@ modular system that separates concerns and improves composability.
 
 from __future__ import annotations
 
+import hashlib
+import io
 from difflib import get_close_matches
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -68,6 +70,29 @@ def _suggest_dimension(invalid_name: str, valid_names: list[str]) -> str | None:
 
 # Global metadata storage for assumption tables
 _TABLE_METADATA: dict[str, dict[str, Any]] = {}
+
+# Content hash (``sha256:<hex>``) of the last data registered under each table
+# name in this process. Tables in the Rust registry resolve by name at execution
+# time (last-writer-wins), so re-registering a name with DIFFERENT content
+# silently swaps the values under any lazy lookup expression already built
+# against the prior same-named table. We track the last-seen content hash to warn
+# on that specific footgun while staying silent for the common issue-#39
+# reentrancy case (re-running the same model re-registers byte-identical data).
+_REGISTERED_TABLE_SHAS: dict[str, str] = {}
+
+
+def _hash_processed_df(processed_df: pl.DataFrame) -> str:
+    """Return ``sha256:<hex>`` over the parquet bytes of a processed table frame.
+
+    Hashes the fully processed DataFrame that is registered with the Rust
+    registry. The frame is already sorted by its key columns before this call,
+    so identical source data produces an identical hash regardless of input row
+    order. Used only to detect same-name / different-content re-registration.
+    """
+    buf = io.BytesIO()
+    processed_df.write_parquet(buf)
+    return f"sha256:{hashlib.sha256(buf.getvalue()).hexdigest()}"
+
 
 # Import LIB path for plugin calls
 try:
@@ -632,6 +657,28 @@ class Table:
 
         # Store the processed DataFrame
         self._df = processed_df
+
+        # Warn if this name was already registered in this process with DIFFERENT
+        # content. Tables resolve by name at execution time (last-writer-wins), so
+        # a differing re-registration silently swaps the values under any lazy
+        # lookup expression already built against the prior same-named table.
+        # Byte-identical re-registration (the common issue-#39 reentrancy case)
+        # stays silent. Never raise here — that would reintroduce the #39 bug.
+        # Hash the processed frame itself (exactly the bytes handed to Rust); it
+        # is already sorted by key columns above, so identical source data yields
+        # an identical hash regardless of input row order.
+        content_sha = _hash_processed_df(processed_df)
+        previous_sha = _REGISTERED_TABLE_SHAS.get(self._name)
+        if previous_sha is not None and previous_sha != content_sha:
+            logger.warning(
+                f"Assumption table '{self._name}' was re-registered with "
+                f"different data. Lazy expressions already built against the "
+                f"previous version will now resolve to the NEW values (tables "
+                f"are resolved by name at execution time). If intentional (e.g. "
+                f"a scenario shock), ignore; otherwise give the tables distinct "
+                f"names, or rebuild expressions after re-registering.",
+            )
+        _REGISTERED_TABLE_SHAS[self._name] = content_sha
 
         # Register with Rust registry using idempotent method
         try:

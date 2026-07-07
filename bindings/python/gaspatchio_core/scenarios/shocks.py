@@ -764,21 +764,25 @@ class RelativeFloorShock(Shock):
     column: str | None = None
 
     def to_expression(self, col: pl.Expr) -> pl.Expr:
-        """Apply relative floor shock.
+        """Raise — ``RelativeFloorShock`` is not implemented.
 
-        Note: This shock needs access to the original value, which is complex
-        in a pipeline context. This implementation assumes it receives the
-        already-shocked value and needs the original stored elsewhere.
-
-        For full functionality, use MaxShock instead.
+        A floor *relative to the pre-shock original value* cannot be computed
+        here: by the time this shock runs, ``col`` is already the shocked value
+        and the original is unavailable. The previous placeholder floored at
+        ``col - delta`` using the shocked value, so the condition was never true
+        and the shock silently did nothing. Use :class:`MaxShock` instead, which
+        composes the two transformations explicitly.
         """
-        import polars as pl
-
-        # This is a placeholder - the actual implementation requires
-        # storing the original value before the pipeline starts.
-        # For now, we just apply a simple floor at (input - delta)
-        floor_value = col - self.delta
-        return pl.when(col < floor_value).then(floor_value).otherwise(col)
+        del col
+        msg = (
+            "RelativeFloorShock is not implemented: a floor relative to the "
+            "original (pre-shock) value cannot be computed here because this "
+            "shock only receives the already-shocked value. Use MaxShock "
+            "instead to express 'max(shocked, original - delta)' (e.g. the "
+            "Solvency II lapse-down max(lapse*0.5, lapse-0.2)); see the MaxShock "
+            "docstring."
+        )
+        raise NotImplementedError(msg)
 
     def describe(self) -> str:
         """Return description of this shock."""

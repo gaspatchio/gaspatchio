@@ -160,17 +160,29 @@ def _fold_batch(
                         accumulators[alias], (key, partial)
                     )
             else:
-                # scalar .over(): group_by(by), within_expr per group
-                reduced = proj.group_by(by).agg(
-                    agg.inner.within_expr().alias(alias)
-                )
-                key_pos = [reduced.columns.index(b) for b in by]
-                val_pos = reduced.columns.index(alias)
-                for row in reduced.iter_rows():
-                    key = tuple(row[p] for p in key_pos)
-                    accumulators[alias] = agg.add_input(
-                        accumulators[alias], (key, row[val_pos])
+                # scalar .over(): fold each partition's values with add_batch.
+                # group_by yields one (key, group) per partition — O(partitions)
+                # Python iterations, versus O(policies) from the old iter_rows
+                # loop — and add_batch vectorises the per-partition reduction for
+                # additive/Welford aggregators. Correctness is unchanged: every
+                # policy in a partition is one data point folded into that
+                # partition's accumulator, then merged across batches. A
+                # non-additive inner aggregator therefore divides by the policy
+                # count within the partition, not the batch count. (F9b, per
+                # partition.) agg is narrowed to _Partitioned here, so agg.inner
+                # is typed as the partition-blind Aggregator Protocol (no
+                # `column` field); cast to Any, mirroring the vector branch.
+                inner = cast("Any", agg.inner)
+                inner_col: str = inner.column
+                batch_state: dict[tuple[Any, ...], Any] = {}
+                for key, group in proj.group_by(by):
+                    key_tuple = key if isinstance(key, tuple) else (key,)
+                    batch_state[key_tuple] = inner.add_batch(
+                        inner.create_accumulator(), group.get_column(inner_col)
                     )
+                accumulators[alias] = agg.merge_accumulators(
+                    accumulators[alias], batch_state
+                )
             continue
         if hasattr(agg, "batch_reduce"):
             # Vector aggregator (PeriodSum, PeriodCount, etc.) — batch_reduce path.
@@ -182,10 +194,22 @@ def _fold_batch(
             )
             partial2 = agg.batch_reduce(proj_p2, _PERIOD)
             accumulators[alias] = agg.add_input(accumulators[alias], partial2)
-        else:
-            # Scalar aggregator (Sum, Mean, etc.) — within_expr path.
+        elif agg.within_expr_override is not None:
+            # Custom within-reduction (.of): there is no per-policy column to
+            # fold, so the override defines the batch's single contribution.
             value = proj.select(agg.within_expr().alias(alias)).item()
             accumulators[alias] = agg.add_input(accumulators[alias], value)
+        else:
+            # Scalar aggregator over the policy axis: every POLICY is a data
+            # point. Fold the whole batch column in one add_batch call, which
+            # vectorises for the additive/Welford aggregators (a single Polars
+            # reduction) and skips nulls to match within_expr semantics. The old
+            # code collapsed the batch to one within_expr value and add_input'd
+            # it, so non-additive aggregators (Mean/Variance/Std/Median/CTE)
+            # divided by the BATCH count instead of the policy count.
+            accumulators[alias] = agg.add_batch(
+                accumulators[alias], proj.get_column(agg.column)
+            )
 
 
 def _check_period_origin(af: ActuarialFrame, align: str | None) -> None:

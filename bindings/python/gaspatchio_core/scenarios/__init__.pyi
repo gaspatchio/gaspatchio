@@ -251,6 +251,9 @@ class BatchSnapshot:
 
 class VectorAggregator(_BaseAggregator):
     def batch_reduce(self, frame: pl.DataFrame, period: str) -> Any: ...
+    def batch_reduce_within(
+        self, frame: pl.DataFrame, period: str, within_by: tuple[str, ...]
+    ) -> Any: ...
     def within_expr(self) -> pl.Expr: ...
 
 class PeriodSum(VectorAggregator):

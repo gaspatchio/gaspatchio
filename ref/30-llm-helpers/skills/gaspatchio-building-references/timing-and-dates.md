@@ -14,10 +14,10 @@ uv run gspio docs "prospective_value" -t parameters
 
 | Parameter | Formula | When Cashflows Occur |
 |-----------|---------|---------------------|
-| `timing="end_of_period"` (default) | `PV[t] = CF[t]*v^0 + CF[t+1]*v^1 + CF[t+2]*v^2 + ...` | End of each period (CF[t] is undiscounted) |
-| `timing="beginning_of_period"` | `PV[t] = CF[t]*v^1 + CF[t+1]*v^2 + ...` | Beginning (everything gets one extra period of discounting) |
+| `timing="end_of_period"` (default) | `PV[t] = CF[t]*v^1 + CF[t+1]*v^2 + ...` | End of each period — every cashflow discounted a full period (Excel `PV` type 0, ordinary annuity) |
+| `timing="beginning_of_period"` | `PV[t] = CF[t]*v^0 + CF[t+1]*v^1 + ...` | Beginning of period — `CF[t]` is undiscounted (Excel `PV` type 1, annuity-due) |
 
-Despite the name, `"end_of_period"` produces standard actuarial BOP discounting (v^t). This matches Excel's `SUMPRODUCT(cashflows, discount_factors)` where `DF[t] = (1+r)^(-t/12)`.
+The labels match Excel's `PV` convention: `end_of_period` = type 0 (ordinary annuity), `beginning_of_period` = type 1 (annuity-due). A beginning-of-period cashflow is discounted one fewer period, so `beginning_of_period` is always worth more than `end_of_period` for the same cashflows.
 
 ### Three Call Patterns
 

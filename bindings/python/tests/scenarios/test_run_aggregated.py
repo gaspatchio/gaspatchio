@@ -14,10 +14,15 @@ from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.scenarios import (
     ArgMax,
     Count,
+    Mean,
+    Median,
+    PeriodCount,
+    PeriodMean,
     PeriodMedian,
     PeriodQuantile,
     PeriodSum,
     Sum,
+    Variance,
 )
 from gaspatchio_core.scenarios._aggregated import AggregatedResult, run_aggregated
 
@@ -379,6 +384,42 @@ def test_period_aggregator_runs_in_for_each_scenario() -> None:
     assert np.asarray(result.aggregations["cf"]).tolist() == [3.0, 6.0, 9.0]
 
 
+def test_policy_axis_period_reduces_over_all_policies_unchanged() -> None:
+    """Policy axis (run_aggregated) reduces across ALL policies per period.
+
+    F9a control: the scenario-axis two-stage fix must NOT touch the policy axis
+    (there is no scenario_id here). PeriodMean means over all 4 policies per
+    period, PeriodCount counts all 4 policies -- no scenario double-reduction.
+
+    model: cf[policy] = [value, value*2]; value = [1,2,3,4].
+      period0 values across policies = [1, 2, 3, 4]
+      period1 values across policies = [2, 4, 6, 8]
+    """
+    mp = pl.DataFrame({"value": [1.0, 2.0, 3.0, 4.0]})
+
+    def model(af: ActuarialFrame) -> ActuarialFrame:
+        return ActuarialFrame(
+            af._df.with_columns(  # noqa: SLF001
+                pl.concat_list([pl.col("value"), pl.col("value") * 2]).alias("cf")
+            )
+        )
+
+    for bs in (1, 4):
+        res = run_aggregated(
+            model,
+            mp,
+            [
+                PeriodSum("cf").alias("sum"),
+                PeriodMean("cf").alias("mean"),
+                PeriodCount("cf").alias("count"),
+            ],
+            batch_size=bs,
+        )
+        assert res.sum.tolist() == [10.0, 20.0]  # 1+2+3+4, 2+4+6+8
+        assert res.mean.tolist() == [2.5, 5.0]  # mean over 4 policies (NOT /1)
+        assert res.count.tolist() == [4.0, 4.0]  # counts policies (NOT scenarios)
+
+
 # ---------------------------------------------------------------------------
 # Task 7 (continued): multi-col .over(), batch-size invariance, PeriodMedian.over(),
 #                     and PeriodQuantile.over() deferred with clear error
@@ -450,3 +491,123 @@ def test_run_aggregated_period_quantile_over_not_supported() -> None:
             mp,
             [PeriodQuantile("cf").alias("q").over("product")],
         )
+
+
+def test_scalar_non_additive_aggregators_are_batch_invariant() -> None:
+    """F9b: scalar Mean/Variance/Median over the policy axis must be batch-invariant.
+
+    The fold collapsed each batch to one within_expr value and add_input'd it, so
+    the non-additive scalar aggregators divided by the BATCH count — e.g. Mean over
+    [10,20,30,40] returned the portfolio SUM (100) at one batch and the true mean
+    (25) only when every policy was its own batch. Sum is the additive control.
+    """
+    mp = pl.DataFrame({"value": [10.0, 20.0, 30.0, 40.0]})
+
+    def model(af: ActuarialFrame) -> ActuarialFrame:
+        return ActuarialFrame(
+            af._df.with_columns(pl.col("value").alias("pv")),  # noqa: SLF001
+        )
+
+    results = {}
+    for bs in (1, 2, 4):
+        res = run_aggregated(
+            model,
+            mp,
+            [
+                Mean("pv").alias("mean"),
+                Variance("pv").alias("var"),
+                Median("pv").alias("median"),
+                Sum("pv").alias("sum"),
+            ],
+            batch_size=bs,
+        )
+        results[bs] = (res.mean, res.var, res.median, res.sum)
+
+    for bs in (1, 2, 4):
+        mean, _var, median, total = results[bs]
+        assert mean == pytest.approx(25.0), f"mean wrong at batch_size={bs}"
+        assert total == pytest.approx(100.0), f"sum control wrong at batch_size={bs}"
+        assert median == pytest.approx(25.0, rel=0.06)  # DDSketch is approximate
+    # Variance must be identical across batch sizes (ddof-agnostic invariance).
+    assert results[1][1] == pytest.approx(results[4][1])
+    assert results[2][1] == pytest.approx(results[4][1])
+
+
+def test_scalar_partitioned_non_additive_aggregators_are_batch_invariant() -> None:
+    """Mean.over()/Median.over() on the policy axis must be batch-invariant.
+
+    The scalar ``.over()`` fold grouped each batch by the partition column and
+    collapsed every group to one ``within_expr`` value, then ``add_input``'d that
+    single value into the partition's accumulator. So a non-additive inner
+    aggregator (Mean/Variance/Std/Median/CTE) divided by the number of BATCHES a
+    partition spanned, not the number of policies in it — batch-dependent, wrong.
+    (Same class as F9b, per partition.) Sum.over() is the additive control.
+
+    The policy layout interleaves partitions across batch boundaries so that, at
+    batch_size=2, partition A spans batches 0-1 and partition B spans batches 1-2,
+    exercising the cross-batch per-partition merge that the old fold got wrong.
+    """
+    mp = pl.DataFrame(
+        {
+            "value": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+            "product": ["A", "A", "A", "B", "B", "B"],
+        },
+    )
+
+    def model(af: ActuarialFrame) -> ActuarialFrame:
+        return ActuarialFrame(af._df.with_columns(pl.col("value").alias("pv")))  # noqa: SLF001
+
+    def _val(df: pl.DataFrame, product: str, col: str) -> float:
+        return df.filter(pl.col("product") == product)[col].item()
+
+    for bs in (1, 2, 3, 6):
+        res = run_aggregated(
+            model,
+            mp,
+            [
+                Mean("pv").alias("mean").over("product"),
+                Median("pv").alias("median").over("product"),
+                Sum("pv").alias("sum").over("product"),
+            ],
+            batch_size=bs,
+        )
+        # A = mean(10,20,30) = 20 ; B = mean(40,50,60) = 50
+        assert _val(res.mean, "A", "mean") == pytest.approx(20.0), f"A mean wrong at bs={bs}"
+        assert _val(res.mean, "B", "mean") == pytest.approx(50.0), f"B mean wrong at bs={bs}"
+        # additive control — already batch-invariant
+        assert _val(res.sum, "A", "sum") == pytest.approx(60.0), f"A sum wrong at bs={bs}"
+        assert _val(res.sum, "B", "sum") == pytest.approx(150.0), f"B sum wrong at bs={bs}"
+        # DDSketch median is approximate
+        assert _val(res.median, "A", "median") == pytest.approx(20.0, rel=0.06)
+        assert _val(res.median, "B", "median") == pytest.approx(50.0, rel=0.06)
+
+
+def test_add_batch_skips_nulls_and_stays_batch_invariant() -> None:
+    """Vectorised add_batch fold: nulls are dropped and results batch-invariant.
+
+    The pre-vectorisation per-row fold passed every value (including None)
+    straight to add_input, which crashed the Welford/sketch aggregators on a
+    null. add_batch drops nulls like ``pl.col(c).mean()`` and reduces each batch
+    in one pass, so the non-null values [10,20,30,40] give mean 25 / sum 100
+    regardless of batch size — even when a whole batch is null-only (bs=1 puts
+    the null in its own batch).
+    """
+    mp = pl.DataFrame({"value": [10.0, 20.0, None, 30.0, 40.0]})
+
+    def model(af: ActuarialFrame) -> ActuarialFrame:
+        return ActuarialFrame(af._df.with_columns(pl.col("value").alias("pv")))  # noqa: SLF001
+
+    for bs in (1, 2, 5):
+        res = run_aggregated(
+            model,
+            mp,
+            [
+                Mean("pv").alias("mean"),
+                Sum("pv").alias("sum"),
+                Median("pv").alias("median"),
+            ],
+            batch_size=bs,
+        )
+        assert res.mean == pytest.approx(25.0), f"mean wrong at bs={bs}"
+        assert res.sum == pytest.approx(100.0), f"sum wrong at bs={bs}"
+        assert res.median == pytest.approx(25.0, rel=0.06), f"median wrong at bs={bs}"

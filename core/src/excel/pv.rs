@@ -17,6 +17,18 @@ pub struct PvKwargs {
 
 const EPS: f64 = 1e-12;
 
+/// Fetch a per-row scalar value, broadcasting a genuine length-1 (literal) input
+/// to every row. Polars passes literal args as a length-1 series while column
+/// args are full length; without this a plugin silently reads row 0 for everyone.
+#[inline]
+fn scalar_at(ca: &Float64Chunked, i: usize) -> Option<f64> {
+    if ca.len() == 1 {
+        ca.get(0)
+    } else {
+        ca.get(i)
+    }
+}
+
 /// Helper function to cast numeric types to Float64 if needed
 /// Handles both scalar and list types (e.g., Int64 -> Float64, List[Int64] -> List[Float64])
 fn cast_to_float_if_needed(series: &Series) -> PolarsResult<Series> {
@@ -114,15 +126,22 @@ fn pv_scalar(
     fv: f64,
     typ: i32,
 ) -> PolarsResult<Series> {
-    let result = rate_ca
-        .into_iter()
-        .zip(nper_ca)
-        .zip(pmt_ca)
-        .map(|((r_opt, n_opt), p_opt)| match (r_opt, n_opt, p_opt) {
-            (Some(r), Some(n), Some(p)) => Some(calculate_pv(r, n, p, fv, typ)),
-            _ => None,
+    // Broadcast length-1 (literal) inputs to the full row count instead of
+    // zip-truncating to the shortest, which collapsed the result to length 1
+    // (and raised a height-mismatch when a literal rate met column nper/pmt).
+    let len = rate_ca.len().max(nper_ca.len()).max(pmt_ca.len());
+    let result: Float64Chunked = (0..len)
+        .map(|i| {
+            match (
+                scalar_at(rate_ca, i),
+                scalar_at(nper_ca, i),
+                scalar_at(pmt_ca, i),
+            ) {
+                (Some(r), Some(n), Some(p)) => Some(calculate_pv(r, n, p, fv, typ)),
+                _ => None,
+            }
         })
-        .collect::<Float64Chunked>();
+        .collect();
 
     Ok(result.with_name("pv".into()).into_series())
 }
@@ -137,34 +156,41 @@ fn pv_list_scalar(
     list_index: i32,
 ) -> PolarsResult<Series> {
     let list_ca = list_series.list()?;
+    let a_ca = scalar_a.f64()?;
+    let b_ca = scalar_b.f64()?;
 
-    // Extract scalars (may be null if empty); we broadcast each element's value
-    let a_opt = scalar_a.f64()?.get(0);
-    let b_opt = scalar_b.f64()?.get(0);
-
-    let result: ListChunked = list_ca.try_apply_amortized(|s| {
-        // Each inner series should be Float64
-        if let Ok(vals) = s.as_ref().f64() {
-            let out: Float64Chunked = vals
-                .iter()
-                .map(|x_opt| match (x_opt, a_opt, b_opt) {
-                    (Some(x), Some(a), Some(b)) => {
-                        let (rate, nper, pmt) = match list_index {
-                            0 => (x, a, b),
-                            1 => (a, x, b),
-                            _ => (a, b, x),
-                        };
-                        Some(calculate_pv(rate, nper, pmt, fv, typ))
-                    }
-                    _ => None,
-                })
-                .collect();
-            Ok(out.into_series())
-        } else {
-            let len = s.as_ref().len();
-            Ok(Float64Chunked::full_null("".into(), len).into_series())
-        }
-    })?;
+    // Combine each list row with THIS row's scalars (broadcasting length-1
+    // literals via scalar_at) rather than row 0's — the previous get(0)
+    // outside the loop applied policy 0's values to every policy.
+    let result: ListChunked = list_ca
+        .into_iter()
+        .enumerate()
+        .map(|(i, opt_s)| {
+            let a_opt = scalar_at(a_ca, i);
+            let b_opt = scalar_at(b_ca, i);
+            let s = opt_s?;
+            if let Ok(vals) = s.f64() {
+                let out: Float64Chunked = vals
+                    .iter()
+                    .map(|x_opt| match (x_opt, a_opt, b_opt) {
+                        (Some(x), Some(a), Some(b)) => {
+                            let (rate, nper, pmt) = match list_index {
+                                0 => (x, a, b),
+                                1 => (a, x, b),
+                                _ => (a, b, x),
+                            };
+                            Some(calculate_pv(rate, nper, pmt, fv, typ))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                Some(out.into_series())
+            } else {
+                let len = s.len();
+                Some(Float64Chunked::full_null("".into(), len).into_series())
+            }
+        })
+        .collect();
 
     Ok(result.into_series())
 }
@@ -182,12 +208,13 @@ fn pv_two_lists(
 
     match (rate_l, nper_l, pmt_l) {
         (Ok(r_l), Ok(n_l), Err(_)) => {
-            // rate and nper are lists, pmt scalar
-            let pmt_opt = pmt_s.f64()?.get(0);
+            // rate and nper are lists, pmt scalar (broadcast per row via scalar_at)
+            let pmt_ca = pmt_s.f64()?;
             let result: ListChunked = r_l
                 .into_iter()
                 .zip(n_l)
-                .map(|(r_opt, n_opt)| match (r_opt, n_opt, pmt_opt) {
+                .enumerate()
+                .map(|(i, (r_opt, n_opt))| match (r_opt, n_opt, scalar_at(pmt_ca, i)) {
                     (Some(r_s), Some(n_s), Some(p)) => {
                         let r_ca = r_s.f64().ok()?;
                         let n_ca = n_s.f64().ok()?;
@@ -207,12 +234,13 @@ fn pv_two_lists(
             Ok(result.into_series())
         }
         (Ok(r_l), Err(_), Ok(p_l)) => {
-            // rate and pmt lists, nper scalar
-            let nper_opt = nper_s.f64()?.get(0);
+            // rate and pmt lists, nper scalar (broadcast per row via scalar_at)
+            let nper_ca = nper_s.f64()?;
             let result: ListChunked = r_l
                 .into_iter()
                 .zip(p_l)
-                .map(|(r_opt, p_opt)| match (r_opt, p_opt, nper_opt) {
+                .enumerate()
+                .map(|(i, (r_opt, p_opt))| match (r_opt, p_opt, scalar_at(nper_ca, i)) {
                     (Some(r_s), Some(p_s), Some(n)) => {
                         let r_ca = r_s.f64().ok()?;
                         let p_ca = p_s.f64().ok()?;
@@ -232,12 +260,13 @@ fn pv_two_lists(
             Ok(result.into_series())
         }
         (Err(_), Ok(n_l), Ok(p_l)) => {
-            // nper and pmt lists, rate scalar
-            let rate_opt = rate_s.f64()?.get(0);
+            // nper and pmt lists, rate scalar (broadcast per row via scalar_at)
+            let rate_ca = rate_s.f64()?;
             let result: ListChunked = n_l
                 .into_iter()
                 .zip(p_l)
-                .map(|(n_opt, p_opt)| match (n_opt, p_opt, rate_opt) {
+                .enumerate()
+                .map(|(i, (n_opt, p_opt))| match (n_opt, p_opt, scalar_at(rate_ca, i)) {
                     (Some(n_s), Some(p_s), Some(r)) => {
                         let n_ca = n_s.f64().ok()?;
                         let p_ca = p_s.f64().ok()?;

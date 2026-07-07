@@ -341,9 +341,13 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
     ) -> int:
         af_df = self._frame._df  # noqa: SLF001
         if isinstance(until_value, int):
-            # uniform max age — read max issue_age, compute tail years
-            max_issue = af_df.select(pl.col(issue_age_column).max()).collect()[0, 0]
-            years = until_value - int(max_issue)
+            # uniform max age — the shared grid must be long enough for the
+            # YOUNGEST life, so size it from min(issue_age) (the most tail
+            # years). Using max(issue_age) would give the fewest months and
+            # truncate every younger cohort. This mirrors the str/expr
+            # branches below, which take max(target - issue) over policies.
+            min_issue = af_df.select(pl.col(issue_age_column).min()).collect()[0, 0]
+            years = until_value - int(min_issue)
         elif isinstance(until_value, str):
             # per-policy max-age column — compute max(target - issue)
             expr = pl.col(until_value) - pl.col(issue_age_column)
