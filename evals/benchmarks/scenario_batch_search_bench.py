@@ -93,12 +93,24 @@ def _run_cell(n_pts: int, n_scen: int, *, verify: bool) -> dict[str, object]:
     def fn(af, *, tables=None, drivers=None, _r=returns):  # noqa: ANN001, ANN202, ARG001
         return l5.main(af, scenario_returns_override=_r, projection_months=82)
 
+    from gaspatchio_core.scenarios._auto_batch import memory_budget_bytes  # noqa: PLC0415
+    from gaspatchio_core.scenarios._memory import DEFAULTS  # noqa: PLC0415
+
     agg = (Sum("pv_net_cf").alias("total").over("scenario_id"),)
     gc.collect()
+    budget_mb = memory_budget_bytes(DEFAULTS.target_memory_fraction) / 1024**2
     auto = for_each_scenario(
         ActuarialFrame(mp), scenarios=list(range(1, n_scen + 1)),
         model_fn=fn, aggregations=agg, batch_size="auto",
     )
+    probed = (auto.selection.probed if auto.selection else None) or []
+    rungs = "; ".join(
+        f"b{p.batch}/{p.engine}="
+        + (f"{p.peak_mb:.0f}MB" if p.peak_mb is not None else "?")
+        + ("+fits" if p.fits else "!fits")
+        for p in probed
+    )
+    _err(f"  probes: [{rungs}] budget={budget_mb:.0f}MB")
     checksum_ok: bool | None = None
     if verify:
         manual = for_each_scenario(

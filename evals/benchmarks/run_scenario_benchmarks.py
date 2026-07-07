@@ -30,7 +30,8 @@ from evals.benchmarks.scenario_lib import (
 )
 from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.scenarios import Sum, for_each_scenario
-from gaspatchio_core.scenarios._memory import IrreducibleCellError
+from gaspatchio_core.scenarios._auto_batch import memory_budget_bytes
+from gaspatchio_core.scenarios._memory import DEFAULTS, IrreducibleCellError
 
 # Point-file thresholds: the largest model-point parquet whose row count is <= the key.
 _POINTS_8 = 8
@@ -65,6 +66,7 @@ def run_cell(n_scenarios: int, points_path: Path) -> dict:
     returns = generate_stochastic_returns(n_scenarios, n_months=180, seed=12345)
     mp = pl.read_parquet(points_path)
     model_fn = make_stochastic_model_fn(l5, returns)
+    budget_mb = memory_budget_bytes(DEFAULTS.target_memory_fraction) / 1024**2
     result = for_each_scenario(
         ActuarialFrame(mp),
         scenarios=list(range(1, n_scenarios + 1)),
@@ -72,10 +74,28 @@ def run_cell(n_scenarios: int, points_path: Path) -> dict:
         aggregations=(Sum("pv_net_cf").alias("total").over("scenario_id"),),
         batch_size="auto",
     )
+    _print_probe_ladder(result.selection, budget_mb)
     m = read_result_metrics(result, n_scenarios, mp.height)
     m["n_scenarios"] = n_scenarios
     m["n_points"] = mp.height
     return m
+
+
+def _print_probe_ladder(selection: object, budget_mb: float) -> None:
+    """Print the search's measured rungs to stderr — the memory story per cell.
+
+    One line per cell makes gating decisions auditable from the CI log alone
+    (which probe ran, what it peaked at, what fit) — the exact evidence that
+    was missing when the ungated-probe OOM had to be reconstructed forensically.
+    """
+    probed = getattr(selection, "probed", None) or []
+    rungs = "; ".join(
+        f"b{p.batch}/{p.engine}="
+        + (f"{p.peak_mb:.0f}MB" if p.peak_mb is not None else "?")
+        + ("+fits" if p.fits else "!fits")
+        for p in probed
+    )
+    print(f"  probes: [{rungs}] budget={budget_mb:.0f}MB", file=sys.stderr)
 
 
 def _pts_label(n: int) -> str:
