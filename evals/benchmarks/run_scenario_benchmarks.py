@@ -30,6 +30,7 @@ from evals.benchmarks.scenario_lib import (
 )
 from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.scenarios import Sum, for_each_scenario
+from gaspatchio_core.scenarios._memory import IrreducibleCellError
 
 # Point-file thresholds: the largest model-point parquet whose row count is <= the key.
 _POINTS_8 = 8
@@ -105,7 +106,17 @@ def main() -> None:
             print(f"SKIP {arm} {n_scen}x{n_pts} -- {path} missing", file=sys.stderr)
             continue
         print(f"{arm} {n_scen}sc x {n_pts}pts ...", file=sys.stderr)
-        cell = run_cell(n_scen, path)
+        try:
+            cell = run_cell(n_scen, path)
+        except IrreducibleCellError as e:
+            # The sizer refusing a cell that does not fit this box is the library
+            # working as designed (free runners are smaller than the perf runner).
+            # Skip the cell's rows but keep the run -- and the emitted JSON -- valid.
+            print(
+                f"SKIP {arm} {n_scen}x{n_pts} -- irreducible on this box: {e}",
+                file=sys.stderr,
+            )
+            continue
         print(
             f"  wall={cell['wall_s']}s rss={cell['peak_rss_mb']}MB "
             f"batch={cell['batch_size']} ({cell['batch_size_resolution']})",

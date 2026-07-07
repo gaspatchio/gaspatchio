@@ -248,12 +248,21 @@ def main() -> None:
     parser.add_argument("--skip-heavy", action="store_true", help="1K/10K only; no 100K + no floor")
     args = parser.parse_args()
 
+    from gaspatchio_core.scenarios._memory import IrreducibleCellError  # noqa: PLC0415
+
     rows: list[dict[str, object]] = []
     cells = list(_LIGHT_CELLS) + ([] if args.skip_heavy else list(_HEAVY_CELLS))
     # Spot-check checksum identity only at the cheapest cell (cell-independent property).
     verify_cell = min(cells, key=lambda c: c[0] * c[1])
     for n_pts, n_scen in cells:
-        m = _run_cell(n_pts, n_scen, verify=(n_pts, n_scen) == verify_cell)
+        try:
+            m = _run_cell(n_pts, n_scen, verify=(n_pts, n_scen) == verify_cell)
+        except IrreducibleCellError as e:
+            # The sizer refusing a cell that does not fit this box is the library
+            # working as designed (free runners are smaller than the perf runner).
+            # Skip the cell's rows but keep the run -- and the emitted JSON -- valid.
+            _err(f"{_BENCH}/{_cell_label(n_pts, n_scen)}: SKIPPED (irreducible on this box: {e})")
+            continue
         rows.extend(_throughput_rows(n_pts, n_scen, m))
     if not args.skip_heavy:
         for n_scen in _FLOOR_SCEN:
