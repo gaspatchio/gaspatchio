@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gaspatchio Rust Core Benchmarks</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥫</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand:   { DEFAULT: '#ff3b30', light: '#ff7066', dark: '#e61a0f' },
+            surface: '#f5f5f5',
+            muted:   '#6b7280',
+            ok:      '#16a34a',
+            warn:    '#ca8a04',
+            fail:    '#dc2626',
+            blue:    '#2563eb',
+            purple:  '#7c3aed',
+          },
+          fontFamily: {
+            heading: ['Chivo', 'sans-serif'],
+            body: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+    h1, h2, h3, h4 { font-family: 'Chivo', sans-serif; letter-spacing: -0.3px; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeUp 0.35s ease both; }
+    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .dot-pulse { animation: pulse-dot 1.5s ease-in-out infinite; }
+  </style>
+</head>
+<body class="bg-white text-gray-900 min-h-screen">
+
+<!-- Header — matches gaspatchio.dev Material red bar -->
+<header class="bg-brand text-white" style="box-shadow: 0 0 4px 0 rgba(0,0,0,.1), 0 4px 8px 0 rgba(0,0,0,.2);">
+  <div class="max-w-7xl mx-auto px-6 h-12 flex items-center justify-between">
+    <a href="." class="flex items-center gap-3 no-underline text-white">
+      <span class="text-xl">🥫</span>
+      <h1 class="text-sm font-bold tracking-tight">Gaspatchio <span class="font-normal text-white/70 ml-1">Dev Dashboard</span></h1>
+    </a>
+    <nav class="flex gap-6 text-sm">
+      <a href="index.html" class="text-white/70 hover:text-white transition-colors">Benchmarks</a>
+      <a href="rust.html" class="text-white underline underline-offset-4 font-medium hover:text-white transition-colors">Rust Core</a>
+      <a href="https://gaspatchio.dev" class="text-white/70 hover:text-white transition-colors">Docs</a>
+      <a href="https://github.com/gaspatchio/gaspatchio" class="text-white/70 hover:text-white transition-colors">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8">
+
+  <!-- Status chips -->
+  <div class="flex flex-wrap gap-3 mb-8" id="status-bar">
+    <div class="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-md text-xs border border-gray-200">
+      <span class="w-2 h-2 rounded-full bg-gray-400 dot-pulse" id="dot-rust"></span>
+      <span id="label-rust">Rust Benchmarks: loading...</span>
+    </div>
+  </div>
+
+  <div class="flex flex-col gap-6">
+
+    <!-- Rust Core Benchmarks -->
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow animate-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <h2 class="text-base font-semibold text-gray-900 mb-1">Rust Core Benchmarks</h2>
+          <p class="text-sm text-gray-500 leading-relaxed max-w-3xl">
+            Low-level Criterion microbenchmarks for the Rust core library — assumption table lookups, vector operations, and storage backend comparisons. These track internal performance regressions, not user-facing execution time.
+          </p>
+          <p class="text-[11px] text-gray-400 mt-2">All benchmarks on GitHub-hosted ubuntu-latest / windows-latest runners</p>
+        </div>
+        <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold tabular shrink-0" id="badge-rust">--</span>
+      </div>
+      <div class="p-6">
+        <div class="relative h-64"><canvas id="chart-rust"></canvas></div>
+        <div class="hidden flex-col items-center justify-center h-48 text-gray-400 text-sm" id="empty-rust">
+          <span class="text-3xl mb-2 opacity-40">⚙</span>
+          <span>No benchmark data yet</span>
+          <span class="text-xs text-gray-300 mt-1">Data appears after the first successful Criterion run</span>
+        </div>
+      </div>
+      <div class="border-t border-gray-100 overflow-x-auto" id="table-rust"></div>
+    </div>
+
+  </div>
+</main>
+
+<footer class="border-t border-gray-200 text-center py-6 text-xs text-gray-400 mt-8">
+  Gaspatchio &mdash; High-performance actuarial modeling &mdash;
+  <a href="https://gaspatchio.dev" class="text-gray-400 hover:text-brand transition-colors">gaspatchio.dev</a> &mdash;
+  <a href="https://github.com/gaspatchio/gaspatchio" class="text-gray-400 hover:text-brand transition-colors">gaspatchio/gaspatchio</a>
+</footer>
+
+<script>
+  // ---------- Chart.js global config ----------
+  Chart.defaults.color = '#9ca3af';
+  Chart.defaults.borderColor = '#f3f4f6';
+  Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+  Chart.defaults.font.size = 11;
+
+  var COLORS = [
+    { line: '#2563eb', fill: 'rgba(37, 99, 235, 0.06)' },
+    { line: '#ff3b30', fill: 'rgba(255, 59, 48, 0.06)' },
+    { line: '#16a34a', fill: 'rgba(22, 163, 74, 0.06)' },
+    { line: '#ca8a04', fill: 'rgba(202, 138, 4, 0.06)' },
+    { line: '#7c3aed', fill: 'rgba(124, 58, 237, 0.06)' },
+    { line: '#db2777', fill: 'rgba(219, 39, 119, 0.06)' },
+    { line: '#0891b2', fill: 'rgba(8, 145, 178, 0.06)' },
+    { line: '#ea580c', fill: 'rgba(234, 88, 12, 0.06)' },
+  ];
+
+  // ---------- Helpers ----------
+
+  function setStatus(key, state, label) {
+    var dot = document.getElementById('dot-' + key);
+    var lbl = document.getElementById('label-' + key);
+    var badge = document.getElementById('badge-' + key);
+    if (dot) dot.className = 'w-2 h-2 rounded-full';
+    if (dot && state === 'ok')    { dot.classList.add('bg-green-500'); }
+    if (dot && state === 'warn')  { dot.classList.add('bg-yellow-500'); }
+    if (dot && state === 'error') { dot.classList.add('bg-gray-300'); }
+    if (badge) {
+      if (state === 'ok')    { badge.textContent = 'OK';      badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-green-50 text-green-700'; }
+      if (state === 'warn')  { badge.textContent = 'WARN';    badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-yellow-50 text-yellow-700'; }
+      if (state === 'error') { badge.textContent = 'NO DATA'; badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular bg-gray-100 text-gray-500'; }
+    }
+    if (lbl) lbl.textContent = label;
+  }
+
+  function fmtVal(v) {
+    if (v == null) return '--';
+    if (Math.abs(v) >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+    if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (Math.abs(v) >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+    return v.toFixed(2);
+  }
+
+  function delta(curr, prev) {
+    if (prev == null || prev === 0) return { text: '--', cls: 'text-gray-400', bg: '' };
+    var pct = ((curr - prev) / prev) * 100;
+    if (Math.abs(pct) < 2.0) return { text: '~0%', cls: 'text-gray-500', bg: 'bg-gray-50' };
+    var sign = pct > 0 ? '+' : '';
+    return {
+      text: sign + pct.toFixed(1) + '%',
+      cls: pct > 0 ? 'text-green-700' : 'text-red-600',
+      bg: pct > 0 ? 'bg-green-50' : 'bg-red-50',
+    };
+  }
+
+  function flipDelta(d) {
+    if (d.cls === 'text-green-700') return { text: d.text, cls: 'text-red-600', bg: 'bg-red-50' };
+    if (d.cls === 'text-red-600')   return { text: d.text, cls: 'text-green-700', bg: 'bg-green-50' };
+    return d;
+  }
+
+  // ---------- Benchmark data table ----------
+
+  function renderTable(containerId, entries, unit, smallerIsBetter) {
+    var el = document.getElementById(containerId);
+    if (!entries || entries.length < 1) { if (el) el.style.display = 'none'; return; }
+
+    var names = []; var seen = {};
+    entries.forEach(function(run) { run.benches.forEach(function(b) { if (!seen[b.name]) { names.push(b.name); seen[b.name] = true; } }); });
+
+    var latest = entries[entries.length - 1];
+    var prev = entries.length > 1 ? entries[entries.length - 2] : null;
+    var oldest = entries[0];
+
+    var html = '<table class="w-full text-xs">';
+    html += '<thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">';
+    html += '<th class="px-5 py-2 font-semibold">Benchmark</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Latest</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">vs prev</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">vs first</th>';
+    html += '<th class="px-3 py-2 font-semibold">Trend</th>';
+    html += '</tr></thead><tbody>';
+
+    names.forEach(function(name, idx) {
+      var lb = latest.benches.find(function(b) { return b.name === name; });
+      var pb = prev ? prev.benches.find(function(b) { return b.name === name; }) : null;
+      var ob = oldest.benches.find(function(b) { return b.name === name; });
+      var val = lb ? lb.value : null;
+      var dPrev = delta(val, pb ? pb.value : null);
+      var dFirst = delta(val, ob ? ob.value : null);
+      if (smallerIsBetter) { dPrev = flipDelta(dPrev); dFirst = flipDelta(dFirst); }
+
+      var spark = entries.slice(-20).map(function(run) {
+        var b = run.benches.find(function(b2) { return b2.name === name; });
+        return b ? b.value : null;
+      }).filter(function(v) { return v !== null; });
+
+      var shortName = name.length > 50 ? name.slice(0, 47) + '...' : name;
+      var stripe = idx % 2 === 0 ? '' : 'bg-gray-50/50';
+
+      html += '<tr class="border-t border-gray-100 hover:bg-gray-50 transition-colors ' + stripe + '">';
+      html += '<td class="px-5 py-2.5 font-medium text-gray-700 truncate max-w-[260px]" title="' + name + '">' + shortName + '</td>';
+      html += '<td class="px-3 py-2.5 text-right tabular font-semibold text-gray-900">' + fmtVal(val) + (unit ? ' <span class="text-gray-400 font-normal">' + unit + '</span>' : '') + '</td>';
+      html += '<td class="px-3 py-2.5 text-right"><span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular ' + dPrev.bg + ' ' + dPrev.cls + '">' + dPrev.text + '</span></td>';
+      html += '<td class="px-3 py-2.5 text-right"><span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular ' + dFirst.bg + ' ' + dFirst.cls + '">' + dFirst.text + '</span></td>';
+      html += '<td class="px-3 py-2.5"><canvas class="spark" data-values="' + spark.join(',') + '" width="80" height="24"></canvas></td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
+
+    el.querySelectorAll('.spark').forEach(function(c) {
+      var vals = c.dataset.values.split(',').map(Number).filter(function(v) { return !isNaN(v); });
+      if (vals.length < 2) return;
+      var ctx = c.getContext('2d');
+      var w = c.width, h = c.height;
+      var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+      var range = max - min || 1;
+      ctx.beginPath();
+      ctx.strokeStyle = '#2563eb';
+      ctx.lineWidth = 1.5;
+      ctx.lineJoin = 'round';
+      vals.forEach(function(v, i) {
+        var x = (i / (vals.length - 1)) * w;
+        var y = h - 2 - ((v - min) / range) * (h - 4);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      var lastX = w, lastY = h - 2 - ((vals[vals.length - 1] - min) / range) * (h - 4);
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#2563eb';
+      ctx.fill();
+    });
+  }
+
+  // ---------- Chart rendering ----------
+
+  function createGradient(ctx, fillColor) {
+    var g = ctx.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, fillColor.replace('0.06', '0.15'));
+    g.addColorStop(1, fillColor.replace('0.06', '0.0'));
+    return g;
+  }
+
+  function renderChart(canvasId, emptyId, entries, unit) {
+    var canvas = document.getElementById(canvasId);
+    var empty = document.getElementById(emptyId);
+
+    if (!entries || entries.length === 0) {
+      if (canvas) canvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      return;
+    }
+
+    var ctx = canvas.getContext('2d');
+    var benchNames = []; var seen = {};
+    entries.forEach(function(run) { run.benches.forEach(function(b) { if (!seen[b.name]) { benchNames.push(b.name); seen[b.name] = true; } }); });
+
+    var labels = entries.map(function(run) {
+      var d = new Date(run.date);
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    });
+
+    var datasets = benchNames.map(function(name, ci) {
+      var color = COLORS[ci % COLORS.length];
+      var data = entries.map(function(run) {
+        var b = run.benches.find(function(b2) { return b2.name === name; });
+        return b ? b.value : null;
+      });
+      var shortName = name.length > 40 ? name.slice(0, 37) + '...' : name;
+      return {
+        label: shortName,
+        data: data,
+        borderColor: color.line,
+        backgroundColor: createGradient(ctx, color.fill),
+        tension: 0.35,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: color.line,
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+        borderWidth: 2,
+        fill: true,
+      };
+    });
+
+    new Chart(canvas, {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 700, easing: 'easeOutQuart' },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 8, boxHeight: 8, padding: 14, font: { size: 10 }, usePointStyle: true, pointStyle: 'circle' },
+          },
+          tooltip: {
+            backgroundColor: '#fff',
+            titleColor: '#111827',
+            bodyColor: '#6b7280',
+            borderColor: '#e5e7eb',
+            borderWidth: 1,
+            padding: 10,
+            cornerRadius: 6,
+            boxWidth: 8, boxHeight: 8, boxPadding: 4,
+            usePointStyle: true,
+            callbacks: {
+              title: function(items) {
+                var idx = items[0].dataIndex;
+                var run = entries[idx];
+                var hash = run.commit && run.commit.id ? run.commit.id.slice(0, 7) : '';
+                var msg = run.commit && run.commit.message ? run.commit.message.split('\n')[0] : '';
+                if (msg.length > 60) msg = msg.slice(0, 57) + '...';
+                return items[0].label + (hash ? '  ·  ' + hash : '') + (msg ? '\n' + msg : '');
+              },
+              label: function(ctx) { return ctx.dataset.label + ': ' + fmtVal(ctx.parsed.y) + (unit ? ' ' + unit : ''); }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: false,
+            grid: { color: '#f3f4f6', lineWidth: 1 },
+            ticks: { maxTicksLimit: 5, callback: function(v) { return fmtVal(v); } },
+          },
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }
+        }
+      }
+    });
+  }
+
+  // ---------- Data loading ----------
+
+  async function loadBenchmarkData(path) {
+    try {
+      var resp = await fetch(path);
+      if (!resp.ok) return null;
+      var text = await resp.text();
+      var match = text.match(/window\.BENCHMARK_DATA\s*=\s*(\{[\s\S]*\});?\s*$/);
+      if (!match) return null;
+      return JSON.parse(match[1]);
+    } catch(e) { return null; }
+  }
+
+  async function init() {
+    var rustData = await loadBenchmarkData('dev/bench/data.js');
+
+    if (rustData && rustData.entries) {
+      var key = Object.keys(rustData.entries)[0];
+      var entries = rustData.entries[key] || [];
+      renderChart('chart-rust', 'empty-rust', entries, 'ns/iter');
+      renderTable('table-rust', entries, 'ns/iter', true);
+      setStatus('rust', 'ok', 'Rust Benchmarks: ' + entries.length + ' runs');
+    } else {
+      renderChart('chart-rust', 'empty-rust', []);
+      var tbl = document.getElementById('table-rust');
+      if (tbl) tbl.style.display = 'none';
+      setStatus('rust', 'error', 'Rust Benchmarks: no data');
+    }
+  }
+
+  init();
+</script>
+
+</body>
+</html>
