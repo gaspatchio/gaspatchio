@@ -75,6 +75,10 @@
       <span class="w-2 h-2 rounded-full bg-gray-400 dot-pulse" id="dot-comparison"></span>
       <span id="label-comparison">Comparison: loading...</span>
     </div>
+    <div class="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-md text-xs border border-gray-200">
+      <span class="w-2 h-2 rounded-full bg-gray-400 dot-pulse" id="dot-aggregated"></span>
+      <span id="label-aggregated">Aggregation: loading...</span>
+    </div>
   </div>
 
   <div class="flex flex-col gap-6">
@@ -141,6 +145,39 @@
       </div>
       <div class="border-t border-gray-100 overflow-x-auto" id="table-comparison"></div>
       <div class="px-5 py-2 text-[10px] text-gray-300" id="provenance-comparison"></div>
+    </div>
+
+    <!-- Section 3: Aggregation Surface (BOTTOM) -->
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow animate-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <h2 class="text-base font-semibold text-gray-900 mb-1">Aggregation Surface</h2>
+          <p class="text-sm text-gray-500 leading-relaxed max-w-3xl">
+            Three ways to aggregate a scenario projection on the Level 4 model, all producing identical results: <code class="text-[12px] bg-gray-100 px-1 py-0.5 rounded">baseline</code> materialises every projection then aggregates, <code class="text-[12px] bg-gray-100 px-1 py-0.5 rounded">run_aggregated</code> folds results on the fly, and <code class="text-[12px] bg-gray-100 px-1 py-0.5 rounded">spill</code> streams to disk. The trade-off is peak memory versus throughput — <code class="text-[12px] bg-gray-100 px-1 py-0.5 rounded">run_aggregated</code> holds throughput while cutting peak memory several-fold.
+          </p>
+          <p class="text-[11px] text-gray-400 mt-2">All benchmarks on GitHub-hosted ubuntu-latest / windows-latest runners</p>
+        </div>
+        <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold tabular shrink-0" id="badge-aggregated">--</span>
+      </div>
+      <div class="p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <p class="text-[11px] text-gray-400 mb-2 font-semibold uppercase tracking-wider">Peak memory (lower is better)</p>
+            <div class="relative h-56"><canvas id="chart-agg-peak"></canvas></div>
+          </div>
+          <div>
+            <p class="text-[11px] text-gray-400 mb-2 font-semibold uppercase tracking-wider">Throughput (higher is better)</p>
+            <div class="relative h-56"><canvas id="chart-agg-throughput"></canvas></div>
+          </div>
+        </div>
+        <div class="hidden flex-col items-center justify-center h-48 text-gray-400 text-sm" id="empty-aggregated">
+          <span class="text-3xl mb-2 opacity-40">📊</span>
+          <span>No aggregation benchmark data yet</span>
+          <span class="text-xs text-gray-300 mt-1">Data appears after the first successful aggregation benchmark run</span>
+        </div>
+      </div>
+      <div class="border-t border-gray-100 overflow-x-auto" id="table-aggregated"></div>
+      <div class="px-5 py-2 text-[10px] text-gray-300" id="provenance-aggregated"></div>
     </div>
 
   </div>
@@ -568,6 +605,153 @@
       html += '<td class="px-3 py-2.5 text-right text-gray-700 tabular">' + fmtThroughput(lThroughput) + '</td>';
       if (speedup != null) {
         html += '<td class="px-3 py-2.5 text-right"><span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular bg-green-50 text-green-700">' + speedup.toFixed(1) + 'x</span></td>';
+      } else {
+        html += '<td class="px-3 py-2.5 text-right text-gray-400">--</td>';
+      }
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  }
+
+  // ---------- Aggregation Surface: peak-memory + throughput bars ----------
+
+  var AGG_ARMS = [
+    { key: 'baseline',   label: 'Baseline (materialise)', bg: 'rgba(107, 114, 128, 0.60)', border: '#6b7280' },
+    { key: 'aggregated', label: 'run_aggregated',         bg: 'rgba(255, 59, 48, 0.85)',   border: '#ff3b30' },
+    { key: 'spill',      label: 'Spill to disk',          bg: 'rgba(37, 99, 235, 0.70)',   border: '#2563eb' },
+  ];
+
+  function aggScales(entries) {
+    var scales = [], seen = {};
+    entries.forEach(function(e) {
+      var m = e.name.match(/^L4 Aggregation\/([^-]+)-baseline-wall$/);
+      if (m && !seen[m[1]]) { scales.push(m[1]); seen[m[1]] = true; }
+    });
+    function parseScale(s) {
+      var m = s.match(/^(\d+)(K|M)?$/i);
+      if (!m) return 0;
+      var n = parseInt(m[1]);
+      if (m[2] && /k/i.test(m[2])) n *= 1000;
+      if (m[2] && /m/i.test(m[2])) n *= 1000000;
+      return n;
+    }
+    scales.sort(function(a, b) { return parseScale(a) - parseScale(b); });
+    return scales;
+  }
+
+  function aggFind(entries, name) {
+    var e = entries.find(function(e2) { return e2.name === name; });
+    return e ? e.value : null;
+  }
+
+  function renderAggregationCharts(entries, run) {
+    var peakCanvas = document.getElementById('chart-agg-peak');
+    var tpCanvas = document.getElementById('chart-agg-throughput');
+    var empty = document.getElementById('empty-aggregated');
+
+    if (!entries || entries.length === 0) {
+      if (peakCanvas) peakCanvas.style.display = 'none';
+      if (tpCanvas) tpCanvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      return;
+    }
+
+    var provEl = document.getElementById('provenance-aggregated');
+    if (provEl && run) provEl.innerHTML = formatProvenance(run);
+
+    var scales = aggScales(entries);
+
+    function makeBar(canvas, metric, axisTitle, unitFmt) {
+      if (!canvas) return;
+      new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: scales,
+          datasets: AGG_ARMS.map(function(a) {
+            return {
+              label: a.label,
+              data: scales.map(function(s) { return aggFind(entries, 'L4 Aggregation/' + s + '-' + a.key + '-' + metric); }),
+              backgroundColor: a.bg, borderColor: a.border, borderWidth: 1, borderRadius: 3,
+            };
+          })
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: { duration: 700, easing: 'easeOutQuart' },
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 8, boxHeight: 8, padding: 14, font: { size: 10 }, usePointStyle: true, pointStyle: 'circle' } },
+            tooltip: {
+              backgroundColor: '#fff', titleColor: '#111827', bodyColor: '#6b7280', borderColor: '#e5e7eb', borderWidth: 1,
+              padding: 10, cornerRadius: 6, boxWidth: 8, boxHeight: 8, boxPadding: 4, usePointStyle: true,
+              callbacks: {
+                title: run ? tooltipTitleWithCommit(run) : undefined,
+                label: function(ctx) { var v = ctx.parsed.y; return v == null ? ctx.dataset.label + ': --' : ctx.dataset.label + ': ' + unitFmt(v); }
+              }
+            }
+          },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#f3f4f6', lineWidth: 1 }, title: { display: true, text: axisTitle, font: { size: 10 }, color: '#9ca3af' }, ticks: { maxTicksLimit: 6, callback: function(v) { return fmtVal(v); } } },
+            x: { grid: { display: false }, title: { display: true, text: 'model points', font: { size: 10 }, color: '#9ca3af' } }
+          }
+        }
+      });
+    }
+
+    makeBar(peakCanvas, 'peak', 'peak memory MB (lower is better)', function(v) { return fmtVal(v) + ' MB'; });
+    makeBar(tpCanvas, 'throughput', 'model points / second (higher is better)', function(v) { return fmtVal(v) + ' pts/sec'; });
+
+    // Badge: peak-memory reduction of run_aggregated vs baseline at the largest scale.
+    var big = scales[scales.length - 1];
+    var ratio = big ? aggFind(entries, 'L4 Aggregation/' + big + '-memory-ratio') : null;
+    var badge = document.getElementById('badge-aggregated');
+    if (badge && ratio != null) {
+      badge.textContent = ratio.toFixed(1) + 'x lighter';
+      badge.className = 'text-[11px] px-2 py-0.5 rounded-full font-semibold tabular shrink-0 bg-green-50 text-green-700';
+    }
+  }
+
+  function renderAggregationTable(entries, run) {
+    var el = document.getElementById('table-aggregated');
+    if (!el || !entries || entries.length === 0) { if (el) el.style.display = 'none'; return; }
+
+    var scales = aggScales(entries);
+    function fmtMB(v) { if (v == null) return '--'; if (v >= 1000) return (v / 1000).toFixed(2) + ' GB'; return v.toFixed(0) + ' MB'; }
+    function fmtTp(v) { if (v == null) return '--'; if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K pts/s'; return v.toFixed(0) + ' pts/s'; }
+
+    var html = '<table class="w-full text-xs">';
+    html += '<thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">';
+    html += '<th class="px-5 py-2 font-semibold">Scale</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Baseline peak</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">run_aggregated peak</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Memory reduction</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">run_aggregated tput</th>';
+    html += '<th class="px-3 py-2 font-semibold text-right">Speed vs baseline</th>';
+    html += '</tr></thead><tbody>';
+
+    scales.forEach(function(s, idx) {
+      var basePeak = aggFind(entries, 'L4 Aggregation/' + s + '-baseline-peak');
+      var aggPeak = aggFind(entries, 'L4 Aggregation/' + s + '-aggregated-peak');
+      var ratio = aggFind(entries, 'L4 Aggregation/' + s + '-memory-ratio');
+      var aggTp = aggFind(entries, 'L4 Aggregation/' + s + '-aggregated-throughput');
+      var speedup = aggFind(entries, 'L4 Aggregation/' + s + '-speedup');
+      var stripe = idx % 2 === 0 ? '' : 'bg-gray-50/50';
+
+      html += '<tr class="border-t border-gray-100 hover:bg-gray-50 transition-colors ' + stripe + '">';
+      html += '<td class="px-5 py-2.5 text-gray-700 tabular">' + s + ' pts</td>';
+      html += '<td class="px-3 py-2.5 text-right text-gray-700 tabular">' + fmtMB(basePeak) + '</td>';
+      html += '<td class="px-3 py-2.5 text-right text-gray-700 tabular">' + fmtMB(aggPeak) + '</td>';
+      if (ratio != null) {
+        html += '<td class="px-3 py-2.5 text-right"><span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular bg-green-50 text-green-700">' + ratio.toFixed(1) + 'x less</span></td>';
+      } else {
+        html += '<td class="px-3 py-2.5 text-right text-gray-400">--</td>';
+      }
+      html += '<td class="px-3 py-2.5 text-right text-gray-700 tabular">' + fmtTp(aggTp) + '</td>';
+      if (speedup != null) {
+        var scls = speedup >= 0.98 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500';
+        html += '<td class="px-3 py-2.5 text-right"><span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tabular ' + scls + '">' + speedup.toFixed(2) + 'x</span></td>';
       } else {
         html += '<td class="px-3 py-2.5 text-right text-gray-400">--</td>';
       }
@@ -1329,9 +1513,10 @@
       loadBenchmarkData('dev/model-bench/data.js'),
       loadComparisonData('dev/comparison/data.js'),
       loadBenchmarkData('dev/model-bench-windows/data.js'),
+      loadBenchmarkData('dev/aggregated-bench/data.js'),
     ]);
 
-    var modelData = results[0], comparisonData = results[1], modelWinData = results[2];
+    var modelData = results[0], comparisonData = results[1], modelWinData = results[2], aggData = results[3];
 
     // Model Benchmarks (hero) — custom throughput + time charts
     if (modelData && modelData.entries) {
@@ -1378,6 +1563,28 @@
       if (canvas) canvas.style.display = 'none';
       if (empty) empty.style.display = 'flex';
       setStatus('comparison', 'error', 'Comparison: no data');
+    }
+
+    // Aggregation Surface (bottom)
+    if (aggData && aggData.entries) {
+      var aggKey = Object.keys(aggData.entries)[0];
+      var aggEntriesAll = aggData.entries[aggKey] || [];
+      var latestAgg = aggEntriesAll.length > 0 ? aggEntriesAll[aggEntriesAll.length - 1] : null;
+      if (latestAgg && latestAgg.benches && latestAgg.benches.length > 0) {
+        renderAggregationCharts(latestAgg.benches, latestAgg);
+        renderAggregationTable(latestAgg.benches, latestAgg);
+        setStatus('aggregated', 'ok', 'Aggregation: data loaded');
+      } else {
+        renderAggregationCharts([], null);
+        var atbl = document.getElementById('table-aggregated');
+        if (atbl) atbl.style.display = 'none';
+        setStatus('aggregated', 'error', 'Aggregation: no data');
+      }
+    } else {
+      renderAggregationCharts([], null);
+      var atbl2 = document.getElementById('table-aggregated');
+      if (atbl2) atbl2.style.display = 'none';
+      setStatus('aggregated', 'error', 'Aggregation: no data');
     }
 
   }
