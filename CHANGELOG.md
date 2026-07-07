@@ -17,7 +17,12 @@
   (Polars #20786; the same cell measured b=4 at ~8.6× the b=1 rung, 2.2×
   above linear), so a bare linear gate still under-predicted the killer rung.
   Over-predicting costs at most a smaller batch; under-predicting costs the
-  process.
+  process. Probe peaks are additionally floored by the materialised frame's
+  size: in a process with retained allocator pools a batch can be served
+  entirely from pooled memory — RSS never grows, the sampler reads ~0, and
+  any prediction multiplied from that zero is blind. The frame's bytes are
+  live memory regardless of where the allocator got them (the same floor the
+  policy axis has always applied to its seed measurement).
 
 ## [0.5.2] — Post-release correctness fixes
 

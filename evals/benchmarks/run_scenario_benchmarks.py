@@ -117,6 +117,78 @@ def cell_to_json_rows(arm: str, cell: dict) -> list[dict]:
     ]
 
 
+def _cell_worker(n_scenarios: int, n_points: int) -> None:
+    """Child-process entry: run ONE cell, print ``CELL {json}`` (or ``CELLSKIP``) to stdout.
+
+    Each cell runs in a fresh interpreter so it gets a clean allocator baseline
+    and the full memory budget. In a shared process, earlier cells leave
+    retained allocator pools behind: later probes are served from those pools
+    (RSS never grows, so measured peaks read ~0 and the search's gate is blind)
+    and the budget shrinks because base RSS includes the pools. Observed live:
+    ``probes: [b1/streaming=0MB+fits]`` and a budget collapsing 7148->3094 MB
+    across cells. Same pattern as scenario_batch_search_bench's floor workers.
+    """
+    try:
+        cell = run_cell(n_scenarios, _points_path(n_points))
+    except IrreducibleCellError as e:
+        # The sizer refusing a cell that does not fit this box is the library
+        # working as designed (free runners are smaller than the perf runner).
+        print(f"CELLSKIP irreducible on this box: {e}", flush=True)
+        return
+    print("CELL " + json.dumps(cell), flush=True)
+
+
+# Per-cell wall clock cap: the heaviest legitimate cell runs ~6 min on CI, so a
+# cell still going at 30 min is wedged. Bounding it keeps one hung cell from
+# eating the whole job timeout and losing every OTHER cell's output with it.
+_CELL_TIMEOUT_S = 1800
+
+
+def _run_cell_in_subprocess(arm: str, n_scen: int, n_pts: int) -> dict | None:
+    """Spawn one fresh-process cell; return its metrics, or None for a tolerated loss.
+
+    stderr is inherited so the child's probe-ladder lines stream straight into
+    the CI log. Failure handling is deliberately asymmetric:
+
+    * signal kill (negative returncode, e.g. kernel OOM-kill) or timeout -- the
+      isolation working as intended: lose that one cell, keep the run;
+    * clean nonzero exit with no result -- a real error (import failure, bug;
+      its traceback already streamed on inherited stderr): raise, so CI fails
+      instead of publishing an incomplete benchmark as green.
+    """
+    import subprocess  # noqa: PLC0415
+
+    cmd = [sys.executable, str(Path(__file__).resolve()), "--cell", str(n_scen), str(n_pts)]
+    try:
+        p = subprocess.run(  # noqa: S603
+            cmd, stdout=subprocess.PIPE, text=True, check=False, timeout=_CELL_TIMEOUT_S
+        )
+    except subprocess.TimeoutExpired:
+        print(
+            f"SKIP {arm} {n_scen}x{n_pts} -- cell exceeded {_CELL_TIMEOUT_S}s and was killed",
+            file=sys.stderr,
+        )
+        return None
+    for ln in p.stdout.splitlines():
+        if ln.startswith("CELLSKIP "):
+            print(f"SKIP {arm} {n_scen}x{n_pts} -- {ln[len('CELLSKIP '):]}", file=sys.stderr)
+            return None
+        if ln.startswith("CELL "):
+            return json.loads(ln[len("CELL "):])
+    if p.returncode < 0:
+        print(
+            f"SKIP {arm} {n_scen}x{n_pts} -- cell process killed by signal "
+            f"{-p.returncode} (likely OOM)",
+            file=sys.stderr,
+        )
+        return None
+    msg = (
+        f"cell {arm} {n_scen}x{n_pts} exited {p.returncode} without a result -- "
+        "a real error, not a memory kill; see its traceback on stderr above"
+    )
+    raise RuntimeError(msg)
+
+
 def main() -> None:
     """Run the full grid and emit the github-action-benchmark JSON array to stdout."""
     rows: list[dict] = []
@@ -126,16 +198,8 @@ def main() -> None:
             print(f"SKIP {arm} {n_scen}x{n_pts} -- {path} missing", file=sys.stderr)
             continue
         print(f"{arm} {n_scen}sc x {n_pts}pts ...", file=sys.stderr)
-        try:
-            cell = run_cell(n_scen, path)
-        except IrreducibleCellError as e:
-            # The sizer refusing a cell that does not fit this box is the library
-            # working as designed (free runners are smaller than the perf runner).
-            # Skip the cell's rows but keep the run -- and the emitted JSON -- valid.
-            print(
-                f"SKIP {arm} {n_scen}x{n_pts} -- irreducible on this box: {e}",
-                file=sys.stderr,
-            )
+        cell = _run_cell_in_subprocess(arm, n_scen, n_pts)
+        if cell is None:
             continue
         print(
             f"  wall={cell['wall_s']}s rss={cell['peak_rss_mb']}MB "
@@ -147,4 +211,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--cell":
+        _cell_worker(int(sys.argv[2]), int(sys.argv[3]))
+    else:
+        main()
