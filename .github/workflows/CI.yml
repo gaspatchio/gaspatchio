@@ -107,7 +107,14 @@ jobs:
 
   windows:
     runs-on: ${{ matrix.platform.runner }}
-    if: startsWith(github.ref, 'refs/tags/')
+    # Tag pushes build the release wheel. Pushes to main build it too — not for
+    # the artifact, but because GitHub cache scoping only lets a tag-triggered
+    # run restore caches created on the default branch: main runs are what keep
+    # the Rust build cache warm. Cold, this job runs ~51 min (v0.5.2: 20 min
+    # full build + ~15 min per extra interpreter, each recompiling the polars
+    # stack); warm, only the gaspatchio crates compile. It also surfaces
+    # Windows build breakage between releases instead of at release time.
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: [rust-tests, python-tests]
     strategy:
       matrix:
@@ -120,6 +127,13 @@ jobs:
         with:
           python-version: 3.x
           architecture: ${{ matrix.platform.target }}
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4   # v2.9.1
+        with:
+          key: ${{ matrix.platform.target }}
+          # A cache saved on a tag ref is unreachable from every other ref, so
+          # tag runs restore-only; main runs are the sole writers.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -127,6 +141,7 @@ jobs:
           args: --release --out dist --find-interpreter
           working-directory: bindings/python
       - name: Upload wheels
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: wheels-windows-${{ matrix.platform.target }}
@@ -134,7 +149,8 @@ jobs:
 
   macos:
     runs-on: ${{ matrix.platform.runner }}
-    if: startsWith(github.ref, 'refs/tags/')
+    # Runs on main pushes for the same cache-warming reason as the windows job.
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: [rust-tests, python-tests]
     strategy:
       matrix:
@@ -148,6 +164,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4   # v2.9.1
+        with:
+          # Both matrix legs run on the same runner image; without the target in
+          # the key they would race to save one shared (wrong-arch) cache.
+          key: ${{ matrix.platform.target }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -155,6 +178,7 @@ jobs:
           args: --release --out dist --find-interpreter
           working-directory: bindings/python
       - name: Upload wheels
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-${{ matrix.platform.target }}
