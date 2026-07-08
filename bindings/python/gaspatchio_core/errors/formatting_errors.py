@@ -42,31 +42,41 @@ def _extract_missing_column_robust(error_str: str) -> str | None:
     """Attempts to extract the missing column name from specific error patterns.
     Assumes error_str is derived from `str(ColumnNotFoundError)` or similar.
     """
-    # Pattern 1: Search for word characters followed by a newline.
-    # Removed ^ anchor to allow matching even if not at the absolute start.
-    match = re.search(r"([a-zA-Z0-9_]+)\n", error_str)
-    if match:
-        col_name = match.group(1)
-        # Relax the length check, maybe short names are valid
-        if col_name.lower() != "traceback":
-            return col_name
+    # polars appends a query-plan dump after the human-readable message, e.g.
+    # "Resolved plan until failure: ... DF [...]; PROJECT */2 COLUMNS". Only the
+    # leading message names the missing column, so scope every bare-token
+    # heuristic to that header. The plan dump's uppercase "COLUMNS" token ends a
+    # line and would otherwise be picked up by the word-before-newline pattern
+    # (the failure mode introduced by polars 1.42's richer error text).
+    header = error_str.split("Resolved plan until failure", 1)[0]
 
-    # Pattern 2/3 Combined: Variations like 'column "name" not found' etc.
-    # Trying a broader pattern to catch different quoting/spacing.
+    # Pattern 1 (most reliable): a quoted column name after a "column"-ish
+    # keyword. polars phrasings: `unable to find column "NAME"; ...`,
+    # `column "NAME" not found`. Tried first so a quoted name always wins.
     match = re.search(
         # Optional 'Error:', optional context words, quote, capture name, quote.
         r"(?:Error:\s*)?(?:column|Field not found:|unable to find column)\s*.*?('|\")([^\'\"]+)\1",
-        error_str,
+        header,
         re.IGNORECASE,
     )
     if match:
         # The actual column name is in group 2
         return match.group(2)
 
-    # Pattern 4: Specific "ColumnNotFoundError: name" format.
-    match = re.search(r"ColumnNotFoundError:\s*([a-zA-Z0-9_]+)", error_str)
+    # Pattern 2: Specific "ColumnNotFoundError: name" format.
+    match = re.search(r"ColumnNotFoundError:\s*([a-zA-Z0-9_]+)", header)
     if match:
         return match.group(1)
+
+    # Pattern 3 (legacy fallback): older polars emitted the bare column name
+    # alone on the first line. Scoped to the header so the plan dump can't
+    # shadow it; only used when the quoted patterns above did not match.
+    match = re.search(r"([a-zA-Z0-9_]+)\n", header)
+    if match:
+        col_name = match.group(1)
+        # Relax the length check, maybe short names are valid
+        if col_name.lower() != "traceback":
+            return col_name
 
     return None
 
