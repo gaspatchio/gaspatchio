@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **Rollforward extractions now share ONE kernel call, by construction.**
+  `CompiledRollforward` gains the expression surface directly —
+  `compiled.expr_for(state)` / `compiled.increment_for(label)` — and
+  extractions reference a single hidden struct column that `ActuarialFrame`
+  materialises on first use (and strips from output, as it always has). The
+  old design cached one plugin expression and relied on the Polars optimiser's
+  common-subexpression elimination to deduplicate the kernel call; Polars 1.42
+  stopped applying CSE to plugin expressions, and in worksheet-style models
+  (each `af.x = ...` its own `with_columns`) CSE never folded across
+  assignments anyway — a K-state rollforward has always cost K kernel runs.
+  It now costs one. `RollforwardCollector` remains as a deprecated facade
+  with its old self-contained-expression semantics (one kernel call per
+  extraction), which is also the pattern for raw Polars frames alongside the
+  new `compiled.plugin_expr()` escape hatch.
+- Dependency bumps: `polars` 1.38.1 → 1.42.1, `numpy` cap raised to `<2.6`.
+  The error formatter's missing-column extraction now parses Polars 1.42's
+  richer `ColumnNotFoundError` text (which appends a query-plan dump whose
+  `COLUMNS` token the old first-word heuristic misread) and still handles the
+  older formats.
+
 ## [0.5.3] — Scenario auto-batching can no longer OOM the box
 
 The `batch_size="auto"` scenario search measures candidate batch sizes by

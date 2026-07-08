@@ -86,7 +86,8 @@ class Charge(Op):
 class Grow(Op):
     """``s *= 1 + rate[t]`` — the rate is applied as quoted per period; the
     schedule ``dt`` is not threaded through, so pre-scale an annual rate to the
-    projection frequency yourself (e.g. a monthly rate for a monthly grid)."""
+    projection frequency yourself (e.g. a monthly rate for a monthly grid).
+    """
 
     target: StateRef
     rate: pl.Expr
@@ -96,7 +97,8 @@ class Grow(Op):
 @dataclass(frozen=True)
 class GrowCapped(Op):
     """``s *= 1 + clamp(rate[t], floor, cap)`` — IUL crediting; rate applied as
-    quoted per period (no schedule ``dt`` scaling — pre-scale to the period)."""
+    quoted per period (no schedule ``dt`` scaling — pre-scale to the period).
+    """
 
     target: StateRef
     rate: pl.Expr

@@ -128,7 +128,7 @@ class AssignCaptureSlots:
 
     The slot table is what the kernel uses to decide which fields to
     emit on its per-row Struct output. Every state's ``eop`` is
-    captured implicitly so user-side ``collector.expr_for(state)`` works
+    captured implicitly so user-side ``compiled.expr_for(state)`` works
     without an explicit ``point="eop"`` annotation.
 
     Returns the unchanged IR via ``apply``; the slot table is exposed via
