@@ -106,6 +106,44 @@ class TestOneKernelCallByConstruction:
         out = af.collect()
         assert out["padded"].to_list()[0] == [1.0, *EXPECTED_POST_COI]
 
+    def test_wide_frame_still_one_kernel_call(self) -> None:
+        """Frames past the incremental-schema threshold (16 cols) still share.
+
+        Guards the cache self-heal invariant the hook relies on: materialising
+        the hidden column marks the schema dirty, and ``__setitem__``'s
+        incremental maintenance must refresh through the ``_schema`` property
+        (which deep-resolves the dirty plan) BEFORE snapshotting the cache —
+        ``_resolve_assigned_dtype`` reading the property provides that. If a
+        future change snapshots the raw dict without the refresh, the cache
+        forgets the hidden column, the next extraction re-materialises it, and
+        the kernel silently runs K times again. Only frames with
+        >= _INCREMENTAL_SCHEMA_MIN_COLS columns take the incremental path, so
+        narrow test frames cannot catch that regression.
+        """
+        compiled = _compile_two_point_av()
+        wide = {f"pad_{i}": [float(i)] for i in range(20)}
+        af = ActuarialFrame(
+            pl.DataFrame(
+                {
+                    "init": [100.0],
+                    "p": [[10.0, 10.0, 10.0]],
+                    "rate": [[0.01, 0.01, 0.01]],
+                    **wide,
+                }
+            )
+        )
+        af.av_eop = compiled.expr_for("av")
+        af.av_post_coi = compiled.expr_for("av", point="post_coi")
+
+        plan = af._df.explain()  # noqa: SLF001
+        plugin_count = plan.lower().count("rollforward([")
+        assert plugin_count == 1, (
+            f"Expected 1 plugin call; got {plugin_count}\nPlan:\n{plan}"
+        )
+        out = af.collect()
+        assert out["av_eop"].to_list()[0] == EXPECTED_EOP
+        assert out["av_post_coi"].to_list()[0] == EXPECTED_POST_COI
+
     def test_two_frames_each_materialise_their_own(self) -> None:
         """One compiled rollforward used on two frames: one kernel call in each."""
         compiled = _compile_two_point_av()

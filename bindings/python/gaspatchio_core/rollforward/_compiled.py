@@ -63,6 +63,11 @@ class CompiledRollforward:
             is_elementwise=True,
         )
 
+    @cached_property
+    def _cached_plugin_expr(self) -> pl.Expr:
+        """The plugin expr built once per instance (exprs are immutable, shareable)."""
+        return self.plugin_expr()
+
     def _field_expr(self, field_name: str) -> pl.Expr:
         """Return a field extraction from the shared hidden struct column.
 
@@ -77,7 +82,7 @@ class CompiledRollforward:
 
         from gaspatchio_core.rollforward import _registry
 
-        _registry.register(self._hidden_column, self.plugin_expr())
+        _registry.register(self._hidden_column, self._cached_plugin_expr)
         return pl.col(self._hidden_column).struct.field(field_name)
 
     def expr_for(self, state: str, *, point: str = "eop") -> pl.Expr:
