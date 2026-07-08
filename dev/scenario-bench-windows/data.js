@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783487867554,
+  "lastUpdate": 1783502335910,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks (Windows)": [
@@ -958,6 +958,130 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 4414.6,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5a02e98c45f779e8734e9567afb0e326a8c50223",
+          "message": "ci(release): build windows/macos wheels one interpreter per matrix leg (#15)\n\nThe v0.5.3-era wheel jobs built cp312/313/314 sequentially in one job via\n--find-interpreter. Measured on the first warm run after #12: the rust-cache\nhit exactly but windows still took 44 min (vs 51 cold), because the polars\nstack sits inside pyo3's dependency cone — every interpreter change\nrecompiles all 29 crates (~14 min), and the three sequential builds thrash\none target dir, so the saved cache only ever holds the last interpreter's\nartifacts and the expensive layer never hits.\n\nSplitting the interpreter into the matrix makes each leg build exactly one\nCPython (-i pinned to setup-python's interpreter), with its own cache key\nand artifact name. Legs run in parallel (~15 min wall-clock cold), and each\ncache holds one config so warm runs rebuild only the gaspatchio crates.\nThe release job's wheels-* download pattern picks up the renamed artifacts\nunchanged; the wheel set stays exactly cp312/313/314 per platform.",
+          "timestamp": "2026-07-08T20:56:25+12:00",
+          "tree_id": "ccc463340528e69b4b6820ec2f7842b994fc3ce0",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/5a02e98c45f779e8734e9567afb0e326a8c50223"
+        },
+        "date": 1783502332573,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 3.466,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 194.2,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 2885.1,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 63.581,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 532.4,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 1572.8,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 1,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-wall",
+            "value": 511.242,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-rss",
+            "value": 576.4,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-throughput",
+            "value": 1956,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 23.766,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 859,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 4207.7,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 229.439,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 4814.3,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 4358.5,
             "unit": "scenario-points/sec"
           },
           {
