@@ -418,16 +418,53 @@ class ActuarialFrame:
         if isinstance(value, ColumnProxy):
             return pl.col(value.name)
         if isinstance(value, ExpressionProxy):
-            return value._expr  # noqa: SLF001
+            return self._ensure_rollforward_sources(value._expr)  # noqa: SLF001
         if isinstance(value, ConditionExpression):
             # Use _to_boolean_expr() which handles list vs scalar columns properly
             # For list columns, routes to list_conditional Rust plugin
             # For scalar columns, uses native Polars comparison cast to Float64
-            return value._to_boolean_expr()  # noqa: SLF001
+            return self._ensure_rollforward_sources(value._to_boolean_expr())  # noqa: SLF001
         if isinstance(value, pl.Expr):
-            return value
+            return self._ensure_rollforward_sources(value)
         # Strings, numpy arrays, and other types become literals
         return pl.lit(value)
+
+    def _ensure_rollforward_sources(self, expr: pl.Expr) -> pl.Expr:
+        """Materialise any hidden rollforward struct columns ``expr`` references.
+
+        ``CompiledRollforward.expr_for`` returns ``pl.col("__rollforward_<fp>")
+        .struct.field(...)`` — a reference to a struct column that exists only
+        once this hook adds it. Materialising here, at the single point every
+        expression enters the frame, is what guarantees the rollforward kernel
+        runs ONCE no matter how many states or increments are extracted (the
+        Polars optimiser stopped deduplicating plugin calls in 1.42, so the
+        guarantee must be structural). ``collect()``/``profile()`` already
+        strip ``__rollforward_*`` columns from the output.
+
+        Idempotent and cheap: a no-op unless a rollforward has been compiled
+        in this process AND the expression references a hidden column missing
+        from the schema.
+        """
+        from gaspatchio_core.rollforward import _registry
+
+        if not _registry.has_entries() or self._df is None:
+            return expr
+        try:
+            roots = expr.meta.root_names()
+        except Exception:  # noqa: BLE001 — meta inspection is best-effort
+            return expr
+        hidden = [n for n in roots if n.startswith(_registry.HIDDEN_PREFIX)]
+        if not hidden:
+            return expr
+        schema = self._schema
+        known = set(schema) if schema is not None else set()
+        for name in hidden:
+            if name in known:
+                continue
+            self._df = self._df.with_columns(
+                _registry.plugin_expr_for(name).alias(name)
+            )
+        return expr
 
     # Excluded: _log_query_plan (now in tracing.py)  # noqa: ERA001
 
@@ -781,6 +818,7 @@ class ActuarialFrame:
         │ P003      ┆ TERM         ┆ 150000      ┆ 0.05        │
         └───────────┴──────────────┴─────────────┴─────────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot join on an uninitialized ActuarialFrame."
@@ -851,6 +889,7 @@ class ActuarialFrame:
         │ P003      ┆ IF     ┆ 1500    │
         └───────────┴────────┴─────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot filter an uninitialized ActuarialFrame."
@@ -920,6 +959,7 @@ class ActuarialFrame:
         │ P002      ┆ 45        ┆ 200000      │
         └───────────┴───────────┴─────────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot rename columns on an uninitialized ActuarialFrame."
@@ -985,6 +1025,7 @@ class ActuarialFrame:
         │ P001      ┆ 1200    ┆ 100000      │
         └───────────┴─────────┴─────────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot drop columns from an uninitialized ActuarialFrame."
@@ -1057,6 +1098,7 @@ class ActuarialFrame:
         │ P003      ┆ 55        ┆ 1500    │
         └───────────┴───────────┴─────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot sort an uninitialized ActuarialFrame."
@@ -1286,6 +1328,7 @@ class ActuarialFrame:
         └───────────┴─────────────┴─────────────────────────────────────┴─────────────────────────────────────┘
         Max policy year: 2
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute max on an uninitialized ActuarialFrame."
@@ -1387,6 +1430,7 @@ class ActuarialFrame:
         └───────────┴─────────────┴─────────────────────────────────────┴─────────────────────────────────────┘
         Min retention level: [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500]
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute min on an uninitialized ActuarialFrame."
@@ -1486,6 +1530,7 @@ class ActuarialFrame:
         │ 1.5         ┆ [0.0, 250.0, 1500.0, … 0.0]   ┆ [1.5, 0.5, 2.5, … 0.5]       │
         └─────────────┴───────────────────────────────┴──────────────────────────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute mean on an uninitialized ActuarialFrame."
@@ -1589,6 +1634,7 @@ class ActuarialFrame:
         Term Life claims volatility: 1443.38
         Whole Life claims volatility: 1443.38
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute std on an uninitialized ActuarialFrame."
@@ -1693,6 +1739,7 @@ class ActuarialFrame:
         North region lapse variance: 0.000007
         South region lapse variance: 0.000003
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute var on an uninitialized ActuarialFrame."
@@ -1793,6 +1840,7 @@ class ActuarialFrame:
         Agent A001 median sales: 5.0
         Agent A002 median sales: 15.0
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute median on an uninitialized ActuarialFrame."
@@ -1891,6 +1939,7 @@ class ActuarialFrame:
         │ [215, 235, 200, 250, … 240, 225, 280] ┆ [322500, 352500, 300000, … 420000]    │
         └───────────────────────────────────────┴───────────────────────────────────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute sum on an uninitialized ActuarialFrame."
@@ -1989,6 +2038,7 @@ class ActuarialFrame:
         │ 2     ┆ 2            ┆ 2            │
         └───────┴──────────────┴──────────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute count on an uninitialized ActuarialFrame."
@@ -2084,6 +2134,7 @@ class ActuarialFrame:
         │ null     ┆ [0.9952, 0.9940] ┆ [0.9994, 0.9988] │
         └──────────┴──────────────────┴──────────────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute product on an uninitialized ActuarialFrame."
@@ -2247,6 +2298,7 @@ class ActuarialFrame:
         │ null       ┆ [2000000.0, 2500000.0]           │
         └────────────┴──────────────────────────────────┘
         ```
+
         """
         if self._df is None:
             msg = "Cannot compute quantile on an uninitialized ActuarialFrame."

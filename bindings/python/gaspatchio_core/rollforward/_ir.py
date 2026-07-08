@@ -15,7 +15,7 @@ Fields:
   - batch_axes: tuple of axis names; defaults to ('policy',). Forward-compat
     for stochastic projection (vmap over scenario axis).
   - track_increments: bool — when True, every Op's per-period delta is
-    surfaced via the collector's ``increment_for(label)``.
+    surfaced via ``CompiledRollforward.increment_for(label)``.
   - lapse_when_all_non_positive: tuple of state names — kernel stops
     advancing when all named states are <= 0 at end-of-period.
   - contract_boundary: optional closed-subset bool Expr — kernel stops at

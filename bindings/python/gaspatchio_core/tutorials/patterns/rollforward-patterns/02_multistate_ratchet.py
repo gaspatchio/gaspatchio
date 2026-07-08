@@ -29,7 +29,6 @@ from datetime import date
 import polars as pl
 
 from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.rollforward._collector import RollforwardCollector
 from gaspatchio_core.rollforward._compile import compile_rollforward
 
 
@@ -68,9 +67,10 @@ def main() -> None:
     )
 
     compiled = compile_rollforward(b)
-    collector = RollforwardCollector(compiled)
-    af.fund = collector.expr_for("fund")
-    af.gmdb = collector.expr_for("gmdb")
+    # Both states read from ONE shared kernel call — the frame materialises
+    # the rollforward struct once and each line extracts its field.
+    af.fund = compiled.expr_for("fund")
+    af.gmdb = compiled.expr_for("gmdb")
     out = af.collect()
     fund = out.get_column("fund").to_list()[0]
     gmdb = out.get_column("gmdb").to_list()[0]

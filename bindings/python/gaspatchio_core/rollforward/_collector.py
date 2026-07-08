@@ -2,14 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""RollforwardCollector — emits one shared plugin Expr per rollforward."""
+"""RollforwardCollector — deprecated facade over CompiledRollforward.
+
+Deprecated since v0.6: use ``compiled.expr_for(...)`` / ``compiled
+.increment_for(...)`` directly. The collector returns SELF-CONTAINED plugin
+expressions — each extraction embeds its own kernel call, so K extractions
+cost K kernel runs. It exists so pre-0.6 call sites (and raw-Polars usage,
+where the exprs work standalone on any LazyFrame) keep their exact old
+behaviour. ``CompiledRollforward.expr_for`` instead references one shared
+hidden struct column that ``ActuarialFrame`` materialises once, making the
+one-kernel-call guarantee structural.
+"""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
-
-from polars.plugins import register_plugin_function
 
 if TYPE_CHECKING:
     import polars as pl
@@ -18,11 +25,11 @@ if TYPE_CHECKING:
 
 
 class RollforwardCollector:
-    """Per-rollforward facade that exposes per-state / per-increment Polars Exprs.
+    """Deprecated: use :meth:`CompiledRollforward.expr_for` instead.
 
-    The collector caches a single ``register_plugin_function`` result so the
-    Polars optimiser can deduplicate the kernel call across multiple
-    ``.struct.field(...)`` accesses within a single ``with_columns`` call.
+    Emits self-contained per-state / per-increment plugin exprs (one kernel
+    call EACH — no sharing). Retained for backwards compatibility and for raw
+    Polars frames, where a self-contained expr is the only thing that works.
     """
 
     def __init__(self, compiled: CompiledRollforward) -> None:
@@ -30,22 +37,12 @@ class RollforwardCollector:
         self._cached_plugin_expr: pl.Expr | None = None
 
     def _shared_plugin_expr(self) -> pl.Expr:
-        if self._cached_plugin_expr is not None:
-            return self._cached_plugin_expr
-        from gaspatchio_core import _internal
-
-        lib = Path(_internal.__file__)  # type: ignore[arg-type]
-        self._cached_plugin_expr = register_plugin_function(
-            plugin_path=lib,
-            function_name="rollforward",
-            args=list(self._compiled.plugin_args),
-            kwargs=self._compiled.plugin_kwargs,
-            is_elementwise=True,
-        )
+        if self._cached_plugin_expr is None:
+            self._cached_plugin_expr = self._compiled.plugin_expr()
         return self._cached_plugin_expr
 
     def expr_for(self, state: str, *, point: str = "eop") -> pl.Expr:
-        """Return a Polars Expr selecting the per-period values for (state, point)."""
+        """Return a self-contained Expr for (state, point) — one kernel call each."""
         from gaspatchio_core.rollforward._refs import StateRef
 
         ref = StateRef(state=state, point=point)
@@ -55,19 +52,17 @@ class RollforwardCollector:
                 f"the point or use a state's eop"
             )
             raise KeyError(msg)
-        plugin = self._shared_plugin_expr()
-        return plugin.struct.field(f"{state}@{point}")
+        return self._shared_plugin_expr().struct.field(f"{state}@{point}")
 
     def increment_for(self, label: str) -> pl.Expr:
-        """Return a Polars Expr selecting the per-period delta for a labelled Op."""
+        """Return a self-contained Expr for a labelled Op's per-period delta."""
         if not self._compiled.ir.track_increments:
             msg = (
                 "rf.increment(...) requires the rollforward to be built with "
                 "track_increments=True"
             )
             raise ValueError(msg)
-        plugin = self._shared_plugin_expr()
-        return plugin.struct.field(f"increment_{label}")
+        return self._shared_plugin_expr().struct.field(f"increment_{label}")
 
 
 __all__ = ["RollforwardCollector"]

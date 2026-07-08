@@ -7,10 +7,13 @@
 Public surface:
 
   - :class:`RollforwardBuilder` — mutable builder that accumulates Ops
-  - :class:`RollforwardCollector` — emits per-state and per-increment exprs
   - :func:`compile_rollforward` — turns a builder into a :class:`CompiledRollforward`
-  - :class:`CompiledRollforward` — frozen artefact with ``explain()``,
+  - :class:`CompiledRollforward` — frozen artefact carrying the expression
+    surface (``expr_for()``, ``increment_for()`` — all extractions share ONE
+    kernel call on an ``ActuarialFrame``) plus ``explain()``,
     ``fingerprint()``, and ``canonical_form()`` for inspection
+  - :class:`RollforwardCollector` — deprecated facade; use
+    ``compiled.expr_for(...)`` instead
 
 These are also re-exported at the top level (``from gaspatchio_core import ...``).
 """

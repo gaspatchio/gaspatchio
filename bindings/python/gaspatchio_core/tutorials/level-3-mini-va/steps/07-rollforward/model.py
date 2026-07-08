@@ -52,7 +52,6 @@ from pathlib import Path
 import polars as pl
 from gaspatchio_core import (
     ActuarialFrame,
-    RollforwardCollector,
     Schedule,
     compile_rollforward,
     when,
@@ -147,7 +146,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         states={"unit_growth": af["unit_init"]},
     )
     rf["unit_growth"].grow(af["effective_growth_rate"])
-    collector = RollforwardCollector(compile_rollforward(rf))
+    compiled = compile_rollforward(rf)
 
     # Rollforward eop output is length n_periods. Prepending 1.0 gives a
     # length-(n_periods + 1) "growth at start of period" vector — i.e. the
@@ -156,7 +155,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     af.prev_cumulative_growth = pl.concat_list(
         [
             pl.lit([1.0], dtype=pl.List(pl.Float64)),
-            collector.expr_for("unit_growth"),
+            compiled.expr_for("unit_growth"),
         ]
     )
     af.av_pp = af.av_pp_init * af.prev_cumulative_growth

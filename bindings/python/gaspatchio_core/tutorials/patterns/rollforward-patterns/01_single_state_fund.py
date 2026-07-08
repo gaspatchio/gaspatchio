@@ -21,10 +21,8 @@ from __future__ import annotations
 
 from datetime import date
 
-import polars as pl
 
 from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.rollforward._collector import RollforwardCollector
 from gaspatchio_core.rollforward._compile import compile_rollforward
 
 
@@ -61,8 +59,7 @@ def main() -> None:
     )
 
     compiled = compile_rollforward(b)
-    collector = RollforwardCollector(compiled)
-    af.av = collector.expr_for("av")
+    af.av = compiled.expr_for("av")
     av = af.collect().get_column("av").to_list()[0]
 
     # Closed form: AV_T = AV_0 * ((1 + r) * (1 - m))^T

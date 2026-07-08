@@ -36,7 +36,7 @@ values is the success signal.
 - `b["state"].floor(value=0.0)` — non-negativity clamp
 - `pl.col("state@point")` — cross-state read at a named point
 - `compile_rollforward(builder)` → `CompiledRollforward`
-- `RollforwardCollector(compiled).expr_for(state, point="eop")` → `pl.Expr`
+- `compiled.expr_for(state, point="eop")` → `pl.Expr` (all extractions share ONE kernel call on an `ActuarialFrame`)
 
 ## When to use which pattern
 

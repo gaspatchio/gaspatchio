@@ -203,11 +203,12 @@ def fit_svensson(  # noqa: PLR0913
         raise ValueError(msg)
     grid = np.geomspace(tau_lo, tau_hi, n_grid)
     best: tuple[float, float, float] | None = None
-    for tau1 in grid:
-        for tau2 in grid[grid > tau1 * min_ratio]:  # tau1<tau2, skip near-diagonal band
-            s = _sse(t, y, float(tau1), float(tau2))
+    for cand1 in grid:
+        # cand1<cand2, skip near-diagonal band
+        for cand2 in grid[grid > cand1 * min_ratio]:
+            s = _sse(t, y, float(cand1), float(cand2))
             if best is None or s < best[0]:
-                best = (s, float(tau1), float(tau2))
+                best = (s, float(cand1), float(cand2))
     if best is None:
         msg = "fit_svensson: tau grid produced no valid (tau1<tau2) pair"
         raise ValueError(msg)
