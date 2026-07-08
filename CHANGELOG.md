@@ -1,6 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.3] — Scenario auto-batching can no longer OOM the box
+
+The `batch_size="auto"` scenario search measures candidate batch sizes by
+running them; three field-observed ways that measurement itself could exceed
+physical memory and get the process kernel-killed are now closed. (#8, #10,
+#11)
 
 ### Fixed
 - `for_each_scenario(batch_size="auto")` no longer risks a kernel OOM-kill
