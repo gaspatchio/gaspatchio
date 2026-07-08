@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783469955265,
+  "lastUpdate": 1783475040744,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib (Windows)": [
@@ -937,6 +937,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 6.83,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "matt@opioinc.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "matt@opioinc.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "distinct": true,
+          "id": "a4bfc5580c9525d19b28149ccc143914010a4597",
+          "message": "ci: drop develop from workflow triggers\n\nThe public repo is trunk-based: develop was a launch-era leftover whose\ncontent is fully contained in main (post-release fixes landed via squash\nPR #7), and the branch has been deleted. Feature branches PR straight to\nmain; releases are signed tags on main.",
+          "timestamp": "2026-07-08T13:30:41+12:00",
+          "tree_id": "81d5b3dcfb5f2545f7642c835393e05f38f4c47d",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/a4bfc5580c9525d19b28149ccc143914010a4597"
+        },
+        "date": 1783475036655,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 8.231,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 4.105,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.34,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 23.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 8.198,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 24.11,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.568,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 1760.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 28.042,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 35.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 49.37,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 3.356,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 2979.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 24.291,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 411.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 7.24,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 22.884,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4369.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 152.022,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 657.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 6.64,
             "unit": "x"
           }
         ]
