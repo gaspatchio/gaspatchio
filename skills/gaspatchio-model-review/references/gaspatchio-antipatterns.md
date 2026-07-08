@@ -76,7 +76,7 @@ b["av"].subtract(af["admin_fee"], label="Admin")
 b["av"].grow(af["interest_rate"], label="Interest")
 b["av"].floor(value=0.0)
 compiled = compile_rollforward(b)
-af.av = RollforwardCollector(compiled).expr_for("av")
+af.av = compiled.expr_for("av")
 ```
 
 The rollforward kernel handles the within-period balance dependency the loop was working around — COI sees the running AV at the moment it's charged, the kernel runs across every policy in parallel, the chain has an inspectable fingerprint. See `tutorial/patterns/rollforward-patterns/` for runnable examples.
