@@ -2,9 +2,9 @@ name: Security Scan
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   push:
-    branches: [main, develop]
+    branches: [main]
   schedule:
     # Weekly full scan to catch newly-published CVEs against unchanged deps.
     - cron: "17 6 * * 1"

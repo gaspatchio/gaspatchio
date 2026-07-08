@@ -4,10 +4,10 @@ on:
   schedule:
     - cron: '0 3 * * 1'  # 3am UTC every Monday
   pull_request:
-    branches: [develop]
+    branches: [main]
     types: [labeled]  # only when 'benchmark' label is added
   push:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
     inputs:
       platform:

@@ -2,9 +2,9 @@ name: Licence Check
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   push:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
