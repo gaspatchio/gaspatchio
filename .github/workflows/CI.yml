@@ -106,13 +106,18 @@ jobs:
 
   windows:
     runs-on: ${{ matrix.platform.runner }}
-    # Tag pushes build the release wheel. Pushes to main build it too — not for
-    # the artifact, but because GitHub cache scoping only lets a tag-triggered
-    # run restore caches created on the default branch: main runs are what keep
-    # the Rust build cache warm. Cold, this job runs ~51 min (v0.5.2: 20 min
-    # full build + ~15 min per extra interpreter, each recompiling the polars
-    # stack); warm, only the gaspatchio crates compile. It also surfaces
-    # Windows build breakage between releases instead of at release time.
+    # Tag pushes build the release wheels. Pushes to main build them too — not
+    # for the artifacts, but because GitHub cache scoping only lets a
+    # tag-triggered run restore caches created on the default branch: main runs
+    # are what keep the Rust build caches warm. One leg per interpreter: the
+    # polars stack sits inside pyo3's dependency cone, so changing interpreter
+    # recompiles all of it (~14 min on windows), and sequential
+    # `--find-interpreter` builds thrash one target dir — a shared cache could
+    # only ever hold the last interpreter's artifacts, so the expensive layer
+    # never hit (measured: 44 min warm vs 51 cold). Per-interpreter legs run in
+    # parallel and each keeps a cache that actually hits. The matrix must cover
+    # every CPython allowed by requires-python in bindings/python/pyproject.toml.
+    # These jobs also surface Windows build breakage between releases.
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: [rust-tests, python-tests]
     strategy:
@@ -120,16 +125,18 @@ jobs:
         platform:
           - runner: windows-latest
             target: x64
+        python: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        id: python
         with:
-          python-version: 3.x
+          python-version: ${{ matrix.python }}
           architecture: ${{ matrix.platform.target }}
       - name: Cache Rust build
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4   # v2.9.1
         with:
-          key: ${{ matrix.platform.target }}
+          key: ${{ matrix.platform.target }}-py${{ matrix.python }}
           # A cache saved on a tag ref is unreachable from every other ref, so
           # tag runs restore-only; main runs are the sole writers.
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -137,18 +144,23 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          # Pin the interpreter to the exact one setup-python installed —
+          # `--find-interpreter` would build for every python on the runner
+          # image, collapsing the legs back into one thrashing build.
+          args: --release --out dist -i ${{ steps.python.outputs.python-path }}
           working-directory: bindings/python
       - name: Upload wheels
         if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-windows-${{ matrix.platform.target }}
+          name: wheels-windows-${{ matrix.platform.target }}-py${{ matrix.python }}
           path: bindings/python/dist
 
   macos:
     runs-on: ${{ matrix.platform.runner }}
-    # Runs on main pushes for the same cache-warming reason as the windows job.
+    # Runs on main pushes for the same cache-warming reason as the windows job,
+    # and one leg per (target, interpreter) for the same reason — see the
+    # comment there. Keep the python matrix in sync with requires-python.
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: [rust-tests, python-tests]
     strategy:
@@ -158,29 +170,31 @@ jobs:
             target: x86_64
           - runner: macos-latest
             target: aarch64
+        python: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        id: python
         with:
-          python-version: 3.x
+          python-version: ${{ matrix.python }}
       - name: Cache Rust build
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4   # v2.9.1
         with:
-          # Both matrix legs run on the same runner image; without the target in
-          # the key they would race to save one shared (wrong-arch) cache.
-          key: ${{ matrix.platform.target }}
+          # All legs run on the same runner image; without target + python in
+          # the key they would race to save one shared (wrong) cache.
+          key: ${{ matrix.platform.target }}-py${{ matrix.python }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist -i ${{ steps.python.outputs.python-path }}
           working-directory: bindings/python
       - name: Upload wheels
         if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-macos-${{ matrix.platform.target }}
+          name: wheels-macos-${{ matrix.platform.target }}-py${{ matrix.python }}
           path: bindings/python/dist
 
   sdist:
