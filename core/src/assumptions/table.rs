@@ -410,6 +410,27 @@ impl AssumptionTable {
             return Err(polars_err!(ShapeMismatch: "wrong # key columns"));
         }
 
+        // Broadcast unit-length literal keys (e.g. pl.lit) to the batch
+        // length. Polars does not pre-broadcast literal plugin inputs on
+        // every engine path — in-memory never does, streaming only while
+        // one morsel spans the frame — so mixed column/literal keys can
+        // arrive here with mismatched lengths.
+        let max_len = key_cols.iter().map(|s| s.len()).max().unwrap_or(0);
+        if max_len > 1 && key_cols.iter().any(|s| s.len() == 1) {
+            let owned: Vec<Series> = key_cols
+                .iter()
+                .map(|s| {
+                    if s.len() == 1 {
+                        s.new_from_index(0, max_len)
+                    } else {
+                        (*s).clone()
+                    }
+                })
+                .collect();
+            let refs: Vec<&Series> = owned.iter().collect();
+            return self.lookup_series(&refs);
+        }
+
         // Fast path: Quick check for scalar-only inputs (most common case)
         let is_scalar_only = key_cols
             .iter()
