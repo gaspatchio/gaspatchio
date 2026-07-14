@@ -2362,6 +2362,24 @@ class ActuarialFrame:
 
     def __setattr__(self, name: str, value: Any) -> None:  # noqa: ANN401
         """Support attribute-style column assignment for eligible identifiers."""
+        # Reassignment of an existing eligible column must update the frame.
+        # Without this check the hasattr guard below matches (reads of column
+        # names resolve via __getattr__), so the value would be stored as an
+        # instance attribute: collect() keeps the stale column while reads
+        # return the shadow, and the two silently diverge.
+        if not name.startswith("_"):
+            try:
+                attr_columns = object.__getattribute__(self, "_attr_columns_set")
+            except AttributeError:
+                attr_columns = None
+            if (
+                attr_columns is not None
+                and name in attr_columns
+                and not hasattr(type(self), name)
+                and name not in _ACCESSOR_REGISTRY
+            ):
+                self[name] = value
+                return None
         # Reserved/internal or existing attributes/accessors: normal behavior
         if (
             hasattr(self, name)

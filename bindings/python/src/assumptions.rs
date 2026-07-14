@@ -32,13 +32,23 @@ pub struct AssumptionLookupKwargs {
 
 // --- Binding Plugin Implementation ---
 
-fn lookup_output_type(_input_fields: &[Field]) -> PolarsResult<Field> {
-    let value_dtype = DataType::Float64; // Assuming float64 for now, might need dynamic type later
-    Ok(Field::new(
-        PlSmallStr::from_static("lookup_result"),
-        // Vector lookup returns a list
-        DataType::List(Box::new(value_dtype)),
-    ))
+fn lookup_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
+    let value_dtype = DataType::Float64;
+    // Scalar keys return a flat Float64 series; any List key returns one
+    // list of rates per row. The declared dtype must match what
+    // lookup_series actually returns, otherwise the schema cache holds a
+    // dtype the collected column contradicts and shape-dependent
+    // operations (when/otherwise lowering, list-vs-scalar arithmetic
+    // routing) misfire on scalar-key lookups.
+    let has_list_key = input_fields
+        .iter()
+        .any(|f| matches!(f.dtype(), DataType::List(_)));
+    let dtype = if has_list_key {
+        DataType::List(Box::new(value_dtype))
+    } else {
+        value_dtype
+    };
+    Ok(Field::new(PlSmallStr::from_static("lookup_result"), dtype))
 }
 
 #[polars_expr(output_type_func=lookup_output_type)]
