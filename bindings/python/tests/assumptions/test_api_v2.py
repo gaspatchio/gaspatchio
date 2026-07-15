@@ -890,8 +890,8 @@ class TestAutoCategoricalConversion:
         """Test that string key columns populate _key_categories"""
         data = pl.DataFrame(
             {
-                "product_type": ["TERM", "WL", "UL", "TERM", "WL"],
-                "rate": [0.01, 0.02, 0.03, 0.01, 0.02],
+                "product_type": ["TERM", "WL", "UL"],
+                "rate": [0.01, 0.02, 0.03],
             },
         )
 
