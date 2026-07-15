@@ -368,19 +368,25 @@ impl AssumptionTable {
         let value_series = df.column(value)?.f64()?;
 
         for row_idx in 0..n_rows {
+            let encode_err = |key_name: &str| {
+                polars_err!(ComputeError:
+                    "null or unencodable key value in column '{}' at source row {} while appending to table",
+                    key_name, row_idx)
+            };
             let hash = if codecs.len() == 2 {
                 // Fast path for 2-key case (same as build method)
                 let av1 = df.column(&keys[0])?.get(row_idx)?;
                 let av2 = df.column(&keys[1])?.get(row_idx)?;
-                let hash1 = codecs[0].encode(av1);
-                let hash2 = codecs[1].encode(av2);
+                let hash1 = codecs[0].encode(av1).ok_or_else(|| encode_err(&keys[0]))?;
+                let hash2 = codecs[1].encode(av2).ok_or_else(|| encode_err(&keys[1]))?;
                 hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
             } else {
                 // General case (same as build method)
                 let mut h = AHasher::default();
                 for (codec, key_name) in codecs.iter().zip(keys) {
                     let av = df.column(key_name)?.get(row_idx)?;
-                    h.write_u64(codec.encode(av));
+                    let part = codec.encode(av).ok_or_else(|| encode_err(key_name))?;
+                    h.write_u64(part);
                 }
                 h.finish()
             };
@@ -450,10 +456,40 @@ impl AssumptionTable {
         let (any_vectors, vector_len, vector_indices) = self.analyze_inputs(key_cols)?;
 
         if any_vectors {
+            Self::validate_inner_lengths(key_cols, &vector_indices)?;
             self.lookup_vector(key_cols, vector_len.unwrap(), &vector_indices)
         } else {
             self.storage.lookup_scalar(key_cols)
         }
+    }
+
+    /// Every vector key column must have the same inner length on every row.
+    /// Ragged inner lists previously misaligned silently: the array batch
+    /// path takes offsets from the first vector column only, so one short
+    /// list shifted every subsequent policy's rates.
+    fn validate_inner_lengths(key_cols: &[&Series], vector_indices: &[usize]) -> PolarsResult<()> {
+        if vector_indices.len() < 2 {
+            return Ok(());
+        }
+        let first = key_cols[vector_indices[0]].list()?.rechunk().into_owned();
+        let first_offsets_buf = first.offsets()?;
+        let first_offsets = first_offsets_buf.as_slice();
+        for &vi in &vector_indices[1..] {
+            let other = key_cols[vi].list()?.rechunk().into_owned();
+            let other_offsets_buf = other.offsets()?;
+            let other_offsets = other_offsets_buf.as_slice();
+            for row in 0..first_offsets.len() - 1 {
+                let len_a = first_offsets[row + 1] - first_offsets[row];
+                let len_b = other_offsets[row + 1] - other_offsets[row];
+                if len_a != len_b {
+                    return Err(polars_err!(ShapeMismatch:
+                        "ragged inner key lists at row {}: one vector key column has {} elements, another has {}; \
+                         inner lengths must match across all vector key columns",
+                        row, len_a, len_b));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn analyze_inputs(
@@ -540,12 +576,16 @@ impl AssumptionTable {
                         self.get_value_at(key_cols, 0, outer_idx, inner_idx, vector_indices)?;
                     let av2 =
                         self.get_value_at(key_cols, 1, outer_idx, inner_idx, vector_indices)?;
-                    let hash1 = codecs[0].encode(av1);
-                    let hash2 = codecs[1].encode(av2);
-                    hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
+                    match (codecs[0].encode(av1), codecs[1].encode(av2)) {
+                        (Some(hash1), Some(hash2)) => {
+                            Some(hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2)
+                        }
+                        _ => None,
+                    }
                 } else {
                     // General case
                     let mut h = AHasher::default();
+                    let mut valid = true;
                     for (key_idx, codec) in codecs.iter().enumerate() {
                         let av = self.get_value_at(
                             key_cols,
@@ -554,14 +594,20 @@ impl AssumptionTable {
                             inner_idx,
                             vector_indices,
                         )?;
-                        h.write_u64(codec.encode(av));
+                        match codec.encode(av) {
+                            Some(part) => h.write_u64(part),
+                            None => {
+                                valid = false;
+                                break;
+                            }
+                        }
                     }
-                    h.finish()
+                    valid.then(|| h.finish())
                 };
 
-                // Look up in hash map
-                if let TableStorage::Hash(h) = &self.storage {
-                    if let Some(v) = h.map.get(&key) {
+                // Look up in hash map (an unencodable key is a miss -> NaN)
+                if let TableStorage::Hash(hs) = &self.storage {
+                    if let Some(v) = key.and_then(|k| hs.map.get(&k)) {
                         inner_vals[inner_idx] = *v;
                     }
                 }
