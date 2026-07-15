@@ -400,6 +400,9 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         when(af.has_surr_charge)
         .then(
             surrender_charges.lookup(
+                # Expected misses (null surr_charge_id) are discarded
+                # by the when() guard; declare them explicitly.
+                on_missing="nan",
                 surr_charge_id=af.surr_charge_id,
                 duration=af.duration_year_capped,
             )

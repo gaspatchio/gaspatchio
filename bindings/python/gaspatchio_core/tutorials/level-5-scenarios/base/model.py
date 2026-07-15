@@ -641,6 +641,9 @@ def main(
         when(af.has_surr_charge)
         .then(
             surrender_charges.lookup(
+                # Expected misses (null surr_charge_id) are discarded
+                # by the when() guard; declare them explicitly.
+                on_missing="nan",
                 duration=af.duration_year_capped,
                 surr_charge_id=af.surr_charge_id,
                 **_maybe_scenario(surrender_charges, af),
