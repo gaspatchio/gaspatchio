@@ -20,8 +20,13 @@ pub enum ColumnCodec {
 
 impl ColumnCodec {
     #[inline]
-    pub fn encode(&self, av: AnyValue) -> u64 {
-        match (self, av) {
+    pub fn encode(&self, av: AnyValue) -> Option<u64> {
+        // Null and unhandled dtype/codec combinations are a miss (None), not
+        // a silent 0u64 that aliases to key 0's hash and returns key 0's rate.
+        if matches!(av, AnyValue::Null) {
+            return None;
+        }
+        let hash = match (self, av) {
             // String encoding - handle special cases first (categorical indices)
             (ColumnCodec::String, AnyValue::Categorical(idx, _)) => u64::from(idx),
             (ColumnCodec::String, AnyValue::String(s)) => {
@@ -90,8 +95,26 @@ impl ColumnCodec {
                     f.to_bits()
                 }
             }
-            _ => 0u64,
-        }
+            // Narrow integers widen to the same hash as their i64 value
+            (ColumnCodec::Integer | ColumnCodec::Float64, AnyValue::Int8(i)) => i as u64,
+            (ColumnCodec::Integer | ColumnCodec::Float64, AnyValue::Int16(i)) => i as u64,
+            (ColumnCodec::Integer | ColumnCodec::Float64, AnyValue::UInt8(u)) => u as u64,
+            (ColumnCodec::Integer | ColumnCodec::Float64, AnyValue::UInt16(u)) => u as u64,
+            (ColumnCodec::String, AnyValue::Int8(i)) => Self::hash_int_as_string(i as i64),
+            (ColumnCodec::String, AnyValue::Int16(i)) => Self::hash_int_as_string(i as i64),
+            (ColumnCodec::String, AnyValue::UInt8(u)) => Self::hash_int_as_string(u as i64),
+            (ColumnCodec::String, AnyValue::UInt16(u)) => Self::hash_int_as_string(u as i64),
+            _ => return None,
+        };
+        Some(hash)
+    }
+
+    #[inline]
+    fn hash_int_as_string(i: i64) -> u64 {
+        let s = i.to_string();
+        let mut hasher = AHasher::default();
+        hasher.write(s.as_bytes());
+        hasher.finish()
     }
 }
 
@@ -113,6 +136,10 @@ impl HashStorage {
             let s = df.column(col_name)?;
             codecs.push(match s.dtype() {
                 DataType::String => ColumnCodec::String,
+                // Categorical values only have encode arms on the String
+                // codec (physical index / string hash); the Integer codec
+                // would treat every row as unencodable.
+                DataType::Categorical(_, _) => ColumnCodec::String,
                 DataType::Float64 => ColumnCodec::Float64,
                 _ => ColumnCodec::Integer,
             });
@@ -120,11 +147,38 @@ impl HashStorage {
 
         // Build the hash map
         let mut map: AHashMap<u64, f64> = AHashMap::with_capacity(n_rows.next_power_of_two());
+        // Transient build-time index: first source row per hash, so a hash
+        // conflict can be verified against the actual key values rather than
+        // misreported (a 64-bit collision between distinct keys is
+        // astronomically rare but must not be called a duplicate).
+        let mut first_row_for_hash: AHashMap<u64, usize> =
+            AHashMap::with_capacity(n_rows.next_power_of_two());
         let value_series = df.column(value)?.f64()?;
 
         for row_idx in 0..n_rows {
             let hash = Self::compute_hash_for_row(df, keys, &codecs, row_idx)?;
             let v = value_series.get(row_idx).unwrap_or(f64::NAN);
+            if let Some(&prev_row) = first_row_for_hash.get(&hash) {
+                let is_true_duplicate = keys.iter().all(|key_name| {
+                    let col = df.column(key_name);
+                    match col {
+                        Ok(c) => match (c.get(prev_row), c.get(row_idx)) {
+                            (Ok(a), Ok(b)) => a == b,
+                            _ => false,
+                        },
+                        Err(_) => false,
+                    }
+                });
+                if is_true_duplicate {
+                    return Err(polars_err!(ComputeError:
+                        "Duplicate key combination at source row {} while building table (same keys as row {}). Deduplicate the source or fix the dimension mapping.",
+                        row_idx, prev_row));
+                }
+                return Err(polars_err!(ComputeError:
+                    "64-bit key-hash collision between distinct source rows {} and {} while building table; use storage_mode=\"array\" for this table.",
+                    prev_row, row_idx));
+            }
+            first_row_for_hash.insert(hash, row_idx);
             map.insert(hash, v);
         }
 
@@ -142,14 +196,21 @@ impl HashStorage {
             // Fast path for 2-key case
             let av1 = df.column(&keys[0])?.get(row_idx)?;
             let av2 = df.column(&keys[1])?.get(row_idx)?;
-            let hash1 = codecs[0].encode(av1);
-            let hash2 = codecs[1].encode(av2);
+            let hash1 = codecs[0].encode(av1).ok_or_else(|| polars_err!(ComputeError:
+                "null or unencodable key value in column '{}' at source row {} while building table",
+                keys[0], row_idx))?;
+            let hash2 = codecs[1].encode(av2).ok_or_else(|| polars_err!(ComputeError:
+                "null or unencodable key value in column '{}' at source row {} while building table",
+                keys[1], row_idx))?;
             Ok(hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2)
         } else {
             let mut h = AHasher::default();
             for (codec, key_name) in codecs.iter().zip(keys) {
                 let av = df.column(key_name)?.get(row_idx)?;
-                h.write_u64(codec.encode(av));
+                let part = codec.encode(av).ok_or_else(|| polars_err!(ComputeError:
+                    "null or unencodable key value in column '{}' at source row {} while building table",
+                    key_name, row_idx))?;
+                h.write_u64(part);
             }
             Ok(h.finish())
         }
@@ -180,19 +241,29 @@ impl HashStorage {
                 // (~15%) than Series::get on this hot lookup path.
                 let av1 = unsafe { key_cols[0].get_unchecked(idx) };
                 let av2 = unsafe { key_cols[1].get_unchecked(idx) };
-                let hash1 = self.codecs[0].encode(av1);
-                let hash2 = self.codecs[1].encode(av2);
-                hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2
+                match (self.codecs[0].encode(av1), self.codecs[1].encode(av2)) {
+                    (Some(h1), Some(h2)) => {
+                        Some(h1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ h2)
+                    }
+                    _ => None,
+                }
             } else {
                 let mut h = AHasher::default();
+                let mut valid = true;
                 for (codec, series) in self.codecs.iter().zip(key_cols) {
                     // SAFETY: idx is bounded by out.len() == series.len() (length parity above).
                     let av = unsafe { series.get_unchecked(idx) };
-                    h.write_u64(codec.encode(av));
+                    match codec.encode(av) {
+                        Some(part) => h.write_u64(part),
+                        None => {
+                            valid = false;
+                            break;
+                        }
+                    }
                 }
-                h.finish()
+                valid.then(|| h.finish())
             };
-            if let Some(v) = self.map.get(&key) {
+            if let Some(v) = key.and_then(|k| self.map.get(&k)) {
                 *slot = *v;
             }
         });
@@ -228,13 +299,13 @@ impl HashStorage {
                     let av1 = unsafe { series1.get_unchecked(global_idx) };
                     let av2 = unsafe { series2.get_unchecked(global_idx) };
 
-                    let hash1 = self.codecs[0].encode(av1);
-                    let hash2 = self.codecs[1].encode(av2);
-
-                    let key = hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2;
-
-                    if let Some(v) = self.map.get(&key) {
-                        *slot = *v;
+                    if let (Some(hash1), Some(hash2)) =
+                        (self.codecs[0].encode(av1), self.codecs[1].encode(av2))
+                    {
+                        let key = hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2;
+                        if let Some(v) = self.map.get(&key) {
+                            *slot = *v;
+                        }
                     }
                 }
             });
@@ -250,5 +321,31 @@ impl HashStorage {
     /// Get reference to codecs for append validation.
     pub fn codecs(&self) -> &[ColumnCodec] {
         &self.codecs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn categorical_keys_do_not_collide() -> PolarsResult<()> {
+        // Categorical dtype fell into the Integer codec, whose encode had no
+        // Categorical arm: every key hashed to the catch-all value, so all
+        // rows collided and lookups silently returned one row's rate for
+        // every key. Categorical keys must route through the String codec.
+        let funds = Series::new("fund".into(), ["A", "B", "C"])
+            .cast(&DataType::from_categories(Categories::global()))?;
+        let rates = Series::new("rate".into(), [0.1f64, 0.2, 0.3]);
+        let df = DataFrame::new(3, vec![funds.clone().into(), rates.into()])?;
+
+        let storage = HashStorage::build(&df, &["fund".to_string()], "rate")?;
+        let out = storage.lookup_scalar(&[&funds])?;
+        let ca = out.f64()?;
+
+        assert_eq!(ca.get(0), Some(0.1));
+        assert_eq!(ca.get(1), Some(0.2));
+        assert_eq!(ca.get(2), Some(0.3));
+        Ok(())
     }
 }

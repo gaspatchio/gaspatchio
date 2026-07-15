@@ -28,6 +28,12 @@ use gaspatchio_core_lib::assumptions::{
 #[derive(Deserialize, Debug, Clone)]
 pub struct AssumptionLookupKwargs {
     pub table_name: String,
+    /// Miss policy: "raise" (default), "nan", or "fill".
+    #[serde(default)]
+    pub on_missing: Option<String>,
+    /// Fill constant used when `on_missing == "fill"`.
+    #[serde(default)]
+    pub fill_value: Option<f64>,
 }
 
 // --- Binding Plugin Implementation ---
@@ -104,7 +110,134 @@ fn lookup_by_table_and_hash(
         }
     );
 
-    table.lookup_series(&key_series_refs)
+    let result = table.lookup_series(&key_series_refs)?;
+    apply_on_missing_policy(
+        result,
+        &key_series_refs,
+        table_name,
+        kwargs.on_missing.as_deref(),
+        kwargs.fill_value,
+    )
+}
+
+/// Apply the lookup miss policy to a lookup result.
+///
+/// Misses surface as NaN in the raw result (the storage kernels pre-fill NaN
+/// and only overwrite on a hit). "raise" turns any NaN into a ComputeError
+/// naming the table and sample keys; "fill" replaces NaN with a constant;
+/// "nan" passes the raw result through. NaN-valued table entries are
+/// indistinguishable from misses by construction, so under "raise" a table
+/// whose rates legitimately contain NaN must opt out via "nan" or "fill".
+fn apply_on_missing_policy(
+    result: Series,
+    key_cols: &[&Series],
+    table_name: &str,
+    on_missing: Option<&str>,
+    fill_value: Option<f64>,
+) -> PolarsResult<Series> {
+    match on_missing.unwrap_or("raise") {
+        "nan" => Ok(result),
+        "fill" => fill_missing(result, fill_value.unwrap_or(f64::NAN)),
+        _ => raise_if_missing(result, key_cols, table_name),
+    }
+}
+
+fn fill_missing(result: Series, constant: f64) -> PolarsResult<Series> {
+    let name = result.name().clone();
+    match result.dtype() {
+        DataType::List(_) => {
+            let filled: ListChunked = result.list()?.try_apply_amortized(|inner| {
+                let s = inner.as_ref();
+                Ok(match s.f64() {
+                    Ok(ca) => ca
+                        .apply_values(|v| if v.is_nan() { constant } else { v })
+                        .into_series(),
+                    Err(_) => s.clone(),
+                })
+            })?;
+            Ok(filled.into_series().with_name(name))
+        }
+        _ => {
+            let ca = result.f64()?;
+            Ok(ca
+                .apply_values(|v| if v.is_nan() { constant } else { v })
+                .into_series()
+                .with_name(name))
+        }
+    }
+}
+
+fn raise_if_missing(
+    result: Series,
+    key_cols: &[&Series],
+    table_name: &str,
+) -> PolarsResult<Series> {
+    // Fast vectorised check first; the row-attribution pass below only runs
+    // on the error path.
+    let flat = match result.dtype() {
+        DataType::List(_) => result.list()?.explode(ExplodeOptions {
+            empty_as_null: false,
+            keep_nulls: false,
+        })?,
+        _ => result.clone(),
+    };
+    let has_missing = flat.f64().map(|ca| ca.is_nan().any()).unwrap_or(false);
+    if !has_missing {
+        return Ok(result);
+    }
+
+    let mut missing_rows: Vec<usize> = Vec::new();
+    let mut n_missing_rows = 0usize;
+    match result.dtype() {
+        DataType::List(_) => {
+            let lc = result.list()?;
+            for row in 0..lc.len() {
+                let row_has_nan = lc
+                    .get_as_series(row)
+                    .and_then(|s| s.f64().ok().map(|ca| ca.is_nan().any()))
+                    .unwrap_or(false);
+                if row_has_nan {
+                    n_missing_rows += 1;
+                    if missing_rows.len() < 3 {
+                        missing_rows.push(row);
+                    }
+                }
+            }
+        }
+        _ => {
+            let ca = result.f64()?;
+            for (row, v) in ca.into_iter().enumerate() {
+                if v.map(|v| v.is_nan()).unwrap_or(true) {
+                    n_missing_rows += 1;
+                    if missing_rows.len() < 3 {
+                        missing_rows.push(row);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut samples = String::new();
+    for &row in &missing_rows {
+        let key_desc: Vec<String> = key_cols
+            .iter()
+            .map(|kc| {
+                // Unit-length literals broadcast; index them at 0.
+                let at = if kc.len() == 1 { 0 } else { row };
+                match kc.get(at) {
+                    Ok(av) => format!("{}={}", kc.name(), av),
+                    Err(_) => format!("{}=?", kc.name()),
+                }
+            })
+            .collect();
+        samples.push_str(&format!(" (row {}: {})", row, key_desc.join(", ")));
+    }
+
+    Err(polars_err!(ComputeError:
+        "Lookup on table '{}' has {} row(s) with missing keys (or NaN-valued entries); first misses:{}. \
+         Keys must exist in the table (exact match). Pass on_missing=\"nan\" or a numeric fill value \
+         to Table(...) or lookup(...) to restore silent-NaN behaviour.",
+        table_name, n_missing_rows, samples))
 }
 
 #[pyclass]

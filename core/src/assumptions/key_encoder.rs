@@ -79,7 +79,14 @@ impl KeyEncoder {
                 let n_unique = series.n_unique()?;
                 Ok(KeyEncoder::categorical(n_unique))
             }
-            DataType::Int64 | DataType::Int32 | DataType::UInt64 | DataType::UInt32 => {
+            DataType::Int64
+            | DataType::Int32
+            | DataType::Int16
+            | DataType::Int8
+            | DataType::UInt64
+            | DataType::UInt32
+            | DataType::UInt16
+            | DataType::UInt8 => {
                 let min = series.min::<i64>()?.unwrap_or(0);
                 let max = series.max::<i64>()?.unwrap_or(0);
                 Ok(KeyEncoder::int_range(min, max))
@@ -359,6 +366,39 @@ impl KeyEncoder {
                 }
             }
             (KeyEncoder::IntRange { offset, size }, AnyValue::UInt32(u)) => {
+                let idx = u as i64 - offset;
+                if idx >= 0 && (idx as usize) < *size {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            }
+            // Narrow integers widen like Int32/UInt32 instead of missing
+            (KeyEncoder::IntRange { offset, size }, AnyValue::Int16(i)) => {
+                let idx = i as i64 - offset;
+                if idx >= 0 && (idx as usize) < *size {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            }
+            (KeyEncoder::IntRange { offset, size }, AnyValue::Int8(i)) => {
+                let idx = i as i64 - offset;
+                if idx >= 0 && (idx as usize) < *size {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            }
+            (KeyEncoder::IntRange { offset, size }, AnyValue::UInt16(u)) => {
+                let idx = u as i64 - offset;
+                if idx >= 0 && (idx as usize) < *size {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            }
+            (KeyEncoder::IntRange { offset, size }, AnyValue::UInt8(u)) => {
                 let idx = u as i64 - offset;
                 if idx >= 0 && (idx as usize) < *size {
                     Some(idx as u32)

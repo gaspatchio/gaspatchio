@@ -61,10 +61,15 @@ def test_when_otherwise_with_scalar_key_lookup() -> None:
     af = ActuarialFrame(
         pl.DataFrame({"policy_id": [1, 2, 3], "scenario_num": [-1, 1, 2]})
     )
+    # Polars evaluates both branches, so the lookup runs for the -1 sentinel
+    # row too; that miss is discarded by the guard and must be declared with
+    # on_missing="nan" (the default on_missing="raise" would error on it).
     af.overlay = (
         when(af.scenario_num == -1)
         .then(0.0)
-        .otherwise(scenario_table.lookup(scenario_num=af.scenario_num))
+        .otherwise(
+            scenario_table.lookup(scenario_num=af.scenario_num, on_missing="nan")
+        )
     )
     out = af.collect()
     assert out["overlay"].to_list() == pytest.approx([0.0, 0.10, 0.20])
