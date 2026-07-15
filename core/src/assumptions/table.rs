@@ -309,6 +309,9 @@ impl AssumptionTable {
             let new_series = new_df.column(key_name)?;
             let new_codec = match new_series.dtype() {
                 DataType::String => ColumnCodec::String,
+                // Match HashStorage::build: categorical keys use the String
+                // codec (the Integer codec has no Categorical encode arm).
+                DataType::Categorical(_, _) => ColumnCodec::String,
                 DataType::Float64 => ColumnCodec::Float64,
                 _ => ColumnCodec::Integer,
             };
