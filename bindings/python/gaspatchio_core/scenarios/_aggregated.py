@@ -105,7 +105,7 @@ def _reject_scenario_axis_only(aggregations: Sequence[Any]) -> None:
                 "policy axis has no scenarios); use Sum/Period* aggregators instead."
             )
             raise ValueError(msg)  # noqa: TRY004 — usage error on the policy axis
-        if inner.within_expr_override is not None:
+        if getattr(inner, "within_expr_override", None) is not None:
             # No allowlist is sound here: batch-invariance requires the
             # within-expression to be decomposable w.r.t. the outer fold
             # (Sum.of(additive), Min.of(min-decomposable), ...), which cannot
