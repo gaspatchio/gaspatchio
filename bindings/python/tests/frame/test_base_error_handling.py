@@ -24,81 +24,65 @@ from gaspatchio_core.util import get_error_mode, set_error_mode
 
 
 class TestMixedGraphFormats:
-    """Test backward compatibility with mixed tuple and TracedOperation formats."""
+    """The graph is record-only metadata; collect()/profile() never replay it.
 
-    def test_collect_with_tuple_format_only(self):
-        """Test collect() works with legacy tuple format."""
+    Operations reach the frame exactly once, through the setter or
+    with_columns. Entries injected directly into the graph (either legacy
+    tuple or TracedOperation format) are display metadata and must NOT be
+    executed — replaying them double-applied self-referential assignments
+    in debug mode (audit F6).
+    """
+
+    def test_collect_ignores_injected_tuple_entries(self):
+        """Manually injected legacy-tuple graph entries are not executed."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
-        # Manually add tuple format operations to graph
         af._tracing = True
         af._computation_graph.append(("c", pl.col("a") + pl.col("b")))
-        af._computation_graph.append(("d", pl.col("c") * 2))
 
         result = af.collect()
 
-        assert "c" in result.columns
-        assert "d" in result.columns
-        assert result["c"].to_list() == [5, 7, 9]
-        assert result["d"].to_list() == [10, 14, 18]
+        assert "c" not in result.columns
+        assert result["a"].to_list() == [1, 2, 3]
 
-    def test_collect_with_traced_operation_format_only(self):
-        """Test collect() works with new TracedOperation format."""
+    def test_collect_ignores_injected_traced_operation_entries(self):
+        """Manually injected TracedOperation graph entries are not executed."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
-        # Manually add TracedOperation format operations to graph
         af._tracing = True
-        metadata1 = OperationMetadata("test.py", 10, "af['c'] = af['a'] + af['b']")
-        metadata2 = OperationMetadata("test.py", 11, "af['d'] = af['c'] * 2")
-
+        metadata = OperationMetadata("test.py", 10, "af['c'] = af['a'] + af['b']")
         af._computation_graph.append(
-            TracedOperation("c", pl.col("a") + pl.col("b"), metadata1),
+            TracedOperation("c", pl.col("a") + pl.col("b"), metadata),
         )
-        af._computation_graph.append(TracedOperation("d", pl.col("c") * 2, metadata2))
 
         result = af.collect()
 
-        assert "c" in result.columns
-        assert "d" in result.columns
-        assert result["c"].to_list() == [5, 7, 9]
-        assert result["d"].to_list() == [10, 14, 18]
+        assert "c" not in result.columns
 
-    def test_collect_with_mixed_formats(self):
-        """Test collect() works with both tuple and TracedOperation formats mixed."""
+    def test_setter_records_and_applies_exactly_once(self):
+        """API operations under tracing are recorded AND applied once."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
-        # Mix tuple and TracedOperation formats
         af._tracing = True
-        af._computation_graph.append(("c", pl.col("a") + pl.col("b")))  # Tuple format
-
-        metadata = OperationMetadata("test.py", 11, "af['d'] = af['c'] * 2")
-        af._computation_graph.append(
-            TracedOperation("d", pl.col("c") * 2, metadata),
-        )  # TracedOperation format
+        af["c"] = pl.col("a") + pl.col("b")
+        af["d"] = pl.col("c") * 2
 
         result = af.collect()
 
-        assert "c" in result.columns
-        assert "d" in result.columns
         assert result["c"].to_list() == [5, 7, 9]
         assert result["d"].to_list() == [10, 14, 18]
+        assert len(af._computation_graph) == 2
 
-    def test_profile_with_mixed_formats(self):
-        """Test profile() works with mixed formats and returns both result and profile."""
+    def test_profile_matches_collect_under_tracing(self):
+        """profile() returns the same applied state as collect()."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
-        # Mix formats
         af._tracing = True
-        af._computation_graph.append(("c", pl.col("a") + pl.col("b")))
-
-        metadata = OperationMetadata("test.py", 11, "af['d'] = af['c'] * 2")
-        af._computation_graph.append(TracedOperation("d", pl.col("c") * 2, metadata))
+        af["c"] = pl.col("a") + pl.col("b")
+        af["d"] = pl.col("c") * 2
 
         result_df, profile_df = af.profile()
 
-        # Check result
-        assert "c" in result_df.columns
-        assert "d" in result_df.columns
         assert result_df["c"].to_list() == [5, 7, 9]
         assert result_df["d"].to_list() == [10, 14, 18]
 
@@ -134,31 +118,21 @@ class TestErrorModeConfiguration:
         """Test that enhanced error mode attempts to use enhanced error handling."""
         set_error_mode("enhanced")
         af = ActuarialFrame({"a": [1, 2, 3]})
+        af._tracing = True
 
-        # Add a TracedOperation that will fail
-        metadata = OperationMetadata("test.py", 10, "af['b'] = af['nonexistent']")
-        af._computation_graph.append(
-            TracedOperation("b", pl.col("nonexistent"), metadata),
-        )
-
-        # Since ErrorBoundaryFinder isn't implemented yet, this should fall back to basic error handling
+        # A lazily-failing operation through the real API (the graph is
+        # record-only, so injected entries would never execute)
         with pytest.raises(pl.exceptions.ColumnNotFoundError):
-            af.collect()
+            af.with_columns(pl.col("nonexistent").alias("b")).collect()
 
     def test_error_mode_debug_enables_enhanced_handling(self):
         """Test that debug error mode enables enhanced error handling."""
         set_error_mode("debug")
         af = ActuarialFrame({"a": [1, 2, 3]})
+        af._tracing = True
 
-        # Add a TracedOperation that will fail
-        metadata = OperationMetadata("test.py", 10, "af['b'] = af['nonexistent']")
-        af._computation_graph.append(
-            TracedOperation("b", pl.col("nonexistent"), metadata),
-        )
-
-        # Since ErrorBoundaryFinder isn't implemented yet, this should fall back to basic error handling
         with pytest.raises(pl.exceptions.ColumnNotFoundError):
-            af.collect()
+            af.with_columns(pl.col("nonexistent").alias("b")).collect()
 
     def test_get_set_error_mode_functions(self):
         """Test error mode getter and setter functions."""
@@ -251,16 +225,10 @@ class TestErrorHandlingIntegration:
         """Test that error handling falls back gracefully when components fail."""
         set_error_mode("enhanced")
         af = ActuarialFrame({"a": [1, 2, 3]})
+        af._tracing = True
 
-        # Add a TracedOperation
-        metadata = OperationMetadata("test.py", 10, "af['b'] = af['nonexistent']")
-        af._computation_graph.append(
-            TracedOperation("b", pl.col("nonexistent"), metadata),
-        )
-
-        # Since ErrorBoundaryFinder isn't implemented yet, this should fall back to basic error handling
         with pytest.raises(pl.exceptions.ColumnNotFoundError):
-            af.collect()
+            af.with_columns(pl.col("nonexistent").alias("b")).collect()
 
 
 class TestBackwardCompatibility:
@@ -293,21 +261,19 @@ class TestBackwardCompatibility:
         assert "c" in result.columns
         assert result["c"].to_list() == [5, 7, 9]
 
-    def test_with_columns_mixed_formats(self):
-        """Test that with_columns works with mixed graph formats."""
+    def test_with_columns_and_setter_compose_under_tracing(self):
+        """Setter and with_columns operations compose; each applies once."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
         af._tracing = True
 
-        # Add some operations manually to create mixed format
-        af._computation_graph.append(("c", pl.col("a") + pl.col("b")))
-
-        # Use with_columns (should add TracedOperation if tracing is on)
-        af = af.with_columns(pl.col("c").alias("d") * 2)
+        af["c"] = pl.col("a") + pl.col("b")
+        af = af.with_columns((pl.col("c") * 2).alias("d"))
 
         result = af.collect()
         assert "c" in result.columns
         assert "d" in result.columns
         assert result["d"].to_list() == [10, 14, 18]
+        assert len(af._computation_graph) == 2
 
     def test_empty_frame_collect(self):
         """Test that collect() works on empty frame."""

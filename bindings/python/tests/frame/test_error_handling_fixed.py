@@ -177,19 +177,19 @@ class TestErrorHandlingIntegration:
         af = ActuarialFrame(self.test_data, verbose=True)
         af._tracing = True
 
-        # Add multiple valid operations
-        af = (
-            af.with_columns((pl.col("premium") * 1.1).alias("calc1"))
-            .with_columns((pl.col("age") + 5).alias("calc2"))
-            .with_columns((pl.col("duration") * 12).alias("calc3"))
-            # This one will fail
-            .with_columns((pl.col("nonexistent") * 2).alias("calc4"))
-            .with_columns(
-                (pl.col("premium") / 2).alias("calc5"),
-            )  # This would work if calc4 didn't fail
-        )
-
+        # with_columns resolves the schema eagerly, so the bad operation can
+        # raise at definition time; the boundary must be identified either way.
         with pytest.raises(Exception) as exc_info:
+            af = (
+                af.with_columns((pl.col("premium") * 1.1).alias("calc1"))
+                .with_columns((pl.col("age") + 5).alias("calc2"))
+                .with_columns((pl.col("duration") * 12).alias("calc3"))
+                # This one will fail
+                .with_columns((pl.col("nonexistent") * 2).alias("calc4"))
+                .with_columns(
+                    (pl.col("premium") / 2).alias("calc5"),
+                )  # This would work if calc4 didn't fail
+            )
             result = af.collect()
 
         exception = exc_info.value
