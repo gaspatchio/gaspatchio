@@ -1402,10 +1402,12 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         # Compute discounted cashflows: CF(t) * v(t)
         discounted_cf = cashflow_expr * v_expr
 
-        # Apply reverse -> cumsum -> reverse pattern to get remaining PV
+        # Apply reverse -> cumsum -> reverse pattern to get remaining PV.
+        # NaN cashflows propagate: a NaN here means an upstream defect (e.g. a
+        # lookup miss under on_missing="nan") and zeroing it would silently
+        # understate the reserve.
         remaining_pv = (
-            discounted_cf.list.eval(pl.element().fill_nan(0.0))
-            .list.reverse()
+            discounted_cf.list.reverse()
             .list.eval(pl.element().cum_sum())
             .list.reverse()
         )

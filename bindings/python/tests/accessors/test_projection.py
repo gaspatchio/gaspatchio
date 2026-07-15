@@ -819,10 +819,15 @@ class TestProspectiveValue:
         assert pytest.approx(pv_2[1], abs=1e-2) == 2 * pv_1[1]
         assert pytest.approx(pv_2[2], abs=1e-2) == 2 * pv_1[2]
 
-    def test_handles_nan_beyond_term(self):
-        """Test that prospective_value handles NaN values beyond policy term."""
+    def test_nan_cashflows_propagate(self):
+        """NaN cashflows must poison the PV, not be silently zeroed.
+
+        A NaN cashflow means an upstream defect (e.g. a lookup miss under
+        on_missing="nan"); the old blanket fill_nan(0.0) converted it into a
+        silently understated reserve. Beyond-term periods must be zeroed
+        explicitly by the model (when/otherwise), not padded with NaN.
+        """
         data = {
-            # Policy has 3 periods but projection has 5 - NaNs beyond term
             "cashflow": [[100.0, 100.0, 100.0, float("nan"), float("nan")]],
         }
         af = ActuarialFrame(data)
@@ -832,14 +837,30 @@ class TestProspectiveValue:
         result = af.collect()
         pv = result["pv"][0]
 
-        # NaN cashflows should be treated as 0 (no cashflow beyond term)
-        # So PV at t=3 and t=4 should be 0
         assert len(pv) == 5
-        # PV at periods with NaN cashflows should be 0 or NaN depending on impl
-        # The first 3 periods should have valid PV
-        assert not math.isnan(pv[0])
-        assert not math.isnan(pv[1])
-        assert not math.isnan(pv[2])
+        # The NaN at t=3 flows backward through the recursion into every
+        # earlier period's PV.
+        assert math.isnan(pv[0])
+        assert math.isnan(pv[1])
+        assert math.isnan(pv[2])
+
+    def test_explicit_zero_beyond_term_gives_finite_pv(self):
+        """The supported beyond-term pattern: zero the cashflows explicitly."""
+        data = {
+            "cashflow": [[100.0, 100.0, 100.0, 0.0, 0.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.pv = af.cashflow.projection.prospective_value(discount_rate=0.05)
+
+        result = af.collect()
+        pv = result["pv"][0]
+
+        assert len(pv) == 5
+        assert all(not math.isnan(v) for v in pv)
+        # Beyond-term periods have zero remaining PV
+        assert pv[3] == pytest.approx(0.0)
+        assert pv[4] == pytest.approx(0.0)
 
     def test_conflicting_parameters_raises_error(self):
         """Test that specifying both discount_rate and discount_factor raises."""
