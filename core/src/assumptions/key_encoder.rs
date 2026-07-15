@@ -79,7 +79,14 @@ impl KeyEncoder {
                 let n_unique = series.n_unique()?;
                 Ok(KeyEncoder::categorical(n_unique))
             }
-            DataType::Int64 | DataType::Int32 | DataType::UInt64 | DataType::UInt32 => {
+            DataType::Int64
+            | DataType::Int32
+            | DataType::Int16
+            | DataType::Int8
+            | DataType::UInt64
+            | DataType::UInt32
+            | DataType::UInt16
+            | DataType::UInt8 => {
                 let min = series.min::<i64>()?.unwrap_or(0);
                 let max = series.max::<i64>()?.unwrap_or(0);
                 Ok(KeyEncoder::int_range(min, max))

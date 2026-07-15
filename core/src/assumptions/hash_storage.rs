@@ -136,6 +136,10 @@ impl HashStorage {
             let s = df.column(col_name)?;
             codecs.push(match s.dtype() {
                 DataType::String => ColumnCodec::String,
+                // Categorical values only have encode arms on the String
+                // codec (physical index / string hash); the Integer codec
+                // would treat every row as unencodable.
+                DataType::Categorical(_, _) => ColumnCodec::String,
                 DataType::Float64 => ColumnCodec::Float64,
                 _ => ColumnCodec::Integer,
             });
@@ -317,5 +321,31 @@ impl HashStorage {
     /// Get reference to codecs for append validation.
     pub fn codecs(&self) -> &[ColumnCodec] {
         &self.codecs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn categorical_keys_do_not_collide() -> PolarsResult<()> {
+        // Categorical dtype fell into the Integer codec, whose encode had no
+        // Categorical arm: every key hashed to the catch-all value, so all
+        // rows collided and lookups silently returned one row's rate for
+        // every key. Categorical keys must route through the String codec.
+        let funds = Series::new("fund".into(), ["A", "B", "C"])
+            .cast(&DataType::from_categories(Categories::global()))?;
+        let rates = Series::new("rate".into(), [0.1f64, 0.2, 0.3]);
+        let df = DataFrame::new(3, vec![funds.clone().into(), rates.into()])?;
+
+        let storage = HashStorage::build(&df, &["fund".to_string()], "rate")?;
+        let out = storage.lookup_scalar(&[&funds])?;
+        let ca = out.f64()?;
+
+        assert_eq!(ca.get(0), Some(0.1));
+        assert_eq!(ca.get(1), Some(0.2));
+        assert_eq!(ca.get(2), Some(0.3));
+        Ok(())
     }
 }
