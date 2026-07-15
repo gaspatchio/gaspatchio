@@ -143,16 +143,39 @@ impl HashStorage {
 
         // Build the hash map
         let mut map: AHashMap<u64, f64> = AHashMap::with_capacity(n_rows.next_power_of_two());
+        // Transient build-time index: first source row per hash, so a hash
+        // conflict can be verified against the actual key values rather than
+        // misreported (a 64-bit collision between distinct keys is
+        // astronomically rare but must not be called a duplicate).
+        let mut first_row_for_hash: AHashMap<u64, usize> =
+            AHashMap::with_capacity(n_rows.next_power_of_two());
         let value_series = df.column(value)?.f64()?;
 
         for row_idx in 0..n_rows {
             let hash = Self::compute_hash_for_row(df, keys, &codecs, row_idx)?;
             let v = value_series.get(row_idx).unwrap_or(f64::NAN);
-            if map.insert(hash, v).is_some() {
+            if let Some(&prev_row) = first_row_for_hash.get(&hash) {
+                let is_true_duplicate = keys.iter().all(|key_name| {
+                    let col = df.column(key_name);
+                    match col {
+                        Ok(c) => match (c.get(prev_row), c.get(row_idx)) {
+                            (Ok(a), Ok(b)) => a == b,
+                            _ => false,
+                        },
+                        Err(_) => false,
+                    }
+                });
+                if is_true_duplicate {
+                    return Err(polars_err!(ComputeError:
+                        "Duplicate key combination at source row {} while building table (same keys as row {}). Deduplicate the source or fix the dimension mapping.",
+                        row_idx, prev_row));
+                }
                 return Err(polars_err!(ComputeError:
-                    "Duplicate key combination at source row {} while building table (an earlier row has the same keys). Deduplicate the source or fix the dimension mapping.",
-                    row_idx));
+                    "64-bit key-hash collision between distinct source rows {} and {} while building table; use storage_mode=\"array\" for this table.",
+                    prev_row, row_idx));
             }
+            first_row_for_hash.insert(hash, row_idx);
+            map.insert(hash, v);
         }
 
         Ok(Self { codecs, map })
