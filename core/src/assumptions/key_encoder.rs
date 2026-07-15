@@ -366,6 +366,39 @@ impl KeyEncoder {
                     None
                 }
             }
+            // Narrow integers widen like Int32/UInt32 instead of missing
+            (KeyEncoder::IntRange { offset, size }, AnyValue::Int16(i)) => {
+                let idx = i as i64 - offset;
+                if idx >= 0 && (idx as usize) < *size {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            }
+            (KeyEncoder::IntRange { offset, size }, AnyValue::Int8(i)) => {
+                let idx = i as i64 - offset;
+                if idx >= 0 && (idx as usize) < *size {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            }
+            (KeyEncoder::IntRange { offset, size }, AnyValue::UInt16(u)) => {
+                let idx = u as i64 - offset;
+                if idx >= 0 && (idx as usize) < *size {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            }
+            (KeyEncoder::IntRange { offset, size }, AnyValue::UInt8(u)) => {
+                let idx = u as i64 - offset;
+                if idx >= 0 && (idx as usize) < *size {
+                    Some(idx as u32)
+                } else {
+                    None
+                }
+            }
             (KeyEncoder::IntRange { offset, size }, AnyValue::Float64(f)) => {
                 if f.fract() == 0.0 && f.is_finite() {
                     let idx = f as i64 - offset;

@@ -133,16 +133,20 @@ def test_null_key_misses_instead_of_aliasing() -> None:
     assert out["rate"][1] == pytest.approx(0.002)
 
 
+@pytest.mark.parametrize("storage_mode", ["auto", "hash"])
 @pytest.mark.parametrize("dtype", [pl.Int8, pl.Int16, pl.UInt8, pl.UInt16])
-def test_narrow_int_keys_widen_and_match(dtype: pl.DataType) -> None:
-    # Narrow-int keys fell into the codec catch-all and either aliased to
-    # key 0 or missed entirely. They must widen and match.
+def test_narrow_int_keys_widen_and_match(
+    dtype: pl.DataType, storage_mode: str
+) -> None:
+    # Narrow-int keys fell into the hash codec catch-all (aliasing to key 0)
+    # and had no KeyEncoder arms on the array path (missing entirely). They
+    # must widen and match on both storage backends.
     table = Table(
-        name=f"boundary_narrow_{dtype}",
+        name=f"boundary_narrow_{dtype}_{storage_mode}",
         source=pl.DataFrame({"age": [0, 7], "rate": [0.111, 0.777]}),
         dimensions={"age": "age"},
         value="rate",
-        storage_mode="hash",
+        storage_mode=storage_mode,
     )
     af = ActuarialFrame(
         pl.DataFrame({"age": pl.Series([7], dtype=dtype)})
