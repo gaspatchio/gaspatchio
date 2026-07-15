@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import polars as pl
 
 from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios._aggregators import Count
+from gaspatchio_core.scenarios._aggregators import Count, Max, Min, Sum
 from gaspatchio_core.scenarios._auto_batch import bounded_seed_size, size_to_budget
 from gaspatchio_core.scenarios._for_each import _collect_with_peak
 from gaspatchio_core.scenarios._metric import _Partitioned
@@ -105,6 +105,18 @@ def _reject_scenario_axis_only(aggregations: Sequence[Any]) -> None:
                 "policy axis has no scenarios); use Sum/Period* aggregators instead."
             )
             raise ValueError(msg)  # noqa: TRY004 — usage error on the policy axis
+        if inner.within_expr_override is not None and not isinstance(
+            inner, (Sum, Min, Max)
+        ):
+            msg = (
+                f"{type(inner).__name__}.of(...) is batch-count-dependent on the "
+                "policy axis: the within-expression reduces each batch to a "
+                "single value, so a non-additive aggregator folds per-batch "
+                "partials instead of per-policy values and its result changes "
+                "with batch_size. Use Sum/Min/Max with .of(), or aggregate a "
+                "model column directly without .of()."
+            )
+            raise ValueError(msg)
 
 
 def _max_period_len(frame: pl.DataFrame) -> int:

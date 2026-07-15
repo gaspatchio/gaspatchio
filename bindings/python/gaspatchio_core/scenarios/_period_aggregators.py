@@ -149,6 +149,39 @@ def _reduce_by_period_within(
     return stage1.group_by(period).agg(*aggs).sort(period).collect()
 
 
+def _reduce_by_period_over_within(
+    frame: pl.DataFrame,
+    period: str,
+    column: str,
+    by: tuple[str, ...],
+    within_by: tuple[str, ...],
+    *aggs: pl.Expr,
+) -> dict[tuple[Any, ...], pl.DataFrame]:
+    """Partitioned two-stage reduce for the scenario axis.
+
+    :func:`_reduce_by_period_within` with a partition key: stage 1 sums
+    ``column`` per (``by``, ``within_by``, period), so each partition sees
+    per-scenario totals; stage 2 applies ``aggs`` across those totals per
+    (``by``, period). Returns the same ``{partition_tuple: per-period frame}``
+    shape as :func:`_reduce_by_period_over`.
+    """
+    stage1 = (
+        frame.lazy()
+        .select(
+            *[pl.col(b) for b in by],
+            *[pl.col(w) for w in within_by],
+            pl.col(period),
+            pl.col(column),
+        )
+        .explode([period, column])
+        .filter(pl.col(period).is_not_null())
+        .group_by([*by, *within_by, period])
+        .agg(pl.col(column).sum())
+    )
+    reduced = stage1.group_by([*by, period]).agg(*aggs).sort([*by, period]).collect()
+    return reduced.partition_by(*by, as_dict=True, include_key=False)
+
+
 def _tidy_partitioned_vector(
     df: pl.DataFrame, *, by: tuple[str, ...], alias: str
 ) -> pl.DataFrame:
@@ -224,6 +257,24 @@ class VectorAggregator(_BaseAggregator):
                 frame, period, self.column, within_by, *self._period_aggs()
             )
         )
+
+    def batch_reduce_over_within(
+        self,
+        frame: pl.DataFrame,
+        period: str,
+        by: tuple[str, ...],
+        within_by: tuple[str, ...],
+    ) -> dict[tuple[Any, ...], Any]:
+        """Partitioned two-stage reduce (scenario axis): ``{partition: partial}``.
+
+        Per ``by`` partition, the statistic reduces ACROSS ``within_by``
+        (scenario) totals per period — the partitioned counterpart of
+        :meth:`batch_reduce_within`.
+        """
+        parts = _reduce_by_period_over_within(
+            frame, period, self.column, by, within_by, *self._period_aggs()
+        )
+        return {key: self._assemble_partial(sub) for key, sub in parts.items()}
 
     def within_expr(self) -> pl.Expr:
         """Not supported — vector aggregators reduce via batch_reduce()."""
