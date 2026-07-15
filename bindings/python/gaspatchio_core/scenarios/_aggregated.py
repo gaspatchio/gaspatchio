@@ -105,6 +105,22 @@ def _reject_scenario_axis_only(aggregations: Sequence[Any]) -> None:
                 "policy axis has no scenarios); use Sum/Period* aggregators instead."
             )
             raise ValueError(msg)  # noqa: TRY004 — usage error on the policy axis
+        if getattr(inner, "within_expr_override", None) is not None:
+            # No allowlist is sound here: batch-invariance requires the
+            # within-expression to be decomposable w.r.t. the outer fold
+            # (Sum.of(additive), Min.of(min-decomposable), ...), which cannot
+            # be verified on an arbitrary Polars expression — Min.of(sum) and
+            # Sum.of(mean) are both silently batch-size-dependent.
+            msg = (
+                f"{type(inner).__name__}.of(...) is not supported on the policy "
+                "axis: the within-expression reduces each batch to a single "
+                "value, so the result depends on batch_size (e.g. "
+                "Min.of(col.sum()) returns a different number for 1 batch than "
+                "for 2). Compute the quantity as a model column and aggregate "
+                "it directly, or use .of() on the scenario axis "
+                "(for_each_scenario), where each scenario is reduced whole."
+            )
+            raise ValueError(msg)
 
 
 def _max_period_len(frame: pl.DataFrame) -> int:
@@ -194,11 +210,6 @@ def _fold_batch(
             )
             partial2 = agg.batch_reduce(proj_p2, _PERIOD)
             accumulators[alias] = agg.add_input(accumulators[alias], partial2)
-        elif agg.within_expr_override is not None:
-            # Custom within-reduction (.of): there is no per-policy column to
-            # fold, so the override defines the batch's single contribution.
-            value = proj.select(agg.within_expr().alias(alias)).item()
-            accumulators[alias] = agg.add_input(accumulators[alias], value)
         else:
             # Scalar aggregator over the policy axis: every POLICY is a data
             # point. Fold the whole batch column in one add_batch call, which
