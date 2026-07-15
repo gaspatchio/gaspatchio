@@ -356,6 +356,11 @@ class ActuarialFrame:
             # collect()/profile() must never replay the graph on top of it —
             # that double-applied self-referential assignments in debug mode.
             if self._tracing:
+                if not self._computation_graph:
+                    # Snapshot the pre-op frame at the start of a trace
+                    # sequence: error-boundary diagnosis replays the graph
+                    # against this baseline, never against the applied _df.
+                    object.__setattr__(self, "_baseline_df", self._df)
                 append_operation_to_graph(self, key, expr)
             self._df = self._df.with_columns(expr.alias(key))
 
@@ -624,6 +629,9 @@ class ActuarialFrame:
             # metadata — collect()/profile() never replay it, so an operation
             # that is recorded but not applied would silently vanish.
             if self._tracing:
+                if not self._computation_graph:
+                    # Baseline for error-boundary diagnosis (see __setitem__)
+                    object.__setattr__(self, "_baseline_df", self._df)
                 for name, expr in converted_exprs_dict.items():
                     append_operation_to_graph(self, name, expr)
             self._df = self._df.with_columns(**converted_exprs_dict)
@@ -2364,6 +2372,7 @@ class ActuarialFrame:
                 "_show_query_plan",
                 "_computation_graph",
                 "_tracing",
+                "_baseline_df",
                 "_date_accessor_instance",
                 "_excel_accessor_instance",
                 "_finance_accessor_instance",

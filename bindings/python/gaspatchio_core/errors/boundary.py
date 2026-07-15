@@ -32,12 +32,18 @@ class ErrorBoundaryFinder:
         """
         self.af = af
         self.exception = exception
-        # Convert LazyFrame to DataFrame for binary search operations
-        if af._df is not None:  # noqa: SLF001
-            if hasattr(af._df, "collect"):  # noqa: SLF001
+        # Replay must start from the PRE-OP baseline captured when the trace
+        # sequence began: _df already contains every recorded operation, so
+        # replaying the graph on top of it would re-apply self-referential
+        # operations during diagnosis and misattribute the failing op.
+        source = getattr(af, "_baseline_df", None)
+        if source is None:
+            source = af._df  # noqa: SLF001
+        if source is not None:
+            if hasattr(source, "collect"):
                 # It's a LazyFrame, collect it
                 try:
-                    self.original_df = af._df.collect()  # noqa: SLF001
+                    self.original_df = source.collect()
                 except Exception:  # noqa: BLE001
                     # If collection fails, try to reconstruct original data
                     # using the stored schema (before computation graph ops)
@@ -48,7 +54,7 @@ class ErrorBoundaryFinder:
                         self.original_df = pl.DataFrame()
             else:
                 # It's already a DataFrame
-                self.original_df = af._df  # noqa: SLF001
+                self.original_df = source
         else:
             self.original_df = pl.DataFrame()
         self.exception_type = type(exception)
