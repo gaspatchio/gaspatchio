@@ -1253,8 +1253,23 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
             Cannot be specified together with `discount_factor`.
         discount_factor : ExpressionProxy or ColumnProxy, optional
-            Pre-computed discount factors (v^t values). Use when you have yield curve
-            or scenario-specific discount factors already calculated.
+            Pre-computed cumulative discount factors. Use when you have yield
+            curve or scenario-specific discount factors already calculated.
+
+            **Convention (timing-dependent):** ``discount_factor[t]`` must
+            discount the position-``t`` cashflow *at the instant implied by
+            the timing* back to the valuation point:
+
+            - ``timing="end_of_period"``: the position-0 cashflow is paid one
+              period out, so ``discount_factor[0]`` already includes one
+              period's discounting — ``[v, v*v, v*v*v, ...]``, **not 1.0
+              first**.
+            - ``timing="beginning_of_period"``: the position-0 cashflow is
+              immediate — ``[1.0, v, v*v, ...]``.
+
+            Supplying beginning-anchored factors (leading 1.0) with
+            ``end_of_period`` timing shifts every period's discounting by one
+            period and leaves the first cashflow undiscounted.
 
             Cannot be specified together with `discount_rate`.
         timing : {"beginning_of_period", "end_of_period"}, default "end_of_period"
@@ -1339,7 +1354,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         data = {
             "benefit": [[100.0, 100.0, 100.0]],
-            "v_t": [[1.0, 0.952381, 0.907029]],  # 5% discount factors
+            # 5% end-of-period factors: position 0 pays one period out, so the
+            # first factor is v = 1/1.05, not 1.0 (see discount_factor docs).
+            "v_t": [[0.952381, 0.907029, 0.863838]],
         }
         af = ActuarialFrame(data)
 
@@ -1355,9 +1372,12 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         The method internally performs:
 
         1. Compute discounted cashflows: CF(t) * v(t)
-        2. Fill NaN values with 0 (handles cashflows beyond policy term)
-        3. Apply reverse -> cumsum -> reverse pattern to get "sum from t to end"
-        4. Adjust for timing convention
+        2. Apply reverse -> cumsum -> reverse pattern to get "sum from t to end"
+        3. Adjust for timing convention
+
+        NaN cashflows propagate into every affected period's PV — a NaN means
+        an upstream defect (e.g. a lookup miss under ``on_missing="nan"``).
+        Zero beyond-term periods explicitly with ``when/otherwise``.
 
         **Replaces Ugly Pattern:**
 
@@ -1427,29 +1447,46 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         #                                                 full period)
         due_result = remaining_pv / v_expr
 
-        # Per-period discount factor v[t] = 1/(1+r[t]) used to convert DUE -> ordinary.
-        if isinstance(discount_rate, (int, float)):
-            # Scalar rate: constant v
-            per_period_v = 1.0 / (1.0 + discount_rate)
-        elif discount_rate is not None:
-            # List column of rates: v[t] = 1/(1+r[t])
-            from gaspatchio_core.column.column_proxy import ColumnProxy
-            from gaspatchio_core.column.expression_proxy import ExpressionProxy
-
-            if isinstance(discount_rate, ExpressionProxy):
-                rate_expr = discount_rate._expr  # noqa: SLF001
-            elif isinstance(discount_rate, ColumnProxy):
-                rate_expr = pl.col(discount_rate.name)
+        # Ordinary (end_of_period) value. Each cashflow slides one period
+        # into the future and must carry ITS OWN period's discount v[s]:
+        #   ord(t) = sum_{s>=t} CF[s] * prod_{u=t..s} v[u]
+        # A single per-position multiplier on the due value (due(t) * v[t])
+        # is only exact for constant rates — with varying rates it discounts
+        # the whole tail by position t's factor instead of each cashflow's.
+        if discount_rate is not None:
+            # Rate inputs: v_expr is the start-anchored cumulative
+            # (prod_{u=0..t-1} v[u]); multiply elementwise by v[t] to get the
+            # end-anchored cumulative prod_{u=0..t}.
+            if isinstance(discount_rate, (int, float)):
+                per_period_v = 1.0 / (1.0 + discount_rate)
             else:
-                rate_expr = discount_rate
-            per_period_v = rate_expr.list.eval(1.0 / (1.0 + pl.element()))
-        else:
-            # discount_factor provided: derive per-period v as v[t]/v[t-1].
-            # At t=0: v[0]/v[-1] = v[0]/1 = v[0]; at t=1: v[1]/v[0]; ...
-            v_prev = v_expr.list.eval(pl.element().shift(1, fill_value=1.0))
-            per_period_v = v_expr / v_prev
+                from gaspatchio_core.column.column_proxy import ColumnProxy
+                from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
-        ordinary_result = due_result * per_period_v
+                if isinstance(discount_rate, ExpressionProxy):
+                    rate_expr = discount_rate._expr  # noqa: SLF001
+                elif isinstance(discount_rate, ColumnProxy):
+                    rate_expr = pl.col(discount_rate.name)
+                else:
+                    rate_expr = discount_rate
+                per_period_v = rate_expr.list.eval(1.0 / (1.0 + pl.element()))
+            v_end = v_expr * per_period_v
+            ordinary_divisor = v_expr
+        else:
+            # discount_factor input is END-anchored by contract (df[0] already
+            # includes one period's discounting), so it IS the end-anchored
+            # cumulative; divide by its shift (df[-1] := 1).
+            v_end = v_expr
+            ordinary_divisor = v_expr.list.eval(
+                pl.element().shift(1, fill_value=1.0)
+            )
+
+        ordinary_result = (
+            (cashflow_expr * v_end)
+            .list.reverse()
+            .list.eval(pl.element().cum_sum())
+            .list.reverse()
+        ) / ordinary_divisor
 
         if timing == "end_of_period":
             # Ordinary annuity: every cashflow discounted a full period (SMALLER).
