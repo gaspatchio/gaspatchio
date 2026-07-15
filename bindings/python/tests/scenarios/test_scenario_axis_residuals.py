@@ -204,28 +204,27 @@ def _policy_model(af: ActuarialFrame) -> ActuarialFrame:
     return af.with_columns(pl.col("value").alias("x"))
 
 
-def test_of_with_non_additive_aggregator_rejected() -> None:
-    """Mean.of(...) is batch-count-dependent and must be rejected loudly."""
+@pytest.mark.parametrize(
+    "agg",
+    [
+        Mean.of(pl.col("x").sum()),
+        Sum.of(pl.col("x").mean()),
+    ],
+    ids=["mean-of-sum", "sum-of-mean"],
+)
+def test_of_rejected_on_policy_axis(agg: object) -> None:
+    """.of() on run_aggregated is batch-size-dependent for ANY outer aggregator.
+
+    No allowlist is sound: invariance would require the within-expression to
+    be decomposable w.r.t. the outer fold (Min.of(col.sum()) and
+    Sum.of(col.mean()) are both silently batch-dependent), which cannot be
+    verified on an arbitrary Polars expression. The scenario axis
+    (for_each_scenario) keeps .of() — each scenario is reduced whole there.
+    """
     mp = pl.DataFrame({"value": [1.0, 2.0, 3.0, 4.0]})
-    with pytest.raises(ValueError, match="of\\(|within_expr"):
+    with pytest.raises(ValueError, match="of\\(.*policy axis|not supported"):
         run_aggregated(
             _policy_model,
             mp,
-            [Mean.of(pl.col("x").sum()).alias("m")],
+            [agg.alias("m")],
         )
-
-
-def test_of_with_additive_aggregator_is_batch_invariant() -> None:
-    """Sum.of(...) folds per-batch partials additively — allowed and stable."""
-    mp = pl.DataFrame({"value": [1.0, 2.0, 3.0, 4.0]})
-    results = [
-        run_aggregated(
-            _policy_model,
-            mp,
-            [Sum.of(pl.col("x").sum()).alias("s")],
-            batch_size=bs,
-        ).aggregations["s"]
-        for bs in (2, 4)
-    ]
-    assert results[0] == pytest.approx(10.0)
-    assert results[1] == pytest.approx(10.0)
