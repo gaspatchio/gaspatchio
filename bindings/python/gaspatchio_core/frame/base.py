@@ -351,14 +351,13 @@ class ActuarialFrame:
             # setter (~0.8ms/call on a real plan -> the plan-build bottleneck).
             new_dtype = self._resolve_assigned_dtype(expr) if do_incremental else None
 
-            # MODIFIED: Integrate tracing
+            # The graph is RECORD-ONLY metadata (calc-graph display, query-plan
+            # logging). Every operation is applied to _df exactly once here;
+            # collect()/profile() must never replay the graph on top of it —
+            # that double-applied self-referential assignments in debug mode.
             if self._tracing:
                 append_operation_to_graph(self, key, expr)
-                # ALSO apply to _df immediately for models that access _df directly
-                self._df = self._df.with_columns(expr.alias(key))
-            else:
-                # Execute directly if not tracing
-                self._df = self._df.with_columns(expr.alias(key))
+            self._df = self._df.with_columns(expr.alias(key))
 
             # Incremental schema maintenance (clears the dirty flag the _df
             # setter just set). If skipped or the dtype could not be resolved
@@ -526,33 +525,15 @@ class ActuarialFrame:
                 return pl.DataFrame(schema={})
 
             final_df = self._df
-            # Apply computation graph if it exists (typically built in optimize mode via tracing)
-            if self._computation_graph:
-                # The trace decorator might have already logged the plan if verbose
-                # but repeating here or having a more structured way to log before collect is fine.
-                if self._show_query_plan:
-                    from .tracing import (
-                        log_query_plan,  # Local import to avoid circularity at module level
-                    )
+            # The computation graph is record-only: every traced operation was
+            # already applied to _df by the setter. Replaying it here would
+            # apply self-referential assignments twice (debug != optimize).
+            if self._computation_graph and self._show_query_plan:
+                from .tracing import (
+                    log_query_plan,  # Local import to avoid circularity at module level
+                )
 
-                    log_query_plan(
-                        self._computation_graph, final_df
-                    )  # Log before applying
-
-                for operation in self._computation_graph:
-                    # Handle both old tuple format and new TracedOperation format
-                    if isinstance(operation, tuple):
-                        # Legacy format: (name, expr)
-                        name, expr_val = operation
-                        final_df = final_df.with_columns(expr_val.alias(name))
-                    else:
-                        # New format: TracedOperation
-                        final_df = final_df.with_columns(
-                            operation.expression.alias(operation.alias)
-                        )
-
-                # Optionally clear the graph after applying, though the tracer resets it per call.
-                # self._computation_graph = []  # noqa: ERA001
+                log_query_plan(self._computation_graph, final_df)
 
             # Strip hidden rollforward columns before collecting
             schema_names = final_df.collect_schema().names()
@@ -574,33 +555,15 @@ class ActuarialFrame:
                 return pl.DataFrame(), pl.DataFrame()
 
             final_df = self._df
-            # Apply computation graph if it exists (typically built in optimize mode via tracing)
-            if self._computation_graph:
-                # The trace decorator might have already logged the plan if verbose
-                # but repeating here or having a more structured way to log before collect is fine.
-                if self._show_query_plan:
-                    from .tracing import (
-                        log_query_plan,  # Local import to avoid circularity at module level
-                    )
+            # The computation graph is record-only: every traced operation was
+            # already applied to _df by the setter. Replaying it here would
+            # apply self-referential assignments twice (debug != optimize).
+            if self._computation_graph and self._show_query_plan:
+                from .tracing import (
+                    log_query_plan,  # Local import to avoid circularity at module level
+                )
 
-                    log_query_plan(
-                        self._computation_graph, final_df
-                    )  # Log before applying
-
-                for operation in self._computation_graph:
-                    # Handle both old tuple format and new TracedOperation format
-                    if isinstance(operation, tuple):
-                        # Legacy format: (name, expr)
-                        name, expr_val = operation
-                        final_df = final_df.with_columns(expr_val.alias(name))
-                    else:
-                        # New format: TracedOperation
-                        final_df = final_df.with_columns(
-                            operation.expression.alias(operation.alias)
-                        )
-
-                # Optionally clear the graph after applying, though the tracer resets it per call.
-                # self._computation_graph = []  # noqa: ERA001
+                log_query_plan(self._computation_graph, final_df)
 
             # Strip hidden rollforward columns before profiling
             schema_names = final_df.collect_schema().names()
@@ -657,19 +620,16 @@ class ActuarialFrame:
                 if output_name not in self._column_order:
                     new_cols_order.append(output_name)
 
-            # Integrate tracing
+            # Record when tracing; ALWAYS apply. The graph is record-only
+            # metadata — collect()/profile() never replay it, so an operation
+            # that is recorded but not applied would silently vanish.
             if self._tracing:
                 for name, expr in converted_exprs_dict.items():
                     append_operation_to_graph(self, name, expr)
-                # Don't execute, just update potential column order
-                self._column_order.extend(new_cols_order)
-                self._refresh_attr_columns_set()
-            else:
-                # Execute directly
-                self._df = self._df.with_columns(**converted_exprs_dict)
-                self._schema = self._df.collect_schema()
-                self._column_order.extend(new_cols_order)
-                self._refresh_attr_columns_set()
+            self._df = self._df.with_columns(**converted_exprs_dict)
+            self._schema = self._df.collect_schema()
+            self._column_order.extend(new_cols_order)
+            self._refresh_attr_columns_set()
 
         except Exception as e:
             msg = f"Error adding columns: {e}"
