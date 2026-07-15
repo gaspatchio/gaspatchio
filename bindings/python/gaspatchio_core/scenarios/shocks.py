@@ -735,27 +735,15 @@ class RelativeFloorShock(Shock):
         - Relative floors that depend on original values
         - Preventing excessive decreases
 
-    Examples:
-    --------
-    **Solvency II lapse down (max of 50% reduction or 20pp decrease):**
-
-    ```python no_output_check
-    from gaspatchio_core.scenarios.shocks import (
-        PipelineShock,
-        MultiplicativeShock,
-        RelativeFloorShock,
-    )
-
-    # This creates: max(lapse × 0.5, lapse - 0.2)
-    # We need to use a PipelineShock with a custom RelativeFloorShock
-    shock = PipelineShock(
-        shocks=[
-            MultiplicativeShock(factor=0.5),
-            RelativeFloorShock(delta=0.2),  # Cannot go more than 0.2 below original
-        ],
-        table="lapse",
-    )
-    ```
+    !!! warning "Not yet implemented"
+        ``RelativeFloorShock`` raises ``NotImplementedError`` at execution:
+        applying a relative floor needs the pre-shock table values at shock
+        time, which the pipeline does not yet thread through. Construction
+        and serialization succeed (plans can declare intent), but a run
+        fails loudly instead of silently skipping the floor. Until it is
+        implemented, apply relative floors in model code — e.g. compute the
+        shocked rate as the maximum of ``rate * 0.5`` and ``rate - 0.2``
+        with ``when/then/otherwise`` on the looked-up column.
 
     """
 
