@@ -48,11 +48,29 @@ def build_period_sketches(
         all rows after the explode.
 
     """
-    gamma = (1.0 + relative_accuracy) / (1.0 - relative_accuracy)
-    inv_log_gamma = 1.0 / math.log(gamma)
     exploded = (
         frame.lazy().select(pl.col(period), pl.col(column)).explode([period, column])
     )
+    return _sketches_from_exploded(
+        exploded, period, column, relative_accuracy=relative_accuracy
+    )
+
+
+def _sketches_from_exploded(
+    exploded: pl.LazyFrame,
+    period: str,
+    column: str,
+    *,
+    relative_accuracy: float,
+) -> list[SignedSketch]:
+    """Vectorized histogram build over an already-exploded (period, value) frame.
+
+    Core of :func:`build_period_sketches`; also fed directly with per-scenario
+    stage-1 totals (one scalar row per (scenario, period)) by the two-stage
+    scenario-axis reducers.
+    """
+    gamma = (1.0 + relative_accuracy) / (1.0 - relative_accuracy)
+    inv_log_gamma = 1.0 / math.log(gamma)
 
     zeros = (
         exploded.filter(pl.col(column) == 0)
@@ -153,6 +171,64 @@ class _PeriodSketchAgg(VectorAggregator):
         """Partitioned sketch reduce: ``{partition_tuple: list[SignedSketch]}``."""
         return build_period_sketches_over(
             frame, period, self.column, by, relative_accuracy=self.relative_accuracy
+        )
+
+    def batch_reduce_within(
+        self, frame: pl.DataFrame, period: str, within_by: tuple[str, ...]
+    ) -> Any:  # noqa: ANN401
+        """Two-stage sketch reduce for the scenario axis.
+
+        Stage 1 sums ``column`` within each ``within_by`` group (scenario) per
+        period — exact, matching the closed-form aggregators' stage 1. Stage 2
+        inserts each group's per-period total into the period sketches, so the
+        rank statistic is taken ACROSS scenarios of per-scenario totals.
+        ``within_by`` groups are disjoint across batches, so merging the
+        per-batch sketches keeps the fold batch-invariant.
+        """
+        totals = self._stage1_totals(frame, period, within_by)
+        return _sketches_from_exploded(
+            totals.lazy().select(pl.col(period), pl.col(self.column)),
+            period,
+            self.column,
+            relative_accuracy=self.relative_accuracy,
+        )
+
+    def batch_reduce_over_within(
+        self,
+        frame: pl.DataFrame,
+        period: str,
+        by: tuple[str, ...],
+        within_by: tuple[str, ...],
+    ) -> dict[tuple[Any, ...], Any]:
+        """Partitioned two-stage sketch reduce (scenario axis), per ``by`` key."""
+        totals = self._stage1_totals(frame, period, (*by, *within_by))
+        parts: dict[tuple[Any, ...], Any] = {}
+        partitioned = totals.partition_by(*by, as_dict=True, include_key=False)
+        for key, sub in partitioned.items():
+            parts[key] = _sketches_from_exploded(
+                sub.lazy().select(pl.col(period), pl.col(self.column)),
+                period,
+                self.column,
+                relative_accuracy=self.relative_accuracy,
+            )
+        return parts
+
+    def _stage1_totals(
+        self, frame: pl.DataFrame, period: str, group_cols: tuple[str, ...]
+    ) -> pl.DataFrame:
+        """Sum ``column`` per (*group_cols, period) after exploding the lists."""
+        return (
+            frame.lazy()
+            .select(
+                *[pl.col(c) for c in group_cols],
+                pl.col(period),
+                pl.col(self.column),
+            )
+            .explode([period, self.column])
+            .filter(pl.col(period).is_not_null())
+            .group_by([*group_cols, period])
+            .agg(pl.col(self.column).sum())
+            .collect()
         )
 
     def add_input(self, state: Any, value: Any) -> Any:  # noqa: ANN401
