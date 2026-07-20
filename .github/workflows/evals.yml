@@ -77,7 +77,7 @@ jobs:
             benchmark_name: Rust Benchmarks (Windows)
             benchmark_path: dev/bench-windows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
       - uses: dtolnay/rust-toolchain@stable
@@ -138,10 +138,10 @@ jobs:
             benchmark_name: Model Benchmarks (Windows)
             benchmark_path: dev/model-bench-windows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --no-dev
       - name: Generate 100K model points
@@ -179,10 +179,10 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true  # L4 tutorial model points + assumptions are git-LFS
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync
       - name: Run aggregation-surface benchmarks (baseline vs run_aggregated vs spill)
@@ -239,17 +239,17 @@ jobs:
             benchmark_name: Gaspatchio vs Lifelib (Windows)
             benchmark_path: dev/comparison-windows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
       - name: Set up SSH agent for benchmarks deploy key
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.BENCHMARKS_DEPLOY_KEY }}
       - name: Clone gaspatchio-benchmarks (lifelib reference data)
         run: git clone --depth 1 git@github.com:opioinc/gaspatchio-benchmarks.git "$GASPATCHIO_BENCHMARKS_DIR"
         working-directory: .
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install dependencies (with lifelib)
         run: uv sync --no-dev --group benchmark
       - name: Generate model points (all scales)
@@ -307,10 +307,10 @@ jobs:
             benchmark_name: Scenario Benchmarks (Windows)
             benchmark_path: dev/scenario-bench-windows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --no-dev
       - name: Generate model points (incl. 100K L5)
@@ -347,10 +347,10 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync
       - name: Generate model points (incl. 100K L5)
@@ -388,10 +388,10 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync
       - name: Run stochastic showcase (1000 scenarios)
@@ -399,7 +399,7 @@ jobs:
       - name: Render showcase chart
         run: uv run python ../../evals/benchmarks/render_scenario_showcase.py
       - name: Upload showcase artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: scenario-showcase
           path: |
@@ -420,10 +420,10 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true  # L4 base model points + assumptions are git-LFS
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync
       - name: Sweep run_aggregated batch size (1K..1M ladder + 10M auto — bounded seed)
@@ -435,7 +435,7 @@ jobs:
           --auto-only-scales 10000000
           --out /tmp/policy-axis-sweep.json
       - name: Upload sweep results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: policy-axis-sweep
           path: /tmp/policy-axis-sweep.json
@@ -451,10 +451,10 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --group evals
       - name: Run evals
@@ -463,7 +463,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: uv run python ../../evals/run_evals.py
       - name: Upload capability matrix
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: capability-matrix
           path: |
@@ -492,11 +492,11 @@ jobs:
     needs: skill-evals
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: gh-pages
       - name: Download eval results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: capability-matrix
           path: dev/capability/
