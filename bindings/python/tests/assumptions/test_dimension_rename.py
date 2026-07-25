@@ -100,6 +100,64 @@ def test_explicit_data_dimension_without_rename_to_uses_dict_key() -> None:
     assert af.collect()["rate"].to_list() == pytest.approx([0.07, 0.10])
 
 
+def test_with_shock_preserves_renamed_dimensions() -> None:
+    """Shock reconstruction keeps the lookup vocabulary of renamed dims."""
+    from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+
+    table = Table(
+        name="rename_shock",
+        source=pl.DataFrame(
+            {"PolicyDurationYrs": [1, 2], "lapse_rate": [0.10, 0.08]}
+        ),
+        dimensions={"duration": "PolicyDurationYrs"},
+        value="lapse_rate",
+    )
+    shocked = table.with_shock(MultiplicativeShock(factor=1.5))
+    af = ActuarialFrame(pl.DataFrame({"duration": [2, 1]}))
+    af.rate = shocked.lookup(duration=af.duration)
+    assert af.collect()["rate"].to_list() == pytest.approx([0.12, 0.15])
+
+
+def test_with_shock_preserves_explicit_rename_to() -> None:
+    """Explicit rename_to survives shock reconstruction; lookups speak YOUR name."""
+    from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+
+    table = Table(
+        name="rename_shock_explicit",
+        source=pl.DataFrame({"Dur": [1, 2], "rate": [0.10, 0.08]}),
+        dimensions={"duration": DataDimension("Dur", rename_to="dur_years")},
+        value="rate",
+    )
+    shocked = table.with_shock(MultiplicativeShock(factor=2.0))
+    af = ActuarialFrame(pl.DataFrame({"duration": [2, 1]}))
+    af.rate = shocked.lookup(duration=af.duration)
+    assert af.collect()["rate"].to_list() == pytest.approx([0.16, 0.20])
+
+
+def test_from_shocks_preserves_explicit_rename_to() -> None:
+    """from_shocks reconstruction (incl. the no-shock branch) keeps renamed dims."""
+    from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+
+    table = Table(
+        name="rename_from_shocks",
+        source=pl.DataFrame({"Dur": [1, 2], "rate": [0.10, 0.08]}),
+        dimensions={"duration": DataDimension("Dur", rename_to="dur_years")},
+        value="rate",
+    )
+    scenarios = Table.from_shocks(
+        table,
+        {"BASE": [], "UP": [MultiplicativeShock(factor=2.0)]},
+        value_column="rate",
+    )
+    for scenario_id, expected in {
+        "BASE": [0.08, 0.10],
+        "UP": [0.16, 0.20],
+    }.items():
+        af = ActuarialFrame(pl.DataFrame({"duration": [2, 1]}))
+        af.rate = scenarios[scenario_id].lookup(duration=af.duration)
+        assert af.collect()["rate"].to_list() == pytest.approx(expected), scenario_id
+
+
 def test_explicit_rename_to_still_looks_up_by_dimension_name() -> None:
     """rename_to controls the processed column; lookups speak YOUR name.
 

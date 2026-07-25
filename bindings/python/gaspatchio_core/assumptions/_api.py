@@ -573,7 +573,7 @@ class Table:
                 result[scenario_id] = Table(
                     name=f"{base_table._name}_{scenario_id}",
                     source=base_df.clone(),
-                    dimensions={name: name for name in base_table._dimensions},
+                    dimensions=base_table._reconstruction_dimensions(),
                     value=base_table._value,
                     validate=False,
                     metadata=base_table.metadata,
@@ -584,17 +584,37 @@ class Table:
                 for shock in shock_list:
                     table = table.with_shock(shock)
 
-                # Rename to include scenario ID
+                # Rename to include scenario ID. Reconstruction dims must come
+                # from the table whose PROCESSED frame is the source: after
+                # with_shock, an explicit rename_to has already collapsed to
+                # the dimension name.
                 result[scenario_id] = Table(
                     name=f"{base_table._name}_{scenario_id}",
                     source=table.to_dataframe(),
-                    dimensions={name: name for name in base_table._dimensions},
+                    dimensions=table._reconstruction_dimensions(),
                     value=base_table._value,
                     validate=False,
                     metadata=base_table.metadata,
                 )
 
         return result
+
+    def _reconstruction_dimensions(self) -> dict[str, str]:
+        """Dimensions spec that rebuilds this table from its PROCESSED frame.
+
+        Reconstruction (with_shock/from_shocks) feeds the processed DataFrame
+        back through the Table constructor, so each dimension key must point
+        at its PROCESSED column name — which differs from the key only when
+        an explicit ``DataDimension(rename_to=...)`` was used. The dict keys
+        (the lookup vocabulary) are preserved either way.
+        """
+        spec: dict[str, str] = {}
+        for dim_name, dim in self._dimensions.items():
+            if isinstance(dim, DataDimension):
+                spec[dim_name] = dim.rename_to or dim.column
+            else:
+                spec[dim_name] = dim_name
+        return spec
 
     def _process_data(self, source: str | Path | pl.DataFrame) -> None:
         """Process the data through dimension transformations and register with Rust.
@@ -1758,11 +1778,9 @@ class Table:
         shocked_name = name or f"{self._name}_shocked"
 
         # Create new Table with shocked data
-        # Recreate dimensions dict with string column names for constructor
-        new_dimensions = {
-            dim_name: dim.column_name if hasattr(dim, "column_name") else str(dim_name)
-            for dim_name, dim in self._dimensions.items()
-        }
+        # Recreate dimensions dict against the PROCESSED column names,
+        # preserving the lookup vocabulary (issue #30 review follow-up).
+        new_dimensions = self._reconstruction_dimensions()
 
         return Table(
             name=shocked_name,
