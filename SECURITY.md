@@ -14,6 +14,19 @@ issues or pull requests.
 Please include the affected version, a description of the issue and its impact, and,
 where possible, a minimal reproduction.
 
+## Reporting bugs privately (not security-related)
+
+Many gaspatchio users work at insurers and cannot post code publicly. You are welcome
+to report **any** bug — not just vulnerabilities — by email to **security@opioinc.com**
+instead of opening a public issue. When we confirm one:
+
+- we open a public tracking issue with a **rewritten, neutral reproduction** — never
+  your code, column names, assumption values, or expected outputs;
+- your name, employer, and any model details stay out of the issue, the commit
+  history, and the changelog (attribution is "reported via a private field report");
+- we send you the issue link so you can follow the fix, and credit you publicly
+  only if you ask us to.
+
 ## Our commitments
 
 - We acknowledge new reports within **2 business days**.
