@@ -613,7 +613,9 @@ class Table:
             if isinstance(dim, DataDimension):
                 spec[dim_name] = dim.rename_to or dim.column
             else:
-                spec[dim_name] = dim_name
+                # Melt/Categorical/Computed dimensions surface their output
+                # column via `name`; fall back to the dict key.
+                spec[dim_name] = getattr(dim, "name", None) or dim_name
         return spec
 
     def _process_data(self, source: str | Path | pl.DataFrame) -> None:
@@ -971,13 +973,15 @@ class Table:
 
         # Lookups always speak the user's dimension names (the dict keys).
         # Processed key columns normally carry those names already (the
-        # shorthand rename), but an explicit DataDimension(rename_to=...) can
-        # give the processed column a third name — translate it back.
-        col_to_dim = {
-            (dim.rename_to or dim.column): dim_name
-            for dim_name, dim in self._dimensions.items()
-            if isinstance(dim, DataDimension)
-        }
+        # shorthand rename), but an explicit DataDimension(rename_to=...) or
+        # a Melt/Categorical/Computed dimension whose `name` differs from its
+        # dict key gives the processed column another name — translate back.
+        col_to_dim = {}
+        for dim_name, dim in self._dimensions.items():
+            if isinstance(dim, DataDimension):
+                col_to_dim[dim.rename_to or dim.column] = dim_name
+            else:
+                col_to_dim[getattr(dim, "name", None) or dim_name] = dim_name
 
         # Build list of expressions in key column order
         key_exprs = []

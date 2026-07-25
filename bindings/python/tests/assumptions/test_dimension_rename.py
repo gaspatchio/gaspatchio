@@ -158,6 +158,39 @@ def test_from_shocks_preserves_explicit_rename_to() -> None:
         assert af.collect()["rate"].to_list() == pytest.approx(expected), scenario_id
 
 
+def test_melt_dimension_named_differently_from_dict_key() -> None:
+    """A MeltDimension whose `name` differs from its dict key: lookups and
+    shock reconstruction both speak the dict key."""
+    from gaspatchio_core.assumptions import MeltDimension
+    from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+
+    table = Table(
+        name="rename_melt",
+        source=pl.DataFrame(
+            {
+                "age": [30, 31],
+                "1": [0.001, 0.003],
+                "2": [0.002, 0.004],
+            }
+        ),
+        dimensions={
+            "age": "age",
+            "duration": MeltDimension(columns=["1", "2"], name="dur_band"),
+        },
+        value="qx",
+    )
+    af = ActuarialFrame(
+        pl.DataFrame({"age": [30, 31], "duration": [2, 1]})
+    )
+    af.qx = table.lookup(age=af.age, duration=af.duration)
+    assert af.collect()["qx"].to_list() == pytest.approx([0.002, 0.003])
+
+    shocked = table.with_shock(MultiplicativeShock(factor=2.0))
+    af2 = ActuarialFrame(pl.DataFrame({"age": [30], "duration": [1]}))
+    af2.qx = shocked.lookup(age=af2.age, duration=af2.duration)
+    assert af2.collect()["qx"].to_list() == pytest.approx([0.002])
+
+
 def test_explicit_rename_to_still_looks_up_by_dimension_name() -> None:
     """rename_to controls the processed column; lookups speak YOUR name.
 
