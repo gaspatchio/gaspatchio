@@ -146,3 +146,40 @@ def test_unicode_identifier_access(simple_af: ActuarialFrame):
     # unicode that is identifier should work
     proxy = simple_af.unicodé
     assert isinstance(proxy, ColumnProxy)
+
+
+def test_attribute_reassignment_updates_calculated_column(simple_af: ActuarialFrame):
+    # Reassigning a column created earlier in the session must replace it,
+    # not silently keep the first value (F7a: shadow-attribute split-brain).
+    simple_af.c = simple_af.a * 2
+    simple_af.c = simple_af.a * 3
+    out = simple_af.collect()
+    assert out["c"].to_list() == [3, 6, 9]
+
+
+def test_attribute_reassignment_updates_source_column(simple_af: ActuarialFrame):
+    # The pattern the skills docs recommend: af.premium = af.premium * 1.1
+    simple_af.a = simple_af.a * 10
+    out = simple_af.collect()
+    assert out["a"].to_list() == [10, 20, 30]
+
+
+def test_attribute_self_referential_reassignment(simple_af: ActuarialFrame):
+    # af.x = af.x + 1 must apply exactly once (not no-op, not double-apply)
+    simple_af.a = simple_af.a + 1
+    out = simple_af.collect()
+    assert out["a"].to_list() == [2, 3, 4]
+
+
+def test_attribute_reassignment_read_write_consistency(simple_af: ActuarialFrame):
+    # After reassignment, reads of af.c and the collected frame must agree.
+    # Previously collect() kept the first value while af.c returned the
+    # second, so downstream columns mixed both in one output.
+    simple_af.c = simple_af.a * 2
+    simple_af.c = simple_af.a * 3
+    simple_af.d = simple_af.c + 0
+    out = simple_af.collect()
+    assert out["c"].to_list() == [3, 6, 9]
+    assert out["d"].to_list() == [3, 6, 9]
+    # And the instance must not carry a shadow attribute for the column
+    assert "c" not in simple_af.__dict__
