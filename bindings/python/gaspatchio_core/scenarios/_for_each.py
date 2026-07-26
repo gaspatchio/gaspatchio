@@ -407,8 +407,18 @@ def _fold_vector_aggregators(
             pl.int_ranges(pl.col(vec.column).list.len()).alias(period),
         )
         if isinstance(agg, _Partitioned):
-            # vector .over(): per-partition partial -> _Partitioned.add_input per key
-            for key, partial in vec.batch_reduce_over(proj_p, period, agg.by).items():
+            # vector .over(): per-partition partial -> _Partitioned.add_input
+            # per key. On the scenario axis the statistic must still reduce
+            # ACROSS scenarios of per-scenario totals within each partition —
+            # unless the user partitions BY scenario_id itself, which means
+            # per-scenario stats across policies.
+            if "scenario_id" in proj_p.columns and "scenario_id" not in agg.by:
+                parts = vec.batch_reduce_over_within(
+                    proj_p, period, agg.by, ("scenario_id",)
+                )
+            else:
+                parts = vec.batch_reduce_over(proj_p, period, agg.by)
+            for key, partial in parts.items():
                 accumulators[alias] = agg.add_input(accumulators[alias], (key, partial))
         else:
             if "scenario_id" in proj_p.columns:
