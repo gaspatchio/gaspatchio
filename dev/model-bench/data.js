@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784527575716,
+  "lastUpdate": 1785035870202,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Model Benchmarks": [
@@ -4241,6 +4241,310 @@ window.BENCHMARK_DATA = {
           {
             "name": "VA + Scenarios (3x)/100K-rss",
             "value": 8727.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cpu-avg",
+            "value": 99.5,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f7b2b0e8b14d9c2615b8304faf62cec38bb84502",
+          "message": "Apply the documented dimensions rename mapping; invite private bug reports (#32)\n\n* fix(assumptions): apply the documented dimensions rename mapping\n\nThe dimensions dict is documented as mapping YOUR name -> SOURCE column\nname, but the string-shorthand conversion built DataDimension(source)\nand discarded the dict key: rename_to was never set, the processed\ntable kept the source column names, and lookup() failed with \"No value\nprovided for key column '<source name>'\". Every shipped example uses\nidentity mappings, so the rename path had never worked.\n\n- Shorthand entries now wire rename_to=dim_name (identity mappings are\n  a no-op).\n- An explicit DataDimension under a differing dict key gets the same\n  default; a user-set rename_to still controls the processed column\n  name, and lookup() translates it back so lookups always speak the\n  dimension-dict vocabulary.\n- The 'shouldn't happen' error now reports both vocabularies when a\n  custom dimension produces an unmatched column name.\n\nFixes #30. Reported via a private field report.\n\n* docs(security): invite private bug reports with an anonymisation promise\n\nMany gaspatchio users work at insurers and cannot post code publicly.\nDocument the intake path: any bug may be reported by email; confirmed\nbugs get a public tracking issue with a rewritten neutral reproduction,\nno names, employers, or model details, and opt-in-only credit.\n\n* fix(assumptions): preserve renamed dimensions through shock reconstruction\n\nReview follow-up (greptile P1 on #32): with_shock/from_shocks rebuild a\nTable from its PROCESSED frame but generated identity dimension specs\nfrom the dict keys (with_shock via a column_name attribute that\nDataDimension does not even have), so any dimension whose processed\ncolumn name differs from its key — an explicit\nDataDimension(rename_to=...) — failed reconstruction with 'Column not\nfound'.\n\n_reconstruction_dimensions() maps each dimension key to its processed\ncolumn name; all three reconstruction sites use it, computed from the\ntable actually supplying the source frame (after with_shock, an\nexplicit rename_to has already collapsed to the dimension name). The\nlookup vocabulary is preserved through arbitrary shock chains.\n\n* fix(assumptions): honour non-Data dimension output names in lookup and reconstruction\n\nReview follow-up (second greptile P1 on #32): Melt/Categorical/Computed\ndimensions surface their processed column via their  field, which\nmay differ from the dimensions-dict key. The lookup translation and\n_reconstruction_dimensions() only handled DataDimension, so such tables\nfailed lookup('No value provided for key column') and failed shock\nreconstruction against a nonexistent column.\n\nBoth now map , so the lookup\nvocabulary (the dict keys) holds for every dimension type, through\nwith_shock and both from_shocks branches. Regression test: a\nMeltDimension named differently from its dict key, looked up and\nshocked.\n\n* chore(deps): pin ruff — the docstring-example linter is version-sensitive\n\nCI resolves dev dependencies fresh (no lockfile ships in this repo), so\nruff>=0.11.10 floated to yesterday's 0.16.0 release, whose changed I001\nimport-sorting behaviour failed ~70 docstring-example lint tests on\nevery PR regardless of its diff. Pin to the version the examples are\nwritten against; the systemic reproducibility fix is tracked in #33.",
+          "timestamp": "2026-07-26T15:07:38+12:00",
+          "tree_id": "ff0d146f3b39a49d30ba833252f1dea60226af9f",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/f7b2b0e8b14d9c2615b8304faf62cec38bb84502"
+        },
+        "date": 1785035869637,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "VA Model (GMDB/GMAB)/8-points",
+            "value": 0.153,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-throughput",
+            "value": 52.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-memory",
+            "value": 63.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-data-mb",
+            "value": 0.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-rss",
+            "value": 239.4,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cores",
+            "value": 1,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cpu-avg",
+            "value": 8.9,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-points",
+            "value": 0.316,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-throughput",
+            "value": 3164.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-memory",
+            "value": 44.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-data-mb",
+            "value": 38,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-rss",
+            "value": 284.3,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cpu-avg",
+            "value": 73.1,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-points",
+            "value": 1.781,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-throughput",
+            "value": 5614.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-memory",
+            "value": 279,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-data-mb",
+            "value": 252.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-rss",
+            "value": 547.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cpu-avg",
+            "value": 93.3,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-points",
+            "value": 16.7,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-throughput",
+            "value": 5988,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-memory",
+            "value": 2836.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-data-mb",
+            "value": 2499.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-rss",
+            "value": 3280.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cpu-avg",
+            "value": 99.2,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-points",
+            "value": 0.072,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-throughput",
+            "value": 111.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-memory",
+            "value": -4.3,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-data-mb",
+            "value": 0.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-rss",
+            "value": 2504.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cores",
+            "value": 2,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cpu-avg",
+            "value": 22.9,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-points",
+            "value": 0.701,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-throughput",
+            "value": 1426.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-memory",
+            "value": -810,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-data-mb",
+            "value": 114,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-rss",
+            "value": 1689.5,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cpu-avg",
+            "value": 86.7,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-points",
+            "value": 4.755,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-throughput",
+            "value": 2103,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-memory",
+            "value": -360.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-data-mb",
+            "value": 771.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-rss",
+            "value": 1329.3,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cpu-avg",
+            "value": 98.2,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-points",
+            "value": 47.198,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-throughput",
+            "value": 2118.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-memory",
+            "value": 7572,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-data-mb",
+            "value": 7629.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-rss",
+            "value": 8852.8,
             "unit": "MB"
           },
           {
