@@ -50,7 +50,11 @@ dev = [
     "pytest-benchmark>=5.1.0",
     "psutil>=5.9.0",
     "pytest-memray>=1.8.0",
-    "ruff>=0.11.10",
+    # Pinned: the docstring-example linter validates against ruff's rules, so
+    # a floating ruff changes test outcomes (0.16.0's I001 flagged ~70
+    # previously-clean examples). No lockfile ships in this repo, so CI
+    # resolves dev deps fresh — see the CI-reproducibility issue.
+    "ruff==0.11.12",
     "ty>=0.0.2",
     "types-PyYAML>=6.0",
     "xlsxwriter>=3.2.9",

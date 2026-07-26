@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+from dataclasses import replace
 from difflib import get_close_matches
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -276,11 +277,26 @@ class Table:
         """
         self._name = name
 
-        # Normalize dimensions - convert strings to DataDimension objects
+        # Normalize dimensions - convert strings to DataDimension objects.
+        # The dict maps YOUR name -> SOURCE column name, so the source column
+        # is renamed to the dimension name during processing; lookup() kwargs
+        # then match the processed table's key columns (issue #30 — the
+        # shorthand previously discarded the dict key and the rename never
+        # happened).
         self._dimensions = {}
         for dim_name, dim_config in dimensions.items():
             if isinstance(dim_config, str):
-                self._dimensions[dim_name] = DataDimension(dim_config)
+                self._dimensions[dim_name] = DataDimension(
+                    dim_config, rename_to=dim_name
+                )
+            elif (
+                isinstance(dim_config, DataDimension)
+                and dim_config.rename_to is None
+                and dim_config.column != dim_name
+            ):
+                # An explicit DataDimension under a differing dict key gets the
+                # same rename; a user-set rename_to always wins.
+                self._dimensions[dim_name] = replace(dim_config, rename_to=dim_name)
             else:
                 self._dimensions[dim_name] = dim_config
 
@@ -557,7 +573,7 @@ class Table:
                 result[scenario_id] = Table(
                     name=f"{base_table._name}_{scenario_id}",
                     source=base_df.clone(),
-                    dimensions={name: name for name in base_table._dimensions},
+                    dimensions=base_table._reconstruction_dimensions(),
                     value=base_table._value,
                     validate=False,
                     metadata=base_table.metadata,
@@ -568,17 +584,39 @@ class Table:
                 for shock in shock_list:
                     table = table.with_shock(shock)
 
-                # Rename to include scenario ID
+                # Rename to include scenario ID. Reconstruction dims must come
+                # from the table whose PROCESSED frame is the source: after
+                # with_shock, an explicit rename_to has already collapsed to
+                # the dimension name.
                 result[scenario_id] = Table(
                     name=f"{base_table._name}_{scenario_id}",
                     source=table.to_dataframe(),
-                    dimensions={name: name for name in base_table._dimensions},
+                    dimensions=table._reconstruction_dimensions(),
                     value=base_table._value,
                     validate=False,
                     metadata=base_table.metadata,
                 )
 
         return result
+
+    def _reconstruction_dimensions(self) -> dict[str, str]:
+        """Dimensions spec that rebuilds this table from its PROCESSED frame.
+
+        Reconstruction (with_shock/from_shocks) feeds the processed DataFrame
+        back through the Table constructor, so each dimension key must point
+        at its PROCESSED column name — which differs from the key only when
+        an explicit ``DataDimension(rename_to=...)`` was used. The dict keys
+        (the lookup vocabulary) are preserved either way.
+        """
+        spec: dict[str, str] = {}
+        for dim_name, dim in self._dimensions.items():
+            if isinstance(dim, DataDimension):
+                spec[dim_name] = dim.rename_to or dim.column
+            else:
+                # Melt/Categorical/Computed dimensions surface their output
+                # column via `name`; fall back to the dict key.
+                spec[dim_name] = getattr(dim, "name", None) or dim_name
+        return spec
 
     def _process_data(self, source: str | Path | pl.DataFrame) -> None:
         """Process the data through dimension transformations and register with Rust.
@@ -933,11 +971,24 @@ class Table:
                 + f"\nRequired dimensions: {sorted(required)}",
             )
 
+        # Lookups always speak the user's dimension names (the dict keys).
+        # Processed key columns normally carry those names already (the
+        # shorthand rename), but an explicit DataDimension(rename_to=...) or
+        # a Melt/Categorical/Computed dimension whose `name` differs from its
+        # dict key gives the processed column another name — translate back.
+        col_to_dim = {}
+        for dim_name, dim in self._dimensions.items():
+            if isinstance(dim, DataDimension):
+                col_to_dim[dim.rename_to or dim.column] = dim_name
+            else:
+                col_to_dim[getattr(dim, "name", None) or dim_name] = dim_name
+
         # Build list of expressions in key column order
         key_exprs = []
         for col in key_columns:
-            if col in all_dimensions:
-                value = all_dimensions[col]
+            dim_key = col if col in all_dimensions else col_to_dim.get(col)
+            if dim_key is not None and dim_key in all_dimensions:
+                value = all_dimensions[dim_key]
                 if isinstance(value, str):
                     expr = pl.col(value)
                 elif isinstance(value, pl.Expr):
@@ -956,8 +1007,15 @@ class Table:
 
                 key_exprs.append(expr)
             else:
-                # This shouldn't happen due to validation above, but handle gracefully
-                raise ValueError(f"No value provided for key column '{col}'")
+                # Reachable when a dimension produces a processed column whose
+                # name differs from its lookup key (e.g. a custom Dimension
+                # with its own naming); tell the user both vocabularies.
+                msg = (
+                    f"No value provided for key column '{col}'. The processed "
+                    f"table's key columns are {key_columns}; the lookup "
+                    f"received {sorted(all_dimensions)}."
+                )
+                raise ValueError(msg)
 
         # Resolve the miss policy: per-lookup override beats the table default
         if on_missing is None:
@@ -1724,11 +1782,9 @@ class Table:
         shocked_name = name or f"{self._name}_shocked"
 
         # Create new Table with shocked data
-        # Recreate dimensions dict with string column names for constructor
-        new_dimensions = {
-            dim_name: dim.column_name if hasattr(dim, "column_name") else str(dim_name)
-            for dim_name, dim in self._dimensions.items()
-        }
+        # Recreate dimensions dict against the PROCESSED column names,
+        # preserving the lookup vocabulary (issue #30 review follow-up).
+        new_dimensions = self._reconstruction_dimensions()
 
         return Table(
             name=shocked_name,
