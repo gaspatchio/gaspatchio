@@ -621,26 +621,34 @@ class TestProspectiveValue:
         result = af.collect()
         pv = result["pv"][0]
 
-        # F4 Excel-alignment (BREAKING): default timing is "end_of_period" =
-        # ordinary annuity (Excel type=0). The annuity-due value at t is
-        #   due(t) = CF[t] + CF[t+1]*v[t] + CF[t+2]*v[t]*v[t+1] + ...
-        # and the ordinary value applies one extra per-period discount v[t]=1/(1+r[t]):
-        #   pv(t) = due(t) * v[t].
-        #   t=2: 100 / 1.06                                =  94.34
-        #   t=1: (100 + 100/1.05) / 1.05                   = 185.94
-        #   t=0: (100 + 100/1.04 + 100/(1.04*1.05)) / 1.04 = 276.66
+        # Default timing is "end_of_period" = ordinary annuity (Excel type=0):
+        # every cashflow slides one period out and carries ITS OWN period's
+        # discount, so
+        #   pv(t) = sum_{s>=t} CF[s] * prod_{u=t..s} v[u],  v[u] = 1/(1+r[u]).
+        # (due(t) * v[t] is only equivalent for constant rates — it discounts
+        # the whole tail by position t's factor.)
+        #   t=2: 100/1.06                                          =  94.34
+        #   t=1: 100/1.05 + 100/(1.05*1.06)                        = 185.09
+        #   t=0: 100/1.04 + 100/(1.04*1.05) + 100/(1.04*1.05*1.06) = 274.12
         assert len(pv) == 3
         assert pytest.approx(pv[2], abs=1e-2) == 100.0 / 1.06
-        assert pytest.approx(pv[1], abs=1e-2) == (100.0 + 100.0 / 1.05) / 1.05
-        expected_pv0 = (100.0 + 100.0 / 1.04 + 100.0 / (1.04 * 1.05)) / 1.04
+        assert pytest.approx(pv[1], abs=1e-2) == 100.0 / 1.05 + 100.0 / (1.05 * 1.06)
+        expected_pv0 = (
+            100.0 / 1.04 + 100.0 / (1.04 * 1.05) + 100.0 / (1.04 * 1.05 * 1.06)
+        )
         assert pytest.approx(pv[0], abs=1e-2) == expected_pv0
 
     def test_with_discount_factor(self):
-        """Test prospective_value with pre-computed discount factors."""
+        """Test prospective_value with pre-computed discount factors.
+
+        Contract: under the default end_of_period timing, discount_factor[t]
+        discounts the position-t cashflow (paid one period out) to the
+        valuation point, so the first factor is v = 1/1.05, not 1.0.
+        """
+        v = 1 / 1.05
         data = {
             "cashflow": [[100.0, 100.0, 100.0]],
-            # v^t factors at 5%: [1.0, 0.952381, 0.907029]
-            "v_t": [[1.0, 1 / 1.05, 1 / 1.05**2]],
+            "v_t": [[v, v**2, v**3]],
         }
         af = ActuarialFrame(data)
 
@@ -649,12 +657,13 @@ class TestProspectiveValue:
         result = af.collect()
         pv = result["pv"][0]
 
-        # With discount factors, the calculation uses the provided v^t directly.
-        # F4 Excel-alignment (BREAKING): default timing is "end_of_period" =
-        # ordinary annuity, so the last period's cashflow is discounted a full
-        # period: pv[2] = CF[2] * (v[2]/v[1]) = 100 * (1/1.05) = 95.238.
+        # Matches the discount_rate=0.05 ordinary-annuity values.
         assert len(pv) == 3
-        assert pytest.approx(pv[2], abs=1e-2) == 100.0 / 1.05
+        assert pytest.approx(pv[2], abs=1e-2) == 100.0 * v
+        assert pytest.approx(pv[1], abs=1e-2) == 100.0 * v + 100.0 * v**2
+        assert pytest.approx(pv[0], abs=1e-2) == (
+            100.0 * v + 100.0 * v**2 + 100.0 * v**3
+        )
 
     def test_timing_end_of_period(self):
         """Test prospective_value with end_of_period timing (benefits)."""
@@ -718,11 +727,11 @@ class TestProspectiveValue:
     def test_timing_beginning_of_period_with_list_rates(self):
         """Test beginning_of_period timing with per-period discount rates.
 
-        F4 Excel-alignment (BREAKING): with list rates the ordinary (end_of_period)
-        value applies one extra per-period discount v[t]=1/(1+r[t]) relative to the
-        annuity-due (beginning_of_period) value, so:
-            end_of_period[t] = beginning_of_period[t] * v[t]
-        (previously the labels were inverted).
+        With varying rates the two timings satisfy their canonical backward
+        recursions, each using that period's own discount v[t] = 1/(1+r[t]):
+            end_of_period:       eop(t) = (CF[t] + eop(t+1)) * v[t]
+            beginning_of_period: bop(t) = CF[t] + bop(t+1) * v[t]
+        (eop[t] == bop[t] * v[t] holds only for constant rates.)
         """
         data = {
             "premium": [[100.0, 100.0, 100.0]],
@@ -743,12 +752,17 @@ class TestProspectiveValue:
 
         # Per-period discount factors
         v = [1 / 1.04, 1 / 1.05, 1 / 1.06]
+        cf = [100.0, 100.0, 100.0]
 
-        # EOP (ordinary) = BOP (due) * v[t] at each time t; due is the larger value.
+        # Due is the larger value at every t.
         assert pv_bop[0] > pv_eop[0]
-        assert pytest.approx(pv_eop[0], abs=1e-2) == pv_bop[0] * v[0]
-        assert pytest.approx(pv_eop[1], abs=1e-2) == pv_bop[1] * v[1]
-        assert pytest.approx(pv_eop[2], abs=1e-2) == pv_bop[2] * v[2]
+        # Backward recursions with each period's own discount factor.
+        assert pytest.approx(pv_eop[2], abs=1e-9) == cf[2] * v[2]
+        assert pytest.approx(pv_eop[1], abs=1e-9) == (cf[1] + pv_eop[2]) * v[1]
+        assert pytest.approx(pv_eop[0], abs=1e-9) == (cf[0] + pv_eop[1]) * v[0]
+        assert pytest.approx(pv_bop[2], abs=1e-9) == cf[2]
+        assert pytest.approx(pv_bop[1], abs=1e-9) == cf[1] + pv_bop[2] * v[1]
+        assert pytest.approx(pv_bop[0], abs=1e-9) == cf[0] + pv_bop[1] * v[0]
 
     def test_timing_excel_convention_bop_gt_eop_exact(self):
         """Pin the Excel annuity convention with exact hand-computed values (F4).
@@ -843,6 +857,68 @@ class TestProspectiveValue:
         assert math.isnan(pv[0])
         assert math.isnan(pv[1])
         assert math.isnan(pv[2])
+
+    def test_discount_factor_input_matches_rate_input_constant(self):
+        """discount_factor input must reproduce the discount_rate result.
+
+        Contract: discount_factor[t] discounts a cashflow paid at the END of
+        period t to the valuation point, so its first element already includes
+        one period's discounting (v, not 1.0). Under that convention both
+        input forms agree for both timings.
+        """
+        v = 1.0 / 1.05
+        factors = {
+            # df[t] discounts the position-t cashflow AT ITS TIMING-DETERMINED
+            # INSTANT to the valuation point: beginning-of-period cashflows
+            # start undiscounted (df[0] = 1); end-of-period cashflows carry a
+            # full period of discounting from the start (df[0] = v).
+            "beginning_of_period": [1.0, v, v**2],
+            "end_of_period": [v, v**2, v**3],
+        }
+        for timing, dfs in factors.items():
+            af = ActuarialFrame(
+                {
+                    "cf": [[100.0, 100.0, 100.0]],
+                    "dfs": [dfs],
+                }
+            )
+            af.pv_rate = af.cf.projection.prospective_value(
+                discount_rate=0.05, timing=timing
+            )
+            af.pv_df = af.cf.projection.prospective_value(
+                discount_factor=af.dfs, timing=timing
+            )
+            out = af.collect()
+            rate_pv = out["pv_rate"][0].to_list()
+            df_pv = out["pv_df"][0].to_list()
+            assert df_pv == pytest.approx(rate_pv), timing
+
+    def test_discount_factor_input_matches_rate_input_varying(self):
+        """Same contract with per-period varying rates."""
+        r = [0.05, 0.03, 0.04]
+        vs = [1.0 / (1.0 + x) for x in r]
+        factors = {
+            "beginning_of_period": [1.0, vs[0], vs[0] * vs[1]],
+            "end_of_period": [vs[0], vs[0] * vs[1], vs[0] * vs[1] * vs[2]],
+        }
+        for timing, dfs in factors.items():
+            af = ActuarialFrame(
+                {
+                    "cf": [[100.0, 100.0, 100.0]],
+                    "rates": [r],
+                    "dfs": [dfs],
+                }
+            )
+            af.pv_rate = af.cf.projection.prospective_value(
+                discount_rate=af.rates, timing=timing
+            )
+            af.pv_df = af.cf.projection.prospective_value(
+                discount_factor=af.dfs, timing=timing
+            )
+            out = af.collect()
+            assert out["pv_df"][0].to_list() == pytest.approx(
+                out["pv_rate"][0].to_list()
+            ), timing
 
     def test_explicit_zero_beyond_term_gives_finite_pv(self):
         """The supported beyond-term pattern: zero the cashflows explicitly."""

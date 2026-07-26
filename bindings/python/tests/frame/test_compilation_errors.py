@@ -185,16 +185,14 @@ class TestCompilationErrorHandling:
     def test_compilation_error_fallback(self):
         """Test fallback when enhanced handling fails."""
         set_error_mode("enhanced")
-        
+
         af = ActuarialFrame(self.test_data, mode="debug")
-        
-        # Force a scenario where enhanced handling might fail
-        # by not having TracedOperations in the graph
-        af._computation_graph = [("bad", pl.col("missing"))]  # Tuple instead of TracedOperation
-        
+
+        # A lazily-failing operation through the real API; the graph is
+        # record-only so injected entries would never execute.
         with pytest.raises(pl.ColumnNotFoundError) as exc_info:
-            af.collect()
-        
+            af.with_columns(pl.col("missing").alias("bad")).collect()
+
         # Should still get basic error handling
         error_str = str(exc_info.value)
         assert "missing" in error_str or "not found" in error_str
