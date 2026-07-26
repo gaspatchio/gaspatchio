@@ -94,6 +94,29 @@ def _hash_processed_df(processed_df: pl.DataFrame) -> str:
     return f"sha256:{hashlib.sha256(buf.getvalue()).hexdigest()}"
 
 
+def _normalise_on_missing(value: str | float) -> tuple[str, float | None]:
+    """Validate an ``on_missing`` policy and split it into (mode, fill).
+
+    ``"raise"`` and ``"nan"`` pass through as modes; any real number becomes
+    the ``"fill"`` mode with that constant. Anything else is a ValueError.
+    """
+    if isinstance(value, str):
+        if value in {"raise", "nan"}:
+            return value, None
+        msg = (
+            "on_missing must be 'raise', 'nan', or a numeric fill value; "
+            f"got {value!r}"
+        )
+        raise ValueError(msg)
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return "fill", float(value)
+    msg = (
+        "on_missing must be 'raise', 'nan', or a numeric fill value; "
+        f"got {type(value).__name__}"
+    )
+    raise ValueError(msg)
+
+
 # Import LIB path for plugin calls
 try:
     from .. import _internal
@@ -124,6 +147,7 @@ class Table:
         validate: bool = True,
         metadata: dict[str, Any] | None = None,
         storage_mode: str = "auto",
+        on_missing: str | float = "raise",
     ):
         """Create a new assumption table.
 
@@ -151,6 +175,14 @@ class Table:
             metadata: Optional metadata dictionary to store with the table
             storage_mode: Storage backend - "auto" (default, chooses based on density),
                 "hash" (always use hash table), or "array" (prefer array indexing)
+            on_missing: What a lookup miss does - "raise" (default) errors at
+                collect() naming the table and the first missing keys; "nan"
+                returns NaN for missing keys (the pre-0.6 behaviour); a number
+                fills missing keys with that constant. Lookups are exact-match,
+                so a miss usually means a data or key-mapping defect. Note that
+                when/then/otherwise evaluates both branches, so a lookup guarded
+                by a condition still runs on the excluded rows - declare those
+                expected misses with on_missing="nan" on the lookup.
 
         Examples:
         --------
@@ -255,6 +287,7 @@ class Table:
         self._value = value
         self._validate = validate
         self._storage_mode = storage_mode
+        self._on_missing_mode, self._on_missing_fill = _normalise_on_missing(on_missing)
         self._df: pl.DataFrame | None = None
         self._schema: TableSchema | None = None
         # Store Enum types for string key columns to enable auto-categorical conversion.
@@ -712,6 +745,7 @@ class Table:
     def lookup(
         self,
         _dimensions: dict[str, str | pl.Expr | ColumnProxy] | None = None,
+        on_missing: str | float | None = None,
         **kwargs: str | pl.Expr | ColumnProxy,
     ) -> pl.Expr:
         """Create a lookup expression using dimension names.
@@ -743,6 +777,11 @@ class Table:
 
         Args:
             _dimensions: Optional dictionary mapping dimension names to columns/expressions
+            on_missing: Per-lookup override of the table's miss policy -
+                "raise", "nan", or a numeric fill constant. Defaults to the
+                policy set on the Table. Use on_missing="nan" for lookups
+                inside when/then/otherwise guards: both branches evaluate, so
+                guarded rows still run the lookup and their misses are expected.
             **kwargs: Dimension name to column/expression mapping
 
         Returns:
@@ -920,6 +959,12 @@ class Table:
                 # This shouldn't happen due to validation above, but handle gracefully
                 raise ValueError(f"No value provided for key column '{col}'")
 
+        # Resolve the miss policy: per-lookup override beats the table default
+        if on_missing is None:
+            miss_mode, miss_fill = self._on_missing_mode, self._on_missing_fill
+        else:
+            miss_mode, miss_fill = _normalise_on_missing(on_missing)
+
         # Create the actual plugin call to Rust lookup implementation
         # is_elementwise=True: each row's lookup depends only on that row's keys,
         # not on other rows. This enables the Polars streaming engine to process
@@ -928,7 +973,11 @@ class Table:
             plugin_path=LIB,
             function_name="lookup_by_table_and_hash",  # Must match #[polars_expr] function name
             args=key_exprs,
-            kwargs={"table_name": self._name},
+            kwargs={
+                "table_name": self._name,
+                "on_missing": miss_mode,
+                "fill_value": miss_fill,
+            },
             is_elementwise=True,
         )
 

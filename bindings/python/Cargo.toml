@@ -37,6 +37,12 @@ polars = { version = "0.53.0", features = [
     "dtype-categorical",
     "dtype-struct",
     "dtype-datetime",
+    # Narrow integer keys must round-trip the plugin boundary; without these
+    # a UInt8/UInt16 key column panics inside pyo3-polars deserialization.
+    "dtype-i8",
+    "dtype-i16",
+    "dtype-u8",
+    "dtype-u16",
     "parquet",
     "strings",
     "list_eval",

@@ -642,13 +642,17 @@ def main(
     )
 
     # Lookup surrender charge rate by duration_year and surr_charge_id.
-    # when() conditionally looks up — avoids NaN for policies without surrender charges.
+    # Polars evaluates BOTH branches of when/then/otherwise, so the lookup
+    # still runs for policies without a surrender schedule (null id). Those
+    # rows are expected misses discarded by the guard — declare that with
+    # on_missing="nan" so genuine misses on guarded rows stay visible.
     af.surr_charge_rate = (
         when(af.has_surr_charge)
         .then(
             surrender_charges.lookup(
                 duration=af.duration_year_capped,
                 surr_charge_id=af.surr_charge_id,
+                on_missing="nan",
             )
         )
         .otherwise(0.0)

@@ -96,25 +96,28 @@ impl ArrayStorage {
         // Fill from DataFrame
         let value_series = df.column(value)?.f64()?;
 
+        let mut occupied = vec![false; capacity];
         for row_idx in 0..n_rows {
             // Encode each key to index
             let mut linear_idx = 0usize;
-            let mut valid = true;
 
             for (i, key_name) in keys.iter().enumerate() {
                 let av = df.column(key_name)?.get(row_idx)?;
-                if let Some(idx) = encoders[i].encode(av) {
-                    linear_idx += idx as usize * strides[i];
-                } else {
-                    valid = false;
-                    break;
-                }
+                let Some(idx) = encoders[i].encode(av) else {
+                    return Err(polars_err!(ComputeError:
+                        "null or unencodable key value in column '{}' at source row {} while building table",
+                        key_name, row_idx));
+                };
+                linear_idx += idx as usize * strides[i];
             }
 
-            if valid {
-                let v = value_series.get(row_idx).unwrap_or(f64::NAN);
-                data[linear_idx] = v;
+            if occupied[linear_idx] {
+                return Err(polars_err!(ComputeError:
+                    "Duplicate key combination at source row {} while building table (an earlier row has the same keys). Deduplicate the source or fix the dimension mapping.",
+                    row_idx));
             }
+            occupied[linear_idx] = true;
+            data[linear_idx] = value_series.get(row_idx).unwrap_or(f64::NAN);
         }
 
         log::debug!(
