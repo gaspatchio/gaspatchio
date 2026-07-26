@@ -1,0 +1,48 @@
+name: Bug report
+description: Something produced a wrong number, an error, or unexpected behaviour
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If you work at an insurer and cannot post code or
+        assumption values publicly, you can email the same report privately to
+        **security@opioinc.com** instead — see
+        [SECURITY.md](https://github.com/gaspatchio/gaspatchio/blob/main/SECURITY.md)
+        for how we anonymise private reports.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you run, and what went wrong? Wrong numbers matter as much as crashes — say which values you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproducible example
+      description: The smallest script that shows the problem. Synthetic data is fine — neutral column names and made-up rates reproduce most bugs.
+      render: python
+    validations:
+      required: false
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What you expected instead (a value, an error message, a shape).
+    validations:
+      required: false
+  - type: input
+    id: gaspatchio-version
+    attributes:
+      label: Gaspatchio version
+      placeholder: e.g. 0.5.3 (from pip show gaspatchio)
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and operating system
+      placeholder: e.g. Python 3.12, Windows 11
+    validations:
+      required: false

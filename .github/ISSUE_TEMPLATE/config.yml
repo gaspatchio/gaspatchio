@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report privately by email
+    url: https://github.com/gaspatchio/gaspatchio/blob/main/SECURITY.md
+    about: >-
+      Can't post code or assumption values publicly? Email any bug to
+      security@opioinc.com — we open an anonymised public issue with a
+      rewritten reproduction and keep your details out of it.
