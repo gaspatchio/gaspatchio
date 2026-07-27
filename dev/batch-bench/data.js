@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784532729536,
+  "lastUpdate": 1785138497489,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Batch Search": [
@@ -200,6 +200,73 @@ window.BENCHMARK_DATA = {
           {
             "name": "Batch Search/100K-10sc-auto-peak",
             "value": 4825,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Matt Wright",
+            "username": "mrmattwright",
+            "email": "1277725+mrmattwright@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "e4d56ffbf66afaf6eedf366d53a4c3e9a676a8cd",
+          "message": "Issue-tracking scheme: triage labels, templates, release notes, public roadmap policy (#34)\n\n* chore(github): issue templates with auto-triage labels and release-notes config\n\nBug reports now open with bug + needs-triage applied automatically, and the\ntemplate points insurer-employed reporters at the private email intake from\nSECURITY.md. release.yml gives auto-generated release notes keyed off PR\nlabels (bug / enhancement / documentation), with ignore-for-release as the\nopt-out.\n\n* docs: public roadmap policy and bug-lifecycle trail\n\nDocuments the label lifecycle a reporter can watch (needs-triage -> confirmed\n-> pending-release -> released via milestone) and the placeholder-issue model\nfor larger features (roadmap + exploring/building/shipped), including the\ncomment-before-building note for contributors and a non-commitment disclaimer.",
+          "timestamp": "2026-07-26T22:20:08Z",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/e4d56ffbf66afaf6eedf366d53a4c3e9a676a8cd"
+        },
+        "date": 1785138496733,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Batch Search/1K-100sc-auto-wall",
+            "value": 30.437,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-100sc-auto-peak",
+            "value": 790.8,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/1K-100sc-checksum",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-wall",
+            "value": 459.551,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-peak",
+            "value": 490.5,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-wall",
+            "value": 213.597,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-peak",
+            "value": 973.4,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-wall",
+            "value": 206.024,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-peak",
+            "value": 4644,
             "unit": "MB"
           }
         ]
