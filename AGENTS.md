@@ -4,6 +4,30 @@ High-performance actuarial modeling framework: Python API backed by Rust/Polars.
 
 ---
 
+## Principles — read these first
+
+The north star. Full text: [`PRINCIPLES.md`](PRINCIPLES.md) · published at
+<https://gaspatchio.dev/principles/>. These are positions, not selling points — the choices
+made and the alternatives rejected. **Justify design decisions and bug-triage verdicts against
+them by name.**
+
+| Principle | In one line |
+|-----------|-------------|
+| **Meet you where you are** | Accept tables, formulas, and conventions in the shape the user already has. The framework reshapes itself to you, not the other way round. |
+| **Closed-form by default** | Cumulative products, powers, linear recurrences — not recursive cell-graphs. Escalate to state-machine rollforward only when within-period charges depend on the running balance. |
+| **Optimize for the laptop** | 100K policies in seconds on the machine on your desk. An edit-run-refine loop past a few seconds is a bug; drop a capability before loosening the loop. |
+| **Audit by default** | Expression lineage on every output column; `source_sha()`/`fingerprint()` on every Schedule, Table, Curve, MortalityTable, and compiled rollforward. Auditable by construction, not by separate workflow. |
+| **LLM-shaped from the inside out** | User + LLM is the design target, not a retrofit. Docs, error messages, and the `gspio docs`/`gspio knowledge` CLI retrieval surface all exist in that shape deliberately. |
+| **Sharp knives, no magic** | Expose primitives, the user composes them, the composition is visible in plain Python. When the composition is wrong, **refuse to run** rather than silently fill in a fallback. |
+| **No vendor lock-in** | Calculation in code, data in Polars/Parquet, model file in Python. The model moves with the user between employers, auditors, and regulators. |
+
+**The tension you will hit most:** *Meet you where you are* pulls toward accepting whatever the
+user wrote; *Sharp knives, no magic* pulls toward refusing anything ambiguous. The resolution:
+**be liberal about the shapes you accept, be strict about the meanings you infer.** A clear error
+naming the ambiguity and the fix beats both silently guessing and failing opaquely.
+
+---
+
 ## Core Concept: ActuarialFrame
 
 An `ActuarialFrame` wraps a Polars DataFrame. Columns are either **scalar** (one value per policy) or **list** (one value per projection period). Arithmetic between scalar and list columns broadcasts automatically.
