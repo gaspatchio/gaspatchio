@@ -271,9 +271,18 @@ at once via `CLAUDE.md`.
 
 ## Build & test
 
+**Every Python command runs from `bindings/python`** — that is where the Python project and
+its lockfile live. There is no Python project at the repository root; running `uv` there
+resolves nothing useful (and in a multi-repo checkout it can pick up a workspace spanning
+sibling repositories). The repository-root `pyproject.toml` exists only to declare that
+boundary.
+
+`uv.lock` is tracked. Install with `--locked` so your environment matches CI exactly; if you
+intend to move a dependency, run `uv lock` and commit the result with your change.
+
 ```bash
-# Install workspace dependencies
-uv sync
+# Install Python dependencies (exact pinned versions)
+cd bindings/python && uv sync --locked
 
 # Build the Rust extension after Rust changes
 cd bindings/python && maturin build -uv

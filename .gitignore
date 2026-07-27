@@ -90,8 +90,15 @@ bindings/python/gaspatchio_core/tutorials/**/gaspatchio_audit/
 /evals/benchmarks/aggregated_results/
 /evals/benchmarks/batch_search_results/
 
-# uv lockfile — dev/CI resolves fresh via `uv sync`; not tracked (matches the core repo).
-# Distribution is via the built wheel, whose deps come from pyproject.toml, so consumers
-# never see this file. Commit it deliberately (with CI `uv sync --frozen`) if you later
-# want pinned/reproducible dev environments.
-/bindings/python/uv.lock
+# Artifact of the repository-root workspace boundary in ./pyproject.toml: any uv command
+# run from the repository root writes an empty 3-line lockfile here. It is meaningless —
+# the real lockfile is bindings/python/uv.lock, tracked, below.
+/uv.lock
+
+# uv lockfile IS tracked (bindings/python/uv.lock) — deliberately, see GSP issue #33.
+# Resolving dev dependencies fresh on every CI run made unrelated PRs fail: ruff floated
+# to 0.16.0 on 2026-07-25 and its changed I001 behaviour broke ~70 docstring-example tests
+# on a PR that touched none of them. CI installs with `uv sync --locked`, so a PR's result
+# depends only on its own diff. Distribution is still via the built wheel, whose deps come
+# from pyproject.toml — consumers never see this file.
+# To take a new dependency version: run `uv lock` and commit the result as part of the PR.

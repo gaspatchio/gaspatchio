@@ -72,7 +72,9 @@ jobs:
           key: ${{ runner.os }}-maturin-dev-${{ hashFiles('**/Cargo.lock', 'bindings/python/**/*.rs', 'core/src/**/*.rs') }}
           # No restore-keys — stale caches with missing Rust functions cause test failures
       - name: Install Python dependencies and build extension
-        run: uv sync
+        # --locked: install exactly what bindings/python/uv.lock pins and fail if it is
+        # stale, so a PR's test result depends only on its own diff (GSP issue #33).
+        run: uv sync --locked
         working-directory: bindings/python
       - name: Run Python tests
         run: uv run pytest -v
@@ -228,7 +230,7 @@ jobs:
           lfs: true
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Run skill structure tests
         run: uv run pytest ../../tests/skills/ -v
       - name: Skill manifests in sync (generated, no drift)
@@ -247,7 +249,7 @@ jobs:
           lfs: true
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Run tutorial base models
         run: |
           for model_file in ../../tutorial/level-*/base/model.py; do
