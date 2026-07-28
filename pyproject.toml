@@ -1,0 +1,20 @@
+# Workspace-only configuration — there is no Python project at the repository root.
+#
+# Purpose: stop uv walking *up* out of this repository. Without this file, uv searches
+# parent directories for a workspace root and, in a local multi-repo checkout, finds one
+# that spans several sibling repositories. Resolving those together can fail on pins that
+# have nothing to do with gaspatchio, so `uv run ...` from the repository root died with a
+# confusing cross-repository dependency error. AGENTS.md documents the CLI as bare
+# `uv run gspio ...`, so that error is the first thing a new contributor or coding agent
+# hits. This file makes the repository behave identically whatever sits above it on disk.
+#
+# bindings/python is deliberately excluded rather than made a member: as a member, uv
+# would move the environment and lockfile to the repository root, orphaning the tracked
+# bindings/python/uv.lock and forcing every contributor into a full Rust rebuild. The
+# Python project stays self-contained, and its lockfile stays where CI expects it.
+#
+# Run Python commands from bindings/python — see the CLI section of AGENTS.md.
+
+[tool.uv.workspace]
+members = []
+exclude = ["bindings/python"]

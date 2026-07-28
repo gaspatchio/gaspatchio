@@ -26,3 +26,11 @@ reason = "quick-xml is transitive via object_store <- polars 0.53; the fix (0.41
 [[IgnoredVulns]]
 id = "RUSTSEC-2026-0195"
 reason = "quick-xml, same root cause and remediation path as RUSTSEC-2026-0194 (transitive via object_store <- polars 0.53, fix in 0.41.0 blocked by the pyo3-polars version-lock; remote-cloud XML parsing path is unused). Revisit when polars/pyo3-polars advance."
+
+# Python advisories became visible for the first time when bindings/python/uv.lock
+# started being tracked (issue #33). Before that the PR scanner had no Python
+# lockfile to read and reported nothing — the risk was not new, only unmeasured.
+
+[[IgnoredVulns]]
+id = "GHSA-9xwg-3r6f-jcx2"
+reason = "pymdown-extensions path traversal in the `b64` extension: an <img src> containing '../' escapes base_path and inlines the target file as base64. Fixed in 11.0.0, which is unreachable — pymdown-extensions is transitive via marimo, and marimo 0.23.13 pins pymdown-extensions>=10.21.2,<11. It reaches us only through the optional `recipes` extra, so it is absent from the published wheel's runtime closure, and exploitation additionally requires the `b64` extension to be enabled over attacker-controlled markdown, which gaspatchio never renders. Revisit when marimo relaxes its <11 cap (then bump and drop this entry)."

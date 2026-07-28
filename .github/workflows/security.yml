@@ -25,7 +25,12 @@ jobs:
       # so skip SARIF upload. The scan itself still runs and fails on any
       # new vulnerability introduced by the PR.
       upload-sarif: false
+      # --config makes osv-scanner.toml apply to EVERY scanned lockfile. Without
+      # it the scanner resolves config per scanned file's own directory, so the
+      # root osv-scanner.toml covered Cargo.lock but not bindings/python/uv.lock,
+      # and Python ignores were silently reported as "unused ignores".
       scan-args: |-
+        --config=osv-scanner.toml
         -r
         ./
 
@@ -34,6 +39,8 @@ jobs:
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
     with:
       upload-sarif: false
+      # Keep in sync with scan-pr above — see the --config note there.
       scan-args: |-
+        --config=osv-scanner.toml
         -r
         ./

@@ -143,7 +143,7 @@ jobs:
           lfs: true
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync --no-dev
+        run: uv sync --locked --no-dev
       - name: Generate 100K model points
         run: uv run --no-dev python ../../evals/benchmarks/generate_model_points.py
       - name: Run model benchmarks
@@ -184,7 +184,7 @@ jobs:
           lfs: true  # L4 tutorial model points + assumptions are git-LFS
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Run aggregation-surface benchmarks (baseline vs run_aggregated vs spill)
         run: uv run python ../../evals/benchmarks/run_aggregated_benchmarks.py | tee /tmp/aggregated-bench-output.json
       - name: Clean working tree for gh-pages push
@@ -251,7 +251,7 @@ jobs:
         working-directory: .
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies (with lifelib)
-        run: uv sync --no-dev --group benchmark
+        run: uv sync --locked --no-dev --group benchmark
       - name: Generate model points (all scales)
         run: uv run --no-dev python ../../evals/benchmarks/generate_model_points.py
       - name: Run comparison benchmarks
@@ -312,7 +312,7 @@ jobs:
           lfs: true
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync --no-dev
+        run: uv sync --locked --no-dev
       - name: Generate model points (incl. 100K L5)
         run: uv run --no-dev python ../../evals/benchmarks/generate_model_points.py
       - name: Run scenario benchmarks
@@ -352,7 +352,7 @@ jobs:
           lfs: true
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Generate model points (incl. 100K L5)
         run: uv run python ../../evals/benchmarks/generate_model_points.py
       - name: Run batch-search benchmark (auto-search throughput + in-mem floor)
@@ -393,7 +393,7 @@ jobs:
           lfs: true
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Run stochastic showcase (1000 scenarios)
         run: uv run python ../../evals/benchmarks/run_scenario_showcase.py
       - name: Render showcase chart
@@ -425,7 +425,7 @@ jobs:
           lfs: true  # L4 base model points + assumptions are git-LFS
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Sweep run_aggregated batch size (1K..1M ladder + 10M auto — bounded seed)
         run: >-
           uv run python
@@ -456,7 +456,7 @@ jobs:
           lfs: true
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: uv sync --group evals
+        run: uv sync --locked --group evals
       - name: Run evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

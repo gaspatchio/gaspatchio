@@ -32,7 +32,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Install workspace + pip-licenses
         run: |
-          uv sync
+          uv sync --locked
           uv pip install pip-licenses
       - name: Resolve runtime closure
         run: |
