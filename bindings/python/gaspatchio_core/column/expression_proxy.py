@@ -138,6 +138,13 @@ class ExpressionProxy:
         # Use the dispatch system to handle list column shimming
         return self.pow(other)
 
+    def __neg__(self) -> ExpressionProxy:
+        """Unary negation operator."""
+        # Multiply by -1 rather than deferring to Polars' `neg`, which has no
+        # list kernel; `mul` goes through the dispatch system that handles list
+        # column shimming.
+        return self.mul(-1.0)
+
     # Comparison operators
     def __eq__(self, other: object) -> ConditionExpression:  # type: ignore[override]
         """Equality comparison.
