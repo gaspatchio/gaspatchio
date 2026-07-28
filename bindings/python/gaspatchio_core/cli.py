@@ -587,6 +587,20 @@ class DimensionDetail(BaseModel):
     numeric_pattern: str | None = None
 
 
+class ListColumnDetail(BaseModel):
+    """A per-period list column — projection output, never a lookup key.
+
+    Reported separately from ``detected_dimensions`` so an agent reading this
+    payload cannot mistake a per-period column for something it can key a
+    ``Table.lookup()`` on.
+    """
+
+    name: str
+    inner_dtype: str
+    min_length: int
+    max_length: int
+
+
 class InterpolationDetail(BaseModel):
     """Interpolation opportunity for a dimension."""
 
@@ -616,6 +630,7 @@ class DescribeResponse(BaseModel):
     suggested_code: str
     overflow_candidate: str | None = None
     interpolation_hints: list[InterpolationDetail] = []
+    list_columns: list[ListColumnDetail] = []
 
 
 def _detect_table_structure(df: pl.DataFrame) -> tuple[str, dict[str, str]]:
@@ -761,12 +776,27 @@ def describe(
                 "Supported types: .parquet, .csv, .xlsx, .xls",
             )
 
+        # A file carrying list columns is projection output, not an assumption
+        # table: assumption-table storage cannot key on List dtypes, so routing
+        # those columns through table-structure detection surfaced a Rust
+        # storage error ("Unsupported key type for array storage") for what is
+        # the documented way to read back a model's own results (#40).
+        # Summarise them separately and analyse only the scalar columns.
+        list_columns = [
+            name for name, dtype in df.schema.items() if isinstance(dtype, pl.List)
+        ]
+        scalar_df = df.drop(list_columns) if list_columns else df
+
         # Analyze table structure
-        table_shape = _analyze_table_shape(df)
+        table_shape = _analyze_table_shape(scalar_df)
 
         # Detect or use provided value column
         if value_column is None:
-            detected_value_column, dimensions = _detect_table_structure(df)
+            if scalar_df.width == 0:
+                # Nothing but list columns — there is no value column to find.
+                detected_value_column, dimensions = "", {}
+            else:
+                detected_value_column, dimensions = _detect_table_structure(scalar_df)
         else:
             if value_column not in df.columns:
                 available_cols = ", ".join(df.columns)
@@ -775,13 +805,20 @@ def describe(
                     f"Available columns: {available_cols}",
                 )
             detected_value_column = value_column
-            dimensions = {col: col for col in df.columns if col != value_column}
+            dimensions = {
+                col: col for col in scalar_df.columns if col != value_column
+            }
 
         if json_output:
             from .assumptions._analysis import analyze_table
 
             # Run rich analysis
-            analysis = analyze_table(df, detect_overflow=True, detect_interpolation=True)
+            # Analyse scalar columns only: a per-period list column is not a
+            # dimension, and reporting it as one told agents to key a lookup
+            # on it (#40).
+            analysis = analyze_table(
+                scalar_df, detect_overflow=True, detect_interpolation=True
+            )
 
             # Determine if this looks like model points vs assumption table
             # Model points: many columns, no clear value column, has ID-like columns
@@ -861,6 +898,15 @@ def describe(
                 suggested_code=suggested_code,
                 overflow_candidate=analysis.overflow_candidate,
                 interpolation_hints=interp_hints,
+                list_columns=[
+                    ListColumnDetail(
+                        name=name,
+                        inner_dtype=str(df.schema[name].inner),
+                        min_length=int(df[name].list.len().min() or 0),
+                        max_length=int(df[name].list.len().max() or 0),
+                    )
+                    for name in list_columns
+                ],
             )
             print(response.model_dump_json(indent=2))
             return
@@ -880,6 +926,42 @@ def describe(
         console.print("\n[bold]Detected Structure:[/bold]")
         console.print(f"Value column: [green]{detected_value_column}[/green]")
         console.print(f"Key columns: {', '.join(dimensions.keys())}")
+
+        if list_columns:
+            console.print("\n[bold]List Columns (per-period values):[/bold]")
+            for name in list_columns:
+                inner = df.schema[name].inner
+                lengths = df[name].list.len()
+                console.print(
+                    f"  [green]{name}[/green]  list[{inner}]  "
+                    f"lengths {lengths.min()}-{lengths.max()}",
+                )
+            console.print(
+                "\n[yellow]This file contains list columns, so it is projection "
+                "output rather than an assumption table.[/yellow]",
+            )
+            console.print(
+                "The structure above describes only its scalar columns.",
+            )
+            # Stop here rather than suggesting assumption-table code for a
+            # results file: the Table example would not run, and registration
+            # cannot succeed on List dtypes.
+            console.print("\n[bold]Code Example:[/bold]")
+            list_cols_repr = ", ".join(f'"{name}"' for name in list_columns)
+            console.print(
+                f"""```python
+import polars as pl
+
+df = pl.read_parquet("{file_path}")
+
+# Per-period columns, one list per policy: {list_cols_repr}
+df.select(pl.col({list_cols_repr}).list.len().alias("n_periods")).head()
+
+# Explode one to inspect it period by period
+df.select("{list_columns[0]}").explode("{list_columns[0]}").head(12)
+```""",
+            )
+            return
 
         # Generate code example
         console.print("\n[bold]Code Example:[/bold]")
@@ -921,7 +1003,10 @@ print(table.describe())
 
         console.print(code_example)
 
-        # Try to create a table for detailed analysis
+        # Try to create a table for detailed analysis. Unreachable for files
+        # with list columns — those return above, because registration cannot
+        # succeed on List dtypes and letting it fail leaked a storage-layer
+        # message that read like a data problem.
         try:
             from .assumptions import Table
 
