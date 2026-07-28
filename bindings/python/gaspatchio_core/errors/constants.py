@@ -38,7 +38,15 @@ COMMON_VALIDATION_VALUES = {
     "frequencies": ["monthly", "quarterly", "semi-annual", "annual", "daily", "weekly"],
     
     # Projection end types
-    "projection_end_types": ["maximum_age", "term_years", "term_months", "fixed_date"],
+    # Values accepted by `projection.set(until=...)` — keep in sync with the
+    # Literal in accessors/projection_frame.py.
+    "projection_end_types": [
+        "maximum_age",
+        "term_years",
+        "term_months",
+        "fixed_date",
+        "next_anniversary",
+    ],
     
     # Common durations
     "duration_units": ["days", "months", "years", "hours", "minutes", "seconds"],

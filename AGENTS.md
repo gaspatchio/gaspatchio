@@ -144,7 +144,7 @@ Let Polars handle parallelization. Never add Rayon or threading inside plugins.
 | # | Gotcha | What Goes Wrong |
 |---|--------|-----------------|
 | 1 | Arithmetic-masking blends in conditional code | Old workaround for a fixed limitation -- `when/then/otherwise` now handles mixed scalar/list branches |
-| 2 | `projection_end_value=99` | Truncates final year; use 100 (off-by-one is catastrophic, ~3% BEL gap) |
+| 2 | `until_value=99` | Truncates final year; use 100 (off-by-one is catastrophic, ~3% BEL gap) |
 | 3 | `python3` instead of `uv run python3` | `ModuleNotFoundError: No module named 'polars'` |
 | 4 | `--policy-id` flag | Policy ID is positional. `--policy-id-column` is a different thing |
 | 5 | Hand-rolled exp/log identity for `scalar ** list` | `**` works directly on list columns now -- write it as the operator |
@@ -174,11 +174,11 @@ def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
     af = ActuarialFrame(mp)
 
     # --- PHASE 2: Projection timeline ---
-    af = af.date.create_projection_timeline(
+    af = af.projection.set(
         valuation_date=datetime.date(2025, 1, 1),
-        projection_end_type="maximum_age",
-        projection_end_value=100,   # NOT 99
-        projection_frequency="monthly",
+        until="maximum_age",
+        until_value=100,   # NOT 99
+        frequency="monthly",
     )
 
     # --- PHASE 3: Calculations (lazy -- NO .collect() from here) ---

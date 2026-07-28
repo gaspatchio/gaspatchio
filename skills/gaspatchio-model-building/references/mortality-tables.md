@@ -146,7 +146,7 @@ m = MortalityTable(
     select_period=SELECT_PERIOD,
 )
 
-# In a model — duration is a list column after create_projection_timeline:
+# In a model — duration is a list column after projection.set():
 af.qx = m.at(age=af["attained_age"], duration=af["duration"])
 ```
 
