@@ -94,6 +94,36 @@ af.mort_rate = mort.lookup(age=af.attained_age, duration=af.duration)
 
 ---
 
+## Timing Conventions
+
+Several methods take a **timing convention**, and it is a choice you make, not a default to
+ignore. Getting it wrong is a silent valuation error, not a crash — and **with constant rates
+both conventions give identical answers**, so the mistake survives testing and only appears
+once rates vary (at age boundaries, or on a real curve).
+
+**The two defaults are opposite. Check, don't assume:**
+
+| Method | Parameter | Default |
+|--------|-----------|---------|
+| `.projection.prospective_value()` | `timing` | `"end_of_period"` |
+| `.projection.cumulative_survival()` | `rate_timing` | `"beginning_of_period"` |
+
+- **`prospective_value(timing=...)`** — whether a period's cashflow lands at the beginning or
+  the end of that period. Benefits are usually end-of-period, premiums beginning-of-period.
+- **`cumulative_survival(rate_timing=...)`** — whether the decrement at period *t* has already
+  been applied. `"beginning_of_period"` gives `[1.0, tpx[0], tpx[0]*tpx[1], ...]`;
+  `"end_of_period"` gives `[tpx[0], tpx[0]*tpx[1], ...]` and matches Excel-style timing.
+- **Discount factors are timing-anchored.** If you pass `discount_factor=` rather than
+  `discount_rate=`, the factors must be built on the same convention you asked for. Under
+  varying (per-period) rates the two are **not** related by a single multiplication — each
+  cashflow carries its own compounded factor.
+
+Run `uv run gspio docs "prospective_value"` for the full contract. When reconciling against a
+reference model, confirm its timing convention before assuming a difference is an assumption
+error.
+
+---
+
 ## CLI Reference
 
 **All commands require `uv run`.** The system Python does not have gaspatchio or polars.
