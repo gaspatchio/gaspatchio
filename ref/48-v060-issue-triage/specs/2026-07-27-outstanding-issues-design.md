@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-27
 **Status:** approved, ready for planning
-**Target release:** v0.6.0 (single release, ~2 days)
+**Target release:** v0.6.0 — a single release carrying every fix, cut when the work is done
+rather than to a date
 **Supersedes nothing.** Continues the cycle of `ref/47-post-release-cleanup/` one release on.
 
 ---
@@ -321,7 +322,8 @@ to the correct one; an unattributable error passes through byte-identical.
 
 ## 5. Sequencing
 
-Five pull requests, ordered so certain work banks early and risk sits last.
+Five pull requests. **The release is cut when the work is done, not to a date** — every fix
+below ships in v0.6.0, and nothing is pre-designated to drop.
 
 | PR | Contents | Risk |
 |---|---|---|
@@ -329,15 +331,23 @@ Five pull requests, ordered so certain work banks early and risk sits last.
 | 2 — lookup boundary | #37 | low |
 | 3 — period index | #36 | medium |
 | 4 — curve extrapolation | #31 | medium |
-| 5 — error attribution | #39 | **high** |
+| 5 — error attribution | #39 | high |
 
-**#39 is the designated casualty.** If the window proves optimistic it is the item that drops:
-it is an auditability improvement, not a wrong-number bug, so the release still honours what
-was promised. Everything above it either is trivially safe or fixes a number.
+The ordering is still cheapest-and-most-certain first, but for a different reason now that
+there is no deadline: PRs 1 and 2 touch surfaces that PRs 3–5 also touch (AGENTS.md examples,
+the lookup error path), so landing them first means the harder work rebases onto corrected
+foundations rather than the other way round.
+
+**#39 is no longer at risk.** An earlier draft designated it the item to drop if a two-day
+window proved optimistic. That constraint was lifted: the decision is to include every fix and
+take the time. #39 is the one item whose cost cannot be estimated before starting — it must
+work backwards from an error surfacing at the end of a lazy chain to the assignment that
+caused it — so it is scheduled last to keep that uncertainty off the critical path, not
+because it is expendable.
 
 Seven of the eight fixes are from the field report (#35, #36, #37, #38, #39, #40, #42); #31
-and #33 came from the internal audit. If #39 slips, exactly one of the reporter's thirteen
-findings misses v0.6.0, and it is the mildest.
+and #33 came from the internal audit. All thirteen of the reporter's findings are therefore
+resolved or deferred-with-a-tracking-issue by the time v0.6.0 ships.
 
 ---
 
@@ -400,8 +410,8 @@ argued against the principles by name.
 
 | Risk | Mitigation |
 |---|---|
-| #39 attribution is harder than the graph suggests | Fallback to the unmodified error; drop from the release if it does not converge |
+| #39 attribution is harder than the graph suggests | Fallback to the unmodified error; scheduled last so the unknown sits off the critical path |
 | #36 `month` semantics at non-monthly frequencies | Defined as *elapsed months*, so the name stays honest; covered by tests at three frequencies |
 | #36 collides with existing user columns | Raise rather than overwrite |
 | #31 long-end change surprises a reconciliation | Both modes shipped; migration note leads the release |
-| Two-day window slips | PR order is the priority order; #39 drops first, #36 second |
+| Release date slips while two breaking changes sit unreleased | Accepted deliberately: the decision is one complete release over an early partial one. Mitigated by telling the field reporter directly that #24 and #28 are coming and what they change (§7) |
