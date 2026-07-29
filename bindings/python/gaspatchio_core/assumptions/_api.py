@@ -780,7 +780,55 @@ class Table:
             logger.error(f"Failed to register table '{self._name}' with Rust: {e}")
             raise
 
-    def lookup(
+    def _reject_unresolvable_string_keys(
+        self,
+        all_dimensions: dict[str, Any],
+    ) -> None:
+        """Raise when a bare-string dimension value names no column on the frame.
+
+        A bare string is read as a **column name**, following Polars. We do not
+        guess the other way: inferring a literal from a bare string would be
+        magic, and would silently change behaviour for anyone legitimately
+        passing a column name. But the resulting ``ColumnNotFoundError`` arrives
+        at ``collect()`` naming only the string, which points away from the
+        mistake — so when the frame is reachable, say what actually happened
+        here, at the call site.
+
+        The frame is reachable whenever at least one dimension value is a
+        ``ColumnProxy``. With no proxy among the values there is no schema to
+        check against, and the deferred error stands.
+        """
+        # Duck-typed, matching how this module already recognises proxies
+        # (`hasattr(value, "_to_expr")` below): ColumnProxy is annotation-only
+        # here and importing it at runtime would be a circular import.
+        frame = next(
+            (
+                value._parent
+                for value in all_dimensions.values()
+                if hasattr(value, "_to_expr") and hasattr(value, "_parent")
+            ),
+            None,
+        )
+        if frame is None:
+            return
+
+        try:
+            available = list(frame.columns)
+        except Exception:  # diagnostics must never break a lookup
+            return
+
+        for dim_name, value in all_dimensions.items():
+            if isinstance(value, str) and value not in available:
+                msg = (
+                    f"Table {self._name!r}, dimension {dim_name!r}: {value!r} was "
+                    f"read as a column name and no such column exists.\n"
+                    f'  • for a literal value:  {dim_name}=pl.lit("{value}")\n'
+                    f'  • for a column:         {dim_name}=af["{value}"]\n'
+                    f"Columns on the frame: {', '.join(available) or 'none'}"
+                )
+                raise ValueError(msg)
+
+    def lookup(  # noqa: PLR0915
         self,
         _dimensions: dict[str, str | pl.Expr | ColumnProxy] | None = None,
         on_missing: str | float | None = None,
@@ -932,6 +980,8 @@ class Table:
         if _dimensions:
             all_dimensions.update(_dimensions)
         all_dimensions.update(kwargs)
+
+        self._reject_unresolvable_string_keys(all_dimensions)
 
         if self._validate:
             self.validate_lookup(**all_dimensions)
