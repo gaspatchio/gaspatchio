@@ -804,6 +804,16 @@ def describe(
                     f"Value column '{value_column}' not found. "
                     f"Available columns: {available_cols}",
                 )
+            if value_column in list_columns:
+                # A per-period list is projection output, never an
+                # assumption-table value. Validating against `df` alone would
+                # accept it and then report it as one.
+                raise typer.BadParameter(
+                    f"Value column '{value_column}' is a list column "
+                    f"(per-period projection output), which cannot be an "
+                    f"assumption-table value. Scalar columns available: "
+                    f"{', '.join(scalar_df.columns) or 'none'}",
+                )
             detected_value_column = value_column
             dimensions = {
                 col: col for col in scalar_df.columns if col != value_column
@@ -843,15 +853,32 @@ def describe(
                 if dim.suggested_type != "value"
             ]
 
-            # Detect value column from analysis
+            # Detect value column from analysis. With no scalar columns the
+            # file cannot be an assumption table at all, and analyze_table
+            # falls back to a default name ("rate") that appears nowhere in the
+            # file — reporting it would invent a column that does not exist.
+            has_scalar_columns = scalar_df.width > 0
             value_col = (
-                analysis.value_columns[0]
-                if analysis.value_columns
-                else detected_value_column
+                (
+                    analysis.value_columns[0]
+                    if analysis.value_columns
+                    else detected_value_column
+                )
+                if has_scalar_columns
+                else ""
             )
 
             # Generate suggested code
-            if is_model_points:
+            if not has_scalar_columns:
+                read_fn = f'pl.read_parquet("{file_path.name}")'
+                first = list_columns[0]
+                suggested_code = (
+                    f"import polars as pl\n\n"
+                    f"df = {read_fn}\n\n"
+                    f"# Every column is per-period projection output.\n"
+                    f'df.select("{first}").explode("{first}").head(12)'
+                )
+            elif is_model_points:
                 file_ext = file_path.suffix.lower()
                 if file_ext == ".parquet":
                     read_fn = f'pl.read_parquet("{file_path.name}")'
@@ -948,6 +975,12 @@ def describe(
             # cannot succeed on List dtypes.
             console.print("\n[bold]Code Example:[/bold]")
             list_cols_repr = ", ".join(f'"{name}"' for name in list_columns)
+            # One alias per column: `pl.col("a", "b").list.len().alias("n")`
+            # expands to two outputs sharing a name and raises DuplicateError.
+            length_exprs = ",\n    ".join(
+                f'pl.col("{name}").list.len().alias("{name}_n_periods")'
+                for name in list_columns
+            )
             console.print(
                 f"""```python
 import polars as pl
@@ -955,7 +988,9 @@ import polars as pl
 df = pl.read_parquet("{file_path}")
 
 # Per-period columns, one list per policy: {list_cols_repr}
-df.select(pl.col({list_cols_repr}).list.len().alias("n_periods")).head()
+df.select(
+    {length_exprs}
+).head()
 
 # Explode one to inspect it period by period
 df.select("{list_columns[0]}").explode("{list_columns[0]}").head(12)
