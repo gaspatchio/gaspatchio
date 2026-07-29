@@ -214,10 +214,20 @@ def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
     )
 
     # --- PHASE 3: Calculations (lazy -- NO .collect() from here) ---
-    af.mort_rate = tables["mortality"].lookup(age=af.age)
+    # Attained age varies by period, so the lookup returns one rate per period.
+    # Looking up on the scalar `issue_age` would give a single rate with nothing
+    # for cumulative_survival() to accumulate over.
+    af.attained_age = (af.issue_age + af.projection.t_years()).floor()
+    af.mort_rate = tables["mortality"].lookup(age=af.attained_age)
     af.survival = af.mort_rate.projection.cumulative_survival()
     return af
 ```
+
+**Your mortality table must cover every attained age the projection reaches.**
+`until="maximum_age"` sizes one grid from the *youngest* life, so older policies run
+past `until_value` — a 55-year-old on a grid built for a 40-year-old reaches attained
+age 115. Lookups raise on a miss (`on_missing="raise"`), so this surfaces immediately
+rather than silently producing NaN reserves.
 
 Phase 1: Load data, rename columns, join enrichment data. `.collect()` is OK.
 Phase 2: Create projection timeline. Sets up time dimension (list columns).

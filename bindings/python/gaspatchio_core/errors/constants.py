@@ -38,8 +38,10 @@ COMMON_VALIDATION_VALUES = {
     "frequencies": ["monthly", "quarterly", "semi-annual", "annual", "daily", "weekly"],
     
     # Projection end types
-    # Values accepted by `projection.set(until=...)` — keep in sync with the
-    # Literal in accessors/projection_frame.py.
+    # Values accepted by `projection.set(until=...)`. Kept in sync with the
+    # Literal in accessors/projection_frame.py by
+    # tests/errors/test_validation_constants_in_sync.py — this list had already
+    # drifted once, so the invariant is asserted rather than requested.
     "projection_end_types": [
         "maximum_age",
         "term_years",
