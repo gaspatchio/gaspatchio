@@ -10,7 +10,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import polars as pl
 import typer
@@ -587,6 +587,83 @@ class DimensionDetail(BaseModel):
     numeric_pattern: str | None = None
 
 
+def _partition_nested_columns(df: pl.DataFrame) -> tuple[pl.DataFrame, list[str]]:
+    """Split a frame into its scalar part and its nested per-period columns.
+
+    Nested dtypes (List, Array, Struct) are projection output, never
+    assumption-table material — assumption storage cannot key on them. One
+    classification consumed by every caller keeps the console and JSON output
+    modes from disagreeing about what a results file is.
+
+    Returns:
+        The frame with nested columns removed, and their names in schema order.
+
+    """
+    nested = [name for name, dtype in df.schema.items() if dtype.is_nested()]
+    return (df.drop(nested) if nested else df), nested
+
+
+def _nested_read_back_example(file_path: Path, nested: list[str]) -> str:
+    """Return a runnable snippet for reading a projection-output file back.
+
+    Uses the file's *name*, not its resolved path: ``resolve_path=True`` on the
+    CLI argument makes the absolute path long enough that Rich wraps it
+    mid-statement, which produces syntactically invalid Python.
+
+    A zero-column file has no nested columns either, so the explode line is
+    omitted rather than indexing into an empty list.
+    """
+    lines = [
+        "import polars as pl",
+        "",
+        f'df = pl.read_parquet("{file_path.name}")',
+    ]
+    if nested:
+        lengths = ",\n    ".join(
+            f'pl.col("{name}").list.len().alias("{name}_n_periods")' for name in nested
+        )
+        lines += [
+            "",
+            "# Per-period columns, one list per policy.",
+            f"df.select(\n    {lengths}\n).head()",
+            "",
+            "# Explode one to inspect it period by period",
+            f'df.select("{nested[0]}").explode("{nested[0]}").head(12)',
+        ]
+    return "\n".join(lines)
+
+
+def _describe_nested_column(df: pl.DataFrame, name: str) -> tuple[str, int, int]:
+    """Return ``(inner_dtype, min_length, max_length)`` for one nested column.
+
+    Struct and Array columns have no ``.list`` accessor, so length statistics
+    only apply to List; the others report their dtype with zero lengths.
+    """
+    dtype = df.schema[name]
+    if isinstance(dtype, pl.List):
+        lengths = df[name].list.len()
+        # min()/max() are typed as the full any-value union; the length of a
+        # list column is always an integer, so narrow rather than int(...) it.
+        lo = cast("int | None", lengths.min())
+        hi = cast("int | None", lengths.max())
+        return str(dtype.inner), lo or 0, hi or 0
+    return str(dtype), 0, 0
+
+
+class ListColumnDetail(BaseModel):
+    """A per-period list column — projection output, never a lookup key.
+
+    Reported separately from ``detected_dimensions`` so an agent reading this
+    payload cannot mistake a per-period column for something it can key a
+    ``Table.lookup()`` on.
+    """
+
+    name: str
+    inner_dtype: str
+    min_length: int
+    max_length: int
+
+
 class InterpolationDetail(BaseModel):
     """Interpolation opportunity for a dimension."""
 
@@ -616,6 +693,7 @@ class DescribeResponse(BaseModel):
     suggested_code: str
     overflow_candidate: str | None = None
     interpolation_hints: list[InterpolationDetail] = []
+    list_columns: list[ListColumnDetail] = []
 
 
 def _detect_table_structure(df: pl.DataFrame) -> tuple[str, dict[str, str]]:
@@ -761,12 +839,36 @@ def describe(
                 "Supported types: .parquet, .csv, .xlsx, .xls",
             )
 
+        # A file carrying list columns is projection output, not an assumption
+        # table: assumption-table storage cannot key on List dtypes, so routing
+        # those columns through table-structure detection surfaced a Rust
+        # storage error ("Unsupported key type for array storage") for what is
+        # the documented way to read back a model's own results (#40).
+        # Summarise them separately and analyse only the scalar columns.
+        #
+        # `is_nested()` rather than `isinstance(dtype, pl.List)`: Array and
+        # Struct hit the same storage error, and gaspatchio's own rollforward
+        # machinery puts Struct columns in frames, so a results parquet can
+        # carry one.
+        scalar_df, list_columns = _partition_nested_columns(df)
+
+        # Auto-detection cannot describe projection output as an assumption
+        # table. An explicit --value-column is a different matter: the user has
+        # declared that the scalar part IS a table, and the nested columns just
+        # come along for the ride.
+        is_projection_output = bool(list_columns) and value_column is None
+
         # Analyze table structure
-        table_shape = _analyze_table_shape(df)
+        table_shape = _analyze_table_shape(scalar_df)
 
         # Detect or use provided value column
         if value_column is None:
-            detected_value_column, dimensions = _detect_table_structure(df)
+            if scalar_df.width == 0 or is_projection_output:
+                # Nothing to describe as a table — reporting a detected value
+                # column here handed the reader a wrong answer to scan.
+                detected_value_column, dimensions = "", {}
+            else:
+                detected_value_column, dimensions = _detect_table_structure(scalar_df)
         else:
             if value_column not in df.columns:
                 available_cols = ", ".join(df.columns)
@@ -774,14 +876,31 @@ def describe(
                     f"Value column '{value_column}' not found. "
                     f"Available columns: {available_cols}",
                 )
+            if value_column in list_columns:
+                # A per-period list is projection output, never an
+                # assumption-table value. Validating against `df` alone would
+                # accept it and then report it as one.
+                raise typer.BadParameter(
+                    f"Value column '{value_column}' is a list column "
+                    f"(per-period projection output), which cannot be an "
+                    f"assumption-table value. Scalar columns available: "
+                    f"{', '.join(scalar_df.columns) or 'none'}",
+                )
             detected_value_column = value_column
-            dimensions = {col: col for col in df.columns if col != value_column}
+            dimensions = {
+                col: col for col in scalar_df.columns if col != value_column
+            }
 
         if json_output:
             from .assumptions._analysis import analyze_table
 
             # Run rich analysis
-            analysis = analyze_table(df, detect_overflow=True, detect_interpolation=True)
+            # Analyse scalar columns only: a per-period list column is not a
+            # dimension, and reporting it as one told agents to key a lookup
+            # on it (#40).
+            analysis = analyze_table(
+                scalar_df, detect_overflow=True, detect_interpolation=True
+            )
 
             # Determine if this looks like model points vs assumption table
             # Model points: many columns, no clear value column, has ID-like columns
@@ -806,15 +925,27 @@ def describe(
                 if dim.suggested_type != "value"
             ]
 
-            # Detect value column from analysis
+            # Detect value column from analysis. For projection output — or a
+            # frame with no scalar columns at all — there is no assumption-table
+            # value to report, and analyze_table falls back to a default name
+            # ("rate") that appears nowhere in the file. The JSON payload is the
+            # documented agent workflow, so inventing a column here sends agents
+            # after something that does not exist.
+            describable_as_table = scalar_df.width > 0 and not is_projection_output
             value_col = (
-                analysis.value_columns[0]
-                if analysis.value_columns
-                else detected_value_column
+                (
+                    analysis.value_columns[0]
+                    if analysis.value_columns
+                    else detected_value_column
+                )
+                if describable_as_table
+                else ""
             )
 
             # Generate suggested code
-            if is_model_points:
+            if not describable_as_table:
+                suggested_code = _nested_read_back_example(file_path, list_columns)
+            elif is_model_points:
                 file_ext = file_path.suffix.lower()
                 if file_ext == ".parquet":
                     read_fn = f'pl.read_parquet("{file_path.name}")'
@@ -842,8 +973,12 @@ def describe(
                 for hint in analysis.interpolation_opportunities
             ]
 
-            # Sample rows
-            sample_rows = df.head(5).to_dicts()
+            # Sample rows, nested columns excluded. Dumping five rows of raw
+            # per-period lists is what `list_columns` exists to replace: a
+            # 10-column x 1200-period file produced ~900 KB of JSON, which
+            # destroys the context of the agent that follows the documented
+            # `--output-file` then `describe --json` workflow.
+            sample_rows = scalar_df.head(5).to_dicts()
 
             response = DescribeResponse(
                 file_path=str(file_path),
@@ -861,6 +996,18 @@ def describe(
                 suggested_code=suggested_code,
                 overflow_candidate=analysis.overflow_candidate,
                 interpolation_hints=interp_hints,
+                list_columns=[
+                    ListColumnDetail(
+                        name=name,
+                        inner_dtype=inner,
+                        min_length=lo,
+                        max_length=hi,
+                    )
+                    for name, (inner, lo, hi) in (
+                        (name, _describe_nested_column(df, name))
+                        for name in list_columns
+                    )
+                ],
             )
             print(response.model_dump_json(indent=2))
             return
@@ -875,6 +1022,34 @@ def describe(
         console.print("\n[bold]Sample Data (first 5 rows):[/bold]")
         with pl.Config(tbl_width_chars=120, fmt_str_lengths=20):
             console.print(df.head(5))
+
+        # Per-period columns first: the verdict has to arrive before the table
+        # structure, or a reader scanning for "Value column" takes a value that
+        # does not apply to this file and stops reading.
+        if list_columns:
+            console.print("\n[bold]Per-period Columns (projection output):[/bold]")
+            for name in list_columns:
+                inner, lo, hi = _describe_nested_column(df, name)
+                extent = f"lengths {lo}-{hi}" if hi else "nested"
+                console.print(f"  [green]{name}[/green]  {inner}  {extent}")
+
+        if is_projection_output:
+            console.print(
+                "\n[yellow]This file contains per-period columns, so it is "
+                "projection output rather than an assumption table.[/yellow]",
+            )
+            if scalar_df.width:
+                console.print(
+                    f"Scalar columns present: {', '.join(scalar_df.columns)}. "
+                    "Pass --value-column to describe them as a table anyway.",
+                )
+            # Stop rather than suggesting assumption-table code for a results
+            # file: registration cannot succeed on nested dtypes.
+            console.print("\n[bold]Code Example:[/bold]")
+            console.print(
+                f"```python\n{_nested_read_back_example(file_path, list_columns)}\n```",
+            )
+            return
 
         # Show detected structure
         console.print("\n[bold]Detected Structure:[/bold]")
@@ -921,7 +1096,10 @@ print(table.describe())
 
         console.print(code_example)
 
-        # Try to create a table for detailed analysis
+        # Try to create a table for detailed analysis. Unreachable for files
+        # with list columns — those return above, because registration cannot
+        # succeed on List dtypes and letting it fail leaked a storage-layer
+        # message that read like a data problem.
         try:
             from .assumptions import Table
 

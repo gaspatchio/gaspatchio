@@ -28,10 +28,10 @@ Defaults and conventions:
   - ``anniversary_mask_expr()`` returns lists of length ``n_periods``
     (one bool per period).
 
-When integrating with ``ActuarialFrame.date.create_timeline(
-projection_end_value=N)``, which produces ``N + 1`` timeline steps, pass
-``n_periods=N`` to ``Schedule.from_inception`` so that ``period_dates_expr``
-returns ``N + 1`` boundaries that align with the timeline indices.
+When integrating with ``ActuarialFrame.projection.set(until_value=N)``, which
+produces ``N + 1`` timeline steps, pass ``n_periods=N`` to
+``Schedule.from_inception`` so that ``period_dates_expr`` returns ``N + 1``
+boundaries that align with the timeline indices.
 """
 
 from __future__ import annotations

@@ -94,6 +94,36 @@ af.mort_rate = mort.lookup(age=af.attained_age, duration=af.duration)
 
 ---
 
+## Timing Conventions
+
+Several methods take a **timing convention**, and it is a choice you make, not a default to
+ignore. Getting it wrong is a silent valuation error, not a crash — and **with constant rates
+both conventions give identical answers**, so the mistake survives testing and only appears
+once rates vary (at age boundaries, or on a real curve).
+
+**The two defaults are opposite. Check, don't assume:**
+
+| Method | Parameter | Default |
+|--------|-----------|---------|
+| `.projection.prospective_value()` | `timing` | `"end_of_period"` |
+| `.projection.cumulative_survival()` | `rate_timing` | `"beginning_of_period"` |
+
+- **`prospective_value(timing=...)`** — whether a period's cashflow lands at the beginning or
+  the end of that period. Benefits are usually end-of-period, premiums beginning-of-period.
+- **`cumulative_survival(rate_timing=...)`** — whether the decrement at period *t* has already
+  been applied. `"beginning_of_period"` gives `[1.0, tpx[0], tpx[0]*tpx[1], ...]`;
+  `"end_of_period"` gives `[tpx[0], tpx[0]*tpx[1], ...]` and matches Excel-style timing.
+- **Discount factors are timing-anchored.** If you pass `discount_factor=` rather than
+  `discount_rate=`, the factors must be built on the same convention you asked for. Under
+  varying (per-period) rates the two are **not** related by a single multiplication — each
+  cashflow carries its own compounded factor.
+
+Run `uv run gspio docs "prospective_value"` for the full contract. When reconciling against a
+reference model, confirm its timing convention before assuming a difference is an assumption
+error.
+
+---
+
 ## CLI Reference
 
 **All commands require `uv run`.** The system Python does not have gaspatchio or polars.
@@ -144,7 +174,7 @@ Let Polars handle parallelization. Never add Rayon or threading inside plugins.
 | # | Gotcha | What Goes Wrong |
 |---|--------|-----------------|
 | 1 | Arithmetic-masking blends in conditional code | Old workaround for a fixed limitation -- `when/then/otherwise` now handles mixed scalar/list branches |
-| 2 | `projection_end_value=99` | Truncates final year; use 100 (off-by-one is catastrophic, ~3% BEL gap) |
+| 2 | `until_value=99` | Truncates final year; use 100 (off-by-one is catastrophic, ~3% BEL gap) |
 | 3 | `python3` instead of `uv run python3` | `ModuleNotFoundError: No module named 'polars'` |
 | 4 | `--policy-id` flag | Policy ID is positional. `--policy-id-column` is a different thing |
 | 5 | Hand-rolled exp/log identity for `scalar ** list` | `**` works directly on list columns now -- write it as the operator |
@@ -174,18 +204,28 @@ def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
     af = ActuarialFrame(mp)
 
     # --- PHASE 2: Projection timeline ---
-    af = af.date.create_projection_timeline(
+    af = af.projection.set(
         valuation_date=datetime.date(2025, 1, 1),
-        projection_end_type="maximum_age",
-        projection_end_value=100,   # NOT 99
-        projection_frequency="monthly",
+        until="maximum_age",
+        until_value=100,   # NOT 99
+        frequency="monthly",
     )
 
     # --- PHASE 3: Calculations (lazy -- NO .collect() from here) ---
-    af.mort_rate = tables["mortality"].lookup(age=af.age)
+    # Attained age varies by period, so the lookup returns one rate per period.
+    # Looking up on the scalar `issue_age` would give a single rate with nothing
+    # for cumulative_survival() to accumulate over.
+    af.attained_age = (af.issue_age + af.projection.t_years()).floor()
+    af.mort_rate = tables["mortality"].lookup(age=af.attained_age)
     af.survival = af.mort_rate.projection.cumulative_survival()
     return af
 ```
+
+**Your mortality table must cover every attained age the projection reaches.**
+`until="maximum_age"` sizes one grid from the *youngest* life, so older policies run
+past `until_value` — a 55-year-old on a grid built for a 40-year-old reaches attained
+age 115. Lookups raise on a miss (`on_missing="raise"`), so this surfaces immediately
+rather than silently producing NaN reserves.
 
 Phase 1: Load data, rename columns, join enrichment data. `.collect()` is OK.
 Phase 2: Create projection timeline. Sets up time dimension (list columns).
