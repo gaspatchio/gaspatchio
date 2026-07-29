@@ -181,7 +181,7 @@ Let Polars handle parallelization. Never add Rayon or threading inside plugins.
 | 4 | `--policy-id` flag | Policy ID is positional. `--policy-id-column` is a different thing |
 | 5 | Hand-rolled exp/log identity for `scalar ** list` | `**` works directly on list columns now -- write it as the operator |
 | 6 | Guessing method signatures | Agents get it wrong ~70% of the time -- `gspio docs` first |
-| 7 | `proj_year` vs `year` confusion | Stress scenarios silently wrong -- mass lapse never fires |
+| 7 | `proj_year` vs `year` confusion | Stress scenarios silently wrong -- mass lapse never fires. `projection.set()` materialises `proj_year` (projection year, from 0); any `year` on the frame is **your** calendar column -- the framework never creates one |
 | 8 | Column name case mismatch | Polars is case-sensitive; check `df.columns` first |
 
 ---
@@ -217,11 +217,25 @@ def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
     # Attained age varies by period, so the lookup returns one rate per period.
     # Looking up on the scalar `issue_age` would give a single rate with nothing
     # for cumulative_survival() to accumulate over.
-    af.attained_age = (af.issue_age + af.projection.t_years()).floor()
+    af.attained_age = af.issue_age + af.proj_year
     af.mort_rate = tables["mortality"].lookup(age=af.attained_age)
     af.survival = af.mort_rate.projection.cumulative_survival()
     return af
 ```
+
+`projection.set()` materialises the period index for you:
+
+| Column | Meaning |
+|--------|---------|
+| `af.month` | Elapsed **whole months** from the projection start — `0,1,2,…` monthly, `0,3,6,…` quarterly, `0,12,24,…` annual. Derived from the boundary dates, so it stays honest at weekly and daily too. |
+| `af.proj_year` | `month // 12` — the projection year, counting from 0. |
+
+Both have length `n_periods + 1`, aligned with `projection.t_years()`, so a maturity test
+like `when(af.month == af.policy_term * 12)` reaches the final boundary. On per-policy
+(jagged) timelines they are jagged too, not padded to the longest-lived policy.
+
+There is deliberately **no** `year` column — see Gotcha #7. If the frame already carries a
+`month` or `proj_year`, `set()` raises rather than overwriting it.
 
 **Your mortality table must cover every attained age the projection reaches.**
 `until="maximum_age"` sizes one grid from the *youngest* life, so older policies run

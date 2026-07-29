@@ -49,6 +49,25 @@ _PERIODS_PER_YEAR: dict[str, int] = {
 _MONTHS_PER_PERIOD: dict[str, int] = {"1M": 1, "3M": 3, "6M": 6, "1Y": 12}
 
 
+# Columns projection.set() materialises. `year` is deliberately absent: model
+# points routinely carry a calendar year, and Gotcha #7 already names
+# `proj_year` vs `year` as a cause of silently-wrong stress scenarios.
+_RESERVED_PERIOD_INDEX_COLUMNS: tuple[str, ...] = ("month", "proj_year")
+
+
+def _elapsed_months_expr(period_dates: pl.Expr) -> pl.Expr:
+    """Return elapsed whole months from each row's first period boundary.
+
+    Derived from the boundary dates rather than a periods-to-months multiple,
+    so it is exact for every frequency — including ``1W`` and ``1D``, where no
+    such multiple exists.
+    """
+    return period_dates.list.eval(
+        (pl.element().dt.year() - pl.element().first().dt.year()) * 12
+        + (pl.element().dt.month() - pl.element().first().dt.month())
+    )
+
+
 def _normalise_frequency(freq: str) -> str:
     """Map English vocab to Schedule shorthand, or pass shorthand through."""
     if freq in _ENGLISH_TO_SCHED_FREQ:
@@ -357,16 +376,66 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
             years = int(af_df.select(expr.max()).collect()[0, 0])
         return years * _PERIODS_PER_YEAR[sched_freq]
 
+    def _reject_reserved_column_collisions(self) -> None:
+        """Raise if the frame already carries a column projection.set() stamps.
+
+        Overwriting silently is the failure class this release exists to
+        remove — and a calendar ``year`` or a source ``month`` on the model
+        points is exactly the sort of column a user would not expect to lose.
+
+        This guards the *user's* columns, not ours. Re-projecting a frame that
+        already has a projection is supported, and in that case the period
+        index is ours to replace: a user-supplied ``month`` could never have
+        survived the first ``set()``, because it would have raised here.
+        """
+        if self._frame._projection is not None:  # noqa: SLF001
+            return
+
+        frame_df = self._frame._df  # noqa: SLF001
+        if frame_df is None:
+            return
+
+        existing = set(frame_df.collect_schema().names())
+        clashes = [c for c in _RESERVED_PERIOD_INDEX_COLUMNS if c in existing]
+        if not clashes:
+            return
+        names = ", ".join(repr(c) for c in clashes)
+        renames = ", ".join(f"{c!r}: 'source_{c}'" for c in clashes)
+        msg = (
+            f"projection.set() materialises the period index as "
+            f"{', '.join(repr(c) for c in _RESERVED_PERIOD_INDEX_COLUMNS)}, but "
+            f"the frame already has {names}. Rename the existing column(s) "
+            f"first — e.g. mp.rename({{{renames}}})."
+        )
+        raise ValueError(msg)
+
     def _stamp_eager_columns(self, schedule: Schedule) -> ActuarialFrame:
-        """Stamp projection_start_date / projection_end_date / num_proj_months."""
+        """Stamp projection dates, num_proj_months, and the period index.
+
+        ``month`` and ``proj_year`` are the period index shipped examples
+        already assume exists (#36). ``month`` is **elapsed whole months from
+        the projection start**, computed from the boundary dates rather than
+        from a periods-to-months multiple, so it stays honest at ``1W`` and
+        ``1D`` — frequencies that are not month-aligned at all.
+        """
+        self._reject_reserved_column_collisions()
+
         if schedule._kind == "from_calendar_grid":  # noqa: SLF001
             boundaries = schedule.period_dates()  # list[date], length n_periods+1
             start_date = boundaries[0]
             end_date = boundaries[-1]
+            months = [
+                (d.year - start_date.year) * 12 + (d.month - start_date.month)
+                for d in boundaries
+            ]
             stamped_df = self._frame._df.with_columns(  # noqa: SLF001
                 projection_start_date=pl.lit(start_date),
                 projection_end_date=pl.lit(end_date),
                 num_proj_months=pl.lit(len(boundaries)),
+                month=pl.lit(months, dtype=pl.List(pl.Int64)),
+                proj_year=pl.lit(
+                    [m // 12 for m in months], dtype=pl.List(pl.Int64)
+                ),
             )
         else:
             # from_inception / per_policy_grid: per-policy boundaries (jagged).
@@ -385,6 +454,13 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
                 # the int_ranges(0, num_proj_months - 1) feeder builds a null
                 # list and the rollforward kernel rejects it.
                 num_proj_months=period_dates_e.list.len().fill_null(0).cast(pl.Int32),
+                # Elapsed whole months from each policy's own first boundary,
+                # so the index stays jagged with the timeline rather than being
+                # padded to the longest-lived policy.
+                month=_elapsed_months_expr(period_dates_e),
+                proj_year=_elapsed_months_expr(period_dates_e).list.eval(
+                    pl.element() // 12
+                ),
             )
 
         new_af = self._frame.__class__(stamped_df)
