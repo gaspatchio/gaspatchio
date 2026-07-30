@@ -128,9 +128,13 @@ class GraphExporter:
         try:
             schema = self.af._df.collect_schema()
             potential_inputs = set(schema.names())
+            # Tuple-recorded columns (#39) are computed too — counting them
+            # as inputs would export wrong lineage (a computed column shown
+            # as a raw model-point field with no formula).
             computed_columns = {
-                op.alias for op in self.af._computation_graph 
-                if hasattr(op, 'alias')
+                op[0] if isinstance(op, tuple) else op.alias
+                for op in self.af._computation_graph
+                if isinstance(op, tuple) or hasattr(op, 'alias')
             }
             
             # Initial input columns are those in schema but not computed

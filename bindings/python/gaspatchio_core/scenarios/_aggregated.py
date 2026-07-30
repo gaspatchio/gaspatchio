@@ -19,7 +19,10 @@ import polars as pl
 from gaspatchio_core.frame import ActuarialFrame
 from gaspatchio_core.scenarios._aggregators import Count
 from gaspatchio_core.scenarios._auto_batch import bounded_seed_size, size_to_budget
-from gaspatchio_core.scenarios._for_each import _collect_with_peak
+from gaspatchio_core.scenarios._for_each import (
+    _collect_with_peak,
+    _reraise_with_attribution,
+)
 from gaspatchio_core.scenarios._metric import _Partitioned
 from gaspatchio_core.scenarios._period_aggregators import _tidy_partitioned_vector
 
@@ -280,7 +283,10 @@ def _resolve_auto(
     if seed_lazy is None:
         msg = "model_fn returned an ActuarialFrame with no underlying frame."
         raise ValueError(msg)
-    seed_proj, seed_peak = _collect_with_peak(seed_lazy, engine="streaming")
+    try:
+        seed_proj, seed_peak = _collect_with_peak(seed_lazy, engine="streaming")
+    except Exception as e:  # noqa: BLE001 — routed to the boundary, which raises
+        _reraise_with_attribution(seed_af, e)
     # per-cell cost: bytes per policy. Floor the measured peak with the materialised
     # frame size: a fast seed collect can complete between RSS samples (seed_peak==0),
     # which would otherwise collapse per_cell to 1 byte and size the WHOLE dataset
@@ -375,7 +381,10 @@ def run_aggregated(
         if lazy is None:
             msg = "model_fn returned an ActuarialFrame with no underlying frame."
             raise ValueError(msg)
-        proj, batch_peak = _collect_with_peak(lazy, engine="streaming")
+        try:
+            proj, batch_peak = _collect_with_peak(lazy, engine="streaming")
+        except Exception as e:  # noqa: BLE001 — routed to the boundary, which raises
+            _reraise_with_attribution(out_af, e)
         max_batch_peak = max(max_batch_peak, batch_peak)
         # n_periods = max list length across ALL List(Float64) columns (all-null safe).
         n_periods = max(n_periods, _max_period_len(proj))

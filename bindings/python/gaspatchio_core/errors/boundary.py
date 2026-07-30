@@ -22,12 +22,23 @@ if TYPE_CHECKING:
 class ErrorBoundaryFinder:
     """Efficiently find the failing operation using binary search."""
 
-    def __init__(self, af: ActuarialFrame, exception: Exception) -> None:
+    def __init__(
+        self,
+        af: ActuarialFrame,
+        exception: Exception,
+        max_rows: int | None = None,
+    ) -> None:
         """Initialize the error boundary finder.
 
         Args:
             af: The ActuarialFrame with failed computation
             exception: The exception that was raised
+            max_rows: Optional row cap applied to the replay baseline. Replay
+                collects real data repeatedly; on a 100K-policy frame an
+                uncapped replay multiplies the failed run's full cost on the
+                error path. A capped baseline keeps diagnosis fast — an error
+                that only manifests beyond the cap simply fails to reproduce,
+                which callers treat as "no attribution".
 
         """
         self.af = af
@@ -39,6 +50,12 @@ class ErrorBoundaryFinder:
         source = getattr(af, "_baseline_df", None)
         if source is None:
             source = af._df  # noqa: SLF001
+        if source is not None and max_rows is not None:
+            source = (
+                source.limit(max_rows)
+                if hasattr(source, "collect")
+                else source.head(max_rows)
+            )
         if source is not None:
             if hasattr(source, "collect"):
                 # It's a LazyFrame, collect it
@@ -110,6 +127,7 @@ class ErrorBoundaryFinder:
         operations = self.af._computation_graph  # noqa: SLF001
         left, right = 0, len(operations) - 1
         last_good_df = self.original_df
+        last_good_index = -1
         failing_index = -1
 
         logger.debug(f"Starting binary search on {len(operations)} operations")
@@ -124,6 +142,7 @@ class ErrorBoundaryFinder:
                 test_df = self._apply_operations_up_to(mid)
                 # This point succeeded, error is later
                 last_good_df = test_df
+                last_good_index = mid
                 left = mid + 1
                 logger.trace(f"Operations 0-{mid} succeeded, searching right half")
             except Exception as e:  # noqa: BLE001
@@ -136,11 +155,16 @@ class ErrorBoundaryFinder:
                     )
                 else:
                     # Different error type, continue searching right
-                    last_good_df = (
-                        self._apply_operations_up_to(mid - 1)
-                        if mid > 0
-                        else self.original_df
-                    )
+                    if mid > 0:
+                        try:
+                            last_good_df = self._apply_operations_up_to(mid - 1)
+                            last_good_index = mid - 1
+                        except Exception:  # noqa: BLE001
+                            last_good_df = self.original_df
+                            last_good_index = -1
+                    else:
+                        last_good_df = self.original_df
+                        last_good_index = -1
                     left = mid + 1
                     logger.trace(
                         f"Different error at ops 0-{mid}, searching right",
@@ -152,6 +176,7 @@ class ErrorBoundaryFinder:
             exact_index = self._find_exact_failing_operation(
                 failing_index,
                 last_good_df,
+                last_good_index,
             )
             failing_op = self._get_operation_at(exact_index)
             logger.debug(f"Found failing operation at index {exact_index}")
@@ -164,44 +189,51 @@ class ErrorBoundaryFinder:
         self,
         start_index: int,
         last_good_df: pl.DataFrame,
+        last_good_index: int = -1,
     ) -> int:
-        """Find the exact failing operation starting from a known failing range.
+        """Find the exact failing operation from a known-good prefix.
 
         Args:
-            start_index: Index where we know failure occurs
-            last_good_df: Last known good DataFrame
+            start_index: Index at or before which failure is known to occur.
+            last_good_df: DataFrame with ops ``0..last_good_index`` applied.
+            last_good_index: Largest op index already contained in
+                ``last_good_df`` (``-1`` when it is the pristine baseline).
+                The scan applies ops strictly AFTER this index — re-applying
+                an op already present double-applies it, and a valid
+                self-referential dtype-changing assignment then raises on
+                its second application and gets blamed for another
+                column's error.
 
         Returns:
-            Exact index of failing operation
+            Exact index of failing operation.
 
         """
         operations = self.af._computation_graph  # noqa: SLF001
         current_df = last_good_df.lazy()  # Convert to LazyFrame for operations
 
-        # Apply operations one by one from the last good state
-        for i in range(max(0, start_index - 1), len(operations)):
+        for i in range(last_good_index + 1, len(operations)):
+            operation = self._get_operation_at(i)
+            if operation is None:
+                continue
+
+            if isinstance(operation, tuple):
+                alias, expr = operation
+            else:
+                alias, expr = operation.alias, operation.expression
+
+            current_df = current_df.with_columns(expr.alias(alias))
             try:
-                operation = self._get_operation_at(i)
-                if operation is None:
-                    continue
-
-                # Apply this single operation
-                if isinstance(operation, tuple):
-                    alias, expr = operation
-                else:
-                    alias, expr = operation.alias, operation.expression
-
-                current_df = current_df.with_columns(expr.alias(alias))
                 # Test by collecting to see if it fails
                 _ = current_df.collect()
                 logger.trace(f"Operation {i} ({alias}) succeeded")
-
             except Exception as e:  # noqa: BLE001
                 if self._is_same_error_type(e):
                     logger.debug(f"Exact failing operation found at index {i}")
                     return i
-                logger.trace(f"Different error type at operation {i}, continuing")
-                continue
+                # The plan now carries a different failure; every later
+                # prefix would just re-raise it, so stop refining.
+                logger.trace(f"Different error type at operation {i}, stopping")
+                break
 
         # Fallback to start_index if exact operation not found
         return start_index
@@ -292,6 +324,32 @@ _ATTRIBUTABLE_ERRORS = (
     pl.exceptions.SchemaError,
 )
 
+# Replay baseline row cap. Attribution re-collects real data several times;
+# uncapped, a 100K-policy failure would multiply the failed run's full cost
+# on the error path (the edit-run-refine loop principle). Shape failures
+# overwhelmingly reproduce within the head; one that does not simply yields
+# no attribution.
+_REPLAY_MAX_ROWS = 10_000
+
+
+class _AttributionReplayFinder(ErrorBoundaryFinder):
+    """Stricter finder for default-mode collect attribution (#39).
+
+    Class-only matching can pair column A's name with column B's message
+    when two operations raise the same exception class. Attribution
+    therefore also requires the first line of the replayed message to match
+    the original's — a mismatch means "not certainly the same failure",
+    which per the fallback contract yields no attribution rather than a
+    self-contradictory one.
+    """
+
+    def _is_same_error_type(self, exception: Exception) -> bool:
+        if not isinstance(exception, self.exception_type):
+            return False
+        original = str(self.exception).split("\n", 1)[0]
+        replayed = str(exception).split("\n", 1)[0]
+        return original == replayed
+
 
 def attribute_collect_failure(
     af: ActuarialFrame,
@@ -300,12 +358,13 @@ def attribute_collect_failure(
     """Name the recorded assignment that reproduces a collect-time failure.
 
     Replays the frame's recorded assignments against the pristine baseline
-    (via :class:`ErrorBoundaryFinder`) until one reproduces the same error
-    class. Returns ``(column_name, expression_string)`` for the first
-    failing assignment, or ``None`` whenever attribution is not certain —
-    unknown error class, empty graph, a replay that does not reproduce the
-    error, or any failure inside the replay itself. Callers must treat
-    ``None`` as "re-raise the original error untouched".
+    (row-capped, via :class:`_AttributionReplayFinder`) until one reproduces
+    the same error class AND leading message. Returns
+    ``(column_name, expression_string)`` for the first failing assignment,
+    or ``None`` whenever attribution is not certain — unknown error class,
+    empty or unsound graph, a replay that does not reproduce the error, or
+    any failure inside the replay itself. Callers must treat ``None`` as
+    "re-raise the original error untouched".
 
     Replay never mutates the live frame: the finder works on eager copies
     collected from the baseline plan.
@@ -322,8 +381,13 @@ def attribute_collect_failure(
         return None
     if not getattr(af, "_computation_graph", None):
         return None
+    if getattr(af, "_attribution_unsound", False):
+        # The live plan diverged from baseline + graph (an unrecorded
+        # mutation on a graph that had to be kept) — replaying would risk
+        # naming the wrong column.
+        return None
     try:
-        finder = ErrorBoundaryFinder(af, exception)
+        finder = _AttributionReplayFinder(af, exception, max_rows=_REPLAY_MAX_ROWS)
         _, failing_op, _ = finder.find_failing_operation()
     except Exception:  # noqa: BLE001 — never make the error worse than we found it
         logger.debug("Collect-error attribution replay failed; passing through")

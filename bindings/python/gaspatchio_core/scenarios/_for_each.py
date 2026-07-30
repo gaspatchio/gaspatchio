@@ -39,7 +39,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeVar, cast
 
 import polars as pl
 from loguru import logger
@@ -310,6 +310,26 @@ def _measure_peak_delta(
     if before is None:
         return 0
     return max(0, peak - before)
+
+
+def _reraise_with_attribution(af: ActuarialFrame, error: Exception) -> NoReturn:
+    """Route a batch-collect failure through the error boundary (#39).
+
+    The batched runners collect the raw LazyFrame directly (never
+    ``af.collect()``, whose window bookkeeping and engine choice they do not
+    want), so collect-time failures would bypass column attribution on
+    exactly the at-scale runs where hunting an unnamed column hurts most.
+
+    Args:
+        af: The ActuarialFrame returned by the model function (carries the
+            recorded assignment graph the attribution replays).
+        error: The exception raised by the batch collect.
+
+    """
+    from gaspatchio_core.errors import _handle_execution_error
+
+    _handle_execution_error(af, error)
+    raise error  # unreachable in practice — the handler always raises
 
 
 def _collect_with_peak(

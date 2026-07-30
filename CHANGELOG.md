@@ -30,11 +30,15 @@
   (as a bare name/expression pair; no tracing overhead) and, when a
   `ShapeError`, `InvalidOperationError` or `SchemaError` reaches the
   `collect()` boundary, the recorded assignments are replayed against a
-  pristine baseline until one reproduces the error. The message then ends
-  with `Failing column: 'x'` and the column's defining expression. When
-  attribution is not certain — nothing recorded reproduces the error, or the
-  replay itself fails — the original error passes through byte-for-byte: a
-  wrong column name costs more than no column name.
+  pristine baseline (row-capped, so diagnosis stays fast at scale) until one
+  reproduces the error class AND message. The message then ends with
+  `Failing column: 'x'` and the column's defining expression. The batched
+  at-scale runners (`run_to_parquet`, `run_aggregated`) route their collect
+  failures through the same boundary. When attribution is not certain —
+  nothing recorded reproduces the error, the replay itself fails, or an
+  unrecorded plan change (filter/join/select) made replay unsound — the
+  original error passes through byte-for-byte: a wrong column name costs
+  more than no column name.
 
 ### Changed
 - **Rollforward extractions now share ONE kernel call, by construction.**
