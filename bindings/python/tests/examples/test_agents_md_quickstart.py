@@ -75,7 +75,7 @@ def test_quickstart_three_phase_shape_runs_end_to_end() -> None:
     )
 
     # --- PHASE 3: Calculations (lazy -- NO .collect() from here) ---
-    af.attained_age = af.issue_age + af.proj_year
+    af.attained_age = af.issue_age + af.month // 12
     af.mort_rate = tables["mortality"].lookup(age=af.attained_age)
     af.survival = af.mort_rate.projection.cumulative_survival()
 
