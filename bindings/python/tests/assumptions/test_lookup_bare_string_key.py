@@ -2,17 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""A bare-string lookup key must name both remedies.
+"""A bare string is a dimension VALUE, not a column name.
 
-Regression test for #37. ``tbl.lookup(product="annuity", age=af.age)`` routes
-the string to ``pl.col(...)``, so it is read as a column name and fails with
-``ColumnNotFoundError: Column 'annuity' not found. Did you mean...`` — pointing
-away from the actual mistake.
+Regression test for #37. ``tbl.lookup(product="annuity", age=af.age)`` used to
+route the string to ``pl.col(...)``, so it was read as a column name and failed
+with ``ColumnNotFoundError: Column 'annuity' not found`` — pointing away from
+the mistake. The only way to express the value was ``pl.lit("annuity")``, which
+put Polars in the middle of an ordinary actuarial lookup.
 
-The framework deliberately does **not** guess that a bare string means a
-literal. Inferring a meaning from a shape is what "Sharp knives, no magic"
-forbids, and it would silently change behaviour for anyone legitimately passing
-a column name as a string. The contract is a clear error naming both fixes.
+A bare string now means the value, which is what ``VLOOKUP(product, ...)``
+means and what an actuary reads. Columns are referenced the gaspatchio way:
+``af.product``, ``af["product"]``, or ``pl.col("product")`` if you want Polars.
+
+**Breaking**, but safely so: a caller who previously passed a column name as a
+bare string now gets a lookup miss — and since #24, misses raise by default and
+name the key that missed.
 """
 
 import polars as pl
@@ -37,96 +41,88 @@ def _rates_table() -> Table:
     )
 
 
-def test_bare_string_key_error_names_both_remedies() -> None:
-    """The error must offer the literal form and the column form."""
+def test_bare_string_is_the_value() -> None:
+    """The reported case now works, with no Polars import needed."""
     af = ActuarialFrame(pl.DataFrame({"policy_id": [1], "age": [40]}))
+    af.rate = _rates_table().lookup(product="annuity", age=af.age)
+    assert af.collect()["rate"].to_list() == [0.001]
+
+
+def test_bare_string_selects_the_right_row() -> None:
+    """Different values select different rows, rather than collapsing to one."""
+    af = ActuarialFrame(pl.DataFrame({"policy_id": [1], "age": [41]}))
     table = _rates_table()
-
-    with pytest.raises(ValueError, match="no such column exists") as excinfo:
-        table.lookup(product="annuity", age=af.age)
-
-    message = str(excinfo.value)
-    assert 'pl.lit("annuity")' in message, message
-    assert 'af["annuity"]' in message, message
-    assert "product" in message, message
-
-
-def test_error_names_the_table_and_dimension() -> None:
-    """Context matters more than the bare column name in a 50-column model."""
-    af = ActuarialFrame(pl.DataFrame({"policy_id": [1], "age": [40]}))
-    table = _rates_table()
-
-    with pytest.raises(ValueError, match="no such column exists") as excinfo:
-        table.lookup(product="annuity", age=af.age)
-
-    message = str(excinfo.value)
-    assert "bare_string_key_rates" in message, message
-
-
-def test_pl_lit_key_still_works() -> None:
-    """The documented remedy must actually resolve."""
-    af = ActuarialFrame(pl.DataFrame({"policy_id": [1], "age": [40]}))
-    table = _rates_table()
-    af.rate = table.lookup(product=pl.lit("annuity"), age=af.age)
+    af.annuity = table.lookup(product="annuity", age=af.age)
+    af.term = table.lookup(product="term", age=af.age)
     out = af.collect()
-    assert out["rate"].to_list() == [0.001]
+    assert out["annuity"].to_list() == [0.002]
+    assert out["term"].to_list() == [0.004]
 
 
-def test_genuine_column_key_still_works() -> None:
-    """A string naming a real column keeps its Polars meaning."""
+def test_pl_lit_still_works() -> None:
+    """The explicit Polars form stays valid — it is just no longer required."""
+    af = ActuarialFrame(pl.DataFrame({"policy_id": [1], "age": [40]}))
+    af.rate = _rates_table().lookup(product=pl.lit("annuity"), age=af.age)
+    assert af.collect()["rate"].to_list() == [0.001]
+
+
+def test_column_reference_via_attribute() -> None:
+    """The gaspatchio way to key on a column.
+
+    The frame column is ``policy_product`` rather than ``product`` because
+    ``af.product`` collides with an existing frame attribute — the case
+    AGENTS.md already covers by telling you to use bracket access.
+    """
+    af = ActuarialFrame(
+        pl.DataFrame(
+            {"policy_id": [1], "age": [40], "policy_product": ["annuity"]}
+        )
+    )
+    af.rate = _rates_table().lookup(product=af.policy_product, age=af.age)
+    assert af.collect()["rate"].to_list() == [0.001]
+
+
+def test_column_reference_via_brackets() -> None:
+    """Bracket access, for names that are keywords or contain spaces."""
     af = ActuarialFrame(
         pl.DataFrame({"policy_id": [1], "age": [40], "product": ["annuity"]})
     )
-    table = _rates_table()
-    af.rate = table.lookup(product="product", age=af.age)
-    out = af.collect()
-    assert out["rate"].to_list() == [0.001]
+    af.rate = _rates_table().lookup(product=af["product"], age=af.age)
+    assert af.collect()["rate"].to_list() == [0.001]
 
 
-def test_a_missing_column_key_gets_the_same_treatment() -> None:
-    """Both readings are offered even when the user meant a column.
+def test_pl_col_still_references_a_column() -> None:
+    """Explicit pl.col keeps its Polars meaning."""
+    af = ActuarialFrame(
+        pl.DataFrame({"policy_id": [1], "age": [40], "product": ["annuity"]})
+    )
+    af.rate = _rates_table().lookup(product=pl.col("product"), age=af.age)
+    assert af.collect()["rate"].to_list() == [0.001]
 
-    Whether ``product="product"`` meant a literal or a column that does not
-    exist is exactly the ambiguity — the framework cannot tell, and guessing
-    is what this fix refuses to do. Naming both remedies is right either way,
-    so this asserts the behaviour rather than pretending the two cases are
-    distinguishable.
+
+def test_a_column_name_passed_as_a_string_now_misses_loudly() -> None:
+    """The breaking case fails loudly, naming the key that missed.
+
+    Someone who meant the column and wrote the bare string gets a miss rather
+    than silently wrong numbers, because #24 made misses raise.
     """
-    af = ActuarialFrame(pl.DataFrame({"policy_id": [1], "age": [40]}))
-    table = _rates_table()
-
-    with pytest.raises(ValueError, match="no such column exists") as excinfo:
-        table.lookup(product="product", age=af.age)
-
-    message = str(excinfo.value)
-    assert 'pl.lit("product")' in message, message
-    assert "policy_id, age" in message, message  # lists what IS available
+    af = ActuarialFrame(
+        pl.DataFrame({"policy_id": [1], "age": [40], "product": ["annuity"]})
+    )
+    af.rate = _rates_table().lookup(product="product", age=af.age)
+    with pytest.raises(Exception, match="missing keys") as excinfo:
+        af.collect()
+    assert "product" in str(excinfo.value)
 
 
-def test_unrelated_missing_column_error_is_not_hijacked() -> None:
-    """Errors that have nothing to do with lookup keys keep their own message.
-
-    Re-wording every ColumnNotFoundError would trade one misleading error for
-    another, so the targeted message fires only for bare-string dimension
-    values.
-    """
-    af = ActuarialFrame(pl.DataFrame({"policy_id": [1], "age": [40]}))
-
-    # Reaching for a column that does not exist already raises on access,
-    # before any lookup is involved. That error must stay as it was.
-    with pytest.raises(AttributeError) as excinfo:
-        _ = af.does_not_exist
-
-    message = str(excinfo.value)
-    assert "was read as a column name" not in message, message
-    assert "does_not_exist" in message, message
-
-
-def test_error_arrives_at_the_call_site_not_at_collect() -> None:
-    """The mistake is on the lookup line, so the error belongs there."""
-    af = ActuarialFrame(pl.DataFrame({"policy_id": [1], "age": [40]}))
-    table = _rates_table()
-
-    # No .collect() — constructing the lookup is enough to raise.
-    with pytest.raises(ValueError, match="no such column exists"):
-        table.lookup(product="annuity", age=af.age)
+def test_a_value_containing_quotes_is_handled() -> None:
+    """Values travel as data and are never interpolated into generated code."""
+    table = Table(
+        name="quoted_values",
+        source=pl.DataFrame({"label": ['say "hi"', "plain"], "rate": [0.5, 0.6]}),
+        dimensions={"label": "label"},
+        value="rate",
+    )
+    af = ActuarialFrame(pl.DataFrame({"policy_id": [1]}))
+    af.rate = table.lookup(label='say "hi"')
+    assert af.collect()["rate"].to_list() == [0.5]
