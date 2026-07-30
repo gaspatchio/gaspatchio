@@ -85,6 +85,7 @@ af.mort_rate = mort.lookup(age=af.attained_age, duration=af.duration)
 
 **Key facts:**
 - `lookup()` is exact-match only -- keys must exist in the table
+- **A bare string is a dimension VALUE** (VLOOKUP semantics): `mort.lookup(product="annuity", age=af.age)` looks up the product *"annuity"*. Reference a **column** with `af.product` / `af["product"]` (or `pl.col("product")`). Passing a column name as a bare string produces a loud lookup miss naming the key.
 - `dimensions` dict maps **your name** -> **source column name**
 - `TableBuilder` for complex/programmatic table construction
 - Dimension types: `DataDimension` (default), `MeltDimension` (wide-to-long), `CategoricalDimension`, `ComputedDimension`
