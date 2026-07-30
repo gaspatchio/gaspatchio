@@ -780,7 +780,7 @@ class Table:
             logger.error(f"Failed to register table '{self._name}' with Rust: {e}")
             raise
 
-    def lookup(
+    def lookup(  # noqa: PLR0915
         self,
         _dimensions: dict[str, str | pl.Expr | ColumnProxy] | None = None,
         on_missing: str | float | None = None,
@@ -990,7 +990,13 @@ class Table:
             if dim_key is not None and dim_key in all_dimensions:
                 value = all_dimensions[dim_key]
                 if isinstance(value, str):
-                    expr = pl.col(value)
+                    # A bare string is a dimension VALUE, not a column name
+                    # (#37). `lookup(product="annuity")` is what an actuary
+                    # means by VLOOKUP, and reading it as a column forced
+                    # `pl.lit("annuity")` on them — Polars leaking into an
+                    # ordinary lookup. Reference a column with `af.product`,
+                    # `af["product"]` or `pl.col("product")`.
+                    expr = pl.lit(value)
                 elif isinstance(value, pl.Expr):
                     expr = value
                 elif hasattr(value, "_to_expr"):
