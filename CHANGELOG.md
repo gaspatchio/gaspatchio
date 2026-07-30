@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Breaking
+
+- **`log_linear` curves: rates outside the knot range change.** Extrapolation
+  previously clamped the log-discount-factor *level*, so beyond the last knot
+  the discount factor stopped decaying and spot rates collapsed toward zero —
+  a flat 5% curve returned ≈1.64% at 30y, carrying a 30-year cashflow at
+  ≈2.7× its true value — and below the first knot the implied spot blew up as
+  `t` shrank. `extrapolation="flat"` (the default) now holds the boundary
+  knot's **spot rate**, matching what `"flat"` has always meant for
+  `linear`/`pchip`, whose knots are rates. `extrapolation="forward"`
+  (`log_linear` only) holds the last segment's forward rate — the
+  market-consistent choice for discounting beyond the last liquid tenor.
+  Unknown values now raise instead of being silently ignored; rate-space
+  methods reject `"forward"`. Curve identity: the default keeps every
+  existing `source_sha()`; a `"forward"` curve hashes differently.
+
+  **Action:** if you evaluate a `log_linear` curve outside its knot range,
+  those rates change. Re-run any reconciliation that discounts past the last
+  knot (typically 20y+ cashflows). (#31)
+
 ### Changed
 - **Rollforward extractions now share ONE kernel call, by construction.**
   `CompiledRollforward` gains the expression surface directly —

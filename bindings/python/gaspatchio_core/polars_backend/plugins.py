@@ -328,7 +328,10 @@ def curve_eval(
         slopes: Per-knot slopes for the ``pchip`` monotone-cubic Hermite
             interpolant.
         extrapolation: Extrapolation mode outside the knot range. ``"flat"``
-            (the only supported value) clamps to the nearest knot.
+            (default) holds the boundary knot's spot rate. ``"forward"`` holds
+            the boundary segment's forward rate and applies to ``log_linear``
+            only — rate-space methods reject it. Unknown values raise; they
+            are never silently ignored.
         b0: Nelson-Siegel-Svensson level parameter (``svensson``).
         b1: Nelson-Siegel-Svensson slope parameter (``svensson``).
         b2: Nelson-Siegel-Svensson first-curvature parameter (``svensson``).

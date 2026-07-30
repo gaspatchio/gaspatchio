@@ -22,8 +22,10 @@ pub struct CurveEvalKwargs {
     pub ys: Option<Vec<f64>>,
     /// Per-knot slopes for the `pchip` monotone-cubic Hermite interpolant.
     pub slopes: Option<Vec<f64>>,
-    /// Extrapolation mode outside the knot range. Currently always flat (the only
-    /// supported value); reserved for future methods.
+    /// Extrapolation mode outside the knot range. `"flat"` (default) holds the
+    /// spot rate at the boundary knot. `"forward"` holds the boundary segment's
+    /// forward rate and applies to `log_linear` only — rate-space methods
+    /// (`linear`/`pchip`) reject it. Unknown values are an error, never ignored.
     pub extrapolation: Option<String>,
     // Nelson-Siegel-Svensson parameters (`svensson`).
     pub b0: Option<f64>,
@@ -127,6 +129,23 @@ fn svensson_load(x: f64) -> (f64, f64) {
     (l, l - e)
 }
 
+/// Reject any extrapolation mode other than `"flat"` for rate-space methods.
+///
+/// `linear`/`pchip` knots ARE rates, so "flat" is already a spot clamp and
+/// "forward" has no meaning there — accepting and ignoring it would create a
+/// new silently-dead parameter, which is how `extrapolation` spent its life
+/// before #31.
+fn reject_non_flat_extrapolation(method: &str, kw: &CurveEvalKwargs) -> PolarsResult<()> {
+    match kw.extrapolation.as_deref() {
+        None | Some("flat") => Ok(()),
+        Some(other) => Err(polars_err!(
+            ComputeError:
+            "curve_eval {}: extrapolation {:?} is not supported; only \"flat\" applies to rate-space knots",
+            method, other
+        )),
+    }
+}
+
 /// Evaluate a single year-fraction `t` using the configured method.
 ///
 /// Out-of-domain `t` resolves to `f64::NAN` (the uniform cross-path sentinel),
@@ -164,6 +183,7 @@ fn eval_one(t: f64, kw: &CurveEvalKwargs) -> PolarsResult<f64> {
                     ComputeError: "curve_eval linear: xs must be non-empty and the same length as ys"
                 ));
             }
+            reject_non_flat_extrapolation("linear", kw)?;
             Ok(eval_linear(t, xs, ys))
         }
         "log_linear" => {
@@ -182,7 +202,51 @@ fn eval_one(t: f64, kw: &CurveEvalKwargs) -> PolarsResult<f64> {
             }
             // ys are log-DF knots: y_i = -u_i * ln(1 + r_i).
             // Interpolate linearly in log-DF space, then convert back to spot rate.
-            let log_df = eval_linear(t, xs, ys);
+            //
+            // Outside the knot range the clamp must happen in RATE space, not
+            // log-DF space. ys are log-DFs, so clamping them holds the discount
+            // factor constant — beyond the last knot the DF stopped decaying
+            // and a flat 5% curve returned ~1.64% at 30y; below the first knot
+            // the implied spot blew up as t shrank (#31). "flat" holds the
+            // boundary knot's spot rate (what "flat" already means for
+            // linear/pchip, whose ys ARE rates); "forward" extends the boundary
+            // segment's log-DF slope — a constant forward rate, the
+            // market-consistent choice for long-tail discounting.
+            let mode = kw.extrapolation.as_deref().unwrap_or("flat");
+            if !matches!(mode, "flat" | "forward") {
+                return Err(polars_err!(
+                    ComputeError:
+                    "curve_eval log_linear: unknown extrapolation {:?}; expected \"flat\" or \"forward\"",
+                    mode
+                ));
+            }
+            let n = xs.len();
+            let log_df = if n >= 2 && t > xs[n - 1] {
+                match mode {
+                    // ys[n-1] = -x_n·ln(1+r_n); scaling by t/x_n keeps
+                    // -ln(DF)/t — the spot — fixed at r_n.
+                    "flat" => ys[n - 1] * (t / xs[n - 1]),
+                    _ => {
+                        let s = (ys[n - 1] - ys[n - 2]) / (xs[n - 1] - xs[n - 2]);
+                        ys[n - 1] + s * (t - xs[n - 1])
+                    }
+                }
+            } else if n >= 2 && t < xs[0] {
+                match mode {
+                    "flat" => ys[0] * (t / xs[0]),
+                    _ => {
+                        // Extending the FIRST segment's slope backwards from
+                        // xs[0]: the segment from t=0 (log-DF 0 by definition)
+                        // to the first knot, i.e. the first knot's own spot.
+                        ys[0] * (t / xs[0])
+                    }
+                }
+            } else if n == 1 {
+                // A single knot defines only its own spot rate; hold it.
+                ys[0] * (t / xs[0])
+            } else {
+                eval_linear(t, xs, ys)
+            };
             let df = log_df.exp();
             Ok(df.powf(-1.0 / t) - 1.0) // annually-compounded spot
         }
@@ -204,6 +268,7 @@ fn eval_one(t: f64, kw: &CurveEvalKwargs) -> PolarsResult<f64> {
                     ComputeError: "curve_eval pchip: xs, ys, slopes must be non-empty and equal length"
                 ));
             }
+            reject_non_flat_extrapolation("pchip", kw)?;
             Ok(eval_hermite(t, xs, ys, m))
         }
         "svensson" => {
@@ -927,5 +992,153 @@ mod tests {
             assert!(eval_linear(t, &xs, &ys).is_nan(), "eval_linear t={t}");
             assert!(eval_hermite(t, &xs, &ys, &m).is_nan(), "eval_hermite t={t}");
         }
+    }
+
+    // -----------------------------------------------------------------
+    // #31 — log_linear extrapolation
+    // -----------------------------------------------------------------
+
+    /// Build `CurveEvalKwargs` for log_linear from ANNUAL spot-rate knots.
+    /// ys are log-DF: y_i = -x_i * ln(1 + r_i).
+    fn loglin_kwargs(xs: Vec<f64>, rates: Vec<f64>, extrapolation: &str) -> CurveEvalKwargs {
+        let ys = xs
+            .iter()
+            .zip(rates.iter())
+            .map(|(x, r)| -x * (1.0 + r).ln())
+            .collect();
+        CurveEvalKwargs {
+            method: "log_linear".into(),
+            xs: Some(xs),
+            ys: Some(ys),
+            slopes: None,
+            extrapolation: Some(extrapolation.into()),
+            b0: None,
+            b1: None,
+            b2: None,
+            b3: None,
+            tau1: None,
+            tau2: None,
+            u: None,
+            zeta: None,
+            omega: None,
+            alpha: None,
+        }
+    }
+
+    /// The reported symptom: a flat 5% curve with a last knot at 10y returned
+    /// a spot of ~1.64% at 30y, because "flat" clamped the log-DF LEVEL — the
+    /// discount factor stopped decaying. A flat curve must stay flat at every
+    /// horizon under BOTH conventions; this pins that the collapse can never
+    /// return.
+    #[test]
+    fn test_log_linear_flat_curve_holds_its_rate_beyond_the_last_knot() {
+        for mode in ["flat", "forward"] {
+            let kw = loglin_kwargs(vec![5.0, 10.0], vec![0.05, 0.05], mode);
+            let spot = eval_one(30.0, &kw).unwrap();
+            assert!(
+                (spot - 0.05).abs() < 1e-12,
+                "mode {mode}: expected 5%, got {spot} (the 1.64% collapse?)"
+            );
+        }
+    }
+
+    /// Sloped curve, knots 4%@5y / 5%@10y. "flat" holds the last SPOT;
+    /// "forward" holds the last segment's forward rate. Expected values are
+    /// derived from the growth-factor identity, independent of the log-DF
+    /// clamp arithmetic: (1 + spot30)^30 = (1.05)^10 * F^20 where F is the
+    /// last segment's annual forward growth (1.05^10 / 1.04^5)^(1/5).
+    #[test]
+    fn test_log_linear_flat_and_forward_on_a_sloped_curve() {
+        let flat = eval_one(
+            30.0,
+            &loglin_kwargs(vec![5.0, 10.0], vec![0.04, 0.05], "flat"),
+        )
+        .unwrap();
+        assert!(
+            (flat - 0.05).abs() < 1e-12,
+            "flat must hold the last spot, got {flat}"
+        );
+
+        let forward = eval_one(
+            30.0,
+            &loglin_kwargs(vec![5.0, 10.0], vec![0.04, 0.05], "forward"),
+        )
+        .unwrap();
+        let f_growth = (1.05_f64.powi(10) / 1.04_f64.powi(5)).powf(1.0 / 5.0);
+        let expected = (1.05_f64.powi(10) * f_growth.powi(20)).powf(1.0 / 30.0) - 1.0;
+        assert!(
+            (forward - expected).abs() < 1e-12,
+            "forward: expected {expected}, got {forward}"
+        );
+        assert!(
+            forward > flat,
+            "an upward-sloping tail must extrapolate above flat"
+        );
+    }
+
+    /// Below the first knot the old clamp was wrong in the OTHER direction:
+    /// holding the log-DF level made the implied spot blow up as t shrinks
+    /// (5%@5y read as (1.05)^5 - 1 = 27.6% at t=1). "flat" holds the first
+    /// spot; "forward" extends the first segment's forward backwards, which
+    /// for a first segment anchored at t=0 is the same rate.
+    #[test]
+    fn test_log_linear_below_the_first_knot_holds_the_first_spot() {
+        for mode in ["flat", "forward"] {
+            let kw = loglin_kwargs(vec![5.0, 10.0], vec![0.05, 0.05], mode);
+            let spot = eval_one(1.0, &kw).unwrap();
+            assert!(
+                (spot - 0.05).abs() < 1e-12,
+                "mode {mode}: expected 5% below the first knot, got {spot}"
+            );
+        }
+    }
+
+    /// Interpolation BETWEEN knots must be untouched by the extrapolation
+    /// mode — this pins that the fix only changes behaviour outside the range.
+    #[test]
+    fn test_log_linear_interior_unchanged_by_extrapolation_mode() {
+        let flat = eval_one(
+            7.5,
+            &loglin_kwargs(vec![5.0, 10.0], vec![0.04, 0.05], "flat"),
+        )
+        .unwrap();
+        let fwd = eval_one(
+            7.5,
+            &loglin_kwargs(vec![5.0, 10.0], vec![0.04, 0.05], "forward"),
+        )
+        .unwrap();
+        assert!(
+            (flat - fwd).abs() < 1e-15,
+            "interior values must not depend on extrapolation mode"
+        );
+    }
+
+    /// An unknown mode is an error naming the bad value and the valid options
+    /// — never silently ignored, which is how this parameter spent its life
+    /// until now.
+    #[test]
+    fn test_log_linear_rejects_an_unknown_extrapolation() {
+        let kw = loglin_kwargs(vec![5.0, 10.0], vec![0.04, 0.05], "parabolic");
+        let err = eval_one(30.0, &kw).unwrap_err().to_string();
+        assert!(err.contains("parabolic"), "must name the bad value: {err}");
+        assert!(err.contains("flat"), "must list the valid options: {err}");
+        assert!(
+            err.contains("forward"),
+            "must list the valid options: {err}"
+        );
+    }
+
+    /// linear/pchip knots are RATES, where "flat" is already a spot clamp and
+    /// "forward" has no meaning — accepting-and-ignoring it would be a new
+    /// silent parameter, so it errors.
+    #[test]
+    fn test_rate_space_methods_reject_forward() {
+        let mut kw = lin_kwargs(vec![1.0, 5.0, 10.0], vec![0.03, 0.03, 0.05]);
+        kw.extrapolation = Some("forward".into());
+        let err = eval_one(30.0, &kw).unwrap_err().to_string();
+        assert!(
+            err.contains("forward"),
+            "must name the rejected mode: {err}"
+        );
     }
 }

@@ -17,6 +17,10 @@ from bisect import bisect_right
 from collections.abc import Sequence
 
 
+# A boundary segment needs two knots; a single knot only defines its own spot.
+_MIN_SEGMENT_KNOTS = 2
+
+
 def linear_interpolate(
     x: float,
     knots_x: Sequence[float],
@@ -61,8 +65,13 @@ def log_df_knots(tenors: Sequence[float], rates: Sequence[float]) -> list[float]
     return [-u * math.log(1.0 + r) for u, r in zip(tenors, rates, strict=True)]
 
 
-def log_linear_spot(t: float, tenors: Sequence[float], log_df: Sequence[float]) -> float:
-    """Spot rate at ``t`` from log-DF knots (linear in log-DF, flat extrapolation).
+def log_linear_spot(
+    t: float,
+    tenors: Sequence[float],
+    log_df: Sequence[float],
+    extrapolation: str = "flat",
+) -> float:
+    """Spot rate at ``t`` from log-DF knots (linear in log-DF between knots).
 
     Interpolates linearly in log-discount-factor space and converts back to
     an annually-compounded spot rate:
@@ -76,14 +85,42 @@ def log_linear_spot(t: float, tenors: Sequence[float], log_df: Sequence[float]) 
         t: Year fraction at which to evaluate the spot rate. Must be ``> 0``.
         tenors: Tenor knot points in years, strictly increasing.
         log_df: Log-discount-factor values at each knot (from :func:`log_df_knots`).
+        extrapolation: ``"flat"`` (default) holds the boundary knot's SPOT
+            rate outside the knot range; ``"forward"`` holds the last
+            segment's forward rate beyond the last knot. Mirrors the Rust
+            kernel exactly.
 
     Returns:
         The annually-compounded spot rate at ``t``, or ``nan`` when ``t`` is
         non-finite or ``t <= 0``.
+
+    Raises:
+        ValueError: If ``extrapolation`` is not ``"flat"`` or ``"forward"``.
+
     """
     if not math.isfinite(t) or t <= 0.0:
         return math.nan
-    ld = linear_interpolate(t, tenors, log_df)
+    if extrapolation not in ("flat", "forward"):
+        msg = f'unknown extrapolation {extrapolation!r}; expected "flat" or "forward"'
+        raise ValueError(msg)
+    # Outside the knot range the clamp must happen in RATE space, not log-DF
+    # space: log_df values are levels, and holding a level constant stops the
+    # discount factor decaying — a flat 5% curve read ~1.64% at 30y (#31).
+    n = len(tenors)
+    has_segment = n >= _MIN_SEGMENT_KNOTS
+    if has_segment and t > tenors[-1]:
+        if extrapolation == "flat":
+            # log_df[-1] = -T·ln(1+r_T); scaling by t/T keeps the spot at r_T.
+            ld = log_df[-1] * (t / tenors[-1])
+        else:  # forward: extend the last segment's log-DF slope.
+            s_seg = (log_df[-1] - log_df[-2]) / (tenors[-1] - tenors[-2])
+            ld = log_df[-1] + s_seg * (t - tenors[-1])
+    elif (has_segment and t < tenors[0]) or n == 1:
+        # Below the first knot both modes agree: the first segment runs from
+        # (0, 0) to the first knot, so extending its slope IS the first spot.
+        ld = log_df[0] * (t / tenors[0])
+    else:
+        ld = linear_interpolate(t, tenors, log_df)
     return math.exp(ld) ** (-1.0 / t) - 1.0
 
 
@@ -167,4 +204,10 @@ def hermite_eval(
     return ys[k] * h00 + h * slopes[k] * h10 + ys[k + 1] * h01 + h * slopes[k + 1] * h11
 
 
-__all__ = ["hermite_eval", "linear_interpolate", "log_df_knots", "log_linear_spot", "pchip_slopes"]
+__all__ = [
+    "hermite_eval",
+    "linear_interpolate",
+    "log_df_knots",
+    "log_linear_spot",
+    "pchip_slopes",
+]

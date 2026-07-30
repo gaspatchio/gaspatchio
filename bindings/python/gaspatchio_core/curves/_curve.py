@@ -117,6 +117,28 @@ class ParametricPayload:
     alpha: float | None = None
 
 
+def _validate_extrapolation(interpolation: str, extrapolation: str) -> None:
+    """Reject invalid interpolation/extrapolation combinations at construction.
+
+    ``"forward"`` extends a forward rate, which only exists for the log-DF
+    representation — for rate-space knots (``linear``/``pchip``) "flat" is
+    already a spot clamp and "forward" has no meaning. Raising here puts the
+    error at the call site rather than at ``collect()``.
+    """
+    if extrapolation not in ("flat", "forward"):
+        msg = (
+            f"extrapolation {extrapolation!r} is not supported; "
+            f"expected 'flat' or 'forward'"
+        )
+        raise ValueError(msg)
+    if extrapolation == "forward" and interpolation != "log_linear":
+        msg = (
+            "extrapolation='forward' requires interpolation='log_linear'; "
+            f"rate-space knots ({interpolation!r}) support only 'flat'"
+        )
+        raise ValueError(msg)
+
+
 @dataclass(frozen=True)
 class Curve:
     """Typed term-structure curve.
@@ -130,6 +152,7 @@ class Curve:
     day_count: DayCount
     interpolation: InterpolationMethod = field(default="linear")
     parametric: ParametricPayload | None = field(default=None)
+    extrapolation: str = field(default="flat")
 
     @classmethod
     def from_zero_rates(
@@ -139,6 +162,7 @@ class Curve:
         rates: list[float],
         day_count: DayCount | None = None,
         interpolation: InterpolationMethod = "linear",
+        extrapolation: str = "flat",
     ) -> Curve:
         """Build a Curve from zero (spot) rates indexed by tenor in years.
 
@@ -165,6 +189,11 @@ class Curve:
                 ``'log_linear'`` (linear in log-discount-factor space, better
                 for preserving positivity of discount factors), or ``'pchip'``
                 (shape-preserving cubic Hermite, smoother forward rates).
+            extrapolation: Behaviour outside the knot range. ``'flat'``
+                (default) holds the boundary knot's **spot rate**;
+                ``'forward'`` (``log_linear`` only) holds the last segment's
+                forward rate — the market-consistent choice for discounting
+                cashflows well beyond the last liquid tenor.
 
         Returns:
             A frozen :class:`Curve` instance.
@@ -187,7 +216,8 @@ class Curve:
             PCHIP interpolation produces smoother forward rates between knots:
 
             >>> c_pchip = Curve.from_zero_rates(
-            ...     tenors=[1, 2, 5, 10], rates=[0.01, 0.02, 0.03, 0.035],
+            ...     tenors=[1, 2, 5, 10],
+            ...     rates=[0.01, 0.02, 0.03, 0.035],
             ...     interpolation="pchip",
             ... )
             >>> c_pchip.spot_rate(3.5)  # doctest: +ELLIPSIS
@@ -217,11 +247,13 @@ class Curve:
                 f"supported methods are {sorted(_supported)}"
             )
             raise ValueError(msg)
+        _validate_extrapolation(interpolation, extrapolation)
         return cls(
             tenors=tuple(tenors),
             rates=tuple(rates),
             day_count=day_count or ActualActualISDA(),
             interpolation=interpolation,
+            extrapolation=extrapolation,
         )
 
     @classmethod
@@ -653,7 +685,7 @@ class Curve:
                 "method": "log_linear",
                 "xs": list(self.tenors),
                 "ys": log_df_knots(self.tenors, self.rates),
-                "extrapolation": "flat",
+                "extrapolation": self.extrapolation,
             }
         if self.interpolation == "pchip":
             return {
@@ -681,9 +713,16 @@ class Curve:
                 float(p.alpha),  # type: ignore[arg-type]
             )
         if self.interpolation == "log_linear":
-            return log_linear_spot(t, self.tenors, log_df_knots(self.tenors, self.rates))
+            return log_linear_spot(
+                t,
+                self.tenors,
+                log_df_knots(self.tenors, self.rates),
+                self.extrapolation,
+            )
         if self.interpolation == "pchip":
-            return hermite_eval(t, self.tenors, self.rates, pchip_slopes(self.tenors, self.rates))
+            return hermite_eval(
+                t, self.tenors, self.rates, pchip_slopes(self.tenors, self.rates)
+            )
         return linear_interpolate(t, self.tenors, self.rates)
 
     def _scalar_spot(self, t: float) -> float:
@@ -843,6 +882,7 @@ class Curve:
         par_rates: list[float],
         day_count: DayCount | None = None,
         interpolation: InterpolationMethod = "linear",
+        extrapolation: str = "flat",
     ) -> Curve:
         """Build a Curve via bootstrap from annual par coupon rates.
 
@@ -859,6 +899,8 @@ class Curve:
                 rate evaluation.
             interpolation: Interpolation method; ``'linear'`` (default) or
                 ``'log_linear'``.
+            extrapolation: Behaviour outside the knot range; see
+                :meth:`from_zero_rates`.
 
         Returns:
             A frozen :class:`Curve` whose ``rates`` are bootstrapped zero rates.
@@ -884,6 +926,7 @@ class Curve:
             rates=zero_rates,
             day_count=day_count,
             interpolation=interpolation,
+            extrapolation=extrapolation,
         )
 
     def shift_parallel(self, *, bps: float) -> Curve:
@@ -947,6 +990,11 @@ class Curve:
             "day_count": self.day_count.name(),
             "interpolation": self.interpolation,
         }
+        # Included only when non-default so every existing curve keeps its
+        # sha; a "forward" curve MUST hash differently — Audit by default
+        # requires the identity stamp to change when behaviour changes.
+        if self.extrapolation != "flat":
+            base["extrapolation"] = self.extrapolation
         if self.parametric is not None:
             p = self.parametric
             if p.kind == "svensson":

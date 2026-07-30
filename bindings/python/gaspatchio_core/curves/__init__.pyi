@@ -22,6 +22,7 @@ class Curve:
     day_count: DayCount
     interpolation: InterpolationMethod
     parametric: ParametricPayload | None
+    extrapolation: str
 
     def __init__(
         self,
@@ -30,6 +31,7 @@ class Curve:
         day_count: DayCount,
         interpolation: InterpolationMethod = ...,
         parametric: ParametricPayload | None = ...,
+        extrapolation: str = ...,
     ) -> None: ...
     @classmethod
     def from_zero_rates(
@@ -39,6 +41,7 @@ class Curve:
         rates: list[float],
         day_count: DayCount | None = ...,
         interpolation: InterpolationMethod = ...,
+        extrapolation: str = ...,
     ) -> Curve: ...
     @classmethod
     def from_par_rates(
@@ -48,6 +51,7 @@ class Curve:
         par_rates: list[float],
         day_count: DayCount | None = ...,
         interpolation: InterpolationMethod = ...,
+        extrapolation: str = ...,
     ) -> Curve: ...
     @classmethod
     def from_svensson(
