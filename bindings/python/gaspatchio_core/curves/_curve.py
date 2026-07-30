@@ -154,6 +154,16 @@ class Curve:
     parametric: ParametricPayload | None = field(default=None)
     extrapolation: str = field(default="flat")
 
+    def __post_init__(self) -> None:
+        """Validate field combinations on every construction path.
+
+        Classmethods, direct ``Curve(...)`` calls, and reconstruction sites
+        such as ``dataclasses.replace`` all funnel through here — an invalid
+        interpolation/extrapolation pair can never produce a live curve that
+        would otherwise fail (or silently evaluate flat) at collect time.
+        """
+        _validate_extrapolation(self.interpolation, self.extrapolation)
+
     @classmethod
     def from_zero_rates(
         cls,
@@ -247,7 +257,7 @@ class Curve:
                 f"supported methods are {sorted(_supported)}"
             )
             raise ValueError(msg)
-        _validate_extrapolation(interpolation, extrapolation)
+        # extrapolation is validated by __post_init__ on construction below.
         return cls(
             tenors=tuple(tenors),
             rates=tuple(rates),

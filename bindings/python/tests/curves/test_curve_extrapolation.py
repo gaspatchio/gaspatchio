@@ -152,6 +152,47 @@ def test_forward_changes_the_source_sha_and_flat_preserves_it() -> None:
     assert forward.canonical_form()["extrapolation"] == "forward"
 
 
+def test_shifts_preserve_extrapolation() -> None:
+    """A stressed forward curve must stay a forward curve.
+
+    The shift helpers used to reconstruct with a hand-written field list
+    that dropped ``extrapolation`` — a parallel-shifted "forward" curve
+    silently became "flat", changing every long-tail discount factor in the
+    stressed valuation while leaving the base run correct.
+    """
+    base = _curve(SLOPED_RATES, "forward")
+    parallel = base.shift_parallel(bps=100)
+    key_rate = base.key_rate_shift(tenor=10.0, bps=25)
+    assert parallel.extrapolation == "forward"
+    assert key_rate.extrapolation == "forward"
+    # And the tail behaves like a forward curve: on an upward-sloping curve
+    # the extrapolated 30y spot sits above the flat clamp at the last knot.
+    assert parallel.spot_rate(30.0) > parallel.spot_rate(10.0)
+    # The identity stamp must still record the mode after a shift.
+    assert parallel.canonical_form()["extrapolation"] == "forward"
+
+
+def test_direct_construction_validates_like_the_classmethods() -> None:
+    """Curve(...) cannot smuggle in a mode the classmethods would reject."""
+    day_count = Curve.from_zero_rates(tenors=TENORS, rates=FLAT_RATES).day_count
+    with pytest.raises(ValueError, match="parabolic"):
+        Curve(
+            tenors=(5.0, 10.0),
+            rates=(0.05, 0.05),
+            day_count=day_count,
+            interpolation="log_linear",
+            extrapolation="parabolic",
+        )
+    with pytest.raises(ValueError, match="log_linear"):
+        Curve(
+            tenors=(5.0, 10.0),
+            rates=(0.05, 0.05),
+            day_count=day_count,
+            interpolation="linear",
+            extrapolation="forward",
+        )
+
+
 def test_regression_pin_the_exact_reported_number() -> None:
     """0.0164 must never come back from a flat 5% curve at 30y.
 
