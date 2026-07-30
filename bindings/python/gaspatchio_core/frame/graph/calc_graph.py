@@ -41,8 +41,14 @@ class GraphExporter:
         self._validate_computation_graph()
     
     def _validate_computation_graph(self) -> None:
-        """Validate that the ActuarialFrame has a computation graph."""
-        if not hasattr(self.af, '_computation_graph') or not self.af._computation_graph:
+        """Validate that the ActuarialFrame has a traced computation graph.
+
+        Bare (name, expr) tuples — recorded on every frame for collect-error
+        attribution (#39) — carry no metadata and cannot drive a calc graph;
+        only TracedOperation records (debug-mode runs) count.
+        """
+        operations = getattr(self.af, '_computation_graph', None) or []
+        if not any(not isinstance(op, tuple) for op in operations):
             raise ValueError(
                 "No computation graph found. Ensure the model was run in debug mode "
                 "by setting GSPIO_MODE=debug environment variable."
@@ -109,8 +115,10 @@ class GraphExporter:
         # Add input columns
         self._add_input_columns(graph)
         
-        # Add computed operations
+        # Add computed operations (skipping bare attribution tuples — no metadata)
         for operation in self.af._computation_graph:
+            if isinstance(operation, tuple):
+                continue
             graph.add_computed_operation(operation)
         
         return graph

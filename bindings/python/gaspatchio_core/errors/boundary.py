@@ -280,3 +280,58 @@ class ErrorBoundaryFinder:
 
         """
         return isinstance(exception, self.exception_type)
+
+
+# Error classes eligible for collect-time column attribution (#39). Kept
+# narrow deliberately: these are data-shape failures that reproduce
+# deterministically under replay. A wrong column name costs the user more
+# than no column name, so anything outside this list passes through.
+_ATTRIBUTABLE_ERRORS = (
+    pl.exceptions.ShapeError,
+    pl.exceptions.InvalidOperationError,
+    pl.exceptions.SchemaError,
+)
+
+
+def attribute_collect_failure(
+    af: ActuarialFrame,
+    exception: Exception,
+) -> tuple[str, str] | None:
+    """Name the recorded assignment that reproduces a collect-time failure.
+
+    Replays the frame's recorded assignments against the pristine baseline
+    (via :class:`ErrorBoundaryFinder`) until one reproduces the same error
+    class. Returns ``(column_name, expression_string)`` for the first
+    failing assignment, or ``None`` whenever attribution is not certain —
+    unknown error class, empty graph, a replay that does not reproduce the
+    error, or any failure inside the replay itself. Callers must treat
+    ``None`` as "re-raise the original error untouched".
+
+    Replay never mutates the live frame: the finder works on eager copies
+    collected from the baseline plan.
+
+    Args:
+        af: The frame whose ``collect()``/``profile()`` raised.
+        exception: The exception raised by the failed execution.
+
+    Returns:
+        ``(column_name, expression_string)`` or ``None``.
+
+    """
+    if not isinstance(exception, _ATTRIBUTABLE_ERRORS):
+        return None
+    if not getattr(af, "_computation_graph", None):
+        return None
+    try:
+        finder = ErrorBoundaryFinder(af, exception)
+        _, failing_op, _ = finder.find_failing_operation()
+    except Exception:  # noqa: BLE001 — never make the error worse than we found it
+        logger.debug("Collect-error attribution replay failed; passing through")
+        return None
+    if failing_op is None:
+        return None
+    if isinstance(failing_op, tuple):
+        alias, expr = failing_op
+    else:
+        alias, expr = failing_op.alias, failing_op.expression
+    return alias, str(expr)

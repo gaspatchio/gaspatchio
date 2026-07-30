@@ -22,6 +22,20 @@
   those rates change. Re-run any reconciliation that discounts past the last
   knot (typically 20y+ cashflows). (#31)
 
+### Fixed
+- **Collect-time failures now name the offending column.** (#39) A lazy
+  chain failing at `collect()` used to surface the raw Polars error — e.g.
+  `ShapeError: list lengths differed at index 0: 6 != 3` — with no clue
+  which of a model's columns produced it. Every assignment is now recorded
+  (as a bare name/expression pair; no tracing overhead) and, when a
+  `ShapeError`, `InvalidOperationError` or `SchemaError` reaches the
+  `collect()` boundary, the recorded assignments are replayed against a
+  pristine baseline until one reproduces the error. The message then ends
+  with `Failing column: 'x'` and the column's defining expression. When
+  attribution is not certain — nothing recorded reproduces the error, or the
+  replay itself fails — the original error passes through byte-for-byte: a
+  wrong column name costs more than no column name.
+
 ### Changed
 - **Rollforward extractions now share ONE kernel call, by construction.**
   `CompiledRollforward` gains the expression surface directly —

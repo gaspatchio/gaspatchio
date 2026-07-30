@@ -352,16 +352,23 @@ class ActuarialFrame:
             new_dtype = self._resolve_assigned_dtype(expr) if do_incremental else None
 
             # The graph is RECORD-ONLY metadata (calc-graph display, query-plan
-            # logging). Every operation is applied to _df exactly once here;
-            # collect()/profile() must never replay the graph on top of it —
-            # that double-applied self-referential assignments in debug mode.
+            # logging, collect-error attribution). Every operation is applied
+            # to _df exactly once here; collect()/profile() must never replay
+            # the graph on top of it — that double-applied self-referential
+            # assignments in debug mode.
+            if not self._computation_graph:
+                # Snapshot the pre-op frame at the start of a recording
+                # window: error-boundary diagnosis replays the graph
+                # against this baseline, never against the applied _df.
+                object.__setattr__(self, "_baseline_df", self._df)
             if self._tracing:
-                if not self._computation_graph:
-                    # Snapshot the pre-op frame at the start of a trace
-                    # sequence: error-boundary diagnosis replays the graph
-                    # against this baseline, never against the applied _df.
-                    object.__setattr__(self, "_baseline_df", self._df)
                 append_operation_to_graph(self, key, expr)
+            else:
+                # Bare (name, expr) tuple so a collect-time failure can be
+                # replayed and attributed to the column that caused it (#39).
+                # Unlike the traced path there is no stack inspection here —
+                # the setter is the model-build hot path.
+                self._computation_graph.append((key, expr))
             self._df = self._df.with_columns(expr.alias(key))
 
             # Incremental schema maintenance (clears the dirty flag the _df
@@ -552,6 +559,20 @@ class ActuarialFrame:
         except Exception as e:  # noqa: BLE001
             _handle_execution_error(self, e)  # Will re-raise or format
 
+    def _reset_attribution_window(self) -> None:
+        """Restart collect-error attribution after an unrecorded plan change.
+
+        The recorded ``(name, expr)`` graph is only sound to replay while the
+        baseline plus the recorded assignments equal the live plan. Structural
+        operations (filter, join, select, rename, drop, sort) mutate the plan
+        without being recorded, so the window restarts: the next assignment
+        snapshots a fresh baseline from the post-mutation plan. Traced debug
+        runs keep their graph — calc-graph export needs the full record, and
+        the tracing decorator manages that lifecycle itself.
+        """
+        if not self._tracing and self._computation_graph:
+            self._computation_graph = []
+
     def profile(self) -> tuple[pl.DataFrame, pl.DataFrame]:
         """Execute and materialize the dataframe with profiling, returning (result_df, profile_info)."""
         try:
@@ -625,15 +646,20 @@ class ActuarialFrame:
                 if output_name not in self._column_order:
                     new_cols_order.append(output_name)
 
-            # Record when tracing; ALWAYS apply. The graph is record-only
-            # metadata — collect()/profile() never replay it, so an operation
-            # that is recorded but not applied would silently vanish.
+            # Record, then ALWAYS apply. The graph is record-only metadata —
+            # collect()/profile() never replay it, so an operation that is
+            # recorded but not applied would silently vanish.
+            if not self._computation_graph:
+                # Baseline for error-boundary diagnosis (see __setitem__)
+                object.__setattr__(self, "_baseline_df", self._df)
             if self._tracing:
-                if not self._computation_graph:
-                    # Baseline for error-boundary diagnosis (see __setitem__)
-                    object.__setattr__(self, "_baseline_df", self._df)
                 for name, expr in converted_exprs_dict.items():
                     append_operation_to_graph(self, name, expr)
+            else:
+                # Bare tuples for collect-error attribution (#39); see
+                # __setitem__ for why there is no metadata capture here.
+                for name, expr in converted_exprs_dict.items():
+                    self._computation_graph.append((name, expr))
             self._df = self._df.with_columns(**converted_exprs_dict)
             self._schema = self._df.collect_schema()
             self._column_order.extend(new_cols_order)
@@ -691,6 +717,7 @@ class ActuarialFrame:
 
             # Call underlying Polars select
             self._df = self._df.select(all_exprs_to_select)
+            self._reset_attribution_window()
 
             # Update schema and column order AFTER execution
             # This might be expensive; consider lazy update or collect_schema()
@@ -796,6 +823,7 @@ class ActuarialFrame:
         self._df = self._df.join(
             right, on=on, left_on=left_on, right_on=right_on, how=how
         )
+        self._reset_attribution_window()
         self._schema = self._df.collect_schema()
         new_cols = [c for c in self._schema.keys() if c not in self._column_order]
         self._column_order.extend(new_cols)
@@ -864,6 +892,7 @@ class ActuarialFrame:
             raise ValueError(msg)
 
         self._df = self._df.filter(predicate)
+        self._reset_attribution_window()
         return self
 
     def rename(self, mapping: dict[str, str]) -> ActuarialFrame:
@@ -934,6 +963,7 @@ class ActuarialFrame:
             raise ValueError(msg)
 
         self._df = self._df.rename(mapping)
+        self._reset_attribution_window()
         self._schema = self._df.collect_schema()
         self._column_order = [mapping.get(c, c) for c in self._column_order]
         self._refresh_attr_columns_set()
@@ -1000,6 +1030,7 @@ class ActuarialFrame:
             raise ValueError(msg)
 
         self._df = self._df.drop(list(columns))
+        self._reset_attribution_window()
         self._schema = self._df.collect_schema()
         self._column_order = [c for c in self._column_order if c not in columns]
         self._refresh_attr_columns_set()
@@ -1073,6 +1104,7 @@ class ActuarialFrame:
             raise ValueError(msg)
 
         self._df = self._df.sort(by, descending=descending)
+        self._reset_attribution_window()
         return self
 
     def pipe(

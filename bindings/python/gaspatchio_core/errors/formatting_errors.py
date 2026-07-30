@@ -365,6 +365,7 @@ def _handle_frame_error(frame: ActuarialFrame, e: Exception):
         for attr in [
             "_enhanced_processed",
             "_basic_formatted",
+            "_column_attributed",
             "enhanced_error",
             "_dispatch_enhanced",
         ]
@@ -475,9 +476,39 @@ def _handle_frame_error(frame: ActuarialFrame, e: Exception):
                     f"Enhanced error handling failed: {format_error}, falling back to basic formatting",
                 )
 
+    # Collect-time column attribution (#39): raises with the column name
+    # appended when a recorded assignment reproduces the error, else returns.
+    _attribute_collect_error(frame, e)
+
     # Fall back to basic column error formatting for column-related errors
     _handle_basic_column_error(frame, e)
     # This should never reach here as _handle_basic_column_error always raises
+
+
+def _attribute_collect_error(frame: ActuarialFrame, e: Exception) -> None:
+    """Name the failing column in a collect-time error, or return (#39).
+
+    Outside traced debug runs the graph holds bare (name, expr) tuples —
+    enough to replay and name the failing column, not enough for the full
+    enhanced formatter. When attribution succeeds the original exception is
+    re-raised with the column name appended; on any ambiguity this returns
+    and the caller's fallback chain handles the error untouched.
+    """
+    from .boundary import attribute_collect_failure
+
+    attribution = attribute_collect_failure(frame, e)
+    if attribution is None:
+        return
+    column, expression = attribution
+    e.args = (
+        f"{e}\n\n"
+        f"  Failing column: {column!r}\n"
+        f"  Defined as:     {expression}",
+    )
+    # Processed-marker idiom used throughout this module (_basic_formatted,
+    # _enhanced_processed): prevents double-decoration on re-entry.
+    e._column_attributed = True  # noqa: SLF001
+    raise e
 
 
 # Backward compatibility alias
