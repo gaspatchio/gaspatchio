@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785461377881,
+  "lastUpdate": 1785463328799,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib (Windows)": [
@@ -2673,6 +2673,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 6.23,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ac747daec774a4fbaa292cd03c716d9afe826d00",
+          "message": "Errors: attribute collect-time failures to the assigned column (#49)\n\n* feat(errors): name the offending column in collect-time failures (#39)\n\nA lazy chain failing at collect() surfaced the raw Polars error — e.g.\n\"ShapeError: list lengths differed at index 0: 6 != 3\" — with no clue\nwhich assigned column produced it: a long hunt in a 50-column model.\nThe bisect-replay machinery to attribute it (ErrorBoundaryFinder) has\nexisted since #18, but the graph it replays was only recorded under\ntraced debug runs, so in every normal run it had nothing to work with.\n\nEvery assignment is now recorded as a bare (name, expr) tuple — no\nstack inspection, unlike the traced path, because the setter is the\nmodel-build hot path. When a ShapeError, InvalidOperationError or\nSchemaError reaches the collect() boundary, the recorded assignments\nreplay against the pristine pre-assignment baseline until one\nreproduces the error class; the message then ends with the column name\nand its defining expression. Audit by default: the lineage the\nprinciples promise now reaches the error path.\n\nThe fallback contract is the safety property: on ANY ambiguity — empty\ngraph, replay that does not reproduce, failure inside the replay — the\noriginal error passes through byte-for-byte. A wrong column name costs\nmore than no column name. Structural operations (filter/join/select/\nrename/drop/sort) are not recorded, so they restart the recording\nwindow rather than risk replaying against a stale baseline.\n\ncalc-graph export ignores the bare tuples (no metadata) and still\ndemands a debug-mode run; two tests that asserted \"non-traced graphs\nstay empty\" now assert the property they actually protected — no\nTracedOperation metadata capture outside tracing.\n\n* fix(errors): harden collect-time attribution against fifteen review findings\n\nA full adversarial review of the #39 commit surfaced fifteen defects, six\nempirically reproduced. The worst was a regression of the most common\nerror path: the always-populated graph routed ordinary missing-column\nerrors into the enhanced compilation path, whose builder crashed on the\nbare tuples and re-raised the RAW Polars error — losing the friendly\ndid-you-mean panel for a simple misspelling. The compilation path now\nrequires TracedOperation records, and tuple-only graphs keep the basic\nformatting they always had.\n\nSoundness — the \"wrong name costs more than no name\" contract:\n- Traced graphs survive structural ops (calc-graph export needs them,\n  even after the decorator restores tracing off) but are marked UNSOUND;\n  both attribution and the enhanced replay refuse a graph whose baseline\n  no longer matches the live plan.\n- Multi-expression with_columns batches restart the window: every\n  expression sees the pre-batch frame live, but replay is sequential,\n  so a sibling-shadowing batch could blame a healthy column.\n- The exact-failure scan starts strictly after the known-good prefix;\n  it used to start one op early and double-apply, blaming a valid\n  self-referential dtype-changing assignment for another column's error.\n- Attribution requires the replayed error's leading message to match the\n  original, not just its class — no more pairing column A's name with\n  column B's error text.\n- Rollforward hidden-column injection is recorded (non-traced) or marks\n  the window unsound (traced) instead of silently desynchronising it.\n- Tuples are recorded AFTER the successful apply — a rejected expression\n  leaves no phantom op.\n\nCost and lifecycle:\n- Replay baselines are row-capped: diagnosis stays fast at scale, and an\n  error past the cap yields no attribution rather than a slow one.\n- A successful collect() closes the window, bounding graph growth on\n  long-lived frames and scoping replay to ops since the last success.\n- Plan logging under show_query_plan fires only for traced records,\n  restoring the pre-#39 optimize-mode behaviour.\n- AF_ERROR_MODE=off/basic disables attribution even on debug frames;\n  already-formatted exceptions are never decorated twice.\n\nCoverage:\n- run_to_parquet / run_aggregated route batch-collect failures through\n  the boundary, so the reported at-scale pain case gets the column name.\n- calc-graph export no longer misclassifies tuple-recorded columns as\n  raw model-point inputs.\n- util/__init__.pyi gains get_error_mode/set_error_mode, clearing two\n  pre-existing stubtest errors.\n\nEight new regression tests, one per reproduced finding class.",
+          "timestamp": "2026-07-31T13:49:26+12:00",
+          "tree_id": "b02ad59b0b73edad9176edd2a175b1d66e2fcf66",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/ac747daec774a4fbaa292cd03c716d9afe826d00"
+        },
+        "date": 1785463325531,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 4.605,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 3.064,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.316,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 25.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 6.735,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 21.31,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.463,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2159.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 24.671,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 40.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 53.29,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.455,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 4073.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 20.713,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 482.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 8.44,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 22.993,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4349.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 153.218,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 652.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 6.66,
             "unit": "x"
           }
         ]
