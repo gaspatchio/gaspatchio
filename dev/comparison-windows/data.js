@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785463328799,
+  "lastUpdate": 1785466068672,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib (Windows)": [
@@ -2807,6 +2807,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 6.66,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f2798f944a917802b31bef561bdbc8cdeae284c9",
+          "message": "release: v0.6.0 — silent wrong numbers become loud errors (#50)\n\n* docs(changelog): record the full batch since v0.5.3 — every shipped fix has an entry\n\nOnly #14, #48 and #49 wrote CHANGELOG entries as they merged; the other\nthirteen commits since v0.5.3 — the audit/field-report P0 runs (#16–#19,\n#32) and the triage batch (#44–#47) — shipped without a record. Release\nnotes derive from this file, so the gap had to close before tagging.\n\nAdds Breaking entries for on_missing=\"raise\" (#24), varying-rate\nprospective_value (#28), the bare-string lookup flip (#37) and the month\nperiod index (#36) alongside the existing #31; Fixed entries for\n#21–#23, #25–#27, #29, #30, #38, #40; and Documentation, Infrastructure\nand Security sections. Every entry names its issue and every breaking\nentry carries an Action line, per the release-notes policy from #34.\n\n* release: v0.6.0",
+          "timestamp": "2026-07-31T14:34:48+12:00",
+          "tree_id": "6cfa274dc2633fdc6798b3e65e4a0e983d4a4704",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/f2798f944a917802b31bef561bdbc8cdeae284c9"
+        },
+        "date": 1785466064606,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 4.066,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.928,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.4,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 20,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 7.12,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 17.8,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.522,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 1915.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 25.174,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 39.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 48.23,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.489,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 4017.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 21.36,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 468.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 8.58,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 24.081,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4152.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 154.307,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 648.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 6.41,
             "unit": "x"
           }
         ]
