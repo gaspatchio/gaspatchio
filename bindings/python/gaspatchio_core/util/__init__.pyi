@@ -36,6 +36,14 @@ def get_default_threads() -> int:
     """Get the default number of threads Polars should use (0 = auto)."""
     ...
 
+def get_error_mode() -> str:
+    """Get the error handling mode ('enhanced' (default), 'basic', 'debug', or 'off')."""
+    ...
+
+def set_error_mode(mode: str) -> None:
+    """Set the error handling mode ('enhanced', 'basic', 'debug', or 'off')."""
+    ...
+
 def execution_mode(mode: str) -> _GeneratorContextManager[None]:
     """Context manager for temporarily changing the execution mode."""
     ...

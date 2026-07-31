@@ -20,7 +20,10 @@ import psutil
 
 from gaspatchio_core.frame import ActuarialFrame
 from gaspatchio_core.scenarios._auto_batch import bounded_seed_size, size_to_budget
-from gaspatchio_core.scenarios._for_each import _collect_with_peak
+from gaspatchio_core.scenarios._for_each import (
+    _collect_with_peak,
+    _reraise_with_attribution,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -155,7 +158,10 @@ def run_to_parquet(
         if seed_lazy is None:
             msg = "model_fn returned an ActuarialFrame with no underlying frame."
             raise ValueError(msg)
-        _seed_df, seed_peak = _collect_with_peak(seed_lazy, engine="streaming")
+        try:
+            _seed_df, seed_peak = _collect_with_peak(seed_lazy, engine="streaming")
+        except Exception as e:  # noqa: BLE001 — routed to the boundary, which raises
+            _reraise_with_attribution(seed_af, e)
         frame_bytes = int(_seed_df.estimated_size())
         # MEMORY sizing floors the measured peak with the frame size: a fast seed
         # collect can complete between RSS samples (seed_peak==0), which would collapse
@@ -178,11 +184,15 @@ def run_to_parquet(
     batch_idx = 0
     for start in range(0, n_policies, resolved):
         batch = model_points.slice(start, resolved)
-        lazy = model_fn(ActuarialFrame(batch))._df  # noqa: SLF001
+        out_af = model_fn(ActuarialFrame(batch))
+        lazy = out_af._df  # noqa: SLF001
         if lazy is None:
             msg = "model_fn returned an ActuarialFrame with no underlying frame."
             raise ValueError(msg)
-        proj, _ = _collect_with_peak(lazy, engine="streaming")
+        try:
+            proj, _ = _collect_with_peak(lazy, engine="streaming")
+        except Exception as e:  # noqa: BLE001 — routed to the boundary, which raises
+            _reraise_with_attribution(out_af, e)
         safe_write_parquet(proj, output_dir / f"batch_{batch_idx:04d}.parquet")
         del proj
         peak = max(peak, psutil.Process().memory_info().rss)

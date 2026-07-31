@@ -365,6 +365,7 @@ def _handle_frame_error(frame: ActuarialFrame, e: Exception):
         for attr in [
             "_enhanced_processed",
             "_basic_formatted",
+            "_column_attributed",
             "enhanced_error",
             "_dispatch_enhanced",
         ]
@@ -405,8 +406,15 @@ def _handle_frame_error(frame: ActuarialFrame, e: Exception):
             not isinstance(op, tuple) for op in frame._computation_graph
         )
 
-    # Try enhanced error handling if we have traced operations
-    if has_traced_operations and error_mode in ["enhanced", "debug"]:
+    # Try enhanced error handling if we have traced operations — but not
+    # when an unrecorded plan mutation (filter/join/select after tracing)
+    # made the graph unsound to replay: a stale replay names the wrong
+    # operation with full confidence.
+    if (
+        has_traced_operations
+        and error_mode in ["enhanced", "debug"]
+        and not getattr(frame, "_attribution_unsound", False)
+    ):
         try:
             # Import error handling components locally to avoid circular imports
             from .boundary import ErrorBoundaryFinder
@@ -475,9 +483,57 @@ def _handle_frame_error(frame: ActuarialFrame, e: Exception):
                     f"Enhanced error handling failed: {format_error}, falling back to basic formatting",
                 )
 
+    # Collect-time column attribution (#39): raises with the column name
+    # appended when a recorded assignment reproduces the error, else returns.
+    _attribute_collect_error(frame, e)
+
     # Fall back to basic column error formatting for column-related errors
     _handle_basic_column_error(frame, e)
     # This should never reach here as _handle_basic_column_error always raises
+
+
+def _attribute_collect_error(frame: ActuarialFrame, e: Exception) -> None:
+    """Name the failing column in a collect-time error, or return (#39).
+
+    Outside traced debug runs the graph holds bare (name, expr) tuples —
+    enough to replay and name the failing column, not enough for the full
+    enhanced formatter. When attribution succeeds the original exception is
+    re-raised with the column name appended; on any ambiguity this returns
+    and the caller's fallback chain handles the error untouched.
+    """
+    # An exception the enhanced/basic machinery already rewrote must not be
+    # decorated a second time (nor pay a second replay) — the enhanced
+    # path's own raise is swallowed by its surrounding except, so control
+    # can reach here with the message already rewritten.
+    if any(
+        hasattr(e, attr)
+        for attr in ("_enhanced_processed", "_basic_formatted", "enhanced_error")
+    ):
+        return
+
+    # Attribution replay is enhanced-tier machinery: AF_ERROR_MODE=off or
+    # =basic is an explicit opt-out that a debug-mode frame must not
+    # override.
+    from gaspatchio_core.util import get_error_mode
+
+    if get_error_mode() not in ("enhanced", "debug"):
+        return
+
+    from .boundary import attribute_collect_failure
+
+    attribution = attribute_collect_failure(frame, e)
+    if attribution is None:
+        return
+    column, expression = attribution
+    e.args = (
+        f"{e}\n\n"
+        f"  Failing column: {column!r}\n"
+        f"  Defined as:     {expression}",
+    )
+    # Processed-marker idiom used throughout this module (_basic_formatted,
+    # _enhanced_processed): prevents double-decoration on re-entry.
+    e._column_attributed = True  # noqa: SLF001
+    raise e
 
 
 # Backward compatibility alias
@@ -564,7 +620,9 @@ def _handle_compilation_error_enhanced(frame: ActuarialFrame, e: Exception):
         finder = CompilationErrorFinder(frame, e)
         fail_idx, fail_op, last_good_df = finder.find_failing_operation()
 
-        if fail_op and last_good_df is not None:
+        # A bare attribution tuple (#39, mixed graph) has no metadata for
+        # the enhanced builder — fall through to basic handling instead.
+        if fail_op and not isinstance(fail_op, tuple) and last_good_df is not None:
             # Build enhanced error using Pydantic models
             enhanced_error = _build_enhanced_compilation_error(
                 exception=e,
@@ -620,7 +678,15 @@ def _handle_compilation_error(frame: ActuarialFrame, e: Exception):
 
     # NEW: Check for column reference errors with enhanced handling
     if _is_column_reference_compilation_error(e):
-        if error_mode in ["enhanced", "debug"] and frame._computation_graph:
+        # Only TracedOperation records can drive the enhanced path — the
+        # bare attribution tuples (#39) carry no metadata, and routing a
+        # tuple-only graph here crashed the builder and re-raised the RAW
+        # Polars error, losing the friendly did-you-mean formatting for
+        # the most common user error (a misspelled column).
+        has_traced_operations = any(
+            not isinstance(op, tuple) for op in frame._computation_graph
+        )
+        if error_mode in ["enhanced", "debug"] and has_traced_operations:
             _handle_compilation_error_enhanced(frame, e)
             # Should never reach here as enhanced handler always raises
         else:

@@ -244,7 +244,10 @@ class TestBackwardCompatibility:
 
         assert "c" in result.columns
         assert result["c"].to_list() == [5, 7, 9]
-        assert len(af._computation_graph) == 0  # No operations added to graph
+        # Non-traced assignments record bare (name, expr) tuples for
+        # collect-error attribution (#39) — but never TracedOperation
+        # objects, whose stack-inspection cost belongs to tracing only.
+        assert all(isinstance(op, tuple) for op in af._computation_graph)
 
     def test_setitem_with_tracing(self):
         """Test that __setitem__ adds to graph when tracing is enabled."""

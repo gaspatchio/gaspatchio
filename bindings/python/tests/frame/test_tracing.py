@@ -78,8 +78,10 @@ def test_trace_optimize_mode_capture(base_frame):
     )
     assert_frame_equal(base_frame.collect(), expected_df)
 
-    # Check computation graph - operations were applied so graph should be empty
-    assert len(base_frame._computation_graph) == 0
+    # Operations were applied immediately; the graph holds only the bare
+    # (name, expr) attribution records (#39), never TracedOperation objects
+    # — optimize mode must not pay tracing's metadata-capture cost.
+    assert all(isinstance(op, tuple) for op in base_frame._computation_graph)
 
 
 def test_trace_optimize_mode_no_operations(base_frame):

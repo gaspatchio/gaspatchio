@@ -240,6 +240,10 @@ class ActuarialFrame:
         # Support both legacy tuple format and new TracedOperation format for backward compatibility
         self._computation_graph: list[tuple[str, Any] | TracedOperation] = []
         self._tracing: bool = False
+        # True when the live plan has diverged from baseline+graph (an
+        # unrecorded mutation on a graph we must keep) — attribution (#39)
+        # refuses to replay rather than risk naming the wrong column.
+        self._attribution_unsound: bool = False
 
         # Projection metadata — populated by af.projection.set(...)
         self._projection: object | None = None
@@ -352,17 +356,22 @@ class ActuarialFrame:
             new_dtype = self._resolve_assigned_dtype(expr) if do_incremental else None
 
             # The graph is RECORD-ONLY metadata (calc-graph display, query-plan
-            # logging). Every operation is applied to _df exactly once here;
-            # collect()/profile() must never replay the graph on top of it —
-            # that double-applied self-referential assignments in debug mode.
+            # logging, collect-error attribution). Every operation is applied
+            # to _df exactly once here; collect()/profile() must never replay
+            # the graph on top of it — that double-applied self-referential
+            # assignments in debug mode.
+            self._open_attribution_window_if_needed()
             if self._tracing:
-                if not self._computation_graph:
-                    # Snapshot the pre-op frame at the start of a trace
-                    # sequence: error-boundary diagnosis replays the graph
-                    # against this baseline, never against the applied _df.
-                    object.__setattr__(self, "_baseline_df", self._df)
                 append_operation_to_graph(self, key, expr)
             self._df = self._df.with_columns(expr.alias(key))
+            if not self._tracing:
+                # Bare (name, expr) tuple so a collect-time failure can be
+                # replayed and attributed to the column that caused it (#39).
+                # Appended AFTER the successful apply: a rejected expression
+                # must not leave a phantom op the live plan never received.
+                # Unlike the traced path there is no stack inspection here —
+                # the setter is the model-build hot path.
+                self._computation_graph.append((key, expr))
 
             # Incremental schema maintenance (clears the dirty flag the _df
             # setter just set). If skipped or the dtype could not be resolved
@@ -465,9 +474,19 @@ class ActuarialFrame:
         for name in hidden:
             if name in known:
                 continue
-            self._df = self._df.with_columns(
-                _registry.plugin_expr_for(name).alias(name)
-            )
+            hidden_expr = _registry.plugin_expr_for(name).alias(name)
+            if self._tracing:
+                # An unrecorded plan mutation under tracing: mark the
+                # window unsound rather than replay against a baseline
+                # that lacks this column (#39).
+                self._reset_attribution_window()
+            else:
+                self._open_attribution_window_if_needed()
+            self._df = self._df.with_columns(hidden_expr)
+            if not self._tracing:
+                # Recorded like any assignment so baseline + graph still
+                # equals the live plan for rollforward models (#39).
+                self._computation_graph.append((name, hidden_expr))
         return expr
 
     # Excluded: _log_query_plan (now in tracing.py)  # noqa: ERA001
@@ -533,12 +552,18 @@ class ActuarialFrame:
             # The computation graph is record-only: every traced operation was
             # already applied to _df by the setter. Replaying it here would
             # apply self-referential assignments twice (debug != optimize).
-            if self._computation_graph and self._show_query_plan:
+            # Log only TracedOperation records: pre-#39 a non-empty graph
+            # implied a traced run, and the bare attribution tuples must not
+            # start triggering plan logging on every optimize-mode collect.
+            traced_ops = [
+                op for op in self._computation_graph if not isinstance(op, tuple)
+            ]
+            if traced_ops and self._show_query_plan:
                 from .tracing import (
                     log_query_plan,  # Local import to avoid circularity at module level
                 )
 
-                log_query_plan(self._computation_graph, final_df)
+                log_query_plan(traced_ops, final_df)
 
             # Strip hidden rollforward columns before collecting
             schema_names = final_df.collect_schema().names()
@@ -548,9 +573,78 @@ class ActuarialFrame:
             if rollforward_cols:
                 final_df = final_df.drop(rollforward_cols)
 
-            return final_df.collect(engine=engine)
+            result = final_df.collect(engine=engine)
+            self._close_attribution_window()
+            return result  # noqa: TRY300 — mirrors profile(); try wraps the whole body
         except Exception as e:  # noqa: BLE001
             _handle_execution_error(self, e)  # Will re-raise or format
+
+    def _open_attribution_window_if_needed(self) -> None:
+        """Snapshot the pre-op plan when the first op of a window is recorded.
+
+        Error-boundary diagnosis replays the graph against this baseline,
+        never against the applied ``_df``. A fresh window is sound by
+        construction, so the unsound flag clears here too.
+        """
+        if not self._computation_graph:
+            object.__setattr__(self, "_baseline_df", self._df)
+            object.__setattr__(self, "_attribution_unsound", False)
+
+    def _record_with_columns_batch(self, exprs: dict[str, pl.Expr]) -> None:
+        """Record an applied ``with_columns`` batch for attribution (#39).
+
+        A single expression records like a setter assignment. A
+        multi-expression batch is applied as ONE Polars ``with_columns`` —
+        every expression sees the pre-batch frame — but replay applies ops
+        one at a time, so an expression naming a sibling's output would
+        replay a DIFFERENT calculation and could blame a healthy column.
+        The window restarts instead of risking it.
+        """
+        if len(exprs) == 1:
+            for name, expr in exprs.items():
+                self._computation_graph.append((name, expr))
+            return
+        self._reset_attribution_window()
+
+    def _reset_attribution_window(self) -> None:
+        """Restart collect-error attribution after an unrecorded plan change.
+
+        The recorded ``(name, expr)`` graph is only sound to replay while the
+        baseline plus the recorded assignments equal the live plan. Structural
+        operations (filter, join, select, rename, drop, sort) and
+        multi-expression batches mutate the plan without a replayable record.
+        Bare tuple windows simply restart — the next assignment snapshots a
+        fresh baseline from the post-mutation plan. Graphs holding
+        TracedOperation records are PRESERVED (calc-graph export needs the
+        full record, even after the trace decorator has switched tracing
+        back off) and only marked unsound, so attribution refuses to replay
+        them rather than replaying against a stale baseline and naming the
+        wrong column.
+        """
+        if self._tracing or any(
+            not isinstance(op, tuple) for op in self._computation_graph
+        ):
+            object.__setattr__(self, "_attribution_unsound", True)
+            return
+        if self._computation_graph:
+            self._computation_graph = []
+
+    def _close_attribution_window(self) -> None:
+        """Drop the recorded tuples after a successful materialisation.
+
+        A successful collect proves every recorded assignment sound, so the
+        window restarts — the next assignment snapshots the then-current
+        plan as its baseline. This bounds graph growth on long-lived frames
+        (notebooks, scenario loops) and scopes replay to the ops since the
+        last success. Traced graphs are kept: calc-graph export runs after
+        ``collect()``.
+        """
+        if (
+            not self._tracing
+            and self._computation_graph
+            and all(isinstance(op, tuple) for op in self._computation_graph)
+        ):
+            self._computation_graph = []
 
     def profile(self) -> tuple[pl.DataFrame, pl.DataFrame]:
         """Execute and materialize the dataframe with profiling, returning (result_df, profile_info)."""
@@ -563,12 +657,16 @@ class ActuarialFrame:
             # The computation graph is record-only: every traced operation was
             # already applied to _df by the setter. Replaying it here would
             # apply self-referential assignments twice (debug != optimize).
-            if self._computation_graph and self._show_query_plan:
+            # See collect(): only TracedOperation records drive plan logging.
+            traced_ops = [
+                op for op in self._computation_graph if not isinstance(op, tuple)
+            ]
+            if traced_ops and self._show_query_plan:
                 from .tracing import (
                     log_query_plan,  # Local import to avoid circularity at module level
                 )
 
-                log_query_plan(self._computation_graph, final_df)
+                log_query_plan(traced_ops, final_df)
 
             # Strip hidden rollforward columns before profiling
             schema_names = final_df.collect_schema().names()
@@ -580,6 +678,7 @@ class ActuarialFrame:
 
             # Use Polars profile to get both result and profile info
             result_df, profile_info = final_df.profile()
+            self._close_attribution_window()
             return result_df, profile_info  # noqa: TRY300
         except Exception as e:  # noqa: BLE001
             _handle_execution_error(self, e)  # Will re-raise or format
@@ -625,16 +724,16 @@ class ActuarialFrame:
                 if output_name not in self._column_order:
                     new_cols_order.append(output_name)
 
-            # Record when tracing; ALWAYS apply. The graph is record-only
-            # metadata — collect()/profile() never replay it, so an operation
-            # that is recorded but not applied would silently vanish.
+            # The graph is record-only metadata — collect()/profile() never
+            # replay it, so an operation that is recorded but not applied
+            # would silently vanish.
+            self._open_attribution_window_if_needed()
             if self._tracing:
-                if not self._computation_graph:
-                    # Baseline for error-boundary diagnosis (see __setitem__)
-                    object.__setattr__(self, "_baseline_df", self._df)
                 for name, expr in converted_exprs_dict.items():
                     append_operation_to_graph(self, name, expr)
             self._df = self._df.with_columns(**converted_exprs_dict)
+            if not self._tracing:
+                self._record_with_columns_batch(converted_exprs_dict)
             self._schema = self._df.collect_schema()
             self._column_order.extend(new_cols_order)
             self._refresh_attr_columns_set()
@@ -691,6 +790,7 @@ class ActuarialFrame:
 
             # Call underlying Polars select
             self._df = self._df.select(all_exprs_to_select)
+            self._reset_attribution_window()
 
             # Update schema and column order AFTER execution
             # This might be expensive; consider lazy update or collect_schema()
@@ -796,6 +896,7 @@ class ActuarialFrame:
         self._df = self._df.join(
             right, on=on, left_on=left_on, right_on=right_on, how=how
         )
+        self._reset_attribution_window()
         self._schema = self._df.collect_schema()
         new_cols = [c for c in self._schema.keys() if c not in self._column_order]
         self._column_order.extend(new_cols)
@@ -864,6 +965,7 @@ class ActuarialFrame:
             raise ValueError(msg)
 
         self._df = self._df.filter(predicate)
+        self._reset_attribution_window()
         return self
 
     def rename(self, mapping: dict[str, str]) -> ActuarialFrame:
@@ -934,6 +1036,7 @@ class ActuarialFrame:
             raise ValueError(msg)
 
         self._df = self._df.rename(mapping)
+        self._reset_attribution_window()
         self._schema = self._df.collect_schema()
         self._column_order = [mapping.get(c, c) for c in self._column_order]
         self._refresh_attr_columns_set()
@@ -1000,6 +1103,7 @@ class ActuarialFrame:
             raise ValueError(msg)
 
         self._df = self._df.drop(list(columns))
+        self._reset_attribution_window()
         self._schema = self._df.collect_schema()
         self._column_order = [c for c in self._column_order if c not in columns]
         self._refresh_attr_columns_set()
@@ -1073,6 +1177,7 @@ class ActuarialFrame:
             raise ValueError(msg)
 
         self._df = self._df.sort(by, descending=descending)
+        self._reset_attribution_window()
         return self
 
     def pipe(
@@ -2372,6 +2477,7 @@ class ActuarialFrame:
                 "_show_query_plan",
                 "_computation_graph",
                 "_tracing",
+                "_attribution_unsound",
                 "_baseline_df",
                 "_date_accessor_instance",
                 "_excel_accessor_instance",
