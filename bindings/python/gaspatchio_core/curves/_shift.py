@@ -11,6 +11,7 @@ shifts are not yet implemented.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -40,12 +41,10 @@ def shift_parallel(curve: Curve, bps: float) -> Curve:
     """
     delta = bps / 10_000.0
     shifted_rates = tuple(r + delta for r in curve.rates)
-    return type(curve)(
-        tenors=curve.tenors,
-        rates=shifted_rates,
-        day_count=curve.day_count,
-        interpolation=curve.interpolation,
-    )
+    # dataclasses.replace carries EVERY field — a reconstruction that lists
+    # fields by hand silently drops any later addition (extrapolation was
+    # dropped exactly that way, flattening stressed forward curves).
+    return dataclasses.replace(curve, rates=shifted_rates)
 
 
 def key_rate_shift(curve: Curve, tenor: float, bps: float) -> Curve:
@@ -85,12 +84,8 @@ def key_rate_shift(curve: Curve, tenor: float, bps: float) -> Curve:
     shifted_rates = tuple(
         r + delta if i == idx else r for i, r in enumerate(curve.rates)
     )
-    return type(curve)(
-        tenors=curve.tenors,
-        rates=shifted_rates,
-        day_count=curve.day_count,
-        interpolation=curve.interpolation,
-    )
+    # See shift_parallel: replace() preserves every field by construction.
+    return dataclasses.replace(curve, rates=shifted_rates)
 
 
 __all__ = ["key_rate_shift", "shift_parallel"]
