@@ -202,6 +202,54 @@ def test_existing_month_column_raises_naming_both_exits() -> None:
     assert "drop" in message
 
 
+@pytest.mark.parametrize("frequency", ["weekly", "daily"])
+def test_existing_month_survives_an_unstamped_schedule(frequency: str) -> None:
+    """No stamp, no collision — the user's column is left exactly alone.
+
+    Weekly/daily schedules never materialise ``month``, so a frame carrying
+    its own (e.g. a calendar month from the model points) must project
+    without being told to rename a column nothing was going to touch.
+    """
+    mp = pl.DataFrame(
+        {
+            "policy_id": [1],
+            "issue_age": [40],
+            "policy_inception": [datetime.date(2020, 1, 1)],
+            "month": [7],
+        }
+    )
+    out = (
+        ActuarialFrame(mp)
+        .projection.set(
+            start_date=datetime.date(2025, 1, 1),
+            n_periods=9,
+            frequency=frequency,
+        )
+        .collect()
+    )
+    assert out["month"].to_list() == [7]
+
+
+def test_existing_month_survives_a_from_inception_schedule() -> None:
+    """Same contract on the duration axis, which also never stamps."""
+    from gaspatchio_core import Schedule
+
+    mp = pl.DataFrame(
+        {
+            "policy_id": [1],
+            "policy_inception": [datetime.date(2020, 3, 15)],
+            "month": [7],
+        }
+    )
+    schedule = Schedule.from_inception(
+        n_periods=12,
+        frequency="1M",
+        inception_column="policy_inception",
+    )
+    out = ActuarialFrame(mp).projection.set(schedule=schedule).collect()
+    assert out["month"].to_list() == [7]
+
+
 def test_reprojecting_replaces_the_period_index() -> None:
     """Calling set() twice in-session is supported; the index is ours."""
     af = _frame().projection.set(

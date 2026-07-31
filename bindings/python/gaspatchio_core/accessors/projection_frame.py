@@ -453,12 +453,14 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         The framework cannot know which the model means, so the model states
         its own one-line formula (see AGENTS.md, Timing Conventions).
         """
-        self._reject_reserved_column_collisions()
-
         stamp_month = (
             schedule.frequency in _MONTHS_PER_PERIOD
             and schedule._kind != "from_inception"  # noqa: SLF001
         )
+        if stamp_month:
+            # Only a schedule that will stamp `month` can collide with it —
+            # weekly/daily/from_inception axes leave the user's column alone.
+            self._reject_reserved_column_collisions()
 
         if schedule._kind == "from_calendar_grid":  # noqa: SLF001
             boundaries = schedule.period_dates()  # list[date], length n_periods+1
