@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785460351134,
+  "lastUpdate": 1785461267315,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks (Windows)": [
@@ -3449,6 +3449,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1994368650,
             "range": "± 25996398",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e5a78c1d20883d12557812713c878eb1628343af",
+          "message": "fix(curves)!: clamp log_linear extrapolation in rate space; make the extrapolation parameter live (#48)\n\n* fix(curves)!: clamp log_linear extrapolation in rate space and make the extrapolation parameter live\n\nlog_linear interpolates log-discount-factors, and outside the knot range\nthe kernel clamped the log-DF LEVEL. Holding a level constant stops the\ndiscount factor decaying: a flat 5% curve returned ~1.64% at 30y (a\n30-year cashflow carried at ~2.7x its true value), and below the first\nknot the same clamp read 5%@5y as 27.6% at t=1, diverging as t -> 0.\nThe extrapolation kwarg was declared, defaulted, serialised across the\nplugin boundary — and read by nothing.\n\nNow \"flat\" (the default) holds the boundary knot's spot rate in both\ndirections, matching what flat has always meant for linear/pchip whose\nknots ARE rates. \"forward\" extends the last segment's forward rate, the\nmarket-consistent choice for long-tail discounting; it requires\nlog_linear, and rate-space methods reject it rather than ignoring it.\nUnknown modes error at Curve construction, not at collect().\n\nThe eager Python path (log_linear_spot) had the identical defect and is\nfixed with the identical arithmetic; parity between the two paths is\nasserted across tenors and modes. canonical_form() includes\nextrapolation only when non-default, so every existing curve keeps its\nsource_sha() while a \"forward\" curve stamps differently — audit by\ndefault, without invalidating shas that predate the parameter working.\n\nBREAKING: models discounting beyond the last knot (or before the first)\nwith a log_linear curve produced overstated present values; re-run\nreconciliations after upgrading. See CHANGELOG.\n\n* fix(curves): preserve extrapolation through shifts; validate on every construction path\n\nTwo review findings, both real. The shift helpers rebuilt curves with a\nhand-written field list that omitted extrapolation (and parametric), so\na parallel- or key-rate-shifted \"forward\" curve silently became \"flat\"\n— the stressed valuation flattened its long tail while the base run\nstayed correct, which is precisely the silent divergence #31 exists to\nkill. They now rebuild with dataclasses.replace, which carries every\nfield by construction, present and future.\n\nValidation moves from the from_zero_rates call site into __post_init__:\nclassmethods, direct Curve(...) construction, and replace() all funnel\nthrough it, so an invalid interpolation/extrapolation pair can no\nlonger produce a live curve that fails (or silently evaluates flat)\nonly at collect time.\n\nRegression tests verified to fail against the previous commit.",
+          "timestamp": "2026-07-31T13:16:11+12:00",
+          "tree_id": "7aac2aea156cdcda930b35ac08027ee350b0d402",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/e5a78c1d20883d12557812713c878eb1628343af"
+        },
+        "date": 1785461264274,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 279854100,
+            "range": "± 5001961",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 276875600,
+            "range": "± 2567016",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 265825650,
+            "range": "± 3104597",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 6734643,
+            "range": "± 193535",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 267777300,
+            "range": "± 3201195",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 6621881,
+            "range": "± 312374",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 272918250,
+            "range": "± 5959267",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 6612356,
+            "range": "± 207195",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 1013520,
+            "range": "± 15292",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 85179766,
+            "range": "± 769902",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 9923999,
+            "range": "± 137044",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 865417100,
+            "range": "± 5317517",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 399555,
+            "range": "± 5071",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 46629008,
+            "range": "± 524078",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 7576379,
+            "range": "± 143149",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 474381550,
+            "range": "± 4482265",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 398508,
+            "range": "± 3121",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 47183177,
+            "range": "± 495993",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 7597285,
+            "range": "± 140344",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 473980150,
+            "range": "± 4510031",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 504655,
+            "range": "± 6249",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 56389740,
+            "range": "± 846114",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 9842826,
+            "range": "± 357600",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 573539150,
+            "range": "± 30707624",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 2382000,
+            "range": "± 24549",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 252295900,
+            "range": "± 11267570",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 37468804,
+            "range": "± 1460844",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 2377025850,
+            "range": "± 112781517",
             "unit": "ns/iter"
           }
         ]
