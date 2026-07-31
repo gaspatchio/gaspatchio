@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.0] — Silent wrong numbers become loud errors
+
+Nineteen issues from a field report (an actuary porting a production model)
+and two internal audits, in one release. Nearly every defect shared one
+shape: the framework silently doing something plausible — returning NaN for
+a missed lookup, keeping a stale column, clamping a curve into nonsense —
+instead of loudly doing the right thing. Five behaviour changes are
+breaking; each carries an **Action** line below. (#21–#31, #33, #35–#40,
+#42)
 
 ### Breaking
 
