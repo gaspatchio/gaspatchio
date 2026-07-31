@@ -28,7 +28,7 @@ import datetime
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio_core import ActuarialFrame, when
 
 
 def _frame() -> ActuarialFrame:
@@ -133,14 +133,22 @@ def test_both_year_formulas_from_agents_md() -> None:
         frequency="monthly",
     )
     af.duration_years = af.month // 12
+    # The AGENTS.md ordinal line, verbatim: month 0 (the projection start)
+    # belongs to year 1 — a bare ceil would label it year 0 and a
+    # `policy_year == 1` shock would skip the first row.
+    af.policy_year = when(af.month == 0).then(1).otherwise((af.month + 11) // 12)
     out = af.collect()
     months = out["month"].to_list()[0]
     duration = out["duration_years"].to_list()[0]
+    ordinal = out["policy_year"].to_list()[0]
     assert duration == [m // 12 for m in months]
+    assert ordinal == [max(1, -(-m // 12)) for m in months]  # ceil, month 0 -> 1
+    assert ordinal[0] == 1
     # And they disagree exactly at the anniversary boundaries, which is why
     # the framework stamps neither.
-    ordinal = [max(1, -(-m // 12)) for m in months]  # ceil, clipped to 1
-    disagreements = [m for m, d, o in zip(months, duration, ordinal, strict=False) if d + 1 != o]
+    disagreements = [
+        m for m, d, o in zip(months, duration, ordinal, strict=False) if d + 1 != o
+    ]
     assert disagreements == [12, 24]
 
 

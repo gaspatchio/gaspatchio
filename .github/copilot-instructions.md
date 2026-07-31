@@ -181,7 +181,7 @@ Let Polars handle parallelization. Never add Rayon or threading inside plugins.
 | 4 | `--policy-id` flag | Policy ID is positional. `--policy-id-column` is a different thing |
 | 5 | Hand-rolled exp/log identity for `scalar ** list` | `**` works directly on list columns now -- write it as the operator |
 | 6 | Guessing method signatures | Agents get it wrong ~70% of the time -- `gspio docs` first |
-| 7 | `proj_year` vs `year` confusion | Stress scenarios silently wrong -- mass lapse never fires. The framework materialises **only** `month`; derive your year label with the formula you mean (`month // 12` duration-style, `(month + 11) // 12` ordinal) and never reuse a calendar `year` column as a projection year |
+| 7 | `proj_year` vs `year` confusion | Stress scenarios silently wrong -- mass lapse never fires. The framework materialises **only** `month`; derive your year label with the formula you mean (`month // 12` duration-style, or the ordinal `when/then` from the period-index section — a bare `(month + 11) // 12` labels the month-0 boundary year 0) and never reuse a calendar `year` column as a projection year |
 | 8 | Column name case mismatch | Polars is case-sensitive; check `df.columns` first |
 
 ---
@@ -237,7 +237,10 @@ you. Write the one-line formula you mean:
 
 ```python
 af.duration_years = af.month // 12            # completed years: 0,0,…,1,1,… (lifelib-style)
-af.policy_year = (af.month + 11) // 12        # ordinal "year 1" = ceil(month/12), Excel ROUNDUP-style
+# Ordinal "year 1" = ceil(month/12), Excel ROUNDUP-style. The month-0 boundary
+# (the projection start) belongs to year 1 — a bare ceil would label it year 0
+# and a `policy_year == 1` shock would skip the first row:
+af.policy_year = when(af.month == 0).then(1).otherwise((af.month + 11) // 12)
 ```
 
 With **end-of-period** rows, "year 1" of a BSCR-style shock is `ceil`; with
