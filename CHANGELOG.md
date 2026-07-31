@@ -4,6 +4,59 @@
 
 ### Breaking
 
+- **Lookup misses raise instead of silently returning NaN.** A missing key
+  returned bare NaN — invisible to `is_null()`/`fill_null()` — and flowed
+  into reserves unnoticed. Misses now error at `collect()`, naming the
+  table, the miss count, and the first missing key tuples. Opt-outs:
+  `Table(..., on_missing="nan")` restores the old behaviour,
+  `on_missing=0.0` fills with a constant, and a per-lookup override covers
+  a single call site. Note that `when(guard).then(...).otherwise(lookup(...))`
+  evaluates *both* branches, so a guarded lookup still runs on the excluded
+  rows — those expected misses must be declared with `on_missing="nan"` on
+  the lookup.
+
+  **Action:** any lookup that relies on misses coming back as NaN must now
+  declare it. (#24)
+
+- **`prospective_value` end-of-period values under varying rates change.**
+  The ordinary-annuity path discounted the whole tail by position *t*'s
+  factor — an identity that only holds for constant rates. Each cashflow now
+  carries its own compounded factor:
+  `pv(t) = Σ_{s≥t} CF[s] · Π_{u=t..s} v[u]`. Constant-rate results are
+  unchanged; per-period-rate end-of-period results change. NaN cashflows
+  also propagate instead of being silently zeroed — beyond-term periods
+  must be zeroed explicitly.
+
+  **Action:** re-run any reconciliation that discounts with a per-period
+  rate vector. (#28)
+
+- **A bare string lookup key is the value, not a column name** — VLOOKUP
+  semantics. `lookup(product="annuity", age=af.age)` now matches rows whose
+  product dimension equals `"annuity"`; previously the string was read as a
+  column reference and raised a misleading `ColumnNotFoundError` for a
+  column that was never meant to exist. Columns are referenced as
+  `af.product`, `af["product"]`, or `pl.col(...)`.
+
+  **Action:** any lookup that passed a column *name* as a bare string must
+  switch to `af["name"]`. (#37)
+
+- **`projection.set()` stamps a `month` period index — and refuses a frame
+  that already carries one.** `month` is elapsed whole months from the
+  projection start (`0,1,2,…` monthly; `0,3,6,…` quarterly), length
+  `n_periods + 1` and aligned with `t_years()`, so shipped examples like
+  `when(af.month == af.policy_term * 12)` now run as written. It is stamped
+  only where the name is honest: month-aligned frequencies on a
+  projection-anchored axis — not weekly/daily grids, not `from_inception`
+  schedules (that axis is policy duration). There is deliberately no
+  `proj_year`/`year` column: a projection-year label depends on the model's
+  timing convention, and the candidates disagree at every anniversary
+  boundary — write the one-line formula you mean (both are documented in
+  AGENTS.md).
+
+  **Action:** if your model points carry their own `month` column, rename
+  it — or `drop("month")` if it came from a previous run's output — before
+  calling `projection.set()`. (#36)
+
 - **`log_linear` curves: rates outside the knot range change.** Extrapolation
   previously clamped the log-discount-factor *level*, so beyond the last knot
   the discount factor stopped decaying and spot rates collapsed toward zero —
@@ -23,6 +76,51 @@
   knot (typically 20y+ cashflows). (#31)
 
 ### Fixed
+- **Reassigning an existing column via attribute updates the frame.**
+  `af.premium = af.premium * 1.1` previously became a shadow instance
+  attribute: reads returned the new values while `collect()` kept the stale
+  column, silently mixing old and new numbers in one output. Existing
+  columns now route through the same path as bracket assignment. (#21)
+- **Unit-length literal lookup keys broadcast to the batch length.**
+  `lookup(..., pl.lit(x))` raised `lengths don't match: key columns not
+  equal length` whenever Polars didn't pre-broadcast the literal — always
+  in-memory, and beyond one morsel under streaming, so toy frames passed
+  while production frames failed. (#22)
+- **Scalar-key lookups declare their true schema.** The output dtype was
+  unconditionally `List(Float64)` while scalar-key lookups return flat
+  `Float64`; the stale schema broke `when()/otherwise()` and scalar-last
+  arithmetic with errors naming innocent columns. Declared dtype now
+  matches runtime. (#23)
+- **Hash-storage key encoding is honest.** Null and narrow-integer keys
+  were encoded to 0 and returned key 0's rate; categorical keys all
+  collided onto a single rate; `UInt8`/`UInt16` key columns panicked the
+  plugin; duplicate key rows at build silently last-write-won; ragged inner
+  key lists misaligned every subsequent policy's rates. Each is now either
+  correct or a loud build/lookup error naming the offending row. (#25, #26)
+- **Debug and optimize modes produce identical numbers.** The computation
+  graph both applied operations at the call site and replayed them at
+  `collect()`, double-applying self-referential assignments in debug mode
+  (the CLI default) — `af["x"] = af["x"] + 1` differed between modes. The
+  graph is record-only now; every operation applies exactly once. (#27)
+- **`Period*` aggregators reduce across scenarios on every path.** The
+  sketch variants (`PeriodMedian`/`PeriodQuantile`/`PeriodCTE`) crashed on
+  the scenario axis; partitioned `.over(dim)` still reduced over
+  policy×scenario cells; and non-additive `.of()` aggregations under
+  `run_aggregated` were silently batch-size-dependent (now rejected at
+  validation with guidance). (#29)
+- **The documented `dimensions` rename mapping works.**
+  `dimensions={"duration": "policy_duration_yrs"}` discarded the dict key,
+  so renamed lookups failed with `No value provided for key column`.
+  Lookups now always speak the dimension-dict vocabulary, and the
+  unmatched-key error reports both vocabularies. (#30)
+- **Unary negation works on list columns** — `-af.claims` instead of
+  `0 - af.claims` — on both column and expression proxies, and it preserves
+  integer dtypes (negating a duration no longer silently widens it to
+  Float64). (#38)
+- **`gspio describe` handles projection output.** Parquet files with list
+  columns no longer leak a Rust storage-layer error; list columns get a
+  per-period summary, are excluded from suggested lookup dimensions, and
+  the printed code example actually runs. (#40)
 - **Collect-time failures now name the offending column.** (#39) A lazy
   chain failing at `collect()` used to surface the raw Polars error — e.g.
   `ShapeError: list lengths differed at index 0: 6 != 3` — with no clue
@@ -60,6 +158,34 @@
   richer `ColumnNotFoundError` text (which appends a query-plan dump whose
   `COLUMNS` token the old first-word heuristic misread) and still handles the
   older formats.
+
+### Documentation
+- The AGENTS.md quickstart called a removed projection API
+  (`create_projection_timeline`); a sweep found six stale locations, all
+  corrected, and the quickstart now runs end-to-end as a test so it cannot
+  rot silently again. (#35)
+- Timing conventions are surfaced in the top-level docs: `prospective_value`
+  defaults to end-of-period while `cumulative_survival` defaults to
+  beginning-of-period — opposite defaults — with the warning that constant
+  rates make a wrong choice invisible until rates vary. (#42)
+- `PRINCIPLES.md` records the framework's positions (published at
+  gaspatchio.dev/principles) in-repo, loaded into every agent session
+  alongside the existing rules.
+
+### Infrastructure
+- `uv.lock` is tracked and CI installs with `--locked`, so a new release of
+  a dev tool can no longer break unrelated PRs; a repo-root workspace
+  boundary stops `uv` from silently resolving a parent multi-repo
+  workspace. (#33)
+- Issue templates with auto-triage labels, release-notes configuration, a
+  public roadmap policy (ROADMAP.md), and a private email intake for bug
+  reports whose reproductions can't be posted publicly (SECURITY.md).
+
+### Security
+- Bumped `pyasn1` 0.6.3 → 0.6.4 (clears five advisories). Recorded an
+  explicit osv-scanner exception for GHSA-9xwg-3r6f-jcx2
+  (`pymdown-extensions`, dev-docs only; the fix is hard-capped upstream by
+  `marimo <11`) with its reachability argument.
 
 ## [0.5.3] — Scenario auto-batching can no longer OOM the box
 
