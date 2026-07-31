@@ -1,0 +1,40 @@
+# ABOUTME: Dispatches a RAG store rebuild when core's main moves, so the
+# ABOUTME: gspio docs/knowledge index tracks shipped docstrings, not memory.
+#
+# Counterpart to gaspatchio-docs' workflow of the same name: docs pushes
+# already dispatch rebuild-rag to opioinc/gaspatchio-mix, but core docstring
+# changes never did — the index only refreshed when the docs repo happened to
+# move. The build indexes gaspatchio-docs/docs plus this repo's
+# bindings/python tree, so only changes under bindings/python matter here.
+#
+# Setup (both required before the job runs; until then it skips, not fails):
+#   1. Actions secret MIX_DISPATCH_PAT — fine-grained PAT scoped to
+#      opioinc/gaspatchio-mix with Contents read/write (repository_dispatch
+#      rides the contents permission).
+#   2. Actions variable RAG_DISPATCH_ENABLED = "true" — flipped once the
+#      secret exists, so a missing PAT shows as a skipped job rather than a
+#      red check on every push to main.
+
+name: Trigger RAG Rebuild
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "bindings/python/gaspatchio_core/**"
+
+jobs:
+  trigger:
+    name: Trigger RAG Store Rebuild
+    if: ${{ vars.RAG_DISPATCH_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Dispatch rebuild event
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697   # v4.0.1 — SHA-pinned: this step receives a write-scoped PAT
+        with:
+          token: ${{ secrets.MIX_DISPATCH_PAT }}
+          repository: opioinc/gaspatchio-mix
+          event-type: rebuild-rag
+          client-payload: '{"source": "gaspatchio-oss", "ref": "${{ github.sha }}"}'
