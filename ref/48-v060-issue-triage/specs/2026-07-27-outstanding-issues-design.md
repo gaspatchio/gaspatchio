@@ -415,3 +415,44 @@ argued against the principles by name.
 | #36 collides with existing user columns | Raise rather than overwrite |
 | #31 long-end change surprises a reconciliation | Both modes shipped; migration note leads the release |
 | Release date slips while two breaking changes sit unreleased | Accepted deliberately: the decision is one complete release over an early partial one. Mitigated by telling the field reporter directly that #24 and #28 are coming and what they change (§7) |
+
+---
+
+## 10. Amendments (2026-07-30)
+
+Two §4 decisions changed during implementation review. Recorded here so the spec and the
+code do not silently disagree.
+
+### #37 — flipped from "targeted error" to "bare string is the value"
+
+The targeted-error implementation drew three real review findings (a cross-frame false
+positive that rejected *valid* lookups, wrong diagnosis ordering on a misspelled dimension,
+broken quoting in the suggested remedy). The deeper problem was the premise: keeping
+string-as-column forces `pl.lit("annuity")` — Polars in the middle of the most ordinary
+actuarial operation there is — against *Meet you where you are*.
+
+**Decision (Matt):** a bare string is the dimension **value** (VLOOKUP semantics). Columns
+are referenced as `af.product` / `af["product"]` / `pl.col(...)`. This is the fourth
+breaking change in v0.6.0, made safe by #24: a caller who relied on string-as-column gets a
+loud lookup miss naming the key, not silently wrong numbers. The framework's own older
+design docs already wrote lookups this way (`sex="M"`, `scalar_id="mort"`). Shipped in PR
+#46.
+
+### #36 — `proj_year` dropped; `month` only, stamped only where honest
+
+Review found the materialised `proj_year` (0-based `month // 12`) contradicted the shipped
+model-building skill, which defines it as BSCR-ordinal "year 1" via a ceiling. Research
+showed the conflict is irreducible: the framework already carries **both** year conventions
+under different names (lifelib-style 0-based `duration` in every reconciled model;
+1-based ordinal in the skill and Excel's `ROUNDUP(t/12, 0)`), the two disagree at every
+anniversary boundary, and *which* is correct for a stress shock depends on the model's
+beginning/end-of-period timing convention — the user choice §4/#42 documents. A
+framework-materialised `proj_year` therefore silently picks the user's timing convention:
+*Sharp knives, no magic* says that column must not exist.
+
+**Decision (Matt):** no `proj_year`. `set()` stamps **`month`** only (Int32), and only
+where the name is honest — month-aligned frequencies, projection-anchored axes (not
+`from_inception`, whose elapsed months are policy *duration*; not 1W/1D, where a
+calendar-month difference over-counts). AGENTS.md documents both one-line year formulas
+and why the framework stamps neither. Also halves the feature's memory cost (~577 MB per
+Int64 column at 100K policies × 60y monthly). Reworked in PR #47.

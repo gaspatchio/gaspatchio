@@ -49,6 +49,26 @@ _PERIODS_PER_YEAR: dict[str, int] = {
 _MONTHS_PER_PERIOD: dict[str, int] = {"1M": 1, "3M": 3, "6M": 6, "1Y": 12}
 
 
+# Columns projection.set() materialises. `year` is deliberately absent: model
+# points routinely carry a calendar year, and Gotcha #7 already names
+# `proj_year` vs `year` as a cause of silently-wrong stress scenarios.
+_MONTH_COLUMN = "month"
+
+
+def _elapsed_months_expr(period_dates: pl.Expr) -> pl.Expr:
+    """Return elapsed whole months from each row's first period boundary.
+
+    A calendar-month difference, exact only when the boundaries sit on a
+    month-aligned grid sharing one anchor convention — which is why the
+    caller stamps ``month`` for 1M/3M/6M/1Y and never for 1W/1D, where the
+    day component would make this over-count by up to a month.
+    """
+    return period_dates.list.eval(
+        (pl.element().dt.year() - pl.element().first().dt.year()) * 12
+        + (pl.element().dt.month() - pl.element().first().dt.month())
+    ).cast(pl.List(pl.Int32))
+
+
 def _normalise_frequency(freq: str) -> str:
     """Map English vocab to Schedule shorthand, or pass shorthand through."""
     if freq in _ENGLISH_TO_SCHED_FREQ:
@@ -124,7 +144,22 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         ``per_policy=True`` to require jagged (raises if it cannot apply).
         ``rollforward()`` works on both uniform and jagged timelines.
 
+        Stamps ``projection_start_date``, ``projection_end_date``,
+        ``num_proj_months``, and — at month-aligned frequencies on a
+        projection-anchored axis — ``month``: elapsed whole months from the
+        projection start, length ``n_periods + 1``, aligned with
+        ``t_years()``. Derive a year label in the model with the convention
+        you mean: ``af.month // 12`` (completed years / duration) or
+        ``ceil(month / 12)`` ("year 1" ordinal). There is deliberately no
+        ``proj_year`` or ``year`` column.
+
+        Raises:
+            ValueError: if the frame already carries a ``month`` column and
+                has no in-session projection — rename your column, or drop it
+                if it came from a previous run's output.
+
         See ref/38-projection-axis/specs for full semantics.
+
         """
         # Mutual exclusion check
         kwargs_provided = any(
@@ -194,7 +229,10 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         # (1W/1D) makes the period count ambiguous — the uniform and jagged
         # paths would disagree silently (e.g. a 12-month term gives ~12 periods
         # uniform but ~52 jagged at weekly). Require a month-aligned frequency.
-        if until in ("term_months", "term_years") and sched_freq not in _MONTHS_PER_PERIOD:
+        if (
+            until in ("term_months", "term_years")
+            and sched_freq not in _MONTHS_PER_PERIOD
+        ):
             msg = (
                 f"until={until!r} is a month/year horizon and requires a "
                 f"month-aligned frequency (one of {sorted(_MONTHS_PER_PERIOD)}); "
@@ -357,17 +395,91 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
             years = int(af_df.select(expr.max()).collect()[0, 0])
         return years * _PERIODS_PER_YEAR[sched_freq]
 
+    def _reject_reserved_column_collisions(self) -> None:
+        """Raise if the frame already carries a column projection.set() stamps.
+
+        Overwriting silently is the failure class this release exists to
+        remove — and a calendar ``year`` or a source ``month`` on the model
+        points is exactly the sort of column a user would not expect to lose.
+
+        This guards the *user's* columns, not ours. Re-projecting a frame that
+        already has an in-session projection is supported, and there the index
+        is ours to replace. A frame reconstructed from a previous run's output
+        (parquet reload, ``ActuarialFrame(af.collect())``) carries ``month``
+        without a live projection — we cannot tell that apart from a user's
+        calendar column, so the error names both exits rather than guessing.
+        """
+        if self._frame._projection is not None:  # noqa: SLF001
+            return
+
+        frame_df = self._frame._df  # noqa: SLF001
+        if frame_df is None:
+            return
+
+        if _MONTH_COLUMN in frame_df.collect_schema().names():
+            msg = (
+                f"projection.set() materialises {_MONTH_COLUMN!r} (elapsed whole "
+                f"months from projection start), but the frame already has a "
+                f"{_MONTH_COLUMN!r} column.\n"
+                f"  • if it is your own (e.g. a calendar month), rename it: "
+                f'mp.rename({{"{_MONTH_COLUMN}": "source_{_MONTH_COLUMN}"}})\n'
+                f"  • if it came from a previous projection run's output, drop "
+                f'it: mp.drop("{_MONTH_COLUMN}")'
+            )
+            raise ValueError(msg)
+
     def _stamp_eager_columns(self, schedule: Schedule) -> ActuarialFrame:
-        """Stamp projection_start_date / projection_end_date / num_proj_months."""
+        """Stamp projection dates, num_proj_months, and the ``month`` index.
+
+        ``month`` is the period index shipped examples already assume exists
+        (#36): **elapsed whole months from the projection start**, one value
+        per boundary (length ``n_periods + 1``, aligned with ``t_years()``).
+
+        It is stamped only where the name is honest:
+
+        - month-aligned frequencies only (1M/3M/6M/1Y). At 1W/1D a
+          calendar-month difference over-counts by up to a month (Jan 31 +
+          one day reads as month 1), so no index is fabricated there.
+        - not on ``from_inception`` schedules, whose axis starts at each
+          policy's own inception — elapsed months there are policy DURATION,
+          not projection time, the exact conflation Gotcha #7 warns about
+          (``scenarios/_aggregated.py`` already documents that axis as
+          duration for the same reason).
+
+        There is deliberately no ``proj_year``: a projection-year label
+        depends on the model's timing convention. With end-of-period rows
+        "year 1" is ``ceil(month / 12)``; with beginning-of-period rows it is
+        ``month // 12 + 1``; the two disagree at every anniversary boundary.
+        The framework cannot know which the model means, so the model states
+        its own one-line formula (see AGENTS.md, Timing Conventions).
+        """
+        stamp_month = (
+            schedule.frequency in _MONTHS_PER_PERIOD
+            and schedule._kind != "from_inception"  # noqa: SLF001
+        )
+        if stamp_month:
+            # Only a schedule that will stamp `month` can collide with it —
+            # weekly/daily/from_inception axes leave the user's column alone.
+            self._reject_reserved_column_collisions()
+
         if schedule._kind == "from_calendar_grid":  # noqa: SLF001
             boundaries = schedule.period_dates()  # list[date], length n_periods+1
             start_date = boundaries[0]
             end_date = boundaries[-1]
-            stamped_df = self._frame._df.with_columns(  # noqa: SLF001
-                projection_start_date=pl.lit(start_date),
-                projection_end_date=pl.lit(end_date),
-                num_proj_months=pl.lit(len(boundaries)),
-            )
+            eager_columns: dict[str, pl.Expr] = {
+                "projection_start_date": pl.lit(start_date),
+                "projection_end_date": pl.lit(end_date),
+                "num_proj_months": pl.lit(len(boundaries)),
+            }
+            if stamp_month:
+                # Boundaries on a month-aligned grid share one anchor
+                # convention, so the calendar-month difference is exact.
+                months = [
+                    (d.year - start_date.year) * 12 + (d.month - start_date.month)
+                    for d in boundaries
+                ]
+                eager_columns[_MONTH_COLUMN] = pl.lit(months, dtype=pl.List(pl.Int32))
+            stamped_df = self._frame._df.with_columns(**eager_columns)  # noqa: SLF001
         else:
             # from_inception / per_policy_grid: per-policy boundaries (jagged).
             period_dates_e = (
@@ -375,17 +487,28 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
                 if schedule._kind == "per_policy_grid"  # noqa: SLF001
                 else schedule.period_dates_expr()
             )
-            stamped_df = self._frame._df.with_columns(  # noqa: SLF001
-                projection_start_date=period_dates_e.list.first(),
-                projection_end_date=period_dates_e.list.last(),
+            eager_columns = {
+                "projection_start_date": period_dates_e.list.first(),
+                "projection_end_date": period_dates_e.list.last(),
                 # Signed Int32 to match the uniform path's pl.lit(int): a bare
                 # list.len() is UInt and `num_proj_months - k` would underflow.
                 # fill_null(0) so a null until_value stamps 0 (matching the
                 # clamped per_policy_period_count_expr) rather than null — else
                 # the int_ranges(0, num_proj_months - 1) feeder builds a null
                 # list and the rollforward kernel rejects it.
-                num_proj_months=period_dates_e.list.len().fill_null(0).cast(pl.Int32),
-            )
+                "num_proj_months": (
+                    period_dates_e.list.len().fill_null(0).cast(pl.Int32)
+                ),
+            }
+            if stamp_month:
+                # Elapsed whole months from each policy's own first boundary —
+                # jagged with the timeline, not padded to the longest-lived
+                # policy. Same null guard as num_proj_months: a null horizon
+                # stamps an empty index, not a null one.
+                eager_columns[_MONTH_COLUMN] = _elapsed_months_expr(
+                    period_dates_e
+                ).fill_null(pl.lit([], dtype=pl.List(pl.Int32)))
+            stamped_df = self._frame._df.with_columns(**eager_columns)  # noqa: SLF001
 
         new_af = self._frame.__class__(stamped_df)
         new_af._projection = schedule  # noqa: SLF001

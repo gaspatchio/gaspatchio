@@ -180,7 +180,7 @@ Let Polars handle parallelization. Never add Rayon or threading inside plugins.
 | 4 | `--policy-id` flag | Policy ID is positional. `--policy-id-column` is a different thing |
 | 5 | Hand-rolled exp/log identity for `scalar ** list` | `**` works directly on list columns now -- write it as the operator |
 | 6 | Guessing method signatures | Agents get it wrong ~70% of the time -- `gspio docs` first |
-| 7 | `proj_year` vs `year` confusion | Stress scenarios silently wrong -- mass lapse never fires |
+| 7 | `proj_year` vs `year` confusion | Stress scenarios silently wrong -- mass lapse never fires. The framework materialises **only** `month`; derive your year label with the formula you mean (`month // 12` duration-style, or the ordinal `when/then` from the period-index section — a bare `(month + 11) // 12` labels the month-0 boundary year 0) and never reuse a calendar `year` column as a projection year |
 | 8 | Column name case mismatch | Polars is case-sensitive; check `df.columns` first |
 
 ---
@@ -214,13 +214,40 @@ def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
 
     # --- PHASE 3: Calculations (lazy -- NO .collect() from here) ---
     # Attained age varies by period, so the lookup returns one rate per period.
-    # Looking up on the scalar `issue_age` would give a single rate with nothing
-    # for cumulative_survival() to accumulate over.
-    af.attained_age = (af.issue_age + af.projection.t_years()).floor()
+    # month // 12 is completed years since projection start (duration-style).
+    af.attained_age = af.issue_age + af.month // 12
     af.mort_rate = tables["mortality"].lookup(age=af.attained_age)
     af.survival = af.mort_rate.projection.cumulative_survival()
     return af
 ```
+
+`projection.set()` materialises **`af.month`** — elapsed **whole months** from the
+projection start: `0,1,2,…` monthly, `0,3,6,…` quarterly, `0,12,24,…` annual. Length
+`n_periods + 1`, aligned with `projection.t_years()`, so a maturity test like
+`when(af.month == af.policy_term * 12)` reaches the final boundary. Jagged on per-policy
+timelines. Not stamped at weekly/daily frequency (calendar months cannot honestly label
+those periods) nor on `from_inception` schedules (that axis is policy *duration*, not
+projection time).
+
+**There is deliberately no `proj_year` or `year` column.** A projection-year label depends
+on your timing convention, and the two candidates disagree at every anniversary boundary
+(month 12, 24, …) — so the framework stamping one would silently pick your convention for
+you. Write the one-line formula you mean:
+
+```python
+af.duration_years = af.month // 12            # completed years: 0,0,…,1,1,… (lifelib-style)
+# Ordinal "year 1" = ceil(month/12), Excel ROUNDUP-style. The month-0 boundary
+# (the projection start) belongs to year 1 — a bare ceil would label it year 0
+# and a `policy_year == 1` shock would skip the first row:
+af.policy_year = when(af.month == 0).then(1).otherwise((af.month + 11) // 12)
+```
+
+With **end-of-period** rows, "year 1" of a BSCR-style shock is `ceil`; with
+**beginning-of-period** rows it is `month // 12 + 1`. See Timing Conventions above. Any
+`year` column on the frame is **yours** (calendar year) — the framework never creates one.
+
+If the frame already carries a `month` column and no in-session projection, `set()` raises:
+rename it if it is yours, `drop("month")` if it came from a previous run's output.
 
 **Your mortality table must cover every attained age the projection reaches.**
 `until="maximum_age"` sizes one grid from the *youngest* life, so older policies run

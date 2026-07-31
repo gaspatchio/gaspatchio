@@ -102,8 +102,10 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # is the first day of a projected month.
     af.projection_date = af.projection.period_dates()
 
-    # Month index (0 = valuation date, 1 = one month later, ...)
-    # af.projection.set() does not produce this automatically.
+    # Month index (0 = valuation date, 1 = one month later, ...).
+    # af.projection.set() now materialises `month` automatically at monthly
+    # frequency — this hand-rolled version is kept to show the formula, and
+    # produces identical values to the stamped column it replaces.
     af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
         af.projection_date.dt.month() - VALUATION_DATE.month
     )
