@@ -1081,6 +1081,147 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         return ExpressionProxy(shifted_expr, parent_af)
 
+    def broadcast_to_periods(
+        self, like: "ColumnProxy | ExpressionProxy | pl.Expr | None" = None
+    ) -> ExpressionProxy:
+        """Broadcast a per-policy scalar column across the projection periods.
+
+        Repeats this column's value once per projection period, producing a
+        list column aligned with the frame's axis. Works for **every dtype**
+        — strings, booleans, and categoricals included — unlike the numeric
+        idiom ``af.scalar + af.list * 0.0``, which has no string equivalent
+        and previously forced hand-rolled ``repeat_by`` helpers into model
+        code.
+
+        !!! note "When to use"
+            * **String dimensions in lookups:** A per-policy ``occupation_class``
+                or ``smoker_status`` feeding a per-period `Table.lookup` needs
+                one value per period, not one per policy.
+            * **Per-period conditionals on policy attributes:** Broadcasting a
+                label before a ``when()`` that selects between per-period lists.
+            * **Any scalar-to-period alignment** where arithmetic broadcasting
+                does not apply (non-numeric dtypes).
+
+        Parameters
+        ----------
+        like : ColumnProxy or ExpressionProxy or pl.Expr, optional
+            A list column whose per-row lengths define the broadcast length —
+            use this on frames without a projection axis, or to match a
+            specific column's (possibly jagged) lengths. Defaults to the
+            frame's ``month`` period index, stamped by ``projection.set()``.
+
+        Returns
+        -------
+        ExpressionProxy
+            List column repeating this column's value once per period.
+
+        Raises
+        ------
+        ValueError
+            If ``like`` is not given and the frame has no ``month`` column
+            to take period lengths from.
+
+        Examples
+        --------
+        **String attribute broadcast to the projection axis**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "occupation_class": ["M", "H"],
+            "month": [[0, 1, 2], [0, 1, 2]],
+        }
+        af = ActuarialFrame(data)
+
+        af.occupation_per_period = af.occupation_class.projection.broadcast_to_periods()
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌──────────────────┬───────────┬───────────────────────┐
+        │ occupation_class ┆ month     ┆ occupation_per_period │
+        │ ---              ┆ ---       ┆ ---                   │
+        │ str              ┆ list[i64] ┆ list[str]             │
+        ╞══════════════════╪═══════════╪═══════════════════════╡
+        │ M                ┆ [0, 1, 2] ┆ ["M", "M", "M"]       │
+        │ H                ┆ [0, 1, 2] ┆ ["H", "H", "H"]       │
+        └──────────────────┴───────────┴───────────────────────┘
+        ```
+
+        **Matching a specific (jagged) list column with `like=`**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "frequency": ["monthly", "annual"],
+            "premiums": [[100.0, 100.0], [1200.0, 1200.0, 1200.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.frequency_per_period = af.frequency.projection.broadcast_to_periods(
+            like=af.premiums
+        )
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 3)
+        ┌───────────┬──────────────────┬───────────────────────────┐
+        │ frequency ┆ premiums         ┆ frequency_per_period      │
+        │ ---       ┆ ---              ┆ ---                       │
+        │ str       ┆ list[f64]        ┆ list[str]                 │
+        ╞═══════════╪══════════════════╪═══════════════════════════╡
+        │ monthly   ┆ [100.0, 100.0]   ┆ ["monthly", "monthly"]    │
+        │ annual    ┆ [1200.0, … 1200… ┆ ["annual", "annual", "an… │
+        └───────────┴──────────────────┴───────────────────────────┘
+        ```
+
+        See Also
+        --------
+        previous_period : Access prior-period values on the same axis
+
+        """
+        from gaspatchio_core.column.column_proxy import ColumnProxy
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        base_expr = self._get_polars_expr()
+        parent_af = self._get_parent_frame()
+
+        if like is not None:
+            if isinstance(like, ColumnProxy):
+                like_expr = like._to_expr()  # noqa: SLF001
+            elif isinstance(like, ExpressionProxy):
+                like_expr = like._expr  # noqa: SLF001
+            elif isinstance(like, pl.Expr):
+                like_expr = like
+            else:
+                msg = (
+                    "broadcast_to_periods(like=...) expects a list column "
+                    f"(ColumnProxy/ExpressionProxy/pl.Expr); got {type(like)}"
+                )
+                raise TypeError(msg)
+            length_expr = like_expr.list.len()
+        else:
+            columns = getattr(parent_af, "columns", None)
+            if columns is not None and "month" not in columns:
+                msg = (
+                    "broadcast_to_periods() needs a period length and this "
+                    "frame has no `month` period index (projection.set() "
+                    "stamps one). Either set a projection axis first, or "
+                    "pass like=<a list column> to broadcast to that "
+                    "column's lengths."
+                )
+                raise ValueError(msg)
+            length_expr = pl.col("month").list.len()
+
+        result_expr = base_expr.repeat_by(length_expr)
+        return ExpressionProxy(result_expr, parent_af)
+
     def remaining_sum(self) -> ExpressionProxy:
         """Compute backward cumulative sum (remaining sum from each period to end).
 

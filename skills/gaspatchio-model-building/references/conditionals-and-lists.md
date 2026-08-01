@@ -46,6 +46,38 @@ The two forms produce identical results.
 
 ---
 
+## String-valued conditionals and broadcasting
+
+`when()` branches can be **strings** on the list-broadcast path too — a per-period
+numeric code maps to a label directly, no raw-Polars `list.eval` workaround and no
+numeric re-encoding of naturally string-keyed dimensions:
+
+```python
+# Per-period code -> version label; output is list[str]
+af.version = when(af.code_list == 0).then("PP23").otherwise("PP24")
+
+# Branches can be per-policy string COLUMNS or list[str] columns too
+af.status = when(af.month < af.term).then(af.active_label).otherwise("lapsed")
+```
+
+Both branches must be string-valued (or both numeric) — a conditional column has
+one dtype, and mixing them raises a clear error rather than coercing either side.
+
+To feed a per-policy **string attribute** into a per-period lookup, broadcast it
+to the projection axis with `broadcast_to_periods()` — it works for every dtype,
+unlike the numbers-only `af.scalar + af.list * 0.0` idiom:
+
+```python
+# occupation_class stays a string; one value per period for the lookup
+af.occ_pp = af.occupation_class.projection.broadcast_to_periods()
+af.rate = occ_rates.lookup(occ=af.occ_pp, year=af.year)
+
+# On frames without a projection axis (or jagged ones), name the length source:
+af.freq_pp = af.frequency.projection.broadcast_to_periods(like=af.premiums)
+```
+
+---
+
 ## Year-Varying Rate Pattern
 
 When a rate changes by year (e.g., inflation schedule), use vectorized masks:

@@ -21,6 +21,22 @@
   uniform calendar-grid schedule now raises — declare the horizons with a
   per-policy grid instead. Found by the GSP-112 chunk-invariance audit.
 
+### Added
+
+- **List-broadcast `when()` supports string outputs.**
+  `when(af.code_list == 0).then("PP23").otherwise("PP24")` now produces a
+  `List(String)` column — previously the list path was f64-only and string
+  branches died with a misleading `then_val at row 0 is null`, forcing raw
+  Polars `list.eval` workarounds or numeric-code re-encodings into model
+  code. String columns, string lists, and categoricals all work as branch
+  values; chained `when()`s fold through; a string branch against a numeric
+  branch refuses loudly (one column, one dtype). (GSP-110)
+- **`broadcast_to_periods()`** on the projection accessor broadcasts a
+  per-policy scalar of any dtype — strings, booleans, categoricals — to a
+  per-period list aligned with the frame's `month` axis (or any list column
+  via `like=`). Replaces the numbers-only `af.scalar + af.list * 0.0` idiom
+  and hand-rolled `repeat_by` helpers for string-keyed lookups. (GSP-110)
+
 ## [0.6.0] — Silent wrong numbers become loud errors
 
 Nineteen issues from a field report (an actuary porting a production model)

@@ -84,15 +84,35 @@ pub fn accumulate(inputs: &[Series]) -> PolarsResult<Series> {
     gaspatchio_core_lib::polars_functions::accumulate(inputs)
 }
 
-/// Output type for list_conditional: List<Float64>
+/// Output type for list_conditional: List<Float64>, or List<String> when a
+/// branch (then/otherwise, fields 2/3) is string-valued — the kernel's Utf8
+/// path (GSP-110). Mixed string/numeric branches are rejected at run time;
+/// declaring String here whenever either branch is string-like keeps the
+/// schema consistent with every input the kernel accepts.
 fn list_conditional_output(input_fields: &[Field]) -> PolarsResult<Field> {
     let name = input_fields
         .get(0)
         .map(|f| f.name().clone())
         .unwrap_or_else(|| PlSmallStr::from_static("list_conditional"));
 
-    // Always return List<Float64>
-    Ok(Field::new(name, DataType::List(Box::new(DataType::Float64))))
+    fn is_string_like(field: &Field) -> bool {
+        let dt = match field.dtype() {
+            DataType::List(inner) => inner.as_ref(),
+            dt => dt,
+        };
+        matches!(
+            dt,
+            DataType::String | DataType::Categorical(_, _) | DataType::Enum(_, _)
+        )
+    }
+    let stringy = input_fields.get(2).map(is_string_like).unwrap_or(false)
+        || input_fields.get(3).map(is_string_like).unwrap_or(false);
+    let inner = if stringy {
+        DataType::String
+    } else {
+        DataType::Float64
+    };
+    Ok(Field::new(name, DataType::List(Box::new(inner))))
 }
 
 /// PyO3 wrapper for list_conditional - element-wise conditional on list columns

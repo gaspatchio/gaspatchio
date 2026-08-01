@@ -47,6 +47,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
     def at_period(
         self, relative_period: int, fill_value: float | None = 0.0
     ) -> "ExpressionProxy": ...
+    def broadcast_to_periods(
+        self, like: "ColumnProxy | ExpressionProxy | pl.Expr | None" = None
+    ) -> "ExpressionProxy": ...
     def prospective_value(
         self,
         discount_rate: "float | ExpressionProxy | ColumnProxy | None" = None,

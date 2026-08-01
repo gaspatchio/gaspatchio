@@ -221,6 +221,29 @@ pub fn list_conditional(inputs: &[Series], kwargs: &ConditionalKwargs) -> Polars
     let then_is_list = matches!(then_val.dtype(), DataType::List(_));
     let otherwise_is_list = matches!(otherwise_val.dtype(), DataType::List(_));
 
+    // String-valued branches take the dedicated Utf8 path (GSP-110). The
+    // condition side (left/right) stays numeric in both paths; only the
+    // selected VALUES differ in dtype. Mixed string/numeric branches have no
+    // single output dtype — refuse loudly rather than coerce either side.
+    let then_is_string = is_string_like(then_val);
+    let otherwise_is_string = is_string_like(otherwise_val);
+    if then_is_string || otherwise_is_string {
+        if !(then_is_string && otherwise_is_string) {
+            return Err(PolarsError::ComputeError(
+                format!(
+                    "list_conditional: mixed branch dtypes — then is {}, otherwise is {}. \
+                     A conditional column has one dtype, so both branches must be \
+                     string-valued or both numeric. Map the numeric branch to a string \
+                     label (or encode the string branch numerically).",
+                    then_val.dtype(),
+                    otherwise_val.dtype()
+                )
+                .into(),
+            ));
+        }
+        return list_conditional_str(left_list, right, then_val, otherwise_val, &kwargs.operator);
+    }
+
     // Case 1: Right is list, then/otherwise are scalars (most common: test 1)
     if right_is_list && !then_is_list && !otherwise_is_list {
         let right_list = right.list()?;
@@ -758,4 +781,204 @@ pub fn list_conditional(inputs: &[Series], kwargs: &ConditionalKwargs) -> Polars
             right_is_list, then_is_list, otherwise_is_list
         ).into(),
     ))
+}
+
+/// Returns true when the series' value dtype (inner dtype for lists) is
+/// string-like: `String`, `Categorical`, or `Enum`.
+fn is_string_like(s: &Series) -> bool {
+    let dt = match s.dtype() {
+        DataType::List(inner) => inner.as_ref(),
+        dt => dt,
+    };
+    matches!(
+        dt,
+        DataType::String | DataType::Categorical(_, _) | DataType::Enum(_, _)
+    )
+}
+
+/// A string-valued then/otherwise branch, normalised to `String` storage.
+///
+/// `Scalar` covers literal broadcasts (length 1) and per-row scalar columns;
+/// `PerElement` covers `List(String)` branches selected element-wise.
+enum StrBranch {
+    Scalar { ca: StringChunked, broadcast: bool },
+    PerElement { list: ListChunked },
+}
+
+impl StrBranch {
+    fn from_series(s: &Series) -> PolarsResult<Self> {
+        match s.dtype() {
+            DataType::List(_) => {
+                let cast = s.cast(&DataType::List(Box::new(DataType::String)))?;
+                Ok(Self::PerElement {
+                    list: cast.list()?.clone(),
+                })
+            }
+            _ => {
+                let cast = s.cast(&DataType::String)?;
+                let ca = cast.str()?.clone();
+                let broadcast = ca.len() == 1;
+                Ok(Self::Scalar { ca, broadcast })
+            }
+        }
+    }
+
+    /// The branch's values for one row: a scalar (repeated per element) or
+    /// this row's own inner list, length-checked against the condition.
+    fn row(&self, idx: usize, expect_len: usize, what: &str) -> PolarsResult<RowStr> {
+        match self {
+            Self::Scalar { ca, broadcast } => {
+                let lookup = if *broadcast { 0 } else { idx };
+                Ok(RowStr::Scalar(ca.get(lookup).map(str::to_string)))
+            }
+            Self::PerElement { list } => match list.get_as_series(idx) {
+                Some(inner) => {
+                    if inner.len() != expect_len {
+                        return Err(PolarsError::ComputeError(
+                            format!(
+                                "mismatched inner list lengths at row {}: condition={}, {}={}",
+                                idx,
+                                expect_len,
+                                what,
+                                inner.len()
+                            )
+                            .into(),
+                        ));
+                    }
+                    Ok(RowStr::List(inner.str()?.clone()))
+                }
+                None => Ok(RowStr::Scalar(None)),
+            },
+        }
+    }
+}
+
+/// One row's view of a string branch.
+enum RowStr {
+    Scalar(Option<String>),
+    List(StringChunked),
+}
+
+impl RowStr {
+    fn get(&self, t: usize) -> Option<&str> {
+        match self {
+            Self::Scalar(v) => v.as_deref(),
+            Self::List(ca) => ca.get(t),
+        }
+    }
+}
+
+/// String-valued `list_conditional`: same comparison semantics as the
+/// numeric path (condition operands cast to Float64, element-wise compare),
+/// but the selected values are strings and the output is `List(String)`.
+///
+/// Null semantics: a null condition element yields a null output element
+/// (matching the numeric path); a null in the SELECTED branch propagates as
+/// a null element — a null label is a visible value, unlike the numeric
+/// path's hard error on null scalars, which exists to keep NaN-free
+/// arithmetic guarantees that have no string analogue.
+fn list_conditional_str(
+    left_list: &ListChunked,
+    right: &Series,
+    then_val: &Series,
+    otherwise_val: &Series,
+    operator: &str,
+) -> PolarsResult<Series> {
+    fn compare(left: f64, right: f64, op: &str) -> PolarsResult<bool> {
+        Ok(match op {
+            "eq" => left == right,
+            "ne" => left != right,
+            "lt" => left < right,
+            "lte" => left <= right,
+            "gt" => left > right,
+            "gte" => left >= right,
+            _ => {
+                return Err(PolarsError::ComputeError(
+                    format!("Unknown operator: {}", op).into(),
+                ))
+            }
+        })
+    }
+
+    let right_is_list = matches!(right.dtype(), DataType::List(_));
+    let right_scalar_ca = if right_is_list {
+        None
+    } else {
+        Some(right.cast(&DataType::Float64)?.f64()?.clone())
+    };
+    let right_list = if right_is_list {
+        Some(right.list()?.clone())
+    } else {
+        None
+    };
+
+    let then_branch = StrBranch::from_series(then_val)?;
+    let otherwise_branch = StrBranch::from_series(otherwise_val)?;
+
+    let mut out_rows: Vec<Option<Series>> = Vec::with_capacity(left_list.len());
+    for idx in 0..left_list.len() {
+        let Some(l_series) = left_list.get_as_series(idx) else {
+            out_rows.push(None);
+            continue;
+        };
+        let l = l_series.cast(&DataType::Float64)?;
+        let l_ca = l.f64()?;
+        let n = l_ca.len();
+
+        // This row's right-hand condition values.
+        let r_row: Option<Float64Chunked> = match (&right_list, &right_scalar_ca) {
+            (Some(rl), _) => match rl.get_as_series(idx) {
+                Some(r_inner) => {
+                    if r_inner.len() != n {
+                        return Err(PolarsError::ComputeError(
+                            format!(
+                                "mismatched inner list lengths at row {}: left={}, right={}",
+                                idx,
+                                n,
+                                r_inner.len()
+                            )
+                            .into(),
+                        ));
+                    }
+                    Some(r_inner.cast(&DataType::Float64)?.f64()?.clone())
+                }
+                None => None,
+            },
+            (None, Some(rs)) => {
+                let lookup = if rs.len() == 1 { 0 } else { idx };
+                rs.get(lookup)
+                    .map(|v| Float64Chunked::from_iter(std::iter::repeat_n(Some(v), n)))
+            }
+            (None, None) => unreachable!("right is either list or scalar"),
+        };
+        let Some(r_ca) = r_row else {
+            // Null right side: no comparison possible for this row.
+            out_rows.push(None);
+            continue;
+        };
+
+        let then_row = then_branch.row(idx, n, "then")?;
+        let otherwise_row = otherwise_branch.row(idx, n, "otherwise")?;
+
+        let mut builder = StringChunkedBuilder::new("".into(), n);
+        for t in 0..n {
+            match (l_ca.get(t), r_ca.get(t)) {
+                (Some(lv), Some(rv)) => {
+                    let selected = if compare(lv, rv, operator)? {
+                        then_row.get(t)
+                    } else {
+                        otherwise_row.get(t)
+                    };
+                    match selected {
+                        Some(v) => builder.append_value(v),
+                        None => builder.append_null(),
+                    }
+                }
+                _ => builder.append_null(),
+            }
+        }
+        out_rows.push(Some(builder.finish().into_series()));
+    }
+
+    Ok(ListChunked::from_iter(out_rows).into_series())
 }
