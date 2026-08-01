@@ -1,6 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [0.7.0] — Book shapes are declared, and conditionals speak strings
+
+A short, sharp release from the post-v0.6.0 audit batch (Linear GSP-111)
+and one long-standing modelling gap (GSP-110). The audits followed the
+template that keeps paying off — sweep the parameter that changes the
+iteration shape, assert a strong invariant — and one of them caught a
+shipped chunk-stability bug in the rollforward kernel. The one behaviour
+change is breaking and carries an **Action** line below.
 
 ### Breaking
 
