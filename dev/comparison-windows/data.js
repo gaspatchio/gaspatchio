@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785617925350,
+  "lastUpdate": 1785620148846,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib (Windows)": [
@@ -3343,6 +3343,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 5.08,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6487cea894cc04e942556c716fd678b8a9147b19",
+          "message": "release: v0.7.0 — book shapes are declared, and conditionals speak strings (#57)",
+          "timestamp": "2026-08-02T09:22:50+12:00",
+          "tree_id": "49369f9e567c54ab72901163229492273a754257",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/6487cea894cc04e942556c716fd678b8a9147b19"
+        },
+        "date": 1785620138718,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 3.935,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 3.028,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.331,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 24.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 7.19,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 21.72,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.48,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2083.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 25.449,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 39.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 53.02,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 3.116,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 3209.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 23.978,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 417,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 7.7,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 30.913,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 3234.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 152.485,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 655.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 4.93,
             "unit": "x"
           }
         ]
