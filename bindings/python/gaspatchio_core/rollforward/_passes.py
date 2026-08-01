@@ -318,6 +318,13 @@ class LowerToPolarsPlugin:
             "captures_resolved": captures_resolved,
             "lapse_state_indices": lapse_state_indices,
             "contract_boundary_arg": contract_boundary_arg,
+            # Declared book shape: a calendar-grid / inception schedule means
+            # every policy's inputs must span exactly n_periods (checked per
+            # row in the kernel — never inferred from the batch, which would
+            # make behaviour depend on streaming chunk boundaries). Jagged
+            # horizons are declared via a per_policy_grid schedule instead.
+            "require_uniform": getattr(ir.schedule, "_kind", None)
+            != "per_policy_grid",
         }
         # Append the registered input column expressions to args so the
         # kernel can locate them by index.

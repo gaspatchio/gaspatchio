@@ -214,22 +214,24 @@ fn pv_two_lists(
                 .into_iter()
                 .zip(n_l)
                 .enumerate()
-                .map(|(i, (r_opt, n_opt))| match (r_opt, n_opt, scalar_at(pmt_ca, i)) {
-                    (Some(r_s), Some(n_s), Some(p)) => {
-                        let r_ca = r_s.f64().ok()?;
-                        let n_ca = n_s.f64().ok()?;
-                        let out = r_ca
-                            .into_iter()
-                            .zip(n_ca)
-                            .map(|(r, n)| match (r, n) {
-                                (Some(rv), Some(nv)) => Some(calculate_pv(rv, nv, p, fv, typ)),
-                                _ => None,
-                            })
-                            .collect::<Float64Chunked>();
-                        Some(out.into_series())
-                    }
-                    _ => None,
-                })
+                .map(
+                    |(i, (r_opt, n_opt))| match (r_opt, n_opt, scalar_at(pmt_ca, i)) {
+                        (Some(r_s), Some(n_s), Some(p)) => {
+                            let r_ca = r_s.f64().ok()?;
+                            let n_ca = n_s.f64().ok()?;
+                            let out = r_ca
+                                .into_iter()
+                                .zip(n_ca)
+                                .map(|(r, n)| match (r, n) {
+                                    (Some(rv), Some(nv)) => Some(calculate_pv(rv, nv, p, fv, typ)),
+                                    _ => None,
+                                })
+                                .collect::<Float64Chunked>();
+                            Some(out.into_series())
+                        }
+                        _ => None,
+                    },
+                )
                 .collect();
             Ok(result.into_series())
         }
@@ -240,22 +242,24 @@ fn pv_two_lists(
                 .into_iter()
                 .zip(p_l)
                 .enumerate()
-                .map(|(i, (r_opt, p_opt))| match (r_opt, p_opt, scalar_at(nper_ca, i)) {
-                    (Some(r_s), Some(p_s), Some(n)) => {
-                        let r_ca = r_s.f64().ok()?;
-                        let p_ca = p_s.f64().ok()?;
-                        let out = r_ca
-                            .into_iter()
-                            .zip(p_ca)
-                            .map(|(r, p)| match (r, p) {
-                                (Some(rv), Some(pv)) => Some(calculate_pv(rv, n, pv, fv, typ)),
-                                _ => None,
-                            })
-                            .collect::<Float64Chunked>();
-                        Some(out.into_series())
-                    }
-                    _ => None,
-                })
+                .map(
+                    |(i, (r_opt, p_opt))| match (r_opt, p_opt, scalar_at(nper_ca, i)) {
+                        (Some(r_s), Some(p_s), Some(n)) => {
+                            let r_ca = r_s.f64().ok()?;
+                            let p_ca = p_s.f64().ok()?;
+                            let out = r_ca
+                                .into_iter()
+                                .zip(p_ca)
+                                .map(|(r, p)| match (r, p) {
+                                    (Some(rv), Some(pv)) => Some(calculate_pv(rv, n, pv, fv, typ)),
+                                    _ => None,
+                                })
+                                .collect::<Float64Chunked>();
+                            Some(out.into_series())
+                        }
+                        _ => None,
+                    },
+                )
                 .collect();
             Ok(result.into_series())
         }
@@ -266,22 +270,26 @@ fn pv_two_lists(
                 .into_iter()
                 .zip(p_l)
                 .enumerate()
-                .map(|(i, (n_opt, p_opt))| match (n_opt, p_opt, scalar_at(rate_ca, i)) {
-                    (Some(n_s), Some(p_s), Some(r)) => {
-                        let n_ca = n_s.f64().ok()?;
-                        let p_ca = p_s.f64().ok()?;
-                        let out = n_ca
-                            .into_iter()
-                            .zip(p_ca)
-                            .map(|(n, p)| match (n, p) {
-                                (Some(nv), Some(pv2)) => Some(calculate_pv(r, nv, pv2, fv, typ)),
-                                _ => None,
-                            })
-                            .collect::<Float64Chunked>();
-                        Some(out.into_series())
-                    }
-                    _ => None,
-                })
+                .map(
+                    |(i, (n_opt, p_opt))| match (n_opt, p_opt, scalar_at(rate_ca, i)) {
+                        (Some(n_s), Some(p_s), Some(r)) => {
+                            let n_ca = n_s.f64().ok()?;
+                            let p_ca = p_s.f64().ok()?;
+                            let out = n_ca
+                                .into_iter()
+                                .zip(p_ca)
+                                .map(|(n, p)| match (n, p) {
+                                    (Some(nv), Some(pv2)) => {
+                                        Some(calculate_pv(r, nv, pv2, fv, typ))
+                                    }
+                                    _ => None,
+                                })
+                                .collect::<Float64Chunked>();
+                            Some(out.into_series())
+                        }
+                        _ => None,
+                    },
+                )
                 .collect();
             Ok(result.into_series())
         }

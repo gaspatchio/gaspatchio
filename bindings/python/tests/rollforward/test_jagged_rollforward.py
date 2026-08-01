@@ -4,8 +4,11 @@
 
 """Jagged (per-policy variable-length) rollforward — each policy projects only
 its own horizon. The rollforward recurrence value[t]=f(value[t-1], inputs[t])
-has no cross-policy coupling, so the kernel derives each policy's period count
-from its own input-list length; ``n_periods`` is a portfolio-max capacity hint.
+has no cross-policy coupling; a ``per_policy_grid`` schedule supplies each
+policy's authoritative period count and ``n_periods`` is a portfolio-max
+capacity hint. Jagged horizons are declared via that schedule (or
+``af.projection.set(..., per_policy=True)``), never inferred from input-list
+lengths — inference was batch-dependent and therefore chunk-unstable.
 """
 
 from __future__ import annotations
@@ -27,16 +30,24 @@ class TestJaggedRollforward:
 
     def test_jagged_input_lists_project_own_horizon(self) -> None:
         # n_periods is the portfolio max (3); the two policies carry premium
-        # lists of DIFFERENT lengths (2 and 3). Each must project only its own.
-        sched = Schedule.from_calendar_grid(
-            start_date=date(2025, 1, 31), n_periods=3, frequency="1M"
+        # lists of DIFFERENT lengths (2 and 3), each declared by its own term.
+        sched = Schedule.from_per_policy_grid(
+            start_date=date(2025, 1, 31),
+            n_periods=3,
+            frequency="1M",
+            until_kind="term_months",
+            until_value_column="term",
         )
         b = RollforwardBuilder(states={"av": pl.col("init")}, schedule=sched)
         b["av"].add(pl.col("premium"))
         compiled = compile_rollforward(b)
 
         df = pl.DataFrame(
-            {"init": [100.0, 100.0], "premium": [[10.0, 20.0], [10.0, 20.0, 30.0]]}
+            {
+                "init": [100.0, 100.0],
+                "term": [2, 3],
+                "premium": [[10.0, 20.0], [10.0, 20.0, 30.0]],
+            }
         )
         av = (
             df.with_columns(av=RollforwardCollector(compiled).expr_for("av"))

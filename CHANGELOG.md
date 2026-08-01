@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- **Rollforward book shape is declared by the schedule, not inferred from
+  the batch.** The uniform-schedule length guard fired only when *every*
+  policy in the batch shared one wrong list length — but the batch is a
+  streaming-engine choice, so identical books passed or failed depending on
+  chunk width, and a genuinely jagged book could error mid-stream whenever
+  a chunk happened to hold same-length policies. The guard is now per-row
+  and driven by declared intent: a `from_calendar_grid` / `from_inception`
+  schedule requires every policy's input lists to have exactly `n_periods`
+  elements (this also catches mixed stale books the old heuristic waved
+  through); jagged horizons use a per-policy grid
+  (`af.projection.set(..., per_policy=True)` or
+  `Schedule.from_per_policy_grid`), whose per-row lengths are authoritative.
+
+  **Action:** a rollforward that fed variable-length input lists to a
+  uniform calendar-grid schedule now raises — declare the horizons with a
+  per-policy grid instead. Found by the GSP-112 chunk-invariance audit.
+
 ## [0.6.0] — Silent wrong numbers become loud errors
 
 Nineteen issues from a field report (an actuary porting a production model)
