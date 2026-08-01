@@ -2,14 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""F12a: a uniform book fed inputs that all disagree with n_periods fails loud.
+"""F12a: a uniform schedule means full-length inputs — checked per row.
 
-The rollforward kernel is intentionally input-length-driven (n_periods is a
-portfolio-max capacity hint), which is how jagged/variable-horizon books work.
-But when EVERY policy's inputs share one length that disagrees with n_periods,
-that is a uniform book fed stale/short inputs — the projection would silently
-truncate to the wrong horizon. That case now raises. Genuinely jagged books,
-whose input lengths VARY across policies, are unaffected.
+A `from_calendar_grid` / `from_inception` schedule declares a uniform book:
+every policy's input lists must have exactly ``n_periods`` elements, and any
+row that disagrees is stale/short/over-long inputs — the projection would
+silently run the wrong horizon, so it raises instead.
+
+The check is per ROW by design. An earlier version fired only when EVERY
+row in the batch shared one wrong length, inferring "jagged" from
+within-batch variance — but batch boundaries are an engine choice
+(streaming chunks), so identical books passed or failed depending on chunk
+width (GSP-112 audit finding). Jagged horizons are now declared, not
+inferred: use ``Schedule.from_per_policy_grid`` (or
+``af.projection.set(..., per_policy=True)``), which supplies authoritative
+per-row lengths.
 """
 
 from __future__ import annotations
@@ -36,8 +43,21 @@ def _uniform_av_collector(n_periods: int) -> RollforwardCollector:
     return RollforwardCollector(compile_rollforward(b))
 
 
+def _per_policy_av_collector(n_periods: int) -> RollforwardCollector:
+    sched = Schedule.from_per_policy_grid(
+        start_date=date(2025, 1, 31),
+        n_periods=n_periods,
+        frequency="1M",
+        until_kind="term_months",
+        until_value_column="term",
+    )
+    b = RollforwardBuilder(states={"av": pl.col("init")}, schedule=sched)
+    b["av"].add(pl.col("premium"))
+    return RollforwardCollector(compile_rollforward(b))
+
+
 def test_uniform_book_inputs_all_mismatch_n_periods_raises() -> None:
-    """Both policies length 2 under n_periods=3 -> uniform mismatch -> raise."""
+    """Both policies length 2 under n_periods=3 -> raise on the first row."""
     collector = _uniform_av_collector(n_periods=3)
     df = pl.DataFrame(
         {"init": [100.0, 100.0], "premium": [[10.0, 10.0], [10.0, 10.0]]},
@@ -46,11 +66,41 @@ def test_uniform_book_inputs_all_mismatch_n_periods_raises() -> None:
         df.with_columns(av=collector.expr_for("av"))
 
 
-def test_jagged_varying_lengths_still_allowed() -> None:
-    """Varying input lengths (2 and 3) -> genuine jagged -> each own horizon."""
+def test_uniform_book_mixed_lengths_raises() -> None:
+    """Varying lengths on a UNIFORM schedule are equally stale inputs.
+
+    The old variance heuristic waved this book through as "jagged"; under
+    declared intent a uniform schedule rejects every short row.
+    """
     collector = _uniform_av_collector(n_periods=3)
     df = pl.DataFrame(
         {"init": [100.0, 100.0], "premium": [[10.0, 10.0], [10.0, 10.0, 10.0]]},
+    )
+    with pytest.raises(pl.exceptions.ComputeError, match="uniform"):
+        df.with_columns(av=collector.expr_for("av"))
+
+
+def test_uniform_book_single_short_row_raises() -> None:
+    """One-row frame (the smallest possible streaming chunk) still raises.
+
+    This is the chunk-stability property itself: the guard's verdict on a
+    row cannot depend on which batchmates the engine happened to give it.
+    """
+    collector = _uniform_av_collector(n_periods=3)
+    df = pl.DataFrame({"init": [100.0], "premium": [[10.0, 10.0]]})
+    with pytest.raises(pl.exceptions.ComputeError, match="uniform"):
+        df.with_columns(av=collector.expr_for("av"))
+
+
+def test_jagged_via_per_policy_grid_allowed() -> None:
+    """Declared jagged: per-policy grid supplies each policy's own horizon."""
+    collector = _per_policy_av_collector(n_periods=3)
+    df = pl.DataFrame(
+        {
+            "init": [100.0, 100.0],
+            "term": [2, 3],
+            "premium": [[10.0, 10.0], [10.0, 10.0, 10.0]],
+        },
     )
     av = df.with_columns(av=collector.expr_for("av")).get_column("av").to_list()
     assert len(av[0]) == 2

@@ -56,6 +56,15 @@ pub struct RollforwardKwargs {
     /// list columns to infer length from. `None` => uniform (use `n_periods`).
     #[serde(default)]
     pub per_policy_lengths_arg: Option<usize>,
+    /// True when the schedule declares a uniform book (`from_calendar_grid`
+    /// / `from_inception`): every policy's input lists must then have exactly
+    /// `n_periods` elements, checked per row. Jagged horizons require a
+    /// `per_policy_grid` schedule. This is declared intent from the lowering —
+    /// the kernel must never infer book shape from the batch it happens to
+    /// see, because batch boundaries are an engine choice (streaming chunks)
+    /// and any cross-row heuristic makes row behaviour depend on batchmates.
+    #[serde(default)]
+    pub require_uniform: bool,
 }
 
 /// Resolved (state, point) capture slot — indices into ir.states / ir.points.
@@ -312,31 +321,37 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         init_slices[0].0.len()
     };
 
-    // ---- 3b. Uniform-schedule footgun guard ----
-    // A uniform (non per-policy-grid) schedule means every policy shares one
-    // horizon = n_periods. If EVERY policy's input lists instead share one
-    // length L that disagrees with n_periods, that is almost certainly a
-    // uniform book fed stale/short inputs — fail loudly rather than silently
-    // truncating the whole projection to L. Genuinely jagged books have inputs
-    // whose lengths VARY across policies (handled per-row below), so they are
-    // deliberately left untouched by this check.
-    if per_policy_lengths.is_none() && !owned_slices.is_empty() && num_rows > 0 {
+    // ---- 3b. Uniform-schedule footgun guard (per-row, chunk-stable) ----
+    // A uniform (non per-policy-grid) schedule declares that every policy
+    // shares one horizon = n_periods, so any row whose input lists have a
+    // different length is stale/short/over-long inputs — fail loudly rather
+    // than silently projecting the wrong horizon. The check is per ROW, never
+    // across rows: this plugin is elementwise, batch boundaries are an engine
+    // choice (streaming chunks), and a cross-row heuristic would make a row's
+    // behaviour depend on its batchmates — the earlier all-rows-share-one-
+    // length version of this guard misfired or missed depending on chunk
+    // width. Jagged horizons are declared, not inferred: use a per-policy
+    // grid, which supplies authoritative per-row lengths.
+    if kwargs.require_uniform && per_policy_lengths.is_none() && !owned_slices.is_empty() {
         let first = &owned_slices[0];
-        let row_len = |r: usize| (first.offsets[r + 1] - first.offsets[r]) as usize;
-        let l0 = row_len(0);
-        if (1..num_rows).all(|r| row_len(r) == l0) && l0 != n_periods {
-            return Err(PolarsError::ComputeError(
-                format!(
-                    "rollforward: every policy's input lists have length {l0}, but the \
-                     schedule's n_periods is {n_periods}. For a uniform book the input list \
-                     columns must have n_periods = {n_periods} elements per policy. Fix: set \
-                     the Schedule's n_periods to {l0}, or build the inputs with {n_periods} \
-                     elements per policy. If policies genuinely have different horizons, use a \
-                     per-policy grid (af.projection.set(..., per_policy=True)) so input lengths \
-                     may vary across policies."
-                )
-                .into(),
-            ));
+        for r in 0..num_rows {
+            let row_len = (first.offsets[r + 1] - first.offsets[r]) as usize;
+            if row_len != n_periods {
+                return Err(PolarsError::ComputeError(
+                    format!(
+                        "rollforward: policy at row {r} has input lists of length \
+                         {row_len}, but the schedule is uniform with n_periods = \
+                         {n_periods} — every policy's input lists must have exactly \
+                         {n_periods} elements. Fix: build the inputs on the schedule's \
+                         axis (or set the Schedule's n_periods to match). If policies \
+                         genuinely have different horizons, use a per-policy grid \
+                         (af.projection.set(..., per_policy=True), or \
+                         Schedule.from_per_policy_grid) so each policy carries its own \
+                         length."
+                    )
+                    .into(),
+                ));
+            }
         }
     }
 

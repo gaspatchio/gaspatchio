@@ -242,9 +242,7 @@ impl HashStorage {
                 let av1 = unsafe { key_cols[0].get_unchecked(idx) };
                 let av2 = unsafe { key_cols[1].get_unchecked(idx) };
                 match (self.codecs[0].encode(av1), self.codecs[1].encode(av2)) {
-                    (Some(h1), Some(h2)) => {
-                        Some(h1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ h2)
-                    }
+                    (Some(h1), Some(h2)) => Some(h1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ h2),
                     _ => None,
                 }
             } else {
