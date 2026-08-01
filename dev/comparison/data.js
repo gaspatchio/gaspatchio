@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785615860782,
+  "lastUpdate": 1785617727858,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib": [
@@ -3209,6 +3209,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 5.16,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8867b66ac2f6c7d1999960d614ec9628f4bacd52",
+          "message": "String outputs on the list-broadcast when() path + broadcast_to_periods() (GSP-110) (#56)",
+          "timestamp": "2026-08-02T08:45:33+12:00",
+          "tree_id": "ff15490624e77256faeb9c60872ba34850e022fb",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/8867b66ac2f6c7d1999960d614ec9628f4bacd52"
+        },
+        "date": 1785617726816,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 1.935,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.377,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.229,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 34.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 5.917,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 25.84,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.444,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2252.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 20.946,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 47.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 47.18,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.453,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 4076.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 16.991,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 588.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 6.93,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 22.659,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4413.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 120.172,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 832.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.3,
             "unit": "x"
           }
         ]
