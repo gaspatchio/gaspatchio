@@ -11,6 +11,7 @@ from .formatting_errors import (
     _format_column_error,
     _handle_execution_error,
     _handle_frame_error,
+    _handle_plan_lowering_panic,
 )
 from .metadata import OperationMetadata, TracedOperation, capture_source_context
 from .models import (
@@ -45,6 +46,7 @@ __all__ = [
     "ValidationErrorFormatter",
     "_handle_execution_error",
     "_handle_frame_error",
+    "_handle_plan_lowering_panic",
     "capture_source_context",
     "capture_validation_context",
     "raise_validation_error",

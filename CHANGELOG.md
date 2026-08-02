@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Schema failures inside `when()` branches are attributed errors, not raw
+  panics.** A schema mismatch in a `when().then()` branch fails during plan
+  lowering, where polars panics instead of raising a typed error — and
+  pyo3's `PanicException` bypassed both `except Exception` and the
+  collect-time column attribution (#39), reaching the model author as a
+  bare Rust panic naming nothing. The `collect()`/`profile()` boundary now
+  converts that panic into a catchable `SchemaError` carrying the standard
+  attribution block (failing column + defining expression), chained to the
+  original panic. Panics of any other origin — and real interrupts — pass
+  through untouched. (#54)
+
 ## [0.7.0] — Book shapes are declared, and conditionals speak strings
 
 A short, sharp release from the post-v0.6.0 audit batch (Linear GSP-111)
