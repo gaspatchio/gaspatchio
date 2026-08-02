@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from loguru import logger
@@ -99,8 +99,8 @@ _ARITHMETIC_OPS: set[str] = {"add", "sub", "mul", "truediv", "floordiv", "mod", 
 def _create_method_wrapper(
     name: str,
     polars_attr: Callable,
-    self_proxy: "ProxyType",
-    parent_af: Optional["ActuarialFrame"],
+    self_proxy: ProxyType,
+    parent_af: ActuarialFrame | None,
     base_expr: pl.Expr,
 ) -> Callable:
     """Create a wrapper for a Polars method."""
@@ -131,8 +131,8 @@ def _create_method_wrapper(
 
 def _should_use_list_shim(
     name: str,
-    self_proxy: "ProxyType",
-    parent_af: Optional["ActuarialFrame"],
+    self_proxy: ProxyType,
+    parent_af: ActuarialFrame | None,
     base_expr: pl.Expr,  # noqa: ARG001
 ) -> bool:
     """Determine if list shimming should be used for the operation."""
@@ -179,7 +179,7 @@ def _execute_regular(polars_attr: Callable, args: tuple, kwargs: dict) -> Any:  
 class ErrorEnhancer:
     """Centralized error handling and enhancement."""
 
-    def __init__(self, self_proxy: "ProxyType") -> None:
+    def __init__(self, self_proxy: ProxyType) -> None:
         self.proxy = self_proxy
         self.parent_af = getattr(self_proxy, "_parent", None)
         tracing = getattr(self.parent_af, "_tracing", False)
@@ -230,12 +230,92 @@ def _has_column_operands(args: tuple, kwargs: dict) -> bool:
     return False
 
 
+# Ops whose polars kernels reject a COMPOUND scalar against a list operand
+# (supertype derivation fails); mul/div/floordiv/mod broadcast fine.
+_ADDSUB_OPS: set[str] = {"add", "sub"}
+
+
+def _addsub_broadcast_side(
+    name: str,
+    self_proxy: ProxyType,
+    parent_af: ActuarialFrame | None,
+    a: tuple,
+    kw: dict,
+) -> str | None:
+    """Name the operand of ``+``/``-`` needing an explicit broadcast (#53).
+
+    polars broadcasts a scalar into list arithmetic natively when the scalar
+    side is a bare column or a literal, but a compound scalar expression
+    (``col * col``) fails supertype derivation — and only for add/sub. The
+    fix is shape-driven, not structure-driven: when one operand is a
+    compound scalar (an ExpressionProxy with scalar shape) and the other is
+    list-shaped, the compound side is pre-broadcast with ``repeat_by`` to
+    the list side's per-row lengths, and the op proceeds as native
+    list-list arithmetic. Returns ``"base"``, ``"arg"``, or ``None``
+    (leave the native plan untouched — including every shape polars
+    already handles, so working models keep their existing plans).
+    """
+    if name not in _ADDSUB_OPS or parent_af is None or len(a) != 1 or kw:
+        return None
+
+    from .column_proxy import ColumnProxy
+    from .expression_proxy import ExpressionProxy
+
+    arg = a[0]
+    receiver_shape = (
+        self_proxy.shape
+        if isinstance(self_proxy, (ColumnProxy, ExpressionProxy))
+        else "unknown"
+    )
+    arg_shape = (
+        arg.shape if isinstance(arg, (ColumnProxy, ExpressionProxy)) else "unknown"
+    )
+
+    # A bare ColumnProxy is a leaf polars broadcasts natively; only the
+    # compound (ExpressionProxy) scalar side needs help. Unknown shapes are
+    # left alone — guessing here could rewrite a working expression.
+    if (
+        isinstance(self_proxy, ExpressionProxy)
+        and receiver_shape == "scalar"
+        and arg_shape == "list"
+    ):
+        return "base"
+    if (
+        isinstance(arg, ExpressionProxy)
+        and arg_shape == "scalar"
+        and receiver_shape == "list"
+    ):
+        return "arg"
+    return None
+
+
+def _apply_addsub_broadcast(
+    broadcast_side: str | None,
+    base_expr: pl.Expr,
+    a: tuple,
+    name: str,
+) -> tuple[pl.Expr, tuple]:
+    """Pre-broadcast the compound scalar side of ``+``/``-`` (#53).
+
+    Operands here are already unwrapped raw expressions; the side named by
+    ``_addsub_broadcast_side`` is repeated to the list side's per-row
+    lengths so the op proceeds as native list-list arithmetic.
+    """
+    if broadcast_side == "base":
+        logger.trace(f"Pre-broadcast compound scalar base for {name} (#53)")
+        return base_expr.repeat_by(a[0].list.len()), a
+    if broadcast_side == "arg":
+        logger.trace(f"Pre-broadcast compound scalar argument for {name} (#53)")
+        return base_expr, (a[0].repeat_by(base_expr.list.len()),)
+    return base_expr, a
+
+
 def _method_caller(  # noqa: PLR0913
     *,
     name: str,
     polars_attr: Callable,
-    self_proxy: "ProxyType",
-    parent_af: Optional["ActuarialFrame"],
+    self_proxy: ProxyType,
+    parent_af: ActuarialFrame | None,
     base_expr: Any,  # noqa: ANN401
     a: tuple,
     kw: dict,
@@ -247,19 +327,30 @@ def _method_caller(  # noqa: PLR0913
         from .expression_proxy import ExpressionProxy
 
         for arg in a:
-            if (
-                isinstance(arg, (ColumnProxy, ExpressionProxy))
-                and arg.shape == "list"
-            ):
+            if isinstance(arg, (ColumnProxy, ExpressionProxy)) and arg.shape == "list":
                 pow_arg_is_list = True
                 logger.trace(f"Pow argument {arg!r} is list-shaped")
                 break
+
+    # polars broadcasts a scalar into list arithmetic for + and - only when
+    # the scalar side is a LEAF (bare column or literal); a COMPOUND scalar
+    # expression fails supertype derivation, so the same formula lived or
+    # died on operand order (#53). Capture the side to pre-broadcast while
+    # the operands still carry shape metadata (before the unwrap below).
+    broadcast_side = _addsub_broadcast_side(name, self_proxy, parent_af, a, kw)
 
     if name in _ARITHMETIC_OPS:
         a = tuple(_unwrap_for_arithmetic(arg) for arg in a)
         kw = {k: _unwrap_for_arithmetic(v) for k, v in kw.items()}
 
-    should_use_list_shim = _should_use_list_shim(name, self_proxy, parent_af, base_expr)
+    base_expr, a = _apply_addsub_broadcast(broadcast_side, base_expr, a, name)
+
+    # After a rewrite both sides are genuine lists — native list-list
+    # arithmetic is the correct path, and list.eval cannot take a list
+    # column as an argument anyway.
+    should_use_list_shim = broadcast_side is None and _should_use_list_shim(
+        name, self_proxy, parent_af, base_expr
+    )
     pow_base_is_list = should_use_list_shim
 
     if not should_use_list_shim and pow_arg_is_list:
@@ -276,7 +367,11 @@ def _method_caller(  # noqa: PLR0913
     error_enhancer = ErrorEnhancer(self_proxy)
 
     try:
-        if should_use_list_shim:
+        if broadcast_side is not None:
+            # polars_attr is bound to the pre-rewrite base expression, so the
+            # rewritten operands must be executed directly.
+            result = getattr(base_expr, name)(*a)
+        elif should_use_list_shim:
             if name == "pow" and a and name in _BACKEND_LIST_OPS:
                 from gaspatchio_core.polars_backend.operators import dispatch_list_op
 
@@ -289,7 +384,9 @@ def _method_caller(  # noqa: PLR0913
             else:
                 try:
                     logger.trace(f"Executing list shim for {name}")
-                    result = _execute_list_shim(name, base_expr, a, kw, is_unary=is_unary)
+                    result = _execute_list_shim(
+                        name, base_expr, a, kw, is_unary=is_unary
+                    )
                 except (TypeError, ValueError) as list_error:
                     logger.trace(f"List shim failed for {name}: {list_error}")
 

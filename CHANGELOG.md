@@ -14,6 +14,19 @@
   attribution block (failing column + defining expression), chained to the
   original panic. Panics of any other origin — and real interrupts — pass
   through untouched. (#54)
+- **Scalar/list broadcast is order-independent for `+` and `-`.** polars
+  broadcasts a scalar into list arithmetic only when the scalar side is a
+  *leaf* (bare column or literal) — a compound scalar expression
+  (`af.a * af.b`) against a list operand failed supertype derivation, and
+  only for `+`/`-`, so the natural expense formula
+  `AnnPrem * ExpsPerPrem + (SA * ExpsPerSA + ExpsPol) * InflFactor` lived
+  or died on operand order. The proxy layer now pre-broadcasts the
+  compound scalar side with `repeat_by` to the list side's per-row lengths
+  (jagged-safe) and the op proceeds as native list-list arithmetic.
+  Engaged only for the shapes that natively fail — bare columns, literals,
+  `*`, and `/` keep their existing plans. Three instances found in the
+  wild during the v0.6.0 field test, all previously "fixed" by flipping
+  operands. (#53)
 
 ## [0.7.0] — Book shapes are declared, and conditionals speak strings
 
