@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.7.1] — Addition commutes, and panics name their column
+
+Three fixes, all traced back to the v0.6.0 field test, none breaking — a
+drop-in upgrade. The thread connecting them: a formula should work as
+written, and when it can't, the refusal should name the thing that's
+wrong. One upstream polars quirk made `+` order-dependent; one pyo3
+escape hatch let plan-lowering panics bypass the named-column error
+contract; one scenario-stacking overwrite turned a modelling mistake
+into a far-away duplicate-key error. (#52, #53, #54)
 
 ### Fixed
 
