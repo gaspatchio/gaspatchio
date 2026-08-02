@@ -19,13 +19,45 @@ if TYPE_CHECKING:
     from .metadata import TracedOperation
 
 
+def is_plan_lowering_panic(exception: BaseException) -> bool:
+    """Return True for pyo3 panics raised by plan lowering's schema derivation.
+
+    A schema mismatch inside a ``when().then()`` branch fails during IR plan
+    lowering, where polars panics ("no valid schema can be derived") instead
+    of raising a typed error. pyo3 surfaces that as ``PanicException`` — a
+    ``BaseException`` subclass that bypasses every ``except Exception``.
+    Matched by type name rather than import: ``pyo3_runtime`` is a synthetic
+    module and this predicate must be safe to call before/without it.
+
+    Kept narrow deliberately (#54): only the schema-derivation panic is a
+    data-shape failure that reproduces deterministically under replay. Any
+    other panic — and any real interrupt — must pass through untouched.
+    """
+    return type(
+        exception
+    ).__name__ == "PanicException" and "no valid schema can be derived" in str(
+        exception
+    )
+
+
+def _replayable(exception: BaseException) -> bool:
+    """Return True when a replay probe may consume this exception.
+
+    Probes catch ``BaseException`` so schema-derivation panics can be matched
+    like any other failure, but anything that is neither an ``Exception`` nor
+    such a panic (``KeyboardInterrupt``, ``SystemExit``, foreign panics) must
+    propagate immediately.
+    """
+    return isinstance(exception, Exception) or is_plan_lowering_panic(exception)
+
+
 class ErrorBoundaryFinder:
     """Efficiently find the failing operation using binary search."""
 
     def __init__(
         self,
         af: ActuarialFrame,
-        exception: Exception,
+        exception: BaseException,
         max_rows: int | None = None,
     ) -> None:
         """Initialize the error boundary finder.
@@ -96,7 +128,9 @@ class ErrorBoundaryFinder:
         # Early termination: check if first operation fails
         try:
             self._apply_operations_up_to(0)
-        except Exception as e:  # noqa: BLE001
+        except BaseException as e:  # panic-aware probe, guarded below
+            if not _replayable(e):
+                raise
             if self._is_same_error_type(e):
                 logger.debug("First operation fails, returning index 0")
                 return 0, self._get_operation_at(0), self.original_df
@@ -104,7 +138,9 @@ class ErrorBoundaryFinder:
         # Early termination: check if all operations succeed
         try:
             final_df = self._apply_operations_up_to(len(operations) - 1)
-        except Exception as e:  # noqa: BLE001
+        except BaseException as e:  # panic-aware probe, guarded below
+            if not _replayable(e):
+                raise
             if not self._is_same_error_type(e):
                 logger.debug(f"Different error type during full replay: {type(e)}")
                 return -1, None, self.original_df
@@ -145,7 +181,9 @@ class ErrorBoundaryFinder:
                 last_good_index = mid
                 left = mid + 1
                 logger.trace(f"Operations 0-{mid} succeeded, searching right half")
-            except Exception as e:  # noqa: BLE001
+            except BaseException as e:  # panic-aware probe, guarded below
+                if not _replayable(e):
+                    raise
                 if self._is_same_error_type(e):
                     # Error at or before this point
                     failing_index = mid
@@ -159,7 +197,11 @@ class ErrorBoundaryFinder:
                         try:
                             last_good_df = self._apply_operations_up_to(mid - 1)
                             last_good_index = mid - 1
-                        except Exception:  # noqa: BLE001
+                        except (
+                            BaseException
+                        ) as retry_error:  # panic-aware probe, guarded below
+                            if not _replayable(retry_error):
+                                raise
                             last_good_df = self.original_df
                             last_good_index = -1
                     else:
@@ -226,7 +268,9 @@ class ErrorBoundaryFinder:
                 # Test by collecting to see if it fails
                 _ = current_df.collect()
                 logger.trace(f"Operation {i} ({alias}) succeeded")
-            except Exception as e:  # noqa: BLE001
+            except BaseException as e:  # panic-aware probe, guarded below
+                if not _replayable(e):
+                    raise
                 if self._is_same_error_type(e):
                     logger.debug(f"Exact failing operation found at index {i}")
                     return i
@@ -301,7 +345,7 @@ class ErrorBoundaryFinder:
             return operations[index]
         return None
 
-    def _is_same_error_type(self, exception: Exception) -> bool:
+    def _is_same_error_type(self, exception: BaseException) -> bool:
         """Check if the given exception is the same type as the original error.
 
         Args:
@@ -343,7 +387,7 @@ class _AttributionReplayFinder(ErrorBoundaryFinder):
     self-contradictory one.
     """
 
-    def _is_same_error_type(self, exception: Exception) -> bool:
+    def _is_same_error_type(self, exception: BaseException) -> bool:
         if not isinstance(exception, self.exception_type):
             return False
         original = str(self.exception).split("\n", 1)[0]
@@ -353,7 +397,7 @@ class _AttributionReplayFinder(ErrorBoundaryFinder):
 
 def attribute_collect_failure(
     af: ActuarialFrame,
-    exception: Exception,
+    exception: BaseException,
 ) -> tuple[str, str] | None:
     """Name the recorded assignment that reproduces a collect-time failure.
 
@@ -377,7 +421,9 @@ def attribute_collect_failure(
         ``(column_name, expression_string)`` or ``None``.
 
     """
-    if not isinstance(exception, _ATTRIBUTABLE_ERRORS):
+    if not (
+        isinstance(exception, _ATTRIBUTABLE_ERRORS) or is_plan_lowering_panic(exception)
+    ):
         return None
     if not getattr(af, "_computation_graph", None):
         return None
@@ -389,7 +435,9 @@ def attribute_collect_failure(
     try:
         finder = _AttributionReplayFinder(af, exception, max_rows=_REPLAY_MAX_ROWS)
         _, failing_op, _ = finder.find_failing_operation()
-    except Exception:  # noqa: BLE001 — never make the error worse than we found it
+    except BaseException as replay_error:  # never make the error worse
+        if not _replayable(replay_error):
+            raise
         logger.debug("Collect-error attribution replay failed; passing through")
         return None
     if failing_op is None:

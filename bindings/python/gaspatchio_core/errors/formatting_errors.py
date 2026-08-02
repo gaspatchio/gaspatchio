@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import polars as pl  # Import polars for exception type checking
 from loguru import logger
@@ -534,6 +534,55 @@ def _attribute_collect_error(frame: ActuarialFrame, e: Exception) -> None:
     # _enhanced_processed): prevents double-decoration on re-entry.
     e._column_attributed = True  # noqa: SLF001
     raise e
+
+
+def _handle_plan_lowering_panic(
+    frame: ActuarialFrame,
+    panic: BaseException,
+) -> NoReturn:
+    """Convert an attributed schema-derivation panic into a SchemaError (#54).
+
+    A schema mismatch inside a ``when().then()`` branch fails during IR plan
+    lowering, where polars panics instead of raising — pyo3's
+    ``PanicException`` is a ``BaseException``, so it bypasses both
+    ``except Exception`` at the collect boundary and the #39 attribution
+    that names the failing column. This is the dedicated boundary for that
+    escape: when the panic is the known schema-derivation failure AND replay
+    attributes it to a recorded assignment, it is re-raised as a catchable
+    ``SchemaError`` carrying the #39 attribution block, chained to the
+    original panic.
+
+    Everything else re-raises untouched: non-panic ``BaseException``s
+    (interrupts), panics of any other origin, the AF_ERROR_MODE=off/basic
+    opt-out, and panics attribution cannot reproduce — per the fallback
+    contract, an unattributed error passes through rather than being
+    rewritten into something that merely looks diagnosed.
+    """
+    from .boundary import is_plan_lowering_panic
+
+    if not is_plan_lowering_panic(panic):
+        raise panic
+
+    from gaspatchio_core.util import get_error_mode
+
+    if get_error_mode() not in ("enhanced", "debug"):
+        raise panic
+
+    from .boundary import attribute_collect_failure
+
+    attribution = attribute_collect_failure(frame, panic)
+    if attribution is None:
+        raise panic
+    column, expression = attribution
+    attributed = pl.exceptions.SchemaError(
+        f"{panic}\n\n"
+        f"  Failing column: {column!r}\n"
+        f"  Defined as:     {expression}",
+    )
+    # Processed-marker idiom used throughout this module: prevents
+    # double-decoration if the converted error re-enters a handler.
+    attributed._column_attributed = True  # type: ignore[attr-defined] # noqa: SLF001
+    raise attributed from panic
 
 
 # Backward compatibility alias

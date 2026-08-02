@@ -21,7 +21,7 @@ from loguru import logger
 from ..column import ColumnProxy, ExpressionProxy
 
 # Import error handling
-from ..errors import _handle_execution_error
+from ..errors import _handle_execution_error, _handle_plan_lowering_panic
 
 # ADDED: Import registry
 from ..frame.registry import _ACCESSOR_REGISTRY
@@ -578,6 +578,8 @@ class ActuarialFrame:
             return result  # noqa: TRY300 — mirrors profile(); try wraps the whole body
         except Exception as e:  # noqa: BLE001
             _handle_execution_error(self, e)  # Will re-raise or format
+        except BaseException as e:  # noqa: BLE001 — pyo3 panics bypass Exception (#54)
+            _handle_plan_lowering_panic(self, e)  # Attributes schema panics; re-raises rest
 
     def _open_attribution_window_if_needed(self) -> None:
         """Snapshot the pre-op plan when the first op of a window is recorded.
@@ -682,6 +684,8 @@ class ActuarialFrame:
             return result_df, profile_info  # noqa: TRY300
         except Exception as e:  # noqa: BLE001
             _handle_execution_error(self, e)  # Will re-raise or format
+        except BaseException as e:  # noqa: BLE001 — pyo3 panics bypass Exception (#54)
+            _handle_plan_lowering_panic(self, e)  # Attributes schema panics; re-raises rest
 
     # Excluded: optimize, get_execution_stats
 
