@@ -27,6 +27,17 @@
   `*`, and `/` keep their existing plans. Three instances found in the
   wild during the v0.6.0 field test, all previously "fixed" by flipping
   operands. (#53)
+- **A shocks-dict `ScenarioRun` refuses a base table that already carries
+  `scenario_id`.** Stacking stamps the batch's scenario key over every
+  `base_tables` entry, so a table already keyed by a scenario axis had its
+  original scenarios silently collapsed onto one key — the cause of the
+  shipped scenarios docs example printing every scenario at the UP rate,
+  and (since strict table builds) of a `Duplicate key combination` error
+  far from the cause. The stacking boundary now raises upfront, naming the
+  table, its existing `scenario_id` dimension, and both remedies: keep the
+  table scenario-invariant and express differences as shocks, or pass the
+  scenario-keyed table through the id-list/drivers shapes, where
+  `base_tables` reach the model untouched. (#52)
 
 ## [0.7.0] — Book shapes are declared, and conditionals speak strings
 

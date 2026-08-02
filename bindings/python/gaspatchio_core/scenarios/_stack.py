@@ -39,6 +39,22 @@ def stack_shocked_table(
     """
     from gaspatchio_core.assumptions import Table
 
+    base_dimensions = base._dimensions  # type: ignore[attr-defined]  # noqa: SLF001
+    if "scenario_id" in base_dimensions:
+        base_name = base._name  # type: ignore[attr-defined]  # noqa: SLF001
+        msg = (
+            f"Table '{base_name}' already carries 'scenario_id' as a "
+            f"dimension — stacking would stamp one batch key over every "
+            f"original scenario's rows, silently collapsing the axis.\n\n"
+            f"A shocks-dict ScenarioRun stacks each base table per scenario, "
+            f"so base tables must be scenario-invariant. Either:\n"
+            f"  - keep the table scenario-invariant and express the "
+            f"per-scenario differences as shocks, or\n"
+            f"  - pass the scenario-keyed table through the id-list or "
+            f"drivers shapes, where base_tables reach the model untouched."
+        )
+        raise ValueError(msg)
+
     base_df = base._materialised_df()  # type: ignore[attr-defined]  # noqa: SLF001
     value_col = base._value  # type: ignore[attr-defined]  # noqa: SLF001
 
