@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785138497489,
+  "lastUpdate": 1785743247940,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Batch Search": [
@@ -267,6 +267,73 @@ window.BENCHMARK_DATA = {
           {
             "name": "Batch Search/100K-10sc-auto-peak",
             "value": 4644,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Matt Wright",
+            "username": "mrmattwright",
+            "email": "1277725+mrmattwright@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "eaf8721925694f1148c4844f1f8d2e4a75f55406",
+          "message": "release: v0.7.1 — addition commutes, and panics name their column (#62)\n\nThree fixes from the v0.6.0 field-test backlog, none breaking: scalar/\nlist broadcast is order-independent for + and - (#53), plan-lowering\npanics convert to attributed SchemaErrors at the collect boundary (#54),\nand a shocks-dict ScenarioRun refuses a base table that already carries\nscenario_id (#52). Plus the event-listener 5.4.2 lock bump clearing\nRUSTSEC-2026-0221 from the main-branch scan.\n\nVersion stamps in core/Cargo.toml, bindings/python/Cargo.toml,\nbindings/python/pyproject.toml; Cargo.lock and uv.lock regenerated\n(uv lock --check passes).",
+          "timestamp": "2026-08-02T09:39:56Z",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/eaf8721925694f1148c4844f1f8d2e4a75f55406"
+        },
+        "date": 1785743246849,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Batch Search/1K-100sc-auto-wall",
+            "value": 32.581,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-100sc-auto-peak",
+            "value": 789.8,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/1K-100sc-checksum",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-wall",
+            "value": 485.684,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-peak",
+            "value": 475.4,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-wall",
+            "value": 235.505,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-peak",
+            "value": 785.4,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-wall",
+            "value": 228.465,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-peak",
+            "value": 4757.9,
             "unit": "MB"
           }
         ]
