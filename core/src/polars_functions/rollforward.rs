@@ -155,9 +155,15 @@ pub enum OpV2 {
 }
 
 /// Owned per-row List<Float64> input slice — offsets + flat values.
+///
+/// ``broadcast`` marks a scalar input: one value per row, held constant across
+/// every period. A level death benefit or a flat charge rate is naturally
+/// scalar, so requiring the caller to materialise `n_periods` copies of the
+/// same number would be ceremony with no meaning.
 struct OwnedListSlice {
     offsets: Vec<i64>,
     values: Vec<f64>,
+    broadcast: bool,
 }
 
 /// Plugin entry point — the function Polars discovers via the
@@ -224,6 +230,60 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
     let mut owned_slices: Vec<OwnedListSlice> = Vec::with_capacity(kwargs.input_columns.len());
     for (i, _name) in kwargs.input_columns.iter().enumerate() {
         let series = &inputs[n_states + i];
+
+        // A scalar (non-List) column is a per-policy constant: broadcast it
+        // across every period rather than demanding n_periods copies.
+        if !matches!(series.dtype(), DataType::List(_)) {
+            // Check the dtype rather than relying on the cast failing: casting a
+            // String column to Float64 silently yields nulls, which would surface
+            // as a confusing "null value not supported" instead of naming the
+            // real problem.
+            if !series.dtype().is_numeric() {
+                return Err(PolarsError::ComputeError(
+                    format!(
+                        "rollforward: input column {} (arg index {}) must be List or numeric \
+                         dtype, got {}",
+                        kwargs.input_columns[i],
+                        n_states + i,
+                        series.dtype()
+                    )
+                    .into(),
+                ));
+            }
+            let cast = series.cast(&DataType::Float64)?;
+            let ca = cast.f64()?;
+            if ca.null_count() > 0 {
+                return Err(PolarsError::ComputeError(
+                    format!(
+                        "rollforward: null value at scalar input column {} not supported",
+                        kwargs.input_columns[i]
+                    )
+                    .into(),
+                ));
+            }
+            let rechunked = ca.rechunk();
+            let values = rechunked
+                .cont_slice()
+                .map_err(|_| {
+                    PolarsError::ComputeError(
+                        format!(
+                            "rollforward: values not contiguous at input column {}",
+                            kwargs.input_columns[i]
+                        )
+                        .into(),
+                    )
+                })?
+                .to_vec();
+            // One value per row; offsets index the row, not the period.
+            let offsets: Vec<i64> = (0..=values.len() as i64).collect();
+            owned_slices.push(OwnedListSlice {
+                offsets,
+                values,
+                broadcast: true,
+            });
+            continue;
+        }
+
         let list_ca = series.list().map_err(|_| {
             PolarsError::ComputeError(
                 format!(
@@ -279,7 +339,11 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
                 )
             })?
             .to_vec();
-        owned_slices.push(OwnedListSlice { offsets, values });
+        owned_slices.push(OwnedListSlice {
+            offsets,
+            values,
+            broadcast: false,
+        });
     }
 
     // ---- 2b. Authoritative per-policy period counts (per_policy_grid) ----
@@ -309,11 +373,20 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         None => None,
     };
 
+    // Period lengths come from genuine per-period lists only. A broadcast
+    // (scalar) input carries one value per row, so its offsets index rows, not
+    // periods — using it to infer a horizon would report every policy as
+    // 1 period long.
+    let first_periodic: Option<&OwnedListSlice> = owned_slices.iter().find(|s| !s.broadcast);
+
     // ---- 3. Determine number of rows ----
     let num_rows = if let Some(ref lengths) = per_policy_lengths {
         lengths.len()
+    } else if let Some(first) = first_periodic {
+        first.offsets.len() - 1
     } else if !owned_slices.is_empty() {
-        owned_slices[0].offsets.len() - 1
+        // Only scalar inputs: one value per row.
+        owned_slices[0].values.len()
     } else if init_slices[0].1 {
         // broadcast: only 1 logical row (caller will broadcast the result)
         1
@@ -332,8 +405,8 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
     // length version of this guard misfired or missed depending on chunk
     // width. Jagged horizons are declared, not inferred: use a per-policy
     // grid, which supplies authoritative per-row lengths.
-    if kwargs.require_uniform && per_policy_lengths.is_none() && !owned_slices.is_empty() {
-        let first = &owned_slices[0];
+    if let (true, None, Some(first)) = (kwargs.require_uniform, &per_policy_lengths, first_periodic)
+    {
         for r in 0..num_rows {
             let row_len = (first.offsets[r + 1] - first.offsets[r]) as usize;
             if row_len != n_periods {
@@ -395,13 +468,15 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
                     format!("rollforward: negative per-policy length at row {row_idx}").into(),
                 )
             })?
-        } else if owned_slices.is_empty() {
-            n_periods
-        } else {
-            let first = &owned_slices[0];
+        } else if let Some(first) = first_periodic {
             first.offsets[row_idx + 1] as usize - first.offsets[row_idx] as usize
+        } else {
+            n_periods
         };
         for (slot_idx, slice) in owned_slices.iter().enumerate() {
+            if slice.broadcast {
+                continue; // scalar: one value per row, no period axis to check
+            }
             let s = slice.offsets[row_idx] as usize;
             let e = slice.offsets[row_idx + 1] as usize;
             let len = e - s;
@@ -846,6 +921,10 @@ fn op_target(op: &OpV2) -> (usize, usize) {
 /// Read a list-arg's value at (row_idx, t).
 fn read_list_at(owned_slices: &[OwnedListSlice], arg_idx: usize, row_idx: usize, t: usize) -> f64 {
     let slice = &owned_slices[arg_idx];
+    if slice.broadcast {
+        // Scalar input: one value per row, constant across periods.
+        return slice.values[row_idx];
+    }
     let flat_idx = slice.offsets[row_idx] as usize + t;
     // Jagged-safety: t must stay within THIS row's slice (offsets[row]..offsets[row+1]).
     debug_assert!(
@@ -1171,5 +1250,165 @@ mod tests {
             "zero-period policy must emit an empty list"
         );
         assert_eq!(row(2), vec![110.0, 130.0, 160.0]);
+    }
+
+    /// Run a 3-period rollforward adding `premium` (a List column) and a
+    /// scalar `bonus` (Float64, no period axis) at each period.
+    fn run_scalar_and_list(
+        init: Vec<f64>,
+        premium: Vec<Vec<f64>>,
+        bonus: Series,
+    ) -> PolarsResult<Vec<Vec<f64>>> {
+        let init = Series::new("av_init".into(), init);
+        let prem =
+            ListChunked::from_iter(premium.into_iter().map(|v| Some(Series::new("".into(), v))))
+                .into_series();
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "require_uniform": true,
+            "input_columns": ["premium", "bonus"],
+            "ops": [
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": "Premium"},
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 1}, "label": "Bonus"}
+            ],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, prem, bonus], &kwargs)?;
+        let field = out.struct_().unwrap().fields_as_series()[0].clone();
+        let list = field.list().unwrap();
+        Ok((0..list.len())
+            .map(|r| {
+                let s = list.get_as_series(r).unwrap();
+                let f = s.f64().unwrap();
+                (0..f.len()).map(|i| f.get(i).unwrap()).collect()
+            })
+            .collect())
+    }
+
+    #[test]
+    fn scalar_input_broadcasts_across_periods() {
+        // `bonus` is a plain Float64 column — one value per policy, held
+        // constant across every period. A level death benefit or flat charge
+        // rate has this shape; requiring n_periods copies would be ceremony.
+        let out = run_scalar_and_list(
+            vec![0.0, 0.0],
+            vec![vec![10.0, 20.0, 30.0], vec![10.0, 20.0, 30.0]],
+            Series::new("bonus".into(), vec![1.0, 2.0]),
+        )
+        .unwrap();
+        // Policy 0 adds 1.0 each period; policy 1 adds 2.0.
+        assert_eq!(out[0], vec![11.0, 32.0, 63.0]);
+        assert_eq!(out[1], vec![12.0, 34.0, 66.0]);
+    }
+
+    #[test]
+    fn scalar_input_equals_explicit_list_of_same_value() {
+        // A broadcast scalar must give bit-identical results to the caller
+        // materialising the same value n_periods times.
+        let scalar = run_scalar_and_list(
+            vec![100.0],
+            vec![vec![10.0, 20.0, 30.0]],
+            Series::new("bonus".into(), vec![5.0]),
+        )
+        .unwrap();
+        let listed = run_scalar_and_list(
+            vec![100.0],
+            vec![vec![10.0, 20.0, 30.0]],
+            ListChunked::from_iter([Some(Series::new("".into(), vec![5.0, 5.0, 5.0]))])
+                .into_series()
+                .with_name("bonus".into()),
+        )
+        .unwrap();
+        assert_eq!(scalar, listed);
+    }
+
+    #[test]
+    fn scalar_input_does_not_trip_the_uniform_length_guard() {
+        // Regression: the uniform-schedule guard and the per-row length check
+        // both used owned_slices[0]. With a scalar column first, they would
+        // read a length of 1 and reject every policy. Order must not matter,
+        // so this is the same run with the scalar column registered first.
+        let init = Series::new("av_init".into(), vec![0.0]);
+        let bonus = Series::new("bonus".into(), vec![7.0]);
+        let prem = ListChunked::from_iter([Some(Series::new("".into(), vec![1.0, 2.0, 3.0]))])
+            .into_series();
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "require_uniform": true,
+            "input_columns": ["bonus", "premium"],
+            "ops": [
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": "Bonus"},
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 1}, "label": "Premium"}
+            ],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, bonus, prem], &kwargs)
+            .expect("scalar-first input order must not trip the length guard");
+        let field = out.struct_().unwrap().fields_as_series()[0].clone();
+        let list = field.list().unwrap();
+        let s = list.get_as_series(0).unwrap();
+        let f = s.f64().unwrap();
+        let row: Vec<f64> = (0..f.len()).map(|i| f.get(i).unwrap()).collect();
+        assert_eq!(row, vec![8.0, 17.0, 27.0]);
+    }
+
+    #[test]
+    fn non_numeric_scalar_input_is_rejected_by_name() {
+        // A String column cannot be a rollforward input; the error must name
+        // the column and its dtype rather than saying "must be List".
+        let init = Series::new("av_init".into(), vec![0.0]);
+        let bad = Series::new("bonus".into(), vec!["not a number"]);
+        let prem = ListChunked::from_iter([Some(Series::new("".into(), vec![1.0, 2.0, 3.0]))])
+            .into_series();
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["premium", "bonus"],
+            "ops": [
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": "Premium"}
+            ],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        let err = rollforward_kernel(&[init, prem, bad], &kwargs).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("bonus"), "error must name the column: {msg}");
+        assert!(
+            msg.contains("List or numeric"),
+            "error must say what is accepted: {msg}"
+        );
     }
 }
