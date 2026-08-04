@@ -109,12 +109,54 @@ class GrowCapped(Op):
 
 @dataclass(frozen=True)
 class DeductNAR(Op):
-    """Net-amount-at-risk COI: ``s -= coi_rate[t] * (death_benefit[t] - s)``."""
+    """Net-amount-at-risk COI, on one of two timing conventions.
+
+    ``nar_timing="beginning_of_period"`` (default) measures the amount at
+    risk where the charge is taken and applies no discount::
+
+        s -= coi_rate[t] * (death_benefit[t] - s)
+
+    ``nar_timing="end_of_period"`` measures it against the accumulated
+    balance — the benefit is paid at period end — and discounts the charge
+    back. Deducting the COI lowers the balance, which raises the amount at
+    risk, so the two are mutually dependent; this is the closed form::
+
+        NAR = (death_benefit - s * accum) / (1 - coi_rate * accum * v)
+        s -= coi_rate * NAR * v
+
+    where ``v = 1/(1+coi_discount_rate)`` and ``accum = 1+credited_rate``.
+    """
 
     target: StateRef
     coi_rate: pl.Expr
     death_benefit: pl.Expr
+    nar_timing: str = "beginning_of_period"
+    coi_discount_rate: pl.Expr | None = None
+    credited_rate: pl.Expr | None = None
     label: str | None = None
+
+    def verify(self) -> None:
+        """Reject a timing convention without the rates it needs."""
+        valid = ("beginning_of_period", "end_of_period")
+        if self.nar_timing not in valid:
+            msg = (
+                f"deduct_nar: nar_timing must be one of {valid}, got "
+                f"{self.nar_timing!r}. This names when the net amount at risk "
+                f"is measured — at the point the COI is charged, or at period "
+                f"end when the death benefit is actually paid."
+            )
+            raise ValueError(msg)
+        if self.nar_timing == "beginning_of_period" and (
+            self.coi_discount_rate is not None or self.credited_rate is not None
+        ):
+            msg = (
+                "deduct_nar: coi_discount_rate and credited_rate only apply "
+                'when nar_timing="end_of_period". Under the '
+                "beginning-of-period convention the charge is taken on the "
+                "balance as it stands, with no discounting, so neither rate "
+                "has anything to act on."
+            )
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)

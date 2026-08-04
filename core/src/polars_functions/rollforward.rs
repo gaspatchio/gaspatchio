@@ -132,6 +132,22 @@ pub enum OpV2 {
         target_point: usize,
         coi_rate_arg: ArgRef,
         death_benefit_arg: ArgRef,
+        /// True when the net amount at risk is measured at END of period —
+        /// the COI is charged now for a benefit paid then, so the amount at
+        /// risk is `death_benefit - accumulated balance` and the charge is
+        /// discounted back. Requires both rate args. False (the default) keeps
+        /// the beginning-of-period convention: NAR measured where the charge
+        /// is taken, no discount.
+        #[serde(default)]
+        nar_at_end_of_period: bool,
+        /// Rate used to discount the COI charge back from the benefit
+        /// payment. Only read when `nar_at_end_of_period`.
+        #[serde(default)]
+        coi_discount_rate_arg: Option<ArgRef>,
+        /// Rate the balance accumulates at over the period. Only read when
+        /// `nar_at_end_of_period`.
+        #[serde(default)]
+        credited_rate_arg: Option<ArgRef>,
         label: Option<String>,
     },
     Ratchet {
@@ -775,6 +791,9 @@ fn apply_op(
             target_point,
             coi_rate_arg,
             death_benefit_arg,
+            nar_at_end_of_period,
+            coi_discount_rate_arg,
+            credited_rate_arg,
             ..
         } => {
             let coi = resolve_arg(
@@ -796,8 +815,49 @@ fn apply_op(
                 stride_point,
             );
             let i = *target_state * stride_state + *target_point * stride_point + t;
-            // Net amount at risk = death_benefit - state; charge coi over NAR.
-            state[i] -= coi * (db - state[i]);
+            if *nar_at_end_of_period {
+                // The benefit is paid at end of period, so the amount at risk
+                // is measured against the accumulated balance — and the COI,
+                // charged now, is discounted back. Deducting the COI lowers
+                // the balance, which raises the amount at risk, so the two are
+                // mutually dependent. Closed form of that solve:
+                //
+                //   NAR = (db - s*accum) / (1 - coi*accum*v)
+                //   COI = coi * NAR * v
+                //
+                // Both factors default to 1.0 when absent, which degenerates to
+                // the simultaneous solve at the deduction point.
+                let v = coi_discount_rate_arg.map_or(1.0, |a| {
+                    let r = resolve_arg(
+                        a,
+                        owned_slices,
+                        state,
+                        row_idx,
+                        t,
+                        stride_state,
+                        stride_point,
+                    );
+                    1.0 / (1.0 + r)
+                });
+                let accum = credited_rate_arg.map_or(1.0, |a| {
+                    1.0 + resolve_arg(
+                        a,
+                        owned_slices,
+                        state,
+                        row_idx,
+                        t,
+                        stride_state,
+                        stride_point,
+                    )
+                });
+                let denom = 1.0 - coi * accum * v;
+                let nar = (db - state[i] * accum) / denom;
+                state[i] -= coi * nar * v;
+            } else {
+                // Beginning of period: amount at risk measured where the
+                // charge is taken, no discount.
+                state[i] -= coi * (db - state[i]);
+            }
             Ok(())
         }
         OpV2::Ratchet {

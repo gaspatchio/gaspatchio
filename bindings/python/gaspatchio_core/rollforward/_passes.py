@@ -323,8 +323,7 @@ class LowerToPolarsPlugin:
             # row in the kernel — never inferred from the batch, which would
             # make behaviour depend on streaming chunk boundaries). Jagged
             # horizons are declared via a per_policy_grid schedule instead.
-            "require_uniform": getattr(ir.schedule, "_kind", None)
-            != "per_policy_grid",
+            "require_uniform": getattr(ir.schedule, "_kind", None) != "per_policy_grid",
         }
         # Append the registered input column expressions to args so the
         # kernel can locate them by index.
@@ -391,6 +390,17 @@ def _resolve_op(  # noqa: PLR0911
             op.death_benefit,
             op_name,
             "death_benefit",
+        )
+        base["nar_at_end_of_period"] = op.nar_timing == "end_of_period"
+        base["coi_discount_rate_arg"] = (
+            None
+            if op.coi_discount_rate is None
+            else cls(op.coi_discount_rate, op_name, "coi_discount_rate")  # type: ignore[operator]
+        )
+        base["credited_rate_arg"] = (
+            None
+            if op.credited_rate is None
+            else cls(op.credited_rate, op_name, "credited_rate")  # type: ignore[operator]
         )
         base["label"] = op.label
         return base

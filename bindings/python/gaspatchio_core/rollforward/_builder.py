@@ -104,7 +104,9 @@ class RollforwardBuilder:
         self._track_increments = track_increments
         self._lapse_when_all_non_positive = lapse_tuple
         self._contract_boundary = (
-            _to_polars_expr(contract_boundary) if contract_boundary is not None else None
+            _to_polars_expr(contract_boundary)
+            if contract_boundary is not None
+            else None
         )
         self._batch_axes: tuple[str, ...] = tuple(batch_axes)
 
@@ -232,17 +234,55 @@ class _StateHandle:
         self._b._transitions.append(op)
         return self
 
-    def deduct_nar(
+    def deduct_nar(  # noqa: PLR0913 — each kwarg is a distinct actuarial assumption; bundling them into a config object would hide the timing convention at the call site
         self,
         coi_rate: ExprLike,
         *,
         death_benefit: ExprLike,
+        nar_timing: str = "beginning_of_period",
+        coi_discount_rate: ExprLike | None = None,
+        credited_rate: ExprLike | None = None,
         label: str | None = None,
     ) -> _StateHandle:
+        """Charge a cost of insurance on the net amount at risk.
+
+        Args:
+            coi_rate: COI rate per unit of net amount at risk, per period.
+            death_benefit: The death benefit the amount at risk is measured
+                against.
+            nar_timing: When the amount at risk is measured.
+                ``"beginning_of_period"`` (default) measures it where the
+                charge is taken, undiscounted. ``"end_of_period"`` measures it
+                against the accumulated balance — the benefit is paid at
+                period end — and discounts the charge back, which requires
+                both rates below. **With constant rates the two agree; they
+                diverge once rates vary, so choose deliberately.**
+            coi_discount_rate: Rate used to discount the COI charge back from
+                the benefit payment. Often distinct from the credited rate —
+                it is a separate product assumption. ``"end_of_period"`` only.
+            credited_rate: Rate the balance accumulates at over the period.
+                ``"end_of_period"`` only.
+            label: Names this deduction in the increment breakdown.
+
+        Returns:
+            The state handle, for chaining.
+
+        """
+        # Rates pass through as-is: Op args must stay bare column references,
+        # and the kernel forms 1/(1+i) and 1+i itself.
         op = DeductNAR(
             target=StateRef(state=self._state, point=self._target_point()),
             coi_rate=_to_polars_expr(coi_rate),
             death_benefit=_to_polars_expr(death_benefit),
+            nar_timing=nar_timing,
+            coi_discount_rate=(
+                None
+                if coi_discount_rate is None
+                else _to_polars_expr(coi_discount_rate)
+            ),
+            credited_rate=(
+                None if credited_rate is None else _to_polars_expr(credited_rate)
+            ),
             label=label,
         )
         op.verify()
