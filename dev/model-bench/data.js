@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785910722279,
+  "lastUpdate": 1785913001453,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Model Benchmarks": [
@@ -11239,6 +11239,310 @@ window.BENCHMARK_DATA = {
           {
             "name": "VA + Scenarios (3x)/100K-cpu-avg",
             "value": 99.5,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5545217550d0c6b5837a9862e79c7a5971fe3980",
+          "message": "feat(rollforward): corridor test on deduct_nar, and refuse a negative NAR (#78)\n\ndeduct_nar measured the amount at risk as death_benefit - account_value.\nOnce a well-funded policy's account value outgrew its face amount that went\nnegative, which made the COI a credit to the account, which enlarged the\naccount, which made the amount at risk more negative. Nothing bounded it. On\na constructed universal life policy the final account value came out 166x too\nlarge, silently, with the correct and incorrect runs agreeing exactly for the\nfirst 49 years.\n\nTwo changes, either of which alone would stop the runaway.\n\ncorridor_factor= adds the regulatory corridor test that real universal life\nproducts carry — IRC section 7702's cash-value-accumulation test and its\nequivalents. The death benefit is at least y times the account value, so the\namount at risk is MAX(NARf, NARc). The corridor branch solves its own\ncircularity and the sign in its denominator is flipped, which is the whole\npoint: under a fixed benefit, charging the COI widens the gap to a fixed\ntarget, so the branch is self-reinforcing; under a proportional benefit it\nshrinks the benefit too, so the branch is self-limiting. As y decays to 1.0\nat advanced ages NARc goes to zero, and that is what caps a well-funded\npolicy. Applies to both timing conventions.\n\nA negative amount at risk is now refused outright rather than returned. It is\nnot a meaningful actuarial quantity, and the error names the period, both\nfigures, and the argument that fixes it. Passing corridor_factor=1.0 is the\nexplicit way to ask for \"floor the amount at risk at zero\", since\nDB = MAX(face, 1.0 * AV) is exactly that.\n\nChose one argument on the existing op over general state-dependent death\nbenefits. The general form is the more principled abstraction and would also\ncover increasing-benefit designs, but it needs expressions over running state\nin the IR, where Op arguments must currently be bare column references. The\none product that might have motivated it does not: a Type B (increasing)\nbenefit gives NAR = face, a constant with no circularity, already expressible\nas a precomputed subtract.\n\nCloses #77. GSP-126.",
+          "timestamp": "2026-08-05T18:48:43+12:00",
+          "tree_id": "b6c8fd068efa69e097fef66baa0764b93c7d7c4d",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/5545217550d0c6b5837a9862e79c7a5971fe3980"
+        },
+        "date": 1785913000526,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "VA Model (GMDB/GMAB)/8-points",
+            "value": 0.194,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-throughput",
+            "value": 41.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-memory",
+            "value": 66.5,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-data-mb",
+            "value": 0.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-rss",
+            "value": 235.5,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cores",
+            "value": 2,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cpu-avg",
+            "value": 10.5,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-points",
+            "value": 0.415,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-throughput",
+            "value": 2409.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-memory",
+            "value": 43.1,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-data-mb",
+            "value": 38,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-rss",
+            "value": 278.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cpu-avg",
+            "value": 74.9,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-points",
+            "value": 2.499,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-throughput",
+            "value": 4001.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-memory",
+            "value": 264.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-data-mb",
+            "value": 252.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-rss",
+            "value": 522.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cpu-avg",
+            "value": 95.2,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-points",
+            "value": 23.403,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-throughput",
+            "value": 4273,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-memory",
+            "value": 2739.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-data-mb",
+            "value": 2499.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-rss",
+            "value": 3175.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cpu-avg",
+            "value": 99.4,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-points",
+            "value": 0.107,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-throughput",
+            "value": 74.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-memory",
+            "value": -36,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-data-mb",
+            "value": 0.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-rss",
+            "value": 2482,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cpu-avg",
+            "value": 39.2,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-points",
+            "value": 1.009,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-throughput",
+            "value": 991.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-memory",
+            "value": -1583.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-data-mb",
+            "value": 114,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-rss",
+            "value": 892.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cpu-avg",
+            "value": 85.8,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-points",
+            "value": 6.763,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-throughput",
+            "value": 1478.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-memory",
+            "value": 474.1,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-data-mb",
+            "value": 771.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-rss",
+            "value": 1317.5,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cpu-avg",
+            "value": 97.5,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-points",
+            "value": 66.635,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-throughput",
+            "value": 1500.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-memory",
+            "value": 7374.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-data-mb",
+            "value": 7629.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-rss",
+            "value": 8651.4,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cpu-avg",
+            "value": 99.3,
             "unit": "%"
           }
         ]
