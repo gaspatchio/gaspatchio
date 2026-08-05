@@ -254,11 +254,17 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
             // String column to Float64 silently yields nulls, which would surface
             // as a confusing "null value not supported" instead of naming the
             // real problem.
-            if !series.dtype().is_numeric() {
+            //
+            // Boolean is admitted alongside the numeric types because the List
+            // path casts its inner values unconditionally, so a per-period
+            // condition mask already works. Rejecting the scalar form would mean
+            // a policy-level flag — a `when=` on a ratchet, say — was accepted as
+            // a list and refused as the single value it naturally is.
+            if !series.dtype().is_numeric() && !matches!(series.dtype(), DataType::Boolean) {
                 return Err(PolarsError::ComputeError(
                     format!(
-                        "rollforward: input column {} (arg index {}) must be List or numeric \
-                         dtype, got {}",
+                        "rollforward: input column {} (arg index {}) must be List, Boolean, or \
+                         numeric dtype, got {}",
                         kwargs.input_columns[i],
                         n_states + i,
                         series.dtype()
@@ -1467,8 +1473,47 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("bonus"), "error must name the column: {msg}");
         assert!(
-            msg.contains("List or numeric"),
+            msg.contains("List, Boolean, or numeric"),
             "error must say what is accepted: {msg}"
         );
+    }
+
+    #[test]
+    fn boolean_scalar_input_broadcasts() {
+        // The List path casts its inner values unconditionally, so a per-period
+        // Boolean mask already works. A policy-level flag — a ratchet `when=`,
+        // say — must not be refused merely for being the single value it is.
+        let init = Series::new("av_init".into(), vec![100.0]);
+        let flag = Series::new("flag".into(), vec![true]);
+        let to = ListChunked::from_iter([Some(Series::new("".into(), vec![150.0, 150.0, 150.0]))])
+            .into_series();
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["to", "flag"],
+            "ops": [
+                {"op": "Ratchet", "target_state": 0, "target_point": 1,
+                 "to_arg": {"kind": "input", "idx": 0},
+                 "when_arg": {"kind": "input", "idx": 1}, "label": null}
+            ],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, to, flag], &kwargs)
+            .expect("a scalar Boolean flag must broadcast, not error");
+        let field = out.struct_().unwrap().fields_as_series();
+        let s = field[0].list().unwrap().get_as_series(0).unwrap();
+        let f = s.f64().unwrap();
+        let row: Vec<f64> = (0..f.len()).map(|i| f.get(i).unwrap()).collect();
+        // The flag is true in every period, so the ratchet fires every period.
+        assert_eq!(row, vec![150.0, 150.0, 150.0]);
     }
 }

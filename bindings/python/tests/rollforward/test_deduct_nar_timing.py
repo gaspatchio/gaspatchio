@@ -168,3 +168,33 @@ class TestRefusesIncoherentArguments:
     def test_rates_without_end_of_period_are_refused(self, kwarg: str) -> None:
         with pytest.raises(ValueError, match='nar_timing="end_of_period"'):
             _project(**{kwarg: af_col("credited")})
+
+    @pytest.mark.parametrize(
+        ("supplied", "named"),
+        [
+            ({}, "coi_discount_rate and credited_rate"),
+            ({"coi_discount_rate": "coi_disc"}, "credited_rate"),
+            ({"credited_rate": "credited"}, "coi_discount_rate"),
+        ],
+    )
+    def test_end_of_period_without_its_rates_is_refused(
+        self,
+        supplied: dict[str, str],
+        named: str,
+    ) -> None:
+        """Omitting a rate must not silently select a different convention.
+
+        Both factors default to 1.0 in the kernel, which degenerates to the
+        simultaneous solve — a third real convention this API does not expose.
+        A missing argument would therefore produce a different answer rather
+        than an error, so the error names exactly which rate is absent.
+        """
+        with pytest.raises(ValueError, match=named):
+            _project(
+                nar_timing="end_of_period",
+                **{k: af_col(v) for k, v in supplied.items()},
+            )
+
+    def test_the_refusal_explains_what_the_default_would_have_done(self) -> None:
+        with pytest.raises(ValueError, match="simultaneous-solve convention"):
+            _project(nar_timing="end_of_period")

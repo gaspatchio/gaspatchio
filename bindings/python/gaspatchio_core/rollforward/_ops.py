@@ -157,6 +157,31 @@ class DeductNAR(Op):
                 "has anything to act on."
             )
             raise ValueError(msg)
+        if self.nar_timing == "end_of_period":
+            # Both factors default to 1.0 in the kernel. Left to default they
+            # would silently produce the simultaneous-solve convention — a
+            # third, real convention this API deliberately does not expose —
+            # rather than the end-of-period one that was asked for. Refuse.
+            missing = [
+                name
+                for name, rate in (
+                    ("coi_discount_rate", self.coi_discount_rate),
+                    ("credited_rate", self.credited_rate),
+                )
+                if rate is None
+            ]
+            if missing:
+                msg = (
+                    f"deduct_nar: {' and '.join(missing)} "
+                    f"{'is' if len(missing) == 1 else 'are'} required when "
+                    'nar_timing="end_of_period". The amount at risk is measured '
+                    "against the balance accumulated to period end, and the "
+                    "charge is discounted back from the benefit payment, so "
+                    "both rates carry the timing. Defaulting them to 1.0 would "
+                    "give the simultaneous-solve convention instead — a "
+                    "different answer, not a rounding difference."
+                )
+                raise ValueError(msg)
 
 
 @dataclass(frozen=True)
