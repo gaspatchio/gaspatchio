@@ -14,22 +14,16 @@ from gaspatchio_core.polars_backend.plugins import (
     accumulate,
     curve_eval,
     fill_series,
-    floor,
     list_clip,
     list_conditional,
     list_pow,
-    round,
-    round_to_int,
 )
 
 __all__ = [
     "accumulate",
     "curve_eval",
     "fill_series",
-    "floor",
     "list_clip",
     "list_conditional",
     "list_pow",
-    "round",
-    "round_to_int",
 ]

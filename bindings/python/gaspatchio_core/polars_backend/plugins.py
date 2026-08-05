@@ -68,69 +68,7 @@ def fill_series(expr: IntoExprColumn, start: int = 0, increment: int = 1) -> pl.
     )
 
 
-def floor(expr: IntoExprColumn, divisor: int = 1, default: int = 0) -> pl.Expr:
-    """Floor division operation.
 
-    Args:
-        expr: Column or expression to apply floor division
-        divisor: Divisor for floor division
-        default: Default value for null results
-
-    Returns:
-        Expression with floor division results
-
-    """
-    expr = _unwrap_proxy(expr)
-
-    return register_plugin_function(
-        args=[expr],
-        plugin_path=_get_lib(),
-        function_name="floor",
-        is_elementwise=True,
-        kwargs={"divisor": divisor, "default": default},
-    )
-
-
-def round(expr: IntoExprColumn, decimal_places: int = 0) -> pl.Expr:  # noqa: A001
-    """Round values to specified decimal places.
-
-    Args:
-        expr: Column or expression to round
-        decimal_places: Number of decimal places
-
-    Returns:
-        Expression with rounded values
-
-    """
-    expr = _unwrap_proxy(expr)
-
-    return register_plugin_function(
-        args=[expr],
-        plugin_path=_get_lib(),
-        function_name="round",
-        is_elementwise=True,
-        kwargs={"decimal_places": decimal_places},
-    )
-
-
-def round_to_int(expr: IntoExprColumn) -> pl.Expr:
-    """Round values to nearest integer.
-
-    Args:
-        expr: Column or expression to round
-
-    Returns:
-        Expression with integer-rounded values
-
-    """
-    expr = _unwrap_proxy(expr)
-
-    return register_plugin_function(
-        args=[expr],
-        plugin_path=_get_lib(),
-        function_name="round_to_int",
-        is_elementwise=True,
-    )
 
 
 def accumulate(initial: pl.Expr, multiply: pl.Expr, add: pl.Expr) -> pl.Expr:
