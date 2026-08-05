@@ -17,6 +17,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_DIR = REPO_ROOT / "skills"
 REGISTRY = SKILLS_DIR / "skills.toml"
+# The plugin root is the skills tree, so the marketplace payload is skills only.
+CLAUDE_PLUGIN_JSON = SKILLS_DIR / ".claude-plugin" / "plugin.json"
 
 
 def registry_order() -> list[str]:
@@ -56,7 +58,7 @@ def test_claude_plugin_generated_from_meta() -> None:
     meta = gen.load_plugin()
     assert data["name"] == meta["name"]
     assert data["license"] == "Apache-2.0"
-    assert data["skills"] == "./skills/"          # glob, self-maintaining
+    assert data["skills"] == "./"                 # glob, self-maintaining
     assert data["author"]["name"] == "Opio Inc."  # canonical, not "Gaspatchio"
     assert isinstance(data["keywords"], list)      # array, not string (hard validation rule)
 
@@ -69,15 +71,34 @@ def test_marketplace_self_hosts_same_repo() -> None:
     assert "url" not in mkt["owner"]               # owner takes name/email, not url (Gate 1)
     assert mkt["description"]                       # required by `claude plugin validate --strict`
     entry = mkt["plugins"][0]
-    assert entry["source"] == "./"
+    # The payload, not the repo: "./" would ship core/, bindings/, tests/, ref/.
+    assert entry["source"] == "./skills"
     assert entry["name"] == "gaspatchio"
     assert entry["version"] == gen.load_plugin()["version"]
 
 
 def test_claude_manifest_uses_glob() -> None:
     """The Claude Code manifest globs the directory; it must not list skills."""
-    data = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    assert data["skills"] == "./skills/"
+    data = json.loads(CLAUDE_PLUGIN_JSON.read_text(encoding="utf-8"))
+    assert data["skills"] == "./"
+
+
+def test_claude_plugin_root_is_the_skills_tree() -> None:
+    """The manifest sits in skills/, so the install payload is skills only.
+
+    A marketplace `source` is the payload: Claude Code copies that entire
+    directory into ~/.claude/plugins/cache. Rooting the plugin at the repo
+    shipped the Rust crate, the Python bindings, tests/ and ref/ to anyone
+    installing seven markdown skills.
+    """
+    assert CLAUDE_PLUGIN_JSON.parent.parent == SKILLS_DIR
+    assert not (REPO_ROOT / ".claude-plugin" / "plugin.json").exists()
+
+
+def test_plugin_payload_carries_nothing_but_skills() -> None:
+    """The payload root holds only skill dirs, the manifest, and the registry."""
+    allowed = {".claude-plugin", "skills.toml", *skill_dirs()}
+    assert {p.name for p in SKILLS_DIR.iterdir()} <= allowed
 
 
 def test_agents_md_count_and_list_in_sync() -> None:
@@ -111,7 +132,7 @@ def test_cursor_manifest_points_at_one_tree() -> None:
 def test_copilot_marketplace_generated() -> None:
     gen = _load_generator()
     mkt = json.loads(gen.render_copilot_marketplace())
-    assert mkt["plugins"][0]["source"] == "./"
+    assert mkt["plugins"][0]["source"] == "./skills"
 
 
 def test_copilot_instructions_generated() -> None:
@@ -129,7 +150,7 @@ def test_all_generated_artifacts_in_sync() -> None:
 
 
 def test_license_consistent_across_manifests() -> None:
-    for path in (REPO_ROOT / ".claude-plugin" / "plugin.json",
+    for path in (CLAUDE_PLUGIN_JSON,
                  REPO_ROOT / ".cursor-plugin" / "plugin.json"):
         assert json.loads(path.read_text())["license"] == "Apache-2.0"
 

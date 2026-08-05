@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "gaspatchio",
-      "source": "./",
+      "source": "./skills",
       "description": "Actuarial modeling skills for gaspatchio (Python + Rust/Polars).",
       "version": "1.0.0"
     }
