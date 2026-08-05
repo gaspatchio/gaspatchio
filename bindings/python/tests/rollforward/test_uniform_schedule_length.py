@@ -92,6 +92,24 @@ def test_uniform_book_single_short_row_raises() -> None:
         df.with_columns(av=collector.expr_for("av"))
 
 
+def test_off_by_one_advice_names_the_point_indexed_trap() -> None:
+    """Length n_periods + 1 is the axis-derived-input trap (gh#73).
+
+    Every projection axis carries one value per period boundary, so a column
+    built from one arrives one element long. The error must state the point-
+    vs period-indexed rule and the ``.list.head(n)`` fix — the earlier advice
+    ("build the inputs on the schedule's axis") described exactly what fails.
+    """
+    collector = _uniform_av_collector(n_periods=3)
+    df = pl.DataFrame({"init": [100.0], "premium": [[10.0, 10.0, 10.0, 10.0]]})
+    with pytest.raises(pl.exceptions.ComputeError) as exc_info:
+        df.with_columns(av=collector.expr_for("av"))
+    msg = str(exc_info.value)
+    assert "point-indexed" in msg
+    assert ".list.head(3)" in msg
+    assert "build the inputs on the schedule's axis" not in msg
+
+
 def test_jagged_via_per_policy_grid_allowed() -> None:
     """Declared jagged: per-policy grid supplies each policy's own horizon."""
     collector = _per_policy_av_collector(n_periods=3)
