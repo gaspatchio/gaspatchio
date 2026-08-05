@@ -11,6 +11,7 @@ calculation — these tests pin the difference so it cannot be optimised away.
 
 from __future__ import annotations
 
+import math
 from datetime import date
 
 import polars as pl
@@ -142,3 +143,28 @@ class TestDecimalsArgument:
         b = af.projection.rollforward(states={"s": af["init"]})
         with pytest.raises(ValueError, match="decimals must be between"):
             b["s"].round(40)
+
+
+class TestExtremeMagnitudes:
+    """Rounding must never turn a representable balance into infinity."""
+
+    def test_a_huge_finite_state_survives_rounding(self) -> None:
+        """Scaling by 100 overflows near the top of f64's range.
+
+        No real account value reaches 1e307, but a finite input silently
+        becoming infinite would poison every later period — the same class
+        of failure the NaN pass-through already guards against.
+        """
+        huge = 1e307
+        af = ActuarialFrame({"init": [huge], "zero": [[0.0]]})
+        af = af.projection.set(
+            start_date=date(2025, 12, 31), n_periods=1, frequency="annual"
+        )
+        b = af.projection.rollforward(states={"s": af["init"]})
+        b["s"].grow(af["zero"])
+        b["s"].round(2)
+        af.s = compile_rollforward(b).expr_for("s")
+        got = af.collect().get_column("s").to_list()[0][0]
+        assert math.isfinite(got)
+        # At this magnitude there is no fractional part left to round.
+        assert got == huge

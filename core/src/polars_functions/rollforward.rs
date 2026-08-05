@@ -772,7 +772,15 @@ fn apply_op(
             // otherwise produce a NaN that looks deliberate.
             if state[i].is_finite() {
                 let scale = 10f64.powi(*decimals);
-                state[i] = (state[i] * scale).round() / scale;
+                let scaled = state[i] * scale;
+                // Above ~1e306 the scaling overflows to infinity, which would
+                // turn a representable balance into one that poisons every
+                // later period. Such a value has no decimal places left to
+                // round to anyway — f64 runs out of precision long before —
+                // so leaving it alone is both safe and correct.
+                if scaled.is_finite() {
+                    state[i] = scaled.round() / scale;
+                }
             }
             Ok(())
         }
