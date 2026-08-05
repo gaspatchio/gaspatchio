@@ -7,8 +7,14 @@
 
 skills/skills.toml is the single source of truth for the skill set, its order,
 and the plugin metadata. This generates the Claude Code plugin manifest
-(.claude-plugin/plugin.json, which globs ./skills/) and the self-hosted
-marketplace listing (.claude-plugin/marketplace.json) from that SSOT.
+(skills/.claude-plugin/plugin.json, which globs its own plugin root) and the
+self-hosted marketplace listing (.claude-plugin/marketplace.json) from that SSOT.
+
+The plugin root is `skills/`, not the repository root. A marketplace entry's
+`source` is the payload: Claude Code copies that whole directory into
+~/.claude/plugins/cache on install. Rooting the plugin at the repository would
+ship the Rust crate, the Python bindings, the test suite and ref/ to anyone who
+wanted seven markdown skills.
 
     uv run python scripts/gen_skill_manifests.py           # write
     uv run python scripts/gen_skill_manifests.py --check    # verify (exit 1 on drift)
@@ -47,7 +53,12 @@ def _dumps(data: dict) -> str:
 
 
 def render_claude_plugin() -> str:
-    """The Claude Code plugin manifest (globs ./skills/; self-maintaining)."""
+    """The Claude Code plugin manifest (globs its own root; self-maintaining).
+
+    Lives at skills/.claude-plugin/plugin.json, so the plugin root *is* the
+    skills tree and "./" scans it for <name>/SKILL.md. Still a glob, so adding
+    a skill directory needs no manifest edit.
+    """
     m = load_plugin()
     return _dumps({
         "name": m["name"],
@@ -58,12 +69,12 @@ def render_claude_plugin() -> str:
         "repository": m["repository"],
         "license": m["license"],
         "keywords": m["keywords"],
-        "skills": "./skills/",
+        "skills": "./",
     })
 
 
 def render_marketplace() -> str:
-    """Self-hosted marketplace listing this repo as a single plugin (source ./)."""
+    """Self-hosted marketplace listing skills/ as the single plugin payload."""
     m = load_plugin()
     return _dumps({
         "name": m["name"],
@@ -71,7 +82,7 @@ def render_marketplace() -> str:
         "description": m["description"],        # required by `claude plugin validate --strict`
         "plugins": [{
             "name": m["name"],
-            "source": "./",
+            "source": "./skills",   # the payload: skills only, not the whole repo
             "description": m["description"],
             "version": m["version"],
         }],
@@ -108,7 +119,7 @@ def render_copilot_instructions() -> str:
 
 
 ARTIFACTS = {
-    REPO_ROOT / ".claude-plugin" / "plugin.json": render_claude_plugin,
+    REPO_ROOT / "skills" / ".claude-plugin" / "plugin.json": render_claude_plugin,
     REPO_ROOT / ".claude-plugin" / "marketplace.json": render_marketplace,
     REPO_ROOT / ".cursor-plugin" / "plugin.json": render_cursor_plugin,
     REPO_ROOT / ".github" / "plugin" / "marketplace.json": render_copilot_marketplace,
