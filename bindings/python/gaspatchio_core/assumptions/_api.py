@@ -697,6 +697,30 @@ class Table:
                                 f"Renamed melt value column from 'value' to '{self._value}'",
                             )
 
+        # Believe the declaration. Published assumption tables essentially
+        # always carry extra columns — an earned rate next to a credited
+        # rate, a count next to a rate, a source note — and requiring the
+        # caller to pre-trim the frame is an ETL step. Promoting an
+        # undeclared column to a dimension key is a guess about its meaning,
+        # and the guess used to fail several steps later with a key-dtype
+        # error that never named the column (gh#66). The user stated the key
+        # set in `dimensions=`; keep exactly those columns (each dimension's
+        # processed output name) plus the value, and set the rest aside.
+        # This also drops a ComputedDimension's consumed inputs, which
+        # previously leaked into the key set the same way.
+        declared_outputs = set(self._reconstruction_dimensions().values())
+        undeclared = [
+            c
+            for c in current_df.columns
+            if c not in declared_outputs and c != self._value
+        ]
+        if undeclared:
+            current_df = current_df.drop(undeclared)
+            logger.debug(
+                f"Table '{self._name}': ignoring undeclared columns "
+                f"{undeclared} (neither in dimensions= nor the value column)",
+            )
+
         # Collect key columns (all columns except the value column)
         key_columns = [col for col in current_df.columns if col != self._value]
 
