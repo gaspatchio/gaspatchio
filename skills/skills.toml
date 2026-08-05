@@ -11,8 +11,9 @@
 #   3. run: uv run python scripts/gen_skill_manifests.py
 #   4. commit the regenerated manifests
 #
-# The Claude Code manifest (.claude-plugin/plugin.json) globs ./skills/ and is
-# intentionally not listed here.
+# The Claude Code manifest lives at skills/.claude-plugin/plugin.json, so the
+# plugin root *is* this directory and its "./" glob scans it for <dir>/SKILL.md.
+# Still a glob, so it is not listed here and needs no edit when a skill is added.
 order = [
     "gaspatchio-quickstart",
     "gaspatchio-model-discovery",
