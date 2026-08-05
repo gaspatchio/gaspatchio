@@ -128,6 +128,49 @@ error but is not.
 differ only on exact ties, so the bug is invisible until it isn't. The rollforward
 `Round` op uses Excel's rule.
 
+## Reference values — and how to get the ones the workbook doesn't ship
+
+A workbook's cached outputs are your gold standard. Extract them to parquet before changing
+anything, and reconcile column by column.
+
+But cached values only cover the one set of inputs the workbook happens to be saved with, and
+that is usually not enough. Branches that never fire on the shipped inputs — a corridor test, a
+guarantee, a mass-lapse trigger — have no reference at all, which is exactly where conversion
+bugs hide.
+
+**You can recalculate the workbook.** `formulas` and `pycel` evaluate a workbook's real formula
+text, so you can change an input and get a genuine reference back:
+
+```bash
+uv run --no-project --with formulas --with openpyxl --with polars python3 recalc.py
+```
+
+```python
+import formulas
+sol = formulas.ExcelModel().loads("model.xlsx").finish().calculate()
+sol["'[model.xlsx]SHEET NAME'!R4"].value[0, 0]   # sheet name uppercased, book name not
+```
+
+**`openpyxl` and `xlsxwriter` do not evaluate anything.** They read and write formula *strings*.
+A workbook edited with them comes back holding `=MAX(M4,N4)` and no value — so use them to
+*write* the variant and a formula engine to *evaluate* it, never openpyxl alone. This is the
+trap: the edited file looks right and is empty of answers.
+
+Three rules make the result trustworthy:
+
+1. **Validate the engine before you believe it.** Recalculate the *unmodified* workbook and diff
+   every column against its own cached values. If that isn't 0.0, stop — nothing downstream
+   counts. (`formulas` reproduced one UL workbook at 0.000e+00 on all 14 columns × 111 rows.)
+2. **Change one cell where you can.** Schedules are often one hardcoded cell with `=E3`, `=E4`
+   cascading below it, so a whole premium schedule moves by editing a single number.
+3. **Build the counterfactual the same way.** To show what your model does *wrong*, edit the
+   workbook's formula to match your model's behaviour and recalculate. Both halves of the
+   comparison then come from the workbook rather than from your own reimplementation of it.
+
+A reimplementation in Python is a reasonable *exploratory* tool — it is fast enough to sweep a
+parameter until a branch fires. Just don't quote its numbers as the reference when the engine
+can give you the workbook's own.
+
 ## Before writing any model code
 
 1. **Extract**, do not read by hand. `marinade extract`.
@@ -138,7 +181,8 @@ differ only on exact ties, so the bug is invisible until it isn't. The rollforwa
    its table's range.
 6. **Identify the reference values.** A workbook's cached outputs are your gold standard —
    extract them to parquet before changing anything, and reconcile against them column by
-   column, not just on the final number.
+   column, not just on the final number. For branches the shipped inputs never exercise,
+   recalculate the workbook with a formula engine rather than reimplementing it.
 7. **Check whether the workbook models one policy or many.** Most teaching and pricing
    workbooks model exactly one, driven by single-cell inputs. That is fine — but it means
    there is no policy space to test across, so guard the assumptions that only hold for
