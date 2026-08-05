@@ -34,6 +34,7 @@ from gaspatchio_core.rollforward._ops import (
     Grow,
     GrowCapped,
     Ratchet,
+    Round,
     Subtract,
 )
 from gaspatchio_core.rollforward._refs import StateRef
@@ -340,7 +341,7 @@ class LowerToPolarsPlugin:
         return kwargs, args
 
 
-def _resolve_op(  # noqa: PLR0911
+def _resolve_op(  # noqa: PLR0911, C901 — one flat branch per Op type; both metrics scale with the IR's op count, and a dispatch table would hide which fields each Op lowers
     op: Op,
     *,
     target_state: int,
@@ -413,6 +414,9 @@ def _resolve_op(  # noqa: PLR0911
         return base
     if isinstance(op, Floor):
         base["value"] = float(op.value)
+        return base
+    if isinstance(op, Round):
+        base["decimals"] = int(op.decimals)
         return base
     if isinstance(op, Apply):
         base["body_arg"] = cls(op.body, op_name, "body")  # type: ignore[operator]

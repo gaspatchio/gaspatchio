@@ -5,11 +5,11 @@
 """Typed Op vocabulary for the rollforward IR.
 
 Each Op is a frozen dataclass with construction-time validation. The
-nine Ops cover the actuarial primitive set:
+ten Ops cover the actuarial primitive set:
 
     Arithmetic:  Add, Subtract, Charge
     Time-aware:  Grow, GrowCapped, DeductNAR
-    Structural:  Ratchet, Floor, Apply
+    Structural:  Ratchet, Floor, Round, Apply
 
 Pattern adopted from MLIR Op + Verifier — typed Op + a verify() method
 that catches impossible configurations at construction time.
@@ -207,6 +207,36 @@ class Floor(Op):
 
 
 @dataclass(frozen=True)
+class Round(Op):
+    """``s = round(s, decimals)`` — half away from zero, as Excel's ROUND.
+
+    Reproduces a source model that rounds *inside* the recursion. Rounding only
+    the final answer is not the same thing: the rounding feeds the next period's
+    opening balance, so the difference compounds. Where the running balance is
+    already an exact multiple of the rounding unit, rounding the state is
+    equivalent to rounding the charge that was just applied to it.
+
+    Half-away-from-zero rather than banker's rounding is deliberate. The op
+    exists to match spreadsheets, and over a long projection the tie-breaking
+    rule stops being a rounding detail and becomes a visible drift.
+    """
+
+    target: StateRef
+    decimals: int = 2
+
+    def verify(self) -> None:
+        """Reject a rounding precision the kernel cannot apply meaningfully."""
+        max_decimals = 15  # beyond f64's decimal precision, rounding is a no-op
+        if not -max_decimals <= self.decimals <= max_decimals:
+            msg = (
+                f"Round: decimals must be between {-max_decimals} and "
+                f"{max_decimals}, got {self.decimals}. Use 2 for currency; "
+                f"negative values round to tens, hundreds, and so on."
+            )
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class Apply(Op):
     """Escape hatch — assign ``body`` directly to the target's point.
 
@@ -231,5 +261,6 @@ __all__ = [
     "GrowCapped",
     "Op",
     "Ratchet",
+    "Round",
     "Subtract",
 ]

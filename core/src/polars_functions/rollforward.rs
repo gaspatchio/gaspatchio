@@ -162,6 +162,16 @@ pub enum OpV2 {
         target_point: usize,
         value: f64,
     },
+    /// Round the running state to `decimals` places, half away from zero.
+    ///
+    /// This is Excel's ROUND, not banker's rounding, because the op exists to
+    /// reproduce spreadsheets that round inside the recursion — where the
+    /// rounding compounds and the tie-breaking rule is therefore load-bearing.
+    Round {
+        target_state: usize,
+        target_point: usize,
+        decimals: i32,
+    },
     Apply {
         target_state: usize,
         target_point: usize,
@@ -751,6 +761,29 @@ fn apply_op(
             }
             Ok(())
         }
+        OpV2::Round {
+            target_state,
+            target_point,
+            decimals,
+        } => {
+            let i = *target_state * stride_state + *target_point * stride_point + t;
+            // f64::round() is half-away-from-zero, which is Excel's rule.
+            // Non-finite values pass through: rounding a NaN to 2dp would
+            // otherwise produce a NaN that looks deliberate.
+            if state[i].is_finite() {
+                let scale = 10f64.powi(*decimals);
+                let scaled = state[i] * scale;
+                // Above ~1e306 the scaling overflows to infinity, which would
+                // turn a representable balance into one that poisons every
+                // later period. Such a value has no decimal places left to
+                // round to anyway — f64 runs out of precision long before —
+                // so leaving it alone is both safe and correct.
+                if scaled.is_finite() {
+                    state[i] = scaled.round() / scale;
+                }
+            }
+            Ok(())
+        }
         OpV2::GrowCapped {
             target_state,
             target_point,
@@ -972,6 +1005,11 @@ fn op_target(op: &OpV2) -> (usize, usize) {
             ..
         }
         | OpV2::Floor {
+            target_state,
+            target_point,
+            ..
+        }
+        | OpV2::Round {
             target_state,
             target_point,
             ..
