@@ -105,8 +105,7 @@ def _normalise_on_missing(value: str | float) -> tuple[str, float | None]:
         if value in {"raise", "nan"}:
             return value, None
         msg = (
-            "on_missing must be 'raise', 'nan', or a numeric fill value; "
-            f"got {value!r}"
+            f"on_missing must be 'raise', 'nan', or a numeric fill value; got {value!r}"
         )
         raise ValueError(msg)
     if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -116,6 +115,23 @@ def _normalise_on_missing(value: str | float) -> tuple[str, float | None]:
         f"got {type(value).__name__}"
     )
     raise ValueError(msg)
+
+
+def _declared_output_columns(dimensions: dict[str, Dimension]) -> dict[str, str]:
+    """Map each dimension name to the column its processing step produces.
+
+    A ``DataDimension`` surfaces ``rename_to`` (or its source column); melt,
+    categorical, and computed dimensions surface their ``name`` attribute,
+    falling back to the dict key. These are the only columns the caller
+    declared as keys — everything else in the processed frame is auxiliary.
+    """
+    spec: dict[str, str] = {}
+    for dim_name, dim in dimensions.items():
+        if isinstance(dim, DataDimension):
+            spec[dim_name] = dim.rename_to or dim.column
+        else:
+            spec[dim_name] = getattr(dim, "name", None) or dim_name
+    return spec
 
 
 # Import LIB path for plugin calls
@@ -608,15 +624,7 @@ class Table:
         an explicit ``DataDimension(rename_to=...)`` was used. The dict keys
         (the lookup vocabulary) are preserved either way.
         """
-        spec: dict[str, str] = {}
-        for dim_name, dim in self._dimensions.items():
-            if isinstance(dim, DataDimension):
-                spec[dim_name] = dim.rename_to or dim.column
-            else:
-                # Melt/Categorical/Computed dimensions surface their output
-                # column via `name`; fall back to the dict key.
-                spec[dim_name] = getattr(dim, "name", None) or dim_name
-        return spec
+        return _declared_output_columns(self._dimensions)
 
     def _process_data(self, source: str | Path | pl.DataFrame) -> None:
         """Process the data through dimension transformations and register with Rust.
@@ -1212,6 +1220,25 @@ class Table:
                         dimension.validate(current_df)
                     current_df = dimension.process(current_df)
 
+        # Believe the declaration here too: an undeclared column in an
+        # extension slice must not become a key, or the appended slice's key
+        # schema silently diverges from the (already trimmed) base table and
+        # the append fails without naming the column. Use the effective
+        # dimensions for THIS slice — extend() accepts per-slice overrides.
+        declared_outputs = set(_declared_output_columns(extend_dimensions).values())
+        undeclared = [
+            c
+            for c in current_df.columns
+            if c not in declared_outputs and c != self._value
+        ]
+        if undeclared:
+            current_df = current_df.drop(undeclared)
+            logger.debug(
+                f"Table '{self._name}': ignoring undeclared columns "
+                f"{undeclared} in extend() slice (neither in dimensions= "
+                f"nor the value column)",
+            )
+
         # Get key columns
         key_columns = [col for col in current_df.columns if col != self._value]
 
@@ -1639,7 +1666,6 @@ class Table:
         ```text
         ['content_sha', 'dimensions', 'kind', 'name', 'value_column']
         ```
-
         """
         return {
             "kind": "Table",
@@ -1693,7 +1719,6 @@ class Table:
         ```text
         True
         ```
-
         """
         from gaspatchio_core._identity import source_sha_of
 

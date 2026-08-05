@@ -19,6 +19,7 @@ import pytest
 from gaspatchio_core.assumptions import (
     CategoricalDimension,
     ComputedDimension,
+    DataDimension,
     MeltDimension,
     Table,
 )
@@ -162,3 +163,64 @@ def test_missing_value_column_still_raises() -> None:
             dimensions={"policy_year": "year"},
             value="credited_rate",
         )
+
+
+def test_extend_slice_with_undeclared_column_is_trimmed() -> None:
+    """extend() applies the same trim, so the slice's keys match the base.
+
+    Without the trim on the extend path, the stray column becomes a key in
+    the appended slice only, and the append fails on a key-schema mismatch
+    against the (trimmed) base table.
+    """
+    base = pl.DataFrame({"year": [1, 2], "rate": [0.1, 0.2]})
+    table = Table(
+        name="undeclared_extend",
+        source=base,
+        dimensions={"policy_year": "year"},
+        value="rate",
+        storage_mode="hash",  # array storage does not support append yet
+    )
+    extra_slice = pl.DataFrame(
+        {
+            "year": [3, 4],
+            "earned_rate": [0.05, 0.06],  # undeclared — must not become a key
+            "rate": [0.3, 0.4],
+        },
+    )
+    table.extend(source=extra_slice)
+    assert "earned_rate" not in table.to_dataframe().columns
+    result = pl.DataFrame({"policy_year": [2, 4]}).with_columns(
+        rate=table.lookup(policy_year=pl.col("policy_year")),
+    )
+    assert result.get_column("rate").to_list() == [0.2, 0.4]
+
+
+def test_extend_trim_respects_per_slice_dimension_overrides() -> None:
+    """The trim keys off the slice's effective dimensions, not the base's.
+
+    The override renames the slice's key column, so the trim must keep the
+    override's output column and drop everything else undeclared.
+    """
+    base = pl.DataFrame({"year": [1, 2], "rate": [0.1, 0.2]})
+    table = Table(
+        name="undeclared_extend_override",
+        source=base,
+        dimensions={"policy_year": "year"},
+        value="rate",
+        storage_mode="hash",  # array storage does not support append yet
+    )
+    extra_slice = pl.DataFrame(
+        {
+            "yr": [3],
+            "note_count": [7.0],  # undeclared — must not become a key
+            "rate": [0.3],
+        },
+    )
+    table.extend(
+        source=extra_slice,
+        dimensions={"policy_year": DataDimension(column="yr", rename_to="policy_year")},
+    )
+    result = pl.DataFrame({"policy_year": [3]}).with_columns(
+        rate=table.lookup(policy_year=pl.col("policy_year")),
+    )
+    assert result.get_column("rate").to_list() == [0.3]
