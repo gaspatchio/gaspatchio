@@ -243,6 +243,7 @@ class _StateHandle:
         nar_timing: str = "beginning_of_period",
         coi_discount_rate: ExprLike | None = None,
         credited_rate: ExprLike | None = None,
+        corridor_factor: ExprLike | None = None,
         label: str | None = None,
     ) -> _StateHandle:
         """Charge a cost of insurance on the net amount at risk.
@@ -263,6 +264,14 @@ class _StateHandle:
                 it is a separate product assumption. ``"end_of_period"`` only.
             credited_rate: Rate the balance accumulates at over the period.
                 ``"end_of_period"`` only.
+            corridor_factor: The multiple of the account value the death
+                benefit must at least equal — the regulatory corridor (IRC
+                §7702 and equivalents), keyed by attained age in most tables.
+                Supplied, the amount at risk is ``MAX(NARf, NARc)``, which is
+                exactly ``death_benefit = MAX(face, y * account_value)``.
+                **Omit it only for a policy whose account value can never
+                approach its face amount** — without it, a well-funded policy
+                produces a negative amount at risk, which is refused.
             label: Names this deduction in the increment breakdown.
 
         Returns:
@@ -283,6 +292,9 @@ class _StateHandle:
             ),
             credited_rate=(
                 None if credited_rate is None else _to_polars_expr(credited_rate)
+            ),
+            corridor_factor=(
+                None if corridor_factor is None else _to_polars_expr(corridor_factor)
             ),
             label=label,
         )

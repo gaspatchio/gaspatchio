@@ -403,6 +403,11 @@ def _resolve_op(  # noqa: PLR0911, C901 — one flat branch per Op type; both me
             if op.credited_rate is None
             else cls(op.credited_rate, op_name, "credited_rate")  # type: ignore[operator]
         )
+        base["corridor_factor_arg"] = (
+            None
+            if op.corridor_factor is None
+            else cls(op.corridor_factor, op_name, "corridor_factor")  # type: ignore[operator]
+        )
         base["label"] = op.label
         return base
     if isinstance(op, Ratchet):
