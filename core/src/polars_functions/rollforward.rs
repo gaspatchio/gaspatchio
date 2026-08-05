@@ -148,6 +148,13 @@ pub enum OpV2 {
         /// `nar_at_end_of_period`.
         #[serde(default)]
         credited_rate_arg: Option<ArgRef>,
+        /// Corridor factor `y` — the multiple of the account value the death
+        /// benefit must at least equal (IRC §7702 and its equivalents). When
+        /// present the amount at risk is `MAX(NARf, NARc)`, which is exactly
+        /// `death_benefit = MAX(face, y * account_value)`. Absent, only the
+        /// fixed-benefit branch is computed.
+        #[serde(default)]
+        corridor_factor_arg: Option<ArgRef>,
         label: Option<String>,
     },
     Ratchet {
@@ -833,6 +840,7 @@ fn apply_op(
             nar_at_end_of_period,
             coi_discount_rate_arg,
             credited_rate_arg,
+            corridor_factor_arg,
             ..
         } => {
             let coi = resolve_arg(
@@ -854,18 +862,35 @@ fn apply_op(
                 stride_point,
             );
             let i = *target_state * stride_state + *target_point * stride_point + t;
-            if *nar_at_end_of_period {
+            // The corridor factor, when supplied, adds a second branch to the
+            // amount-at-risk calculation. `MAX(NARf, NARc)` is exactly
+            // `death_benefit = MAX(face, y * account_value)`: the amount at
+            // risk is monotonic in the benefit and each branch is self-
+            // consistent, so the larger is the binding one.
+            let corridor = corridor_factor_arg.map(|a| {
+                resolve_arg(
+                    a,
+                    owned_slices,
+                    state,
+                    row_idx,
+                    t,
+                    stride_state,
+                    stride_point,
+                )
+            });
+            let (nar, charge, balance) = if *nar_at_end_of_period {
                 // The benefit is paid at end of period, so the amount at risk
                 // is measured against the accumulated balance — and the COI,
                 // charged now, is discounted back. Deducting the COI lowers
                 // the balance, which raises the amount at risk, so the two are
                 // mutually dependent. Closed form of that solve:
                 //
-                //   NAR = (db - s*accum) / (1 - coi*accum*v)
-                //   COI = coi * NAR * v
+                //   NARf = (db - s*accum) / (1 - coi*accum*v)
+                //   COI  = coi * NAR * v
                 //
-                // Both factors default to 1.0 when absent, which degenerates to
-                // the simultaneous solve at the deduction point.
+                // Both rates are required by `DeductNAR.verify()`; the 1.0
+                // fallbacks here are unreachable from the Python API and exist
+                // only so the kernel stays total on hand-written kwargs.
                 let v = coi_discount_rate_arg.map_or(1.0, |a| {
                     let r = resolve_arg(
                         a,
@@ -889,14 +914,51 @@ fn apply_op(
                         stride_point,
                     )
                 });
-                let denom = 1.0 - coi * accum * v;
-                let nar = (db - state[i] * accum) / denom;
-                state[i] -= coi * nar * v;
+                let accumulated = state[i] * accum;
+                let nar_face = (db - accumulated) / (1.0 - coi * accum * v);
+                let nar = match corridor {
+                    // Under a proportional benefit the COI shrinks the benefit
+                    // too, so the amount at risk falls rather than rises — the
+                    // sign in the denominator flips, and this branch is
+                    // self-limiting rather than divergent.
+                    Some(y) => {
+                        let y_less_1 = y - 1.0;
+                        let nar_corridor =
+                            (y_less_1 * accumulated) / (1.0 + y_less_1 * coi * accum * v);
+                        nar_face.max(nar_corridor)
+                    }
+                    None => nar_face,
+                };
+                (nar, coi * nar * v, accumulated)
             } else {
                 // Beginning of period: amount at risk measured where the
-                // charge is taken, no discount.
-                state[i] -= coi * (db - state[i]);
+                // charge is taken, no discount. No solve — benefit and balance
+                // are read at the same point.
+                let nar_face = db - state[i];
+                let nar = match corridor {
+                    Some(y) => nar_face.max((y - 1.0) * state[i]),
+                    None => nar_face,
+                };
+                (nar, coi * nar, state[i])
+            };
+            if nar < 0.0 {
+                // A negative amount at risk makes the COI a credit to the
+                // account, which enlarges the account, which makes the amount
+                // at risk more negative. Nothing bounds the loop, and every
+                // period of it looks plausible — so refuse rather than return
+                // a number.
+                return Err(PolarsError::ComputeError(
+                    format!(
+                        "deduct_nar: net amount at risk is negative in period {t} \
+                         (account value {balance:.2} exceeds death benefit {db:.2}). \
+                         A negative amount at risk credits the account value instead \
+                         of charging it, and compounds. Pass corridor_factor= for the \
+                         standard corridor test, or raise the death benefit."
+                    )
+                    .into(),
+                ));
             }
+            state[i] -= charge;
             Ok(())
         }
         OpV2::Ratchet {

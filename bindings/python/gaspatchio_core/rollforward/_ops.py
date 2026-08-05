@@ -125,6 +125,24 @@ class DeductNAR(Op):
         s -= coi_rate * NAR * v
 
     where ``v = 1/(1+coi_discount_rate)`` and ``accum = 1+credited_rate``.
+
+    ``corridor_factor`` adds the regulatory corridor test (IRC §7702 and its
+    equivalents): the death benefit is at least ``y`` times the account
+    value, so the amount at risk becomes ``MAX(NARf, NARc)`` where the
+    corridor branch solves its own, differently-signed, circularity::
+
+        NARc = ((y-1) * s * accum) / (1 + (y-1) * coi_rate * accum * v)
+
+    That ``MAX`` is exactly ``death_benefit = MAX(face, y * account_value)``.
+    The sign flip matters: under a fixed benefit, charging the COI widens the
+    gap to the target, so the branch is self-reinforcing; under a
+    proportional benefit it shrinks the benefit too, so the branch is
+    self-limiting. As ``y`` approaches 1.0 at advanced ages ``NARc`` goes to
+    zero, which is what stops a well-funded policy running away.
+
+    Omitted, only the fixed-benefit branch is computed — and a **negative**
+    amount at risk is then refused rather than returned, because it would
+    credit the account value and compound.
     """
 
     target: StateRef
@@ -133,6 +151,7 @@ class DeductNAR(Op):
     nar_timing: str = "beginning_of_period"
     coi_discount_rate: pl.Expr | None = None
     credited_rate: pl.Expr | None = None
+    corridor_factor: pl.Expr | None = None
     label: str | None = None
 
     def verify(self) -> None:
