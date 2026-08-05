@@ -62,16 +62,18 @@ loading, the `gspio` CLI, and the projection lifecycle — is in the
 
 ## Performance
 
-Gaspatchio targets the machine on your desk, not a cluster: a 100,000-policy run with monthly
-projections over 30 years finishes in seconds on a laptop, and a million policies is minutes.
-That is a constraint we work to, not a marketing claim — the edit-run-refine loop slipping past
-a few seconds is treated as a bug ([the principles](https://gaspatchio.dev/principles/) explain
-why we would drop a capability before loosening the loop).
+Gaspatchio targets the machine on your desk, not a cluster. The constraint we design to — not
+a benchmark result, a constraint — is that a 100,000-policy run with monthly projections over
+30 years finishes in seconds on a laptop, and a million policies is minutes; the edit-run-refine
+loop slipping past a few seconds is treated as a bug
+([the principles](https://gaspatchio.dev/principles/) explain why we would drop a capability
+before loosening the loop).
 
-**[The benchmark dashboard](https://gaspatchio.github.io/gaspatchio/)** tracks this per commit,
-straight from CI:
+**[The benchmark dashboard](https://gaspatchio.github.io/gaspatchio/)** tracks measured
+performance per commit, straight from CI (hosted runners, so laptop times differ):
 
-- **Model benchmarks** — the Level 4 variable annuity model, end to end
+- **Model benchmarks** — the Level 4 variable annuity model, end to end, up to
+  100,000 policies
 - **Gaspatchio vs lifelib** — cross-engine comparison on identical models; both engines
   reconcile to **0.0000% across 9 million data points**, so the speed numbers compare
   like for like
