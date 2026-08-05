@@ -65,6 +65,14 @@ Before asking questions, run `uv run gspio describe --json <file>` on every data
 
 This informs all subsequent questions. Don't ask the user about data structure — you already know it from describe.
 
+**If the source is a spreadsheet**, `gspio describe` does not apply — extract the formula
+graph instead, and read [references/spreadsheet-conversion.md](references/spreadsheet-conversion.md)
+before asking any questions. It covers how to partition the workbook into rollforward
+states and closed-form columns mechanically, and the structural features that convert to a
+model which **runs and is wrong** rather than one that fails: lapse gates hidden inside
+schedule lookups, COI timing conventions that agree until rates vary, rounding inside a
+recursion, and approximate-match `VLOOKUP` running past the end of a table.
+
 ### 1. Check project context first
 
 Before asking **any** questions:
@@ -254,7 +262,8 @@ Treat reconciliation as a separate, **hard-mode** process layered on top of disc
 | "I already know what I want" | Even experienced actuaries benefit from structured discovery. Confirm the data structure first. |
 | "Just start coding" | Models built without a spec take longer to debug. The spec takes 10 minutes and saves hours. |
 | "We don't have time for this" | Discovery IS the fastest path. Skipping it means debugging blind. |
-| "I have the Excel model, I can see what it does" | Excel models have hidden dependencies, stale caches, and undocumented formulas. Map them first. |
+| "I have the Excel model, I can see what it does" | Excel models have hidden dependencies, stale caches, and undocumented formulas. Map them first — see [references/spreadsheet-conversion.md](references/spreadsheet-conversion.md). |
+| "I read the first row of formulas, the pattern is obvious" | Spreadsheets routinely special-case row 1. A lapse gate that appears only from row 2 puts variables inside the recursion that look like plain lookups. |
 | "The user already described the model" | A description is not a spec. Pin down data shape, assumptions, projection parameters, and outputs. |
 
 ---
