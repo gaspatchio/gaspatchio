@@ -32,6 +32,7 @@ from gaspatchio_core.rollforward._ops import (
     Grow,
     GrowCapped,
     Ratchet,
+    Round,
     Subtract,
 )
 from gaspatchio_core.rollforward._refs import StateRef
@@ -310,6 +311,29 @@ class _StateHandle:
         op = Floor(
             target=StateRef(state=self._state, point=self._target_point()),
             value=value,
+        )
+        op.verify()
+        self._b._transitions.append(op)
+        return self
+
+    def round(self, decimals: int = 2) -> _StateHandle:
+        """Round the running state, half away from zero, as Excel's ROUND.
+
+        Args:
+            decimals: Places to round to. 2 for currency; negative values round
+                to tens, hundreds, and so on.
+
+        Returns:
+            The state handle, for chaining.
+
+        Place this where the source model rounds. Rounding inside a recursion is
+        not the same as rounding the answer: each rounded balance opens the next
+        period, so the difference compounds over the projection.
+
+        """
+        op = Round(
+            target=StateRef(state=self._state, point=self._target_point()),
+            decimals=decimals,
         )
         op.verify()
         self._b._transitions.append(op)
