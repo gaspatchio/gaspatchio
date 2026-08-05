@@ -254,7 +254,7 @@ These are the top mistakes from real model-building sessions. Each links to the 
 | 1 | Arithmetic-masking blends in conditional code | Old workaround for a fixed limitation — `when/then/otherwise` now handles mixed scalar/list branches | [conditionals-and-lists.md](references/conditionals-and-lists.md) |
 | 2 | `until_value=99` | Truncates final year; ~3% BEL gap | [model-phases.md](references/model-phases.md) |
 | 3 | `proj_year` vs `year` confusion | Stress scenarios silently wrong — mass lapse never fires | [timing-and-dates.md](references/timing-and-dates.md) |
-| 4 | Rebuilding `af.month` by hand | `projection.set()` already materialises `month` (elapsed whole months, `n_periods + 1` point-indexed values). Don't derive it from `period_dates()` — but do slice `.list.head(n_periods)` when feeding a rollforward | [model-phases.md](references/model-phases.md) |
+| 4 | Rebuilding `af.month` by hand | `projection.set()` already materialises `month` (elapsed whole months, `n_periods + 1` point-indexed values). Don't derive it from `period_dates()` — but do slice `.list.head(n_periods)` (= `num_proj_months - 1`) when feeding a rollforward | [model-phases.md](references/model-phases.md) |
 | 5 | `python3` instead of `uv run python3` | `ModuleNotFoundError: No module named 'polars'` | (this file, Environment section) |
 | 6 | `--policy-id` flag | It's a positional arg, not a flag. `--policy-id-column` is a different thing | (this file, Environment section) |
 | 7 | `prospective_value` timing | `end_of_period` = ordinary annuity (Excel type 0), `beginning_of_period` = annuity-due (type 1); BoP is worth more | [timing-and-dates.md](references/timing-and-dates.md) |

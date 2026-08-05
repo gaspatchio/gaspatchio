@@ -148,7 +148,11 @@ Three things about its shape that do bite:
 
 - It is **point-indexed**: `n_periods + 1` values, one per period boundary, aligned
   with `t_years()`. Rollforward inputs are period-indexed (`n_periods` values) —
-  slice with `.list.head(n_periods)` before driving one.
+  slice with `.list.head(n_periods)` before driving one. The period count comes
+  from the frame: `num_proj_months` counts the boundaries, so
+  `n_periods = num_proj_months - 1` (on a uniform schedule, one integer for the
+  whole portfolio). On a **jagged** schedule there is no single count — slice with
+  each policy's own `num_proj_months - 1`, never a portfolio-wide constant.
 - It is **not stamped** at weekly/daily frequency (calendar months cannot honestly
   label those periods) nor on `from_inception` schedules (that axis is policy
   *duration*, not projection time). On those, use `t_years()` as your axis.
