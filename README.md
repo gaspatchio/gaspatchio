@@ -20,6 +20,7 @@ Python that read like the formulas on a spreadsheet, and a Rust core runs them.
 | | |
 |---|---|
 | 📖 **Documentation** | **[gaspatchio.dev](https://gaspatchio.dev/)** — guides, tutorials, full API reference, recipes |
+| 📊 **Benchmarks** | [gaspatchio.github.io/gaspatchio](https://gaspatchio.github.io/gaspatchio/) — live per-commit performance dashboard |
 | 🐍 **Python package** | [`bindings/python/`](bindings/python/README.md) — install, the `gspio` CLI, building models · **start here** |
 | 🦀 **Rust engine** | [`core/`](core/README.md) — assumption registry, vector plugins, projection kernels |
 
@@ -58,6 +59,29 @@ loading, the `gspio` CLI, and the projection lifecycle — is in the
 - **Built for AI-assisted work** — every public method ships docstring examples tested against
   their output, with clear error messages and an MCP/plugin surface, so you can use AI coding
   assistants to build and verify models — while the calculations stay auditable by you.
+
+## Performance
+
+Gaspatchio targets the machine on your desk, not a cluster: a 100,000-policy run with monthly
+projections over 30 years finishes in seconds on a laptop, and a million policies is minutes.
+That is a constraint we work to, not a marketing claim — the edit-run-refine loop slipping past
+a few seconds is treated as a bug ([the principles](https://gaspatchio.dev/principles/) explain
+why we would drop a capability before loosening the loop).
+
+**[The benchmark dashboard](https://gaspatchio.github.io/gaspatchio/)** tracks this per commit,
+straight from CI:
+
+- **Model benchmarks** — the Level 4 variable annuity model, end to end
+- **Gaspatchio vs lifelib** — cross-engine comparison on identical models; both engines
+  reconcile to **0.0000% across 9 million data points**, so the speed numbers compare
+  like for like
+- **Aggregation & scenario benchmarks** — memory and throughput for portfolio-scale runs
+- **[Rust core microbenchmarks](https://gaspatchio.github.io/gaspatchio/rust.html)** —
+  Criterion results for the lookup and projection kernels
+
+The speed comes from the architecture, not tuning flags: closed-form kernels instead of
+recursive cell-graphs, and Polars' streaming engine with vectorised Rust plugins — no
+per-row Python anywhere on the hot path.
 
 ## Repository layout
 
