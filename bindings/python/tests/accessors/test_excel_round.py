@@ -99,3 +99,31 @@ def test_dead_plugin_wrappers_are_gone() -> None:
     assert not hasattr(plugins, "floor")
     with pytest.raises(ImportError):
         from gaspatchio_core.functions.vector import round  # noqa: A004
+
+
+def test_composed_list_expression_rounds_element_wise() -> None:
+    """A composed per-period expression must take the element-wise path.
+
+    The shape gate keys off ``shape``, not the proxy's concrete type, so a
+    list-valued ExpressionProxy (here ``coi * factor``) rounds inside the
+    list rather than hitting scalar ``Expr.round`` and failing at collect.
+    """
+    af = ActuarialFrame({"coi": [[10.124, 7558.484]], "factor": [1.0001]})
+    af.rounded = (af.coi * af.factor).excel.round(2)
+    out = af.collect()
+    assert out.get_column("rounded").to_list() == [[10.13, 7559.24]]
+
+
+def test_extreme_negative_digits_round_to_zero() -> None:
+    """ROUND(x, -309) is 0 for every finite float — not an OverflowError.
+
+    10**309 is not representable, but no finite value is within half of it
+    (max double is under 1.8e308), so the result is exactly zero, sign
+    normalised; nulls stay null.
+    """
+    af = ActuarialFrame({"x": [1.7e308, -1.7e308, 123.45, None]})
+    af.rounded = af.x.excel.round(-309)
+    af.rounded_more = af.x.excel.round(-400)
+    out = af.collect()
+    assert out.get_column("rounded").to_list() == [0.0, 0.0, 0.0, None]
+    assert out.get_column("rounded_more").to_list() == [0.0, 0.0, 0.0, None]

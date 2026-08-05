@@ -572,14 +572,15 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             ```
 
         """
-        from ..column.column_proxy import ColumnProxy
         from ..column.expression_proxy import ExpressionProxy
         from .excel_functions.round import round as _excel_round
 
         base_expr = self._get_polars_expr()
         parent_frame = self._get_parent_frame()
 
-        is_list = isinstance(self._proxy, ColumnProxy) and self._proxy.shape == "list"
+        # ColumnProxy and ExpressionProxy both resolve shape, so a composed
+        # per-period expression rounds element-wise, not just a named column.
+        is_list = self._proxy.shape == "list"
         if is_list:
             result_expr = base_expr.list.eval(_excel_round(pl.element(), num_digits))
         else:

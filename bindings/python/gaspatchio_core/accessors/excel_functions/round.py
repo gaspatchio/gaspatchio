@@ -13,6 +13,10 @@ from gaspatchio_core.functions.utils import to_polars_expression
 if TYPE_CHECKING:
     from gaspatchio_core.typing import IntoExprColumn
 
+# The most negative num_digits whose scale factor 10**(-num_digits) still
+# fits in a float; anything beyond rounds every finite value to exactly 0.
+_MIN_FINITE_NUM_DIGITS = -308
+
 
 def round(number: IntoExprColumn, num_digits: int = 0) -> pl.Expr:  # noqa: A001
     """Round half away from zero, exactly like Excel's ROUND.
@@ -103,6 +107,13 @@ def round(number: IntoExprColumn, num_digits: int = 0) -> pl.Expr:  # noqa: A001
     expr = to_polars_expression(number)
     if num_digits >= 0:
         return expr.round(num_digits, mode="half_away_from_zero")
+    if num_digits < _MIN_FINITE_NUM_DIGITS:
+        # 10.0 ** 309 overflows a float before the expression is even built.
+        # No guard needed on the maths: every finite float is below half of
+        # 10**309 (max double ≈ 1.8e308 < 5e308), so the result is exactly 0
+        # for any input. Multiply keeps the shape, nulls, and NaNs; adding
+        # 0.0 normalises the -0.0 that a negative input would leave behind.
+        return expr * 0.0 + 0.0
     # Polars rejects negative decimals; scale into range, round to a whole
     # number under the same rule, and scale back — ROUND(1250, -2) = 1300.
     factor = 10.0 ** (-num_digits)
