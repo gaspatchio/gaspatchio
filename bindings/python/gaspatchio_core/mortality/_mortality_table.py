@@ -97,7 +97,7 @@ class MortalityTable:
                     "use structure='select_ultimate' if duration is meaningful"
                 )
                 raise ValueError(msg)
-            return self.table.lookup(age=age, **other)
+            return self.table.lookup(_dimensions={"age": age, **other})
 
         if self.structure == "select_ultimate":
             return self._at_select_ultimate(
@@ -182,7 +182,9 @@ class MortalityTable:
         else:
             # Scalar pl.Expr (e.g., pl.col("duration") on a plain DataFrame).
             clamped_duration = duration_expr.clip(upper_bound=self.select_period)
-        return self.table.lookup(age=age_expr, duration=clamped_duration, **other_exprs)
+        return self.table.lookup(
+            _dimensions={"age": age_expr, "duration": clamped_duration, **other_exprs},
+        )
 
     def _at_joint(
         self,
@@ -195,7 +197,7 @@ class MortalityTable:
         if age_1 is None or age_2 is None:
             msg = "structure='joint' requires both age_1=... and age_2=..."
             raise ValueError(msg)
-        return self.table.lookup(age_1=age_1, age_2=age_2, **other)
+        return self.table.lookup(_dimensions={"age_1": age_1, "age_2": age_2, **other})
 
     def canonical_form(self) -> dict[str, object]:
         """Return the JSON-encodable canonical form of this MortalityTable.

@@ -56,9 +56,10 @@ gaspatchio_core\.accessors\.excel\.ExcelFrameAccessor
 # API module re-exports type annotations and has pydantic issues
 gaspatchio_core\.api\.models.*
 
-# Assumptions module - stub may be out of sync with implementation
-gaspatchio_core\.assumptions\..*
-gaspatchio_core\.TableBuilder\..*
+# Module-level `except ImportError as e` in _api.py — the except clause deletes
+# the name after the block, which stubtest reports as a phantom deleted symbol.
+# Same artifact as functions.vector.e below. Not a stub bug.
+gaspatchio_core\.assumptions\._api\.e
 
 # Projection accessor TYPE_CHECKING imports (covered by generic patterns above)
 # gaspatchio_core\.accessors\.projection\.ActuarialFrame  # removed: matched by .*\.ActuarialFrame$
