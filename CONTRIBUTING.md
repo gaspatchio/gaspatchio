@@ -96,8 +96,12 @@ rebase or a small fix rather than bouncing the PR back to you.
   git config --global commit.gpgsign true
   ```
 
-  If you have already written unsigned commits, don't rewrite history over it — we squash
-  merge, which produces a single signed commit.
+  Set this up **before** you start a branch. `required_signatures` is evaluated against
+  every commit in the PR, and **a squash merge does not sidestep it** — GitHub refuses the
+  merge before it creates the squash commit. Unsigned commits therefore have to be
+  re-signed, which means a rebase. If you're already stuck with some, say so on the PR and
+  a maintainer will rebase it for you (your authorship is preserved); it isn't something
+  you need to untangle alone.
 
 - **Conventional commits** (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`) with a scope
   where one applies. Explain the *why*, not just the *what*. Keep commits focused and
