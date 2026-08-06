@@ -39,7 +39,15 @@ See CONTRIBUTING.md for the full guide.
 
 - [ ] Type stubs updated and `uv run python -m mypy.stubtest gaspatchio_core` passes.
 - [ ] Docstring examples added or updated (they are executed as tests).
-- [ ] `CHANGELOG.md` updated.
+
+## Changelog
+
+- [ ] User-visible change (behaviour, API, a projected number, performance) → an
+      entry under `## [Unreleased]`, or under the pending release section if one is
+      open. Internal refactors and repo hygiene don't need one.
+- [ ] **If anything merged to `main` while this PR was open, re-check that your entry
+      is still there.** Concurrent PRs edit the same block, so the later merge
+      silently wins and no test catches it.
 
 ## Notes for the reviewer
 
