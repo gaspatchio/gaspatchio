@@ -2,25 +2,28 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Type stubs for Gaspatchio Assumption API v2 - New modular assumption table system."""
+"""Type stubs for Gaspatchio Assumption API v2 - New modular assumption table system.
+
+Every signature here is checked against the implementation by stubtest — the
+``gaspatchio_core.assumptions`` tree is deliberately NOT allowlisted, so a stub
+that drifts from the runtime fails CI rather than lying to editors and type
+checkers (see gh#72).
+"""
 
 from __future__ import annotations
 
+import abc
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 
+from gaspatchio_core.assumptions._analysis import InterpolationHint
+
 if TYPE_CHECKING:
     from gaspatchio_core.column.column_proxy import ColumnProxy
-    from gaspatchio_core.column.expression_proxy import ExpressionProxy
     from gaspatchio_core.scenarios.shocks import Shock
-
-# Type alias for lookup arguments
-LookupValue = str | pl.Expr | "ColumnProxy" | "ExpressionProxy"
-
-# Type alias for storage mode
-StorageModeType = Literal["auto", "hash", "array"]
 
 # Core API Classes
 class Table:
@@ -34,7 +37,8 @@ class Table:
         value: str = "rate",
         validate: bool = True,
         metadata: dict[str, Any] | None = None,
-        storage_mode: StorageModeType = "auto",
+        storage_mode: Literal["auto", "hash", "array"] = "auto",
+        on_missing: str | float = "raise",
     ) -> None: ...
     @classmethod
     def from_scenario_files(
@@ -66,7 +70,12 @@ class Table:
         shocks: dict[str, list[Shock]],
         value_column: str,
     ) -> dict[str, Table]: ...
-    def lookup(self, **kwargs: LookupValue) -> pl.Expr: ...
+    def lookup(
+        self,
+        _dimensions: dict[str, str | pl.Expr | ColumnProxy] | None = None,
+        on_missing: str | float | None = None,
+        **kwargs: str | pl.Expr | ColumnProxy,
+    ) -> pl.Expr: ...
     def canonical_form(self) -> dict[str, Any]: ...
     def source_sha(self) -> str: ...
     def with_shock(self, shock: Shock, name: str | None = None) -> Table: ...
@@ -92,17 +101,44 @@ class Table:
     def storage_mode(self) -> str: ...
 
 class TableBuilder:
-    """Builder pattern for constructing assumption tables with validation."""
+    """Fluent builder for constructing assumption tables step by step."""
 
     def __init__(self, name: str) -> None: ...
-    def source(self, source: str | Path | pl.DataFrame) -> TableBuilder: ...
-    def dimension(self, name: str, dimension: str | Dimension) -> TableBuilder: ...
-    def value(self, column_name: str) -> TableBuilder: ...
-    def metadata(self, metadata: dict[str, Any]) -> TableBuilder: ...
-    def validate(self, enabled: bool = True) -> TableBuilder: ...
+    def from_source(self, source: str | Path | pl.DataFrame) -> TableBuilder: ...
+    def with_data_dimension(
+        self,
+        name: str,
+        column: str,
+        rename_to: str | None = None,
+        dtype: pl.DataType | None = None,
+    ) -> TableBuilder: ...
+    def with_melt_dimension(
+        self,
+        name: str,
+        columns: list[str],
+        overflow: Any | None = None,
+        fill: Any | None = None,
+    ) -> TableBuilder: ...
+    def with_categorical_dimension(
+        self,
+        name: str,
+        value: Any,
+        dimension_name: str | None = None,
+    ) -> TableBuilder: ...
+    def with_computed_dimension(
+        self,
+        name: str,
+        expression: pl.Expr,
+        alias: str | None = None,
+    ) -> TableBuilder: ...
+    def with_value_column(self, name: str) -> TableBuilder: ...
+    def with_dimension(self, name: str, dimension: Dimension) -> TableBuilder: ...
     def build(self) -> Table: ...
+    def reset(self) -> TableBuilder: ...
+    def copy(self) -> TableBuilder: ...
 
 # Analysis Classes
+@dataclass
 class DimensionInfo:
     """Information about a detected dimension in the data."""
 
@@ -111,85 +147,117 @@ class DimensionInfo:
     unique_count: int
     sample_values: list[Any]
     suggested_type: Literal["key", "melt", "categorical", "value"]
-    numeric_pattern: str | None
+    numeric_pattern: str | None = None
 
+@dataclass
 class TableSchema:
     """Complete schema analysis of an assumption table."""
 
     data_dimensions: list[DimensionInfo]
     value_columns: list[str]
-    format: Literal["long", "wide", "mixed"]
-    overflow_candidate: str | None
-    interpolation_opportunities: list[Any]
-    row_count: int
+    format: Literal["curve", "wide"]
+    overflow_candidate: str | None = None
+    interpolation_opportunities: list[InterpolationHint] = ...
+    row_count: int = 0
 
     def to_dict(self) -> dict[str, Any]: ...
 
 # Dimension Classes
-class Dimension:
+class Dimension(metaclass=abc.ABCMeta):
     """Base class for dimension types."""
 
+    @abc.abstractmethod
     def validate(self, df: pl.DataFrame) -> None: ...
+    @abc.abstractmethod
     def process(self, df: pl.DataFrame) -> pl.DataFrame: ...
 
+@dataclass
 class DataDimension(Dimension):
     """Represents a simple data column dimension."""
 
-    def __init__(self, column_name: str) -> None: ...
+    column: str
+    rename_to: str | None = None
+    dtype: pl.DataType | None = None
+    def validate(self, df: pl.DataFrame) -> None: ...
+    def process(self, df: pl.DataFrame) -> pl.DataFrame: ...
 
+@dataclass
 class MeltDimension(Dimension):
-    """Transforms wide format data to long format."""
+    """Melts wide-format columns into a long-format dimension."""
 
-    def __init__(
-        self,
-        id_vars: list[str],
-        value_vars: list[str],
-        var_name: str = "variable",
-        value_name: str = "value",
-    ) -> None: ...
+    columns: list[str]
+    name: str = "variable"
+    overflow: OverflowStrategy | None = None
+    fill: FillStrategy | None = None
+    def validate(self, df: pl.DataFrame) -> None: ...
+    def process(self, df: pl.DataFrame) -> pl.DataFrame: ...
 
+@dataclass
 class CategoricalDimension(Dimension):
     """Adds a constant categorical value to the data."""
 
-    def __init__(self, name: str, value: Any) -> None: ...
+    value: Any
+    name: str | None = None
+    def validate(self, df: pl.DataFrame) -> None: ...
+    def process(self, df: pl.DataFrame) -> pl.DataFrame: ...
 
+@dataclass
 class ComputedDimension(Dimension):
     """Creates computed columns based on expressions."""
 
-    def __init__(self, name: str, expression: pl.Expr) -> None: ...
+    expression: pl.Expr
+    name: str
+    def validate(self, df: pl.DataFrame) -> None: ...
+    def process(self, df: pl.DataFrame) -> pl.DataFrame: ...
 
 # Strategy Classes
-class OverflowStrategy:
+class OverflowStrategy(metaclass=abc.ABCMeta):
     """Base class for overflow handling strategies."""
 
+@dataclass
 class ExtendOverflow(OverflowStrategy):
-    """Extends boundary values for overflow handling."""
+    """Extends a boundary column's value out to a maximum key."""
 
-    def __init__(self, max_extension: int = 200) -> None: ...
+    column: str
+    to_value: int = 200
+    from_value: int | None = None
 
+@dataclass
 class AutoDetectOverflow(OverflowStrategy):
-    """Automatically detects and handles overflow columns."""
+    """Detects overflow columns by name pattern and extends them."""
 
-    def __init__(self, max_extension: int = 200) -> None: ...
+    patterns: list[str] = ...
+    to_value: int = 200
 
-class FillStrategy:
+class FillStrategy(metaclass=abc.ABCMeta):
     """Base class for fill strategies."""
 
+@dataclass
 class LinearInterpolate(FillStrategy):
-    """Linear interpolation fill strategy."""
+    """Interpolates missing values between known points."""
 
+    method: Literal["linear", "log-linear", "cubic"] = "linear"
+    fill_gaps: bool = True
+    extrapolate: bool = False
+
+@dataclass
 class FillConstant(FillStrategy):
-    """Fill with constant value strategy."""
+    """Fills missing values with a constant."""
 
-    def __init__(self, value: Any) -> None: ...
+    value: Any
 
+@dataclass
 class FillForward(FillStrategy):
-    """Forward fill strategy."""
+    """Forward-fills missing values."""
+
+    limit: int | None = None
 
 # Analysis Functions
 def analyze_table(
     source: str | Path | pl.DataFrame,
-    sample_size: int = 1000,
+    sample_rows: int = 1000,
+    detect_overflow: bool = True,
+    detect_interpolation: bool = True,
 ) -> TableSchema: ...
 
 # Metadata Functions
