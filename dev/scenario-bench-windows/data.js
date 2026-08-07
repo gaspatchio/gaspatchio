@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785913915051,
+  "lastUpdate": 1786139580358,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks (Windows)": [
@@ -3802,6 +3802,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 4158.5,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0783b17d8de91bb609e39facb4af4d9f5ee290ec",
+          "message": "docs(skills): gotcha #4 said af.month doesn't exist — it does (#79)",
+          "timestamp": "2026-08-08T09:08:47+12:00",
+          "tree_id": "cb06abc5117f274fc966c2ee17f1f13d39b0d03a",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/0783b17d8de91bb609e39facb4af4d9f5ee290ec"
+        },
+        "date": 1786139576663,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 3.727,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 200.2,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 2683,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 45.396,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 547.2,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 2202.8,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 24.477,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 874.5,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 4085.4,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 240.838,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 4844.6,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 4152.2,
             "unit": "scenario-points/sec"
           },
           {
