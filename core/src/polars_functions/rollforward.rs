@@ -449,20 +449,38 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         for r in 0..num_rows {
             let row_len = (first.offsets[r + 1] - first.offsets[r]) as usize;
             if row_len != n_periods {
-                return Err(PolarsError::ComputeError(
+                // Off-by-exactly-one is almost always the point-vs-period trap:
+                // every projection axis carries one value per period BOUNDARY
+                // (n_periods + 1), and columns derived from an axis inherit
+                // that length. Name the actual rule and the one-line fix —
+                // the earlier advice ("build the inputs on the schedule's
+                // axis") pointed straight back at what fails (gh#73).
+                let msg = if row_len == n_periods + 1 {
+                    format!(
+                        "rollforward: policy at row {r} has input lists of length \
+                         {row_len} — exactly one more than the uniform schedule's \
+                         n_periods = {n_periods}. Projection axes (month, t_years(), \
+                         period_dates()) are point-indexed: one value per period \
+                         boundary, n_periods + 1 in total, and every column derived \
+                         from an axis inherits the extra value. Rollforward inputs \
+                         are period-indexed: exactly one value per period. Fix: drop \
+                         the final boundary once, where the axis is first used — \
+                         e.g. `.list.head({n_periods})` — and let every downstream \
+                         column inherit the period-indexed length."
+                    )
+                } else {
                     format!(
                         "rollforward: policy at row {r} has input lists of length \
                          {row_len}, but the schedule is uniform with n_periods = \
                          {n_periods} — every policy's input lists must have exactly \
-                         {n_periods} elements. Fix: build the inputs on the schedule's \
-                         axis (or set the Schedule's n_periods to match). If policies \
-                         genuinely have different horizons, use a per-policy grid \
+                         {n_periods} elements. If policies genuinely have different \
+                         horizons, use a per-policy grid \
                          (af.projection.set(..., per_policy=True), or \
-                         Schedule.from_per_policy_grid) so each policy carries its own \
-                         length."
+                         Schedule.from_per_policy_grid) so each policy carries its \
+                         own length."
                     )
-                    .into(),
-                ));
+                };
+                return Err(PolarsError::ComputeError(msg.into()));
             }
         }
     }
@@ -1540,6 +1558,60 @@ mod tests {
         let f = s.f64().unwrap();
         let row: Vec<f64> = (0..f.len()).map(|i| f.get(i).unwrap()).collect();
         assert_eq!(row, vec![8.0, 17.0, 27.0]);
+    }
+
+    /// Runs one policy's `premium` list through a uniform 3-period schedule
+    /// and returns the guard's error message ("" if it passed).
+    fn uniform_guard_error(premium: Vec<f64>) -> String {
+        let init = Series::new("av_init".into(), vec![0.0]);
+        let prem = ListChunked::from_iter([Some(Series::new("".into(), premium))]).into_series();
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "require_uniform": true,
+            "input_columns": ["premium"],
+            "ops": [
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": "Premium"}
+            ],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        match rollforward_kernel(&[init, prem], &kwargs) {
+            Ok(_) => String::new(),
+            Err(e) => e.to_string(),
+        }
+    }
+
+    #[test]
+    fn off_by_one_length_names_the_point_indexed_trap() {
+        // Length n_periods + 1 is what every axis-derived input produces, so
+        // the error must state the point- vs period-indexed rule and the
+        // .list.head fix — not point back at the axis that caused it (gh#73).
+        let msg = uniform_guard_error(vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(msg.contains("point-indexed"), "{msg}");
+        assert!(msg.contains(".list.head(3)"), "{msg}");
+        assert!(msg.contains("n_periods = 3"), "{msg}");
+        assert!(
+            !msg.contains("build the inputs on the schedule's axis"),
+            "the old advice reproduces the failure and must not return: {msg}"
+        );
+    }
+
+    #[test]
+    fn other_length_mismatch_keeps_the_generic_uniform_message() {
+        let msg = uniform_guard_error(vec![1.0, 2.0]);
+        assert!(msg.contains("must have exactly 3"), "{msg}");
+        assert!(msg.contains("per-policy grid"), "{msg}");
+        assert!(!msg.contains("point-indexed"), "{msg}");
     }
 
     #[test]
