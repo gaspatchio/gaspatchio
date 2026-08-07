@@ -137,20 +137,32 @@ af.dt = af.projection.year_fractions()               # List<Float64> — per-per
 `af.projection.t_years()` is the direct input to `Curve.discount_factor()` for
 term-structure discounting — see [curves-and-scheduling.md](curves-and-scheduling.md).
 
-### Deriving a period-index column (`month`)
+### The period-index column (`month`)
 
-`af.projection.set()` does NOT stamp an `af.month` or `af.t` index column — derive it from the date list:
+`af.projection.set()` **materialises `af.month`** — elapsed whole months from the
+projection start: `0,1,2,…` monthly, `0,3,6,…` quarterly, `0,12,24,…` annual. Do not
+rebuild it from `period_dates()`; it is already there, and calendar-date arithmetic
+gets the elapsed-months semantics wrong at month boundaries.
 
-```python
-# Derive month index (0-based) from projection dates
-af.projection_date = af.projection.period_dates()
-af.month = (
-    (af.projection_date.dt.year() - 2025) * 12
-    + (af.projection_date.dt.month() - 1)
-)
-```
+Three things about its shape that do bite:
 
-Adjust the reference year to match your `valuation_date`.
+- It is **point-indexed**: `n_periods + 1` values, one per period boundary, aligned
+  with `t_years()`. Rollforward inputs are period-indexed (`n_periods` values) —
+  slice with `.list.head(n_periods)` before driving one. The period count comes
+  from the frame: `num_proj_months` counts the boundaries, so
+  `n_periods = num_proj_months - 1` (on a uniform schedule, one integer for the
+  whole portfolio). On a **jagged** schedule there is no single count — slice with
+  each policy's own `num_proj_months - 1`, never a portfolio-wide constant.
+- It is **not stamped** at weekly/daily frequency (calendar months cannot honestly
+  label those periods) nor on `from_inception` schedules (that axis is policy
+  *duration*, not projection time). On those, use `t_years()` as your axis.
+- If the input frame already carries a `month` column, `set()` **raises** rather than
+  silently overwriting: rename it if it is yours, `drop("month")` if it came from a
+  previous run's output.
+
+There is deliberately no `proj_year` column — a projection-year label depends on your
+timing convention. Derive the one you mean (`af.month // 12` for completed years);
+see [timing-and-dates.md](timing-and-dates.md).
 
 ### `.projection` (frame) vs `.dt` (column) — They Are Different
 
