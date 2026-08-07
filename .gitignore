@@ -59,6 +59,7 @@ docs/_build/
 **/.claude/settings.local.json
 **/.claude/history*
 **/.claude/tmp/
+**/.claude/worktrees/
 /core/rust-functions-outputs
 /bindings/python/pyfuncs-outputs
 /bindings/python/tests/scratch/scenarios/benchmark_history.jsonl
