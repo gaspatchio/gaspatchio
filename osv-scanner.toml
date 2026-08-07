@@ -34,3 +34,7 @@ reason = "quick-xml, same root cause and remediation path as RUSTSEC-2026-0194 (
 [[IgnoredVulns]]
 id = "GHSA-9xwg-3r6f-jcx2"
 reason = "pymdown-extensions path traversal in the `b64` extension: an <img src> containing '../' escapes base_path and inlines the target file as base64. Fixed in 11.0.0, which is unreachable — pymdown-extensions is transitive via marimo, and marimo 0.23.13 pins pymdown-extensions>=10.21.2,<11. It reaches us only through the optional `recipes` extra, so it is absent from the published wheel's runtime closure, and exploitation additionally requires the `b64` extension to be enabled over attacker-controlled markdown, which gaspatchio never renders. Revisit when marimo relaxes its <11 cap (then bump and drop this entry)."
+
+[[IgnoredVulns]]
+id = "GHSA-gm37-52c6-37mw"
+reason = "pymdown-extensions ReDoS: exponential-backtracking regexes in the caret/tilde/betterem/magiclink inline processors let a <50-byte untrusted Markdown line pin the rendering thread. Fixed only in 11.0.1, which is unreachable — same version-lock as GHSA-9xwg-3r6f-jcx2: pymdown-extensions is transitive via marimo, and marimo 0.23.13 pins pymdown-extensions>=10.21.2,<11. It reaches us only through the optional `recipes` extra, so it is absent from the published wheel's runtime closure, and exploitation requires rendering attacker-controlled markdown through those extensions, which gaspatchio never does. Revisit when marimo relaxes its <11 cap (then bump and drop this entry together with GHSA-9xwg-3r6f-jcx2)."
