@@ -32,12 +32,9 @@ from gaspatchio_core.polars_backend.operators import (
 from gaspatchio_core.polars_backend.plugins import (
     accumulate,
     fill_series,
-    floor,
     list_clip,
     list_conditional,
     list_pow,
-    round,
-    round_to_int,
 )
 
 __all__ = [
@@ -49,12 +46,9 @@ __all__ = [
     "execute_list_clip",
     "execute_list_pow",
     "fill_series",
-    "floor",
     "list_clip",
     "list_conditional",
     "list_pow",
-    "round",
-    "round_to_int",
     "to_boolean_expr",
     "unwrap_for_list_eval",
 ]

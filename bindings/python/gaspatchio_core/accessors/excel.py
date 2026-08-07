@@ -528,6 +528,66 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
         return ExpressionProxy(result_expr, parent_frame)
 
+    def round(self, num_digits: int = 0) -> "ExpressionProxy":
+        """Round half away from zero, exactly like Excel's ROUND.
+
+        Excel sends a tie away from zero — ``ROUND(0.125, 2)`` is ``0.13`` —
+        while Polars' native ``.round()`` uses banker's rounding (half to
+        even) and gives ``0.12``. When a workbook rounds inside its recursion
+        the tie-breaking rule compounds, so a conversion must use the
+        workbook's rule. The rollforward's ``rf["state"].round()`` op applies
+        this same away-from-zero convention to a running state; this method
+        is its column-side counterpart.
+
+        Works on scalar and per-period list columns; list columns are rounded
+        element-wise.
+
+        !!! note "When to use"
+            *   **Workbook Conversion**: Reproduce a spreadsheet's ROUND exactly.
+            *   **Regulatory Reporting**: Match figures rounded away from zero.
+            *   **Reconciliation**: Remove rounding-convention mismatches first.
+
+        Parameters
+        ----------
+        num_digits : int
+            Digits after the decimal point, as in Excel: ``2`` rounds to
+            cents, ``0`` to whole units, negative values round to the left of
+            the decimal point (``-2`` rounds to hundreds). Defaults to 0.
+
+        Returns
+        -------
+        ExpressionProxy
+            Float64 (or List[Float64] for list columns) rounded half away
+            from zero.
+
+        Examples
+        --------
+        Round per-period charges to cents the way the workbook does::
+
+            ```python
+            from gaspatchio_core import ActuarialFrame
+
+            af = ActuarialFrame({"coi": [[10.125, 7558.485]]})
+            af.coi_rounded = af.coi.excel.round(2)
+            ```
+
+        """
+        from ..column.expression_proxy import ExpressionProxy
+        from .excel_functions.round import round as _excel_round
+
+        base_expr = self._get_polars_expr()
+        parent_frame = self._get_parent_frame()
+
+        # ColumnProxy and ExpressionProxy both resolve shape, so a composed
+        # per-period expression rounds element-wise, not just a named column.
+        is_list = self._proxy.shape == "list"
+        if is_list:
+            result_expr = base_expr.list.eval(_excel_round(pl.element(), num_digits))
+        else:
+            result_expr = _excel_round(base_expr, num_digits)
+
+        return ExpressionProxy(result_expr, parent_frame)
+
     def days(self, start_date: "IntoExprColumn") -> "ExpressionProxy":
         """Calculate the number of days between two dates, similar to Excel's DAYS.
 

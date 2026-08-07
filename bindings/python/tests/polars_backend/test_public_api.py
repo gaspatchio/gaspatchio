@@ -12,12 +12,9 @@ def test_functions_vector_imports_still_work() -> None:
     from gaspatchio_core.functions.vector import (  # noqa: F401
         accumulate,
         fill_series,
-        floor,
         list_clip,
         list_conditional,
         list_pow,
-        round,
-        round_to_int,
     )
 
 
@@ -31,12 +28,9 @@ def test_polars_backend_plugins_imports() -> None:
     from gaspatchio_core.polars_backend.plugins import (  # noqa: F401
         accumulate,
         fill_series,
-        floor,
         list_clip,
         list_conditional,
         list_pow,
-        round,
-        round_to_int,
     )
 
 
@@ -59,12 +53,9 @@ def test_polars_backend_package_root_imports() -> None:
         execute_list_clip,
         execute_list_pow,
         fill_series,
-        floor,
         list_clip,
         list_conditional,
         list_pow,
-        round,
-        round_to_int,
         to_boolean_expr,
         unwrap_for_list_eval,
     )
