@@ -127,9 +127,6 @@ class RollforwardBuilder:
 
         # Op accumulator — mutated as the user chains transitions
         self._transitions: list[Op] = []
-        # Current scope window (None if no .between(...) is active)
-        self._current_state: str | None = None
-        self._current_window: tuple[str, str] | None = None
 
     def __getitem__(self, state_name: str) -> _StateHandle:
         if state_name not in self._state_inits:
@@ -178,18 +175,22 @@ class _StateHandle:
     Returns ``self`` from each emit so calls chain.
     """
 
-    def __init__(self, builder: RollforwardBuilder, state: str) -> None:
+    def __init__(
+        self,
+        builder: RollforwardBuilder,
+        state: str,
+        window: tuple[str, str] | None = None,
+    ) -> None:
         self._b = builder
         self._state = state
+        # The .between(...) scope, carried by THIS handle only (gh#101): ops
+        # chained from a between() handle land on its end point; a plain
+        # b["state"] handle always defaults to eop, as the docs promise.
+        self._window = window
 
     def _target_point(self) -> str:
-        # If a .between(...) scope is active and applies to this state, use its
-        # end-point. Otherwise default to 'eop'.
-        if (
-            self._b._current_state == self._state
-            and self._b._current_window is not None
-        ):
-            return self._b._current_window[1]
+        if self._window is not None:
+            return self._window[1]
         return "eop"
 
     def add(self, expr: ExprLike, *, label: str | None = None) -> _StateHandle:
@@ -389,13 +390,9 @@ class _StateHandle:
         if self._b._points.index(p1) >= self._b._points.index(p2):
             msg = f"{p1!r} must precede {p2!r} in declared point order"
             raise ValueError(msg)
-        # Stash the scope on the builder; subsequent ops on this handle pick it up.
-        # New handle is returned (rather than mutating self) so each chain has its
-        # own scope window without aliasing.
-        new_handle = _StateHandle(self._b, self._state)
-        self._b._current_state = self._state
-        self._b._current_window = (p1, p2)
-        return new_handle
+        # The window rides on the returned handle, so each chain has its own
+        # scope and a later plain b["state"] handle defaults to eop (gh#101).
+        return _StateHandle(self._b, self._state, (p1, p2))
 
     def at(self, point: str) -> StateRef:
         if point not in self._b._points:
