@@ -267,14 +267,17 @@ Phase 3: All calculations. Lazy only -- no `.collect()`, no Python loops.
 
 | Task | Skill |
 |------|-------|
-| New to gaspatchio, first setup | `quickstart` |
-| Scope a new model before writing code | `model-discovery` |
-| Write or modify model code | `model-building` |
-| Review model quality / actuarial standards | `model-review` |
-| Match model to Excel/lifelib/vendor reference | `model-reconciliation` |
-| Scenarios, shocks, sensitivity analysis | `model-scenarios` |
+| New to gaspatchio, first setup | `gaspatchio-quickstart` |
+| Scope a new model before writing code | `gaspatchio-model-discovery` |
+| Write or modify model code | `gaspatchio-model-building` |
+| Review model quality / actuarial standards | `gaspatchio-model-review` |
+| Match model to Excel/lifelib/vendor reference | `gaspatchio-model-reconciliation` |
+| Scenarios, shocks, sensitivity analysis | `gaspatchio-model-scenarios` |
+| Add custom accessors or port functions from other libraries | `gaspatchio-extending` |
 
-Skills are in the `skills/` directory. Each has a `SKILL.md` with full instructions.
+Skills are in the `skills/` directory. Each has a `SKILL.md` with full instructions. The
+table names are the canonical skill names (directory and frontmatter). In Claude Code the
+plugin prefixes its own name, so invoke as `gaspatchio:gaspatchio-model-building`.
 
 ---
 
@@ -304,7 +307,7 @@ Tutorial models are in `tutorial/`. Start at Level 1 if new, Level 3 base for a 
 
 ## Extending Gaspatchio
 
-To add custom calculations or accessor methods, use the `extending-gaspatchio` skill.
+To add custom calculations or accessor methods, use the `gaspatchio-extending` skill.
 Do not write raw Python loops or `map_elements` — compose Polars expressions.
 The accessor pattern (`@register_accessor` + base classes) is the primary extension mechanism.
 
