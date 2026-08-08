@@ -7,16 +7,20 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import TYPE_CHECKING, Any, Literal
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import polars as pl
 
 from .base import BaseFrameAccessor
 
 if TYPE_CHECKING:
+    from ..column import ColumnProxy, ExpressionProxy
     from ..frame.base import ActuarialFrame
     from ..rollforward._builder import RollforwardBuilder
     from ..schedule import Schedule
+
+    ExprLike: TypeAlias = pl.Expr | ColumnProxy | ExpressionProxy
 
 class ProjectionFrameAccessor(BaseFrameAccessor):
     def __init__(self, frame: "ActuarialFrame") -> None: ...
@@ -41,7 +45,17 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         frequency: str | None = ...,
         per_policy: bool | None = ...,
     ) -> "ActuarialFrame": ...
-    def rollforward(self, **kwargs: Any) -> "RollforwardBuilder": ...
+    def rollforward(
+        self,
+        *,
+        states: dict[str, ExprLike],
+        points: Iterable[str] | None = ...,
+        track_increments: bool = ...,
+        lapse_when_all_non_positive: Iterable[str] = ...,
+        contract_boundary: ExprLike | None = ...,
+        batch_axes: tuple[str, ...] = ...,
+        schedule: None = ...,
+    ) -> "RollforwardBuilder": ...
     def period_dates(self) -> pl.Expr: ...
     def year_fractions(self) -> pl.Expr: ...
     def t_years(self) -> pl.Expr: ...

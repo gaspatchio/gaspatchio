@@ -39,6 +39,7 @@ from gaspatchio_core.rollforward._refs import StateRef
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from typing import TypeAlias
 
     import polars as pl
 
@@ -51,7 +52,7 @@ if TYPE_CHECKING:
     # An accepted expression-like input. Anything with ``_to_expr()`` is
     # unwrapped at the boundary; plain ``pl.Expr`` passes through unchanged.
     # TYPE_CHECKING-only — stubtest allowlists this alias by name.
-    ExprLike = pl.Expr | ColumnProxy | ExpressionProxy
+    ExprLike: TypeAlias = pl.Expr | ColumnProxy | ExpressionProxy
 
 
 def _to_polars_expr(x: object) -> pl.Expr:

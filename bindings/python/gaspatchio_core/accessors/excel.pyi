@@ -4,13 +4,30 @@
 
 """Type stubs for Excel accessors."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, Union
 
 if TYPE_CHECKING:
     from ..column.column_proxy import ColumnProxy
     from ..column.expression_proxy import ExpressionProxy
     from ..frame.base import ActuarialFrame
     from ..typing import IntoExprColumn  # For yearfrac
+
+BasisType = Union[
+    Literal[
+        0,
+        1,
+        2,
+        3,
+        4,
+        "us_nasd_30_360",
+        "act/act",
+        "actual/360",
+        "actual/365",
+        "european_30_360",
+    ],
+    int,
+    str,
+]
 
 class ExcelFrameAccessor:
     _frame: ActuarialFrame
@@ -23,7 +40,7 @@ class ExcelColumnAccessor:
     def __init__(self, proxy: ExpressionProxy | ColumnProxy) -> None: ...
     def from_excel_serial(self, epoch: str = ...) -> ExpressionProxy: ...
     def yearfrac(
-        self, end_date_expr: IntoExprColumn, basis: str = ...
+        self, end_date_expr: IntoExprColumn, basis: BasisType = ...
     ) -> ExpressionProxy: ...
     def irr(
         self,
