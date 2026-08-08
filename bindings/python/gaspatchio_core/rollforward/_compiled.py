@@ -17,6 +17,60 @@ if TYPE_CHECKING:
     from gaspatchio_core.rollforward._refs import StateRef
 
 
+def capture_slot_error(
+    state: str,
+    point: str,
+    ir: IR,
+    capture_slots: tuple[StateRef, ...],
+) -> KeyError:
+    """Build the error for an unreadable ``(state, point)`` extraction.
+
+    Capture slots exist for each state's ``eop`` and for points an Op
+    targets — declaring a point in ``points=(...)`` alone does not capture
+    it. The message names whichever precondition actually failed.
+
+    Parameters
+    ----------
+    state : str
+        The state name the extraction asked for.
+    point : str
+        The point name the extraction asked for.
+    ir : IR
+        The compiled IR, for the declared states and points.
+    capture_slots : tuple[StateRef, ...]
+        The slots the kernel actually emits.
+
+    Returns
+    -------
+    KeyError
+        An error whose message states the failed precondition and the
+        next move.
+
+    """
+    state_names = [s.name for s in ir.states]
+    if state not in state_names:
+        msg = f"Unknown state {state!r}. States on this rollforward: {state_names}."
+        return KeyError(msg)
+    if point not in ir.points:
+        msg = (
+            f"Point {point!r} is not declared on this rollforward. Declared "
+            f"points: {list(ir.points)}. A point must be declared in "
+            f"points=(...) and targeted by an Op before it can be read."
+        )
+        return KeyError(msg)
+    captured = [s.point for s in capture_slots if s.state == state]
+    msg = (
+        f"({state!r}, {point!r}) is not a capture slot: {point!r} is declared, "
+        f"but no Op targets it for state {state!r}. Slots exist for each "
+        f"state's 'eop' and for points an Op targets — declaring a point "
+        f"alone does not capture it. Captured for {state!r}: {captured}. "
+        f"To read {point!r}, target it with an Op; for an opening balance, "
+        f"read the prior period's close: the eop column's "
+        f".projection.previous_period()."
+    )
+    return KeyError(msg)
+
+
 @dataclass(frozen=True)
 class CompiledRollforward:
     """Frozen artefact carrying the compiled IR and inspection surface.
@@ -103,11 +157,7 @@ class CompiledRollforward:
 
         ref = StateRef(state=state, point=point)
         if ref not in self.capture_slots:
-            msg = (
-                f"({state!r}, {point!r}) not in capture slots — declare "
-                f"the point or use a state's eop"
-            )
-            raise KeyError(msg)
+            raise capture_slot_error(state, point, self.ir, self.capture_slots)
         return self._field_expr(f"{state}@{point}")
 
     def increment_for(self, label: str) -> pl.Expr:

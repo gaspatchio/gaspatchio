@@ -43,15 +43,14 @@ class RollforwardCollector:
 
     def expr_for(self, state: str, *, point: str = "eop") -> pl.Expr:
         """Return a self-contained Expr for (state, point) — one kernel call each."""
+        from gaspatchio_core.rollforward._compiled import capture_slot_error
         from gaspatchio_core.rollforward._refs import StateRef
 
         ref = StateRef(state=state, point=point)
         if ref not in self._compiled.capture_slots:
-            msg = (
-                f"({state!r}, {point!r}) not in capture slots — declare "
-                f"the point or use a state's eop"
+            raise capture_slot_error(
+                state, point, self._compiled.ir, self._compiled.capture_slots
             )
-            raise KeyError(msg)
         from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
 
         return ProxyAwareExpr.wrap(
