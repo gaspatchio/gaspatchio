@@ -285,8 +285,9 @@ Skills are in the `skills/` directory. Each has a `SKILL.md` with full instructi
 | 3 | Mini Variable Annuity | Full VA projection: mortality, lapse, AV, claims, discounting (6 incremental steps) |
 | 4 | Reconciled Lifelib | Production model reconciled to 0.0000% against lifelib across 1,016 model points |
 | 5 | Scenarios | Deterministic scenarios, parameter shocks, sensitivity sweeps, regulatory reports |
+| patterns | Rollforward Patterns | The state-machine recursion end to end: `af.projection.rollforward(...)` + `compile_rollforward` — fund growth, GMDB ratchet via cross-state read, lapse stop |
 
-Tutorial models are in `tutorial/`. Start at Level 1 if new, Level 3 base for a complete VA model to study.
+Tutorial models are in `tutorial/`. Start at Level 1 if new, Level 3 base for a complete VA model to study. For the rollforward (UL account values, anything where a within-period charge depends on the running balance), init the worked patterns: `gspio tutorial init rollforward-patterns`.
 
 ---
 
