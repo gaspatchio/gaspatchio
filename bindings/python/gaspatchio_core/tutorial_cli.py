@@ -51,31 +51,53 @@ LEVELS: list[tuple[str, str]] = [
     ),
 ]
 
+# Pattern collections: (directory_name, short_description). Worked API patterns,
+# not sequential levels — they live under patterns/, have no base/ subdirectory,
+# and hold numbered self-asserting scripts instead of a single model.py.
+PATTERNS: list[tuple[str, str]] = [
+    (
+        "patterns/rollforward-patterns",
+        "Rollforward — stateful recursion: fund growth, GMDB ratchet, lapse stop",
+    ),
+]
+
+
+def _is_pattern(dir_name: str) -> bool:
+    """Return True if a resolved directory name is a pattern collection."""
+    return dir_name.startswith("patterns/")
+
 
 def _resolve_level(name: str) -> str:
-    """Normalize a level name to its directory name.
+    """Normalize a tutorial name to its directory name.
 
-    Accepts 'level-1', '1', 'level-1-hello-world', etc.
+    Accepts 'level-1', '1', 'level-1-hello-world', a pattern collection name
+    ('rollforward-patterns'), or its full path ('patterns/rollforward-patterns').
 
     Parameters
     ----------
     name : str
-        User-provided level identifier.
+        User-provided tutorial identifier.
 
     Returns
     -------
     str
-        The canonical directory name (e.g. 'level-1-hello-world').
+        The canonical directory name (e.g. 'level-1-hello-world' or
+        'patterns/rollforward-patterns').
 
     Raises
     ------
     typer.BadParameter
-        If the level name cannot be resolved to a known tutorial.
+        If the name cannot be resolved to a known tutorial.
 
     """
     # Exact match
-    for dir_name, _ in LEVELS:
+    for dir_name, _ in LEVELS + PATTERNS:
         if name == dir_name:
+            return dir_name
+
+    # Pattern collections by bare name: 'rollforward-patterns'
+    for dir_name, _ in PATTERNS:
+        if dir_name == f"patterns/{name}":
             return dir_name
 
     # Short forms: 'level-1' or '1'
@@ -84,9 +106,48 @@ def _resolve_level(name: str) -> str:
         if dir_name.startswith(f"level-{stripped}-"):
             return dir_name
 
-    available = ", ".join(f"level-{i + 1}" for i in range(len(LEVELS)))
-    msg = f"Unknown tutorial level: '{name}'. Available: {available}"
+    levels = ", ".join(f"level-{i + 1}" for i in range(len(LEVELS)))
+    patterns = ", ".join(d.removeprefix("patterns/") for d, _ in PATTERNS)
+    msg = f"Unknown tutorial: '{name}'. Available: {levels}, {patterns}"
     raise typer.BadParameter(msg)
+
+
+def _verify_pattern(pattern_dir: Path) -> None:
+    """Run every numbered script in a pattern collection.
+
+    The scripts assert internally against closed-form or hand-computed
+    expectations, so a clean exit is a real verification.
+
+    Parameters
+    ----------
+    pattern_dir : Path
+        The pattern collection directory (e.g. .../patterns/rollforward-patterns).
+
+    Raises
+    ------
+    typer.Exit
+        Code 1 if any script fails; code 0 after all scripts pass.
+
+    """
+    scripts = sorted(pattern_dir.glob("[0-9][0-9]_*.py"))
+    if not scripts:
+        console.print(f"[red]No numbered scripts found in {pattern_dir}[/red]")
+        raise typer.Exit(code=1)
+
+    for script in scripts:
+        result = subprocess.run(  # noqa: S603
+            [sys.executable, str(script)],
+            capture_output=True,
+            text=True,
+            cwd=str(pattern_dir),
+            check=False,
+        )
+        if result.returncode != 0:
+            console.print(f"[red]FAIL: {script.name}[/red]\n{result.stderr}")
+            raise typer.Exit(code=1)
+        console.print(f"[green]PASS: {script.name}[/green]")
+
+    raise typer.Exit(code=0)
 
 
 @tutorial_app.command()
@@ -104,8 +165,16 @@ def list() -> None:  # noqa: A001
         short_name = dir_name.split("-")[0] + "-" + dir_name.split("-")[1]
         table.add_row(short_name, description, status)
 
+    for dir_name, description in PATTERNS:
+        is_ready = (tutorials_dir / dir_name).exists()
+        status = "[green]ready[/green]" if is_ready else "[red]missing[/red]"
+        table.add_row(dir_name.removeprefix("patterns/"), description, status)
+
     console.print(table)
-    console.print("\n[bold]Get started:[/bold] gspio tutorial init level-1\n")
+    console.print("\n[bold]Get started:[/bold] gspio tutorial init level-1")
+    console.print(
+        "[bold]API patterns:[/bold] gspio tutorial init rollforward-patterns\n"
+    )
 
 
 @tutorial_app.command()
@@ -127,7 +196,12 @@ def init(
     """Copy a tutorial into your working directory."""
     dir_name = _resolve_level(level)
     tutorials_dir = get_tutorials_dir()
-    source = tutorials_dir / dir_name / "base"
+    # Levels copy their base/ variant; pattern collections are the directory.
+    source = (
+        tutorials_dir / dir_name
+        if _is_pattern(dir_name)
+        else tutorials_dir / dir_name / "base"
+    )
 
     if not source.exists():
         console.print(f"[red]Tutorial source not found: {source}[/red]")
@@ -143,11 +217,16 @@ def init(
     if dest_resolved.exists() and force:
         shutil.rmtree(dest_resolved)
 
-    shutil.copytree(source, dest_resolved)
+    shutil.copytree(source, dest_resolved, ignore=shutil.ignore_patterns("__pycache__"))
     console.print(f"[green]Tutorial copied to: {dest_resolved}[/green]\n")
     console.print("[bold]Next steps:[/bold]")
     console.print(f"  cd {dest}")
-    console.print("  uv run python model.py\n")
+    if _is_pattern(dir_name):
+        scripts = sorted(source.glob("[0-9][0-9]_*.py"))
+        first = f"uv run python {scripts[0].name}   # then " if scripts else ""
+        console.print(f"  {first}see README.md\n")
+    else:
+        console.print("  uv run python model.py\n")
 
 
 @tutorial_app.command()
@@ -157,6 +236,11 @@ def verify(
     """Run a tutorial model and verify its output matches expected."""
     dir_name = _resolve_level(level)
     tutorials_dir = get_tutorials_dir()
+
+    if _is_pattern(dir_name):
+        _verify_pattern(tutorials_dir / dir_name)
+        return
+
     base_dir = tutorials_dir / dir_name / "base"
 
     expected_file = base_dir / "expected_output.txt"
