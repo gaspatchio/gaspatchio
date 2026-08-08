@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.8.1] — The surface tells the truth
+
+Four small fixes from the second, clean-room field test of the Type A UL
+conversion — all in the retrieval-and-refusal surface rather than the
+numerics. The pattern the field test exposed: content and features the
+framework already had were unreachable or over-promised, so an agent (or
+an actuary) working from the surface alone concluded they didn't exist.
+No numeric behaviour changes.
+
+### Fixed
+
+- **`gspio tutorial` reaches the shipped rollforward patterns.** The
+  worked rollforward examples ship in the wheel, but `tutorial list`
+  never showed them and `init` refused them — so the state-machine
+  recursion, the framework's flagship escalation, had no reachable worked
+  example. `list` now shows the collection, `init rollforward-patterns`
+  copies it, and `verify` runs its self-asserting scripts. (#94)
+- **Capture-slot errors name the real rule.** Reading a declared point
+  that no Op targets raised "declare the point" — a no-op when the point
+  is already declared. The error now states which precondition failed,
+  lists what is captured for the state, and names the next move,
+  including the opening-balance idiom (prior period's `eop`). (#93)
+- **`track_increments=True` refuses loudly at build time.** The flag was
+  accepted, validated, and explained while the kernel emitted no
+  increment fields, so the failure arrived at `collect()` phrased as a
+  wrong field name. The builder now raises `NotImplementedError` at the
+  call that asks for it, naming the gap and the workaround — and the
+  workaround's known trap. Increment emission itself remains open. (#69)
+- **The skill routing table names skills that exist.** The always-loaded
+  agent knowledge routed to `model-building` and friends — names that
+  resolve nowhere; the canonical names are `gaspatchio-model-building`
+  et al., plugin-prefixed in Claude Code. The table now uses the real
+  names and gains the missing `gaspatchio-extending` row. (#99)
+
 ## [0.8.0] — Rounding is requested by name, and lookups commute
 
 The v0.6.0 field-test issue batch (#66–#68, #70–#73), plus the rollforward
