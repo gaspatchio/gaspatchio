@@ -310,6 +310,21 @@ def main() -> None:
     gsp_setup_s, l4_model = _gaspatchio_setup()
     print(f"  gaspatchio setup: {gsp_setup_s}s", file=sys.stderr)
 
+    # Warm the process before any timed run (gh#91): the first collect() in a
+    # process pays one-time costs — engine/thread-pool init, first joins,
+    # page-cache warm — that on cold hosted runners add ~0.4s to whichever
+    # leg runs first. That leg is the 8-point one, where 0.4s reads as a 3x
+    # step regression on the dashboard. Untimed, result discarded.
+    warmup_mp = _gaspatchio_mp_path(8)
+    if warmup_mp.exists():
+        print("[setup] Warmup run (untimed, 8 points) …", file=sys.stderr)
+        t_warm = time.perf_counter()
+        _run_gaspatchio(l4_model, warmup_mp)
+        print(
+            f"  warmup: {round(time.perf_counter() - t_warm, 3)}s (discarded)",
+            file=sys.stderr,
+        )
+
     print("[setup] Loading lifelib IntegratedLife model …", file=sys.stderr)
     # lifelib_runner lives in the same directory as this script; load it directly
     # so the import works regardless of the caller's sys.path / cwd.
