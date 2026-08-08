@@ -182,12 +182,6 @@ def test_operator_shape_matrix(
     polars has no list ``pow``, only the proxy layer's shim does — so the
     wrapper must delegate to the proxy, not to polars.
     """
-    if (shape_name, op_name, direction) == ("list_x_scalar", "pow", "proxy_first"):
-        pytest.xfail(
-            "scalar base ** list-valued expression exponent: the proxy pow "
-            "shim cannot see the expression's list shape — a proxy-layer gap "
-            "that exists on main independently of lookup(); gh#89",
-        )
     op = _MATRIX_OPS[op_name]
     data = _MATRIX_SHAPES[shape_name]
     table = Table(
