@@ -509,7 +509,6 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         discount_factor : Calculate discount factors from interest rates
 
         """
-        from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
@@ -522,10 +521,9 @@ class FinanceColumnAccessor(BaseColumnAccessor):
             )
             raise RuntimeError(msg)
 
-        # Read the proxy's cached shape directly.
-        is_list = (
-            isinstance(self._proxy, ColumnProxy) and self._proxy.shape == "list"
-        )
+        # ColumnProxy and ExpressionProxy both resolve shape, so a composed
+        # per-period expression converts element-wise, not just a named column.
+        is_list = self._proxy.shape == "list"
 
         # Build the conversion expression
         if method == "compound":
@@ -614,7 +612,6 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         discount_factor : Calculate discount factors from interest rates
 
         """
-        from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
@@ -627,10 +624,9 @@ class FinanceColumnAccessor(BaseColumnAccessor):
             )
             raise RuntimeError(msg)
 
-        # Read the proxy's cached shape directly.
-        is_list = (
-            isinstance(self._proxy, ColumnProxy) and self._proxy.shape == "list"
-        )
+        # ColumnProxy and ExpressionProxy both resolve shape, so a composed
+        # per-period expression converts element-wise, not just a named column.
+        is_list = self._proxy.shape == "list"
 
         # Build the compound growth expression: (1 + rate)^(period / periods_per_year)
         if is_list:

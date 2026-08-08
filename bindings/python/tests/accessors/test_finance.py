@@ -78,6 +78,59 @@ class TestToMonthlyList:
         assert monthly_rates[3] == pytest.approx(0.0048675506, rel=1e-6)  # noqa: S101
 
 
+class TestComposedListExpressions:
+    """Composed list expressions take the element-wise path (issue #86).
+
+    The shape gate keys off ``shape``, not the proxy's concrete type, so a
+    list-valued ExpressionProxy converts inside the list rather than hitting
+    the scalar path and failing at collect with ``pow`` on ``list[f64]``.
+    """
+
+    def test_to_monthly_compound_on_composed_expression(self) -> None:
+        """``(rate * 1.0).finance.to_monthly()`` matches the named column."""
+        af = ActuarialFrame({"rate_ann": [[0.03, 0.04], [0.05, 0.06]]})
+
+        af["mth_col"] = af["rate_ann"].finance.to_monthly(method="compound")  # type: ignore[attr-defined]
+        af["mth_expr"] = (af["rate_ann"] * 1.0).finance.to_monthly(  # type: ignore[attr-defined]
+            method="compound"
+        )
+
+        result = af.collect()
+        for row in range(2):
+            expected = result["mth_col"][row].to_list()
+            actual = result["mth_expr"][row].to_list()
+            assert actual == pytest.approx(expected, rel=1e-12)
+
+    def test_to_monthly_simple_on_composed_expression(self) -> None:
+        """The simple method routes through ``list.eval`` on expressions too."""
+        af = ActuarialFrame({"rate_ann": [[0.03, 0.06]]})
+
+        af["mth_expr"] = (af["rate_ann"] * 1.0).finance.to_monthly(  # type: ignore[attr-defined]
+            method="simple"
+        )
+
+        result = af.collect()
+        assert result["mth_expr"][0].to_list() == pytest.approx(
+            [0.03 / 12, 0.06 / 12], rel=1e-12
+        )
+
+    def test_compound_on_composed_expression(self) -> None:
+        """``(month + 0).finance.compound(...)`` matches the named column."""
+        af = ActuarialFrame({"month": [[0, 1, 6, 12]]})
+
+        af["factor_col"] = af["month"].finance.compound(  # type: ignore[attr-defined]
+            rate=0.01, periods_per_year=12
+        )
+        af["factor_expr"] = (af["month"] + 0).finance.compound(  # type: ignore[attr-defined]
+            rate=0.01, periods_per_year=12
+        )
+
+        result = af.collect()
+        expected = result["factor_col"][0].to_list()
+        actual = result["factor_expr"][0].to_list()
+        assert actual == pytest.approx(expected, rel=1e-12)
+
+
 class TestFrameDiscountFactor:
     """Tests for frame-level discount_factor() using native Polars explode/implode."""
 

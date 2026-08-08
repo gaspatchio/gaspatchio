@@ -321,18 +321,16 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
             # Map rate_timing to start_at
             start_at = 1.0 if rate_timing == "beginning_of_period" else None
-        from gaspatchio_core.column.column_proxy import ColumnProxy
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
 
         # Get base expression and parent frame
         base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
 
-        # Determine if this is a list column via the proxy's cached shape.
-        is_list = (
-            isinstance(self._proxy, ColumnProxy)
-            and self._proxy.shape == "list"
-        )
+        # ColumnProxy and ExpressionProxy both resolve shape, so a composed
+        # per-period expression takes the within-list cumulative product path,
+        # not just a named column.
+        is_list = self._proxy.shape == "list"
 
         # Apply appropriate calculation based on column type
         if is_list:

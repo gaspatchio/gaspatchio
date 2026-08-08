@@ -38,6 +38,24 @@ class TestCumulativeSurvival:
         assert pytest.approx(survival[1], abs=1e-6) == 0.998001
         assert pytest.approx(survival[2], abs=1e-6) == 0.997002999
 
+    def test_composed_list_expression(self):
+        """A composed list expression takes the element-wise path (issue #86).
+
+        The shape gate keys off ``shape``, not the proxy's concrete type, so
+        ``(qx * 1.0).projection.cumulative_survival()`` computes the same
+        within-list cumulative product as the named column instead of hitting
+        the scalar ``cum_prod`` path and failing at collect.
+        """
+        af = ActuarialFrame({"qx": [[0.001, 0.002, 0.003]]})
+
+        af.surv_col = af.qx.projection.cumulative_survival(start_at=None)
+        af.surv_expr = (af.qx * 1.0).projection.cumulative_survival(start_at=None)
+
+        result = af.collect()
+        expected = result["surv_col"][0].to_list()
+        actual = result["surv_expr"][0].to_list()
+        assert actual == pytest.approx(expected, rel=1e-12)
+
     def test_list_column_multiple_policies(self):
         """Test cumulative survival with multiple policies."""
         data = {
