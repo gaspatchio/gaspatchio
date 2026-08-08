@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786153777044,
+  "lastUpdate": 1786179616544,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Model Benchmarks (Windows)": [
@@ -12759,6 +12759,310 @@ window.BENCHMARK_DATA = {
           {
             "name": "VA + Scenarios (3x)/100K-cpu-avg",
             "value": 99.6,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5007e1c420fa6733b79df1fa9f0a8f1ea4137e73",
+          "message": "docs(agents): skill routing table names the real skill names (#99)\n\nThe routing table listed quickstart, model-building, etc. — names that\nexist nowhere: the canonical names are gaspatchio-quickstart and\nfriends, and Claude Code invokes them plugin-prefixed as\ngaspatchio:gaspatchio-model-building. An agent following the table as\nwritten asks for skills that don't resolve. Also adds the missing\ngaspatchio-extending row and fixes the reversed extending-gaspatchio\nreference in the Extending section. Flagged in round one of the UL\nconversion (P2 loose end); made urgent by the clean-room rerun, where\nskill routing is the variable under test. copilot-instructions\nregenerated.",
+          "timestamp": "2026-08-08T20:50:59+12:00",
+          "tree_id": "e2d61fbc1c7559db7519e1f3c3312a2c4d15d2e6",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/5007e1c420fa6733b79df1fa9f0a8f1ea4137e73"
+        },
+        "date": 1786179613062,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "VA Model (GMDB/GMAB)/8-points",
+            "value": 0.168,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-throughput",
+            "value": 47.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-memory",
+            "value": 37.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-data-mb",
+            "value": 0.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-rss",
+            "value": 136.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cores",
+            "value": 2,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cpu-avg",
+            "value": 10.7,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-points",
+            "value": 0.341,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-throughput",
+            "value": 2932.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-memory",
+            "value": 58,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-data-mb",
+            "value": 38,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-rss",
+            "value": 194.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cpu-avg",
+            "value": 55.2,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-points",
+            "value": 1.975,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-throughput",
+            "value": 5063.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-memory",
+            "value": 292.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-data-mb",
+            "value": 252.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-rss",
+            "value": 471,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cpu-avg",
+            "value": 90.8,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-points",
+            "value": 21.179,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-throughput",
+            "value": 4721.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-memory",
+            "value": 2725,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-data-mb",
+            "value": 2499.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-rss",
+            "value": 3107.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cpu-avg",
+            "value": 98.9,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-points",
+            "value": 0.108,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-throughput",
+            "value": 74.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-memory",
+            "value": 4.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-data-mb",
+            "value": 0.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-rss",
+            "value": 2215.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cores",
+            "value": 3,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cpu-avg",
+            "value": 18.8,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-points",
+            "value": 0.857,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-throughput",
+            "value": 1166.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-memory",
+            "value": -1832.3,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-data-mb",
+            "value": 114,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-rss",
+            "value": 383.5,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cpu-avg",
+            "value": 79.3,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-points",
+            "value": 5.343,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-throughput",
+            "value": 1871.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-memory",
+            "value": 729.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-data-mb",
+            "value": 771.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-rss",
+            "value": 1072,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cpu-avg",
+            "value": 96.5,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-points",
+            "value": 55.666,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-throughput",
+            "value": 1796.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-memory",
+            "value": 7643.3,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-data-mb",
+            "value": 7629.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-rss",
+            "value": 8481.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cpu-avg",
+            "value": 99.5,
             "unit": "%"
           }
         ]
