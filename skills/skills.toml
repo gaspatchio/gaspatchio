@@ -17,6 +17,7 @@
 order = [
     "gaspatchio-quickstart",
     "gaspatchio-model-discovery",
+    "gaspatchio-workbook-conversion",
     "gaspatchio-model-building",
     "gaspatchio-model-reconciliation",
     "gaspatchio-model-review",
