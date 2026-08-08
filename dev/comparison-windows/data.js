@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786179842506,
+  "lastUpdate": 1786180819026,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib (Windows)": [
@@ -5619,6 +5619,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 6.22,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "01d554dcf6cf1fae68c59f80267392a737d8a1ea",
+          "message": "release: v0.8.1 — the surface tells the truth (#100)\n\nVersion stamps 0.8.0 → 0.8.1 in core/Cargo.toml,\nbindings/python/Cargo.toml, and bindings/python/pyproject.toml, with\nCargo.lock and uv.lock regenerated to match, plus the CHANGELOG entry.\n\nPatch-only: #96 (gspio tutorial reaches the shipped rollforward\npatterns, gh#94), #97 (capture-slot errors name the real rule, gh#93),\n#98 (track_increments=True refuses loudly at build time, refs gh#69).\nNo numeric behaviour changes.",
+          "timestamp": "2026-08-08T21:07:26+12:00",
+          "tree_id": "867a41d4565773529b115ca7765815ed3656b70f",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/01d554dcf6cf1fae68c59f80267392a737d8a1ea"
+        },
+        "date": 1786180815847,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 2.916,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 3.017,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.377,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 21.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 7.621,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 20.21,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.587,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 1703.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 27.405,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 36.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 46.69,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 3.687,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 2712.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 23.132,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 432.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 6.27,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 26.454,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 3780.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 150.32,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 665.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.68,
             "unit": "x"
           }
         ]
