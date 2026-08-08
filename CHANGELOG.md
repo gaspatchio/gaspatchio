@@ -1,5 +1,94 @@
 # Changelog
 
+## [0.8.0] — Rounding is requested by name, and lookups commute
+
+The v0.6.0 field-test issue batch (#66–#68, #70–#73), plus the rollforward
+hardening that preceded it. Two threads: conventions are named, not
+guessed — Excel's half-away-from-zero and polars' banker's rounding are
+now each requested explicitly, and `deduct_nar` states its timing — and
+formulas work as written in either operand order. Nothing that worked
+before breaks; the only removals are wrappers that could never do
+anything but panic.
+
+### Added
+
+- **`.excel.round(num_digits)` — working per-period column rounding,
+  named by its convention.** There was no working way to round a list
+  column: polars' `.round()` raises on lists, and `plugins.round` /
+  `round_to_int` / `floor` called Rust symbols that were never
+  implemented, dying with a dlsym panic that even `except Exception`
+  cannot catch. The new accessor applies Excel's half-away-from-zero
+  (7558.485 → 7558.49), works element-wise on per-period list columns and
+  scalars alike, and supports Excel's negative `num_digits`. It is the
+  column-side counterpart of the rollforward's `Round` op — deliberately
+  the same rule — while polars' native `.round()` keeps banker's
+  rounding: two conventions, each requested by name. The dead wrappers
+  are removed rather than implemented. (#68, #70)
+- **Rollforward `Round` op**, for products whose spec rounds the running
+  balance inside the recursion — same half-away-from-zero rule as
+  `.excel.round`, by design. (#74)
+- **Corridor test on `deduct_nar`, and a negative NAR refuses to run.**
+  Once a well-funded policy's account value outgrows its death benefit,
+  `death_benefit − account_value` goes negative, the COI becomes a credit,
+  and the account runs away — 166× too large on a constructed UL policy,
+  silently, after 49 years of exact agreement. `corridor_factor=` adds
+  the regulatory corridor test real UL products carry; independently, a
+  negative NAR now raises instead of compounding. (#78)
+
+### Fixed
+
+- **`lookup()` cooperates with proxies in either operand order.**
+  `af.col * lookup(...)` worked while `lookup(...) * af.col` raised,
+  because polars' `Expr` operators raise instead of returning
+  `NotImplemented` (filed upstream as pola-rs/polars#28748), so Python
+  never offers the proxy its reflected method. Lookup results — and the
+  other bare-expression surfaces: rollforward `expr_for` /
+  `increment_for` and the `Schedule.*_expr` family — now return an
+  internal `pl.Expr` subclass that hands mixed operations to the proxy
+  layer, which owns the operator semantics polars lacks (`**` on list
+  columns included). The guarantee covers operators; a method chain
+  (`.clip()`, …) returns a plain polars expression — assign to a column
+  first. Held in place by a 40-cell operator × shape × operand-order
+  test matrix. (#67)
+- **Only declared columns become dimension keys.** An undeclared source
+  column riding along in a table's DataFrame was silently promoted into
+  the lookup key, so the composition on screen was not the composition
+  that ran. Construction and `extend()` now trim to the declared
+  dimensions. (#66)
+- **Scalar rollforward inputs broadcast across periods, and `deduct_nar`
+  names its timing convention.** A level death benefit is one value per
+  policy; it no longer has to be materialised as n_periods identical
+  copies, and List inputs are untouched (bit-identical plans). (#65)
+- **The rollforward length-mismatch error points at what actually
+  fails**, distinguishing point-indexed from period-indexed columns
+  instead of advising the wrong fix. (#73)
+- **The assumptions type stubs no longer describe an API that does not
+  exist.** (#72)
+- **The Claude plugin installs `skills/`, not the repository.** A
+  marketplace `source: "./"` shipped the whole tree — 47 MB from a clean
+  checkout, 25 GB from one carrying build output — to deliver seven
+  skill directories. (#75)
+
+### Documentation
+
+- Spreadsheet-to-gaspatchio translation reference for the discovery
+  skill: what a workbook's structure implies about the model you should
+  write, with every row naming the failure that is silent. (#76)
+- Model-building skill gotcha #4 corrected: `af.month` exists —
+  `projection.set()` materialises it. (#71)
+- README gained a Performance section linking the live per-commit
+  benchmark dashboard. (#81)
+- CONTRIBUTING is canonical for the GitHub workflow (branches vs forks,
+  signing, merge policy); code of conduct and PR template added. (#87)
+
+### Security
+
+- cryptography 49.0.0 → 50.0.0; the new pymdown-extensions ReDoS
+  advisory (GHSA-gm37-52c6-37mw) is filtered with reachability reasoning
+  — marimo caps `pymdown-extensions<11`, and the vulnerable extensions
+  are absent from gaspatchio's runtime closure. (#88)
+- GitHub Actions dependency bumps across the workflow set. (#20)
+
 ## [0.7.1] — Addition commutes, and panics name their column
 
 Three fixes, all traced back to the v0.6.0 field test, none breaking — a
