@@ -58,11 +58,17 @@ class RollforwardCollector:
         )
 
     def increment_for(self, label: str) -> pl.Expr:
-        """Return a self-contained Expr for a labelled Op's per-period delta."""
+        """Return a self-contained Expr for a labelled Op's per-period delta.
+
+        Not yet functional: the kernel does not emit increment fields, and
+        the builder refuses ``track_increments=True`` until it does (gh#69).
+        """
         if not self._compiled.ir.track_increments:
             msg = (
-                "rf.increment(...) requires the rollforward to be built with "
-                "track_increments=True"
+                "increment tracking is not yet implemented (gh#69): the "
+                "kernel does not emit increment fields, and the builder "
+                "refuses track_increments=True. Derive flows from captured "
+                "points instead."
             )
             raise ValueError(msg)
         from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr

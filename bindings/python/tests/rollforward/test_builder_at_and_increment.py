@@ -27,7 +27,6 @@ def b() -> RollforwardBuilder:
         states={"av": pl.col("init")},
         points=["bop", "post_coi", "eop"],
         schedule=sched,
-        track_increments=True,
     )
 
 
@@ -44,32 +43,14 @@ class TestAt:
 
 
 class TestIncrement:
-    def test_increment_records_label_request(self, b: RollforwardBuilder) -> None:
-        b["av"].add(pl.col("p"), label="Premium")
-        ref = b.increment("Premium")
-        # Returns an opaque IncrementRef that the compiler resolves to a Struct field
-        assert ref.label == "Premium"
+    # ``increment()`` is unreachable until the kernel emits increment
+    # fields: the builder refuses track_increments=True (gh#69), and
+    # without the flag the gate below fires. The IncrementRef round-trip
+    # tests return with the emission arc.
 
-    def test_increment_unknown_label_raises_at_lookup_time(
+    def test_increment_gate_names_the_unimplemented_feature(
         self,
         b: RollforwardBuilder,
     ) -> None:
-        # ``increment(label)`` construction is permissive — the compiler
-        # validates that the label was emitted by some op. At builder time
-        # this is a deferred check.
-        ref = b.increment("DoesNotExist")
-        assert ref.label == "DoesNotExist"
-
-    def test_increment_requires_track_increments_flag(self) -> None:
-        sched = Schedule.from_calendar_grid(
-            start_date=date(2025, 1, 31),
-            n_periods=12,
-            frequency="1M",
-        )
-        b_no_track = RollforwardBuilder(
-            states={"av": pl.col("init")},
-            schedule=sched,
-            track_increments=False,
-        )
-        with pytest.raises(ValueError, match="track_increments=True"):
-            b_no_track.increment("Anything")
+        with pytest.raises(ValueError, match="not yet implemented"):
+            b.increment("Anything")

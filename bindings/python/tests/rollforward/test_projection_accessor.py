@@ -40,7 +40,7 @@ class TestProjectionAccessor:
         rf = af.projection.rollforward(
             states={"av": pl.col("init")},
             points=("bop", "after", "eop"),
-            track_increments=True,
+            track_increments=False,
             lapse_when_all_non_positive=["av"],
             contract_boundary=pl.col("breach"),
             batch_axes=("policy",),

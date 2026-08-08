@@ -161,11 +161,17 @@ class CompiledRollforward:
         return self._field_expr(f"{state}@{point}")
 
     def increment_for(self, label: str) -> pl.Expr:
-        """Return a Polars Expr selecting the per-period delta for a labelled Op."""
+        """Return a Polars Expr selecting the per-period delta for a labelled Op.
+
+        Not yet functional: the kernel does not emit increment fields, and
+        the builder refuses ``track_increments=True`` until it does (gh#69).
+        """
         if not self.ir.track_increments:
             msg = (
-                "rf.increment(...) requires the rollforward to be built with "
-                "track_increments=True"
+                "increment tracking is not yet implemented (gh#69): the "
+                "kernel does not emit increment fields, and the builder "
+                "refuses track_increments=True. Derive flows from captured "
+                "points instead."
             )
             raise ValueError(msg)
         return self._field_expr(f"increment_{label}")

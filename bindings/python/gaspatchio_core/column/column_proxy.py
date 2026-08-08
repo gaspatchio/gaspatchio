@@ -360,8 +360,8 @@ class ColumnProxy:
         lazily extracts the ``Premium`` increment series from the hidden
         rollforward Struct column.
 
-        Only meaningful when the rollforward was built with
-        ``track_increments=True``.
+        Not yet functional: the kernel does not emit increment fields, and
+        the builder refuses ``track_increments=True`` until it does (gh#69).
         """
         return _RollforwardFieldAccessor(self._parent, self.name)
 
