@@ -83,3 +83,34 @@ def test_af_indexing_matches_pl_col() -> None:
     col_result = af_col.collect()
 
     assert proxy_result.equals(col_result)
+
+
+def test_expr_for_cooperates_with_proxies_in_either_order() -> None:
+    """``compiled.expr_for(...)`` carries the gh#67 interop, like Table.lookup."""
+    af = _make_frame()
+    b = af.projection.rollforward(states={"av": af["av_init"]})
+    b["av"].add(af["premium"], label="Premium").grow(
+        af["interest_rate"],
+        label="Interest",
+    )
+    compiled = compile_rollforward(b)
+    af.lhs = compiled.expr_for("av") * af["sum_assured"]
+    af.rhs = af["sum_assured"] * compiled.expr_for("av")
+    out = af.collect()
+    assert out.get_column("lhs").to_list() == out.get_column("rhs").to_list()
+
+
+def test_collector_expr_cooperates_with_proxies_in_either_order() -> None:
+    """The deprecated collector's self-contained exprs get the same interop."""
+    af = _make_frame()
+    b = af.projection.rollforward(states={"av": af["av_init"]})
+    b["av"].add(af["premium"], label="Premium").grow(
+        af["interest_rate"],
+        label="Interest",
+    )
+    compiled = compile_rollforward(b)
+    collector = RollforwardCollector(compiled)
+    af.lhs = collector.expr_for("av") * af["sum_assured"]
+    af.rhs = af["sum_assured"] * collector.expr_for("av")
+    out = af.collect()
+    assert out.get_column("lhs").to_list() == out.get_column("rhs").to_list()

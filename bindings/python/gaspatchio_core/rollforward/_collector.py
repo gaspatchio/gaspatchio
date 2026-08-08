@@ -52,7 +52,11 @@ class RollforwardCollector:
                 f"the point or use a state's eop"
             )
             raise KeyError(msg)
-        return self._shared_plugin_expr().struct.field(f"{state}@{point}")
+        from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
+
+        return ProxyAwareExpr.wrap(
+            self._shared_plugin_expr().struct.field(f"{state}@{point}"),
+        )
 
     def increment_for(self, label: str) -> pl.Expr:
         """Return a self-contained Expr for a labelled Op's per-period delta."""
@@ -62,7 +66,11 @@ class RollforwardCollector:
                 "track_increments=True"
             )
             raise ValueError(msg)
-        return self._shared_plugin_expr().struct.field(f"increment_{label}")
+        from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
+
+        return ProxyAwareExpr.wrap(
+            self._shared_plugin_expr().struct.field(f"increment_{label}"),
+        )
 
 
 __all__ = ["RollforwardCollector"]
