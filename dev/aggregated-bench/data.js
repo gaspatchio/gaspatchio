@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786180507379,
+  "lastUpdate": 1786231590779,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Aggregation Surface Benchmarks": [
@@ -11683,6 +11683,240 @@ window.BENCHMARK_DATA = {
           {
             "name": "L4 Aggregation/100K-spill-peak",
             "value": 2052.4,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4692029197f4eb802ca161b509f78b0d34a01bfb",
+          "message": "fix(accessors): gate list path on shape, not proxy type, so composed expressions convert element-wise (#105)\n\nto_monthly(), compound(), and cumulative_survival() gated their list\npath on isinstance(proxy, ColumnProxy), so a composed list-valued\nExpressionProxy fell through to the scalar path and refused to run at\ncollect (pow on list[f64], cum_prod on list). Gate on the resolved\nshape alone — the pattern PR #85 established for excel.round; both\nproxy types resolve .shape identically.\n\nServes 'Meet you where you are': a composed per-period expression is\nthe same shape the user already had, and the accessor now accepts it.\n\nFixes #86",
+          "timestamp": "2026-08-09T11:18:37+12:00",
+          "tree_id": "302976df27e98e9aba604bc033c6af1e96555af8",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/4692029197f4eb802ca161b509f78b0d34a01bfb"
+        },
+        "date": 1786231589431,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "L4 Aggregation/1K-baseline-wall",
+            "value": 0.341,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-agg-wall",
+            "value": 0.349,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-wall",
+            "value": 0.344,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-throughput",
+            "value": 2932.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-throughput",
+            "value": 2907,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-peak",
+            "value": 56.1,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-data-mb",
+            "value": 24.2,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-peak",
+            "value": 7.1,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-memory-ratio",
+            "value": 7.9,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/1K-speedup",
+            "value": 1.01,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/1K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-wall",
+            "value": 0.419,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-throughput",
+            "value": 2386.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-peak",
+            "value": 40.4,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-wall",
+            "value": 2.458,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-agg-wall",
+            "value": 2.483,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-wall",
+            "value": 2.519,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-throughput",
+            "value": 4068.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-throughput",
+            "value": 3969.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-peak",
+            "value": 241.6,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-data-mb",
+            "value": 252.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-peak",
+            "value": 88.9,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-memory-ratio",
+            "value": 2.72,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/10K-speedup",
+            "value": 0.99,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/10K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-wall",
+            "value": 3.378,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-throughput",
+            "value": 2960.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-peak",
+            "value": 336.6,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-wall",
+            "value": 23.537,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-agg-wall",
+            "value": 23.701,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-wall",
+            "value": 23.901,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-throughput",
+            "value": 4248.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-throughput",
+            "value": 4183.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-peak",
+            "value": 2515.6,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-data-mb",
+            "value": 2499.9,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-peak",
+            "value": 440,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-memory-ratio",
+            "value": 5.72,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/100K-speedup",
+            "value": 0.99,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/100K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-wall",
+            "value": 32.754,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-throughput",
+            "value": 3053.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-peak",
+            "value": 2029.9,
             "unit": "MB"
           }
         ]
