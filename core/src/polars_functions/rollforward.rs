@@ -111,12 +111,22 @@ pub enum OpV2 {
         target_state: usize,
         target_point: usize,
         rate_arg: ArgRef,
+        /// Round the computed charge (half away from zero) to this many
+        /// decimals before applying it, leaving the running state unrounded —
+        /// the placement spreadsheets use: `s -= ROUND(s * rate, d)`.
+        #[serde(default)]
+        round_charge: Option<i32>,
         label: Option<String>,
     },
     Grow {
         target_state: usize,
         target_point: usize,
         rate_arg: ArgRef,
+        /// Round the computed credit (half away from zero) to this many
+        /// decimals before applying it, leaving the running state unrounded —
+        /// the placement spreadsheets use: `s += ROUND(s * rate, d)`.
+        #[serde(default)]
+        round_charge: Option<i32>,
         label: Option<String>,
     },
     GrowCapped {
@@ -155,6 +165,13 @@ pub enum OpV2 {
         /// fixed-benefit branch is computed.
         #[serde(default)]
         corridor_factor_arg: Option<ArgRef>,
+        /// Round the COI charge (half away from zero) to this many decimals
+        /// before applying it, leaving the running state unrounded — the
+        /// placement spreadsheets use: `s -= ROUND(coi, d)`. Under the
+        /// end-of-period convention the exact charge is solved first, then
+        /// rounded — rounding does not participate in the closed-form solve.
+        #[serde(default)]
+        round_charge: Option<i32>,
         label: Option<String>,
     },
     Ratchet {
@@ -686,6 +703,26 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
     Ok(struct_chunked.into_series())
 }
 
+/// Round `x` to `decimals` places, half away from zero — Excel's ROUND.
+///
+/// Non-finite values pass through unchanged, and values whose scaled form
+/// overflows f64 are returned as-is: such a value has no decimal places left
+/// to round to anyway. Shared by the `Round` op (which rounds the running
+/// state) and the `round_charge` knob on flow-shaped ops (which rounds the
+/// individual charge or credit before it is applied, as spreadsheets do).
+fn round_half_away(x: f64, decimals: i32) -> f64 {
+    if !x.is_finite() {
+        return x;
+    }
+    let scale = 10f64.powi(decimals);
+    let scaled = x * scale;
+    if scaled.is_finite() {
+        scaled.round() / scale
+    } else {
+        x
+    }
+}
+
 /// Apply a single Op to the per-row state buffer at period ``t``.
 fn apply_op(
     op: &OpV2,
@@ -739,6 +776,7 @@ fn apply_op(
             target_state,
             target_point,
             rate_arg,
+            round_charge,
             ..
         } => {
             let r = resolve_arg(
@@ -751,13 +789,19 @@ fn apply_op(
                 stride_point,
             );
             let i = *target_state * stride_state + *target_point * stride_point + t;
-            state[i] *= 1.0 - r;
+            match round_charge {
+                // Spreadsheet placement: the charge is rounded, the state
+                // carries its sub-unit residue forward unrounded.
+                Some(d) => state[i] -= round_half_away(state[i] * r, *d),
+                None => state[i] *= 1.0 - r,
+            }
             Ok(())
         }
         OpV2::Grow {
             target_state,
             target_point,
             rate_arg,
+            round_charge,
             ..
         } => {
             // schedule dt is not threaded through yet — rates are taken
@@ -772,7 +816,12 @@ fn apply_op(
                 stride_point,
             );
             let i = *target_state * stride_state + *target_point * stride_point + t;
-            state[i] *= 1.0 + r;
+            match round_charge {
+                // Spreadsheet placement: the credit is rounded, the state
+                // carries its sub-unit residue forward unrounded.
+                Some(d) => state[i] += round_half_away(state[i] * r, *d),
+                None => state[i] *= 1.0 + r,
+            }
             Ok(())
         }
         OpV2::Floor {
@@ -793,20 +842,9 @@ fn apply_op(
         } => {
             let i = *target_state * stride_state + *target_point * stride_point + t;
             // f64::round() is half-away-from-zero, which is Excel's rule.
-            // Non-finite values pass through: rounding a NaN to 2dp would
-            // otherwise produce a NaN that looks deliberate.
-            if state[i].is_finite() {
-                let scale = 10f64.powi(*decimals);
-                let scaled = state[i] * scale;
-                // Above ~1e306 the scaling overflows to infinity, which would
-                // turn a representable balance into one that poisons every
-                // later period. Such a value has no decimal places left to
-                // round to anyway — f64 runs out of precision long before —
-                // so leaving it alone is both safe and correct.
-                if scaled.is_finite() {
-                    state[i] = scaled.round() / scale;
-                }
-            }
+            // Non-finite values and balances whose scaled form overflows pass
+            // through unchanged (see round_half_away).
+            state[i] = round_half_away(state[i], *decimals);
             Ok(())
         }
         OpV2::GrowCapped {
@@ -859,6 +897,7 @@ fn apply_op(
             coi_discount_rate_arg,
             credited_rate_arg,
             corridor_factor_arg,
+            round_charge,
             ..
         } => {
             let coi = resolve_arg(
@@ -976,6 +1015,14 @@ fn apply_op(
                     .into(),
                 ));
             }
+            // Spreadsheet placement: the charge is rounded, the state carries
+            // its sub-cent residue forward unrounded. Under end-of-period
+            // timing the exact charge is solved first, then rounded — the
+            // rounding does not participate in the closed-form solve.
+            let charge = match round_charge {
+                Some(d) => round_half_away(charge, *d),
+                None => charge,
+            };
             state[i] -= charge;
             Ok(())
         }
@@ -1687,5 +1734,137 @@ mod tests {
         let row: Vec<f64> = (0..f.len()).map(|i| f.get(i).unwrap()).collect();
         // The flag is true in every period, so the ratchet fires every period.
         assert_eq!(row, vec![150.0, 150.0, 150.0]);
+    }
+
+    #[test]
+    fn round_half_away_is_excels_round() {
+        // Ties chosen to be exact in binary so the rule, not representation,
+        // is what's under test.
+        assert_eq!(round_half_away(2.5, 0), 3.0);
+        assert_eq!(round_half_away(-2.5, 0), -3.0);
+        assert_eq!(round_half_away(0.375, 2), 0.38);
+        assert_eq!(round_half_away(-0.375, 2), -0.38);
+        assert_eq!(round_half_away(125.0, -1), 130.0);
+        // Non-finite and overflow-on-scale values pass through unchanged.
+        assert!(round_half_away(f64::NAN, 2).is_nan());
+        assert_eq!(round_half_away(f64::INFINITY, 2), f64::INFINITY);
+        assert_eq!(round_half_away(1.7e308, 2), 1.7e308);
+    }
+
+    /// One-state, one-input helper: run `ops_json` over 2 periods with the
+    /// given init and per-period input values, returning the eop capture row.
+    fn run_one_input(init_v: f64, input: Vec<f64>, ops_json: &str) -> Vec<f64> {
+        let init = Series::new("av_init".into(), vec![init_v]);
+        let inp =
+            ListChunked::from_iter([Some(Series::new("".into(), input.clone()))]).into_series();
+        let kwargs_json = format!(
+            r#"{{
+            "ir": {{"states": [{{"name": "av"}}], "points": ["bop", "eop"], "transitions": []}},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": {},
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["x"],
+            "ops": [{}],
+            "captures_resolved": [{{"state": 0, "point": 1}}]
+        }}"#,
+            input.len(),
+            ops_json
+        );
+        let kwargs: RollforwardKwargs = serde_json::from_str(&kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, inp], &kwargs).unwrap();
+        let field = out.struct_().unwrap().fields_as_series()[0].clone();
+        let s = field.list().unwrap().get_as_series(0).unwrap();
+        let f = s.f64().unwrap();
+        (0..f.len()).map(|i| f.get(i).unwrap()).collect()
+    }
+
+    #[test]
+    fn charge_round_charge_rounds_the_flow_not_the_state() {
+        // Spreadsheet placement: s -= ROUND(s * rate, 2), state unrounded.
+        // t1: 1000 * 0.033333 = 33.333 -> 33.33; s = 966.67
+        // t2: 966.67 * 0.033333 = 32.2221... -> 32.22; s = 934.45
+        let row = run_one_input(
+            1000.0,
+            vec![0.033333, 0.033333],
+            r#"{"op": "Charge", "target_state": 0, "target_point": 1,
+                "rate_arg": {"kind": "input", "idx": 0},
+                "round_charge": 2, "label": null}"#,
+        );
+        assert!((row[0] - 966.67).abs() < 1e-9, "t1: {}", row[0]);
+        assert!((row[1] - 934.45).abs() < 1e-9, "t2: {}", row[1]);
+    }
+
+    #[test]
+    fn grow_round_charge_rounds_the_credit() {
+        // s += ROUND(s * rate, 2): 1000 * 0.0333333 = 33.3333 -> 33.33.
+        let row = run_one_input(
+            1000.0,
+            vec![0.0333333],
+            r#"{"op": "Grow", "target_state": 0, "target_point": 1,
+                "rate_arg": {"kind": "input", "idx": 0},
+                "round_charge": 2, "label": null}"#,
+        );
+        assert!((row[0] - 1033.33).abs() < 1e-9, "t1: {}", row[0]);
+    }
+
+    #[test]
+    fn deduct_nar_round_charge_rounds_the_solved_coi() {
+        // BOP: NAR = 10000 - 1000 = 9000; charge = 9000 * 0.0012345
+        // = 11.1105 -> ROUND -> 11.11; s = 988.89 (unrounded state would
+        // be 988.8895).
+        let init = Series::new("av_init".into(), vec![1000.0]);
+        let coi =
+            ListChunked::from_iter([Some(Series::new("".into(), vec![0.0012345]))]).into_series();
+        let db =
+            ListChunked::from_iter([Some(Series::new("".into(), vec![10000.0]))]).into_series();
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 1,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["coi", "db"],
+            "ops": [{"op": "DeductNAR", "target_state": 0, "target_point": 1,
+                     "coi_rate_arg": {"kind": "input", "idx": 0},
+                     "death_benefit_arg": {"kind": "input", "idx": 1},
+                     "nar_at_end_of_period": false,
+                     "round_charge": 2, "label": null}],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, coi, db], &kwargs).unwrap();
+        let field = out.struct_().unwrap().fields_as_series()[0].clone();
+        let s = field.list().unwrap().get_as_series(0).unwrap();
+        let v = s.f64().unwrap().get(0).unwrap();
+        assert!((v - 988.89).abs() < 1e-9, "eop: {v}");
+    }
+
+    #[test]
+    fn round_charge_defaults_absent_in_serialised_ops() {
+        // Ops serialised before the knob existed must still deserialise,
+        // with the unrounded behaviour.
+        let json = r#"{
+            "op": "Charge",
+            "target_state": 0,
+            "target_point": 1,
+            "rate_arg": {"kind": "input", "idx": 0},
+            "label": null
+        }"#;
+        let op: OpV2 = serde_json::from_str(json).unwrap();
+        match op {
+            OpV2::Charge { round_charge, .. } => assert!(round_charge.is_none()),
+            _ => panic!("expected Charge"),
+        }
     }
 }

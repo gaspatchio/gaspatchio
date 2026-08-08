@@ -98,6 +98,7 @@ class TestExtendedKwargs:
                 "target_state": 0,
                 "target_point": 1,
                 "rate_arg": {"kind": "input", "idx": 1},
+                "round_charge": None,
                 "label": "G",
             },
             {

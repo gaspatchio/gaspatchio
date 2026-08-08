@@ -212,20 +212,65 @@ class _StateHandle:
         self._b._transitions.append(op)
         return self
 
-    def charge(self, rate: ExprLike, *, label: str | None = None) -> _StateHandle:
+    def charge(
+        self,
+        rate: ExprLike,
+        *,
+        round_charge: int | None = None,
+        label: str | None = None,
+    ) -> _StateHandle:
+        """Deduct ``rate`` of the running balance.
+
+        Args:
+            rate: Charge rate per period, as a fraction of the balance.
+            round_charge: Round the computed charge (half away from zero,
+                Excel's ROUND) to this many decimals before applying it —
+                ``s -= ROUND(s*rate, d)`` — leaving the state to carry its
+                sub-unit residue forward, the placement spreadsheets use.
+                Contrast ``.round(d)``, which rounds the balance itself and
+                discards the residue every period.
+            label: Names this charge in the increment breakdown.
+
+        Returns:
+            The state handle, for chaining.
+
+        """
         op = Charge(
             target=StateRef(state=self._state, point=self._target_point()),
             rate=_to_polars_expr(rate),
+            round_charge=round_charge,
             label=label,
         )
         op.verify()
         self._b._transitions.append(op)
         return self
 
-    def grow(self, rate: ExprLike, *, label: str | None = None) -> _StateHandle:
+    def grow(
+        self,
+        rate: ExprLike,
+        *,
+        round_charge: int | None = None,
+        label: str | None = None,
+    ) -> _StateHandle:
+        """Grow the running balance by ``rate``.
+
+        Args:
+            rate: Growth rate per period, as quoted (no schedule ``dt``
+                scaling — pre-scale an annual rate to the projection
+                frequency yourself).
+            round_charge: Round the computed credit before applying it —
+                ``s += ROUND(s*rate, d)`` — the spreadsheet placement (see
+                ``charge``).
+            label: Names this credit in the increment breakdown.
+
+        Returns:
+            The state handle, for chaining.
+
+        """
         op = Grow(
             target=StateRef(state=self._state, point=self._target_point()),
             rate=_to_polars_expr(rate),
+            round_charge=round_charge,
             label=label,
         )
         op.verify()
@@ -260,6 +305,7 @@ class _StateHandle:
         coi_discount_rate: ExprLike | None = None,
         credited_rate: ExprLike | None = None,
         corridor_factor: ExprLike | None = None,
+        round_charge: int | None = None,
         label: str | None = None,
     ) -> _StateHandle:
         """Charge a cost of insurance on the net amount at risk.
@@ -288,6 +334,14 @@ class _StateHandle:
                 **Omit it only for a policy whose account value can never
                 approach its face amount** — without it, a well-funded policy
                 produces a negative amount at risk, which is refused.
+            round_charge: Round the COI charge (half away from zero, Excel's
+                ROUND) to this many decimals before applying it —
+                ``s -= ROUND(coi, d)`` — leaving the state to carry its
+                sub-cent residue forward, which is how spreadsheets place
+                their ROUND. Under ``"end_of_period"`` timing the exact
+                charge is solved first, then rounded — the rounding does not
+                participate in the closed-form solve. Contrast ``.round(d)``,
+                which rounds the balance itself.
             label: Names this deduction in the increment breakdown.
 
         Returns:
@@ -312,6 +366,7 @@ class _StateHandle:
             corridor_factor=(
                 None if corridor_factor is None else _to_polars_expr(corridor_factor)
             ),
+            round_charge=round_charge,
             label=label,
         )
         op.verify()
@@ -357,6 +412,12 @@ class _StateHandle:
         Place this where the source model rounds. Rounding inside a recursion is
         not the same as rounding the answer: each rounded balance opens the next
         period, so the difference compounds over the projection.
+
+        This rounds the **balance**. Sheets that round the individual charge —
+        ``s -= ROUND(coi, 2)`` with the balance left unrounded — are the
+        ``round_charge=`` parameter on ``charge``/``grow``/``deduct_nar``
+        instead; the two placements agree only while the balance is an exact
+        multiple of the rounding unit.
 
         """
         op = Round(
