@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786179010726,
+  "lastUpdate": 1786179543752,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Aggregation Surface Benchmarks": [
@@ -11215,6 +11215,240 @@ window.BENCHMARK_DATA = {
           {
             "name": "L4 Aggregation/100K-spill-peak",
             "value": 1662,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5007e1c420fa6733b79df1fa9f0a8f1ea4137e73",
+          "message": "docs(agents): skill routing table names the real skill names (#99)\n\nThe routing table listed quickstart, model-building, etc. — names that\nexist nowhere: the canonical names are gaspatchio-quickstart and\nfriends, and Claude Code invokes them plugin-prefixed as\ngaspatchio:gaspatchio-model-building. An agent following the table as\nwritten asks for skills that don't resolve. Also adds the missing\ngaspatchio-extending row and fixes the reversed extending-gaspatchio\nreference in the Extending section. Flagged in round one of the UL\nconversion (P2 loose end); made urgent by the clean-room rerun, where\nskill routing is the variable under test. copilot-instructions\nregenerated.",
+          "timestamp": "2026-08-08T20:50:59+12:00",
+          "tree_id": "e2d61fbc1c7559db7519e1f3c3312a2c4d15d2e6",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/5007e1c420fa6733b79df1fa9f0a8f1ea4137e73"
+        },
+        "date": 1786179542182,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "L4 Aggregation/1K-baseline-wall",
+            "value": 0.341,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-agg-wall",
+            "value": 0.35,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-wall",
+            "value": 0.353,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-throughput",
+            "value": 2932.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-throughput",
+            "value": 2832.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-peak",
+            "value": 55.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-data-mb",
+            "value": 24.2,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-peak",
+            "value": 7.6,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-memory-ratio",
+            "value": 7.34,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/1K-speedup",
+            "value": 0.99,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/1K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-wall",
+            "value": 0.433,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-throughput",
+            "value": 2309.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-peak",
+            "value": 42.6,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-wall",
+            "value": 2.482,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-agg-wall",
+            "value": 2.511,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-wall",
+            "value": 2.561,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-throughput",
+            "value": 4029,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-throughput",
+            "value": 3904.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-peak",
+            "value": 257.6,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-data-mb",
+            "value": 252.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-peak",
+            "value": 84.4,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-memory-ratio",
+            "value": 3.05,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/10K-speedup",
+            "value": 0.98,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/10K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-wall",
+            "value": 3.382,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-throughput",
+            "value": 2956.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-peak",
+            "value": 361.3,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-wall",
+            "value": 23.681,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-agg-wall",
+            "value": 23.839,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-wall",
+            "value": 24.136,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-throughput",
+            "value": 4222.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-throughput",
+            "value": 4143.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-peak",
+            "value": 2470.5,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-data-mb",
+            "value": 2499.9,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-peak",
+            "value": 511.2,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-memory-ratio",
+            "value": 4.83,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/100K-speedup",
+            "value": 0.99,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/100K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-wall",
+            "value": 33.132,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-throughput",
+            "value": 3018.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-peak",
+            "value": 1896,
             "unit": "MB"
           }
         ]
