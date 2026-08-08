@@ -80,10 +80,15 @@ class CompiledRollforward:
         """
         import polars as pl
 
+        from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
         from gaspatchio_core.rollforward import _registry
 
         _registry.register(self._hidden_column, self._cached_plugin_expr)
-        return pl.col(self._hidden_column).struct.field(field_name)
+        # Wrapped so extractions cooperate with af-column operands in either
+        # operand order (gh#67) — same contract as Table.lookup.
+        return ProxyAwareExpr.wrap(
+            pl.col(self._hidden_column).struct.field(field_name),
+        )
 
     def expr_for(self, state: str, *, point: str = "eop") -> pl.Expr:
         """Return a Polars Expr selecting the per-period values for (state, point).

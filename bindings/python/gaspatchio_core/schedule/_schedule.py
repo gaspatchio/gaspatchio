@@ -37,12 +37,37 @@ boundaries that align with the timeline indices.
 from __future__ import annotations
 
 import calendar as _stdlib_calendar
+import functools
 import hashlib
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+def _proxy_aware(fn: Callable[..., pl.Expr]) -> Callable[..., pl.Expr]:
+    """Wrap an ``Expr``-returning method for proxy interop in either operand order.
+
+    ``pl.Expr`` raises on a ``ColumnProxy`` operand instead of returning
+    ``NotImplemented`` (gh#67), so every schedule expression a model can
+    combine with ``af`` columns is rebuilt as a ``ProxyAwareExpr`` — the same
+    contract as ``Table.lookup``. The import happens at call time: the column
+    package pulls in the frame package, which this module must not import at
+    module scope.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> pl.Expr:  # noqa: ANN401
+        from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
+
+        return ProxyAwareExpr.wrap(fn(*args, **kwargs))
+
+    return wrapper
+
 from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 
 from gaspatchio_core._identity import canonical_bytes
@@ -375,6 +400,7 @@ class Schedule:
             until_value_column=until_value_column,
         )
 
+    @_proxy_aware
     def per_policy_period_dates_expr(self) -> pl.Expr:
         """Return a variable-length List<Date> per row for a ``per_policy_grid``.
 
@@ -401,6 +427,7 @@ class Schedule:
         interval = _SCHED_FREQ_TO_INTERVAL[self.frequency]
         return pl.date_ranges(start=start, end=end, interval=interval, closed="both")
 
+    @_proxy_aware
     def per_policy_period_count_expr(self) -> pl.Expr:
         """Return each policy's period count (= boundaries - 1) for a jagged grid.
 
@@ -455,6 +482,7 @@ class Schedule:
             out.append(d)
         return out
 
+    @_proxy_aware
     def period_dates_expr(self) -> pl.Expr:
         """Return a Polars expression yielding a List<Date> per row.
 
@@ -532,6 +560,7 @@ class Schedule:
             for t in range(self.n_periods)
         ]
 
+    @_proxy_aware
     def year_fractions_expr(self) -> pl.Expr:
         """Return a Polars expression yielding a List<Float64> dt[t] series per row.
 
@@ -682,6 +711,7 @@ class Schedule:
         step = self._anniversary_period_count()
         return [(t + 1) % step == 0 for t in range(self.n_periods)]
 
+    @_proxy_aware
     def anniversary_mask_expr(self) -> pl.Expr:
         """Return a per-row boolean list expression marking contract anniversaries.
 
@@ -789,6 +819,7 @@ class Schedule:
         years_to_add = n - 1 if candidate >= valuation_date else n
         return _safe_anniversary(val_year + years_to_add, incep_month, incep_day)
 
+    @_proxy_aware
     def is_in_force_expr(
         self,
         *,
@@ -859,6 +890,7 @@ class Schedule:
         mask_exprs = [(pe <= end_col).fill_null(True) for pe in period_end_exprs]  # noqa: FBT003
         return pl.concat_list(mask_exprs)
 
+    @_proxy_aware
     def contract_boundary_expr(
         self,
         *,

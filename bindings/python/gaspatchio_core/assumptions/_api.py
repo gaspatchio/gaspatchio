@@ -30,6 +30,7 @@ from loguru import logger
 from polars.plugins import register_plugin_function
 
 from .._internal import PyAssumptionTableRegistry
+from ..column.proxy_aware_expr import ProxyAwareExpr
 from ._analysis import TableSchema, analyze_table
 from ._dimensions import DataDimension, Dimension
 from ._utils import _convert_keys_to_f64, _materialise
@@ -845,6 +846,16 @@ class Table:
         3. Or both combined:
            table.lookup({"policy duration": af["duration"]}, age=af["age"])
 
+        The returned expression cooperates with ``af`` columns in either
+        operand order: ``table.lookup(...) * af.pols`` and
+        ``af.pols * table.lookup(...)`` agree, including the list-column
+        operator shims (``**`` on per-period columns). That guarantee covers
+        *operators* only — an Expr method call (``.clip()``,
+        ``.fill_null()``, …) returns a plain polars expression, after which
+        a proxy operand raises again. For method chains, assign the lookup
+        to a column first (``af.mort_rate = table.lookup(...)``) and
+        continue from the column.
+
         Args:
             _dimensions: Optional dictionary mapping dimension names to columns/expressions
             on_missing: Per-lookup override of the table's miss policy -
@@ -1065,16 +1076,22 @@ class Table:
         # is_elementwise=True: each row's lookup depends only on that row's keys,
         # not on other rows. This enables the Polars streaming engine to process
         # the query in chunks without falling back to in-memory execution.
-        return register_plugin_function(
-            plugin_path=LIB,
-            function_name="lookup_by_table_and_hash",  # Must match #[polars_expr] function name
-            args=key_exprs,
-            kwargs={
-                "table_name": self._name,
-                "on_missing": miss_mode,
-                "fill_value": miss_fill,
-            },
-            is_elementwise=True,
+        #
+        # Wrapped so `lookup(...) * af.col` works in either operand order —
+        # a bare pl.Expr raises on a proxy operand before the proxy's
+        # reflected method can run (gh#67).
+        return ProxyAwareExpr.wrap(
+            register_plugin_function(
+                plugin_path=LIB,
+                function_name="lookup_by_table_and_hash",  # Must match #[polars_expr] function name
+                args=key_exprs,
+                kwargs={
+                    "table_name": self._name,
+                    "on_missing": miss_mode,
+                    "fill_value": miss_fill,
+                },
+                is_elementwise=True,
+            )
         )
 
     def extend(
