@@ -60,15 +60,16 @@ class RollforwardCollector:
     def increment_for(self, label: str) -> pl.Expr:
         """Return a self-contained Expr for a labelled Op's per-period delta.
 
-        Not yet functional: the kernel does not emit increment fields, and
-        the builder refuses ``track_increments=True`` until it does (gh#69).
+        The delta is signed — what the op actually applied to its target:
+        negative for charges, positive for credits, zero after a stop or
+        lapse (the kernel applied nothing, where a source sheet may keep
+        computing a notional charge).
         """
         if not self._compiled.ir.track_increments:
             msg = (
-                "increment tracking is not yet implemented (gh#69): the "
-                "kernel does not emit increment fields, and the builder "
-                "refuses track_increments=True. Derive flows from captured "
-                "points instead."
+                "increment_for(): this rollforward was built without "
+                "track_increments=True, so the kernel emits no increment "
+                "fields. Pass track_increments=True to the builder."
             )
             raise ValueError(msg)
         from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr

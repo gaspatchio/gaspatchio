@@ -159,7 +159,7 @@ fn rollforward_output(
         })
         .collect::<PolarsResult<Vec<_>>>()?;
 
-    let fields: Vec<Field> = kwargs
+    let mut fields: Vec<Field> = kwargs
         .captures_resolved
         .iter()
         .map(|cap| {
@@ -170,6 +170,19 @@ fn rollforward_output(
             )
         })
         .collect();
+
+    // Increment fields (track_increments): the same helper the kernel's
+    // emission uses, so the declared schema and the emitted struct cannot
+    // drift apart.
+    for (_, label) in
+        gaspatchio_core_lib::polars_functions::rollforward::labelled_increments(&kwargs)?
+    {
+        let name = format!("increment_{label}");
+        fields.push(Field::new(
+            PlSmallStr::from(name.as_str()),
+            DataType::List(Box::new(DataType::Float64)),
+        ));
+    }
 
     Ok(Field::new(
         PlSmallStr::from_static("rollforward"),
