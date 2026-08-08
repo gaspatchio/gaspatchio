@@ -27,7 +27,6 @@ class TestUlSmoke:
             states={"av": pl.col("av_init")},
             points=["bop", "post_coi", "eop"],
             schedule=sched,
-            track_increments=True,
         )
 
         b["av"].between("bop", "post_coi").add(
