@@ -310,6 +310,32 @@ def _apply_addsub_broadcast(
     return base_expr, a
 
 
+def _pow_arg_is_list(a: tuple[Any, ...], parent_af: ActuarialFrame | None) -> bool:
+    """Whether any ``pow`` operand is list-shaped.
+
+    Proxy operands carry a resolved ``.shape``; a bare expression operand
+    (e.g. ``Table.lookup`` over a list key) does not, so its shape is
+    resolved from the schema the same way ``ExpressionProxy`` does (gh#89).
+    """
+    if not a or parent_af is None:
+        return False
+    from .column_proxy import ColumnProxy
+    from .expression_proxy import ExpressionProxy
+    from .shape import _shape_from_expr_dtype
+
+    for arg in a:
+        if isinstance(arg, (ColumnProxy, ExpressionProxy)):
+            arg_is_list = arg.shape == "list"
+        elif isinstance(arg, pl.Expr):
+            arg_is_list = _shape_from_expr_dtype(parent_af, arg) == "list"
+        else:
+            arg_is_list = False
+        if arg_is_list:
+            logger.trace(f"Pow argument {arg!r} is list-shaped")
+            return True
+    return False
+
+
 def _method_caller(  # noqa: PLR0913
     *,
     name: str,
@@ -321,16 +347,7 @@ def _method_caller(  # noqa: PLR0913
     kw: dict,
 ) -> Any:  # noqa: ANN401
     """Execute the delegated method with proper list-type handling."""
-    pow_arg_is_list = False
-    if name == "pow" and a and parent_af:
-        from .column_proxy import ColumnProxy
-        from .expression_proxy import ExpressionProxy
-
-        for arg in a:
-            if isinstance(arg, (ColumnProxy, ExpressionProxy)) and arg.shape == "list":
-                pow_arg_is_list = True
-                logger.trace(f"Pow argument {arg!r} is list-shaped")
-                break
+    pow_arg_is_list = name == "pow" and _pow_arg_is_list(a, parent_af)
 
     # polars broadcasts a scalar into list arithmetic for + and - only when
     # the scalar side is a LEAF (bare column or literal); a COMPOUND scalar
