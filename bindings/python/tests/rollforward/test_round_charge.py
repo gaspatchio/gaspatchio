@@ -98,6 +98,19 @@ def test_round_charge_differs_from_state_round() -> None:
     assert charge_placement != state_placement
 
 
+def test_round_charge_type_is_validated() -> None:
+    """A non-int precision is refused at construction, not at Rust deserialization.
+
+    2.0 and True both survive the range check (bool is an int subclass) and
+    would otherwise travel to the kernel's Option<i32>, failing far from the
+    user's line with a serde error that never names round_charge.
+    """
+    with pytest.raises(TypeError, match="round_charge"):
+        Grow(target=None, rate=pl.lit(0.1), round_charge=2.0).verify()  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="round_charge"):
+        Grow(target=None, rate=pl.lit(0.1), round_charge=True).verify()  # type: ignore[arg-type]
+
+
 def test_round_charge_bounds_are_validated() -> None:
     """Out-of-range precision is refused at construction, as Round does."""
     with pytest.raises(ValueError, match="round_charge"):

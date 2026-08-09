@@ -46,6 +46,16 @@ def _verify_round_charge(round_charge: int | None, op_name: str) -> None:
     """Reject a charge-rounding precision the kernel cannot apply meaningfully."""
     if round_charge is None:
         return
+    # bool is an int subclass and 2.0 passes the range check; both would only
+    # fail later, deep in the kernel's Option<i32> deserialization, with an
+    # error that never names round_charge.
+    if isinstance(round_charge, bool) or not isinstance(round_charge, int):
+        msg = (
+            f"{op_name}: round_charge must be an int number of decimal places "
+            f"or None, got {round_charge!r} ({type(round_charge).__name__}). "
+            f"Use 2 for currency."
+        )
+        raise TypeError(msg)
     if not -_MAX_ROUND_DECIMALS <= round_charge <= _MAX_ROUND_DECIMALS:
         msg = (
             f"{op_name}: round_charge must be between {-_MAX_ROUND_DECIMALS} "
@@ -109,9 +119,10 @@ class Charge(Op):
 
 @dataclass(frozen=True)
 class Grow(Op):
-    """``s *= 1 + rate[t]`` — the rate is applied as quoted per period; the
-    schedule ``dt`` is not threaded through, so pre-scale an annual rate to the
-    projection frequency yourself (e.g. a monthly rate for a monthly grid).
+    """``s *= 1 + rate[t]`` — the rate is applied as quoted per period.
+
+    The schedule ``dt`` is not threaded through, so pre-scale an annual rate to
+    the projection frequency yourself (e.g. a monthly rate for a monthly grid).
 
     ``round_charge`` rounds the computed credit before applying it —
     ``s += ROUND(s*rate, d)`` — the spreadsheet placement (see ``Charge``).
@@ -128,8 +139,10 @@ class Grow(Op):
 
 @dataclass(frozen=True)
 class GrowCapped(Op):
-    """``s *= 1 + clamp(rate[t], floor, cap)`` — IUL crediting; rate applied as
-    quoted per period (no schedule ``dt`` scaling — pre-scale to the period).
+    """``s *= 1 + clamp(rate[t], floor, cap)`` — IUL crediting.
+
+    The rate is applied as quoted per period (no schedule ``dt`` scaling —
+    pre-scale to the period).
     """
 
     target: StateRef
