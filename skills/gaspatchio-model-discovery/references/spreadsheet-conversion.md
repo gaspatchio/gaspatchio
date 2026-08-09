@@ -39,6 +39,37 @@ SELECT name, destinations FROM defined_names;
 column becomes one binding with one `formula_pattern`. A sheet of 1,997 formulas
 routinely reduces to ~20 labelled variables, which *is* your model's variable list.
 
+**`formula_pattern` is one row's formula and cannot signal a mixed binding.** The
+schema stores a single formula id per binding, so when a binding merges rows with
+different formulas the column shows one of them — in the observed cases the *first*
+row's, which is very often the special case, not the rule (upstream:
+gaspatchio/xl-marinade#12). Never treat it as authoritative: for every binding that
+matters, read the full distribution over the binding's row range before trusting the
+pattern:
+
+```python
+import re
+from collections import Counter
+
+# `address` comes straight from the agent_bindings query above — a
+# sheet-qualified A1 range like "Projection!J16:J117". agent_cells_light
+# stores row/col as 1-based numbers (column J is 10), so parse the range;
+# binding the letter "J" matches nothing, silently.
+sheet, rng = address.rsplit("!", 1)
+col_letters, first_row, last_row = re.match(r"([A-Z]+)(\d+):[A-Z]+(\d+)", rng).groups()
+col = sum((ord(c) - 64) * 26**i for i, c in enumerate(reversed(col_letters)))
+
+rows = con.execute(
+    "SELECT formula_r1c1 FROM agent_cells_light "
+    "WHERE sheet=? AND col=? AND row BETWEEN ? AND ? AND formula_r1c1 IS NOT NULL",
+    (sheet, col, int(first_row), int(last_row)),
+)
+print(Counter(f for (f,) in rows).most_common())
+```
+
+One dominant formula plus a handful of outliers is the signature of a special-cased
+first row or a gated later block — read the outlier rows in full.
+
 **`.xlsm` files need the `vba` extra.** Without it the VBA tables are silently empty and
 you may conclude a workbook has no user-defined functions when it has several.
 
@@ -86,8 +117,9 @@ E5   IF(R4 > 0, VLOOKUP(B5, premiums, 3), 0)       <- R = prior EOY account valu
 
 Only row 4 is a plain lookup. Every later row is gated on the prior period's closing
 balance, which puts both variables inside the cycle. **Read more than the first data
-row** — spreadsheets very often special-case it, and `formula_pattern` reports the
-dominant pattern, not the exception.
+row** — spreadsheets very often special-case it, and on a merged mixed binding
+`formula_pattern` is one row's formula, which can be precisely that special case.
+The distribution query above is what tells you; the pattern column cannot.
 
 ## Timing conventions: check, never assume
 
