@@ -48,12 +48,21 @@ matters, read the full distribution over the binding's row range before trusting
 pattern:
 
 ```python
+import re
 from collections import Counter
+
+# `address` comes straight from the agent_bindings query above — a
+# sheet-qualified A1 range like "Projection!J16:J117". agent_cells_light
+# stores row/col as 1-based numbers (column J is 10), so parse the range;
+# binding the letter "J" matches nothing, silently.
+sheet, rng = address.rsplit("!", 1)
+col_letters, first_row, last_row = re.match(r"([A-Z]+)(\d+):[A-Z]+(\d+)", rng).groups()
+col = sum((ord(c) - 64) * 26**i for i, c in enumerate(reversed(col_letters)))
 
 rows = con.execute(
     "SELECT formula_r1c1 FROM agent_cells_light "
     "WHERE sheet=? AND col=? AND row BETWEEN ? AND ? AND formula_r1c1 IS NOT NULL",
-    (sheet, col, first_row, last_row),
+    (sheet, col, int(first_row), int(last_row)),
 )
 print(Counter(f for (f,) in rows).most_common())
 ```
