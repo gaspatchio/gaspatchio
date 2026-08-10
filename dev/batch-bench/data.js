@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785743247940,
+  "lastUpdate": 1786340551624,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Batch Search": [
@@ -334,6 +334,73 @@ window.BENCHMARK_DATA = {
           {
             "name": "Batch Search/100K-10sc-auto-peak",
             "value": 4757.9,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Matt Wright",
+            "username": "mrmattwright",
+            "email": "1277725+mrmattwright@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0c0884e2385c1f4924f10f9d668997c56239d7d6",
+          "message": "docs(skills): formula_pattern cannot signal a mixed binding — teach the distribution query (#107)\n\n* docs(skills): formula_pattern is one row's formula — teach the distribution query, not trust in the column\n\nThe conversion reference claimed formula_pattern 'reports the dominant\npattern, not the exception'; on merged mixed bindings it reports one\nrow's formula — in the observed cases the first row's, which is\nprecisely the exception (upstream: gaspatchio/xl-marinade#12, the\nschema stores a single formula id per binding). Replace the claim with\nthe defensive truth and the Counter-over-formula_r1c1 idiom the\nround-three clean-room run used to catch it.\n\nRefs #103\n\n* docs(skills): make the distribution query runnable from the binding row\n\nThe worked example bound sheet/col/first_row/last_row without saying where\nthey come from, and agent_cells_light stores col as a 1-based number — a\nreader deriving the letter from the binding address gets zero rows with no\nerror. Parse the binding's own A1 range instead; snippet executed against a\nreal IR (capital-regimes erm-153 extract) before committing.\n\nAddresses Greptile review on #107.",
+          "timestamp": "2026-08-09T08:20:55Z",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/0c0884e2385c1f4924f10f9d668997c56239d7d6"
+        },
+        "date": 1786340550543,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Batch Search/1K-100sc-auto-wall",
+            "value": 25.055,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-100sc-auto-peak",
+            "value": 791.6,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/1K-100sc-checksum",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-wall",
+            "value": 369.924,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-peak",
+            "value": 467.1,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-wall",
+            "value": 176.625,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-peak",
+            "value": 755.4,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-wall",
+            "value": 175.112,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-peak",
+            "value": 4757.2,
             "unit": "MB"
           }
         ]
