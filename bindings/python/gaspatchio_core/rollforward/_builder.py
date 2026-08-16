@@ -82,20 +82,6 @@ class RollforwardBuilder:
         contract_boundary: ExprLike | None = None,
         batch_axes: tuple[str, ...] = ("policy",),
     ) -> None:
-        # Refuse the unimplemented feature at the call that asks for it,
-        # not at collect time as a missing struct field (gh#69).
-        if track_increments:
-            msg = (
-                "track_increments=True is not yet implemented: the kernel "
-                "does not yet emit increment fields, so increment_for() "
-                "would fail at collect time as a missing struct field "
-                "(gh#69). Build without track_increments and derive flows "
-                "from captured points instead — noting that state "
-                "differences read as zero after lapse, where a source "
-                "model may still report a notional charge."
-            )
-            raise NotImplementedError(msg)
-
         # Validate points
         pts = tuple(points) if points is not None else ("bop", "eop")
         if "bop" not in pts or "eop" not in pts:
@@ -141,10 +127,10 @@ class RollforwardBuilder:
     def increment(self, label: str) -> IncrementRef:
         if not self._track_increments:
             msg = (
-                "increment tracking is not yet implemented (gh#69): the "
-                "kernel does not emit increment fields, and the builder "
-                "refuses track_increments=True. Derive flows from captured "
-                "points instead."
+                "increment(): this rollforward was built without "
+                "track_increments=True, so the kernel emits no increment "
+                "fields. Pass track_increments=True to the builder to get "
+                "per-period deltas for every labelled op."
             )
             raise ValueError(msg)
         return IncrementRef(label=label)

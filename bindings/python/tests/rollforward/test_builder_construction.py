@@ -46,17 +46,15 @@ class TestBuilderConstruction:
         assert list(b._state_inits.keys()) == ["av", "guarantee"]
         assert b._points == ("bop", "after_growth", "eop")
 
-    def test_track_increments_flag_refused_until_kernel_emits(
-        self, monthly_sched: Schedule
-    ) -> None:
-        # gh#69: the kernel does not emit increment fields yet, so the
-        # builder refuses the flag at the call that asks for it.
-        with pytest.raises(NotImplementedError, match="gh#69"):
-            RollforwardBuilder(
-                states={"av": pl.col("init")},
-                schedule=monthly_sched,
-                track_increments=True,
-            )
+    def test_track_increments_flag_accepted(self, monthly_sched: Schedule) -> None:
+        # gh#69: the kernel emits increment fields, so the flag builds.
+        # Emission semantics are covered in test_track_increments_emission.py.
+        b = RollforwardBuilder(
+            states={"av": pl.col("init")},
+            schedule=monthly_sched,
+            track_increments=True,
+        )
+        assert b._track_increments is True
 
     def test_lapse_kwarg(self, monthly_sched: Schedule) -> None:
         b = RollforwardBuilder(
