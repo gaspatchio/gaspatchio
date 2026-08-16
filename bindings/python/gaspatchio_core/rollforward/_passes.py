@@ -44,6 +44,27 @@ if TYPE_CHECKING:
     from gaspatchio_core.rollforward._ops import Op
 
 
+def _verify_unique_increment_labels(ir: IR) -> None:
+    """Refuse duplicate labels under track_increments.
+
+    Each labelled op emits its own ``increment_{label}`` struct field, so
+    labels must be unique — two fields with one name cannot coexist.
+    """
+    seen: dict[str, str] = {}
+    for op in ir.transitions:
+        label = getattr(op, "label", None)
+        if label is None:
+            continue
+        if label in seen:
+            msg = (
+                f"track_increments=True: duplicate op label {label!r} "
+                f"({seen[label]} and {type(op).__name__}). Each labelled op "
+                "emits its own increment field, so labels must be unique."
+            )
+            raise ValueError(msg)
+        seen[label] = type(op).__name__
+
+
 class Pass(Protocol):
     def name(self) -> str: ...
     def apply(self, ir: IR) -> IR: ...
@@ -86,6 +107,8 @@ class Validate:
                         f"have label=...; {type(op).__name__} has label=None"
                     )
                     raise ValueError(msg)
+        if ir.track_increments:
+            _verify_unique_increment_labels(ir)
         return ir
 
 
@@ -373,10 +396,12 @@ def _resolve_op(  # noqa: PLR0911, C901 — one flat branch per Op type; both me
         return base
     if isinstance(op, Charge):
         base["rate_arg"] = cls(op.rate, op_name, "rate")  # type: ignore[operator]
+        base["round_charge"] = op.round_charge
         base["label"] = op.label
         return base
     if isinstance(op, Grow):
         base["rate_arg"] = cls(op.rate, op_name, "rate")  # type: ignore[operator]
+        base["round_charge"] = op.round_charge
         base["label"] = op.label
         return base
     if isinstance(op, GrowCapped):
@@ -408,6 +433,7 @@ def _resolve_op(  # noqa: PLR0911, C901 — one flat branch per Op type; both me
             if op.corridor_factor is None
             else cls(op.corridor_factor, op_name, "corridor_factor")  # type: ignore[operator]
         )
+        base["round_charge"] = op.round_charge
         base["label"] = op.label
         return base
     if isinstance(op, Ratchet):

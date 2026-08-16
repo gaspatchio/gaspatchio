@@ -48,9 +48,9 @@ class TestIncrement:
     # without the flag the gate below fires. The IncrementRef round-trip
     # tests return with the emission arc.
 
-    def test_increment_gate_names_the_unimplemented_feature(
+    def test_increment_gate_points_at_the_flag(
         self,
         b: RollforwardBuilder,
     ) -> None:
-        with pytest.raises(ValueError, match="not yet implemented"):
+        with pytest.raises(ValueError, match="track_increments=True"):
             b.increment("Anything")

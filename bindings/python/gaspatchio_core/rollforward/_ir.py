@@ -14,11 +14,12 @@ Fields:
   - schedule: the bound Schedule
   - batch_axes: tuple of axis names; defaults to ('policy',). Forward-compat
     for stochastic projection (vmap over scenario axis).
-  - track_increments: bool — reserved: will surface every Op's per-period
-    delta via ``CompiledRollforward.increment_for(label)`` once the kernel
-    emits increment fields. Until then the builder refuses the flag (gh#69);
-    the IR field exists so passes, fingerprints, and the kernel contract
-    are already shaped for it.
+  - track_increments: bool — the kernel emits one ``increment_{label}``
+    struct field per labelled Op, holding the SIGNED per-period delta the
+    Op applied to its target (negative for charges, positive for credits,
+    zero after a stop or lapse). Surfaced via
+    ``CompiledRollforward.increment_for(label)``. Requires every
+    label-bearing Op to carry a unique label (validated).
   - lapse_when_all_non_positive: tuple of state names — kernel stops
     advancing when all named states are <= 0 at end-of-period.
   - contract_boundary: optional closed-subset bool Expr — kernel stops at

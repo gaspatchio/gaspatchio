@@ -20,7 +20,10 @@ from gaspatchio_core.rollforward._builder import RollforwardBuilder
 from gaspatchio_core.schedule import Schedule
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from gaspatchio_core.frame.base import ActuarialFrame
+    from gaspatchio_core.rollforward._builder import ExprLike
 
 
 # English-frequency -> Schedule frequency mapping.
@@ -517,13 +520,24 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         new_af._threads = self._frame._threads  # noqa: SLF001
         return new_af
 
-    def rollforward(self, **kwargs: Any) -> RollforwardBuilder:  # noqa: ANN401
+    def rollforward(  # noqa: PLR0913 — mirrors RollforwardBuilder; a config dict would lose call-site readability
+        self,
+        *,
+        states: dict[str, ExprLike],
+        points: Iterable[str] | None = None,
+        track_increments: bool = False,
+        lapse_when_all_non_positive: Iterable[str] = (),
+        contract_boundary: ExprLike | None = None,
+        batch_axes: tuple[str, ...] = ("policy",),
+        schedule: None = None,
+    ) -> RollforwardBuilder:
         """Construct a :class:`RollforwardBuilder` that reads schedule from this frame.
 
         ``schedule=`` is no longer accepted on this method — call
-        ``af.projection.set(...)`` first.
+        ``af.projection.set(...)`` first. Every other keyword forwards to
+        :class:`RollforwardBuilder` unchanged.
         """
-        if "schedule" in kwargs:
+        if schedule is not None:
             msg = (
                 "schedule= is no longer accepted on rollforward(). "
                 "Call af.projection.set(...) before rollforward(); the schedule "
@@ -541,8 +555,15 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         # variable-length timeline projects each policy over only its own
         # horizon. ``n_periods`` from the schedule canonical form is passed to
         # the kernel as a portfolio-max capacity hint, not a per-row invariant.
-        kwargs["schedule"] = self._frame._projection  # noqa: SLF001
-        return RollforwardBuilder(**kwargs)
+        return RollforwardBuilder(
+            states=states,
+            schedule=self._frame._projection,  # noqa: SLF001
+            points=points,
+            track_increments=track_increments,
+            lapse_when_all_non_positive=lapse_when_all_non_positive,
+            contract_boundary=contract_boundary,
+            batch_axes=batch_axes,
+        )
 
     def _require_projection(self) -> Schedule:
         """Return the frame's Schedule or raise if absent."""

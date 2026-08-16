@@ -39,6 +39,32 @@ class Op:
         """Construction-time validation. Default is a no-op; override per Op."""
 
 
+_MAX_ROUND_DECIMALS = 15  # beyond f64's decimal precision, rounding is a no-op
+
+
+def _verify_round_charge(round_charge: int | None, op_name: str) -> None:
+    """Reject a charge-rounding precision the kernel cannot apply meaningfully."""
+    if round_charge is None:
+        return
+    # bool is an int subclass and 2.0 passes the range check; both would only
+    # fail later, deep in the kernel's Option<i32> deserialization, with an
+    # error that never names round_charge.
+    if isinstance(round_charge, bool) or not isinstance(round_charge, int):
+        msg = (
+            f"{op_name}: round_charge must be an int number of decimal places "
+            f"or None, got {round_charge!r} ({type(round_charge).__name__}). "
+            f"Use 2 for currency."
+        )
+        raise TypeError(msg)
+    if not -_MAX_ROUND_DECIMALS <= round_charge <= _MAX_ROUND_DECIMALS:
+        msg = (
+            f"{op_name}: round_charge must be between {-_MAX_ROUND_DECIMALS} "
+            f"and {_MAX_ROUND_DECIMALS}, got {round_charge}. Use 2 for "
+            f"currency; negative values round to tens, hundreds, and so on."
+        )
+        raise ValueError(msg)
+
+
 @dataclass(frozen=True)
 class Add(Op):
     """``s += amount[t]`` at the target's point."""
@@ -59,13 +85,22 @@ class Subtract(Op):
 
 @dataclass(frozen=True)
 class Charge(Op):
-    """``s *= 1 - rate[t]`` at the target's point."""
+    """``s *= 1 - rate[t]`` at the target's point.
+
+    ``round_charge`` rounds the computed charge (half away from zero, Excel's
+    ROUND) to that many decimals before applying it — ``s -= ROUND(s*rate, d)``
+    — leaving the running state to carry its sub-unit residue forward, which
+    is the placement spreadsheets use. Contrast ``Round``, which rounds the
+    state and discards the residue every period.
+    """
 
     target: StateRef
     rate: pl.Expr
     label: str | None = None
+    round_charge: int | None = None
 
     def verify(self) -> None:
+        _verify_round_charge(self.round_charge, "charge")
         # Heuristic: a literal negative rate is almost certainly a bug
         # (rate=0.05 means "5% expense charge"; rate=-0.05 would mean
         # "negative expense" i.e. a credit). Real negative rates should
@@ -84,20 +119,30 @@ class Charge(Op):
 
 @dataclass(frozen=True)
 class Grow(Op):
-    """``s *= 1 + rate[t]`` — the rate is applied as quoted per period; the
-    schedule ``dt`` is not threaded through, so pre-scale an annual rate to the
-    projection frequency yourself (e.g. a monthly rate for a monthly grid).
+    """``s *= 1 + rate[t]`` — the rate is applied as quoted per period.
+
+    The schedule ``dt`` is not threaded through, so pre-scale an annual rate to
+    the projection frequency yourself (e.g. a monthly rate for a monthly grid).
+
+    ``round_charge`` rounds the computed credit before applying it —
+    ``s += ROUND(s*rate, d)`` — the spreadsheet placement (see ``Charge``).
     """
 
     target: StateRef
     rate: pl.Expr
     label: str | None = None
+    round_charge: int | None = None
+
+    def verify(self) -> None:
+        _verify_round_charge(self.round_charge, "grow")
 
 
 @dataclass(frozen=True)
 class GrowCapped(Op):
-    """``s *= 1 + clamp(rate[t], floor, cap)`` — IUL crediting; rate applied as
-    quoted per period (no schedule ``dt`` scaling — pre-scale to the period).
+    """``s *= 1 + clamp(rate[t], floor, cap)`` — IUL crediting.
+
+    The rate is applied as quoted per period (no schedule ``dt`` scaling —
+    pre-scale to the period).
     """
 
     target: StateRef
@@ -131,7 +176,7 @@ class DeductNAR(Op):
     value, so the amount at risk becomes ``MAX(NARf, NARc)`` where the
     corridor branch solves its own, differently-signed, circularity::
 
-        NARc = ((y-1) * s * accum) / (1 + (y-1) * coi_rate * accum * v)
+        NARc = ((y - 1) * s * accum) / (1 + (y - 1) * coi_rate * accum * v)
 
     That ``MAX`` is exactly ``death_benefit = MAX(face, y * account_value)``.
     The sign flip matters: under a fixed benefit, charging the COI widens the
@@ -152,10 +197,12 @@ class DeductNAR(Op):
     coi_discount_rate: pl.Expr | None = None
     credited_rate: pl.Expr | None = None
     corridor_factor: pl.Expr | None = None
+    round_charge: int | None = None
     label: str | None = None
 
     def verify(self) -> None:
         """Reject a timing convention without the rates it needs."""
+        _verify_round_charge(self.round_charge, "deduct_nar")
         valid = ("beginning_of_period", "end_of_period")
         if self.nar_timing not in valid:
             msg = (

@@ -100,8 +100,10 @@ gaspatchio_core\.registry\..*
 
 # TYPE_CHECKING-only type alias for the rollforward builder's `ExprLike`
 # (pl.Expr | ColumnProxy | ExpressionProxy). Lives behind `if TYPE_CHECKING:`
-# so callers don't pay the column-proxy import cost at module load.
+# so callers don't pay the column-proxy import cost at module load. The
+# projection_frame stub mirrors the alias for its rollforward() signature.
 gaspatchio_core\.rollforward\._builder\.ExprLike
+gaspatchio_core\.accessors\.projection_frame\.ExprLike
 
 # Errors module
 gaspatchio_core\.errors\..*
@@ -156,32 +158,12 @@ gaspatchio_core\.curves\._.*
 gaspatchio_core\.curves\.InterpolationMethod
 gaspatchio_core\.curves\.TimeInput
 
-# Curves module — @dataclass-generated __match_args__ not declared in stubs
-gaspatchio_core\.curves\.Curve\.__match_args__
-
 # Mortality module — private submodules (not part of the public stub surface)
 gaspatchio_core\.mortality\._.*
 
 # Mortality module — Literal TypeAliases: `type X = ...` syntax not recognised as Union by stubtest
 gaspatchio_core\.mortality\.AgeBasis
 gaspatchio_core\.mortality\.Structure
-
-# Mortality module — @dataclass-generated __match_args__ not declared in stubs
-gaspatchio_core\.mortality\.MortalityTable\.__match_args__
-
-# Schedule module — @dataclass-generated __match_args__ not declared in stubs
-gaspatchio_core\.schedule\.Actual360\.__match_args__
-gaspatchio_core\.schedule\.Actual365Fixed\.__match_args__
-gaspatchio_core\.schedule\.ActualActualISDA\.__match_args__
-gaspatchio_core\.schedule\.BespokeCalendar\.__match_args__
-gaspatchio_core\.schedule\.JointCalendar\.__match_args__
-gaspatchio_core\.schedule\.NullCalendar\.__match_args__
-gaspatchio_core\.schedule\.OneTwelfth\.__match_args__
-gaspatchio_core\.schedule\.Schedule\.__match_args__
-gaspatchio_core\.schedule\.TARGET\.__match_args__
-gaspatchio_core\.schedule\.Thirty360\.__match_args__
-gaspatchio_core\.schedule\.UnitedKingdom\.__match_args__
-gaspatchio_core\.schedule\.UnitedStates\.__match_args__
 
 # Rollforward module — private submodules; TYPE_CHECKING imports are referenced
 # in stubs (IR, Op, Schedule, StateRef, RollforwardBuilder, CompiledRollforward,
@@ -216,3 +198,48 @@ gaspatchio_core\.column\.condition_expression\.Shape
 gaspatchio_core\.schedule\._calendar\._ecb_holidays_for_years
 gaspatchio_core\.schedule\._calendar\._uk_holidays_for_year
 gaspatchio_core\.schedule\._calendar\._us_holidays_for_year
+
+# ============================================================================
+# Missing-stub ledger (2026-08-09, gh#104)
+# CI runs stubtest WITHOUT --ignore-missing-stub as of gh#104: anything that
+# exists at runtime but not in a stub fails CI unless listed here with a
+# reason. This section is the explicit TODO ledger — remove an entry when the
+# surface gets stubbed, and never add one without a reason line.
+# ============================================================================
+
+# Dataclass-generated members (__match_args__, Python 3.13's __replace__,
+# __post_init__ hooks) — generated on every dataclass; tooling noise, not
+# stub bugs.
+.*\.__match_args__
+.*\.__replace__
+.*\.__post_init__
+
+# Internal dispatch machinery — the column stubs are a curated public façade
+# (proxy.pyi documents the user surface; dispatch internals are not it).
+gaspatchio_core\.column\.dispatch\..*
+
+# Rust extension internals not part of the public stub surface.
+gaspatchio_core\._internal\.__all__
+gaspatchio_core\._internal\.PyAssumptionTableRegistry
+
+# Accessor registry internals.
+gaspatchio_core\.frame\.registry\.AccessorClass
+gaspatchio_core\.frame\.registry\.AccessorRegistryDict
+
+# Scenario aggregator engine plumbing — users construct aggregators and hand
+# them to run_aggregated; the batch protocol is engine-facing, not user API.
+gaspatchio_core\.scenarios\..*\.add_batch
+gaspatchio_core\.scenarios\..*\.requires_scenario_id
+gaspatchio_core\.scenarios\..*\.batch_reduce_over
+gaspatchio_core\.scenarios\..*\.batch_reduce_over_within
+gaspatchio_core\.scenarios\.Aggregator\.within_expr
+
+# Assumption overflow-strategy engine hook (.apply) and schema helper —
+# engine-facing, invoked by Table, not by users.
+gaspatchio_core\.assumptions\..*\.apply
+gaspatchio_core\.assumptions\.TableSchema\.suggest_table_config
+
+# Submodule __all__ drift pending each module's own stub audit.
+gaspatchio_core\.assumptions\.__all__
+gaspatchio_core\.functions\.__all__
+gaspatchio_core\.util\.__all__

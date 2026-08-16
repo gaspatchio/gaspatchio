@@ -25,6 +25,9 @@ from .assumptions import list_tables_with_metadata as list_tables_with_metadata
 from .column import ColumnProxy as ColumnProxy
 from .column import ExpressionProxy as ExpressionProxy
 
+# Curves and mortality
+from .curves import Curve as Curve
+
 # Frame and error classes
 from .errors import PerformanceWarning as PerformanceWarning
 from .frame import ActuarialFrame as ActuarialFrame
@@ -32,6 +35,13 @@ from .frame import run_model as run_model
 
 # Functions
 from .functions.conditional import when as when
+from .mortality import MortalityTable as MortalityTable
+
+# Rollforward surface
+from .rollforward._builder import RollforwardBuilder as RollforwardBuilder
+from .rollforward._collector import RollforwardCollector as RollforwardCollector
+from .rollforward._compile import compile_rollforward as compile_rollforward
+from .rollforward._compiled import CompiledRollforward as CompiledRollforward
 
 # Scenarios
 from .scenarios import AggregatedResult as AggregatedResult
@@ -56,8 +66,12 @@ from .schedule import TARGET as TARGET
 from .schedule import Actual360 as Actual360
 from .schedule import Actual365Fixed as Actual365Fixed
 from .schedule import ActualActualISDA as ActualActualISDA
+from .schedule import BusinessDayConvention as BusinessDayConvention
+from .schedule import Calendar as Calendar
+from .schedule import DayCount as DayCount
 from .schedule import NullCalendar as NullCalendar
 from .schedule import OneTwelfth as OneTwelfth
+from .schedule import Schedule as Schedule
 from .schedule import Thirty360 as Thirty360
 from .schedule import UnitedKingdom as UnitedKingdom
 from .schedule import UnitedStates as UnitedStates
@@ -83,8 +97,14 @@ __all__: list[str] = [
     "ActualActualISDA",
     "ActuarialFrame",
     "AggregatedResult",
+    "BusinessDayConvention",
+    "Calendar",
     "ColumnProxy",
+    "CompiledRollforward",
+    "Curve",
+    "DayCount",
     "ExpressionProxy",
+    "MortalityTable",
     "NullCalendar",
     "OneTwelfth",
     "PerformanceWarning",
@@ -98,13 +118,17 @@ __all__: list[str] = [
     "PeriodStd",
     "PeriodSum",
     "PeriodVariance",
+    "RollforwardBuilder",
+    "RollforwardCollector",
     "ScenarioRun",
+    "Schedule",
     "SpillResult",
     "Table",
     "TableBuilder",
     "Thirty360",
     "UnitedKingdom",
     "UnitedStates",
+    "compile_rollforward",
     "execution_mode",
     "functions",
     "get_default_mode",

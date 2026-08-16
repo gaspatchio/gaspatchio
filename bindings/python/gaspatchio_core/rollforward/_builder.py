@@ -39,6 +39,7 @@ from gaspatchio_core.rollforward._refs import StateRef
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from typing import TypeAlias
 
     import polars as pl
 
@@ -51,7 +52,7 @@ if TYPE_CHECKING:
     # An accepted expression-like input. Anything with ``_to_expr()`` is
     # unwrapped at the boundary; plain ``pl.Expr`` passes through unchanged.
     # TYPE_CHECKING-only — stubtest allowlists this alias by name.
-    ExprLike = pl.Expr | ColumnProxy | ExpressionProxy
+    ExprLike: TypeAlias = pl.Expr | ColumnProxy | ExpressionProxy
 
 
 def _to_polars_expr(x: object) -> pl.Expr:
@@ -81,20 +82,6 @@ class RollforwardBuilder:
         contract_boundary: ExprLike | None = None,
         batch_axes: tuple[str, ...] = ("policy",),
     ) -> None:
-        # Refuse the unimplemented feature at the call that asks for it,
-        # not at collect time as a missing struct field (gh#69).
-        if track_increments:
-            msg = (
-                "track_increments=True is not yet implemented: the kernel "
-                "does not yet emit increment fields, so increment_for() "
-                "would fail at collect time as a missing struct field "
-                "(gh#69). Build without track_increments and derive flows "
-                "from captured points instead — noting that state "
-                "differences read as zero after lapse, where a source "
-                "model may still report a notional charge."
-            )
-            raise NotImplementedError(msg)
-
         # Validate points
         pts = tuple(points) if points is not None else ("bop", "eop")
         if "bop" not in pts or "eop" not in pts:
@@ -127,9 +114,6 @@ class RollforwardBuilder:
 
         # Op accumulator — mutated as the user chains transitions
         self._transitions: list[Op] = []
-        # Current scope window (None if no .between(...) is active)
-        self._current_state: str | None = None
-        self._current_window: tuple[str, str] | None = None
 
     def __getitem__(self, state_name: str) -> _StateHandle:
         if state_name not in self._state_inits:
@@ -143,10 +127,10 @@ class RollforwardBuilder:
     def increment(self, label: str) -> IncrementRef:
         if not self._track_increments:
             msg = (
-                "increment tracking is not yet implemented (gh#69): the "
-                "kernel does not emit increment fields, and the builder "
-                "refuses track_increments=True. Derive flows from captured "
-                "points instead."
+                "increment(): this rollforward was built without "
+                "track_increments=True, so the kernel emits no increment "
+                "fields. Pass track_increments=True to the builder to get "
+                "per-period deltas for every labelled op."
             )
             raise ValueError(msg)
         return IncrementRef(label=label)
@@ -178,18 +162,22 @@ class _StateHandle:
     Returns ``self`` from each emit so calls chain.
     """
 
-    def __init__(self, builder: RollforwardBuilder, state: str) -> None:
+    def __init__(
+        self,
+        builder: RollforwardBuilder,
+        state: str,
+        window: tuple[str, str] | None = None,
+    ) -> None:
         self._b = builder
         self._state = state
+        # The .between(...) scope, carried by THIS handle only (gh#101): ops
+        # chained from a between() handle land on its end point; a plain
+        # b["state"] handle always defaults to eop, as the docs promise.
+        self._window = window
 
     def _target_point(self) -> str:
-        # If a .between(...) scope is active and applies to this state, use its
-        # end-point. Otherwise default to 'eop'.
-        if (
-            self._b._current_state == self._state
-            and self._b._current_window is not None
-        ):
-            return self._b._current_window[1]
+        if self._window is not None:
+            return self._window[1]
         return "eop"
 
     def add(self, expr: ExprLike, *, label: str | None = None) -> _StateHandle:
@@ -212,20 +200,65 @@ class _StateHandle:
         self._b._transitions.append(op)
         return self
 
-    def charge(self, rate: ExprLike, *, label: str | None = None) -> _StateHandle:
+    def charge(
+        self,
+        rate: ExprLike,
+        *,
+        round_charge: int | None = None,
+        label: str | None = None,
+    ) -> _StateHandle:
+        """Deduct ``rate`` of the running balance.
+
+        Args:
+            rate: Charge rate per period, as a fraction of the balance.
+            round_charge: Round the computed charge (half away from zero,
+                Excel's ROUND) to this many decimals before applying it —
+                ``s -= ROUND(s*rate, d)`` — leaving the state to carry its
+                sub-unit residue forward, the placement spreadsheets use.
+                Contrast ``.round(d)``, which rounds the balance itself and
+                discards the residue every period.
+            label: Names this charge in the increment breakdown.
+
+        Returns:
+            The state handle, for chaining.
+
+        """
         op = Charge(
             target=StateRef(state=self._state, point=self._target_point()),
             rate=_to_polars_expr(rate),
+            round_charge=round_charge,
             label=label,
         )
         op.verify()
         self._b._transitions.append(op)
         return self
 
-    def grow(self, rate: ExprLike, *, label: str | None = None) -> _StateHandle:
+    def grow(
+        self,
+        rate: ExprLike,
+        *,
+        round_charge: int | None = None,
+        label: str | None = None,
+    ) -> _StateHandle:
+        """Grow the running balance by ``rate``.
+
+        Args:
+            rate: Growth rate per period, as quoted (no schedule ``dt``
+                scaling — pre-scale an annual rate to the projection
+                frequency yourself).
+            round_charge: Round the computed credit before applying it —
+                ``s += ROUND(s*rate, d)`` — the spreadsheet placement (see
+                ``charge``).
+            label: Names this credit in the increment breakdown.
+
+        Returns:
+            The state handle, for chaining.
+
+        """
         op = Grow(
             target=StateRef(state=self._state, point=self._target_point()),
             rate=_to_polars_expr(rate),
+            round_charge=round_charge,
             label=label,
         )
         op.verify()
@@ -260,6 +293,7 @@ class _StateHandle:
         coi_discount_rate: ExprLike | None = None,
         credited_rate: ExprLike | None = None,
         corridor_factor: ExprLike | None = None,
+        round_charge: int | None = None,
         label: str | None = None,
     ) -> _StateHandle:
         """Charge a cost of insurance on the net amount at risk.
@@ -288,6 +322,14 @@ class _StateHandle:
                 **Omit it only for a policy whose account value can never
                 approach its face amount** — without it, a well-funded policy
                 produces a negative amount at risk, which is refused.
+            round_charge: Round the COI charge (half away from zero, Excel's
+                ROUND) to this many decimals before applying it —
+                ``s -= ROUND(coi, d)`` — leaving the state to carry its
+                sub-cent residue forward, which is how spreadsheets place
+                their ROUND. Under ``"end_of_period"`` timing the exact
+                charge is solved first, then rounded — the rounding does not
+                participate in the closed-form solve. Contrast ``.round(d)``,
+                which rounds the balance itself.
             label: Names this deduction in the increment breakdown.
 
         Returns:
@@ -312,6 +354,7 @@ class _StateHandle:
             corridor_factor=(
                 None if corridor_factor is None else _to_polars_expr(corridor_factor)
             ),
+            round_charge=round_charge,
             label=label,
         )
         op.verify()
@@ -358,6 +401,12 @@ class _StateHandle:
         not the same as rounding the answer: each rounded balance opens the next
         period, so the difference compounds over the projection.
 
+        This rounds the **balance**. Sheets that round the individual charge —
+        ``s -= ROUND(coi, 2)`` with the balance left unrounded — are the
+        ``round_charge=`` parameter on ``charge``/``grow``/``deduct_nar``
+        instead; the two placements agree only while the balance is an exact
+        multiple of the rounding unit.
+
         """
         op = Round(
             target=StateRef(state=self._state, point=self._target_point()),
@@ -389,13 +438,9 @@ class _StateHandle:
         if self._b._points.index(p1) >= self._b._points.index(p2):
             msg = f"{p1!r} must precede {p2!r} in declared point order"
             raise ValueError(msg)
-        # Stash the scope on the builder; subsequent ops on this handle pick it up.
-        # New handle is returned (rather than mutating self) so each chain has its
-        # own scope window without aliasing.
-        new_handle = _StateHandle(self._b, self._state)
-        self._b._current_state = self._state
-        self._b._current_window = (p1, p2)
-        return new_handle
+        # The window rides on the returned handle, so each chain has its own
+        # scope and a later plain b["state"] handle defaults to eop (gh#101).
+        return _StateHandle(self._b, self._state, (p1, p2))
 
     def at(self, point: str) -> StateRef:
         if point not in self._b._points:

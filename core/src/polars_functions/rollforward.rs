@@ -19,8 +19,10 @@
 //! The kernel walks transitions in declared order per period, evaluating
 //! each Op against the current per-row state vector. Output is a Polars
 //! Struct with one field per capture slot (named `"{state}@{point}"`) —
-//! plus one field per labelled increment when track_increments=True
-//! (increment emission is not yet implemented).
+//! plus, when track_increments=True, one field per labelled Op (named
+//! `"increment_{label}"`, in declared order) holding the SIGNED per-period
+//! delta the Op applied to its target: negative for charges, positive for
+//! credits, zero after a stop or lapse.
 
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
@@ -111,12 +113,22 @@ pub enum OpV2 {
         target_state: usize,
         target_point: usize,
         rate_arg: ArgRef,
+        /// Round the computed charge (half away from zero) to this many
+        /// decimals before applying it, leaving the running state unrounded —
+        /// the placement spreadsheets use: `s -= ROUND(s * rate, d)`.
+        #[serde(default)]
+        round_charge: Option<i32>,
         label: Option<String>,
     },
     Grow {
         target_state: usize,
         target_point: usize,
         rate_arg: ArgRef,
+        /// Round the computed credit (half away from zero) to this many
+        /// decimals before applying it, leaving the running state unrounded —
+        /// the placement spreadsheets use: `s += ROUND(s * rate, d)`.
+        #[serde(default)]
+        round_charge: Option<i32>,
         label: Option<String>,
     },
     GrowCapped {
@@ -155,6 +167,13 @@ pub enum OpV2 {
         /// fixed-benefit branch is computed.
         #[serde(default)]
         corridor_factor_arg: Option<ArgRef>,
+        /// Round the COI charge (half away from zero) to this many decimals
+        /// before applying it, leaving the running state unrounded — the
+        /// placement spreadsheets use: `s -= ROUND(coi, d)`. Under the
+        /// end-of-period convention the exact charge is solved first, then
+        /// rounded — rounding does not participate in the closed-form solve.
+        #[serde(default)]
+        round_charge: Option<i32>,
         label: Option<String>,
     },
     Ratchet {
@@ -503,6 +522,28 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         })
         .collect();
 
+    // ---- 5b. Labelled-increment output buffers (track_increments) ----
+    // One field per labelled Op, in declared order: the SIGNED delta the Op
+    // applied to its target slot in each period (state_after − state_before —
+    // negative for charges, positive for credits). Zero for periods after a
+    // stop or lapse: the kernel applied nothing, which is distinct from a
+    // source model that keeps computing a notional charge (gh#69).
+    let labelled_ops = labelled_increments(kwargs)?;
+    let n_incs = labelled_ops.len();
+    let mut inc_slot: Vec<Option<usize>> = vec![None; kwargs.ops.len()];
+    for (k, (op_idx, _)) in labelled_ops.iter().enumerate() {
+        inc_slot[*op_idx] = Some(k);
+    }
+    let mut increment_values: Vec<Vec<f64>> =
+        (0..n_incs).map(|_| Vec::with_capacity(total_len)).collect();
+    let mut increment_offsets: Vec<Vec<i64>> = (0..n_incs)
+        .map(|_| {
+            let mut v = Vec::with_capacity(num_rows + 1);
+            v.push(0i64);
+            v
+        })
+        .collect();
+
     // ---- 6. Per-row state walk ----
     // Jagged-aware: each policy projects over its OWN period count. The
     // recurrence value[t] = f(value[t-1], inputs[t]) has no cross-policy
@@ -556,6 +597,9 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
             for cap_idx in 0..n_captures {
                 capture_offsets[cap_idx].push(capture_values[cap_idx].len() as i64);
             }
+            for k in 0..n_incs {
+                increment_offsets[k].push(increment_values[k].len() as i64);
+            }
             continue;
         }
 
@@ -574,6 +618,10 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
             // state[s][bop][0] = init
             state[s * stride_state + bop_idx * stride_point] = init_val;
         }
+
+        // Per-row increment scratch: [labelled_op][t], zero-filled so stopped
+        // periods read as "nothing applied" without special-casing.
+        let mut row_incs: Vec<f64> = vec![0.0; n_incs * row_periods];
 
         // Walk periods. ``stopped`` flips True the first time a stop
         // condition fires; subsequent periods write zeros to all cells.
@@ -624,7 +672,10 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
             // Apply Ops in declared order. After each Op, propagate the new
             // (state, target_point) value to all later points in declared
             // order so subsequent Ops chain correctly.
-            for op in &kwargs.ops {
+            for (op_idx, op) in kwargs.ops.iter().enumerate() {
+                let (op_target_state, op_target_point) = op_target(op);
+                let slot = op_target_state * stride_state + op_target_point * stride_point + t;
+                let before = state[slot];
                 apply_op(
                     op,
                     &mut state,
@@ -634,9 +685,10 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
                     stride_state,
                     stride_point,
                 )?;
-                let (op_target_state, op_target_point) = op_target(op);
-                let new_val =
-                    state[op_target_state * stride_state + op_target_point * stride_point + t];
+                let new_val = state[slot];
+                if let Some(k) = inc_slot[op_idx] {
+                    row_incs[k * row_periods + t] = new_val - before;
+                }
                 for p in (op_target_point + 1)..n_points {
                     state[op_target_state * stride_state + p * stride_point + t] = new_val;
                 }
@@ -665,16 +717,28 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
             }
             capture_offsets[cap_idx].push(capture_values[cap_idx].len() as i64);
         }
+        // Emit per-labelled-op increment lists.
+        for k in 0..n_incs {
+            increment_values[k]
+                .extend_from_slice(&row_incs[k * row_periods..(k + 1) * row_periods]);
+            increment_offsets[k].push(increment_values[k].len() as i64);
+        }
     }
 
     // ---- 7. Build output Struct ----
-    let mut output_series: Vec<Series> = Vec::with_capacity(n_captures);
+    let mut output_series: Vec<Series> = Vec::with_capacity(n_captures + n_incs);
     for (cap_idx, cap) in kwargs.captures_resolved.iter().enumerate() {
         let state_name = &state_names[cap.state];
         let point_name = &point_names[cap.point];
         let field_name = format!("{}@{}", state_name, point_name);
         let values = std::mem::take(&mut capture_values[cap_idx]);
         let offsets_vec = std::mem::take(&mut capture_offsets[cap_idx]);
+        output_series.push(build_list_series(values, offsets_vec, field_name.as_str())?);
+    }
+    for (k, (_, label)) in labelled_ops.iter().enumerate() {
+        let field_name = format!("increment_{label}");
+        let values = std::mem::take(&mut increment_values[k]);
+        let offsets_vec = std::mem::take(&mut increment_offsets[k]);
         output_series.push(build_list_series(values, offsets_vec, field_name.as_str())?);
     }
 
@@ -684,6 +748,26 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         output_series.iter(),
     )?;
     Ok(struct_chunked.into_series())
+}
+
+/// Round `x` to `decimals` places, half away from zero — Excel's ROUND.
+///
+/// Non-finite values pass through unchanged, and values whose scaled form
+/// overflows f64 are returned as-is: such a value has no decimal places left
+/// to round to anyway. Shared by the `Round` op (which rounds the running
+/// state) and the `round_charge` knob on flow-shaped ops (which rounds the
+/// individual charge or credit before it is applied, as spreadsheets do).
+fn round_half_away(x: f64, decimals: i32) -> f64 {
+    if !x.is_finite() {
+        return x;
+    }
+    let scale = 10f64.powi(decimals);
+    let scaled = x * scale;
+    if scaled.is_finite() {
+        scaled.round() / scale
+    } else {
+        x
+    }
 }
 
 /// Apply a single Op to the per-row state buffer at period ``t``.
@@ -739,6 +823,7 @@ fn apply_op(
             target_state,
             target_point,
             rate_arg,
+            round_charge,
             ..
         } => {
             let r = resolve_arg(
@@ -751,13 +836,19 @@ fn apply_op(
                 stride_point,
             );
             let i = *target_state * stride_state + *target_point * stride_point + t;
-            state[i] *= 1.0 - r;
+            match round_charge {
+                // Spreadsheet placement: the charge is rounded, the state
+                // carries its sub-unit residue forward unrounded.
+                Some(d) => state[i] -= round_half_away(state[i] * r, *d),
+                None => state[i] *= 1.0 - r,
+            }
             Ok(())
         }
         OpV2::Grow {
             target_state,
             target_point,
             rate_arg,
+            round_charge,
             ..
         } => {
             // schedule dt is not threaded through yet — rates are taken
@@ -772,7 +863,12 @@ fn apply_op(
                 stride_point,
             );
             let i = *target_state * stride_state + *target_point * stride_point + t;
-            state[i] *= 1.0 + r;
+            match round_charge {
+                // Spreadsheet placement: the credit is rounded, the state
+                // carries its sub-unit residue forward unrounded.
+                Some(d) => state[i] += round_half_away(state[i] * r, *d),
+                None => state[i] *= 1.0 + r,
+            }
             Ok(())
         }
         OpV2::Floor {
@@ -793,20 +889,9 @@ fn apply_op(
         } => {
             let i = *target_state * stride_state + *target_point * stride_point + t;
             // f64::round() is half-away-from-zero, which is Excel's rule.
-            // Non-finite values pass through: rounding a NaN to 2dp would
-            // otherwise produce a NaN that looks deliberate.
-            if state[i].is_finite() {
-                let scale = 10f64.powi(*decimals);
-                let scaled = state[i] * scale;
-                // Above ~1e306 the scaling overflows to infinity, which would
-                // turn a representable balance into one that poisons every
-                // later period. Such a value has no decimal places left to
-                // round to anyway — f64 runs out of precision long before —
-                // so leaving it alone is both safe and correct.
-                if scaled.is_finite() {
-                    state[i] = scaled.round() / scale;
-                }
-            }
+            // Non-finite values and balances whose scaled form overflows pass
+            // through unchanged (see round_half_away).
+            state[i] = round_half_away(state[i], *decimals);
             Ok(())
         }
         OpV2::GrowCapped {
@@ -859,6 +944,7 @@ fn apply_op(
             coi_discount_rate_arg,
             credited_rate_arg,
             corridor_factor_arg,
+            round_charge,
             ..
         } => {
             let coi = resolve_arg(
@@ -976,6 +1062,14 @@ fn apply_op(
                     .into(),
                 ));
             }
+            // Spreadsheet placement: the charge is rounded, the state carries
+            // its sub-cent residue forward unrounded. Under end-of-period
+            // timing the exact charge is solved first, then rounded — the
+            // rounding does not participate in the closed-form solve.
+            let charge = match round_charge {
+                Some(d) => round_half_away(charge, *d),
+                None => charge,
+            };
             state[i] -= charge;
             Ok(())
         }
@@ -1043,6 +1137,56 @@ fn resolve_arg(
         ArgRef::Input { idx } => read_list_at(owned_slices, idx, row_idx, t),
         ArgRef::State { state: s, point: p } => state[s * stride_state + p * stride_point + t],
     }
+}
+
+/// Return an Op's label, if it carries one. Floor and Round are unlabelled
+/// structural ops; everything else is a flow the user may name.
+fn op_label(op: &OpV2) -> Option<&str> {
+    match op {
+        OpV2::Add { label, .. }
+        | OpV2::Subtract { label, .. }
+        | OpV2::Charge { label, .. }
+        | OpV2::Grow { label, .. }
+        | OpV2::GrowCapped { label, .. }
+        | OpV2::DeductNAR { label, .. }
+        | OpV2::Ratchet { label, .. }
+        | OpV2::Apply { label, .. } => label.as_deref(),
+        OpV2::Floor { .. } | OpV2::Round { .. } => None,
+    }
+}
+
+/// The labelled Ops that emit increment fields when `track_increments`, as
+/// `(op_index, label)` in declared order. One source of truth shared by the
+/// kernel's emission and the plugin's output-schema declaration, so the two
+/// cannot drift. Duplicate labels are refused — they would produce two
+/// struct fields with one name.
+///
+/// # Errors
+///
+/// Returns `ComputeError` when two labelled Ops share a label.
+pub fn labelled_increments(kwargs: &RollforwardKwargs) -> PolarsResult<Vec<(usize, String)>> {
+    if !kwargs.track_increments {
+        return Ok(Vec::new());
+    }
+    let mut seen: Vec<&str> = Vec::new();
+    let mut out: Vec<(usize, String)> = Vec::new();
+    for (i, op) in kwargs.ops.iter().enumerate() {
+        if let Some(label) = op_label(op) {
+            if seen.contains(&label) {
+                return Err(PolarsError::ComputeError(
+                    format!(
+                        "rollforward: duplicate op label {label:?} with \
+                         track_increments=True — each labelled op emits its own \
+                         increment field, so labels must be unique"
+                    )
+                    .into(),
+                ));
+            }
+            seen.push(label);
+            out.push((i, label.to_string()));
+        }
+    }
+    Ok(out)
 }
 
 /// Return the (target_state, target_point) for an Op so the period walker
@@ -1687,5 +1831,256 @@ mod tests {
         let row: Vec<f64> = (0..f.len()).map(|i| f.get(i).unwrap()).collect();
         // The flag is true in every period, so the ratchet fires every period.
         assert_eq!(row, vec![150.0, 150.0, 150.0]);
+    }
+
+    #[test]
+    fn round_half_away_is_excels_round() {
+        // Ties chosen to be exact in binary so the rule, not representation,
+        // is what's under test.
+        assert_eq!(round_half_away(2.5, 0), 3.0);
+        assert_eq!(round_half_away(-2.5, 0), -3.0);
+        assert_eq!(round_half_away(0.375, 2), 0.38);
+        assert_eq!(round_half_away(-0.375, 2), -0.38);
+        assert_eq!(round_half_away(125.0, -1), 130.0);
+        // Non-finite and overflow-on-scale values pass through unchanged.
+        assert!(round_half_away(f64::NAN, 2).is_nan());
+        assert_eq!(round_half_away(f64::INFINITY, 2), f64::INFINITY);
+        assert_eq!(round_half_away(1.7e308, 2), 1.7e308);
+    }
+
+    /// One-state, one-input helper: run `ops_json` over 2 periods with the
+    /// given init and per-period input values, returning the eop capture row.
+    fn run_one_input(init_v: f64, input: Vec<f64>, ops_json: &str) -> Vec<f64> {
+        let init = Series::new("av_init".into(), vec![init_v]);
+        let inp =
+            ListChunked::from_iter([Some(Series::new("".into(), input.clone()))]).into_series();
+        let kwargs_json = format!(
+            r#"{{
+            "ir": {{"states": [{{"name": "av"}}], "points": ["bop", "eop"], "transitions": []}},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": {},
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["x"],
+            "ops": [{}],
+            "captures_resolved": [{{"state": 0, "point": 1}}]
+        }}"#,
+            input.len(),
+            ops_json
+        );
+        let kwargs: RollforwardKwargs = serde_json::from_str(&kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, inp], &kwargs).unwrap();
+        let field = out.struct_().unwrap().fields_as_series()[0].clone();
+        let s = field.list().unwrap().get_as_series(0).unwrap();
+        let f = s.f64().unwrap();
+        (0..f.len()).map(|i| f.get(i).unwrap()).collect()
+    }
+
+    #[test]
+    fn charge_round_charge_rounds_the_flow_not_the_state() {
+        // Spreadsheet placement: s -= ROUND(s * rate, 2), state unrounded.
+        // t1: 1000 * 0.033333 = 33.333 -> 33.33; s = 966.67
+        // t2: 966.67 * 0.033333 = 32.2221... -> 32.22; s = 934.45
+        let row = run_one_input(
+            1000.0,
+            vec![0.033333, 0.033333],
+            r#"{"op": "Charge", "target_state": 0, "target_point": 1,
+                "rate_arg": {"kind": "input", "idx": 0},
+                "round_charge": 2, "label": null}"#,
+        );
+        assert!((row[0] - 966.67).abs() < 1e-9, "t1: {}", row[0]);
+        assert!((row[1] - 934.45).abs() < 1e-9, "t2: {}", row[1]);
+    }
+
+    #[test]
+    fn grow_round_charge_rounds_the_credit() {
+        // s += ROUND(s * rate, 2): 1000 * 0.0333333 = 33.3333 -> 33.33.
+        let row = run_one_input(
+            1000.0,
+            vec![0.0333333],
+            r#"{"op": "Grow", "target_state": 0, "target_point": 1,
+                "rate_arg": {"kind": "input", "idx": 0},
+                "round_charge": 2, "label": null}"#,
+        );
+        assert!((row[0] - 1033.33).abs() < 1e-9, "t1: {}", row[0]);
+    }
+
+    #[test]
+    fn deduct_nar_round_charge_rounds_the_solved_coi() {
+        // BOP: NAR = 10000 - 1000 = 9000; charge = 9000 * 0.0012345
+        // = 11.1105 -> ROUND -> 11.11; s = 988.89 (unrounded state would
+        // be 988.8895).
+        let init = Series::new("av_init".into(), vec![1000.0]);
+        let coi =
+            ListChunked::from_iter([Some(Series::new("".into(), vec![0.0012345]))]).into_series();
+        let db =
+            ListChunked::from_iter([Some(Series::new("".into(), vec![10000.0]))]).into_series();
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": false,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 1,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["coi", "db"],
+            "ops": [{"op": "DeductNAR", "target_state": 0, "target_point": 1,
+                     "coi_rate_arg": {"kind": "input", "idx": 0},
+                     "death_benefit_arg": {"kind": "input", "idx": 1},
+                     "nar_at_end_of_period": false,
+                     "round_charge": 2, "label": null}],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, coi, db], &kwargs).unwrap();
+        let field = out.struct_().unwrap().fields_as_series()[0].clone();
+        let s = field.list().unwrap().get_as_series(0).unwrap();
+        let v = s.f64().unwrap().get(0).unwrap();
+        assert!((v - 988.89).abs() < 1e-9, "eop: {v}");
+    }
+
+    #[test]
+    fn round_charge_defaults_absent_in_serialised_ops() {
+        // Ops serialised before the knob existed must still deserialise,
+        // with the unrounded behaviour.
+        let json = r#"{
+            "op": "Charge",
+            "target_state": 0,
+            "target_point": 1,
+            "rate_arg": {"kind": "input", "idx": 0},
+            "label": null
+        }"#;
+        let op: OpV2 = serde_json::from_str(json).unwrap();
+        match op {
+            OpV2::Charge { round_charge, .. } => assert!(round_charge.is_none()),
+            _ => panic!("expected Charge"),
+        }
+    }
+
+    #[test]
+    fn track_increments_emits_signed_per_op_deltas() {
+        // Add "Premium" then Charge "Fee" over 3 periods; the struct gains
+        // increment_Premium and increment_Fee fields with the SIGNED deltas.
+        //   t: bop -> +100 -> *(1-0.1)
+        //   t1: 0    -> 100  -> 90        inc_P=+100, inc_F=-10
+        //   t2: 90   -> 190  -> 171       inc_P=+100, inc_F=-19
+        //   t3: 171  -> 271  -> 243.9     inc_P=+100, inc_F=-27.1
+        let init = Series::new("av_init".into(), vec![0.0]);
+        let prem =
+            ListChunked::from_iter([Some(Series::new("".into(), vec![100.0, 100.0, 100.0]))])
+                .into_series();
+        let rate = ListChunked::from_iter([Some(Series::new("".into(), vec![0.1, 0.1, 0.1]))])
+            .into_series();
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": true,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["premium", "rate"],
+            "ops": [
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": "Premium"},
+                {"op": "Charge", "target_state": 0, "target_point": 1,
+                 "rate_arg": {"kind": "input", "idx": 1}, "label": "Fee"}
+            ],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, prem, rate], &kwargs).unwrap();
+        let fields = out.struct_().unwrap().fields_as_series();
+        let names: Vec<&str> = fields.iter().map(|s| s.name().as_str()).collect();
+        assert_eq!(names, vec!["av@eop", "increment_Premium", "increment_Fee"]);
+
+        let row = |f: usize| -> Vec<f64> {
+            let s = fields[f].list().unwrap().get_as_series(0).unwrap();
+            let ca = s.f64().unwrap();
+            (0..ca.len()).map(|i| ca.get(i).unwrap()).collect()
+        };
+        let approx = |got: &[f64], want: &[f64]| {
+            assert_eq!(got.len(), want.len());
+            for (g, w) in got.iter().zip(want) {
+                assert!((g - w).abs() < 1e-9, "got {got:?}, want {want:?}");
+            }
+        };
+        approx(&row(0), &[90.0, 171.0, 243.9]);
+        approx(&row(1), &[100.0, 100.0, 100.0]);
+        approx(&row(2), &[-10.0, -19.0, -27.1]);
+    }
+
+    #[test]
+    fn increments_are_zero_after_lapse() {
+        // Subtract drives the state non-positive at t2; the lapse stop fires
+        // and t3's increments read zero — the kernel applied nothing, which
+        // is distinct from a sheet's notional post-lapse charge (gh#69).
+        let init = Series::new("av_init".into(), vec![100.0]);
+        let w = ListChunked::from_iter([Some(Series::new("".into(), vec![50.0, 60.0, 50.0]))])
+            .into_series();
+        let kwargs_json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": true,
+            "lapse_when_all_non_positive": ["av"],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 3,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["w"],
+            "ops": [
+                {"op": "Subtract", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": "Withdrawal"}
+            ],
+            "captures_resolved": [{"state": 0, "point": 1}],
+            "lapse_state_indices": [0]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, w], &kwargs).unwrap();
+        let fields = out.struct_().unwrap().fields_as_series();
+        let s = fields[1].list().unwrap().get_as_series(0).unwrap();
+        let ca = s.f64().unwrap();
+        let incs: Vec<f64> = (0..ca.len()).map(|i| ca.get(i).unwrap()).collect();
+        assert_eq!(incs, vec![-50.0, -60.0, 0.0]);
+    }
+
+    #[test]
+    fn duplicate_labels_with_track_increments_are_refused() {
+        let json = r#"{
+            "ir": {"states": [{"name": "av"}], "points": ["bop", "eop"], "transitions": []},
+            "captures": [["av", "eop"]],
+            "track_increments": true,
+            "lapse_when_all_non_positive": [],
+            "contract_boundary": null,
+            "n_states": 1,
+            "n_points": 2,
+            "n_periods": 1,
+            "bop_idx": 0,
+            "eop_idx": 1,
+            "input_columns": ["a"],
+            "ops": [
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": "X"},
+                {"op": "Subtract", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": "X"}
+            ],
+            "captures_resolved": [{"state": 0, "point": 1}]
+        }"#;
+        let kwargs: RollforwardKwargs = serde_json::from_str(json).unwrap();
+        let err = labelled_increments(&kwargs).unwrap_err();
+        assert!(err.to_string().contains("duplicate op label"));
     }
 }

@@ -163,18 +163,39 @@ class CompiledRollforward:
     def increment_for(self, label: str) -> pl.Expr:
         """Return a Polars Expr selecting the per-period delta for a labelled Op.
 
-        Not yet functional: the kernel does not emit increment fields, and
-        the builder refuses ``track_increments=True`` until it does (gh#69).
+        The delta is signed — what the op actually applied to its target:
+        negative for charges, positive for credits, zero after a stop or
+        lapse (the kernel applied nothing, where a source sheet may keep
+        computing a notional charge against the full face amount).
+        """
+        self._validate_increment_label(label)
+        return self._field_expr(f"increment_{label}")
+
+    def _validate_increment_label(self, label: str) -> None:
+        """Refuse an unknown/untracked increment label at the call that asks.
+
+        Shared with the deprecated ``RollforwardCollector`` facade so both
+        paths refuse immediately with identical wording, rather than letting
+        an unknown label die at collect time as a missing struct field.
         """
         if not self.ir.track_increments:
             msg = (
-                "increment tracking is not yet implemented (gh#69): the "
-                "kernel does not emit increment fields, and the builder "
-                "refuses track_increments=True. Derive flows from captured "
-                "points instead."
+                "increment_for(): this rollforward was built without "
+                "track_increments=True, so the kernel emits no increment "
+                "fields. Pass track_increments=True to the builder."
             )
             raise ValueError(msg)
-        return self._field_expr(f"increment_{label}")
+        labels = [
+            found
+            for op in self.ir.transitions
+            if (found := getattr(op, "label", None)) is not None
+        ]
+        if label not in labels:
+            msg = (
+                f"increment_for({label!r}): no op carries that label. "
+                f"Labelled ops in this rollforward: {labels}."
+            )
+            raise KeyError(msg)
 
     def canonical_form(self) -> dict[str, Any]:
         """Return a stable, deterministic dict describing the model structure.
