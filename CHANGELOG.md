@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.8.2] — The recursion tells the whole truth
+
+Where 0.8.1 made the surface honest about what didn't exist, 0.8.2 ships
+the two things the clean-room UL conversions actually asked the recursion
+for: the flows it applied, and the spreadsheet's rounding placement. The
+rollforward now reports what it did — per-op, signed, period by period —
+instead of leaving flows to be reconstructed from state differences. Around
+it, the window lands where the docs promise, the type stubs stop hiding the
+API from editors, and two conversion paths accept composed expressions they
+previously refused.
+
+### Added
+
+- **`track_increments=True` emits real per-op increments.** Every labelled
+  op contributes a signed per-period delta — what it actually applied to
+  its target: negative for charges, positive for credits, and zero after a
+  stop or lapse. Zero-after-lapse is the honest representation:
+  reconstructing flows from state differences conflates "no charge" with
+  "nothing left to charge against", which was silently wrong for 55 of 111
+  projection years in the clean-room UL conversion. Read them via
+  `compiled.increment_for(label)` or the builder's `increment()` handle; an
+  unknown label refuses immediately on every path — including the
+  deprecated collector facade — naming the labels that exist. Closes the
+  #69 arc: accepted-but-inert, then a loud refusal in 0.8.1, now the real
+  thing. (#69)
+- **`round_charge=` on `charge`, `grow`, and `deduct_nar` — round the
+  flow, not the state.** Spreadsheets place `ROUND()` on the individual
+  charge where it is computed; the rollforward's `Round` op rounds the
+  running balance. Those are different numbers that compound differently,
+  and only one placement was expressible. Both now are, each requested by
+  name; under the end-of-period NAR convention the circular charge is
+  solved first and rounded once, and a non-integer precision refuses at
+  construction rather than deep in the kernel. (#92)
+
+### Fixed
+
+- **`.between()` scope sticks to its handle, not the builder.** Ops
+  chained from a plain `b["state"]` handle default to `eop` as the docs
+  promise; a mid-chain `.between()` window no longer silently captures
+  every later step. (#101)
+- **The shipped stubs tell the truth about the rollforward API.**
+  `compile_rollforward`, `Schedule`, `Curve`, and `MortalityTable` import
+  cleanly, `af.projection` types as the accessor it is, and `rollforward()`
+  shows its real signature — so Pylance stops red-squiggling a correct
+  model. The stubtest CI gate now runs un-blinded, with deliberate
+  omissions recorded in a reasoned allowlist instead of a flag that hid
+  everything. (#104)
+- **`finance.to_monthly` converts composed list expressions.** The list
+  path gated on proxy *type* rather than *shape*, so a composed expression
+  that was list-shaped fell through to the scalar path and failed at
+  collect. Shape decides now. (#86)
+- **`scalar ** lookup(list key)` works.** Pow dispatch resolves the shape
+  of bare polars expressions instead of only proxy-wrapped ones, so the
+  natural spelling of a compound-growth formula against a looked-up rate
+  no longer raises. (#89)
+- **The skills stop over-promising.** The conversion reference no longer
+  claims `formula_pattern` reports the dominant pattern — it teaches the
+  distribution query that actually settles a merged binding (#103) — and
+  the model-building skill draws the proxy duck-typing boundary honestly:
+  `clip` and `when/then` are the idioms, the polars `*_horizontal` free
+  functions are outside it (#102).
+
 ## [0.8.1] — The surface tells the truth
 
 Four small fixes from the second, clean-room field test of the Type A UL
