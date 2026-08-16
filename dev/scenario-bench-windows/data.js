@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786855417330,
+  "lastUpdate": 1786868175094,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks (Windows)": [
@@ -5268,6 +5268,130 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 4193.5,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "744242a6028b8b3868509b618d8cd89640e71bf8",
+          "message": "fix(typing): heal the two mypy errors merge skew left on main (#125)\n\nEach tranche PR was mypy-clean against the main it branched from; the\ncombination is not. #109's truthful stubs made the assignment ignore in\n_passes.py redundant, and _builder's duck-typed pass-through now returns\nan unlaundered Any. CI only gates stubtest, so this never went red\npublicly — but the documented dev standard is both checkers pass, and\nthe next branch to run mypy locally inherits the noise.\n\nVerified: uv run mypy gaspatchio_core/rollforward/ clean; rollforward\nsuite 229 passed on the current kernel build.",
+          "timestamp": "2026-08-16T19:58:16+12:00",
+          "tree_id": "a1defa862230103b5cf1c4333c12929a2284fc6c",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/744242a6028b8b3868509b618d8cd89640e71bf8"
+        },
+        "date": 1786868171705,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 2.828,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 237.9,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 3535.6,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 25.852,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 570,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 3868.2,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-wall",
+            "value": 398.854,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-rss",
+            "value": 591.1,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-throughput",
+            "value": 2507.2,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 19.067,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 916.1,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 5244.7,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 182.771,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 4911.3,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 5471.3,
             "unit": "scenario-points/sec"
           },
           {
