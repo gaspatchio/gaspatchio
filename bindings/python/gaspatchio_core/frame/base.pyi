@@ -13,6 +13,7 @@ from gaspatchio_core.typing import IntoExprColumn
 from ..accessors.date import DateFrameAccessor
 from ..accessors.excel import ExcelFrameAccessor
 from ..accessors.finance import FinanceFrameAccessor
+from ..accessors.projection_frame import ProjectionFrameAccessor
 
 # ADDED: Import ExpressionProxy for method return types
 from ..column import ColumnProxy, ExpressionProxy
@@ -82,6 +83,7 @@ class ActuarialFrame:
     _date_accessor_instance: DateFrameAccessor | None
     _finance_accessor_instance: FinanceFrameAccessor | None
     _excel_accessor_instance: ExcelFrameAccessor | None
+    _projection_accessor_instance: ProjectionFrameAccessor | None
     # ADDED: attribute-eligible column set
     _attr_columns_set: set[str]
 
@@ -152,7 +154,37 @@ class ActuarialFrame:
     @property
     def excel(self) -> ExcelFrameAccessor: ...
     @property
+    def projection(self) -> ProjectionFrameAccessor: ...
+    @property
     def columns(self) -> list[str]: ...
+
+    # Everyday frame verbs (declared so they don't fall into __getattr__)
+    def drop(self, *columns: str) -> Self:
+        """Remove columns from the frame."""
+
+    def filter(self, predicate: pl.Expr) -> Self:
+        """Filter rows by a boolean expression."""
+
+    def join(
+        self,
+        other: pl.DataFrame | pl.LazyFrame,
+        on: str | list[str] | None = None,
+        left_on: str | list[str] | None = None,
+        right_on: str | list[str] | None = None,
+        how: str = "left",
+    ) -> Self:
+        """Join with another DataFrame without leaving the ActuarialFrame API."""
+
+    def rename(self, mapping: dict[str, str]) -> Self:
+        """Rename columns to snake_case or actuarial conventions."""
+
+    def sort(
+        self,
+        by: str | list[str],
+        *,
+        descending: bool = False,
+    ) -> Self:
+        """Sort rows by one or more columns."""
 
     # ADDED: Core function wrapper method signatures
     def fill_series(

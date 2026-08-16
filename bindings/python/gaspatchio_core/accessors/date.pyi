@@ -4,6 +4,7 @@
 
 """Type stubs for date accessors."""
 
+import datetime
 from typing import TYPE_CHECKING
 
 from .base import BaseColumnAccessor, BaseFrameAccessor
@@ -35,5 +36,9 @@ class DateColumnAccessor(BaseColumnAccessor):
     _proxy: "ColumnProxy | ExpressionProxy"
 
     def __init__(self, proxy: "ColumnProxy | ExpressionProxy") -> None: ...
+    def months_between(
+        self,
+        other: "ColumnProxy | ExpressionProxy | datetime.date",
+    ) -> "ExpressionProxy": ...
     def to_period(self, freq: str = ...) -> "ExpressionProxy":  # Ellipsis for default
         ...

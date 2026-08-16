@@ -80,7 +80,10 @@ jobs:
         run: uv run pytest -v
         working-directory: bindings/python
       - name: Verify stub files match runtime
-        run: uv run python -m mypy.stubtest gaspatchio_core --ignore-missing-stub --ignore-unused-allowlist --mypy-config-file mypy-stubtest.ini --allowlist stubtest-allowlist.txt
+        # No --ignore-missing-stub: "exists at runtime, missing from stub" is the
+        # drift class that hid the rollforward API from editors (gh#104). Known,
+        # deliberate omissions live in the allowlist's missing-stub ledger.
+        run: uv run python -m mypy.stubtest gaspatchio_core --ignore-unused-allowlist --mypy-config-file mypy-stubtest.ini --allowlist stubtest-allowlist.txt
         working-directory: bindings/python
 
   manylinux:

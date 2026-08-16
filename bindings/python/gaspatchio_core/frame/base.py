@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from ..accessors.date import DateFrameAccessor
     from ..accessors.excel import ExcelFrameAccessor
     from ..accessors.finance import FinanceFrameAccessor
+    from ..accessors.projection_frame import ProjectionFrameAccessor
 
     # Import TracedOperation for type hints
     from ..errors.metadata import TracedOperation
@@ -221,6 +222,7 @@ class ActuarialFrame:
     _date_accessor_instance: DateFrameAccessor | None = None
     _excel_accessor_instance: ExcelFrameAccessor | None = None
     _finance_accessor_instance: FinanceFrameAccessor | None = None
+    _projection_accessor_instance: ProjectionFrameAccessor | None = None
 
     def __init__(self, data=None, mode=None, verbose=None, threads=None) -> None:
         """Initialize the ActuarialFrame with optional data, mode, and configuration."""
@@ -1313,6 +1315,43 @@ class ActuarialFrame:
                         raise AttributeError(msg) from None
             self._excel_accessor_instance = AccessorClass(self)
         return self._excel_accessor_instance
+
+    @property
+    def projection(self) -> ProjectionFrameAccessor:
+        """Access projection setup and the rollforward builder for this frame.
+
+        A declared property like its ``date``/``finance``/``excel`` siblings —
+        not registry-``__getattr__`` — so the editor surface and runtime agree
+        (gh#104).
+        """
+        if self._projection_accessor_instance is None:
+            AccessorClass = _ACCESSOR_REGISTRY.get("projection", {}).get("frame")
+            if not AccessorClass:
+                try:
+                    from ..accessors import (
+                        projection_frame as _projection_frame_mod,  # noqa: F401
+                    )
+
+                    AccessorClass = _ACCESSOR_REGISTRY.get("projection", {}).get(
+                        "frame"
+                    )
+                except Exception:  # noqa: BLE001
+                    AccessorClass = None
+                if not AccessorClass:
+                    try:
+                        from ..accessors.projection_frame import (
+                            ProjectionFrameAccessor as _BuiltInProjectionAccessor,
+                        )
+
+                        AccessorClass = _BuiltInProjectionAccessor
+                    except Exception:  # noqa: BLE001
+                        msg = (
+                            "No 'projection' frame accessor registered or "
+                            "kind mismatch."
+                        )
+                        raise AttributeError(msg) from None
+            self._projection_accessor_instance = AccessorClass(self)
+        return self._projection_accessor_instance
 
     def max(self) -> MaxResult:
         """Calculate maximum values across all numeric columns.
