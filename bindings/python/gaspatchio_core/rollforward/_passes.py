@@ -373,10 +373,12 @@ def _resolve_op(  # noqa: PLR0911, C901 — one flat branch per Op type; both me
         return base
     if isinstance(op, Charge):
         base["rate_arg"] = cls(op.rate, op_name, "rate")  # type: ignore[operator]
+        base["round_charge"] = op.round_charge
         base["label"] = op.label
         return base
     if isinstance(op, Grow):
         base["rate_arg"] = cls(op.rate, op_name, "rate")  # type: ignore[operator]
+        base["round_charge"] = op.round_charge
         base["label"] = op.label
         return base
     if isinstance(op, GrowCapped):
@@ -408,6 +410,7 @@ def _resolve_op(  # noqa: PLR0911, C901 — one flat branch per Op type; both me
             if op.corridor_factor is None
             else cls(op.corridor_factor, op_name, "corridor_factor")  # type: ignore[operator]
         )
+        base["round_charge"] = op.round_charge
         base["label"] = op.label
         return base
     if isinstance(op, Ratchet):
