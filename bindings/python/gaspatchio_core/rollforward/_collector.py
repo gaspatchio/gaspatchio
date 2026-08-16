@@ -65,13 +65,9 @@ class RollforwardCollector:
         lapse (the kernel applied nothing, where a source sheet may keep
         computing a notional charge).
         """
-        if not self._compiled.ir.track_increments:
-            msg = (
-                "increment_for(): this rollforward was built without "
-                "track_increments=True, so the kernel emits no increment "
-                "fields. Pass track_increments=True to the builder."
-            )
-            raise ValueError(msg)
+        # Same immediate validation as the compiled path — an unknown label
+        # must refuse here, not surface at collect as a missing struct field.
+        self._compiled._validate_increment_label(label)
         from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
 
         return ProxyAwareExpr.wrap(

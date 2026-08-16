@@ -168,6 +168,16 @@ class CompiledRollforward:
         lapse (the kernel applied nothing, where a source sheet may keep
         computing a notional charge against the full face amount).
         """
+        self._validate_increment_label(label)
+        return self._field_expr(f"increment_{label}")
+
+    def _validate_increment_label(self, label: str) -> None:
+        """Refuse an unknown/untracked increment label at the call that asks.
+
+        Shared with the deprecated ``RollforwardCollector`` facade so both
+        paths refuse immediately with identical wording, rather than letting
+        an unknown label die at collect time as a missing struct field.
+        """
         if not self.ir.track_increments:
             msg = (
                 "increment_for(): this rollforward was built without "
@@ -186,7 +196,6 @@ class CompiledRollforward:
                 f"Labelled ops in this rollforward: {labels}."
             )
             raise KeyError(msg)
-        return self._field_expr(f"increment_{label}")
 
     def canonical_form(self) -> dict[str, Any]:
         """Return a stable, deterministic dict describing the model structure.

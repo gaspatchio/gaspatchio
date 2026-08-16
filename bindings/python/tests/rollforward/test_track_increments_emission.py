@@ -123,6 +123,24 @@ class TestGates:
         with pytest.raises(KeyError, match="Premium"):
             compiled.increment_for("premium")  # case matters; message helps
 
+    def test_collector_unknown_label_refused_immediately(self) -> None:
+        """The deprecated facade validates like the compiled path.
+
+        Without this, an unknown label sails through to Polars collect and
+        dies as a missing struct field, far from the call that asked (the
+        gh#93 rule: refuse at the call, naming the valid labels).
+        """
+        from gaspatchio_core.rollforward._collector import RollforwardCollector
+
+        af = _frame(av_init=[0.0], premium=[[100.0]])
+        b = af.projection.rollforward(
+            states={"av": af["av_init"]}, track_increments=True
+        )
+        b["av"].add(af["premium"], label="Premium")
+        collector = RollforwardCollector(compile_rollforward(b))
+        with pytest.raises(KeyError, match="Premium"):
+            collector.increment_for("premium")
+
     def test_increment_for_without_flag_points_at_the_flag(self) -> None:
         af = _frame(av_init=[0.0], premium=[[100.0]])
         b = af.projection.rollforward(states={"av": af["av_init"]})
