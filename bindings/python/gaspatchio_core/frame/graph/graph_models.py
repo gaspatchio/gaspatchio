@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from gaspatchio_core.column.shape import Kind, Shape
+
 
 class NodeType(str, Enum):
     """Types of nodes in the calculation graph."""
@@ -50,6 +52,14 @@ class NodeData(BaseModel):
     """Data associated with a graph node."""
 
     dtype: str = Field(default="unknown", description="Data type of the node")
+    shape: Shape = Field(
+        default="unknown",
+        description="Column shape: scalar (one value per policy) or list (per period)",
+    )
+    kind: Kind = Field(
+        default="unknown",
+        description="Column kind: value or boolean_mask (dtype-driven fallback)",
+    )
     source: DataSource | None = Field(default=None, description="Source of input data")
     dependencies: list[str] = Field(
         default_factory=list, description="Node dependencies"
