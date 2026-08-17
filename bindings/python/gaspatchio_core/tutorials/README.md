@@ -117,6 +117,8 @@ uv run gspio run-model tutorial/level-3-mini-va/steps/01-from-files/model.py \
 
 The base model uses inline data, so it only needs the first form. Steps 01 onward load data from files and can use all three forms.
 
+**The contract with the CLI forms:** `run-model` and `run-single-policy` build the frame from your model-points file and call `main()` with only those columns — the `if __name__ == "__main__":` block never runs. A column attached in that block exists only for the standalone form, so everything `main()` needs must either be in the model-points file or be created inside `main()` itself.
+
 ## On-ramps
 
 Each level can be started independently if you have the right background:

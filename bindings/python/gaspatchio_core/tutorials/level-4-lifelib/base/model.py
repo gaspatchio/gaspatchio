@@ -917,6 +917,9 @@ def main(
 # =========================================================================
 
 if __name__ == "__main__":
+    # Standalone entry point. `gspio run-model` never runs this block: it
+    # builds the frame from your model-points file and calls main() directly,
+    # so everything main() needs must be created inside main().
     mp = pl.read_parquet(MODEL_DIR / "model_points.parquet")
     af = ActuarialFrame(mp)
     result_af = main(af)

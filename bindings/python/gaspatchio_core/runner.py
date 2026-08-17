@@ -215,6 +215,15 @@ def _execute_model_run(
         # Use the enhanced error message if available
         error_message = str(e)
 
+        if "'ActuarialFrame' object has no attribute" in error_message:
+            error_message += (
+                " Note: run-model builds the frame from the model-points file"
+                " and calls main() with only those columns — a column attached"
+                " outside main() (for example in an `if __name__ == '__main__':`"
+                " block) is not visible here. Create it inside main() or add it"
+                " to the model points."
+            )
+
         # Log that model execution failed (without repeating the full error)
         logger.debug("Model execution failed with {}", type(e).__name__)
 
