@@ -70,3 +70,25 @@ class TestNodeShapeKind:
         assert nodes["rates"]["shape"] == "list"
         assert nodes["double_rates"]["shape"] == "list"
         assert nodes["double_rates"]["kind"] == "value"
+
+    def test_backfill_resolves_dtype_lost_by_tracing(self) -> None:
+        """A None tracing dtype falls back to the frame's collected schema."""
+        set_default_mode("debug")
+        try:
+            af = ActuarialFrame({"age": [30, 40], "rates": [[0.1, 0.2], [0.3, 0.4]]})
+
+            @af.trace
+            def build(f: ActuarialFrame) -> None:
+                f.double_rates = f.rates * 2.0
+
+            build(af)
+            for op in af._computation_graph:  # noqa: SLF001
+                if not isinstance(op, tuple):
+                    op.expected_dtype = None
+            payload = json.loads(GraphExporter(af).export())
+        finally:
+            set_default_mode("optimize")
+        node = {n["id"]: n["data"] for n in payload["nodes"]}["double_rates"]
+        assert node["shape"] == "list"
+        assert node["kind"] == "value"
+        assert node["dtype"] != "unknown"
