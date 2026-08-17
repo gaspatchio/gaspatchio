@@ -23,6 +23,75 @@ def _af_with_synthetic_projection(n: int = 12) -> ActuarialFrame:
     )
 
 
+class TestReturnsProxyAwareExpressions:
+    """The frame-level projection methods hand out proxy-aware expressions.
+
+    A bare ``pl.Expr`` raises on a proxy operand before the proxy's
+    reflected method can run (gh#67), so results worked in one operand
+    order and not the other. ``ProxyAwareExpr`` fixes the operand-order
+    trap while remaining a real ``pl.Expr`` — raw Polars interop such as
+    ``pl.concat_list`` (the checked-in tutorial idiom) is untouched.
+    """
+
+    def test_all_six_return_proxy_aware_expr(self) -> None:
+        """Every method returns a ProxyAwareExpr that is still a pl.Expr."""
+        import polars as pl
+
+        from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
+
+        af = _af_with_synthetic_projection(n=12)
+        results = [
+            af.projection.period_dates(),
+            af.projection.year_fractions(),
+            af.projection.t_years(),
+            af.projection.anniversary_mask(),
+            af.projection.is_in_force(),
+            af.projection.contract_boundary(),
+        ]
+        for wrapped in results:
+            assert isinstance(wrapped, ProxyAwareExpr)
+            assert isinstance(wrapped, pl.Expr)
+
+    def test_assignment_round_trip(self) -> None:
+        """A wrapped result assigns to a column and collects unchanged."""
+        af = _af_with_synthetic_projection(n=12)
+        af.t_years_col = af.projection.t_years()
+        result = af.collect()
+        assert len(result["t_years_col"][0]) == 13
+
+    def test_concat_list_interop(self) -> None:
+        """The L3-typed tutorial idiom: result passed straight to pl.concat_list."""
+        import polars as pl
+
+        af = _af_with_synthetic_projection(n=24)
+        af.is_anniversary = pl.concat_list(
+            [
+                af.projection.anniversary_mask(),
+                pl.lit([False], dtype=pl.List(pl.Boolean)),
+            ]
+        )
+        mask = af.collect()["is_anniversary"][0]
+        assert len(mask) == 25
+        assert mask[11] is True
+        assert mask[24] is False
+
+    def test_operator_interop_with_proxy_operand(self) -> None:
+        """The ``expr * proxy`` order works — it raises on a bare pl.Expr."""
+        from datetime import date
+
+        from gaspatchio_core import ActuarialFrame
+
+        af = ActuarialFrame({"id": ["P1"], "scale": [2.0]})
+        af = af.projection.set(
+            start_date=date(2025, 1, 31), n_periods=12, frequency="monthly"
+        )
+        af.scaled = af.projection.year_fractions() * af.scale
+        values = af.collect()["scaled"][0]
+        assert len(values) == 12
+        for v in values:
+            assert v == pytest.approx(2.0 / 12.0)
+
+
 class TestPeriodDates:
     def test_returns_list_of_n_plus_one_dates(self) -> None:
         af = _af_with_synthetic_projection(n=12)
