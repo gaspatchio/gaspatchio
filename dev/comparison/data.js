@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786952541957,
+  "lastUpdate": 1786953195914,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib": [
@@ -7223,6 +7223,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 5.11,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0bfbf8c431c9c12a1eea6885a5a4bd34b518ef92",
+          "message": "refactor(column): reflected mask operators delegate to masks.py (#132)",
+          "timestamp": "2026-08-17T19:43:45+12:00",
+          "tree_id": "c507852842ebb999d43c1224cfc945277400eaad",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/0bfbf8c431c9c12a1eea6885a5a4bd34b518ef92"
+        },
+        "date": 1786953194402,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 1.889,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.338,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.145,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 55.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 5.642,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 38.91,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.45,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2222.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 19.775,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 50.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 43.94,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.494,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 4009.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 15.935,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 627.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 6.39,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 23.201,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4310.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 117.522,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 850.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.07,
             "unit": "x"
           }
         ]
