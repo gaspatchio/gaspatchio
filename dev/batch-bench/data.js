@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786340551624,
+  "lastUpdate": 1786943935177,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Batch Search": [
@@ -401,6 +401,73 @@ window.BENCHMARK_DATA = {
           {
             "name": "Batch Search/100K-10sc-auto-peak",
             "value": 4757.2,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Matt Wright",
+            "username": "mrmattwright",
+            "email": "1277725+mrmattwright@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "d7616b20f72dc0d41c87ad4c6bdc0f97c77a525c",
+          "message": "release: v0.8.2 — the recursion tells the whole truth\n\nReal per-op increment emission closes the #69 arc; round_charge places ROUND on the flow as source spreadsheets do (#92); between() scope sticks to its handle (#101); truthful stubs un-blind the rollforward API (#104); shape-gated conversions (#86, #89); skill honesty (#102, #103).",
+          "timestamp": "2026-08-16T08:26:56Z",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/d7616b20f72dc0d41c87ad4c6bdc0f97c77a525c"
+        },
+        "date": 1786943932319,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Batch Search/1K-100sc-auto-wall",
+            "value": 32.225,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-100sc-auto-peak",
+            "value": 785.5,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/1K-100sc-checksum",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-wall",
+            "value": 491.746,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-peak",
+            "value": 471.7,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-wall",
+            "value": 233.347,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-peak",
+            "value": 802.2,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-wall",
+            "value": 224.848,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-peak",
+            "value": 4802.1,
             "unit": "MB"
           }
         ]
