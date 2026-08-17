@@ -172,6 +172,7 @@ class ActuarialFrame:
         left_on: str | list[str] | None = None,
         right_on: str | list[str] | None = None,
         how: str = "left",
+        maintain_order: str | None = None,
     ) -> Self:
         """Join with another DataFrame without leaving the ActuarialFrame API."""
 
