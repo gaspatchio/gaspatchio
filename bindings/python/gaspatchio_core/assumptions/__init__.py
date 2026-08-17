@@ -6,7 +6,13 @@
 
 # Core API
 from ._analysis import DimensionInfo, TableSchema, analyze_table
-from ._api import Table, get_table_metadata, list_tables, list_tables_with_metadata
+from ._api import (
+    Table,
+    TableSupersededError,
+    get_table_metadata,
+    list_tables,
+    list_tables_with_metadata,
+)
 from ._builder import TableBuilder
 
 # Dimension types
@@ -35,6 +41,7 @@ from ._strategies import (
 __all__ = [
     # Core API
     "Table",
+    "TableSupersededError",
     "analyze_table",
     "TableBuilder",
     # Metadata functions

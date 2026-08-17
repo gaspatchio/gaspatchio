@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from gaspatchio_core.scenarios.shocks import Shock
 
 # Core API Classes
+class TableSupersededError(RuntimeError): ...
+
 class Table:
     """Main assumption table class with dimension-based structure."""
 

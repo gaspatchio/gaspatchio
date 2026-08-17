@@ -70,6 +70,18 @@ def _suggest_dimension(invalid_name: str, valid_names: list[str]) -> str | None:
 
 # Import for type hints without circular dependency
 
+
+class TableSupersededError(RuntimeError):
+    """A lookup was built from a Table whose name now resolves to different data.
+
+    Tables resolve by name at execution time (last-writer-wins), so a lookup
+    from a superseded object would silently read the newer table's values —
+    the shape where a scenario override resolves to base data and a
+    sensitivity sweep reports zero sensitivity. Raised at ``lookup()`` so the
+    wrong number is never produced.
+    """
+
+
 # Global metadata storage for assumption tables
 _TABLE_METADATA: dict[str, dict[str, Any]] = {}
 
@@ -772,6 +784,7 @@ class Table:
         # is already sorted by key columns above, so identical source data yields
         # an identical hash regardless of input row order.
         content_sha = _hash_processed_df(processed_df)
+        self._registered_sha = content_sha
         previous_sha = _REGISTERED_TABLE_SHAS.get(self._name)
         if previous_sha is not None and previous_sha != content_sha:
             logger.warning(
@@ -970,6 +983,25 @@ class Table:
         └───────────┴──────────────┴─────────────┴────────────┘
         ```
         """
+        # Refuse a lookup that is guaranteed to read the wrong table. Lookups
+        # resolve by NAME at execution time, so if this name was re-registered
+        # with different data after this object was built, the expression
+        # would silently serve the newer values (#116 — a scenario override
+        # resolving to base data, the sweep reporting zero sensitivity).
+        registered_sha = _REGISTERED_TABLE_SHAS.get(self._name)
+        if registered_sha is not None and registered_sha != self._registered_sha:
+            msg = (
+                f"Assumption table '{self._name}' has been superseded: another "
+                f"Table was registered under this name with different data "
+                f"after this object was built. Lookups resolve by name at "
+                f"execution time, so this lookup would silently read the "
+                f"newer table's values (a scenario override lost this way "
+                f"reports zero sensitivity). Look up from the most recently "
+                f"built '{self._name}' Table, or give the tables distinct "
+                f"names."
+            )
+            raise TableSupersededError(msg)
+
         # Merge both sources of dimensions
         all_dimensions = {}
         if _dimensions:
