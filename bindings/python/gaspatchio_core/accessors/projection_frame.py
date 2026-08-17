@@ -22,7 +22,7 @@ from gaspatchio_core.schedule import Schedule
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from gaspatchio_core.column.expression_proxy import ExpressionProxy
+    from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
     from gaspatchio_core.frame.base import ActuarialFrame
     from gaspatchio_core.rollforward._builder import ExprLike
 
@@ -574,19 +574,23 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
             raise ValueError(msg)
         return proj
 
-    def _wrap(self, expr: pl.Expr) -> ExpressionProxy:
-        """Wrap an emitted expression with this frame as its parent.
+    def _wrap(self, expr: pl.Expr) -> ProxyAwareExpr:
+        """Wrap an emitted expression for proxy-aware operator interop.
 
-        The frame-level projection methods hand results to users, so they
-        must carry shape/kind context like every other accessor — a bare
-        ``pl.Expr`` loses its parent and resolves as ``unknown`` shape
-        downstream.
+        These methods hand frame-independent expressions to users, and a
+        bare ``pl.Expr`` raises on a proxy operand before the proxy's
+        reflected method can run (gh#67) — so results worked in one
+        operand order and not the other. ``ProxyAwareExpr`` fixes the
+        operand-order trap while staying a real ``pl.Expr``, so raw
+        Polars interop (``pl.concat_list([...])``, the tutorial idiom)
+        is untouched. Same treatment as ``Table.lookup`` and the
+        ``Schedule.*_expr`` family.
         """
-        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
 
-        return ExpressionProxy(expr, self._frame)
+        return ProxyAwareExpr.wrap(expr)
 
-    def period_dates(self) -> ExpressionProxy:
+    def period_dates(self) -> ProxyAwareExpr:
         """Return per-row List<Date>.
 
         Uniform schedules give length ``n_periods+1`` for every row;
@@ -600,7 +604,7 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
             return self._wrap(sched.per_policy_period_dates_expr())
         return self._wrap(sched.period_dates_expr())
 
-    def year_fractions(self) -> ExpressionProxy:
+    def year_fractions(self) -> ProxyAwareExpr:
         """Return per-row List<Float64> of length n_periods (per-period dt[t])."""
         sched = self._require_projection()
         if sched._kind == "from_calendar_grid":  # noqa: SLF001
@@ -608,7 +612,7 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
             return self._wrap(pl.lit(yfs, dtype=pl.List(pl.Float64)))
         return self._wrap(sched.year_fractions_expr())
 
-    def t_years(self) -> ExpressionProxy:
+    def t_years(self) -> ProxyAwareExpr:
         """Return per-row List<Float64> of cumulative year fractions from 0.
 
         Length is ``n_periods + 1``. Feeds ``Curve.discount_factor(t)`` directly.
@@ -625,7 +629,7 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
             pl.concat_list([zeros, yfs_expr.list.eval(pl.element().cum_sum())])
         )
 
-    def anniversary_mask(self) -> ExpressionProxy:
+    def anniversary_mask(self) -> ProxyAwareExpr:
         """Return per-row List<Boolean> of length n_periods marking anniversaries."""
         sched = self._require_projection()
         if sched._kind == "from_calendar_grid":  # noqa: SLF001
@@ -633,7 +637,7 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
             return self._wrap(pl.lit(mask, dtype=pl.List(pl.Boolean)))
         return self._wrap(sched.anniversary_mask_expr())
 
-    def is_in_force(self, *, end_date_column: str | None = None) -> ExpressionProxy:
+    def is_in_force(self, *, end_date_column: str | None = None) -> ProxyAwareExpr:
         """Return per-row List<Boolean> of length n_periods — boundary mask.
 
         Pass ``end_date_column`` for from_inception schedules where each
@@ -645,7 +649,7 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
 
     def contract_boundary(
         self, *, end_date_column: str | None = None
-    ) -> ExpressionProxy:
+    ) -> ProxyAwareExpr:
         """Return per-row List<Boolean> of length n_periods — kernel termination mask.
 
         True at period t means the contract has terminated by period t. Pass to
