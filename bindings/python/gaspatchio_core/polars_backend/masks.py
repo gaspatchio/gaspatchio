@@ -87,6 +87,30 @@ def boolean_or(
     return left._expr | _other_to_native_expr(right)  # noqa: SLF001
 
 
+def boolean_and_reflected(mask: pl.Expr, condition: ConditionExpression) -> pl.Expr:
+    """Combine ``mask & condition`` for the reflected operator path.
+
+    The left operand is an ExpressionProxy's raw expression — a Float64
+    0/1 mask by construction (Python dispatches to ``__rand__`` only when
+    the left side is a proxy rather than a ConditionExpression, which
+    happens on the mask-combination path). The reflected path is
+    unconditionally arithmetic: ``left * right``, preserving operand
+    order.
+    """
+    return mask * to_boolean_expr(condition)
+
+
+def boolean_or_reflected(mask: pl.Expr, condition: ConditionExpression) -> pl.Expr:
+    """Combine ``mask | condition`` for the reflected operator path.
+
+    Same contract as :func:`boolean_and_reflected`; uses the
+    ``1 - (1-a)(1-b)`` identity over Float64 0/1 masks, preserving
+    operand order.
+    """
+    right_bool = to_boolean_expr(condition)
+    return pl.lit(1.0) - ((pl.lit(1.0) - mask) * (pl.lit(1.0) - right_bool))
+
+
 def boolean_not(condition: ConditionExpression) -> pl.Expr:
     """Negate a predicate.
 
