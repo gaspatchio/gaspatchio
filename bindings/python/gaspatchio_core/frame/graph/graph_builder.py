@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 from loguru import logger
 
+from gaspatchio_core.column.shape import kind_from_dtype, shape_from_dtype
+
 from .graph_models import DataSource, GraphEdge, GraphNode, NodeData, NodeType
 from .graph_utils import clean_expression_string, simplify_dtype
 
@@ -96,13 +98,15 @@ class CalculationGraph:
     ) -> GraphNode:
         """Create an input node."""
         dtype_str = simplify_dtype(str(dtype)) if dtype else "unknown"
-        
+
         return GraphNode(
             id=column_name,
             type=NodeType.INPUT,
             label=column_name,
             data=NodeData(
                 dtype=dtype_str,
+                shape=shape_from_dtype(dtype),
+                kind=kind_from_dtype(dtype),
                 source=source,
                 dependencies=[]
             )
@@ -126,7 +130,9 @@ class CalculationGraph:
                 formula=expr_str,
                 dependencies=dependencies,
                 source_location=source_location,
-                dtype=dtype_str
+                dtype=dtype_str,
+                shape=shape_from_dtype(operation.expected_dtype),
+                kind=kind_from_dtype(operation.expected_dtype)
             )
         )
     
