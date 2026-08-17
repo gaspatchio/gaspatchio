@@ -56,6 +56,19 @@ class TestJoin:
         sample_af.join(params, on="product_code")
         assert "rate" in sample_af.collect().columns
 
+    def test_join_maintain_order_left(self):
+        """maintain_order="left" preserves this frame's row order through the join."""
+        af = ActuarialFrame({"id": [3, 1, 2], "val": [30, 10, 20]})
+        other = pl.DataFrame({"id": [1, 2, 3], "extra": ["a", "b", "c"]})
+        af = af.join(other, on="id", maintain_order="left")
+        assert af.collect()["id"].to_list() == [3, 1, 2]
+
+    def test_join_maintain_order_default_unchanged(self, sample_af):
+        """Omitting maintain_order keeps the existing join behavior."""
+        params = pl.DataFrame({"product_code": ["TERM", "WL"], "rate": [0.05, 0.08]})
+        result = sample_af.join(params, on="product_code")
+        assert sorted(result.collect()["rate"].to_list()) == [0.05, 0.05, 0.08]
+
 
 class TestFilter:
     def test_filter_reduces_rows(self, sample_af):
