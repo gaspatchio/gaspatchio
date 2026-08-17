@@ -309,3 +309,90 @@ class TestKnowledgeCommand:
 
         assert result.exit_code == 1
         assert "API unavailable" in result.output
+
+
+class TestKnowledgePayloadTrimming:
+    """#120: near-duplicate collapse and per-hit truncation by default."""
+
+    @staticmethod
+    def _hit(text: str, doc_id: str) -> KnowledgeResult:
+        return KnowledgeResult(
+            text=text,
+            score=0.9,
+            doc_id=doc_id,
+            tags=[],
+            jurisdiction=None,
+            doc_type=None,
+        )
+
+    def _mock_response(self, hits: list[KnowledgeResult]) -> KnowledgeSearchResponse:
+        return KnowledgeSearchResponse(
+            results=hits,
+            query="net premium reserve",
+            count=len(hits),
+            search_type="hybrid",
+            retrieval_mode="chunks",
+            took_ms=10.0,
+        )
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_near_duplicate_hits_collapse_by_default(self, mock_client_class):
+        """The observed #120 case: one preamble ingested under two doc_ids."""
+        preamble = "The purpose of this practice note is to provide background. " * 60
+        mock_client = MagicMock()
+        mock_client.search_knowledge.return_value = self._mock_response(
+            [
+                self._hit(preamble, "VM-20"),
+                self._hit(preamble + " Minor trailing variation.", "VM-20 _2"),
+                self._hit("Term Insurance uses the NPR methodology.", "VM-20"),
+            ]
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["knowledge", "net premium reserve"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["deduplicated"] == 1
+        assert len(output["results"]) == 2
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_long_hit_truncates_with_marker(self, mock_client_class):
+        """A long hit is windowed and carries the --full marker."""
+        long_text = "Reserve methodology background prose. " * 200
+        mock_client = MagicMock()
+        mock_client.search_knowledge.return_value = self._mock_response(
+            [self._hit(long_text, "VM-20")]
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["knowledge", "reserve methodology"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        hit = output["results"][0]
+        assert hit["truncated"] is True
+        assert hit["full_chars"] == len(long_text)
+        assert "--full" in hit["text"]
+        assert len(hit["text"]) < len(long_text)
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_full_flag_returns_everything(self, mock_client_class):
+        """--full skips both dedup and truncation."""
+        long_text = "Reserve methodology background prose. " * 200
+        preamble_hits = [
+            self._hit(long_text, "VM-20"),
+            self._hit(long_text, "VM-20 _2"),
+        ]
+        mock_client = MagicMock()
+        mock_client.search_knowledge.return_value = self._mock_response(preamble_hits)
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["knowledge", "reserve methodology", "--full"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["deduplicated"] == 0
+        assert len(output["results"]) == 2
+        assert output["results"][0]["text"] == long_text
+        assert output["results"][0]["truncated"] is False

@@ -19,7 +19,7 @@ from loguru import logger
 from pydantic import BaseModel
 from rich.console import Console
 
-from .api import APIConnectionError, KnowledgeAPIClient
+from .api import APIConnectionError, KnowledgeAPIClient, postprocess
 from .runner import (  # Changed to relative import
     ModelRunConfig,
     RunMetrics,
@@ -1401,6 +1401,26 @@ def docs(
             rich_help_panel="Filters",
         ),
     ] = None,
+    max_chars: Annotated[
+        int,
+        typer.Option(
+            "--max-chars",
+            help="Per-result text budget in characters; a longer text keeps a "
+            "window around the first query match, with a marker naming --full. "
+            "0 = unlimited.",
+            min=0,
+            rich_help_panel="Output Mode",
+        ),
+    ] = 1500,
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help="Return complete result texts and keep near-duplicate hits "
+            "(skips all client-side trimming).",
+            rich_help_panel="Output Mode",
+        ),
+    ] = False,
 ):
     """Search Gaspatchio framework documentation.
 
@@ -1455,12 +1475,19 @@ def docs(
                 content_type=content_type,
             )
         else:
-            result = client.search_docs(
+            search = client.search_docs(
                 query,
                 limit=limit,
                 search_type=search_type,
                 content_type=content_type,
             )
+            if not full:
+                kept, dropped = postprocess.dedupe_results(search.results)
+                kept = [postprocess.truncate_result(r, query, max_chars) for r in kept]
+                search = search.model_copy(
+                    update={"results": kept, "deduplicated": dropped},
+                )
+            result = search
         # Output JSON directly for LLM consumption
         print(result.model_dump_json(indent=2))
     except APIConnectionError as e:
@@ -1557,6 +1584,26 @@ def knowledge(
             rich_help_panel="Filters",
         ),
     ] = None,
+    max_chars: Annotated[
+        int,
+        typer.Option(
+            "--max-chars",
+            help="Per-result text budget in characters; a longer text keeps a "
+            "window around the first query match, with a marker naming --full. "
+            "0 = unlimited.",
+            min=0,
+            rich_help_panel="Output Mode",
+        ),
+    ] = 1500,
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help="Return complete result texts and keep near-duplicate hits "
+            "(skips all client-side trimming).",
+            rich_help_panel="Output Mode",
+        ),
+    ] = False,
 ):
     """Search the actuarial knowledge base.
 
@@ -1631,7 +1678,7 @@ def knowledge(
                 doc_type=doc_type,
             )
         else:
-            result = client.search_knowledge(
+            search = client.search_knowledge(
                 query,
                 limit=limit,
                 search_type=search_type,
@@ -1640,6 +1687,13 @@ def knowledge(
                 jurisdiction=jurisdiction,
                 doc_type=doc_type,
             )
+            if not full:
+                kept, dropped = postprocess.dedupe_results(search.results)
+                kept = [postprocess.truncate_result(r, query, max_chars) for r in kept]
+                search = search.model_copy(
+                    update={"results": kept, "deduplicated": dropped},
+                )
+            result = search
         # Output JSON directly for LLM consumption
         print(result.model_dump_json(indent=2))
     except APIConnectionError as e:
