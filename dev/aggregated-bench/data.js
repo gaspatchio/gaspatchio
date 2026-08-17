@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786953098775,
+  "lastUpdate": 1786953994667,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Aggregation Surface Benchmarks": [
@@ -14253,6 +14253,240 @@ window.BENCHMARK_DATA = {
           {
             "name": "L4 Aggregation/100K-spill-peak",
             "value": 2251.1,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6dac1471b88ecab7e0b6dfc1eb5dcbf4aa4981cb",
+          "message": "feat(graph): calc-graph nodes carry shape and kind from the shape SOT (#134)\n\n* feat(graph): calc-graph nodes carry shape and kind from the shape SOT\n\nThe lineage graph classified columns only by raw dtype string, while\nthe framework's own shape/kind vocabulary (scalar/list,\nvalue/boolean_mask) lived unwired next door in column/shape.py. Expose\ntwo dtype-only helpers on the SOT (shape_from_dtype, kind_from_dtype —\nsame rules, one home; _shape_from_schema now routes through the former)\nand stamp every graph node with both at construction. Lineage output\nnow speaks the same shape language as the dispatch layer.\n\n* feat(graph): backfill node dtype/shape/kind from the collected schema\n\nTracing-time dtype inference is a per-assignment probe and can return\nNone, and a probe failure cascades to downstream assignments — those\nnodes exported shape/kind as unknown even though the frame's collected\nschema knows the answer. After building the graph, resolve any\nstill-unknown dtype/shape/kind from the schema; a schema failure\ndegrades to the traced values rather than breaking export.",
+          "timestamp": "2026-08-17T19:58:25+12:00",
+          "tree_id": "9f9b3abfcb5cc6cfced9029d32283eb8f6d3d78f",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/6dac1471b88ecab7e0b6dfc1eb5dcbf4aa4981cb"
+        },
+        "date": 1786953993054,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "L4 Aggregation/1K-baseline-wall",
+            "value": 0.351,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-agg-wall",
+            "value": 0.361,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-wall",
+            "value": 0.358,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-throughput",
+            "value": 2849,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-throughput",
+            "value": 2793.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-peak",
+            "value": 57,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-data-mb",
+            "value": 24.2,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-peak",
+            "value": 9.3,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-memory-ratio",
+            "value": 6.13,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/1K-speedup",
+            "value": 1.01,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/1K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-wall",
+            "value": 0.428,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-throughput",
+            "value": 2336.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-peak",
+            "value": 48.3,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-wall",
+            "value": 2.453,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-agg-wall",
+            "value": 2.482,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-wall",
+            "value": 2.545,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-throughput",
+            "value": 4076.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-throughput",
+            "value": 3929.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-peak",
+            "value": 263.3,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-data-mb",
+            "value": 252.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-peak",
+            "value": 80.4,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-memory-ratio",
+            "value": 3.27,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/10K-speedup",
+            "value": 0.98,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/10K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-wall",
+            "value": 3.408,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-throughput",
+            "value": 2934.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-peak",
+            "value": 314.3,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-wall",
+            "value": 23.511,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-agg-wall",
+            "value": 23.679,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-wall",
+            "value": 23.875,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-throughput",
+            "value": 4253.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-throughput",
+            "value": 4188.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-peak",
+            "value": 2541.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-data-mb",
+            "value": 2499.9,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-peak",
+            "value": 545.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-memory-ratio",
+            "value": 4.66,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/100K-speedup",
+            "value": 0.99,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/100K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-wall",
+            "value": 32.705,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-throughput",
+            "value": 3057.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-peak",
+            "value": 2112.1,
             "unit": "MB"
           }
         ]
