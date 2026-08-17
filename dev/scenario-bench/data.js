@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786869790159,
+  "lastUpdate": 1786939121737,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks": [
@@ -5562,6 +5562,128 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 5822.6,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Matt Wright",
+            "username": "mrmattwright",
+            "email": "1277725+mrmattwright@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "d7616b20f72dc0d41c87ad4c6bdc0f97c77a525c",
+          "message": "release: v0.8.2 — the recursion tells the whole truth\n\nReal per-op increment emission closes the #69 arc; round_charge places ROUND on the flow as source spreadsheets do (#92); between() scope sticks to its handle (#101); truthful stubs un-blind the rollforward API (#104); shape-gated conversions (#86, #89); skill honesty (#102, #103).",
+          "timestamp": "2026-08-16T08:26:56Z",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/d7616b20f72dc0d41c87ad4c6bdc0f97c77a525c"
+        },
+        "date": 1786939119077,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 3.466,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 176.5,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 2885.2,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 32.353,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 780.2,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 3090.9,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-wall",
+            "value": 490.039,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-rss",
+            "value": 828.8,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-throughput",
+            "value": 2040.7,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 22.986,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 1156.9,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 4350.5,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 226.505,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 5895.2,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 4414.9,
             "unit": "scenario-points/sec"
           },
           {
