@@ -13,8 +13,8 @@ dependencies = [
     "platformdirs>=4.0",
     "psutil>=5.9",
     "pydantic>=2.0.0",
-    "polars==1.42.1",
-    "polars[rt64]==1.42.1",
+    "polars==1.43.2",
+    "polars[rt64]==1.43.2",
     "rich>=13.9.4",
     "typer>=0.15.1",
     "pyarrow>=15.0.0",
@@ -55,7 +55,7 @@ dev = [
     # previously-clean examples). The pin states that ruff's version is part of
     # the test contract; uv.lock (tracked, installed with `uv sync --locked`)
     # is what makes every other dev dependency reproducible too — issue #33.
-    "ruff==0.11.12",
+    "ruff==0.16.3",
     "ty>=0.0.2",
     "types-PyYAML>=6.0",
     "xlsxwriter>=3.2.9",
@@ -76,10 +76,10 @@ evals = [
 ]
 
 [project.optional-dependencies]
-pandas = ["polars[rt64]==1.42.1"]
-numpy = ["polars[rt64]==1.42.1"]
-pyarrow = ["polars[rt64]==1.42.1"]
-excel = ["polars[rt64]==1.42.1"]
+pandas = ["polars[rt64]==1.43.2"]
+numpy = ["polars[rt64]==1.43.2"]
+pyarrow = ["polars[rt64]==1.43.2"]
+excel = ["polars[rt64]==1.43.2"]
 recipes = ["marimo>=0.10.0"]
 
 # Build System
