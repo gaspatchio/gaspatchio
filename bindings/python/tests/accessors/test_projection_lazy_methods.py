@@ -23,6 +23,38 @@ def _af_with_synthetic_projection(n: int = 12) -> ActuarialFrame:
     )
 
 
+class TestReturnsFrameworkExpressions:
+    """The frame-level projection methods hand out framework expressions.
+
+    A bare ``pl.Expr`` has no parent, so its shape resolves as unknown
+    downstream; the wrapped form carries the frame and participates in
+    shape-aware dispatch like every other accessor result.
+    """
+
+    def test_all_six_return_expression_proxy(self) -> None:
+        """Every frame-level projection method returns a wrapped expression."""
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+
+        af = _af_with_synthetic_projection(n=12)
+        results = [
+            af.projection.period_dates(),
+            af.projection.year_fractions(),
+            af.projection.t_years(),
+            af.projection.anniversary_mask(),
+            af.projection.is_in_force(),
+            af.projection.contract_boundary(),
+        ]
+        for proxy in results:
+            assert isinstance(proxy, ExpressionProxy)
+
+    def test_assignment_round_trip(self) -> None:
+        """A wrapped result assigns to a column and collects unchanged."""
+        af = _af_with_synthetic_projection(n=12)
+        af.t_years_col = af.projection.t_years()
+        result = af.collect()
+        assert len(result["t_years_col"][0]) == 13
+
+
 class TestPeriodDates:
     def test_returns_list_of_n_plus_one_dates(self) -> None:
         af = _af_with_synthetic_projection(n=12)
