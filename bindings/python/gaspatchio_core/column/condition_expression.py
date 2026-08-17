@@ -165,13 +165,15 @@ class ConditionExpression:
         return ExpressionProxy(combined, self._parent)
 
     def __rand__(self, other: ExpressionProxy) -> ExpressionProxy:
-        """Handle ExpressionProxy & ConditionExpression (reverse AND)."""
-        from gaspatchio_core.column.expression_proxy import ExpressionProxy
-        from gaspatchio_core.polars_backend.masks import to_boolean_expr
+        """Handle ExpressionProxy & ConditionExpression (reverse AND).
 
-        left_bool = other._expr  # noqa: SLF001
-        right_bool = to_boolean_expr(self)
-        combined = left_bool * right_bool
+        Delegates to ``polars_backend.masks.boolean_and_reflected`` — the
+        arithmetic-as-logic identity lives in the backend, in one place.
+        """
+        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio_core.polars_backend.masks import boolean_and_reflected
+
+        combined = boolean_and_reflected(other._expr, self)  # noqa: SLF001
         return ExpressionProxy(combined, self._parent, kind="boolean_mask")
 
     def __or__(self, other: ConditionExpression) -> ExpressionProxy:
@@ -186,15 +188,15 @@ class ConditionExpression:
         return ExpressionProxy(combined, self._parent, kind="boolean_mask")
 
     def __ror__(self, other: ExpressionProxy) -> ExpressionProxy:
-        """Handle ExpressionProxy | ConditionExpression (reverse OR)."""
-        import polars as pl
+        """Handle ExpressionProxy | ConditionExpression (reverse OR).
 
+        Delegates to ``polars_backend.masks.boolean_or_reflected`` — the
+        ``1 - (1-a)(1-b)`` identity lives in the backend, in one place.
+        """
         from gaspatchio_core.column.expression_proxy import ExpressionProxy
-        from gaspatchio_core.polars_backend.masks import to_boolean_expr
+        from gaspatchio_core.polars_backend.masks import boolean_or_reflected
 
-        left_bool = other._expr  # noqa: SLF001
-        right_bool = to_boolean_expr(self)
-        combined = pl.lit(1.0) - ((pl.lit(1.0) - left_bool) * (pl.lit(1.0) - right_bool))
+        combined = boolean_or_reflected(other._expr, self)  # noqa: SLF001
         return ExpressionProxy(combined, self._parent, kind="boolean_mask")
 
     def __invert__(self) -> ExpressionProxy:
