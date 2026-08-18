@@ -1,5 +1,11 @@
 name: Evals & Benchmarks
 
+# Still runs per-commit on main: the gh-pages trend history keeps a point per
+# commit, so a regression stays attributable to the change that caused it. That
+# is affordable because every job restores its LFS objects from the Actions
+# cache (.github/actions/lfs-pull) and fetches only the subset it reads — a warm
+# cache costs zero LFS bandwidth. Re-fetching the full 32.5 MB working set in
+# all 13 job instances on every commit is what exhausted the account's quota.
 on:
   schedule:
     - cron: '0 3 * * 1'  # 3am UTC every Monday
@@ -79,7 +85,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "core/benches/**"
+          scope: rust
       - uses: dtolnay/rust-toolchain@stable
       # Cache compiled dependencies (polars, criterion, …) to keep the cold
       # Windows build inside the timeout. Only deps are cached — the bench crate
@@ -102,6 +113,8 @@ jobs:
           output-file-path: core/bench-output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: ${{ matrix.benchmark_path }}
           alert-threshold: '200%'
           fail-on-alert: false
@@ -140,7 +153,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked --no-dev
@@ -161,6 +179,8 @@ jobs:
           output-file-path: benchmark-output/model-bench-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: ${{ matrix.benchmark_path }}
           alert-threshold: '150%'
           fail-on-alert: false
@@ -181,7 +201,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true  # L4 tutorial model points + assumptions are git-LFS
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
@@ -198,6 +223,8 @@ jobs:
           output-file-path: /tmp/aggregated-bench-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: dev/aggregated-bench
           alert-threshold: '150%'
           fail-on-alert: false
@@ -241,7 +268,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - name: Set up SSH agent for benchmarks deploy key
         uses: webfactory/ssh-agent@v0.10.0
         with:
@@ -270,6 +302,8 @@ jobs:
           output-file-path: evals/benchmarks/comparison_results/benchmark-results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: ${{ matrix.benchmark_path }}
           alert-threshold: '200%'
           fail-on-alert: false
@@ -309,7 +343,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked --no-dev
@@ -330,6 +369,8 @@ jobs:
           output-file-path: benchmark-output/scenario-bench-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: ${{ matrix.benchmark_path }}
           alert-threshold: '150%'
           fail-on-alert: false
@@ -349,7 +390,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
@@ -368,6 +414,8 @@ jobs:
           output-file-path: /tmp/batch-search-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: dev/batch-bench
           alert-threshold: '150%'
           fail-on-alert: false
@@ -390,7 +438,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
@@ -422,7 +475,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true  # L4 base model points + assumptions are git-LFS
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
@@ -453,7 +511,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked --group evals
@@ -480,6 +543,8 @@ jobs:
           output-file-path: evals/results/benchmark-results.json  # relative to repo root
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: dev/evals
           alert-threshold: '200%'
           comment-on-alert: true

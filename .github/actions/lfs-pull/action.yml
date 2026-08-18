@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Pull cached LFS objects
+description: >-
+  Restore only the git-LFS objects a job actually needs, from an Actions cache
+  keyed on the LFS object ids. A cache hit costs zero LFS bandwidth; a miss
+  fetches just the requested subset instead of the whole 32.5 MB working set.
+  Use with `actions/checkout` configured `lfs: false` — a local composite action
+  cannot run before the repository is on disk.
+
+inputs:
+  include:
+    description: >-
+      Comma-separated git-lfs path patterns to fetch, passed straight to
+      `git lfs pull --include`. Fetch the narrowest set the job reads.
+    required: true
+  scope:
+    description: >-
+      Short slug naming this include-set (e.g. python, evals, rust). Namespaces
+      the cache entry so jobs pulling different subsets never share — and never
+      overwrite — each other's cache.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # The object ids change only when a tracked binary changes, so they make a
+    # cache key that survives ordinary commits.
+    - name: Resolve LFS object ids for the cache key
+      shell: bash
+      run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+    - name: Restore cached LFS objects
+      uses: actions/cache@v6
+      with:
+        path: .git/lfs/objects
+        key: lfs-${{ inputs.scope }}-${{ hashFiles('.lfs-assets-id') }}
+
+    # Offline on a cache hit: git-lfs checks the local object store first.
+    - name: Fetch any objects the cache did not supply
+      shell: bash
+      run: git lfs pull --include="${{ inputs.include }}"
+
+    # hashFiles needs the file inside the workspace, so drop it once the cache
+    # step has resolved its key — the jobs that push to gh-pages check the tree.
+    - name: Drop the cache-key scratch file
+      shell: bash
+      run: rm -f .lfs-assets-id

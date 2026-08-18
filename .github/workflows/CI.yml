@@ -52,7 +52,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**"
+          scope: python
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -230,7 +235,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**"
+          scope: python
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
@@ -249,7 +259,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**"
+          scope: python
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
