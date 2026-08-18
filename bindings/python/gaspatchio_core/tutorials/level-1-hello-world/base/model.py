@@ -110,6 +110,9 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 # =========================================================================
 
 if __name__ == "__main__":
+    # Standalone entry point. `gspio run-model` never runs this block: it
+    # builds the frame from your model-points file and calls main() directly,
+    # so everything main() needs must be created inside main().
     af = ActuarialFrame(MODEL_POINTS)
     result_af = main(af)
     result = result_af.collect()
