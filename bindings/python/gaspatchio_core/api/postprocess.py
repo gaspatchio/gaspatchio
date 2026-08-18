@@ -36,13 +36,14 @@ _DEDUPE_THRESHOLD = 0.9
 # Query terms shorter than this are too common to anchor a snippet window.
 _MIN_TERM_CHARS = 4
 
-# After stripping the shared prefix, remainders at or below this many
-# normalised characters are trailing noise (a revision stamp, a page marker);
-# anything longer is substantive content — even one load-bearing sentence
-# after shared boilerplate must survive. A global similarity ratio cannot
-# draw this line: with a dominant shared preamble, distinct tails up to
-# ~1/9 of its length keep the ratio above any fixed threshold.
-_TRIVIAL_TAIL_CHARS = 120
+# Ingestion noise has a specific shape: one text is exactly the other plus a
+# trailing stamp — a strict extension. Only that shape may collapse without
+# comparing tails, and only when the addendum is stamp-sized (a few words,
+# not a sentence). Divergent continuations — both texts carrying their own
+# words past the shared prefix — are content however short, and when the
+# heuristic cannot tell, it keeps both: a visible near-duplicate is cheap,
+# silently dropped content is not.
+_STAMP_CHARS = 40
 
 
 def _normalise(text: str) -> str:
@@ -64,8 +65,9 @@ def _is_near_duplicate(a: str, b: str, threshold: float) -> bool:
 
     The global ratio is a fast gate: below threshold the texts are
     clearly distinct. Above it, the shared prefix is stripped and the
-    remainders judged on their own — tiny remainders are trailing noise,
-    longer ones are duplicate only if they are themselves similar.
+    remainders judged on their own. A strict extension (one remainder
+    empty) with a stamp-sized addendum is ingestion noise; anything else
+    is duplicate only if the remainders are themselves similar.
     """
     matcher = SequenceMatcher(None, a, b)
     if not (
@@ -78,8 +80,8 @@ def _is_near_duplicate(a: str, b: str, threshold: float) -> bool:
     prefix_len = _common_prefix_len(a, b)
     rest_a = a[prefix_len:]
     rest_b = b[prefix_len:]
-    if max(len(rest_a), len(rest_b)) <= _TRIVIAL_TAIL_CHARS:
-        return True
+    if min(len(rest_a), len(rest_b)) == 0:
+        return max(len(rest_a), len(rest_b)) <= _STAMP_CHARS
     return SequenceMatcher(None, rest_a, rest_b).ratio() >= threshold
 
 

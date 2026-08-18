@@ -139,6 +139,23 @@ class TestDedupeShortTails:
         assert dropped == 1
         assert len(kept) == 1
 
+    def test_both_sided_short_distinct_tails_survive(self) -> None:
+        """Divergent continuations are content however short they are.
+
+        When BOTH texts continue past the shared prefix with different
+        words, the pair diverges — unlike the strict-extension shape of
+        ingestion noise, where one text is exactly the other plus a stamp.
+        """
+        hits = [
+            _knowledge(PREAMBLE + " Term insurance follows section 3.B.4.", "VM-20"),
+            _knowledge(PREAMBLE + " Universal life follows section 3.C.", "VM-20 _2"),
+        ]
+
+        kept, dropped = dedupe_results(hits)
+
+        assert dropped == 0
+        assert len(kept) == 2
+
 
 class TestTruncate:
     """Snippet windowing around the first query match."""
