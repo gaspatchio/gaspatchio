@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787035177725,
+  "lastUpdate": 1787041480538,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks": [
@@ -6056,6 +6056,130 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 5666.9,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b3111b5cbced6be05d2a5e77331b52e2e4dfff51",
+          "message": "fix(assumptions): refuse lookups from a superseded Table object (#137)\n\n* fix(assumptions): refuse lookups from a superseded Table object\n\nTables resolve by name at execution time (last-writer-wins), so a\nscenario override built before load_assumptions() silently resolved to\nbase data and the sweep reported zero sensitivity — the run succeeded,\nthe numbers were plausible, and the shock never happened (#116, vm20\nclean room L8).\n\nRefuse at the point of guaranteed wrongness: lookup() on a Table whose\nname has since been re-registered with different content now raises\nTableSupersededError naming the hazard and the fix. Registration itself\nstays permissive — same-name tables across different models in one\nprocess and identical-content re-runs (#39 reentrancy) are legitimate\nand untouched, which is also why the issue's registration-time\nrefusal was rejected: table names like \"mortality\" are reused\npervasively across independent models.\n\nFixes #116\n\n* fix(assumptions): extend() re-stamps the content identity it registers\n\nReview catch (Greptile P1 on the PR): extend() appended to the Rust\nregistry and to self._df but left both compared content hashes at the\npre-extension value. A later registration of the ORIGINAL data then\nread as idempotent reentrancy, and a lookup from the extended object\npassed the superseded guard while resolving to data that had silently\nlost the appended rows — the exact class of silent wrong the guard\nexists to refuse.\n\nextend() now re-sorts the concatenated frame by its key columns\n(restoring the _process_data invariant) and re-stamps both the object's\nand the registry's content hash from it.\n\nRefs #116\n\n* fix(assumptions): record the registered hash only after registration succeeds\n\nReview catch (Greptile, second pass): _process_data wrote the new\ncontent hash into the supersession dict before calling the Rust\nregistry. A failed replacement left the dict holding a hash the\nregistry never accepted, and the guard then wrongly refused lookups\nfrom the still-valid previous table. The write ordering predates this\nPR, but it only became load-bearing when the guard started reading it.\n\nMove the write after the successful register_or_replace_table call;\nthe different-content warning still reads the previous hash first.\n\nRefs #116\n\n* fix(assumptions): make extend() commit registry and identity together\n\nReview catch (Greptile, third pass — same species as the first two):\nthe native append ran before the Python-side concat, so a concat\nfailure after an accepted append left the registry extended while the\nobject and the supersession dict still carried the pre-extension\nidentity — the audit surface attesting data the lookups no longer\nserve.\n\nBuild the post-extension frame and its hash before the native append;\nafter the append succeeds, commit self._df and both hashes with plain\nassignments that cannot fail. Either both sides move or neither does.\n\nRefs #116",
+          "timestamp": "2026-08-18T20:05:33+12:00",
+          "tree_id": "d58d21eeff1561ef70d36b3f622f83447be3493c",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/b3111b5cbced6be05d2a5e77331b52e2e4dfff51"
+        },
+        "date": 1787041479421,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 3.453,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 163.5,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 2895.8,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 31.849,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 796.8,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 3139.8,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-wall",
+            "value": 473.181,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-rss",
+            "value": 837.8,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-throughput",
+            "value": 2113.4,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 21.912,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 1125.7,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 4563.8,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 248.808,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 5896.5,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 4019.2,
             "unit": "scenario-points/sec"
           },
           {
