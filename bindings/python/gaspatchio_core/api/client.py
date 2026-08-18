@@ -22,7 +22,18 @@ from .models import (
 
 
 class APIConnectionError(Exception):
-    """Raised when the API is unavailable."""
+    """Raised when the API is unavailable or returns an error.
+
+    ``status_code`` carries the HTTP status when the API answered with an
+    error, and is ``None`` when no response arrived at all (connection
+    refused, timeout). Callers use the distinction to tell "this endpoint
+    is failing" from "the whole API is unreachable".
+    """
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        """Store the message and the HTTP status, if a response arrived."""
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class KnowledgeAPIClient:
@@ -90,12 +101,12 @@ class KnowledgeAPIClient:
             msg = f"API validation error: {'; '.join(messages)}"
         except Exception:  # noqa: BLE001
             msg = f"API validation error: {response.text}"
-        raise APIConnectionError(msg) from None
+        raise APIConnectionError(msg, status_code=response.status_code) from None
 
     def _raise_generic_error(self, status_code: int, text: str) -> typing.NoReturn:
         """Raise error with generic error message."""
         msg = f"API error: {status_code} - {text}"
-        raise APIConnectionError(msg) from None
+        raise APIConnectionError(msg, status_code=status_code) from None
 
     def _post(
         self,

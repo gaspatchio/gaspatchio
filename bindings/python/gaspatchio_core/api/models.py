@@ -51,6 +51,8 @@ class DocsSearchResponse(BaseModel):
     took_ms: float
     # Near-duplicate hits collapsed client-side; count keeps the server total.
     deduplicated: int = 0
+    # Set when these results stand in for a failed --answer request (#119).
+    note: str | None = None
 
 
 class KnowledgeSearchResponse(BaseModel):
@@ -64,6 +66,8 @@ class KnowledgeSearchResponse(BaseModel):
     took_ms: float
     # Near-duplicate hits collapsed client-side; count keeps the server total.
     deduplicated: int = 0
+    # Set when these results stand in for a failed --answer request (#119).
+    note: str | None = None
 
 
 class DocsAnswerResponse(BaseModel):

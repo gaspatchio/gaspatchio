@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
+from gaspatchio_core.api.client import APIConnectionError
 from gaspatchio_core.api.models import (
     KnowledgeAnswerResponse,
     KnowledgeResult,
@@ -396,3 +397,42 @@ class TestKnowledgePayloadTrimming:
         assert len(output["results"]) == 2
         assert output["results"][0]["text"] == long_text
         assert output["results"][0]["truncated"] is False
+
+
+class TestKnowledgeAnswerFallback:
+    """#119: a dead answer backend degrades to search, mirroring docs."""
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_answer_server_error_falls_back_to_search(self, mock_client_class):
+        """A 5xx from /answer yields search results with the situation named."""
+        mock_client = MagicMock()
+        mock_client.answer_knowledge.side_effect = APIConnectionError(
+            'API error: 500 - {"detail":"Internal server error."}',
+            status_code=500,
+        )
+        mock_client.search_knowledge.return_value = KnowledgeSearchResponse(
+            results=[
+                KnowledgeResult(
+                    text="The net premium reserve is defined in VM-20 3.B.",
+                    score=0.9,
+                    doc_id="VM-20",
+                    tags=[],
+                    jurisdiction=None,
+                    doc_type=None,
+                )
+            ],
+            query="net premium reserve",
+            count=1,
+            search_type="hybrid",
+            retrieval_mode="chunks",
+            took_ms=10.0,
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["knowledge", "net premium reserve", "--answer"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["results"]
+        assert "--answer" in (output.get("note") or "")
+        mock_client.search_knowledge.assert_called_once()
