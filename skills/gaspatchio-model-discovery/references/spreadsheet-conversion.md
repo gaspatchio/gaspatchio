@@ -16,12 +16,29 @@ Use [XL Marinade](https://marinade.gaspatchio.dev/), which extracts a workbook i
 SQLite formula graph:
 
 ```bash
-uv tool install 'xl-marinade[llm,vba]'      # extras matter: vba is a separate install
+uv tool install 'xl-marinade[llm,vba]>=0.3.0'   # extras matter: vba is a separate install
+marinade --version                              # confirm >= 0.3.0 before extracting
 marinade extract model.xlsx -o model.db
 ```
 
+The 0.3.0 floor is not cosmetic: earlier releases report a mixed binding's *first*
+formula rather than its dominant one (xl-marinade#12), have no version surface at all
+(#13), and ship a skill documenting a pre-0.2.0 schema (#15) — an extract produced by
+an older install differs in ways this file's recipes do not account for.
+
 If the `xl-marinade` skill is available, invoke it — it owns the CLI and query surface
 in detail. This file covers only what to do with the results.
+
+Two caveats remain open upstream (verified 2026-08-18):
+
+- **`agent_cells` semantics are a footgun** (xl-marinade#14): numeric cells carry NULL
+  `data_type`, values are JSON-stringified, and an empty formula is `''` not NULL — the
+  obvious SQL over it is silently wrong. Prefer the `agent_bindings` views; when you
+  must query cells directly, read #14 first.
+- **Within-column recurrences are invisible to the binding graph** (xl-marinade#16):
+  `agent_binding_dependencies` drops intra-binding edges, so a column referencing its
+  own previous row shows no self-edge. Never conclude "no recursion" from the binding
+  graph alone — check the row-level formulas of any balance-like column.
 
 The stable views are `agent_*` and `atlas_*`; the raw tables are internal. The two you
 will use constantly:
@@ -39,13 +56,12 @@ SELECT name, destinations FROM defined_names;
 column becomes one binding with one `formula_pattern`. A sheet of 1,997 formulas
 routinely reduces to ~20 labelled variables, which *is* your model's variable list.
 
-**`formula_pattern` is one row's formula and cannot signal a mixed binding.** The
-schema stores a single formula id per binding, so when a binding merges rows with
-different formulas the column shows one of them — in the observed cases the *first*
-row's, which is very often the special case, not the rule (upstream:
-gaspatchio/xl-marinade#12). Never treat it as authoritative: for every binding that
-matters, read the full distribution over the binding's row range before trusting the
-pattern:
+**`formula_pattern` is one formula and cannot signal a mixed binding.** The schema
+stores a single formula id per binding; since 0.3.0 it points at the binding's
+*dominant* formula (before that, an arbitrary row's — very often the special case, not
+the rule; xl-marinade#12), but a merged binding with exception rows still shows only
+that one pattern. Never treat it as authoritative: for every binding that matters, read
+the full distribution over the binding's row range before trusting the pattern:
 
 ```python
 import re

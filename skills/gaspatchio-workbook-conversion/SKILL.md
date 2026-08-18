@@ -32,6 +32,11 @@ Related skills, and what this one deliberately does not repeat:
 | `gaspatchio-model-reconciliation` | Diff techniques once both sides produce numbers |
 | **This skill** | The conversion *discipline*: what to trust, what to prove, in what order |
 
+Tooling: the extraction stack is [xl-marinade](https://marinade.gaspatchio.dev/) —
+`uv tool install 'xl-marinade[llm,vba]>=0.3.0'`, then `marinade extract`. The discovery
+skill's `references/spreadsheet-conversion.md` owns the usage detail, the 0.3.0 floor
+rationale, and the open upstream caveats; install and version-check before extracting.
+
 ## HARD GATE: the value reader is inside the trust boundary
 
 **Never treat an Excel reader as trusted infrastructure for a value proof.**
