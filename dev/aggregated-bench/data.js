@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787048735849,
+  "lastUpdate": 1787086159315,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Aggregation Surface Benchmarks": [
@@ -15657,6 +15657,240 @@ window.BENCHMARK_DATA = {
           {
             "name": "L4 Aggregation/100K-spill-peak",
             "value": 1878,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3d447ea7a4523777dd454fd75f5af9cdc06ed6ab",
+          "message": "feat(skills): gaspatchio-workbook-conversion — the conversion discipline as a skill (#114)\n\n* feat(skills): gaspatchio-workbook-conversion — the conversion discipline as a skill\n\nThe dedicated conversion skill promised at #41's close, specced by #95\nfrom three independent conversions of the same workbook. It owns the\ndiscipline the other skills don't: the reader trust boundary (fastexcel\ntruncates floats to ~9 sig figs under a String dtype — proven against\nraw sheet XML before any value becomes gold standard), the three-proof\nstructure that makes any residual localise to one question, defined-name\nassumption extraction, faithful-quirk rules, and full-grid\nreconciliation over headline columns.\n\nRegistered in skills.toml between discovery and building; routing table,\ninstall count/list, and generated manifests updated.\n\nFixes #95\n\n* test(skills): execute the workbook-conversion skill's factual claims\n\nThe skill is a document of claims: fastexcel mangles float precision\nbehind a String-dtype inference, round_charge=/.clip()/.round() exist on\nthe API it names, the sibling skills and reference files sit where it\nsays. None of that was guarded — the skill could silently outlive\nreality. Six tests now execute the claims: the truncation repro from the\nHARD GATE table runs live (deliberately failing the day a fastexcel\nrelease fixes the truncation, which is the wanted signal to update the\nskill), cross-references are checked on disk, and the named API surface\nis pinned by signature. Probes are the two from the skill's own table\nthat survive xlsxwriter's %.16g write, so any measured loss belongs to\nthe reader alone; each test was proven red-capable by mutation.\n\nDesign note: ref/30-llm-helpers/specs/2026-08-18-workbook-conversion-\nskill-hardening-design.md.\n\nServes Audit-by-default: the skill's claims now carry executable proof.\nRefs #95.\n\n* docs(skills): xl-marinade 0.3.0 floor and the live caveat set\n\nThe discovery reference's install guidance predated 0.3.0: no version\nfloor, and a caveat paragraph describing #12's first-row formula_pattern\n— fixed upstream 2026-08-15 (formula_pattern is now the dominant\nformula, though it still cannot signal a mixed binding, so the\nread-the-distribution recipe stays). The floor matters because pre-0.3.0\nextracts differ in ways the recipes assume away. The two caveats still\nopen upstream (#14 agent_cells semantics, #16 invisible within-column\nrecurrences) are now stated where the recipes are, verified against the\nlive issue tracker 2026-08-18. The conversion skill gets a two-line\nTooling pointer only — the discovery reference owns the detail, per the\nskill's own ownership table.\n\nRefs #95.\n\n* chore(plugin): bump to 1.1.0 so installed plugins receive the new skill\n\n/plugin update no-ops on an unchanged version string even when skill\ncontent changed — observed twice (this plugin and xl-marinade's). At\n1.0.0 an installed user would never receive the eighth skill. Minor\nbump for a new skill; manifests regenerated via gen_skill_manifests.py\n(version-only diffs).\n\nRefs #95.",
+          "timestamp": "2026-08-19T08:43:48+12:00",
+          "tree_id": "f9c451603dbdbc86e42a50a3bb605a904a4c5ae7",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/3d447ea7a4523777dd454fd75f5af9cdc06ed6ab"
+        },
+        "date": 1787086155712,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "L4 Aggregation/1K-baseline-wall",
+            "value": 0.153,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-agg-wall",
+            "value": 0.157,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-wall",
+            "value": 0.174,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-throughput",
+            "value": 6535.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-throughput",
+            "value": 5747.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-peak",
+            "value": 58.9,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-baseline-data-mb",
+            "value": 24.2,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-aggregated-peak",
+            "value": 6.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/1K-memory-ratio",
+            "value": 8.66,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/1K-speedup",
+            "value": 0.9,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/1K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-wall",
+            "value": 0.26,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-throughput",
+            "value": 3846.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/1K-spill-peak",
+            "value": 39.4,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-wall",
+            "value": 1.158,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-agg-wall",
+            "value": 1.173,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-wall",
+            "value": 1.21,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-throughput",
+            "value": 8635.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-throughput",
+            "value": 8264.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-peak",
+            "value": 280.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-baseline-data-mb",
+            "value": 252.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-aggregated-peak",
+            "value": 61.6,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/10K-memory-ratio",
+            "value": 4.56,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/10K-speedup",
+            "value": 0.97,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/10K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-wall",
+            "value": 2.097,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-throughput",
+            "value": 4768.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/10K-spill-peak",
+            "value": 411.5,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-wall",
+            "value": 11.251,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-agg-wall",
+            "value": 11.368,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-wall",
+            "value": 11.502,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-throughput",
+            "value": 8888.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-throughput",
+            "value": 8694.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-peak",
+            "value": 2565,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-baseline-data-mb",
+            "value": 2499.9,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-aggregated-peak",
+            "value": 480.8,
+            "unit": "MB"
+          },
+          {
+            "name": "L4 Aggregation/100K-memory-ratio",
+            "value": 5.33,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/100K-speedup",
+            "value": 0.99,
+            "unit": "x"
+          },
+          {
+            "name": "L4 Aggregation/100K-correct",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-wall",
+            "value": 21.449,
+            "unit": "seconds"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-throughput",
+            "value": 4662.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "L4 Aggregation/100K-spill-peak",
+            "value": 2353.8,
             "unit": "MB"
           }
         ]
