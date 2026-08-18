@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787040971891,
+  "lastUpdate": 1787048875456,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Model Benchmarks (Windows)": [
@@ -17619,6 +17619,310 @@ window.BENCHMARK_DATA = {
           {
             "name": "VA + Scenarios (3x)/100K-cpu-avg",
             "value": 99.7,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7cbd2c540c8ac8cc09c4aa1c6147d27f3c16d800",
+          "message": "feat(cli): docs/knowledge results get dedup and snippet windows by default (#138)\n\n* feat(cli): docs/knowledge results get dedup and snippet windows by default\n\nThe retrieval surface is a CLI chosen for token efficiency, and per-hit\npayload is part of that contract. Two costs broke it: near-identical\nchunks ingested under different doc_ids repeated the same preamble at\nthe top of the ranking (#120), and results inlined whole source\ndocuments — one default query returned ~16 KB, in a workflow whose\nskills mandate a docs lookup before every unfamiliar method (#130).\n\nBoth fixed client-side, after the API returns and before the JSON\nprints, with nothing hidden: near-duplicate hits collapse into the\nfirst-ranked copy and the response reports how many were dropped;\ntexts over the --max-chars budget (default 1500) keep a window around\nthe first query match and carry a marker naming --full. --full or\n--max-chars 0 restores the complete payload. Server-side index dedup\nremains open in the mix repo.\n\nFixes #120\nFixes #130\n\n* fix(cli): dedupe on full texts, anchor snippets at word boundaries\n\nReview catches (Greptile, both confirmed against the observed data):\n\n- The dedupe comparison was capped to the first 2,000 normalised chars,\n  but the observed boilerplate preambles run ~3.5 KB — two chunks\n  sharing the preamble with DIFFERENT substance after it compared\n  identical and the second was silently dropped. Compare the full\n  normalised texts; the quick-ratio gates keep the cost bounded.\n\n- The snippet anchor used str.find, so a query term inside a longer\n  word (\"rate\" in \"generated\") stole the window from the real\n  occurrence later in the document. Word-boundary matches now win;\n  a bare substring hit is kept as fallback (\"flow\" in \"cashflow\")\n  since it still beats windowing the head blindly.\n\nRefs #120 #130\n\n* fix(cli): snippet anchor prefers exact words over inflected prefixes\n\nReview catch (Greptile, second pass): the boundary regex had no\ntrailing check, so an earlier \"rates\" outranked a later standalone\n\"rate\" and the window omitted the passage the query actually names.\n\nThe bare exact-word suggestion would regress the other direction —\nwith only \"rates\" present, the anchor would fall to the substring tier\nwhere mid-word noise (\"generated\") wins again. Three tiers instead:\nexact word, then boundary prefix (inflected forms), then substring;\nthe strongest non-empty tier takes the earliest position.\n\nRefs #120 #130\n\n* fix(cli): judge dedupe on what remains after the shared prefix\n\nReview catch (Greptile, third pass on this surface): a global\nsimilarity ratio cannot separate \"mostly shared boilerplate\" from\n\"duplicate content\" — with a dominant shared preamble, distinct tails\nup to ~1/9 of its length keep the ratio above any fixed threshold, and\nthe observed #120 data shows a single load-bearing sentence is exactly\nwhat follows 3.5 KB of boilerplate.\n\nThe global ratio remains the fast gate; above it, the shared prefix is\nstripped and the remainders judged on their own — at or under 120\nnormalised chars they are trailing noise (a revision stamp) and the\nhits collapse, longer remainders are duplicate only if they are\nthemselves similar.\n\nRefs #120 #130\n\n* fix(cli): dedupe collapses only strict extensions without comparing tails\n\nReview catch (Greptile, fourth pass on this surface): the 120-char\nfloor collapsed both-sided short distinct tails without comparing\nthem, losing a short divergent passage after shared boilerplate.\n\nThe distinction is shape, not length: ingestion noise is a strict\nextension — one text exactly the other plus a trailing stamp — and\nonly that shape may collapse uncompared, with the addendum bounded at\nstamp size (40 chars). Divergent continuations, both texts carrying\ntheir own words past the shared prefix, are compared by ratio however\nshort. Where the heuristic cannot tell, it keeps both: a visible\nnear-duplicate is cheap, silently dropped content is not.\n\nRefs #120 #130",
+          "timestamp": "2026-08-18T22:18:10+12:00",
+          "tree_id": "2f6a8e11d7b6e9edd0b6e21321cc1acaa913378b",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/7cbd2c540c8ac8cc09c4aa1c6147d27f3c16d800"
+        },
+        "date": 1787048872194,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "VA Model (GMDB/GMAB)/8-points",
+            "value": 0.214,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-throughput",
+            "value": 37.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-memory",
+            "value": 37.5,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-data-mb",
+            "value": 0.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-rss",
+            "value": 137,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cpu-avg",
+            "value": 22.8,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-points",
+            "value": 0.433,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-throughput",
+            "value": 2309.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-memory",
+            "value": 58.5,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-data-mb",
+            "value": 38,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-rss",
+            "value": 195.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cpu-avg",
+            "value": 63,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-points",
+            "value": 2.572,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-throughput",
+            "value": 3888,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-memory",
+            "value": 288.4,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-data-mb",
+            "value": 252.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-rss",
+            "value": 466.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cpu-avg",
+            "value": 92.9,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-points",
+            "value": 24.859,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-throughput",
+            "value": 4022.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-memory",
+            "value": 2654.3,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-data-mb",
+            "value": 2499.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-rss",
+            "value": 3034,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cpu-avg",
+            "value": 99.2,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-points",
+            "value": 0.112,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-throughput",
+            "value": 71.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-memory",
+            "value": 6.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-data-mb",
+            "value": 0.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-rss",
+            "value": 2144,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cores",
+            "value": 3,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cpu-avg",
+            "value": 16.1,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-points",
+            "value": 1.115,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-throughput",
+            "value": 896.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-memory",
+            "value": -1758.5,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-data-mb",
+            "value": 114,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-rss",
+            "value": 385.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cpu-avg",
+            "value": 76.3,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-points",
+            "value": 6.897,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-throughput",
+            "value": 1449.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-memory",
+            "value": 748.1,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-data-mb",
+            "value": 771.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-rss",
+            "value": 1092,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cpu-avg",
+            "value": 97.2,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-points",
+            "value": 69.066,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-throughput",
+            "value": 1447.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-memory",
+            "value": 7467.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-data-mb",
+            "value": 7629.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-rss",
+            "value": 8328.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cpu-avg",
+            "value": 99.5,
             "unit": "%"
           }
         ]
