@@ -77,26 +77,36 @@ def dedupe_results(
 def _first_match_position(text: str, query: str) -> int | None:
     """Position of the earliest query-term occurrence in text, if any.
 
-    Word-boundary matches win over substring hits: "rate" inside
-    "generated" must not steal the anchor from a later "rate table". A
-    bare substring hit ("flow" inside "cashflow") is still used when no
-    boundary match exists — better than windowing the head blindly.
+    Three anchor tiers, strongest non-empty tier wins: an exact word
+    ("rate" as its own word), then a boundary prefix ("rate" starting
+    "rates" — inflected forms are usually the match the reader wants),
+    then a bare substring ("flow" inside "cashflow" — still better than
+    windowing the head blindly). Without the tiers a mid-word hit like
+    "rate" inside "generated", or an earlier "rates", would steal the
+    window from the passage the query actually names.
     """
     terms = [t for t in re.split(r"\W+", query) if len(t) >= _MIN_TERM_CHARS]
     lowered = text.lower()
 
-    boundary_positions = []
+    exact_positions = []
+    prefix_positions = []
+    substring_positions = []
     for term in terms:
-        match = re.search(rf"\b{re.escape(term.lower())}", lowered)
+        escaped = re.escape(term.lower())
+        match = re.search(rf"\b{escaped}\b", lowered)
         if match:
-            boundary_positions.append(match.start())
-    if boundary_positions:
-        return min(boundary_positions)
+            exact_positions.append(match.start())
+        match = re.search(rf"\b{escaped}", lowered)
+        if match:
+            prefix_positions.append(match.start())
+        pos = lowered.find(term.lower())
+        if pos >= 0:
+            substring_positions.append(pos)
 
-    substring_positions = [
-        pos for pos in (lowered.find(term.lower()) for term in terms) if pos >= 0
-    ]
-    return min(substring_positions) if substring_positions else None
+    for positions in (exact_positions, prefix_positions, substring_positions):
+        if positions:
+            return min(positions)
+    return None
 
 
 def truncate_result(result: _ResultT, query: str, max_chars: int) -> _ResultT:

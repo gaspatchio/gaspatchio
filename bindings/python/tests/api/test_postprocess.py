@@ -162,6 +162,36 @@ class TestTruncate:
         assert out.truncated is True
         assert "rate table maps attained age" in out.text
 
+    def test_exact_word_outranks_an_earlier_inflected_form(self) -> None:
+        """An earlier prefix match ("rates") must not hide a later exact word.
+
+        Exact-word occurrences win the anchor; inflected forms are the
+        second tier, substrings the third.
+        """
+        decoy = "Corporate bond rates moved with the yield curve. " * 40
+        text = decoy + "The rate table maps attained age to mortality. " + decoy
+        result = _doc(text)
+
+        out = truncate_result(result, query="rate", max_chars=300)
+
+        assert out.truncated is True
+        assert "rate table maps attained age" in out.text
+
+    def test_inflected_form_still_anchors_when_no_exact_word_exists(self) -> None:
+        """With only "rates" present, the inflected form beats mid-word noise.
+
+        "generated" appears earlier than "rates", but a boundary-prefix
+        match outranks a bare substring.
+        """
+        decoy = "Charts were generated from integrated data sources. " * 40
+        text = decoy + "Mortality rates vary by attained age and duration. " + decoy
+        result = _doc(text)
+
+        out = truncate_result(result, query="rate", max_chars=300)
+
+        assert out.truncated is True
+        assert "Mortality rates vary" in out.text
+
     def test_substring_match_is_still_better_than_the_head(self) -> None:
         """A bare substring hit still beats windowing the head blindly.
 
