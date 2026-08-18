@@ -269,6 +269,7 @@ Phase 3: All calculations. Lazy only -- no `.collect()`, no Python loops.
 |------|-------|
 | New to gaspatchio, first setup | `gaspatchio-quickstart` |
 | Scope a new model before writing code | `gaspatchio-model-discovery` |
+| Convert an Excel workbook to a model | `gaspatchio-workbook-conversion` |
 | Write or modify model code | `gaspatchio-model-building` |
 | Review model quality / actuarial standards | `gaspatchio-model-review` |
 | Match model to Excel/lifelib/vendor reference | `gaspatchio-model-reconciliation` |
