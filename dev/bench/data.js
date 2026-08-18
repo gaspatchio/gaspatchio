@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786954452278,
+  "lastUpdate": 1787020346467,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -9971,6 +9971,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1589429445,
             "range": "± 6364384",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "db9b0299c7b86bbe2fbb6cb16ea68656f242a5d8",
+          "message": "perf(bench): generate model points instead of committing 22.8 MB of LFS (#140)\n\n`benches/fixtures/age-last-smoking-{1k,100k}.parquet` fed only the assumption-table\nlookup benchmarks, and almost all of it was redundant: every list column is a pure\nfunction of five scalars per policy, so 100,000 policies expand to 64.4M projection\nmonths from ~500 KB of real entropy.\n\nLFS bandwidth is billed to the repository owner on every fetch, including\nthird-party clones of this public repo — 2,316 clones from 356 unique cloners in\n14 days, largely the plugin marketplace, none of which need benchmark fixtures.\n#139 scoped and cached CI's fetches; removing the object from the checked-out tree\nmeans it is never fetched by anyone. `core/benches/**` drops from 22.86 MB to ~50 KB.\n\n`benches/common/mod.rs` generates the frame from a per-policy SplitMix64 stream\nseeded off the policy index, so a policy's attributes depend only on its index and\n`model_points(1_000)` is exactly the first 1,000 rows of `model_points(100_000)` —\nthe nesting the cross-size benchmarks rely on. Wrapping integer arithmetic only, so\nLinux and Windows agree. Both sets are memoised; previously the bench groups did\nfive full 22 MB parquet reads per run.\n\nAlso removes the unreferenced 100-row `age-last-smoking.parquet` seed. The copy at\nbindings/python/jobs/example/ is a different consumer and is untouched.\n\nFidelity vs the retired fixtures, measured before deletion: identical schema,\nidentical row count, 950 vs 950 distinct (issue_age, duration) combinations, and\n64,303,576 vs 64,352,584 exploded projection months (-0.08%).\n\ncore/tests/bench_model_points.rs pins schema, every derivation, scalar/list\nagreement, the prefix property, determinism and key-space coverage.\n\nExpect a one-time ~9% step down on array_lookup_1k and array_vector_lookup_1k.\nThe compute-bound hash_vector case is flat at +0.3%, so the lookup workload is\nequivalent; the array delta was not isolated (data volume, key diversity and\nchunking all ruled out). Far inside the 200% alert threshold.",
+          "timestamp": "2026-08-18T14:19:27+12:00",
+          "tree_id": "7d1ea29e9f087b2877bfae7377ead557b88aae98",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/db9b0299c7b86bbe2fbb6cb16ea68656f242a5d8"
+        },
+        "date": 1787020345226,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 122641559,
+            "range": "± 7552658",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 122333433,
+            "range": "± 302460",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 119899751,
+            "range": "± 347534",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 4180240,
+            "range": "± 37874",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 119076650,
+            "range": "± 8045761",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 2999345,
+            "range": "± 74100",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 118915414,
+            "range": "± 324751",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 2998933,
+            "range": "± 132373",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 390601,
+            "range": "± 16620",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 39776526,
+            "range": "± 2500124",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 6223474,
+            "range": "± 42365",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 401934053,
+            "range": "± 27998091",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 277621,
+            "range": "± 724",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 22590526,
+            "range": "± 840341",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 2880946,
+            "range": "± 2823",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 227595325,
+            "range": "± 470579",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 278186,
+            "range": "± 2435",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 23322880,
+            "range": "± 1787095",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 2866432,
+            "range": "± 75436",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 227522701,
+            "range": "± 678567",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 353122,
+            "range": "± 5799",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 28772181,
+            "range": "± 550987",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 3611869,
+            "range": "± 11819",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 288994914,
+            "range": "± 20879508",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 1316610,
+            "range": "± 75624",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 112633054,
+            "range": "± 8134623",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 19955704,
+            "range": "± 862239",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1146080332,
+            "range": "± 70212278",
             "unit": "ns/iter"
           }
         ]
