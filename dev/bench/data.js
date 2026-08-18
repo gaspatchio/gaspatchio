@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787049199564,
+  "lastUpdate": 1787086761913,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -10739,6 +10739,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1547192721,
             "range": "± 3795052",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3d447ea7a4523777dd454fd75f5af9cdc06ed6ab",
+          "message": "feat(skills): gaspatchio-workbook-conversion — the conversion discipline as a skill (#114)\n\n* feat(skills): gaspatchio-workbook-conversion — the conversion discipline as a skill\n\nThe dedicated conversion skill promised at #41's close, specced by #95\nfrom three independent conversions of the same workbook. It owns the\ndiscipline the other skills don't: the reader trust boundary (fastexcel\ntruncates floats to ~9 sig figs under a String dtype — proven against\nraw sheet XML before any value becomes gold standard), the three-proof\nstructure that makes any residual localise to one question, defined-name\nassumption extraction, faithful-quirk rules, and full-grid\nreconciliation over headline columns.\n\nRegistered in skills.toml between discovery and building; routing table,\ninstall count/list, and generated manifests updated.\n\nFixes #95\n\n* test(skills): execute the workbook-conversion skill's factual claims\n\nThe skill is a document of claims: fastexcel mangles float precision\nbehind a String-dtype inference, round_charge=/.clip()/.round() exist on\nthe API it names, the sibling skills and reference files sit where it\nsays. None of that was guarded — the skill could silently outlive\nreality. Six tests now execute the claims: the truncation repro from the\nHARD GATE table runs live (deliberately failing the day a fastexcel\nrelease fixes the truncation, which is the wanted signal to update the\nskill), cross-references are checked on disk, and the named API surface\nis pinned by signature. Probes are the two from the skill's own table\nthat survive xlsxwriter's %.16g write, so any measured loss belongs to\nthe reader alone; each test was proven red-capable by mutation.\n\nDesign note: ref/30-llm-helpers/specs/2026-08-18-workbook-conversion-\nskill-hardening-design.md.\n\nServes Audit-by-default: the skill's claims now carry executable proof.\nRefs #95.\n\n* docs(skills): xl-marinade 0.3.0 floor and the live caveat set\n\nThe discovery reference's install guidance predated 0.3.0: no version\nfloor, and a caveat paragraph describing #12's first-row formula_pattern\n— fixed upstream 2026-08-15 (formula_pattern is now the dominant\nformula, though it still cannot signal a mixed binding, so the\nread-the-distribution recipe stays). The floor matters because pre-0.3.0\nextracts differ in ways the recipes assume away. The two caveats still\nopen upstream (#14 agent_cells semantics, #16 invisible within-column\nrecurrences) are now stated where the recipes are, verified against the\nlive issue tracker 2026-08-18. The conversion skill gets a two-line\nTooling pointer only — the discovery reference owns the detail, per the\nskill's own ownership table.\n\nRefs #95.\n\n* chore(plugin): bump to 1.1.0 so installed plugins receive the new skill\n\n/plugin update no-ops on an unchanged version string even when skill\ncontent changed — observed twice (this plugin and xl-marinade's). At\n1.0.0 an installed user would never receive the eighth skill. Minor\nbump for a new skill; manifests regenerated via gen_skill_manifests.py\n(version-only diffs).\n\nRefs #95.",
+          "timestamp": "2026-08-19T08:43:48+12:00",
+          "tree_id": "f9c451603dbdbc86e42a50a3bb605a904a4c5ae7",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/3d447ea7a4523777dd454fd75f5af9cdc06ed6ab"
+        },
+        "date": 1787086760459,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 168735064,
+            "range": "± 1584515",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 168475297,
+            "range": "± 3819739",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 167097847,
+            "range": "± 223473",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 6523837,
+            "range": "± 25936",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 167275833,
+            "range": "± 1639528",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 4060991,
+            "range": "± 143413",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 167212329,
+            "range": "± 926888",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 4062464,
+            "range": "± 44328",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 586972,
+            "range": "± 5565",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 54027462,
+            "range": "± 39447",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 10357875,
+            "range": "± 40612",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 539584388,
+            "range": "± 3237201",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 402285,
+            "range": "± 2214",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 32153090,
+            "range": "± 135973",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 4012143,
+            "range": "± 103796",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 320412285,
+            "range": "± 4000989",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 402148,
+            "range": "± 651",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 32130779,
+            "range": "± 69408",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 4012867,
+            "range": "± 7201",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 320512200,
+            "range": "± 3102534",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 519051,
+            "range": "± 1014",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 40058126,
+            "range": "± 138474",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 5245134,
+            "range": "± 53986",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 400387430,
+            "range": "± 2731191",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 1912216,
+            "range": "± 99958",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 157751894,
+            "range": "± 911578",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 26416055,
+            "range": "± 269251",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1593251121,
+            "range": "± 3020208",
             "unit": "ns/iter"
           }
         ]
