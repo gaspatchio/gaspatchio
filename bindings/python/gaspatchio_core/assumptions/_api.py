@@ -1297,6 +1297,19 @@ class Table:
         # Convert keys to f64
         processed_df = _convert_keys_to_f64(current_df, key_columns)
 
+        # Build the post-extension frame and its content identity BEFORE the
+        # native append, re-sorted by keys to keep the _process_data
+        # invariant (self._df sorted, hash canonical). A Python-side failure
+        # here (e.g. a schema mismatch polars rejects that the native layer
+        # would accept) aborts the extend with the registry untouched — the
+        # two sides must commit together or not at all.
+        extended_df: pl.DataFrame | None = None
+        content_sha: str | None = None
+        if self._df is not None:
+            all_key_columns = [c for c in self._df.columns if c != self._value]
+            extended_df = pl.concat([self._df, processed_df]).sort(all_key_columns)
+            content_sha = _hash_processed_df(extended_df)
+
         # Append to existing table using Rust registry
         try:
             registry = PyAssumptionTableRegistry()
@@ -1313,17 +1326,14 @@ class Table:
             logger.error(f"Failed to extend table '{self._name}': {e}")
             raise
 
-        # Update our stored DataFrame by concatenating, re-sorted by keys to
-        # keep the _process_data invariant (self._df sorted, hash canonical).
-        if self._df is not None:
-            all_key_columns = [c for c in self._df.columns if c != self._value]
-            self._df = pl.concat([self._df, processed_df]).sort(all_key_columns)
-            # Re-stamp the content identity for the extended data. Without
-            # this both compared hashes stay at the pre-extension value: a
-            # later registration of the ORIGINAL data reads as idempotent
-            # reentrancy, and a lookup from this object passes the
-            # superseded guard while the appended rows are silently gone.
-            content_sha = _hash_processed_df(self._df)
+        # Commit the Python-side state; plain assignments cannot fail, so the
+        # registry and this object's identity move together. Re-stamping the
+        # hashes matters: leaving them at the pre-extension value makes a
+        # later registration of the ORIGINAL data read as idempotent
+        # reentrancy, and a lookup from this object then passes the
+        # superseded guard while the appended rows are silently gone.
+        if extended_df is not None and content_sha is not None:
+            self._df = extended_df
             self._registered_sha = content_sha
             _REGISTERED_TABLE_SHAS[self._name] = content_sha
 

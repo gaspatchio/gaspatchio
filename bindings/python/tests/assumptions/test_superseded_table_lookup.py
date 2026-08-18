@@ -102,6 +102,49 @@ def test_extended_table_still_looks_up_its_own_data() -> None:
     assert af.collect()["rate"].to_list() == [4.0]
 
 
+def test_failed_python_concat_leaves_registry_unextended(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """extend() commits both sides or neither.
+
+    The post-extension frame and its identity are built BEFORE the native
+    append; a Python-side failure (e.g. a schema mismatch polars rejects
+    that the native layer would have accepted) must abort the extend with
+    the registry untouched, never leave the registry extended while the
+    object still carries the pre-extension identity.
+    """
+    from gaspatchio_core.assumptions import _api
+
+    table = _table("superseded_extend_atomic", [1.0, 2.0, 3.0], storage_mode="hash")
+
+    native_appends: list[str] = []
+    real_registry_cls = _api.PyAssumptionTableRegistry
+
+    class _RecordingRegistry:
+        def __init__(self) -> None:
+            self._real = real_registry_cls()
+
+        def append_to_table(self, **kwargs: object) -> None:
+            native_appends.append("append")
+            self._real.append_to_table(**kwargs)
+
+    def _boom(*_args: object, **_kwargs: object) -> pl.DataFrame:
+        msg = "simulated concat failure"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_api, "PyAssumptionTableRegistry", _RecordingRegistry)
+    monkeypatch.setattr(_api.pl, "concat", _boom)
+    with pytest.raises(RuntimeError, match="simulated concat failure"):
+        table.extend(pl.DataFrame({"age": [60], "rate": [4.0]}))
+    monkeypatch.undo()
+
+    assert native_appends == []
+
+    af = ActuarialFrame({"policy_id": [1], "age": [40]})
+    af.rate = table.lookup(age=af.age)
+    assert af.collect()["rate"].to_list() == [2.0]
+
+
 def test_failed_replacement_does_not_poison_the_original(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
