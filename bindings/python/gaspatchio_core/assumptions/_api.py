@@ -70,6 +70,18 @@ def _suggest_dimension(invalid_name: str, valid_names: list[str]) -> str | None:
 
 # Import for type hints without circular dependency
 
+
+class TableSupersededError(RuntimeError):
+    """A lookup was built from a Table whose name now resolves to different data.
+
+    Tables resolve by name at execution time (last-writer-wins), so a lookup
+    from a superseded object would silently read the newer table's values —
+    the shape where a scenario override resolves to base data and a
+    sensitivity sweep reports zero sensitivity. Raised at ``lookup()`` so the
+    wrong number is never produced.
+    """
+
+
 # Global metadata storage for assumption tables
 _TABLE_METADATA: dict[str, dict[str, Any]] = {}
 
@@ -772,6 +784,7 @@ class Table:
         # is already sorted by key columns above, so identical source data yields
         # an identical hash regardless of input row order.
         content_sha = _hash_processed_df(processed_df)
+        self._registered_sha = content_sha
         previous_sha = _REGISTERED_TABLE_SHAS.get(self._name)
         if previous_sha is not None and previous_sha != content_sha:
             logger.warning(
@@ -782,7 +795,6 @@ class Table:
                 f"a scenario shock), ignore; otherwise give the tables distinct "
                 f"names, or rebuild expressions after re-registering.",
             )
-        _REGISTERED_TABLE_SHAS[self._name] = content_sha
 
         # Register with Rust registry using idempotent method
         try:
@@ -796,6 +808,10 @@ class Table:
                 force_replace=True,  # Always replace for reentrancy support
                 storage_mode=self._storage_mode,
             )
+            # Record the hash only once the registry actually holds this data;
+            # recording before a failed replacement would poison the guard and
+            # wrongly refuse lookups from the still-valid previous table.
+            _REGISTERED_TABLE_SHAS[self._name] = content_sha
             # Query the actual storage mode chosen by Rust (may differ from requested if "auto")
             actual_mode = (
                 registry.get_table_storage_mode(self._name) or self._storage_mode
@@ -970,6 +986,25 @@ class Table:
         └───────────┴──────────────┴─────────────┴────────────┘
         ```
         """
+        # Refuse a lookup that is guaranteed to read the wrong table. Lookups
+        # resolve by NAME at execution time, so if this name was re-registered
+        # with different data after this object was built, the expression
+        # would silently serve the newer values (#116 — a scenario override
+        # resolving to base data, the sweep reporting zero sensitivity).
+        registered_sha = _REGISTERED_TABLE_SHAS.get(self._name)
+        if registered_sha is not None and registered_sha != self._registered_sha:
+            msg = (
+                f"Assumption table '{self._name}' has been superseded: another "
+                f"Table was registered under this name with different data "
+                f"after this object was built. Lookups resolve by name at "
+                f"execution time, so this lookup would silently read the "
+                f"newer table's values (a scenario override lost this way "
+                f"reports zero sensitivity). Look up from the most recently "
+                f"built '{self._name}' Table, or give the tables distinct "
+                f"names."
+            )
+            raise TableSupersededError(msg)
+
         # Merge both sources of dimensions
         all_dimensions = {}
         if _dimensions:
@@ -1262,6 +1297,19 @@ class Table:
         # Convert keys to f64
         processed_df = _convert_keys_to_f64(current_df, key_columns)
 
+        # Build the post-extension frame and its content identity BEFORE the
+        # native append, re-sorted by keys to keep the _process_data
+        # invariant (self._df sorted, hash canonical). A Python-side failure
+        # here (e.g. a schema mismatch polars rejects that the native layer
+        # would accept) aborts the extend with the registry untouched — the
+        # two sides must commit together or not at all.
+        extended_df: pl.DataFrame | None = None
+        content_sha: str | None = None
+        if self._df is not None:
+            all_key_columns = [c for c in self._df.columns if c != self._value]
+            extended_df = pl.concat([self._df, processed_df]).sort(all_key_columns)
+            content_sha = _hash_processed_df(extended_df)
+
         # Append to existing table using Rust registry
         try:
             registry = PyAssumptionTableRegistry()
@@ -1278,9 +1326,16 @@ class Table:
             logger.error(f"Failed to extend table '{self._name}': {e}")
             raise
 
-        # Update our stored DataFrame by concatenating
-        if self._df is not None:
-            self._df = pl.concat([self._df, processed_df])
+        # Commit the Python-side state; plain assignments cannot fail, so the
+        # registry and this object's identity move together. Re-stamping the
+        # hashes matters: leaving them at the pre-extension value makes a
+        # later registration of the ORIGINAL data read as idempotent
+        # reentrancy, and a lookup from this object then passes the
+        # superseded guard while the appended rows are silently gone.
+        if extended_df is not None and content_sha is not None:
+            self._df = extended_df
+            self._registered_sha = content_sha
+            _REGISTERED_TABLE_SHAS[self._name] = content_sha
 
         return self
 
