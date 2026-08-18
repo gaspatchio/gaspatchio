@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787041309036,
+  "lastUpdate": 1787049199564,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -10547,6 +10547,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1510544631,
             "range": "± 3042102",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7cbd2c540c8ac8cc09c4aa1c6147d27f3c16d800",
+          "message": "feat(cli): docs/knowledge results get dedup and snippet windows by default (#138)\n\n* feat(cli): docs/knowledge results get dedup and snippet windows by default\n\nThe retrieval surface is a CLI chosen for token efficiency, and per-hit\npayload is part of that contract. Two costs broke it: near-identical\nchunks ingested under different doc_ids repeated the same preamble at\nthe top of the ranking (#120), and results inlined whole source\ndocuments — one default query returned ~16 KB, in a workflow whose\nskills mandate a docs lookup before every unfamiliar method (#130).\n\nBoth fixed client-side, after the API returns and before the JSON\nprints, with nothing hidden: near-duplicate hits collapse into the\nfirst-ranked copy and the response reports how many were dropped;\ntexts over the --max-chars budget (default 1500) keep a window around\nthe first query match and carry a marker naming --full. --full or\n--max-chars 0 restores the complete payload. Server-side index dedup\nremains open in the mix repo.\n\nFixes #120\nFixes #130\n\n* fix(cli): dedupe on full texts, anchor snippets at word boundaries\n\nReview catches (Greptile, both confirmed against the observed data):\n\n- The dedupe comparison was capped to the first 2,000 normalised chars,\n  but the observed boilerplate preambles run ~3.5 KB — two chunks\n  sharing the preamble with DIFFERENT substance after it compared\n  identical and the second was silently dropped. Compare the full\n  normalised texts; the quick-ratio gates keep the cost bounded.\n\n- The snippet anchor used str.find, so a query term inside a longer\n  word (\"rate\" in \"generated\") stole the window from the real\n  occurrence later in the document. Word-boundary matches now win;\n  a bare substring hit is kept as fallback (\"flow\" in \"cashflow\")\n  since it still beats windowing the head blindly.\n\nRefs #120 #130\n\n* fix(cli): snippet anchor prefers exact words over inflected prefixes\n\nReview catch (Greptile, second pass): the boundary regex had no\ntrailing check, so an earlier \"rates\" outranked a later standalone\n\"rate\" and the window omitted the passage the query actually names.\n\nThe bare exact-word suggestion would regress the other direction —\nwith only \"rates\" present, the anchor would fall to the substring tier\nwhere mid-word noise (\"generated\") wins again. Three tiers instead:\nexact word, then boundary prefix (inflected forms), then substring;\nthe strongest non-empty tier takes the earliest position.\n\nRefs #120 #130\n\n* fix(cli): judge dedupe on what remains after the shared prefix\n\nReview catch (Greptile, third pass on this surface): a global\nsimilarity ratio cannot separate \"mostly shared boilerplate\" from\n\"duplicate content\" — with a dominant shared preamble, distinct tails\nup to ~1/9 of its length keep the ratio above any fixed threshold, and\nthe observed #120 data shows a single load-bearing sentence is exactly\nwhat follows 3.5 KB of boilerplate.\n\nThe global ratio remains the fast gate; above it, the shared prefix is\nstripped and the remainders judged on their own — at or under 120\nnormalised chars they are trailing noise (a revision stamp) and the\nhits collapse, longer remainders are duplicate only if they are\nthemselves similar.\n\nRefs #120 #130\n\n* fix(cli): dedupe collapses only strict extensions without comparing tails\n\nReview catch (Greptile, fourth pass on this surface): the 120-char\nfloor collapsed both-sided short distinct tails without comparing\nthem, losing a short divergent passage after shared boilerplate.\n\nThe distinction is shape, not length: ingestion noise is a strict\nextension — one text exactly the other plus a trailing stamp — and\nonly that shape may collapse uncompared, with the addendum bounded at\nstamp size (40 chars). Divergent continuations, both texts carrying\ntheir own words past the shared prefix, are compared by ratio however\nshort. Where the heuristic cannot tell, it keeps both: a visible\nnear-duplicate is cheap, silently dropped content is not.\n\nRefs #120 #130",
+          "timestamp": "2026-08-18T22:18:10+12:00",
+          "tree_id": "2f6a8e11d7b6e9edd0b6e21321cc1acaa913378b",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/7cbd2c540c8ac8cc09c4aa1c6147d27f3c16d800"
+        },
+        "date": 1787049198622,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 156470846,
+            "range": "± 1583833",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 156686127,
+            "range": "± 369077",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 157024744,
+            "range": "± 2168110",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 6240402,
+            "range": "± 57330",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 157337795,
+            "range": "± 1373807",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 3816333,
+            "range": "± 118556",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 157473885,
+            "range": "± 288845",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 3836986,
+            "range": "± 109424",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 547796,
+            "range": "± 1300",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 51771953,
+            "range": "± 228766",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 9743995,
+            "range": "± 196584",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 517953495,
+            "range": "± 1933697",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 388231,
+            "range": "± 1433",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 29794426,
+            "range": "± 56279",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 4062510,
+            "range": "± 54395",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 298836976,
+            "range": "± 568441",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 387891,
+            "range": "± 1476",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 30220784,
+            "range": "± 54154",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 4123889,
+            "range": "± 25377",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 300912965,
+            "range": "± 1632352",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 488752,
+            "range": "± 1006",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 38408890,
+            "range": "± 107213",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 5209400,
+            "range": "± 33532",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 390591211,
+            "range": "± 554581",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 1812889,
+            "range": "± 4357",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 153176045,
+            "range": "± 386557",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 26836993,
+            "range": "± 147780",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1547192721,
+            "range": "± 3795052",
             "unit": "ns/iter"
           }
         ]
