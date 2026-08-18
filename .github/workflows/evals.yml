@@ -1,16 +1,19 @@
 name: Evals & Benchmarks
 
-# Deliberately NOT run on every push to main. This workflow fans out to 13
-# LFS-fetching job instances; at ~10 MB of LFS objects each that was the single
-# largest consumer of the account's Git LFS bandwidth quota. The weekly cron
-# keeps the gh-pages trend history moving, and the `benchmark` / `performance`
-# PR labels plus workflow_dispatch cover on-demand runs.
+# Still runs per-commit on main: the gh-pages trend history keeps a point per
+# commit, so a regression stays attributable to the change that caused it. That
+# is affordable because every job restores its LFS objects from the Actions
+# cache (.github/actions/lfs-pull) and fetches only the subset it reads — a warm
+# cache costs zero LFS bandwidth. Re-fetching the full 32.5 MB working set in
+# all 13 job instances on every commit is what exhausted the account's quota.
 on:
   schedule:
     - cron: '0 3 * * 1'  # 3am UTC every Monday
   pull_request:
     branches: [main]
     types: [labeled]  # only when 'benchmark' label is added
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       platform:
@@ -42,8 +45,8 @@ env:
   PYTHONUTF8: "1"
 
 # Cancel a superseded in-progress run of the same workflow on the same ref +
-# event (so re-labelling a PR doesn't stack full benchmark runs). Keyed by
-# event_name too, so a labelled PR never cancels the weekly scheduled run.
+# event (so rapid pushes don't stack full benchmark runs). Keyed by event_name
+# too, so a push never cancels the weekly scheduled benchmark run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
@@ -54,6 +57,7 @@ jobs:
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event.label.name == 'benchmark') &&
       (github.event_name != 'workflow_dispatch' ||
       inputs.suite == 'all' ||
@@ -109,6 +113,8 @@ jobs:
           output-file-path: core/bench-output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: ${{ matrix.benchmark_path }}
           alert-threshold: '200%'
           fail-on-alert: false
@@ -118,6 +124,7 @@ jobs:
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event.label.name == 'benchmark') &&
       (github.event_name != 'workflow_dispatch' ||
       inputs.suite == 'all' ||
@@ -172,6 +179,8 @@ jobs:
           output-file-path: benchmark-output/model-bench-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: ${{ matrix.benchmark_path }}
           alert-threshold: '150%'
           fail-on-alert: false
@@ -181,6 +190,7 @@ jobs:
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event.label.name == 'benchmark' ||
       github.event.label.name == 'performance'
     runs-on: ubuntu-latest
@@ -213,6 +223,8 @@ jobs:
           output-file-path: /tmp/aggregated-bench-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: dev/aggregated-bench
           alert-threshold: '150%'
           fail-on-alert: false
@@ -225,6 +237,7 @@ jobs:
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event.label.name == 'benchmark') &&
       (github.event_name != 'workflow_dispatch' ||
       inputs.suite == 'all' ||
@@ -289,6 +302,8 @@ jobs:
           output-file-path: evals/benchmarks/comparison_results/benchmark-results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: ${{ matrix.benchmark_path }}
           alert-threshold: '200%'
           fail-on-alert: false
@@ -298,6 +313,7 @@ jobs:
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' &&
       github.event.label.name == 'performance')) &&
       (github.event_name != 'workflow_dispatch' ||
@@ -353,6 +369,8 @@ jobs:
           output-file-path: benchmark-output/scenario-bench-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: ${{ matrix.benchmark_path }}
           alert-threshold: '150%'
           fail-on-alert: false
@@ -396,6 +414,8 @@ jobs:
           output-file-path: /tmp/batch-search-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: dev/batch-bench
           alert-threshold: '150%'
           fail-on-alert: false
@@ -523,6 +543,8 @@ jobs:
           output-file-path: evals/results/benchmark-results.json  # relative to repo root
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Keep the trend readable and data.js bounded; older points roll off.
+          max-items-in-chart: 250
           benchmark-data-dir-path: dev/evals
           alert-threshold: '200%'
           comment-on-alert: true
