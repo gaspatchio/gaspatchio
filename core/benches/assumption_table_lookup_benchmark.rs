@@ -9,28 +9,19 @@ use polars_core::utils::concat_df;
 use std::fs::File;
 use std::path::Path;
 
-// Helper function to load the 1k model points DataFrame from Parquet
+#[path = "common/mod.rs"]
+mod common;
+
+// Model points are generated, not committed. The parquets these replaced were
+// 22.8 MB of git-LFS whose every list column was derivable from five scalars per
+// policy; see `common::model_points` for the shape and the determinism guarantee.
+// Both sets are memoised, so the repeated setup calls below cost one generation.
 fn load_model_points_1k() -> PolarsResult<DataFrame> {
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("benches/fixtures/age-last-smoking-1k.parquet");
-    let file = File::open(&path).map_err(|e| {
-        PolarsError::ComputeError(
-            format!("Failed to open 1k key source parquet {:?}: {}", path, e).into(),
-        )
-    })?;
-    ParquetReader::new(file).finish()
+    common::model_points_1k()
 }
 
-// Helper function to load the 100k model points DataFrame from Parquet
 fn load_model_points_100k() -> PolarsResult<DataFrame> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("benches/fixtures/age-last-smoking-100k.parquet");
-    let file = File::open(&path).map_err(|e| {
-        PolarsError::ComputeError(
-            format!("Failed to open 100k key source parquet {:?}: {}", path, e).into(),
-        )
-    })?;
-    ParquetReader::new(file).finish()
+    common::model_points_100k()
 }
 
 // Custom melt implementation (copied from the main crate)
