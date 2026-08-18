@@ -27,7 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "core/benches/**"
+          scope: rust
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/cache@v6
         with:

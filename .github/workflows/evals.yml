@@ -1,13 +1,16 @@
 name: Evals & Benchmarks
 
+# Deliberately NOT run on every push to main. This workflow fans out to 13
+# LFS-fetching job instances; at ~10 MB of LFS objects each that was the single
+# largest consumer of the account's Git LFS bandwidth quota. The weekly cron
+# keeps the gh-pages trend history moving, and the `benchmark` / `performance`
+# PR labels plus workflow_dispatch cover on-demand runs.
 on:
   schedule:
     - cron: '0 3 * * 1'  # 3am UTC every Monday
   pull_request:
     branches: [main]
     types: [labeled]  # only when 'benchmark' label is added
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       platform:
@@ -39,8 +42,8 @@ env:
   PYTHONUTF8: "1"
 
 # Cancel a superseded in-progress run of the same workflow on the same ref +
-# event (so rapid pushes don't stack full benchmark runs). Keyed by event_name
-# too, so a push never cancels the weekly scheduled benchmark run.
+# event (so re-labelling a PR doesn't stack full benchmark runs). Keyed by
+# event_name too, so a labelled PR never cancels the weekly scheduled run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
@@ -51,7 +54,6 @@ jobs:
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event.label.name == 'benchmark') &&
       (github.event_name != 'workflow_dispatch' ||
       inputs.suite == 'all' ||
@@ -79,7 +81,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "core/benches/**"
+          scope: rust
       - uses: dtolnay/rust-toolchain@stable
       # Cache compiled dependencies (polars, criterion, …) to keep the cold
       # Windows build inside the timeout. Only deps are cached — the bench crate
@@ -111,7 +118,6 @@ jobs:
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event.label.name == 'benchmark') &&
       (github.event_name != 'workflow_dispatch' ||
       inputs.suite == 'all' ||
@@ -140,7 +146,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked --no-dev
@@ -170,7 +181,6 @@ jobs:
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event.label.name == 'benchmark' ||
       github.event.label.name == 'performance'
     runs-on: ubuntu-latest
@@ -181,7 +191,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true  # L4 tutorial model points + assumptions are git-LFS
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
@@ -210,7 +225,6 @@ jobs:
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event.label.name == 'benchmark') &&
       (github.event_name != 'workflow_dispatch' ||
       inputs.suite == 'all' ||
@@ -241,7 +255,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - name: Set up SSH agent for benchmarks deploy key
         uses: webfactory/ssh-agent@v0.10.0
         with:
@@ -279,7 +298,6 @@ jobs:
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' &&
       github.event.label.name == 'performance')) &&
       (github.event_name != 'workflow_dispatch' ||
@@ -309,7 +327,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked --no-dev
@@ -349,7 +372,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
@@ -390,7 +418,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
@@ -422,7 +455,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true  # L4 base model points + assumptions are git-LFS
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked
@@ -453,7 +491,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          lfs: true
+          lfs: false
+      - name: Pull the LFS objects this job reads
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,evals/**"
+          scope: evals
       - uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --locked --group evals
