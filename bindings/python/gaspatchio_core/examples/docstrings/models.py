@@ -82,6 +82,11 @@ class DocstringCodeExample(BaseModel):
             # Adding --isolated to prevent pyproject.toml from current dir
             # from interfering too much, though ruff might still pick some
             # global configs. For snippet linting, this is safer.
+            # The select is pinned: --isolated otherwise inherits whichever
+            # rule set the installed ruff defaults to, and that set moves —
+            # 0.16 added import-sorting, which turned 70 examples red on a
+            # version bump. These are the correctness rules the gate is for
+            # (syntax errors, undefined names, unused imports), not style.
             command = [
                 ruff_exe,
                 "check",
@@ -89,6 +94,8 @@ class DocstringCodeExample(BaseModel):
                 "json",
                 "--no-cache",
                 "--isolated",
+                "--select",
+                "E4,E7,E9,F",
                 "-",
             ]
 
