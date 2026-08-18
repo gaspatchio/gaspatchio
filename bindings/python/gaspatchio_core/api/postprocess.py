@@ -36,10 +36,51 @@ _DEDUPE_THRESHOLD = 0.9
 # Query terms shorter than this are too common to anchor a snippet window.
 _MIN_TERM_CHARS = 4
 
+# After stripping the shared prefix, remainders at or below this many
+# normalised characters are trailing noise (a revision stamp, a page marker);
+# anything longer is substantive content — even one load-bearing sentence
+# after shared boilerplate must survive. A global similarity ratio cannot
+# draw this line: with a dominant shared preamble, distinct tails up to
+# ~1/9 of its length keep the ratio above any fixed threshold.
+_TRIVIAL_TAIL_CHARS = 120
+
 
 def _normalise(text: str) -> str:
     """Lowercase and collapse whitespace for comparison."""
     return " ".join(text.lower().split())
+
+
+def _common_prefix_len(a: str, b: str) -> int:
+    """Length of the longest common prefix of two strings."""
+    limit = min(len(a), len(b))
+    for i in range(limit):
+        if a[i] != b[i]:
+            return i
+    return limit
+
+
+def _is_near_duplicate(a: str, b: str, threshold: float) -> bool:
+    """Whether two normalised texts carry the same content.
+
+    The global ratio is a fast gate: below threshold the texts are
+    clearly distinct. Above it, the shared prefix is stripped and the
+    remainders judged on their own — tiny remainders are trailing noise,
+    longer ones are duplicate only if they are themselves similar.
+    """
+    matcher = SequenceMatcher(None, a, b)
+    if not (
+        matcher.real_quick_ratio() >= threshold
+        and matcher.quick_ratio() >= threshold
+        and matcher.ratio() >= threshold
+    ):
+        return False
+
+    prefix_len = _common_prefix_len(a, b)
+    rest_a = a[prefix_len:]
+    rest_b = b[prefix_len:]
+    if max(len(rest_a), len(rest_b)) <= _TRIVIAL_TAIL_CHARS:
+        return True
+    return SequenceMatcher(None, rest_a, rest_b).ratio() >= threshold
 
 
 def dedupe_results(
@@ -56,16 +97,9 @@ def dedupe_results(
     dropped = 0
     for result in results:
         norm = _normalise(result.text)
-        is_duplicate = False
-        for seen in kept_norms:
-            matcher = SequenceMatcher(None, norm, seen)
-            if (
-                matcher.real_quick_ratio() >= threshold
-                and matcher.quick_ratio() >= threshold
-                and matcher.ratio() >= threshold
-            ):
-                is_duplicate = True
-                break
+        is_duplicate = any(
+            _is_near_duplicate(norm, seen, threshold) for seen in kept_norms
+        )
         if is_duplicate:
             dropped += 1
             continue

@@ -99,6 +99,47 @@ class TestDedupe:
         assert len(kept) == 2
 
 
+class TestDedupeShortTails:
+    """A dominant preamble must not swallow short distinct substance."""
+
+    def test_short_distinct_tails_survive_a_dominant_preamble(self) -> None:
+        """Even one distinct load-bearing sentence after boilerplate is content.
+
+        The global ratio stays above threshold when the tails are short
+        relative to the preamble, so the judgement must fall on what
+        remains after the shared prefix.
+        """
+        tail_a = (
+            "Term insurance uses the net premium reserve methodology defined "
+            "in VM-20 section 3.B.4 for the base reserve calculation. " * 3
+        )
+        tail_b = (
+            "Universal life secondary guarantees are valued under the VM-20 "
+            "section 3.C stochastic exclusion ratio test instead. " * 3
+        )
+        hits = [
+            _knowledge(PREAMBLE + tail_a, "VM-20"),
+            _knowledge(PREAMBLE + tail_b, "VM-20 _2"),
+        ]
+
+        kept, dropped = dedupe_results(hits)
+
+        assert dropped == 0
+        assert len(kept) == 2
+
+    def test_trivial_trailing_variation_still_collapses(self) -> None:
+        """A few words of tail difference is noise, not substance."""
+        hits = [
+            _knowledge(PREAMBLE, "VM-20"),
+            _knowledge(PREAMBLE + " Revised August 2026.", "VM-20 _2"),
+        ]
+
+        kept, dropped = dedupe_results(hits)
+
+        assert dropped == 1
+        assert len(kept) == 1
+
+
 class TestTruncate:
     """Snippet windowing around the first query match."""
 
