@@ -25,19 +25,21 @@ from gaspatchio_core.api.models import DocResult, KnowledgeResult
 
 _ResultT = TypeVar("_ResultT", DocResult, KnowledgeResult)
 
-# Near-duplicate detection compares normalised text prefixes; 0.9 collapses
+# Near-duplicate detection compares the FULL normalised texts; 0.9 collapses
 # re-ingested copies of the same source (which differ in whitespace or a
-# trailing variation) while distinct prose stays comfortably below it.
+# trailing variation) while distinct prose stays comfortably below it. The
+# comparison must never be capped to a prefix: the observed boilerplate
+# preambles run ~3.5 KB, so a prefix probe would collapse two chunks whose
+# substantive content only diverges after the shared preamble.
 _DEDUPE_THRESHOLD = 0.9
-_DEDUPE_PROBE_CHARS = 2000
 
 # Query terms shorter than this are too common to anchor a snippet window.
 _MIN_TERM_CHARS = 4
 
 
 def _normalise(text: str) -> str:
-    """Lowercase, collapse whitespace, and cap length for cheap comparison."""
-    return " ".join(text.lower().split())[:_DEDUPE_PROBE_CHARS]
+    """Lowercase and collapse whitespace for comparison."""
+    return " ".join(text.lower().split())
 
 
 def dedupe_results(
@@ -73,13 +75,28 @@ def dedupe_results(
 
 
 def _first_match_position(text: str, query: str) -> int | None:
-    """Position of the earliest query-term occurrence in text, if any."""
+    """Position of the earliest query-term occurrence in text, if any.
+
+    Word-boundary matches win over substring hits: "rate" inside
+    "generated" must not steal the anchor from a later "rate table". A
+    bare substring hit ("flow" inside "cashflow") is still used when no
+    boundary match exists — better than windowing the head blindly.
+    """
     terms = [t for t in re.split(r"\W+", query) if len(t) >= _MIN_TERM_CHARS]
     lowered = text.lower()
-    positions = [
+
+    boundary_positions = []
+    for term in terms:
+        match = re.search(rf"\b{re.escape(term.lower())}", lowered)
+        if match:
+            boundary_positions.append(match.start())
+    if boundary_positions:
+        return min(boundary_positions)
+
+    substring_positions = [
         pos for pos in (lowered.find(term.lower()) for term in terms) if pos >= 0
     ]
-    return min(positions) if positions else None
+    return min(substring_positions) if substring_positions else None
 
 
 def truncate_result(result: _ResultT, query: str, max_chars: int) -> _ResultT:

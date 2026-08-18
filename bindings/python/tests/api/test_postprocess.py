@@ -80,6 +80,24 @@ class TestDedupe:
         assert dropped == 1
         assert kept[0].text == PREAMBLE
 
+    def test_shared_long_preamble_with_distinct_substance_survives(self) -> None:
+        """A long shared preamble must not mask distinct substance after it.
+
+        Dropping either hit would silently lose relevant material — the
+        observed boilerplate preambles run ~3.5 KB.
+        """
+        substance_a = "Term insurance uses the NPR methodology per VM-20 3.B.4. " * 20
+        substance_b = "Universal life secondary guarantees follow VM-20 3.C. " * 20
+        hits = [
+            _knowledge(PREAMBLE + substance_a, "VM-20"),
+            _knowledge(PREAMBLE + substance_b, "VM-20 _2"),
+        ]
+
+        kept, dropped = dedupe_results(hits)
+
+        assert dropped == 0
+        assert len(kept) == 2
+
 
 class TestTruncate:
     """Snippet windowing around the first query match."""
@@ -128,3 +146,33 @@ class TestTruncate:
         assert out.truncated is True
         assert out.text.startswith(PREAMBLE[:40])
         assert "--full" in out.text
+
+    def test_window_anchors_on_the_word_not_a_substring(self) -> None:
+        """A substring hit inside a longer word must not steal the anchor.
+
+        "rate" inside "generated" loses to the real "rate table" later in
+        the document.
+        """
+        decoy = "Charts were generated from integrated data sources. " * 40
+        text = decoy + "The rate table maps attained age to mortality. " + decoy
+        result = _doc(text)
+
+        out = truncate_result(result, query="rate table", max_chars=300)
+
+        assert out.truncated is True
+        assert "rate table maps attained age" in out.text
+
+    def test_substring_match_is_still_better_than_the_head(self) -> None:
+        """A bare substring hit still beats windowing the head blindly.
+
+        With no word-boundary occurrence at all ('flow' appears only inside
+        'cashflow'), the substring position is the best available anchor.
+        """
+        filler = "Background prose about projection mechanics. " * 40
+        text = filler + "The cashflow vector nets premiums against claims. " + filler
+        result = _doc(text)
+
+        out = truncate_result(result, query="flow", max_chars=300)
+
+        assert out.truncated is True
+        assert "cashflow vector" in out.text
