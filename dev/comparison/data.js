@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786953966659,
+  "lastUpdate": 1787020172712,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib": [
@@ -7491,6 +7491,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 7.05,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "db9b0299c7b86bbe2fbb6cb16ea68656f242a5d8",
+          "message": "perf(bench): generate model points instead of committing 22.8 MB of LFS (#140)\n\n`benches/fixtures/age-last-smoking-{1k,100k}.parquet` fed only the assumption-table\nlookup benchmarks, and almost all of it was redundant: every list column is a pure\nfunction of five scalars per policy, so 100,000 policies expand to 64.4M projection\nmonths from ~500 KB of real entropy.\n\nLFS bandwidth is billed to the repository owner on every fetch, including\nthird-party clones of this public repo — 2,316 clones from 356 unique cloners in\n14 days, largely the plugin marketplace, none of which need benchmark fixtures.\n#139 scoped and cached CI's fetches; removing the object from the checked-out tree\nmeans it is never fetched by anyone. `core/benches/**` drops from 22.86 MB to ~50 KB.\n\n`benches/common/mod.rs` generates the frame from a per-policy SplitMix64 stream\nseeded off the policy index, so a policy's attributes depend only on its index and\n`model_points(1_000)` is exactly the first 1,000 rows of `model_points(100_000)` —\nthe nesting the cross-size benchmarks rely on. Wrapping integer arithmetic only, so\nLinux and Windows agree. Both sets are memoised; previously the bench groups did\nfive full 22 MB parquet reads per run.\n\nAlso removes the unreferenced 100-row `age-last-smoking.parquet` seed. The copy at\nbindings/python/jobs/example/ is a different consumer and is untouched.\n\nFidelity vs the retired fixtures, measured before deletion: identical schema,\nidentical row count, 950 vs 950 distinct (issue_age, duration) combinations, and\n64,303,576 vs 64,352,584 exploded projection months (-0.08%).\n\ncore/tests/bench_model_points.rs pins schema, every derivation, scalar/list\nagreement, the prefix property, determinism and key-space coverage.\n\nExpect a one-time ~9% step down on array_lookup_1k and array_vector_lookup_1k.\nThe compute-bound hash_vector case is flat at +0.3%, so the lookup workload is\nequivalent; the array delta was not isolated (data volume, key diversity and\nchunking all ruled out). Far inside the 200% alert threshold.",
+          "timestamp": "2026-08-18T14:19:27+12:00",
+          "tree_id": "7d1ea29e9f087b2877bfae7377ead557b88aae98",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/db9b0299c7b86bbe2fbb6cb16ea68656f242a5d8"
+        },
+        "date": 1787020170854,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 2.065,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.542,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.154,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 51.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 6.193,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 40.21,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.474,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2109.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 22.04,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 45.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 46.5,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.549,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 3923.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 17.14,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 583.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 6.72,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 23.598,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4237.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 120.651,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 828.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.11,
             "unit": "x"
           }
         ]
