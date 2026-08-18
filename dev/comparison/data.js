@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787034727769,
+  "lastUpdate": 1787040892736,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib": [
@@ -7759,6 +7759,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 7.35,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b3111b5cbced6be05d2a5e77331b52e2e4dfff51",
+          "message": "fix(assumptions): refuse lookups from a superseded Table object (#137)\n\n* fix(assumptions): refuse lookups from a superseded Table object\n\nTables resolve by name at execution time (last-writer-wins), so a\nscenario override built before load_assumptions() silently resolved to\nbase data and the sweep reported zero sensitivity — the run succeeded,\nthe numbers were plausible, and the shock never happened (#116, vm20\nclean room L8).\n\nRefuse at the point of guaranteed wrongness: lookup() on a Table whose\nname has since been re-registered with different content now raises\nTableSupersededError naming the hazard and the fix. Registration itself\nstays permissive — same-name tables across different models in one\nprocess and identical-content re-runs (#39 reentrancy) are legitimate\nand untouched, which is also why the issue's registration-time\nrefusal was rejected: table names like \"mortality\" are reused\npervasively across independent models.\n\nFixes #116\n\n* fix(assumptions): extend() re-stamps the content identity it registers\n\nReview catch (Greptile P1 on the PR): extend() appended to the Rust\nregistry and to self._df but left both compared content hashes at the\npre-extension value. A later registration of the ORIGINAL data then\nread as idempotent reentrancy, and a lookup from the extended object\npassed the superseded guard while resolving to data that had silently\nlost the appended rows — the exact class of silent wrong the guard\nexists to refuse.\n\nextend() now re-sorts the concatenated frame by its key columns\n(restoring the _process_data invariant) and re-stamps both the object's\nand the registry's content hash from it.\n\nRefs #116\n\n* fix(assumptions): record the registered hash only after registration succeeds\n\nReview catch (Greptile, second pass): _process_data wrote the new\ncontent hash into the supersession dict before calling the Rust\nregistry. A failed replacement left the dict holding a hash the\nregistry never accepted, and the guard then wrongly refused lookups\nfrom the still-valid previous table. The write ordering predates this\nPR, but it only became load-bearing when the guard started reading it.\n\nMove the write after the successful register_or_replace_table call;\nthe different-content warning still reads the previous hash first.\n\nRefs #116\n\n* fix(assumptions): make extend() commit registry and identity together\n\nReview catch (Greptile, third pass — same species as the first two):\nthe native append ran before the Python-side concat, so a concat\nfailure after an accepted append left the registry extended while the\nobject and the supersession dict still carried the pre-extension\nidentity — the audit surface attesting data the lookups no longer\nserve.\n\nBuild the post-extension frame and its hash before the native append;\nafter the append succeeds, commit self._df and both hashes with plain\nassignments that cannot fail. Either both sides move or neither does.\n\nRefs #116",
+          "timestamp": "2026-08-18T20:05:33+12:00",
+          "tree_id": "d58d21eeff1561ef70d36b3f622f83447be3493c",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/b3111b5cbced6be05d2a5e77331b52e2e4dfff51"
+        },
+        "date": 1787040891207,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 1.761,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 1.783,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.147,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 54.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 5.947,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 40.46,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.457,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2188.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 20.45,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 48.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 44.75,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.53,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 3952.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 16.491,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 606.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 6.52,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 23.611,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4235.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 118.953,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 840.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.04,
             "unit": "x"
           }
         ]
