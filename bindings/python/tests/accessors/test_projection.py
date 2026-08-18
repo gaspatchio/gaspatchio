@@ -1435,3 +1435,65 @@ class TestAccumulate:
         assert pytest.approx(av[0], abs=1e-6) == 111.0
         assert pytest.approx(av[1], abs=1e-6) == 122.11
         assert pytest.approx(av[2], abs=1e-6) == 133.3311
+
+
+class TestFromSurvival:
+    """#118: survival-shaped input skips the lossy 1-(1-px) round trip."""
+
+    # A VM-20 shock-lapse year: px < 0.5, where the round trip loses bits.
+    SHOCK_PX = 0.19944199999999995
+
+    def test_the_inversion_hazard_is_real(self):
+        """The Sterbenz bound: 1-(1-px) is exact only for px >= 0.5.
+
+        Guards the motivation: if float semantics ever make the round trip
+        exact, from_survival stops earning its keep and this suite says so.
+        """
+        assert 1 - (1 - self.SHOCK_PX) != self.SHOCK_PX
+
+    def test_list_from_survival_is_bit_exact(self):
+        """Survival input cumulates exactly — no inversion anywhere."""
+        px = [0.999, 0.9, self.SHOCK_PX]
+        af = ActuarialFrame({"px": [px]})
+
+        af.cum_px = af.px.projection.cumulative_survival(
+            rate_timing="end_of_period", from_survival=True
+        )
+
+        result = af.collect()["cum_px"].to_list()[0]
+        assert result == [px[0], px[0] * px[1], px[0] * px[1] * px[2]]
+
+    def test_beginning_of_period_prepends_one(self):
+        """Default timing still prepends the t=0 survival of 1.0."""
+        px = [0.999, 0.9, self.SHOCK_PX]
+        af = ActuarialFrame({"px": [px]})
+
+        af.cum_px = af.px.projection.cumulative_survival(from_survival=True)
+
+        result = af.collect()["cum_px"].to_list()[0]
+        assert result == [1.0, px[0], px[0] * px[1]]
+
+    def test_rate_path_differs_on_shock_values(self):
+        """The rate spelling is measurably lossy on the same shock input."""
+        af = ActuarialFrame({"px": [[self.SHOCK_PX]], "rate": [[1 - self.SHOCK_PX]]})
+
+        af.via_rates = af.rate.projection.cumulative_survival(
+            rate_timing="end_of_period"
+        )
+        af.direct = af.px.projection.cumulative_survival(
+            rate_timing="end_of_period", from_survival=True
+        )
+
+        row = af.collect()
+        assert row["direct"].to_list()[0] == [self.SHOCK_PX]
+        assert row["via_rates"].to_list()[0] != [self.SHOCK_PX]
+
+    def test_scalar_from_survival(self):
+        """Scalar columns cumulate across rows, same as the rate path."""
+        af = ActuarialFrame({"px": [0.999, 0.9]})
+
+        af.cum = af.px.projection.cumulative_survival(
+            rate_timing="end_of_period", from_survival=True
+        )
+
+        assert af.collect()["cum"].to_list() == [0.999, 0.999 * 0.9]
