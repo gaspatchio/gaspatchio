@@ -795,7 +795,6 @@ class Table:
                 f"a scenario shock), ignore; otherwise give the tables distinct "
                 f"names, or rebuild expressions after re-registering.",
             )
-        _REGISTERED_TABLE_SHAS[self._name] = content_sha
 
         # Register with Rust registry using idempotent method
         try:
@@ -809,6 +808,10 @@ class Table:
                 force_replace=True,  # Always replace for reentrancy support
                 storage_mode=self._storage_mode,
             )
+            # Record the hash only once the registry actually holds this data;
+            # recording before a failed replacement would poison the guard and
+            # wrongly refuse lookups from the still-valid previous table.
+            _REGISTERED_TABLE_SHAS[self._name] = content_sha
             # Query the actual storage mode chosen by Rust (may differ from requested if "auto")
             actual_mode = (
                 registry.get_table_storage_mode(self._name) or self._storage_mode

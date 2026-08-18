@@ -102,6 +102,35 @@ def test_extended_table_still_looks_up_its_own_data() -> None:
     assert af.collect()["rate"].to_list() == [4.0]
 
 
+def test_failed_replacement_does_not_poison_the_original(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed same-name registration must not corrupt supersession tracking.
+
+    If the Rust registration raises, the registry still serves the original
+    data — so the original object's lookups must keep working, not be
+    refused against a hash the registry never accepted.
+    """
+    from gaspatchio_core.assumptions import _api
+
+    original = _table("superseded_failed_swap", [1.0, 2.0, 3.0])
+
+    class _ExplodingRegistry:
+        def register_or_replace_table(self, **_kwargs: object) -> None:
+            msg = "simulated native registration failure"
+            raise RuntimeError(msg)
+
+    monkeypatch.setattr(_api, "PyAssumptionTableRegistry", _ExplodingRegistry)
+    with pytest.raises(RuntimeError, match="simulated native registration"):
+        _table("superseded_failed_swap", [9.0, 8.0, 7.0])
+    monkeypatch.undo()
+
+    af = ActuarialFrame({"policy_id": [1], "age": [40]})
+    af.rate = original.lookup(age=af.age)
+
+    assert af.collect()["rate"].to_list() == [2.0]
+
+
 def test_lookup_after_identical_reregistration_works_on_both_objects() -> None:
     """The issue-#39 reentrancy case: identical data, both objects stay valid."""
     first = _table("superseded_reentrant", [1.0, 2.0, 3.0])
