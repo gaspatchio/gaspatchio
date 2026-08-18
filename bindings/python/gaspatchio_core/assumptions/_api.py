@@ -1310,9 +1310,19 @@ class Table:
             logger.error(f"Failed to extend table '{self._name}': {e}")
             raise
 
-        # Update our stored DataFrame by concatenating
+        # Update our stored DataFrame by concatenating, re-sorted by keys to
+        # keep the _process_data invariant (self._df sorted, hash canonical).
         if self._df is not None:
-            self._df = pl.concat([self._df, processed_df])
+            all_key_columns = [c for c in self._df.columns if c != self._value]
+            self._df = pl.concat([self._df, processed_df]).sort(all_key_columns)
+            # Re-stamp the content identity for the extended data. Without
+            # this both compared hashes stay at the pre-extension value: a
+            # later registration of the ORIGINAL data reads as idempotent
+            # reentrancy, and a lookup from this object passes the
+            # superseded guard while the appended rows are silently gone.
+            content_sha = _hash_processed_df(self._df)
+            self._registered_sha = content_sha
+            _REGISTERED_TABLE_SHAS[self._name] = content_sha
 
         return self
 

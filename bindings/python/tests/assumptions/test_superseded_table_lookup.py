@@ -25,12 +25,13 @@ from gaspatchio_core import ActuarialFrame
 from gaspatchio_core.assumptions import Table, TableSupersededError
 
 
-def _table(name: str, rates: list[float]) -> Table:
+def _table(name: str, rates: list[float], storage_mode: str = "auto") -> Table:
     return Table(
         name=name,
         source=pl.DataFrame({"age": [30, 40, 50], "rate": rates}),
         dimensions={"age": "age"},
         value="rate",
+        storage_mode=storage_mode,
     )
 
 
@@ -48,6 +49,7 @@ def test_lookup_on_superseded_table_raises() -> None:
 
 
 def test_error_names_the_hazard_and_the_fix() -> None:
+    """The message states the hazard and both ways out."""
     override = _table("superseded_msg", [1.0, 2.0, 3.0])
     _table("superseded_msg", [9.0, 8.0, 7.0])
 
@@ -69,6 +71,35 @@ def test_lookup_on_current_table_after_supersede_works() -> None:
     result = af.collect()
 
     assert result["rate"].to_list() == [8.0]
+
+
+def test_extend_updates_content_identity() -> None:
+    """extend() re-stamps the content hash it registers under the name.
+
+    Without the re-stamp both compared hashes stay at the pre-extension
+    value: a later registration of the ORIGINAL data reads as idempotent,
+    and a lookup from the extended object passes the guard while the
+    appended rows are silently gone.
+    """
+    extended = _table("superseded_extend", [1.0, 2.0, 3.0], storage_mode="hash")
+    extended.extend(pl.DataFrame({"age": [60], "rate": [4.0]}))
+
+    # Original content re-registers (the reentrancy flow).
+    _table("superseded_extend", [1.0, 2.0, 3.0], storage_mode="hash")
+
+    with pytest.raises(TableSupersededError, match="superseded_extend"):
+        extended.lookup(age=pl.col("age"))
+
+
+def test_extended_table_still_looks_up_its_own_data() -> None:
+    """The extended object's own lookups keep working after the re-stamp."""
+    table = _table("superseded_extend_ok", [1.0, 2.0, 3.0], storage_mode="hash")
+    table.extend(pl.DataFrame({"age": [60], "rate": [4.0]}))
+
+    af = ActuarialFrame({"policy_id": [1], "age": [60]})
+    af.rate = table.lookup(age=af.age)
+
+    assert af.collect()["rate"].to_list() == [4.0]
 
 
 def test_lookup_after_identical_reregistration_works_on_both_objects() -> None:
