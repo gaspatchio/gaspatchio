@@ -19,6 +19,12 @@ This skill can be used standalone on any gaspatchio model. It does NOT require m
 - Parameter shocks (mortality, lapse, interest rates, expenses)
 - Regulatory or economic scenario comparison
 
+It also fires **without a user request** when the *source* is scenario-shaped: a
+workbook under conversion whose variant/scenario tabs are the ask. Decide the axis
+first via the model-building classification gate — input-shaped variants belong to
+this skill's machinery; wiring-divergent variants become a model-point row axis
+instead, and this skill's runner is the wrong tool.
+
 ## Hard gate
 
 Do NOT claim scenario analysis is complete until a `report/report.md` exists containing charts (embedded PNGs) and the run's audit chain (plan SHA + JSON audit sidecar from `ScenarioRun.run(audit=True)`). Every scenario run produces a report.

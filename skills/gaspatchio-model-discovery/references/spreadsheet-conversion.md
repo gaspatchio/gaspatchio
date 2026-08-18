@@ -40,8 +40,9 @@ Two caveats remain open upstream (verified 2026-08-18):
   own previous row shows no self-edge. Never conclude "no recursion" from the binding
   graph alone — check the row-level formulas of any balance-like column.
 
-The stable views are `agent_*` and `atlas_*`; the raw tables are internal. The two you
-will use constantly:
+The stable views are `agent_*` and `marinade_*`; the raw tables are internal. One
+blessed exception: `defined_names` is a base table with no `agent_*` view yet — read
+it, read-only. The two queries you will use constantly:
 
 ```sql
 -- the model's variable list, auto-named from the sheet's own header row
@@ -97,7 +98,9 @@ of these produces a model that **runs and is wrong**, not a model that fails.
 | The workbook has | Write it as | Silent failure if you get it wrong |
 |---|---|---|
 | A strongly-connected component in the binding graph | a rollforward state | Members that look like plain schedule lookups get written as closed-form columns. See "the lapse gate" below — this is the most common miss. |
-| No cycle | plain column assignments | Reaching for a rollforward anyway costs clarity and speed for nothing. *Closed-form by default.* |
+| A forward row offset (`R[-1]C` — cumulative px, running balances) | `accumulate()` / `cum_prod`-style closed forms | Written as a plain column it reads garbage from an unshifted neighbour — usually loud. The quiet failure is reaching for a full rollforward instead: correct, slow, unreadable. |
+| A backward row offset (`R[1]C` — PV rollbacks, mean reserves) | a **reversed** accumulation (reverse, accumulate, reverse back) or `next_period()` composition | Written as plain column assignments the model **runs and is wrong** — and in a reserving workbook those columns *are* the reserve. No cycle test can see this shape (gaspatchio#115). |
+| No cycle **and no row offset** | plain column assignments | Reaching for a rollforward anyway costs clarity and speed for nothing. *Closed-form by default.* |
 | `IF(<prior period cell> > 0, x, 0)` | `lapse_when_all_non_positive=[...]` | The gate makes premium and expense depend on prior state, so they belong **inside** the recursion. Written as columns they are correct until the policy lapses, then silently wrong — and most test policies never lapse. |
 | A circular COI reference (NAR depends on the balance the COI reduces) | `deduct_nar(nar_timing=...)` | There are **three** conventions and they agree when rates are constant. The error only appears once rates vary, so it survives testing. Read the timing section below. |
 | `ROUND(...,2)` between an opening and closing balance | `.round(2)` **inside** the rollforward | Rounding the final answer instead drifts monotonically — invisible in year 1, material by year 40. It compounds because each rounded balance opens the next period. |
@@ -107,19 +110,57 @@ of these produces a model that **runs and is wrong**, not a model that fails.
 | Single-cell defined names (`face`, `iq`) | model-point columns | Hard-coding them as literals works until the second policy. |
 | Two rate assumptions that look interchangeable | two separate arguments | A workbook may carry both a *credited* rate and a separate *rate for discounting COI*. Collapsing them is invisible while they are equal. |
 
-## Finding the state machine mechanically
+## Finding the recurrences mechanically
 
-You do not have to judge which variables are recursive. Compute the strongly-connected
-components of the binding dependency graph: **every SCC of size > 1 is a rollforward
-state; everything else is closed-form.** This turns the *Closed-form by default*
-principle into a query rather than a judgement call.
+You do not have to judge which variables are recursive — but it takes **two** tests,
+not one, and order matters.
+
+**Test 1 — order-dependence (run this first).** Any formula that references *another
+row* is order-dependent and must be written as a recurrence. In R1C1 that is exactly a
+non-zero row offset — `R[-1]C`, `R[1]C` — so it is one `LIKE`:
+
+```sql
+-- first pass: bindings whose dominant formula reads another row
+SELECT address, label, formula_pattern FROM agent_bindings
+WHERE formula_pattern LIKE '%R[%';
+
+-- authoritative pass: per column, how many row formulas carry an offset —
+-- catches the gated/mixed bindings whose dominant pattern hides it
+SELECT sheet, col, COUNT(*) AS n,
+       SUM(formula_r1c1 LIKE '%R[%') AS offset_rows
+FROM agent_cells_light WHERE formula_r1c1 IS NOT NULL
+GROUP BY sheet, col;
+```
+
+(`RC[-1]` — same row, different column — has no `R[` and correctly stays closed-form.
+A split-off init row often shows a plain pattern while every propagation row beneath it
+carries the offset; the second query is what tells you.)
+
+A **forward** offset (`R[-1]C`) is a rollforward-style accumulation — cumulative
+products and sums usually have closed forms. A **backward** offset (`R[1]C`) is a PV
+rollback — exactly as order-dependent, spelled as a *reversed* accumulation (reverse
+the series, accumulate, reverse back) or `next_period()` composition. Neither needs
+the state machine unless a within-period charge also reads the running balance.
+
+**Test 2 — within-period cycles (the escalation detector).** Strongly-connected
+components of the binding dependency graph find the *genuine* cycles — the variables
+that must live inside one rollforward state:
 
 ```sql
 SELECT source_binding_id, target_binding_id FROM agent_binding_dependencies;
 ```
 
-Feed those edges to Tarjan's algorithm (or any SCC implementation) and read off the
-partition.
+Feed those edges to Tarjan's algorithm and read off the components.
+
+**The SCC test alone is not the split, and trusting it that way is the bad kind of
+wrong.** A VM-20 NPR reserving workbook returns *zero* SCCs of size > 1 at both
+binding and cell granularity — verdict "everything is closed-form" — while ten of its
+columns, the PV rollbacks that *are* the reserve, carry recurrences (gaspatchio#115).
+Two independent reasons: backward recurrences are DAGs, invisible to a cycle test *in
+principle*; and the binding graph drops intra-binding edges, so even a forward
+self-recurrence cannot form an SCC there (xl-marinade#16). The row-offset scan catches
+all of them — including the lapse-gate example below — while the SCC test remains the
+right detector for what it is good at: cross-binding within-period cycles.
 
 ### The lapse gate — the trap this catches
 
@@ -136,6 +177,26 @@ balance, which puts both variables inside the cycle. **Read more than the first 
 row** — spreadsheets very often special-case it, and on a merged mixed binding
 `formula_pattern` is one row's formula, which can be precisely that special case.
 The distribution query above is what tells you; the pattern column cannot.
+
+## Confirm consumption with the edge table before modelling structure
+
+On a bug-for-bug twin, a structure that *looks* per-scenario / per-product / per-region
+is a hypothesis, not a fact — **a computed cell is not necessarily a used cell.** One
+capital workbook computed a correlation switch per scenario (`D41`/`E41`/`F41`, a
+layout that plainly intends per-scenario behaviour), but all three consumers referenced
+`$D$41` absolutely; modelling it per-scenario broke one scenario's SCR by ~856k. What
+settled it was not re-reading formulas but one query:
+
+```sql
+SELECT from_cell, to_cell FROM agent_dependencies
+WHERE to_cell IN ('...!D41', '...!E41', '...!F41');
+-- three rows, all pointing at D41; E41 and F41 have no consumers
+```
+
+Before modelling any structural hypothesis, ask the edge table who actually reads the
+cells. And treat **"dead cell adjacent to a wrong reference" as a defect signature** —
+the same query pattern exposed a stress-annuity pair where the dead neighbour marked a
+mis-pointed formula. Both belong in the conversion report as workbook findings.
 
 ## Timing conventions: check, never assume
 
@@ -181,6 +242,14 @@ differ only on exact ties, so the bug is invisible until it isn't. The rollforwa
 A workbook's cached outputs are your gold standard. Extract them to parquet before changing
 anything, and reconcile column by column.
 
+**One class of cached value is irreproducible by design: Excel's cosmetic zero.** When
+the final add/subtract of two references lands below ~2⁻⁴⁸ *relative to the operands*,
+Excel caches an exact `0` where IEEE arithmetic (and any honest engine) says something
+like `-1.09e-11`. A strict tie-out should expect this class and bound it —
+`|cached − ieee| / max(1, |a|, |b|) ≲ 2⁻⁴⁸` — naming it as an Excel display artifact
+rather than loosening the global tolerance to hide it. The divisor floor (`max(1, …)`)
+matters: the cosmetic zero itself must not divide by zero in your residual report.
+
 But cached values only cover the one set of inputs the workbook happens to be saved with, and
 that is usually not enough. Branches that never fire on the shipped inputs — a corridor test, a
 guarantee, a mass-lapse trigger — have no reference at all, which is exactly where conversion
@@ -219,19 +288,39 @@ A reimplementation in Python is a reasonable *exploratory* tool — it is fast e
 parameter until a branch fires. Just don't quote its numbers as the reference when the engine
 can give you the workbook's own.
 
+Two verified caveats on `formulas` itself:
+
+- **It cannot load a workbook with `%` in a sheet name** — printf interpolation of the
+  sheet id raises `ValueError: unsupported format character`. Percentage-named
+  regulatory tabs are common (a VM-20 sheet named after the 135% constraint hits it).
+  The workaround that preserves gold-standard integrity: copy the workbook to scratch,
+  rename the sheet there, rewrite its by-name references, and never open the original
+  for writing.
+- **It exercises unfired branches; it does not adjudicate Excel's undefined
+  behaviour.** On a degenerate approximate-match VLOOKUP over unsorted data it returns
+  the sane answer where Excel's cache holds the insane one — so it validates normal
+  formulas and cannot arbitrate quirks. When you hit one, take the affected cells as
+  *extracted assumptions*: assert their cached values against the extract, reproduce
+  them as data, and state the consequence in the report.
+
 ## Before writing any model code
 
 1. **Extract**, do not read by hand. `marinade extract`.
-2. **Partition** the bindings into SCCs. That is your rollforward/closed-form split.
-3. **List the defined names.** Single cells are model-point columns; ranges are `Table`s.
-4. **Find every `ROUND`**, and note which sit inside a cycle.
-5. **Find every approximate-match `VLOOKUP`** and check whether the projection outruns
+2. **Scan for row offsets, then partition into SCCs.** The offset scan finds every
+   recurrence (forward *and* backward); the SCCs find which ones must share a
+   rollforward state. Together — not the SCC test alone — they are your
+   recurrence/closed-form split.
+3. **Confirm consumption with the edge table** for any structure you are about to
+   model — a computed cell is not necessarily a used cell.
+4. **List the defined names.** Single cells are model-point columns; ranges are `Table`s.
+5. **Find every `ROUND`**, and note which sit inside a cycle.
+6. **Find every approximate-match `VLOOKUP`** and check whether the projection outruns
    its table's range.
-6. **Identify the reference values.** A workbook's cached outputs are your gold standard —
+7. **Identify the reference values.** A workbook's cached outputs are your gold standard —
    extract them to parquet before changing anything, and reconcile against them column by
    column, not just on the final number. For branches the shipped inputs never exercise,
    recalculate the workbook with a formula engine rather than reimplementing it.
-7. **Check whether the workbook models one policy or many.** Most teaching and pricing
+8. **Check whether the workbook models one policy or many.** Most teaching and pricing
    workbooks model exactly one, driven by single-cell inputs. That is fine — but it means
    there is no policy space to test across, so guard the assumptions that only hold for
    that one life with assertions rather than comments.
