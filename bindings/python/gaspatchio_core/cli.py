@@ -46,6 +46,31 @@ logger.add(
 
 # Rich console for better output
 console = Console()
+# Human-facing degradation notices go to stderr so stdout stays pure JSON
+# for the agents that parse it.
+err_console = Console(stderr=True)
+
+# At or above this status the API answered but the endpoint itself failed —
+# a different situation from an unreachable API (no status at all).
+_HTTP_SERVER_ERROR = 500
+
+
+def _answer_fallback_note(status_code: int) -> str:
+    """Build the machine-readable note carried on a fallback search response."""
+    return (
+        f"answer synthesis unavailable (HTTP {status_code}); these are search "
+        "results for the same query — retry --answer later"
+    )
+
+
+def _print_answer_fallback_notice(status_code: int) -> None:
+    """Tell the human on stderr that search results stand in for the answer."""
+    err_console.print(
+        f"[yellow]Answer synthesis is unavailable[/yellow] (HTTP {status_code} "
+        "from the API). Search still works — showing search results for the "
+        "same query instead."
+    )
+
 
 app = typer.Typer(
     name="gspio",
@@ -1467,29 +1492,47 @@ def docs(
     """
     try:
         client = KnowledgeAPIClient()
+        fallback_status: int | None = None
         if answer:
-            result = client.answer_docs(
-                query,
-                limit=limit,
-                search_type=search_type,
-                content_type=content_type,
-            )
-        else:
-            search = client.search_docs(
-                query,
-                limit=limit,
-                search_type=search_type,
-                content_type=content_type,
-            )
-            if not full:
-                kept, dropped = postprocess.dedupe_results(search.results)
-                kept = [postprocess.truncate_result(r, query, max_chars) for r in kept]
-                search = search.model_copy(
-                    update={"results": kept, "deduplicated": dropped},
+            try:
+                result = client.answer_docs(
+                    query,
+                    limit=limit,
+                    search_type=search_type,
+                    content_type=content_type,
                 )
-            result = search
+            except APIConnectionError as e:
+                # A server error on /answer means the synthesis path is down,
+                # not the retrieval surface — degrade to search (#119). With
+                # no status at all the whole API is unreachable: fail loudly.
+                if e.status_code is None or e.status_code < _HTTP_SERVER_ERROR:
+                    raise
+                fallback_status = e.status_code
+            else:
+                print(result.model_dump_json(indent=2))
+                return
+        search = client.search_docs(
+            query,
+            limit=limit,
+            search_type=search_type,
+            content_type=content_type,
+        )
+        if not full:
+            kept, dropped = postprocess.dedupe_results(search.results)
+            kept = [postprocess.truncate_result(r, query, max_chars) for r in kept]
+            search = search.model_copy(
+                update={"results": kept, "deduplicated": dropped},
+            )
+        if fallback_status is not None:
+            # The notice waits until the fallback search has succeeded —
+            # printed earlier it would promise results that a failed search
+            # then never delivers.
+            _print_answer_fallback_notice(fallback_status)
+            search = search.model_copy(
+                update={"note": _answer_fallback_note(fallback_status)},
+            )
         # Output JSON directly for LLM consumption
-        print(result.model_dump_json(indent=2))
+        print(search.model_dump_json(indent=2))
     except APIConnectionError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
@@ -1667,35 +1710,53 @@ def knowledge(
     """
     try:
         client = KnowledgeAPIClient()
+        fallback_status: int | None = None
         if answer:
-            result = client.answer_knowledge(
-                query,
-                limit=limit,
-                search_type=search_type,
-                retrieval_mode=retrieval_mode,
-                tags=tags,
-                jurisdiction=jurisdiction,
-                doc_type=doc_type,
-            )
-        else:
-            search = client.search_knowledge(
-                query,
-                limit=limit,
-                search_type=search_type,
-                retrieval_mode=retrieval_mode,
-                tags=tags,
-                jurisdiction=jurisdiction,
-                doc_type=doc_type,
-            )
-            if not full:
-                kept, dropped = postprocess.dedupe_results(search.results)
-                kept = [postprocess.truncate_result(r, query, max_chars) for r in kept]
-                search = search.model_copy(
-                    update={"results": kept, "deduplicated": dropped},
+            try:
+                result = client.answer_knowledge(
+                    query,
+                    limit=limit,
+                    search_type=search_type,
+                    retrieval_mode=retrieval_mode,
+                    tags=tags,
+                    jurisdiction=jurisdiction,
+                    doc_type=doc_type,
                 )
-            result = search
+            except APIConnectionError as e:
+                # A server error on /answer means the synthesis path is down,
+                # not the retrieval surface — degrade to search (#119). With
+                # no status at all the whole API is unreachable: fail loudly.
+                if e.status_code is None or e.status_code < _HTTP_SERVER_ERROR:
+                    raise
+                fallback_status = e.status_code
+            else:
+                print(result.model_dump_json(indent=2))
+                return
+        search = client.search_knowledge(
+            query,
+            limit=limit,
+            search_type=search_type,
+            retrieval_mode=retrieval_mode,
+            tags=tags,
+            jurisdiction=jurisdiction,
+            doc_type=doc_type,
+        )
+        if not full:
+            kept, dropped = postprocess.dedupe_results(search.results)
+            kept = [postprocess.truncate_result(r, query, max_chars) for r in kept]
+            search = search.model_copy(
+                update={"results": kept, "deduplicated": dropped},
+            )
+        if fallback_status is not None:
+            # The notice waits until the fallback search has succeeded —
+            # printed earlier it would promise results that a failed search
+            # then never delivers.
+            _print_answer_fallback_notice(fallback_status)
+            search = search.model_copy(
+                update={"note": _answer_fallback_note(fallback_status)},
+            )
         # Output JSON directly for LLM consumption
-        print(result.model_dump_json(indent=2))
+        print(search.model_dump_json(indent=2))
     except APIConnectionError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
