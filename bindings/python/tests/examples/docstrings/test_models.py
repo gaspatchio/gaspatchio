@@ -473,3 +473,33 @@ def test_dt_proxy_month_docstring_lint():
     assert not all_lint_issues, (
         f"Expected no linting issues in dt_proxy_month_md_fixture examples, got: {all_lint_issues}"
     )
+
+
+def test_lint_rule_set_does_not_float_on_ruff_defaults():
+    """The snippet gate lints with an explicit rule set, not ruff's defaults.
+
+    Ruff 0.16 added import-sorting (I001) to its default select, and the
+    harness's --isolated invocation inherited it — 70 docstring examples
+    went red in CI on a routine version bump (PR #144) without any code
+    changing. The gate's rules are project policy and must be written by
+    the harness, not by whichever ruff version is installed: stylistic
+    import ordering in a two-line example is not what this gate is for.
+    """
+    example = DocstringCodeExample(
+        snippet="""import datetime
+from gaspatchio_core import ActuarialFrame
+d = datetime.date(2023, 1, 1)
+af = ActuarialFrame({"issue_date": [d]})""",
+        output=None,
+        object_context="test_module.unsorted_imports",
+        example_index=0,
+        raw_source_location=("/fake/unsorted.py", 5),
+    )
+    try:
+        issues = example.lint()
+    except ImportError as e:  # pragma: no cover - env without ruff
+        pytest.skip(f"Skipping lint test, ruff not available: {e}")
+    assert not issues, (
+        "Import-order style leaked into the snippet gate — the ruff "
+        f"invocation is floating on version defaults again: {issues}"
+    )
