@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787113832700,
+  "lastUpdate": 1787115622031,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -11123,6 +11123,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1516762954,
             "range": "± 8014250",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "942513b92feb2ac449482f9852208900d7fe3660",
+          "message": "feat(projection): cumulative_survival accepts survival-shaped input (#143)\n\nA reserving workbook hands you a combined persistency px = (1-qx)(1-lapse)\nfar more often than a bare decrement rate — and the only way to feed it\nto cumulative_survival was to invert it so the method could undo the\ninversion. 1-(1-px) is exact only while px >= 0.5 (Sterbenz); a VM-20\nshock-lapse year sits at px = 0.199, where the round trip loses bits\nthat a strict tie-out sees (vm20 room: 2.1e-17 vs the workbook's cached\nvalues where the direct product is 0.0e0). The error is tiny and\navoidable for free — and it lived in the method whose name is exactly\nwhat a reserving model reaches for.\n\ncumulative_survival(from_survival=True) cumulates the factors directly,\nno inversion anywhere, list and scalar paths both; the timing parameters\nmean the same thing in both shapes. The docstring documents the\ninversion hazard next to the timing notes (per the #42 precedent that\nadjacent traps belong in the method's own contract) and carries an\nexecutable example whose output table is identical to the rate-shaped\nexample — same numbers, honest input shape.\n\nServes Meet-you-where-you-are (accept the shape the source hands you)\nand Audit-by-default (bit-exact against the gold standard where the\nround trip is not). Closes #118.\n\nVerified: 65 projection tests + 42 docstring examples green; stubtest\nclean across 266 modules; ruff/mypy/format deltas zero vs baseline\n(1/51/4 findings and 4 mypy errors are main's pre-existing debt).",
+          "timestamp": "2026-08-19T16:45:12+12:00",
+          "tree_id": "9f272ed53a46bb148e179edcb2b943a231e23289",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/942513b92feb2ac449482f9852208900d7fe3660"
+        },
+        "date": 1787115620430,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 157541862,
+            "range": "± 2292763",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 157570680,
+            "range": "± 1511135",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 157506725,
+            "range": "± 287725",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 6324159,
+            "range": "± 61113",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 157528936,
+            "range": "± 322237",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 3811618,
+            "range": "± 24700",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 157366703,
+            "range": "± 1433393",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 3830471,
+            "range": "± 110647",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 545886,
+            "range": "± 17847",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 51756023,
+            "range": "± 33449",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 9529536,
+            "range": "± 241718",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 519436106,
+            "range": "± 2787004",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 387710,
+            "range": "± 650",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 29897503,
+            "range": "± 38669",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 4125780,
+            "range": "± 16679",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 301119630,
+            "range": "± 2372098",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 388105,
+            "range": "± 915",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 30133698,
+            "range": "± 109600",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 4003013,
+            "range": "± 20935",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 303814164,
+            "range": "± 2759094",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 488584,
+            "range": "± 5639",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 38494880,
+            "range": "± 28777",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 5253114,
+            "range": "± 61953",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 384761756,
+            "range": "± 410727",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 1813765,
+            "range": "± 2866",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 152917098,
+            "range": "± 158876",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 26594215,
+            "range": "± 263304",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1540602133,
+            "range": "± 3799440",
             "unit": "ns/iter"
           }
         ]
