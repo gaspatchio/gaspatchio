@@ -270,3 +270,34 @@ class TestKnowledgeAPIClient:
         assert payload["tags"] == ["IFRS17"]
         assert payload["jurisdiction"] == "EU"
         assert payload["doc_type"] == "standard"
+
+
+class TestErrorStatusCode:
+    """#119: errors carry the HTTP status so callers can tell situations apart."""
+
+    @patch("httpx.Client.post")
+    def test_server_error_carries_the_status_code(self, mock_post):
+        """A 5xx response surfaces its status on the raised error."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = '{"detail":"Internal server error."}'
+        mock_post.return_value = mock_response
+
+        client = KnowledgeAPIClient()
+        with pytest.raises(APIConnectionError) as exc_info:
+            client.answer_docs("test query")
+
+        assert exc_info.value.status_code == 500
+
+    @patch("httpx.Client.post")
+    def test_connection_error_has_no_status_code(self, mock_post):
+        """No response at all means status_code stays None."""
+        import httpx
+
+        mock_post.side_effect = httpx.ConnectError("Connection refused")
+
+        client = KnowledgeAPIClient()
+        with pytest.raises(APIConnectionError) as exc_info:
+            client.search_docs("test query")
+
+        assert exc_info.value.status_code is None
