@@ -10,9 +10,9 @@ from datetime import date
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.rollforward._builder import RollforwardBuilder
-from gaspatchio_core.schedule import Schedule
+from gaspatchio import ActuarialFrame
+from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.schedule import Schedule
 
 
 class TestProjectionAccessor:

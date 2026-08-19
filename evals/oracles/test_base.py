@@ -19,7 +19,7 @@ def test_extract_code_takes_largest_python_fence() -> None:
     """extract_code returns the largest ```python fenced block, dedented."""
     md = (
         "Intro.\n\n```python\nx = 1\n```\n\n"
-        "More.\n\n```python\nfrom gaspatchio_core import ActuarialFrame\n\n"
+        "More.\n\n```python\nfrom gaspatchio import ActuarialFrame\n\n"
         "def main(af):\n    af.y = af.x * 2\n    return af\n```\n"
     )
     code = extract_code(md)

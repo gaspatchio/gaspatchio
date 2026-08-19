@@ -53,9 +53,9 @@ SPDX-License-Identifier = "Apache-2.0"
 # NOTICE file for the full attribution and licence text.
 [[annotations]]
 path = [
-  "bindings/python/gaspatchio_core/tutorials/level-4-lifelib/reference/**.parquet",
-  "bindings/python/gaspatchio_core/tutorials/level-4-lifelib/base/assumptions/**.parquet",
-  "bindings/python/gaspatchio_core/tutorials/level-4-lifelib/base/model_points*.parquet",
+  "bindings/python/gaspatchio/tutorials/level-4-lifelib/reference/**.parquet",
+  "bindings/python/gaspatchio/tutorials/level-4-lifelib/base/assumptions/**.parquet",
+  "bindings/python/gaspatchio/tutorials/level-4-lifelib/base/model_points*.parquet",
 ]
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (c) 2022 lifelib Developers"

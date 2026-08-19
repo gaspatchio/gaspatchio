@@ -12,7 +12,7 @@ TUTORIALS_DIR = (
     Path(__file__).resolve().parent.parent.parent
     / "bindings"
     / "python"
-    / "gaspatchio_core"
+    / "gaspatchio"
     / "tutorials"
 )
 

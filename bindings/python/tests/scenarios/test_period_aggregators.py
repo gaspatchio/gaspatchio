@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
-from gaspatchio_core.scenarios._period_aggregators import (
+from gaspatchio.scenarios._period_aggregators import (
     PeriodCount,
     PeriodMax,
     PeriodMean,

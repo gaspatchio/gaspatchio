@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame, when
-from gaspatchio_core.util import set_default_mode
+from gaspatchio import ActuarialFrame, when
+from gaspatchio.util import set_default_mode
 
 
 def _build_model(af: ActuarialFrame) -> ActuarialFrame:

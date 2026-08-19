@@ -38,8 +38,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import MeltDimension, Table
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import MeltDimension, Table
 
 N_POLICIES = 400
 N_PERIODS = 12

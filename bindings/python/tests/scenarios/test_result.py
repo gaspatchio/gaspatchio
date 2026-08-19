@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from gaspatchio_core.scenarios._result import ScenarioResult
+from gaspatchio.scenarios._result import ScenarioResult
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -70,7 +70,7 @@ def test_result_is_frozen() -> None:
 
 def test_scenario_result_has_selection_and_new_resolution_literal() -> None:
     """ScenarioResult carries SelectionDecision and uses the new auto_search literal."""
-    from gaspatchio_core.scenarios._result import (
+    from gaspatchio.scenarios._result import (
         ProbeResult,
         ScenarioResult,
         SelectionDecision,

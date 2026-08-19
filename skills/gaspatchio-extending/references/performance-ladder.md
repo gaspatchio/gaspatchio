@@ -34,7 +34,7 @@ Gaspatchio already provides:
 | `af.drop(*cols)` | Remove temporary columns |
 | `af.sort(by)` | Order rows for reconciliation |
 
-**Scenario/shock system** (`gaspatchio_core/scenarios/shocks`):
+**Scenario/shock system** (`gaspatchio/scenarios/shocks`):
 
 | Composable | What It Does |
 |-----------|-------------|

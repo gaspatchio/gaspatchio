@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
     import pytest
 
-from gaspatchio_core.scenarios._memory import (
+from gaspatchio.scenarios._memory import (
     DEFAULTS,
     IrreducibleCellError,
     SizingDefaults,
@@ -165,7 +165,7 @@ def test_effective_limit_failopen_on_exception(
         msg = "boom"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr("gaspatchio_core.scenarios._memory.read_cgroup_limit", _boom)
+    monkeypatch.setattr("gaspatchio.scenarios._memory.read_cgroup_limit", _boom)
     eff = effective_limit(
         host_available=7 * 1024**3,
         host_physical=64 * 1024**3,
@@ -232,7 +232,7 @@ def test_budget_never_negative(tmp_path: Path) -> None:
 
 
 def test_sizing_defaults_has_ladder_and_safety_margin():
-    from gaspatchio_core.scenarios._memory import DEFAULTS
+    from gaspatchio.scenarios._memory import DEFAULTS
 
     assert DEFAULTS.ladder == (1, 4, 16, 64)
     assert DEFAULTS.safety_margin == 1.3

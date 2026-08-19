@@ -11,7 +11,7 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core import Curve, Schedule
+from gaspatchio import Curve, Schedule
 
 
 class TestCurveSchedulePolarsIntegration:

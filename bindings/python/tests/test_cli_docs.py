@@ -11,13 +11,13 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from gaspatchio_core.api.client import APIConnectionError
-from gaspatchio_core.api.models import (
+from gaspatchio.api.client import APIConnectionError
+from gaspatchio.api.models import (
     DocResult,
     DocsAnswerResponse,
     DocsSearchResponse,
 )
-from gaspatchio_core.cli import app
+from gaspatchio.cli import app
 
 runner = CliRunner()
 
@@ -51,7 +51,7 @@ class TestDocsCommand:
         assert result.exit_code == 0
         assert "gspio docs" in result.output
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_docs_returns_json(self, mock_client_class):
         """Docs command returns JSON output."""
         mock_client = MagicMock()
@@ -80,7 +80,7 @@ class TestDocsCommand:
         assert "results" in output
         assert output["query"] == "cumulative survival"
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_docs_with_limit_option(self, mock_client_class):
         """Docs -n flag sets result limit."""
         mock_client = MagicMock()
@@ -103,7 +103,7 @@ class TestDocsCommand:
             content_type=None,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_docs_with_search_type_option(self, mock_client_class):
         """Docs -s flag sets search type."""
         mock_client = MagicMock()
@@ -126,7 +126,7 @@ class TestDocsCommand:
             content_type=None,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_docs_with_content_type_filter(self, mock_client_class):
         """Docs -t flag filters by content type."""
         mock_client = MagicMock()
@@ -151,7 +151,7 @@ class TestDocsCommand:
             content_type=["code_example"],
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_docs_with_answer_flag(self, mock_client_class):
         """Docs --answer returns generated answer."""
         mock_client = MagicMock()
@@ -186,10 +186,10 @@ class TestDocsCommand:
             content_type=None,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_docs_api_error_exits_nonzero(self, mock_client_class):
         """Docs exits with error code on API failure."""
-        from gaspatchio_core.api.client import APIConnectionError
+        from gaspatchio.api.client import APIConnectionError
 
         mock_client = MagicMock()
         mock_client.search_docs.side_effect = APIConnectionError("API unavailable")
@@ -224,7 +224,7 @@ class TestDocsPayloadTrimming:
             took_ms=10.0,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_whole_document_hit_truncates_to_window(self, mock_client_class):
         """The observed #130 case: a 9.3 KB page inlined whole."""
         page = (
@@ -247,7 +247,7 @@ class TestDocsPayloadTrimming:
         assert "rollforward walks the state recursion" in hit["text"]
         assert "--full" in hit["text"]
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_max_chars_zero_disables_truncation(self, mock_client_class):
         """--max-chars 0 means unlimited."""
         page = "Framework background prose. " * 300
@@ -262,7 +262,7 @@ class TestDocsPayloadTrimming:
         assert output["results"][0]["text"] == page
         assert output["results"][0]["truncated"] is False
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_short_results_pass_through_unchanged(self, mock_client_class):
         """Results within budget are byte-identical to the server payload."""
         mock_client = MagicMock()
@@ -305,7 +305,7 @@ class TestDocsAnswerFallback:
             took_ms=10.0,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_answer_server_error_falls_back_to_search(self, mock_client_class):
         """A 5xx from /answer degrades to search results, not a dead end.
 
@@ -332,7 +332,7 @@ class TestDocsAnswerFallback:
         assert "Search still works" in result.stderr
         mock_client.search_docs.assert_called_once()
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_answer_503_also_falls_back(self, mock_client_class):
         """The server's own declared degradation (503) takes the same path."""
         mock_client = MagicMock()
@@ -348,7 +348,7 @@ class TestDocsAnswerFallback:
         assert result.exit_code == 0
         assert json.loads(result.stdout)["results"]
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_connection_error_still_fails_loudly(self, mock_client_class):
         """No status code means the whole API is unreachable — no fallback."""
         mock_client = MagicMock()
@@ -362,7 +362,7 @@ class TestDocsAnswerFallback:
         assert result.exit_code == 1
         mock_client.search_docs.assert_not_called()
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_no_search_promise_when_fallback_search_also_fails(self, mock_client_class):
         """The notice must not announce search results that never arrive.
 

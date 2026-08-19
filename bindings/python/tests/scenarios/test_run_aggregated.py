@@ -10,8 +10,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import (
+from gaspatchio import ActuarialFrame
+from gaspatchio.scenarios import (
     ArgMax,
     Count,
     Mean,
@@ -24,7 +24,7 @@ from gaspatchio_core.scenarios import (
     Sum,
     Variance,
 )
-from gaspatchio_core.scenarios._aggregated import AggregatedResult, run_aggregated
+from gaspatchio.scenarios._aggregated import AggregatedResult, run_aggregated
 
 
 def test_aggregated_result_attribute_access() -> None:
@@ -303,7 +303,7 @@ def test_inception_aligned_proceeds_with_align_duration() -> None:
 
 def test_auto_single_batch_when_budget_is_generous(monkeypatch) -> None:
     """Cap removed: a generous budget resolves 'auto' to a single batch (B == n)."""
-    from gaspatchio_core.scenarios import _auto_batch
+    from gaspatchio.scenarios import _auto_batch
 
     mp = pl.DataFrame({"value": [float(i) for i in range(1, 21)]})  # 20 policies
     monkeypatch.setattr(_auto_batch, "memory_budget_bytes", lambda _f: 10_000_000_000)
@@ -313,7 +313,7 @@ def test_auto_single_batch_when_budget_is_generous(monkeypatch) -> None:
 
 def test_auto_batches_when_sizer_returns_small_b(monkeypatch) -> None:
     """When the sizer returns a small B, 'auto' batches and stays equivalent to full."""
-    import gaspatchio_core.scenarios._aggregated as agg
+    import gaspatchio.scenarios._aggregated as agg
 
     mp = pl.DataFrame({"value": [float(i) for i in range(1, 21)]})  # 20 policies
     full = run_aggregated(_toy_model, mp, [PeriodSum("cf").alias("cf")], batch_size=20)
@@ -325,7 +325,7 @@ def test_auto_batches_when_sizer_returns_small_b(monkeypatch) -> None:
 
 def test_auto_seed_peak_zero_uses_frame_size(monkeypatch) -> None:
     """A missed RSS sample (seed_peak==0) must not collapse per_cell to 1 byte (#7)."""
-    import gaspatchio_core.scenarios._aggregated as agg
+    import gaspatchio.scenarios._aggregated as agg
 
     captured: dict[str, int] = {}
     real_collect = agg._collect_with_peak  # noqa: SLF001
@@ -351,12 +351,12 @@ def test_auto_seed_peak_zero_uses_frame_size(monkeypatch) -> None:
 
 
 def test_top_level_exports() -> None:
-    """run_aggregated and all Period* classes are accessible from gaspatchio_core."""
-    import gaspatchio_core as gsp
+    """run_aggregated and all Period* classes are accessible from gaspatchio."""
+    import gaspatchio as gsp
 
     assert hasattr(gsp, "run_aggregated")
     for name in ("PeriodSum", "PeriodCount", "PeriodMean", "PeriodMin", "PeriodMax"):
-        assert hasattr(gsp, name), f"gaspatchio_core.{name} missing"
+        assert hasattr(gsp, name), f"gaspatchio.{name} missing"
 
 
 def test_small_n_single_batch_is_no_op() -> None:
@@ -368,7 +368,7 @@ def test_small_n_single_batch_is_no_op() -> None:
 
 def test_period_aggregator_runs_in_for_each_scenario() -> None:
     """Shared-surface: PeriodSum works unchanged on the scenario axis via for_each_scenario."""
-    from gaspatchio_core.scenarios import for_each_scenario
+    from gaspatchio.scenarios import for_each_scenario
 
     # Build the frame once: 2 policies, cf=[value*(t+1)] for t in 0..2
     # value=[1,2] -> cf_0=[1,2,3], cf_1=[2,4,6] -> portfolio sum=[3,6,9]

@@ -28,7 +28,7 @@ import datetime
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 
 def _frame() -> ActuarialFrame:
@@ -98,7 +98,7 @@ def test_no_month_on_a_from_inception_axis() -> None:
     `proj_year` vs `year` class of conflation Gotcha #7 warns about, and the
     axis scenarios/_aggregated.py already refuses for calendar aggregation.
     """
-    from gaspatchio_core import Schedule
+    from gaspatchio import Schedule
 
     mp = pl.DataFrame(
         {
@@ -240,7 +240,7 @@ def test_existing_month_survives_an_unstamped_schedule(frequency: str) -> None:
 
 def test_existing_month_survives_a_from_inception_schedule() -> None:
     """Same contract on the duration axis, which also never stamps."""
-    from gaspatchio_core import Schedule
+    from gaspatchio import Schedule
 
     mp = pl.DataFrame(
         {

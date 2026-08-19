@@ -10,10 +10,10 @@ from datetime import date
 
 import pytest
 
-from gaspatchio_core.schedule._business_day import BusinessDayConvention
-from gaspatchio_core.schedule._calendar import NullCalendar, UnitedStates
-from gaspatchio_core.schedule._day_count import OneTwelfth
-from gaspatchio_core.schedule._schedule import Schedule
+from gaspatchio.schedule._business_day import BusinessDayConvention
+from gaspatchio.schedule._calendar import NullCalendar, UnitedStates
+from gaspatchio.schedule._day_count import OneTwelfth
+from gaspatchio.schedule._schedule import Schedule
 
 
 class TestFromCalendarGrid:
@@ -157,27 +157,27 @@ class TestPublicAPI:
 
         Verifies subpackage re-exports match the private module class objects.
         """
-        from gaspatchio_core.schedule import (
+        from gaspatchio.schedule import (
             Calendar,
         )
 
         # Verify these are the same classes the private modules export
-        from gaspatchio_core.schedule._calendar import Calendar as PrivateCalendar
+        from gaspatchio.schedule._calendar import Calendar as PrivateCalendar
 
         assert Calendar is PrivateCalendar
 
     def test_top_level_imports(self) -> None:
-        """Top-level gaspatchio_core exposes Schedule, Calendar, DayCount, BDC."""
-        import gaspatchio_core
+        """Top-level gaspatchio exposes Schedule, Calendar, DayCount, BDC."""
+        import gaspatchio
 
-        assert hasattr(gaspatchio_core, "Schedule")
-        assert hasattr(gaspatchio_core, "Calendar")
-        assert hasattr(gaspatchio_core, "DayCount")
-        assert hasattr(gaspatchio_core, "BusinessDayConvention")
+        assert hasattr(gaspatchio, "Schedule")
+        assert hasattr(gaspatchio, "Calendar")
+        assert hasattr(gaspatchio, "DayCount")
+        assert hasattr(gaspatchio, "BusinessDayConvention")
 
     def test_top_level___all___includes_new_exports(self) -> None:
         """Top-level __all__ lists all four new public names."""
-        import gaspatchio_core
+        import gaspatchio
 
         for name in ("Schedule", "Calendar", "DayCount", "BusinessDayConvention"):
-            assert name in gaspatchio_core.__all__
+            assert name in gaspatchio.__all__

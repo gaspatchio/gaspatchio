@@ -6,7 +6,7 @@
 
 **Architecture:** Make the base model scenario-ready by checking for `scenario_id` column in lookups. Create two example scripts demonstrating explicit file-based scenarios and dynamic programmatic shocks. Document everything in SCENARIOS.md.
 
-**Tech Stack:** gaspatchio_core (ActuarialFrame, with_scenarios, Table, shocks), polars
+**Tech Stack:** gaspatchio (ActuarialFrame, with_scenarios, Table, shocks), polars
 
 ---
 
@@ -91,7 +91,7 @@ import sys
 from pathlib import Path
 
 import polars as pl
-from gaspatchio_core import ActuarialFrame, with_scenarios
+from gaspatchio import ActuarialFrame, with_scenarios
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -228,7 +228,7 @@ import sys
 from pathlib import Path
 
 import polars as pl
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -577,7 +577,7 @@ uv run python appliedlife/dynamic_scenarios.py --example 3  # Sensitivity sweep
 The appliedlife model is **scenario-ready** - it checks for a `scenario_id` column and uses it for assumption lookups. If no `scenario_id` is present, it defaults to "BASE".
 
 ```python
-from gaspatchio_core import ActuarialFrame, with_scenarios
+from gaspatchio import ActuarialFrame, with_scenarios
 from appliedlife.model_applied_life import main as run_model
 
 # Load model points

@@ -14,7 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from gaspatchio_core.examples.docstrings.style import StyleChecker
+from gaspatchio.examples.docstrings.style import StyleChecker
 
 
 def check_and_run_file(file_path: Path) -> int:

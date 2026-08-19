@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 import yaml
 
-from gaspatchio_core.scenarios._config import parse_aggregations
+from gaspatchio.scenarios._config import parse_aggregations
 
 if TYPE_CHECKING:
     from pathlib import Path

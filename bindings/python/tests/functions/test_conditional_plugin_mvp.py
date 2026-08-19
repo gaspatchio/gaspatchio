@@ -17,7 +17,7 @@ Tests the simplest case to prove the concept works:
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 
 def test_mvp_simple_eq_comparison() -> None:

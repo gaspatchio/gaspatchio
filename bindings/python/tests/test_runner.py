@@ -12,7 +12,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gaspatchio_core.runner import (
+from gaspatchio.runner import (
     ModelRunConfig,
     _cast_policy_id,
     _resolve_id_column,
@@ -186,7 +186,7 @@ class TestRunSinglePolicyTypeCasting:
     def simple_model(self, temp_dir):
         """Create a simple model file."""
         model_code = '''
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 def main(af: ActuarialFrame) -> ActuarialFrame:
     """Simple model that doubles the value."""

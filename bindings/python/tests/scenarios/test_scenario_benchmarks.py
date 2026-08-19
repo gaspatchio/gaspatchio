@@ -16,8 +16,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import with_scenarios
+from gaspatchio import ActuarialFrame
+from gaspatchio.scenarios import with_scenarios
 
 # Path to test data
 SCRATCH_DIR = Path(__file__).parent.parent / "scratch" / "scenarios"

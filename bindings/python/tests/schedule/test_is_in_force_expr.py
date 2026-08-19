@@ -10,7 +10,7 @@ from datetime import date
 
 import polars as pl
 
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.schedule import Schedule
 
 
 class TestIsInForceExpr:

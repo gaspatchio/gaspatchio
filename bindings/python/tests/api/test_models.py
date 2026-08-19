@@ -6,7 +6,7 @@
 # ABOUTME: Validates Pydantic models can parse API responses correctly.
 """Tests for API response models."""
 
-from gaspatchio_core.api.models import (
+from gaspatchio.api.models import (
     DocResult,
     DocsAnswerResponse,
     DocsSearchResponse,
@@ -21,7 +21,7 @@ def test_doc_result_from_dict():
     """DocResult can be created from API response dict."""
     data = {
         "text": "cumulative_survival() calculates...",
-        "source_file": "gaspatchio_core/accessors/projection.py",
+        "source_file": "gaspatchio/accessors/projection.py",
         "content_type": "code_example",
         "score": 0.92,
         "object_path": "projection.cumulative_survival",
@@ -29,7 +29,7 @@ def test_doc_result_from_dict():
     }
     result = DocResult.model_validate(data)
     assert result.text == "cumulative_survival() calculates..."
-    assert result.source_file == "gaspatchio_core/accessors/projection.py"
+    assert result.source_file == "gaspatchio/accessors/projection.py"
     assert result.content_type == "code_example"
     assert result.score == 0.92
     assert result.object_path == "projection.cumulative_survival"

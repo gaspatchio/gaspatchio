@@ -7,7 +7,7 @@
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
+from gaspatchio.assumptions import Table
 
 
 def test_table_reentrancy():

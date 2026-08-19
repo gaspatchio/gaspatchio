@@ -16,8 +16,8 @@ import datetime
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import MeltDimension, Table
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import MeltDimension, Table
 
 # Configure Polars for better display
 pl.Config.set_tbl_cols(-1)

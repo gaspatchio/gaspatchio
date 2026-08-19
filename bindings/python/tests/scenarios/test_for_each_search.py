@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import Sum, for_each_scenario
+from gaspatchio import ActuarialFrame
+from gaspatchio.scenarios import Sum, for_each_scenario
 
 if TYPE_CHECKING:
-    from gaspatchio_core.scenarios._result import ScenarioResult
+    from gaspatchio.scenarios._result import ScenarioResult
 
 
 def _af(n_policies: int = 200) -> ActuarialFrame:
@@ -120,8 +120,8 @@ def test_forced_b1_raises_when_neither_engine_fits(monkeypatch):
     """Forced-b1 with a remainder that no engine fits raises the hard ceiling."""
     import pytest
 
-    from gaspatchio_core.scenarios import _for_each
-    from gaspatchio_core.scenarios._memory import IrreducibleCellError
+    from gaspatchio.scenarios import _for_each
+    from gaspatchio.scenarios._memory import IrreducibleCellError
 
     monkeypatch.setattr(_for_each, "memory_budget_bytes", lambda *a, **k: 1)  # 1-byte budget
     with pytest.raises(IrreducibleCellError):
@@ -139,8 +139,8 @@ def test_auto_search_hard_ceiling_raises_when_remainder_cannot_fit(monkeypatch):
     """Auto path: a remainder that no streaming rung nor the in-mem floor fits raises."""
     import pytest
 
-    from gaspatchio_core.scenarios import _for_each
-    from gaspatchio_core.scenarios._memory import IrreducibleCellError
+    from gaspatchio.scenarios import _for_each
+    from gaspatchio.scenarios._memory import IrreducibleCellError
 
     monkeypatch.setattr(_for_each, "memory_budget_bytes", lambda *a, **k: 1)  # 1-byte budget
     with pytest.raises(IrreducibleCellError):
@@ -160,7 +160,7 @@ def _patch_constant_peak(monkeypatch, peak_mb: float) -> None:
     the measured peak is synthetic, which lets a test place each ladder rung
     deterministically above or below the budget.
     """
-    from gaspatchio_core.scenarios import _for_each
+    from gaspatchio.scenarios import _for_each
 
     real = _for_each._collect_with_peak  # noqa: SLF001
 
@@ -179,7 +179,7 @@ def test_gate_skips_rung_predicted_over_budget(monkeypatch):
     probe anyway (and died when the real rung exceeded physical memory); the gate
     must stop the ladder at b=1 without ever launching b=4.
     """
-    from gaspatchio_core.scenarios import _for_each
+    from gaspatchio.scenarios import _for_each
 
     _patch_constant_peak(monkeypatch, 100.0)  # every collect "peaks" at 100 MB
     monkeypatch.setattr(
@@ -204,7 +204,7 @@ def test_gate_skips_rung_predicted_over_budget(monkeypatch):
 
 def test_gate_allows_rungs_predicted_within_budget(monkeypatch):
     """A generous budget gates nothing: the full ladder is still probed."""
-    from gaspatchio_core.scenarios import _for_each
+    from gaspatchio.scenarios import _for_each
 
     _patch_constant_peak(monkeypatch, 100.0)
     monkeypatch.setattr(
@@ -234,7 +234,7 @@ def test_gate_prediction_includes_streaming_batch_inflation(monkeypatch):
     1 GB budget, linear predicts 100*4*1.3 = 520 MB (would probe b=4); inflated
     predicts 100*4*3.0*1.3 = 1560 MB (must skip).
     """
-    from gaspatchio_core.scenarios import _for_each
+    from gaspatchio.scenarios import _for_each
 
     _patch_constant_peak(monkeypatch, 100.0)
     monkeypatch.setattr(
@@ -265,7 +265,7 @@ def test_probe_peak_floored_by_frame_size(monkeypatch):
     rung's effective peak must be floored by the collected frame's size, which
     is real live memory regardless of where the allocator got it.
     """
-    from gaspatchio_core.scenarios import _for_each
+    from gaspatchio.scenarios import _for_each
 
     _patch_constant_peak(monkeypatch, 0.0)  # the pool-reuse lie: sampler sees nothing
     monkeypatch.setattr(

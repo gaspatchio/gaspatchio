@@ -14,8 +14,8 @@ scalar-last arithmetic both raised SchemaError naming innocent columns).
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, when
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame, when
+from gaspatchio.assumptions import Table
 
 
 @pytest.fixture(scope="module")

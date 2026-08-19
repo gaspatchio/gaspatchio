@@ -9,7 +9,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 @pytest.fixture

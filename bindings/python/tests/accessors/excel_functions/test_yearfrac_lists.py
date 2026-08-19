@@ -15,7 +15,7 @@ import pytest
 from polars.testing import assert_series_equal
 from polars.exceptions import ComputeError
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 class TestYearfracListColumns:

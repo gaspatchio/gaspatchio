@@ -10,7 +10,7 @@ from datetime import date
 
 import pytest
 
-from gaspatchio_core.schedule._calendar import (
+from gaspatchio.schedule._calendar import (
     TARGET,
     BespokeCalendar,
     Calendar,
@@ -169,7 +169,7 @@ class TestCalendarRegistry:
 
     def test_resolve_curated_names(self) -> None:
         """All curated calendar names must resolve to the correct calendar instance."""
-        from gaspatchio_core.schedule._calendar import calendar_from_name
+        from gaspatchio.schedule._calendar import calendar_from_name
 
         assert calendar_from_name("NullCalendar") == NullCalendar()
         assert calendar_from_name("TARGET") == TARGET()
@@ -178,7 +178,7 @@ class TestCalendarRegistry:
 
     def test_unknown_name_raises_with_suggestions(self) -> None:
         """An unknown name must raise ValueError with the name in the message."""
-        from gaspatchio_core.schedule._calendar import calendar_from_name
+        from gaspatchio.schedule._calendar import calendar_from_name
 
         with pytest.raises(ValueError, match="unknown calendar 'US'"):
             calendar_from_name("US")

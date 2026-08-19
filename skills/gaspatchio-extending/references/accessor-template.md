@@ -11,12 +11,12 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from gaspatchio_core.accessors.base import BaseColumnAccessor
-from gaspatchio_core.frame.registry import register_accessor
+from gaspatchio.accessors.base import BaseColumnAccessor
+from gaspatchio.frame.registry import register_accessor
 
 if TYPE_CHECKING:
-    from gaspatchio_core.column.column_proxy import ColumnProxy
-    from gaspatchio_core.column.expression_proxy import ExpressionProxy
+    from gaspatchio.column.column_proxy import ColumnProxy
+    from gaspatchio.column.expression_proxy import ExpressionProxy
 
 
 @register_accessor("risk", kind="column")
@@ -42,8 +42,8 @@ class RiskColumnAccessor(BaseColumnAccessor):
         Handles both ColumnProxy (uses pl.col) and ExpressionProxy
         (accesses _expr directly).
         """
-        from gaspatchio_core.column.column_proxy import ColumnProxy
-        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio.column.column_proxy import ColumnProxy
+        from gaspatchio.column.expression_proxy import ExpressionProxy
 
         if isinstance(self._proxy, ExpressionProxy):
             return self._proxy._expr  # noqa: SLF001
@@ -70,7 +70,7 @@ class RiskColumnAccessor(BaseColumnAccessor):
         Examples
         --------
         ```python
-        from gaspatchio_core import ActuarialFrame
+        from gaspatchio import ActuarialFrame
 
         data = {"age": [30, 40, 50]}
         af = ActuarialFrame(data)
@@ -79,8 +79,8 @@ class RiskColumnAccessor(BaseColumnAccessor):
         ```
 
         """
-        from gaspatchio_core.column.column_proxy import ColumnProxy
-        from gaspatchio_core.column.expression_proxy import ExpressionProxy
+        from gaspatchio.column.column_proxy import ColumnProxy
+        from gaspatchio.column.expression_proxy import ExpressionProxy
 
         base_expr = self._get_polars_expr()
         parent_frame = self._proxy._parent  # noqa: SLF001
@@ -120,7 +120,7 @@ Most Gaspatchio columns are list columns (each policy has a vector of monthly va
 **The standard pattern** (from `finance.py:522-524`):
 
 ```python
-from gaspatchio_core.column.column_proxy import ColumnProxy
+from gaspatchio.column.column_proxy import ColumnProxy
 
 # Get the underlying expression
 base_expr = self._get_polars_expr()
@@ -211,11 +211,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from gaspatchio_core.accessors.base import BaseFrameAccessor
-from gaspatchio_core.frame.registry import register_accessor
+from gaspatchio.accessors.base import BaseFrameAccessor
+from gaspatchio.frame.registry import register_accessor
 
 if TYPE_CHECKING:
-    from gaspatchio_core.frame.base import ActuarialFrame
+    from gaspatchio.frame.base import ActuarialFrame
 
 
 @register_accessor("reporting", kind="frame")
@@ -284,11 +284,11 @@ Location of existing accessors:
 
 | Namespace | File |
 |-----------|------|
-| `finance` | `gaspatchio_core/accessors/finance.py` |
-| `projection` | `gaspatchio_core/accessors/projection.py` |
-| `projection` (frame) | `gaspatchio_core/accessors/projection_frame.py` |
-| `date` | `gaspatchio_core/accessors/date.py` |
-| `excel` | `gaspatchio_core/accessors/excel.py` |
+| `finance` | `gaspatchio/accessors/finance.py` |
+| `projection` | `gaspatchio/accessors/projection.py` |
+| `projection` (frame) | `gaspatchio/accessors/projection_frame.py` |
+| `date` | `gaspatchio/accessors/date.py` |
+| `excel` | `gaspatchio/accessors/excel.py` |
 
 ---
 
@@ -298,8 +298,8 @@ The accessor is registered when the module containing the `@register_accessor` d
 
 ### For new namespaces in gaspatchio-core:
 
-1. Create your accessor file in `gaspatchio_core/accessors/your_accessor.py`
-2. Add the import to `gaspatchio_core/accessors/__init__.py`:
+1. Create your accessor file in `gaspatchio/accessors/your_accessor.py`
+2. Add the import to `gaspatchio/accessors/__init__.py`:
    ```python
    from . import your_accessor
    ```
@@ -318,14 +318,14 @@ my_project/
     data.parquet
 ```
 
-2. Write the accessor following the templates above. The file is self-contained — it imports from `gaspatchio_core` and registers itself.
+2. Write the accessor following the templates above. The file is self-contained — it imports from `gaspatchio` and registers itself.
 
 3. Import it at the top of the model file **before** using the accessor:
 
 ```python
 import my_accessors  # noqa: F401  # registers custom accessors
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
     # Custom accessor is now available
@@ -350,7 +350,7 @@ For a quick smoke test:
 ```bash
 uv run python3 -c "
 import my_accessors  # noqa: F401
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 af = ActuarialFrame({'age': [30, 50, 70]})
 af.hazard = af.age.risk.hazard_rate(a=0.0001, b=0.085)
 print(af.collect())

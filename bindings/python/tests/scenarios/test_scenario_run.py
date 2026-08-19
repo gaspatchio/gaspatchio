@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios._aggregators import Mean, Sum
-from gaspatchio_core.scenarios._run import ScenarioRun
+from gaspatchio.assumptions import Table
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios._aggregators import Mean, Sum
+from gaspatchio.scenarios._run import ScenarioRun
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -22,8 +22,8 @@ name the key that missed.
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import Table
 
 
 def _rates_table() -> Table:

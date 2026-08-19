@@ -275,14 +275,14 @@ uv run pytest -m "not benchmark"  # Skip slow benchmarks
 uv run pytest -m performance      # Only performance tests
 
 # Type checking (both tools should pass)
-uv run mypy gaspatchio_core
-uv run pyright gaspatchio_core
+uv run mypy gaspatchio
+uv run pyright gaspatchio
 
 # Validate type stubs match implementation
-uv run python -m mypy.stubtest gaspatchio_core
+uv run python -m mypy.stubtest gaspatchio
 
 # Update docstring test expectations
-uv run pytest gaspatchio_core/accessors/excel.py --doctest-modules --accept
+uv run pytest gaspatchio/accessors/excel.py --doctest-modules --accept
 ```
 
 ### Model Execution
@@ -350,7 +350,7 @@ Clone the repo. Editors auto-detect plugin directories when the project is opene
 ### Python Package Structure
 The Python bindings wrap the Rust core library via PyO3:
 
-- **gaspatchio_core._internal**: PyO3 module built from Rust (see _internal.pyi for API)
+- **gaspatchio._internal**: PyO3 module built from Rust (see _internal.pyi for API)
 - **ActuarialFrame**: Main DataFrame-like structure for actuarial calculations
   - Wraps Polars DataFrames with actuarial-specific operations
   - Supports method chaining via proxy pattern

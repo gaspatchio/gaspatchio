@@ -17,12 +17,12 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
-from gaspatchio_core.rollforward._builder import RollforwardBuilder
-from gaspatchio_core.rollforward._compile import compile_rollforward
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.rollforward._compile import compile_rollforward
+from gaspatchio.schedule import Schedule
 
 if TYPE_CHECKING:
-    from gaspatchio_core.rollforward._compiled import CompiledRollforward
+    from gaspatchio.rollforward._compiled import CompiledRollforward
 
 
 def _compiled_with_untargeted_bop() -> CompiledRollforward:

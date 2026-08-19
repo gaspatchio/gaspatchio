@@ -7,8 +7,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.accessors.excel_functions.pv import pv as pv_expr
+from gaspatchio import ActuarialFrame
+from gaspatchio.accessors.excel_functions.pv import pv as pv_expr
 
 
 def test_pv_scalar_inputs():

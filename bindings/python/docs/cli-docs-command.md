@@ -55,7 +55,7 @@ Returns JSON with this structure:
       "text": "The actual documentation content...",
       "score": 0.92,
       "content_type": "code_example",
-      "source_file": "gaspatchio_core/accessors/projection.py",
+      "source_file": "gaspatchio/accessors/projection.py",
       "object_path": "projection.ProjectionAccessor.cumulative_survival",
       "has_code": true
     }

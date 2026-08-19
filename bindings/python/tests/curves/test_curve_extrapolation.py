@@ -27,8 +27,8 @@ import math
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.curves import Curve
+from gaspatchio import ActuarialFrame
+from gaspatchio.curves import Curve
 
 TENORS = [5.0, 10.0]
 FLAT_RATES = [0.05, 0.05]

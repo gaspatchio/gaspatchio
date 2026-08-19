@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import polars as pl
 import pytest
-from gaspatchio_core import (
+from gaspatchio import (
     ActuarialFrame,
     ColumnProxy,
 )
@@ -125,7 +125,7 @@ def test_with_columns_adds_expressions(sample_lazy_frame):
 
 # Test collect / profile (mocking underlying call and error handling)
 @patch("polars.LazyFrame.collect")
-@patch("gaspatchio_core.errors._handle_execution_error")
+@patch("gaspatchio.errors._handle_execution_error")
 def test_collect_calls_polars_collect(
     mock_handle_error, mock_collect, sample_lazy_frame
 ):

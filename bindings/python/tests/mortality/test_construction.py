@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from gaspatchio_core.mortality._mortality_table import MortalityTable
+from gaspatchio.mortality._mortality_table import MortalityTable
 
 if TYPE_CHECKING:
-    from gaspatchio_core.assumptions import Table
+    from gaspatchio.assumptions import Table
 
 
 class TestMortalityTableConstruction:
@@ -124,19 +124,19 @@ class TestPublicAPI:
 
     def test_mortality_table_importable_from_subpackage(self) -> None:
         """Subpackage re-export is the same object as the private implementation."""
-        from gaspatchio_core.mortality import MortalityTable
-        from gaspatchio_core.mortality._mortality_table import MortalityTable as Private
+        from gaspatchio.mortality import MortalityTable
+        from gaspatchio.mortality._mortality_table import MortalityTable as Private
 
         assert MortalityTable is Private
 
     def test_top_level_import(self) -> None:
-        """gaspatchio_core has a MortalityTable attribute."""
-        import gaspatchio_core
+        """gaspatchio has a MortalityTable attribute."""
+        import gaspatchio
 
-        assert hasattr(gaspatchio_core, "MortalityTable")
+        assert hasattr(gaspatchio, "MortalityTable")
 
     def test_top_level___all___includes_mortality_table(self) -> None:
-        """gaspatchio_core.__all__ includes 'MortalityTable'."""
-        import gaspatchio_core
+        """gaspatchio.__all__ includes 'MortalityTable'."""
+        import gaspatchio
 
-        assert "MortalityTable" in gaspatchio_core.__all__
+        assert "MortalityTable" in gaspatchio.__all__

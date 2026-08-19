@@ -28,10 +28,10 @@ from evals.benchmarks.scenario_lib import (
     make_stochastic_model_fn,
     read_result_metrics,
 )
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import Sum, for_each_scenario
-from gaspatchio_core.scenarios._auto_batch import memory_budget_bytes
-from gaspatchio_core.scenarios._memory import DEFAULTS, IrreducibleCellError
+from gaspatchio import ActuarialFrame
+from gaspatchio.scenarios import Sum, for_each_scenario
+from gaspatchio.scenarios._auto_batch import memory_budget_bytes
+from gaspatchio.scenarios._memory import DEFAULTS, IrreducibleCellError
 
 # Point-file thresholds: the largest model-point parquet whose row count is <= the key.
 _POINTS_8 = 8

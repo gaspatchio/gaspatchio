@@ -24,7 +24,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from gaspatchio_core.scenarios._aggregators import (
+from gaspatchio.scenarios._aggregators import (
     CTE,
     ArgMax,
     ArgMin,

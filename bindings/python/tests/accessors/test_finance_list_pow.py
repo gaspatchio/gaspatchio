@@ -8,7 +8,7 @@
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def test_discount_factor_spot_uses_list_pow() -> None:

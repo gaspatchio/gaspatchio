@@ -11,10 +11,10 @@ import polars as pl
 import pytest
 
 # Import the new FriendlyErrorFormatter
-from gaspatchio_core.errors.formatter import FriendlyErrorFormatter
+from gaspatchio.errors.formatter import FriendlyErrorFormatter
 
 # For backward compatibility, also test the existing functions
-from gaspatchio_core.errors.formatting_errors import (
+from gaspatchio.errors.formatting_errors import (
     _extract_missing_column_robust,
     _find_similar_columns,
 )

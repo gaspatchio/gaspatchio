@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from gaspatchio_core.rollforward._passes import FoldConstants
+from gaspatchio.rollforward._passes import FoldConstants
 
 if TYPE_CHECKING:
-    from gaspatchio_core.rollforward._ir import IR
+    from gaspatchio.rollforward._ir import IR
 
 
 class TestFoldConstants:

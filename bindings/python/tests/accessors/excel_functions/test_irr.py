@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def test_irr_basic_vector():

@@ -11,14 +11,14 @@ from pathlib import Path
 import polars as pl
 from typer.testing import CliRunner
 
-from gaspatchio_core.cli import app
+from gaspatchio.cli import app
 
 runner = CliRunner()
 
 # The #121 shape: main() reads a column that only the __main__ block attaches,
 # so the model passes standalone and dies under run-model.
 STANDALONE_ONLY_MODEL_SRC = """
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def main(af: ActuarialFrame) -> ActuarialFrame:

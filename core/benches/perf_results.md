@@ -57,7 +57,7 @@ vector_lookups_parquet_keys_100k/mortality_lookup_parquet_keys_100k
 
 ## 2026-04-30 — PR 1 (chained when reverse-fold, GSP-87)
 
-PR 1 (`gsp-95-pr1-chained-when`) changes only Python files: `bindings/python/gaspatchio_core/functions/conditional.py` (the `_build_scalar_conditional` builder) and new tests. **No Rust changes** — `list_conditional`, `list_pow`, `list_clip`, and all other kernels are unmodified.
+PR 1 (`gsp-95-pr1-chained-when`) changes only Python files: `bindings/python/gaspatchio/functions/conditional.py` (the `_build_scalar_conditional` builder) and new tests. **No Rust changes** — `list_conditional`, `list_pow`, `list_clip`, and all other kernels are unmodified.
 
 `realistic_vector_lookup` measures Rust kernel performance and is therefore unaffected by this PR by construction. The benchmark was not re-run for PR 1; it will be re-run as part of PR 2 / PR 3 which touch broader surface.
 

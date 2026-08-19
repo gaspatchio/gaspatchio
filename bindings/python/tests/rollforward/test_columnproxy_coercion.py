@@ -15,7 +15,7 @@ from datetime import date
 
 import polars as pl
 
-from gaspatchio_core import (
+from gaspatchio import (
     ActuarialFrame,
     RollforwardCollector,
     Schedule,

@@ -17,7 +17,7 @@ FIXTURE = Path(__file__).resolve().parent / "_fixtures" / "min_points.parquet"
 GOOD = """Here is the model:
 
 ```python
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def main(af: ActuarialFrame) -> ActuarialFrame:
@@ -27,7 +27,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 """
 
 BROKEN = """```python
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def main(af: ActuarialFrame) -> ActuarialFrame:

@@ -13,7 +13,7 @@ through to Polars' native ``neg``, which has no list kernel.
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 
 def _frame() -> ActuarialFrame:

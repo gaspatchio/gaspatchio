@@ -8,8 +8,8 @@
 
 import pytest
 
-from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
-from gaspatchio_core.scenarios.shocks import (
+from gaspatchio.scenarios._sensitivity import sensitivity_analysis
+from gaspatchio.scenarios.shocks import (
     AdditiveShock,
     MultiplicativeShock,
     OverrideShock,
@@ -221,8 +221,8 @@ class TestSensitivityAnalysisWorkflow:
     def test_output_compatible_with_scenario_run(self):
         """Output can be wrapped directly in a ScenarioRun for audit."""
         # Arrange
-        from gaspatchio_core.scenarios import ScenarioRun
-        from gaspatchio_core.scenarios._aggregators import Sum
+        from gaspatchio.scenarios import ScenarioRun
+        from gaspatchio.scenarios._aggregators import Sum
 
         values = [0.9, 1.0, 1.1]
 
@@ -260,6 +260,6 @@ class TestSensitivityAnalysisWorkflow:
 
 def test_import_sensitivity_analysis():
     """sensitivity_analysis should be importable from scenarios module."""
-    from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis as sa
+    from gaspatchio.scenarios._sensitivity import sensitivity_analysis as sa
 
     assert callable(sa)

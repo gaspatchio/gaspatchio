@@ -22,8 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from types import ModuleType
 
-    from gaspatchio_core import ActuarialFrame
-    from gaspatchio_core.scenarios.shocks import Shock
+    from gaspatchio import ActuarialFrame
+    from gaspatchio.scenarios.shocks import Shock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 L5_DIR = REPO_ROOT / "tutorial" / "level-5-scenarios" / "base"
@@ -81,7 +81,7 @@ def make_shock_bank(n: int) -> dict[int, list[Shock]]:
     Scenario i applies a mortality-scalar multiplier on a fixed sweep in
     [0.8, 1.2] -- no RNG (perf tracking must be reproducible across runs).
     """
-    from gaspatchio_core.scenarios.shocks import MultiplicativeShock  # noqa: PLC0415
+    from gaspatchio.scenarios.shocks import MultiplicativeShock  # noqa: PLC0415
 
     out: dict[int, list[Shock]] = {}
     for i in range(1, n + 1):

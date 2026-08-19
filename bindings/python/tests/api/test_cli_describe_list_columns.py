@@ -18,7 +18,7 @@ from pathlib import Path
 import polars as pl
 from typer.testing import CliRunner
 
-from gaspatchio_core.cli import app
+from gaspatchio.cli import app
 
 runner = CliRunner()
 

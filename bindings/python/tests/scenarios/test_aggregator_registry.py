@@ -11,13 +11,13 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from gaspatchio_core.scenarios._aggregators import (
+from gaspatchio.scenarios._aggregators import (
     _AGGREGATOR_REGISTRY,
     Sum,
     register_aggregator,
     scenario_aggregator,
 )
-from gaspatchio_core.scenarios._metric import Aggregator
+from gaspatchio.scenarios._metric import Aggregator
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

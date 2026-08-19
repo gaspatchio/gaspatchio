@@ -26,7 +26,7 @@ import datetime
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 pytest.importorskip("polars")
 

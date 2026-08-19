@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from datetime import date
 
-from gaspatchio_core.rollforward._fingerprint import spec_fingerprint
-from gaspatchio_core.rollforward._ir import IR
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.rollforward._fingerprint import spec_fingerprint
+from gaspatchio.rollforward._ir import IR
+from gaspatchio.schedule import Schedule
 
 
 class TestSpecFingerprint:

@@ -19,8 +19,8 @@ from unittest.mock import patch
 import polars as pl
 import pytest
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.util import get_error_mode, set_error_mode
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.util import get_error_mode, set_error_mode
 
 
 class TestErrorHandlingIntegration:

@@ -30,11 +30,11 @@ batch's working set, not the full portfolio.
 ### Imports
 
 ```python
-from gaspatchio_core import run_aggregated, AggregatedResult
-from gaspatchio_core.scenarios import Sum, PeriodSum, PeriodQuantile, PeriodMedian, PeriodCTE
+from gaspatchio import run_aggregated, AggregatedResult
+from gaspatchio.scenarios import Sum, PeriodSum, PeriodQuantile, PeriodMedian, PeriodCTE
 ```
 
-Both are also importable from `gaspatchio_core.scenarios` directly.
+Both are also importable from `gaspatchio.scenarios` directly.
 
 ### Signature
 
@@ -54,8 +54,8 @@ run_aggregated(
 ```python
 import polars as pl
 from pathlib import Path
-from gaspatchio_core import run_aggregated
-from gaspatchio_core.scenarios import Sum, PeriodSum, PeriodQuantile
+from gaspatchio import run_aggregated
+from gaspatchio.scenarios import Sum, PeriodSum, PeriodQuantile
 
 # model_points is a plain pl.DataFrame; model_fn receives an ActuarialFrame per batch
 model_points = pl.read_parquet("data/model_points.parquet")
@@ -144,7 +144,7 @@ portfolio joins, or when `run_aggregated` cannot express the required transforma
 ### Imports
 
 ```python
-from gaspatchio_core import run_to_parquet, SpillResult
+from gaspatchio import run_to_parquet, SpillResult
 from pathlib import Path
 ```
 
@@ -166,7 +166,7 @@ run_to_parquet(
 ```python
 import polars as pl
 from pathlib import Path
-from gaspatchio_core import run_to_parquet
+from gaspatchio import run_to_parquet
 
 model_points = pl.read_parquet("data/model_points.parquet")
 out = Path("output/projections")
@@ -329,8 +329,8 @@ then use `run_to_parquet` for a filtered subpopulation that needs individual pol
 ```python
 import polars as pl
 from pathlib import Path
-from gaspatchio_core import run_aggregated, run_to_parquet
-from gaspatchio_core.scenarios import Sum, PeriodSum
+from gaspatchio import run_aggregated, run_to_parquet
+from gaspatchio.scenarios import Sum, PeriodSum
 
 model_points = pl.read_parquet("data/model_points.parquet")
 

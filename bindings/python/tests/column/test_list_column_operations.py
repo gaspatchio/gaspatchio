@@ -12,7 +12,7 @@ not just scalar literals. This is GSP-10.
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 class TestListPowWithColumnExponent:

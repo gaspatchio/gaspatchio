@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from model_applied_life import main as run_model
 
-from gaspatchio_core import ActuarialFrame, with_scenarios
+from gaspatchio import ActuarialFrame, with_scenarios
 
 ASSUMPTIONS_DIR = Path(__file__).parent / "assumptions"
 OUTPUT_DIR = Path(__file__).parent / "output"

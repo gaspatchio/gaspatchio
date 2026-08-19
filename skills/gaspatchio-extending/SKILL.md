@@ -154,7 +154,7 @@ Always use `uv run` — the system Python does not have gaspatchio or polars ins
 uv run gspio docs "<method>"                    # look up API
 uv run pytest                                   # run tests including docstrings
 uv run pytest --doctest-modules                 # validate docstring examples
-uv run python3 -c "import gaspatchio_core; ..."  # inline scripts
+uv run python3 -c "import gaspatchio; ..."  # inline scripts
 ```
 
 ---

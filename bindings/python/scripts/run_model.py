@@ -32,12 +32,12 @@ from pathlib import Path
 
 import polars as pl
 import typer
-from gaspatchio_core.runner import (
+from gaspatchio.runner import (
     ModelRunConfig,
     ModelRunResult,
     transpose_single_policy_result,
 )
-from gaspatchio_core.runner import (
+from gaspatchio.runner import (
     run_model as execute_runner_run_model,
 )
 from loguru import logger
@@ -92,7 +92,7 @@ for name in logging.root.manager.loggerDict:
 logger.info("Configured all loggers to DEBUG level")
 
 # Configure specific loggers for Rust code
-for logger_name in ["gaspatchio_core", "gaspatchio_core.lookup"]:
+for logger_name in ["gaspatchio", "gaspatchio.lookup"]:
     rust_logger = logging.getLogger(logger_name)
     rust_logger.setLevel(logging.DEBUG)
 

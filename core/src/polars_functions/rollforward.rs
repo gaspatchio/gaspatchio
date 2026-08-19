@@ -31,7 +31,7 @@ use serde::Deserialize;
 
 /// Plugin kwargs payload — direct mirror of the dict produced by
 /// `LowerToPolarsPlugin.lower(ir, slots)` in
-/// `gaspatchio_core.rollforward._passes`.
+/// `gaspatchio.rollforward._passes`.
 #[derive(Deserialize)]
 pub struct RollforwardKwargs {
     pub ir: serde_json::Value,
@@ -77,7 +77,7 @@ pub struct CaptureSlot {
 }
 
 /// Op enum — mirrors the typed Op classes in
-/// `gaspatchio_core.rollforward._ops`. Tag is the bare class name; payload
+/// `gaspatchio.rollforward._ops`. Tag is the bare class name; payload
 /// fields use pre-resolved arg-indices (state, point, input-column slots) so
 /// the kernel's hot loop never does string lookups.
 ///

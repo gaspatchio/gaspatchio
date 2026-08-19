@@ -25,7 +25,7 @@ See CONTRIBUTING.md for the full guide.
 
 - [ ] `cd bindings/python && uv run pytest -v` passes
 - [ ] `uv run pytest --doctest-modules --doctest-glob="*.pyi"` passes
-- [ ] `uv run mypy gaspatchio_core` and `uv run pyright gaspatchio_core` pass
+- [ ] `uv run mypy gaspatchio` and `uv run pyright gaspatchio` pass
 - [ ] `cd core && cargo test` passes (if Rust changed)
 
 **If this changes a projected number:**
@@ -37,7 +37,7 @@ See CONTRIBUTING.md for the full guide.
 
 **If this changes the public API:**
 
-- [ ] Type stubs updated and `uv run python -m mypy.stubtest gaspatchio_core` passes.
+- [ ] Type stubs updated and `uv run python -m mypy.stubtest gaspatchio` passes.
 - [ ] Docstring examples added or updated (they are executed as tests).
 
 ## Changelog

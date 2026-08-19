@@ -14,8 +14,8 @@ from typing import Any
 import polars as pl
 import pytest
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import (
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import (
     CTE,
     ArgMax,
     ArgMin,

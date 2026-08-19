@@ -14,8 +14,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import (
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import (
     Mean,
     PeriodCount,
     PeriodMax,
@@ -100,7 +100,7 @@ def test_auto_search_does_not_warn(af: ActuarialFrame) -> None:
 
 
 def test_fold_batch_helper_exists() -> None:
-    from gaspatchio_core.scenarios import _for_each
+    from gaspatchio.scenarios import _for_each
 
     assert hasattr(_for_each, "_fold_batch")
 

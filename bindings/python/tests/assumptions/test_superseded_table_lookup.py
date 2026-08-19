@@ -21,8 +21,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table, TableSupersededError
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import Table, TableSupersededError
 
 
 def _table(name: str, rates: list[float], storage_mode: str = "auto") -> Table:
@@ -113,7 +113,7 @@ def test_failed_python_concat_leaves_registry_unextended(
     the registry untouched, never leave the registry extended while the
     object still carries the pre-extension identity.
     """
-    from gaspatchio_core.assumptions import _api
+    from gaspatchio.assumptions import _api
 
     table = _table("superseded_extend_atomic", [1.0, 2.0, 3.0], storage_mode="hash")
 
@@ -154,7 +154,7 @@ def test_failed_replacement_does_not_poison_the_original(
     data — so the original object's lookups must keep working, not be
     refused against a hash the registry never accepted.
     """
-    from gaspatchio_core.assumptions import _api
+    from gaspatchio.assumptions import _api
 
     original = _table("superseded_failed_swap", [1.0, 2.0, 3.0])
 

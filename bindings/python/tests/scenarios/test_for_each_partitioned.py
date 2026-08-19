@@ -12,8 +12,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import Sum, for_each_scenario
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import Sum, for_each_scenario
 
 
 @pytest.fixture

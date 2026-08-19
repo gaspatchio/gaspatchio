@@ -4,7 +4,7 @@
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def test_attribute_access_returns_column_proxy_and_has_methods():

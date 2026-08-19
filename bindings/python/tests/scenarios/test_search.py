@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from gaspatchio_core.scenarios._memory import IrreducibleCellError
-from gaspatchio_core.scenarios._result import ProbeResult
-from gaspatchio_core.scenarios._search import build_ladder, decide_winner
+from gaspatchio.scenarios._memory import IrreducibleCellError
+from gaspatchio.scenarios._result import ProbeResult
+from gaspatchio.scenarios._search import build_ladder, decide_winner
 
 
 def _probe(

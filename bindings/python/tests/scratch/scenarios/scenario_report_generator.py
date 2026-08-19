@@ -16,8 +16,8 @@ from pathlib import Path
 import altair as alt
 import polars as pl
 
-from gaspatchio_core import Table
-from gaspatchio_core.scenarios import parse_scenario_config, describe_scenarios
+from gaspatchio import Table
+from gaspatchio.scenarios import parse_scenario_config, describe_scenarios
 
 ASSUMPTIONS_DIR = Path(__file__).parent / "assumptions"
 OUTPUT_DIR = Path(__file__).parent

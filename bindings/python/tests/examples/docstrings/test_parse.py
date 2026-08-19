@@ -7,7 +7,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
-from gaspatchio_core.examples.docstrings.parse import GaspatchioDocstringParser
+from gaspatchio.examples.docstrings.parse import GaspatchioDocstringParser
 
 
 @pytest.fixture(scope="module")
@@ -603,7 +603,7 @@ def test_process_dt_proxy_month_fixture(
     # ex1.snippet is expected to be the clean, executable code directly
     expected_clean_snippet1 = (
         "import polars as pl\n"
-        "from gaspatchio_core import ActuarialFrame\n"
+        "from gaspatchio import ActuarialFrame\n"
         'af = ActuarialFrame({"d": pl.date_range("2022-01-01", "2022-03-01", interval="1mo")})\n'
         'print(af.select(af["d"].dt.month().alias("m")).collect())'
     )
@@ -636,7 +636,7 @@ def test_process_dt_proxy_month_fixture(
 
     expected_clean_snippet2 = (
         "import datetime, polars as pl\n"
-        "from gaspatchio_core import ActuarialFrame\n"
+        "from gaspatchio import ActuarialFrame\n"
         "data = {\n"
         '    "policy_id": ["C003", "D004"],\n'
         '    "claim_lodgement_dates": [\n'
@@ -1031,7 +1031,7 @@ def test_extract_examples_rjust_complex_docstring(parser: GaspatchioDocstringPar
         "    ```python\n"
         "    # Test with pl.Config to ensure consistent display\n"
         "    with pl.Config(fmt_str_lengths=100):\n"
-        "        from gaspatchio_core.frame.base import ActuarialFrame\n"
+        "        from gaspatchio.frame.base import ActuarialFrame\n"
         "        import polars as pl\n"
         "        data = {\n"
         '            "amount_str": ["12.3", "1234.56", None, "7"],\n'
@@ -1058,7 +1058,7 @@ def test_extract_examples_rjust_complex_docstring(parser: GaspatchioDocstringPar
         "    **Vector (List Shimming) Example: Right-padding list elements**\n"
         "    ```python\n"
         "    with pl.Config(fmt_str_lengths=100):\n"
-        "        from gaspatchio_core.frame.base import ActuarialFrame # Added import\n"
+        "        from gaspatchio.frame.base import ActuarialFrame # Added import\n"
         "        import polars as pl # Added import\n"
         "        data_list = {\n"
         '            "batch_id": ["Y01"],\n'

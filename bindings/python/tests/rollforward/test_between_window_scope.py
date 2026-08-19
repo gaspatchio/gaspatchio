@@ -18,7 +18,7 @@ import datetime
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, compile_rollforward
+from gaspatchio import ActuarialFrame, compile_rollforward
 
 
 def _frame() -> ActuarialFrame:

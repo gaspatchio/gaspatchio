@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import List
 
 import pytest
-from gaspatchio_core.examples.docstrings.models import (
+from gaspatchio.examples.docstrings.models import (
     DocstringCodeExample,
     GaspatchioDocstring,  # Added for completeness
 )
-from gaspatchio_core.examples.docstrings.parse import GaspatchioDocstringParser
+from gaspatchio.examples.docstrings.parse import GaspatchioDocstringParser
 
 
 @pytest.fixture
@@ -490,7 +490,7 @@ def test_lint_rule_set_does_not_float_on_ruff_defaults():
     """
     example = DocstringCodeExample(
         snippet="""import datetime
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 d = datetime.date(2023, 1, 1)
 af = ActuarialFrame({"issue_date": [d]})""",
         output=None,

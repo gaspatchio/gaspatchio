@@ -12,9 +12,9 @@ sync" is not a mechanism. These assertions are.
 
 import typing
 
-from gaspatchio_core.accessors import projection_frame as _pf
-from gaspatchio_core.errors.constants import COMMON_VALIDATION_VALUES
-from gaspatchio_core.frame.base import ActuarialFrame
+from gaspatchio.accessors import projection_frame as _pf
+from gaspatchio.errors.constants import COMMON_VALIDATION_VALUES
+from gaspatchio.frame.base import ActuarialFrame
 
 ProjectionFrameAccessor = _pf.ProjectionFrameAccessor
 

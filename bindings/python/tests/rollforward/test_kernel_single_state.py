@@ -11,10 +11,10 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core.rollforward._builder import RollforwardBuilder
-from gaspatchio_core.rollforward._collector import RollforwardCollector
-from gaspatchio_core.rollforward._compile import compile_rollforward
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.rollforward._collector import RollforwardCollector
+from gaspatchio.rollforward._compile import compile_rollforward
+from gaspatchio.schedule import Schedule
 
 
 class TestWholeLifeSingleState:

@@ -8,7 +8,7 @@
 
 from typer.testing import CliRunner
 
-from gaspatchio_core.cli import app
+from gaspatchio.cli import app
 
 runner = CliRunner()
 

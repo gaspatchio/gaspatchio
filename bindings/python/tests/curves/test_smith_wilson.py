@@ -13,9 +13,9 @@ import numpy as np
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.curves import Curve
-from gaspatchio_core.curves._smith_wilson import solve_zeta, sw_price, sw_spot
+from gaspatchio import ActuarialFrame
+from gaspatchio.curves import Curve
+from gaspatchio.curves._smith_wilson import solve_zeta, sw_price, sw_spot
 
 # lifelib worked example (MIT, (c) 2022 lifelib Developers) - see REFERENCES.md (Task 11)
 U = np.array([1.0, 2.0, 4.0, 5.0, 6.0, 7.0])
@@ -49,7 +49,7 @@ def test_sw_alpha_none_calibrates() -> None:
 
 
 def test_calibrate_alpha_meets_gap_and_floor() -> None:
-    from gaspatchio_core.curves._smith_wilson import calibrate_alpha
+    from gaspatchio.curves._smith_wilson import calibrate_alpha
 
     llp = float(U.max())
     cp = max(llp + 40.0, 60.0)

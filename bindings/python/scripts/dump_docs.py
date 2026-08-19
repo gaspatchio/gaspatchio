@@ -12,21 +12,21 @@ app = typer.Typer()
 
 # List of files to dump (update with your actual files)
 FILES_TO_DUMP = [
-    Path(__file__).parent.parent / "gaspatchio_core/accessors/excel.py",
+    Path(__file__).parent.parent / "gaspatchio/accessors/excel.py",
     Path(__file__).parent.parent / "tests/accessors/test_excel.py",
     Path(__file__).parent.parent.parent.parent / "ref/01-dsl/dsl-design.md",
-    Path(__file__).parent.parent / "gaspatchio_core/frame/base.py",
-    Path(__file__).parent.parent / "gaspatchio_core/registry.py",
-    Path(__file__).parent.parent / "gaspatchio_core/column/column_proxy.py",
-    Path(__file__).parent.parent / "gaspatchio_core/column/expression_proxy.py",
-    Path(__file__).parent.parent / "gaspatchio_core/column/dispatch.py",
+    Path(__file__).parent.parent / "gaspatchio/frame/base.py",
+    Path(__file__).parent.parent / "gaspatchio/registry.py",
+    Path(__file__).parent.parent / "gaspatchio/column/column_proxy.py",
+    Path(__file__).parent.parent / "gaspatchio/column/expression_proxy.py",
+    Path(__file__).parent.parent / "gaspatchio/column/dispatch.py",
     Path(__file__).parent.parent.parent.parent.parent
     / "gaspatchio-models/models/my-model/model_calculation.py",
-    Path(__file__).parent.parent / "gaspatchio_core/functions/vector.py",
-    Path(__file__).parent.parent / "gaspatchio_core/runner.py",
+    Path(__file__).parent.parent / "gaspatchio/functions/vector.py",
+    Path(__file__).parent.parent / "gaspatchio/runner.py",
     Path(__file__).parent.parent.parent.parent / "ref/ARCHITECTURE_SUMMARY.md",
     Path(__file__).parent.parent / "README.md",
-    Path(__file__).parent.parent / "gaspatchio_core/assumptions/_api.py",
+    Path(__file__).parent.parent / "gaspatchio/assumptions/_api.py",
 ]
 
 

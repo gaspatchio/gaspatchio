@@ -13,7 +13,7 @@ import time
 
 import polars as pl
 
-from gaspatchio_core.assumptions import (
+from gaspatchio.assumptions import (
     AutoDetectOverflow,
     ComputedDimension,
     DataDimension,

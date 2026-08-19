@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 import polars as pl
 import pytest
 
-from gaspatchio_core.column import ColumnProxy, ExpressionProxy
-from gaspatchio_core.column.condition_expression import ConditionExpression
+from gaspatchio.column import ColumnProxy, ExpressionProxy
+from gaspatchio.column.condition_expression import ConditionExpression
 
 
 # Mock ActuarialFrame specific to ExpressionProxy tests
@@ -176,9 +176,9 @@ def test_expression_proxy_reverse_pow_operator(expr_proxy):
 def test_expression_proxy_date_accessor_wiring(expr_proxy):
     """Test that the .date accessor exists and returns the correct type."""
     # Test against the actual registered accessor
-    from gaspatchio_core.accessors.date import DateColumnAccessor  # Assuming actual
-    # from gaspatchio_core.accessors.base import BaseColumnAccessor # No longer needed for mock
-    # from gaspatchio_core.frame.registry import _ACCESSOR_REGISTRY # No longer needed for mock registration
+    from gaspatchio.accessors.date import DateColumnAccessor  # Assuming actual
+    # from gaspatchio.accessors.base import BaseColumnAccessor # No longer needed for mock
+    # from gaspatchio.frame.registry import _ACCESSOR_REGISTRY # No longer needed for mock registration
 
     # REMOVED Mock Class definition and registration
     # class MockDateAccessorExpr(BaseColumnAccessor): ...
@@ -201,11 +201,11 @@ def test_expression_proxy_date_accessor_wiring(expr_proxy):
 
 def test_expression_proxy_finance_accessor_wiring(expr_proxy):
     """Test that the .finance accessor exists and returns the correct type."""
-    from gaspatchio_core.accessors.finance import (
+    from gaspatchio.accessors.finance import (
         FinanceColumnAccessor,  # Assuming actual
     )
-    # from gaspatchio_core.accessors.base import BaseColumnAccessor # No longer needed for mock
-    # from gaspatchio_core.frame.registry import _ACCESSOR_REGISTRY # No longer needed for mock registration
+    # from gaspatchio.accessors.base import BaseColumnAccessor # No longer needed for mock
+    # from gaspatchio.frame.registry import _ACCESSOR_REGISTRY # No longer needed for mock registration
 
     # REMOVED Mock class definition and registration
     # class MockFinanceAccessorExpr(BaseColumnAccessor): ...

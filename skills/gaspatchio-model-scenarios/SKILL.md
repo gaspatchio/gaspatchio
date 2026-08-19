@@ -57,7 +57,7 @@ uv run python run_scenarios.py
 A `ScenarioRun` is the typed plan that captures shocks, base tables, aggregations, and an optional master seed as a single hashable value. You build it, run it, and the result carries the plan's SHA + an opt-in JSON audit sidecar — so the same shocks against the same tables always produce the same SHA, and re-running is one Python call.
 
 ```python
-from gaspatchio_core.scenarios import (
+from gaspatchio.scenarios import (
     ScenarioRun,
     MultiplicativeShock,
     Sum,
@@ -98,7 +98,7 @@ Teach and apply these in order. Each level builds on the previous.
 The model's discount-rate lookup uses `scenario_id` automatically if the rate table has rows for each scenario. For pure rate scenarios with no table shocks, the low-level `with_scenarios()` cross-join is enough — promote to `ScenarioRun` when the analysis settles.
 
 ```python
-from gaspatchio_core.scenarios import with_scenarios
+from gaspatchio.scenarios import with_scenarios
 
 af = with_scenarios(af, ["BASE", "UP", "DOWN"])
 result = model.main(af).collect()
@@ -115,7 +115,7 @@ The assumption table `risk_free_rates.parquet` must have BASE/UP/DOWN rows. `wit
 Declare per-scenario shock recipes as a `dict[str, list[Shock]]` and run the plan:
 
 ```python
-from gaspatchio_core.scenarios import (
+from gaspatchio.scenarios import (
     ScenarioRun,
     MultiplicativeShock,
     AdditiveShock,
@@ -146,7 +146,7 @@ ScenarioRun stacks each base table with a `scenario_id` dimension internally, ap
 `FilteredShock`, `TimeConditionalShock`, and `PipelineShock` compose targeted stresses:
 
 ```python
-from gaspatchio_core.scenarios import (
+from gaspatchio.scenarios import (
     FilteredShock,
     TimeConditionalShock,
     PipelineShock,
@@ -195,7 +195,7 @@ Systematically vary a single parameter (or two, for a 2D interaction grid). Ther
 
 ```python
 import itertools
-from gaspatchio_core.scenarios import ScenarioRun, MultiplicativeShock, Sum
+from gaspatchio.scenarios import ScenarioRun, MultiplicativeShock, Sum
 
 mort_values = [0.8, 0.9, 1.0, 1.1, 1.2]
 
@@ -455,7 +455,7 @@ Every scalar aggregator above has a **`Period*` twin** that returns a **per-peri
 **Same modifier surface as scalar aggregators.** Chain `.alias()` and `.over()` identically:
 
 ```python
-from gaspatchio_core.scenarios import PeriodSum, PeriodQuantile
+from gaspatchio.scenarios import PeriodSum, PeriodQuantile
 
 aggregations=(
     PeriodSum("net_cf").alias("net_cf").over("scenario_id"),

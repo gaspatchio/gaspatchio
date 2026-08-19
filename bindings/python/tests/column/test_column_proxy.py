@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import polars as pl
 import pytest
 
-from gaspatchio_core.column import ColumnProxy, ExpressionProxy
-from gaspatchio_core.column.condition_expression import ConditionExpression
+from gaspatchio.column import ColumnProxy, ExpressionProxy
+from gaspatchio.column.condition_expression import ConditionExpression
 
 
 # Mock ActuarialFrame specific to ColumnProxy tests if needed, or reuse a common one
@@ -167,7 +167,7 @@ def test_column_proxy_reverse_pow_operator(col_proxy):
     assert isinstance(result_proxy, ExpressionProxy)
     # Verify correctness via evaluation rather than expression string,
     # since the dispatch may route through exp/log identity for list columns.
-    from gaspatchio_core import ActuarialFrame
+    from gaspatchio import ActuarialFrame
 
     af = ActuarialFrame({"test_col": [1, 2, 3]})
     af.result = other ** af.test_col
@@ -204,11 +204,11 @@ def test_column_proxy_map_batches(col_proxy):
 def test_column_proxy_date_accessor_wiring(col_proxy):
     """Test that the .date accessor exists and returns the correct type."""
     # We need the actual or a properly registered mock accessor for this test
-    from gaspatchio_core.accessors.date import (
+    from gaspatchio.accessors.date import (
         DateColumnAccessor,  # Assuming actual accessor
     )
-    # from gaspatchio_core.accessors.base import BaseColumnAccessor # No longer needed for mock
-    # from gaspatchio_core.frame.registry import _ACCESSOR_REGISTRY # No longer needed for mock registration
+    # from gaspatchio.accessors.base import BaseColumnAccessor # No longer needed for mock
+    # from gaspatchio.frame.registry import _ACCESSOR_REGISTRY # No longer needed for mock registration
 
     # REMOVED Mock Class Definition and Dynamic Registration
     # class MockDateAccessorCol(BaseColumnAccessor): ...
@@ -229,11 +229,11 @@ def test_column_proxy_date_accessor_wiring(col_proxy):
 
 def test_column_proxy_finance_accessor_wiring(col_proxy):
     """Test that the .finance accessor exists and returns the correct type."""
-    from gaspatchio_core.accessors.finance import (
+    from gaspatchio.accessors.finance import (
         FinanceColumnAccessor,  # Assuming actual accessor
     )
-    # from gaspatchio_core.accessors.base import BaseColumnAccessor # No longer needed
-    # from gaspatchio_core.frame.registry import _ACCESSOR_REGISTRY # No longer needed
+    # from gaspatchio.accessors.base import BaseColumnAccessor # No longer needed
+    # from gaspatchio.frame.registry import _ACCESSOR_REGISTRY # No longer needed
 
     # REMOVED Mock Class Definition and Dynamic Registration
     # class MockFinanceAccessorCol(BaseColumnAccessor): ...

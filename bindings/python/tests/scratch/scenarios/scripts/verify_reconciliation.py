@@ -32,7 +32,7 @@ def main():
 
     # Import and run the model
     print("\n1. Running gaspatchio model (model_applied_life.py)...")
-    from gaspatchio_core import ActuarialFrame
+    from gaspatchio import ActuarialFrame
     from appliedlife.model_applied_life import main as run_model
 
     mp_path = script_dir.parent / "model_points.parquet"

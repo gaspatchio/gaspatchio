@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 
 # Import the core components and the registry directly for patching
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.frame.registry import _ACCESSOR_REGISTRY
+from gaspatchio import ActuarialFrame
+from gaspatchio.frame.registry import _ACCESSOR_REGISTRY
 
 
 # Dummy accessor classes for testing

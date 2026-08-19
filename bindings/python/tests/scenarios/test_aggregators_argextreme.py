@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from gaspatchio_core.scenarios._aggregators import ArgMax, ArgMin
+from gaspatchio.scenarios._aggregators import ArgMax, ArgMin
 
 
 def test_argmax_returns_scenario_id() -> None:

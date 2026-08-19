@@ -18,7 +18,7 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core import Schedule
+from gaspatchio import Schedule
 
 
 class TestGsp92ScheduleShape:

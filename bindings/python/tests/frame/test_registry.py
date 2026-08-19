@@ -8,10 +8,10 @@ import copy
 
 import pytest
 
-from gaspatchio_core.accessors.base import BaseColumnAccessor, BaseFrameAccessor
+from gaspatchio.accessors.base import BaseColumnAccessor, BaseFrameAccessor
 
 # Import the items to test
-from gaspatchio_core.frame.registry import (
+from gaspatchio.frame.registry import (
     _ACCESSOR_REGISTRY,
     list_registered_accessors,
     register_accessor,

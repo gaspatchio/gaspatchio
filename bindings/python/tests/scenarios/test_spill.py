@@ -10,7 +10,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gaspatchio_core.scenarios._spill import (
+from gaspatchio.scenarios._spill import (
     check_spill_target,
     fstype_for_path,
     safe_write_parquet,
@@ -59,12 +59,12 @@ def test_safe_write_temp_is_same_directory(tmp_path, monkeypatch):
         seen["dst_parent"] = Path(str(dst)).parent
         real_replace(src, dst)
 
-    monkeypatch.setattr("gaspatchio_core.scenarios._spill.os.replace", spy)
+    monkeypatch.setattr("gaspatchio.scenarios._spill.os.replace", spy)
     safe_write_parquet(pl.DataFrame({"a": [1]}), tmp_path / "x.parquet")
     assert seen["src_parent"] == seen["dst_parent"]  # same FS -> atomic rename works
 
 
-from gaspatchio_core.scenarios._spill import preflight_disk
+from gaspatchio.scenarios._spill import preflight_disk
 
 
 def test_preflight_passes_when_room(tmp_path):
@@ -75,15 +75,15 @@ def test_preflight_fails_loud_when_insufficient(tmp_path, monkeypatch):
     import shutil
 
     monkeypatch.setattr(
-        "gaspatchio_core.scenarios._spill.shutil.disk_usage",
+        "gaspatchio.scenarios._spill.shutil.disk_usage",
         lambda _p: shutil._ntuple_diskusage(total=10, used=9, free=1),  # noqa: SLF001
     )
     with pytest.raises(OSError, match="insufficient disk"):
         preflight_disk(tmp_path, estimated_bytes=1_000_000)
 
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios._spill import run_to_parquet
+from gaspatchio import ActuarialFrame
+from gaspatchio.scenarios._spill import run_to_parquet
 
 
 def _toy_full_model(af: ActuarialFrame) -> ActuarialFrame:
@@ -106,21 +106,21 @@ def test_run_to_parquet_writes_all_policies(tmp_path):
 def test_for_each_sink_does_not_require_scenario_id(tmp_path):
     """A frame with NO scenario_id column must spill without a KeyError."""
     df = pl.DataFrame({"policy": [1, 2, 3], "v": [1.0, 2.0, 3.0]})
-    from gaspatchio_core.scenarios._for_each import _write_batch_parquet
+    from gaspatchio.scenarios._for_each import _write_batch_parquet
 
     _write_batch_parquet(df, tmp_path / "b0.parquet")  # must not raise
     assert pl.read_parquet(tmp_path / "b0.parquet")["policy"].to_list() == [1, 2, 3]
 
 
 def test_run_to_parquet_top_level_export():
-    import gaspatchio_core as gsp
+    import gaspatchio as gsp
 
     assert hasattr(gsp, "run_to_parquet")
 
 
 def test_run_to_parquet_auto_batches_to_budget(tmp_path, monkeypatch):
     """auto path: the shared sizer's B drives the number of batch files."""
-    import gaspatchio_core.scenarios._spill as spill
+    import gaspatchio.scenarios._spill as spill
 
     mp = pl.DataFrame({"value": [float(i) for i in range(1, 11)]})  # 10 policies
     monkeypatch.setattr(spill, "size_to_budget", lambda *a, **k: 4)
@@ -138,7 +138,7 @@ def test_run_to_parquet_auto_batches_to_budget(tmp_path, monkeypatch):
 
 def test_preflight_disk_uses_frame_size_not_peak_rss(tmp_path, monkeypatch):
     """Disk preflight estimates from the output frame, not the peak RSS (#15)."""
-    import gaspatchio_core.scenarios._spill as spill
+    import gaspatchio.scenarios._spill as spill
 
     captured: dict[str, int] = {}
     real_collect = spill._collect_with_peak  # noqa: SLF001

@@ -11,7 +11,7 @@ import pytest
 from openpyxl.utils.datetime import MAC_EPOCH, from_excel
 from polars.testing import assert_series_equal
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 # Test data for from_excel_serial
 # Expected values verified against openpyxl.utils.datetime.from_excel (the reference implementation)

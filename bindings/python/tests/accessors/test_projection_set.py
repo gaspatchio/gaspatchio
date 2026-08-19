@@ -10,8 +10,8 @@ from datetime import date
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.schedule import Schedule
+from gaspatchio import ActuarialFrame
+from gaspatchio.schedule import Schedule
 
 
 class TestSetKwargsPath:

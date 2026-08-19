@@ -6,9 +6,9 @@ from pathlib import Path
 
 import polars as pl  # For multi_example_fixture global_vars
 import pytest
-from gaspatchio_core.examples.docstrings.models import DocstringCodeExample
-from gaspatchio_core.examples.docstrings.parse import GaspatchioDocstringParser
-from gaspatchio_core.examples.docstrings.validate import GaspatchioEvalExample
+from gaspatchio.examples.docstrings.models import DocstringCodeExample
+from gaspatchio.examples.docstrings.parse import GaspatchioDocstringParser
+from gaspatchio.examples.docstrings.validate import GaspatchioEvalExample
 
 from tests.examples.docstrings.fixtures.multi_example_fixture import PremiumCalculator
 

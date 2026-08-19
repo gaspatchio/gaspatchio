@@ -16,8 +16,8 @@ import math
 from pathlib import Path
 
 import polars as pl
-from gaspatchio_core import ActuarialFrame, when
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame, when
+from gaspatchio.assumptions import Table
 
 
 def load_assumptions():

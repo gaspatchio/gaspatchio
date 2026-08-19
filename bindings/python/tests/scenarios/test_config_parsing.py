@@ -8,8 +8,8 @@
 
 import pytest
 
-from gaspatchio_core.scenarios._aggregators import Sum
-from gaspatchio_core.scenarios.shocks import (
+from gaspatchio.scenarios._aggregators import Sum
+from gaspatchio.scenarios.shocks import (
     AdditiveShock,
     MultiplicativeShock,
     OverrideShock,
@@ -21,7 +21,7 @@ class TestParseShockConfig:
 
     def test_parse_multiplicative_shock(self):
         """Parse multiply shock from dict."""
-        from gaspatchio_core.scenarios import parse_shock_config
+        from gaspatchio.scenarios import parse_shock_config
 
         config = {"table": "mortality", "multiply": 1.2}
         shock = parse_shock_config(config)
@@ -32,7 +32,7 @@ class TestParseShockConfig:
 
     def test_parse_additive_shock(self):
         """Parse add shock from dict."""
-        from gaspatchio_core.scenarios import parse_shock_config
+        from gaspatchio.scenarios import parse_shock_config
 
         config = {"table": "discount_rates", "add": 0.005}
         shock = parse_shock_config(config)
@@ -43,7 +43,7 @@ class TestParseShockConfig:
 
     def test_parse_override_shock(self):
         """Parse set/override shock from dict."""
-        from gaspatchio_core.scenarios import parse_shock_config
+        from gaspatchio.scenarios import parse_shock_config
 
         config = {"table": "lapse", "set": 0.0}
         shock = parse_shock_config(config)
@@ -54,7 +54,7 @@ class TestParseShockConfig:
 
     def test_parse_shock_with_column(self):
         """Parse shock targeting specific column."""
-        from gaspatchio_core.scenarios import parse_shock_config
+        from gaspatchio.scenarios import parse_shock_config
 
         config = {"table": "mortality", "column": "qx", "multiply": 1.2}
         shock = parse_shock_config(config)
@@ -65,7 +65,7 @@ class TestParseShockConfig:
 
     def test_parse_shock_missing_table(self):
         """Shock config without table should raise error."""
-        from gaspatchio_core.scenarios import parse_shock_config
+        from gaspatchio.scenarios import parse_shock_config
 
         config = {"multiply": 1.2}  # Missing table
 
@@ -74,7 +74,7 @@ class TestParseShockConfig:
 
     def test_parse_shock_no_operation(self):
         """Shock config without operation should raise error."""
-        from gaspatchio_core.scenarios import parse_shock_config
+        from gaspatchio.scenarios import parse_shock_config
 
         config = {"table": "mortality"}  # No multiply/add/set
 
@@ -83,7 +83,7 @@ class TestParseShockConfig:
 
     def test_parse_shock_multiple_operations(self):
         """Shock config with multiple operations should raise error."""
-        from gaspatchio_core.scenarios import parse_shock_config
+        from gaspatchio.scenarios import parse_shock_config
 
         config = {"table": "mortality", "multiply": 1.2, "add": 0.01}
 
@@ -96,7 +96,7 @@ class TestParseScenarioConfig:
 
     def test_parse_string_scenario(self):
         """Parse simple string scenario ID (no shocks)."""
-        from gaspatchio_core.scenarios import parse_scenario_config
+        from gaspatchio.scenarios import parse_scenario_config
 
         config = ["BASE"]
         result = parse_scenario_config(config)
@@ -106,7 +106,7 @@ class TestParseScenarioConfig:
 
     def test_parse_dict_scenario_no_shocks(self):
         """Parse dict scenario with no shocks."""
-        from gaspatchio_core.scenarios import parse_scenario_config
+        from gaspatchio.scenarios import parse_scenario_config
 
         config = [{"id": "BASE"}]
         result = parse_scenario_config(config)
@@ -116,7 +116,7 @@ class TestParseScenarioConfig:
 
     def test_parse_dict_scenario_with_shocks(self):
         """Parse dict scenario with shock list."""
-        from gaspatchio_core.scenarios import parse_scenario_config
+        from gaspatchio.scenarios import parse_scenario_config
 
         config = [
             {"id": "BASE"},
@@ -136,7 +136,7 @@ class TestParseScenarioConfig:
 
     def test_parse_multiple_shocks(self):
         """Parse scenario with multiple shocks."""
-        from gaspatchio_core.scenarios import parse_scenario_config
+        from gaspatchio.scenarios import parse_scenario_config
 
         config = [
             {
@@ -157,7 +157,7 @@ class TestParseScenarioConfig:
 
     def test_parse_mixed_string_and_dict(self):
         """Parse config with mix of string and dict scenarios."""
-        from gaspatchio_core.scenarios import parse_scenario_config
+        from gaspatchio.scenarios import parse_scenario_config
 
         config = [
             "BASE",
@@ -173,14 +173,14 @@ class TestParseScenarioConfig:
 
     def test_parse_empty_config(self):
         """Empty config should raise error."""
-        from gaspatchio_core.scenarios import parse_scenario_config
+        from gaspatchio.scenarios import parse_scenario_config
 
         with pytest.raises(ValueError, match="empty"):
             parse_scenario_config([])
 
     def test_parse_duplicate_scenario_ids(self):
         """Duplicate scenario IDs should raise error."""
-        from gaspatchio_core.scenarios import parse_scenario_config
+        from gaspatchio.scenarios import parse_scenario_config
 
         config = ["BASE", {"id": "BASE"}]
 
@@ -189,7 +189,7 @@ class TestParseScenarioConfig:
 
     def test_parse_dict_missing_id(self):
         """Dict scenario without id should raise error."""
-        from gaspatchio_core.scenarios import parse_scenario_config
+        from gaspatchio.scenarios import parse_scenario_config
 
         config = [{"shocks": [{"table": "mortality", "multiply": 1.2}]}]
 
@@ -202,7 +202,7 @@ class TestLLMWorkflowIntegration:
 
     def test_llm_generated_config_to_describe(self):
         """LLM config can be parsed and wrapped in a ScenarioRun for audit."""
-        from gaspatchio_core.scenarios import ScenarioRun, parse_scenario_config
+        from gaspatchio.scenarios import ScenarioRun, parse_scenario_config
 
         # LLM generates this JSON-like config
         config = [
@@ -226,8 +226,8 @@ class TestLLMWorkflowIntegration:
 
     def test_llm_config_with_sensitivity_analysis(self):
         """Combine LLM config with sensitivity_analysis output."""
-        from gaspatchio_core.scenarios import parse_scenario_config
-        from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
+        from gaspatchio.scenarios import parse_scenario_config
+        from gaspatchio.scenarios._sensitivity import sensitivity_analysis
 
         # LLM can generate a sweep using sensitivity_analysis
         sweep_shocks = sensitivity_analysis(

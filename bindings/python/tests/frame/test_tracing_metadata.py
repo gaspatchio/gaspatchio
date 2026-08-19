@@ -20,8 +20,8 @@ from unittest.mock import Mock, patch
 import polars as pl
 import pytest
 
-from gaspatchio_core.errors.metadata import OperationMetadata, TracedOperation
-from gaspatchio_core.frame.tracing import append_operation_to_graph, log_query_plan
+from gaspatchio.errors.metadata import OperationMetadata, TracedOperation
+from gaspatchio.frame.tracing import append_operation_to_graph, log_query_plan
 
 
 class MockActuarialFrame:
@@ -145,7 +145,7 @@ class TestAppendOperationToGraph:
         assert enabled_time < 2.0  # Should complete in under 2 seconds
         assert len(frame._computation_graph) == 100
 
-    @patch("gaspatchio_core.frame.tracing.logger")
+    @patch("gaspatchio.frame.tracing.logger")
     def test_logging_includes_source_location(self, mock_logger):
         """Test that logging includes source location information."""
         frame = MockActuarialFrame(tracing=True)
@@ -206,8 +206,8 @@ class TestAppendOperationToGraph:
 class TestLogQueryPlan:
     """Test the updated log_query_plan function with backward compatibility."""
 
-    @patch("gaspatchio_core.frame.tracing.get_default_verbose", return_value=True)
-    @patch("gaspatchio_core.frame.tracing.logger")
+    @patch("gaspatchio.frame.tracing.get_default_verbose", return_value=True)
+    @patch("gaspatchio.frame.tracing.logger")
     def test_log_legacy_tuple_format(self, mock_logger, mock_verbose):
         """Test logging with legacy tuple format."""
         operations = [
@@ -223,8 +223,8 @@ class TestLogQueryPlan:
         assert any("Step 1: col1 = expr1" in call for call in trace_calls)
         assert any("Step 2: col2 = expr2" in call for call in trace_calls)
 
-    @patch("gaspatchio_core.frame.tracing.get_default_verbose", return_value=True)
-    @patch("gaspatchio_core.frame.tracing.logger")
+    @patch("gaspatchio.frame.tracing.get_default_verbose", return_value=True)
+    @patch("gaspatchio.frame.tracing.logger")
     def test_log_traced_operation_format(self, mock_logger, mock_verbose):
         """Test logging with new TracedOperation format."""
         metadata1 = OperationMetadata(
@@ -255,8 +255,8 @@ class TestLogQueryPlan:
         assert any("Source: test1.py:10" in call for call in trace_calls)
         assert any("Source: test2.py:20" in call for call in trace_calls)
 
-    @patch("gaspatchio_core.frame.tracing.get_default_verbose", return_value=True)
-    @patch("gaspatchio_core.frame.tracing.logger")
+    @patch("gaspatchio.frame.tracing.get_default_verbose", return_value=True)
+    @patch("gaspatchio.frame.tracing.logger")
     def test_log_mixed_formats(self, mock_logger, mock_verbose):
         """Test logging with mixed tuple and TracedOperation formats."""
         metadata = OperationMetadata(
@@ -279,8 +279,8 @@ class TestLogQueryPlan:
         assert any("Step 2: new_col = new_expr" in call for call in trace_calls)
         assert any("Source: test.py:15" in call for call in trace_calls)
 
-    @patch("gaspatchio_core.frame.tracing.get_default_verbose", return_value=False)
-    @patch("gaspatchio_core.frame.tracing.logger")
+    @patch("gaspatchio.frame.tracing.get_default_verbose", return_value=False)
+    @patch("gaspatchio.frame.tracing.logger")
     def test_no_logging_when_verbose_disabled(self, mock_logger, mock_verbose):
         """Test that nothing is logged when verbose mode is disabled."""
         operations = [("col1", "expr1")]
@@ -291,8 +291,8 @@ class TestLogQueryPlan:
         # Should not call logger.trace when verbose is disabled
         mock_logger.trace.assert_not_called()
 
-    @patch("gaspatchio_core.frame.tracing.get_default_verbose", return_value=True)
-    @patch("gaspatchio_core.frame.tracing.logger")
+    @patch("gaspatchio.frame.tracing.get_default_verbose", return_value=True)
+    @patch("gaspatchio.frame.tracing.logger")
     def test_query_plan_explanation_error_handling(self, mock_logger, mock_verbose):
         """Test handling of errors during query plan explanation."""
         # Create a frame that will cause explain() to fail
@@ -307,8 +307,8 @@ class TestLogQueryPlan:
         warning_call = mock_logger.warning.call_args[0][0]
         assert "Could not explain query plan" in warning_call
 
-    @patch("gaspatchio_core.frame.tracing.get_default_verbose", return_value=True)
-    @patch("gaspatchio_core.frame.tracing.logger")
+    @patch("gaspatchio.frame.tracing.get_default_verbose", return_value=True)
+    @patch("gaspatchio.frame.tracing.logger")
     def test_operation_without_metadata(self, mock_logger, mock_verbose):
         """Test handling of TracedOperation without metadata."""
         # Create TracedOperation with None metadata
@@ -405,7 +405,7 @@ class TestIntegrationScenarios:
         # Mock capture_source_context to raise an exception
         # Patch at the import location (where it's used), not where it's defined
         with patch(
-            "gaspatchio_core.frame.tracing.capture_source_context",
+            "gaspatchio.frame.tracing.capture_source_context",
             side_effect=Exception("Metadata capture failed"),
         ):
             # The exception should propagate since we want to know about failures

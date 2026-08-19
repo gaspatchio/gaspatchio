@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# ABOUTME: Tests for gaspatchio_core functions module
+# ABOUTME: Tests for gaspatchio functions module
 # ABOUTME: Contains test modules for conditional expressions and vector operations
-"""Tests for gaspatchio_core functions module."""
+"""Tests for gaspatchio functions module."""

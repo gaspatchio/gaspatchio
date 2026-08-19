@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import polars as pl
 
-from gaspatchio_core.rollforward._ops import DeductNAR, Grow, GrowCapped, Op
-from gaspatchio_core.rollforward._refs import StateRef
+from gaspatchio.rollforward._ops import DeductNAR, Grow, GrowCapped, Op
+from gaspatchio.rollforward._refs import StateRef
 
 
 class TestGrow:

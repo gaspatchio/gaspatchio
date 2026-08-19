@@ -16,7 +16,7 @@ from evals.oracles.numeric import grade_numeric
 FIXTURE = Path(__file__).resolve().parent / "_fixtures" / "min_points.parquet"
 
 MATCHES = """```python
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def main(af: ActuarialFrame) -> ActuarialFrame:
@@ -26,7 +26,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 """
 
 WRONG = """```python
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def main(af: ActuarialFrame) -> ActuarialFrame:

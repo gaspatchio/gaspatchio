@@ -7,15 +7,15 @@ from typing import Any
 import polars as pl
 import pytest
 
-from gaspatchio_core.accessors.base import BaseColumnAccessor, BaseFrameAccessor
+from gaspatchio.accessors.base import BaseColumnAccessor, BaseFrameAccessor
 
-# from gaspatchio_core.column.proxy import ColumnProxy, ExpressionProxy # OLD
-from gaspatchio_core.column.column_proxy import ColumnProxy  # NEW
-from gaspatchio_core.column.expression_proxy import ExpressionProxy  # NEW
+# from gaspatchio.column.proxy import ColumnProxy, ExpressionProxy # OLD
+from gaspatchio.column.column_proxy import ColumnProxy  # NEW
+from gaspatchio.column.expression_proxy import ExpressionProxy  # NEW
 
 # Import the core components and the registry/decorator
-from gaspatchio_core.frame.base import ActuarialFrame
-from gaspatchio_core.frame.registry import _ACCESSOR_REGISTRY, register_accessor
+from gaspatchio.frame.base import ActuarialFrame
+from gaspatchio.frame.registry import _ACCESSOR_REGISTRY, register_accessor
 
 
 # Dummy accessor classes for testing - now decorated

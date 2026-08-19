@@ -10,11 +10,11 @@ import json
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame, set_default_mode
-from gaspatchio_core.column.shape import kind_from_dtype, shape_from_dtype
-from gaspatchio_core.frame.graph.calc_graph import GraphExporter
-from gaspatchio_core.frame.graph.graph_builder import CalculationGraph
-from gaspatchio_core.frame.graph.graph_models import DataSource
+from gaspatchio import ActuarialFrame, set_default_mode
+from gaspatchio.column.shape import kind_from_dtype, shape_from_dtype
+from gaspatchio.frame.graph.calc_graph import GraphExporter
+from gaspatchio.frame.graph.graph_builder import CalculationGraph
+from gaspatchio.frame.graph.graph_models import DataSource
 
 
 class TestDtypeHelpers:

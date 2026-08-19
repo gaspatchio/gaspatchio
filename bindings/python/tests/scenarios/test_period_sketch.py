@@ -9,8 +9,8 @@ import math
 
 import polars as pl
 
-from gaspatchio_core.scenarios._period_sketch import build_period_sketches
-from gaspatchio_core.scenarios._sketch import SignedSketch
+from gaspatchio.scenarios._period_sketch import build_period_sketches
+from gaspatchio.scenarios._sketch import SignedSketch
 
 _RA = 1e-4
 
@@ -70,7 +70,7 @@ def test_from_binned_equals_per_value_build() -> None:
 import numpy as np
 import polars as pl
 
-from gaspatchio_core.scenarios._period_sketch import (
+from gaspatchio.scenarios._period_sketch import (
     PeriodCTE,
     PeriodMedian,
     PeriodQuantile,
@@ -141,7 +141,7 @@ def test_period_cte_upper_tail() -> None:
 
 
 def test_run_aggregated_with_period_quantile_matches_full() -> None:
-    from gaspatchio_core import ActuarialFrame, run_aggregated
+    from gaspatchio import ActuarialFrame, run_aggregated
 
     def model(af: ActuarialFrame) -> ActuarialFrame:
         df = af._df.with_columns(  # noqa: SLF001
@@ -156,7 +156,7 @@ def test_run_aggregated_with_period_quantile_matches_full() -> None:
 
 
 def test_period_quantile_top_level_export() -> None:
-    import gaspatchio_core as gsp
+    import gaspatchio as gsp
 
     for name in ("PeriodQuantile", "PeriodMedian", "PeriodCTE"):
         assert hasattr(gsp, name)
@@ -164,7 +164,7 @@ def test_period_quantile_top_level_export() -> None:
 
 def test_period_sketch_batch_reduce_over_partitions() -> None:
     """Sketch reduce partitions into {partition: list[SignedSketch]} (#over)."""
-    from gaspatchio_core.scenarios._period_sketch import PeriodMedian
+    from gaspatchio.scenarios._period_sketch import PeriodMedian
 
     frame = pl.DataFrame(
         {"product": ["A", "A", "B"], "cf": [[1.0, 3.0], [5.0, 7.0], [100.0, 200.0]]},

@@ -11,11 +11,11 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core.rollforward._engine_binding import derive_engine_binding
-from gaspatchio_core.rollforward._ir import IR, State
-from gaspatchio_core.rollforward._ops import Add, Apply, Floor, Grow
-from gaspatchio_core.rollforward._refs import StateRef
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.rollforward._engine_binding import derive_engine_binding
+from gaspatchio.rollforward._ir import IR, State
+from gaspatchio.rollforward._ops import Add, Apply, Floor, Grow
+from gaspatchio.rollforward._refs import StateRef
+from gaspatchio.schedule import Schedule
 
 
 @pytest.fixture

@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 # Test imports - Keep these as they might be needed for remaining tests or future ones
-from gaspatchio_core import ColumnProxy, ExpressionProxy
+from gaspatchio import ColumnProxy, ExpressionProxy
 
 
 # Mock ActuarialFrame - Keep fixture definitions here for now

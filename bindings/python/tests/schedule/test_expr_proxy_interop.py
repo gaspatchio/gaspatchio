@@ -16,8 +16,8 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, Schedule
-from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
+from gaspatchio import ActuarialFrame, Schedule
+from gaspatchio.column.proxy_aware_expr import ProxyAwareExpr
 
 
 def _jagged() -> Schedule:

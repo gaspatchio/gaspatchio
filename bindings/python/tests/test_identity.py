@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from gaspatchio_core._identity import canonical_bytes, source_sha_of
+from gaspatchio._identity import canonical_bytes, source_sha_of
 
 
 def test_canonical_bytes_sorts_keys():

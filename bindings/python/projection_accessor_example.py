@@ -276,7 +276,7 @@ Benefits:
 - Consistent with Polars when/then/otherwise API
 - Can be extended with more condition types
 
-This can be integrated into the gaspatchio_core.accessors.projection module.
+This can be integrated into the gaspatchio.accessors.projection module.
 """
     )
 

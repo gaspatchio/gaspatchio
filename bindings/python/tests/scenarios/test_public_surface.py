@@ -9,8 +9,8 @@ from __future__ import annotations
 
 
 def test_v02_surface_importable() -> None:
-    """All v0.2 public names must import cleanly from gaspatchio_core.scenarios."""
-    from gaspatchio_core.scenarios import (
+    """All v0.2 public names must import cleanly from gaspatchio.scenarios."""
+    from gaspatchio.scenarios import (
         CTE,
         AdditiveShock,
         Aggregator,
@@ -90,15 +90,15 @@ def test_v02_surface_importable() -> None:
 
 def test_baseaggregator_is_public() -> None:
     """Custom-aggregator authors can import BaseAggregator from the public namespace."""
-    from gaspatchio_core.scenarios import BaseAggregator
-    from gaspatchio_core.scenarios._aggregators import _BaseAggregator
+    from gaspatchio.scenarios import BaseAggregator
+    from gaspatchio.scenarios._aggregators import _BaseAggregator
 
     assert BaseAggregator is _BaseAggregator
 
 
 def test_v01_names_removed() -> None:
     """v0.1 names must NOT be importable - clean break per GSP-101 §10."""
-    import gaspatchio_core.scenarios as ns
+    import gaspatchio.scenarios as ns
 
     for retired in (
         "MultiAgg",

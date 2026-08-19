@@ -11,9 +11,9 @@ import math
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.curves import Curve
-from gaspatchio_core.curves._svensson import (
+from gaspatchio import ActuarialFrame
+from gaspatchio.curves import Curve
+from gaspatchio.curves._svensson import (
     fit_svensson,
     svensson_spot,
     svensson_spot_cc,

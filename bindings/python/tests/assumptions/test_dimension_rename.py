@@ -14,9 +14,9 @@ and lookups failed with "No value provided for key column '<source name>'".
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.assumptions._dimensions import DataDimension
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import Table
+from gaspatchio.assumptions._dimensions import DataDimension
 
 
 def test_renamed_scalar_dimension_lookup() -> None:
@@ -102,7 +102,7 @@ def test_explicit_data_dimension_without_rename_to_uses_dict_key() -> None:
 
 def test_with_shock_preserves_renamed_dimensions() -> None:
     """Shock reconstruction keeps the lookup vocabulary of renamed dims."""
-    from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+    from gaspatchio.scenarios.shocks import MultiplicativeShock
 
     table = Table(
         name="rename_shock",
@@ -120,7 +120,7 @@ def test_with_shock_preserves_renamed_dimensions() -> None:
 
 def test_with_shock_preserves_explicit_rename_to() -> None:
     """Explicit rename_to survives shock reconstruction; lookups speak YOUR name."""
-    from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+    from gaspatchio.scenarios.shocks import MultiplicativeShock
 
     table = Table(
         name="rename_shock_explicit",
@@ -136,7 +136,7 @@ def test_with_shock_preserves_explicit_rename_to() -> None:
 
 def test_from_shocks_preserves_explicit_rename_to() -> None:
     """from_shocks reconstruction (incl. the no-shock branch) keeps renamed dims."""
-    from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+    from gaspatchio.scenarios.shocks import MultiplicativeShock
 
     table = Table(
         name="rename_from_shocks",
@@ -161,8 +161,8 @@ def test_from_shocks_preserves_explicit_rename_to() -> None:
 def test_melt_dimension_named_differently_from_dict_key() -> None:
     """A MeltDimension whose `name` differs from its dict key: lookups and
     shock reconstruction both speak the dict key."""
-    from gaspatchio_core.assumptions import MeltDimension
-    from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+    from gaspatchio.assumptions import MeltDimension
+    from gaspatchio.scenarios.shocks import MultiplicativeShock
 
     table = Table(
         name="rename_melt",

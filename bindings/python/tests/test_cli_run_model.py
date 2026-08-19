@@ -12,12 +12,12 @@ import polars as pl
 import pytest
 from typer.testing import CliRunner
 
-from gaspatchio_core.cli import app
+from gaspatchio.cli import app
 
 runner = CliRunner()
 
 MODEL_SRC = """
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def main(af: ActuarialFrame) -> ActuarialFrame:
@@ -90,7 +90,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 @dataclass
@@ -133,7 +133,7 @@ def test_load_model_failure_leaves_no_broken_module_registered(tmp_path: Path):
     """
     import sys
 
-    from gaspatchio_core.runner import load_model_from_path
+    from gaspatchio.runner import load_model_from_path
 
     model_path = tmp_path / "broken.py"
     model_path.write_text("raise RuntimeError('boom at import time')\n")

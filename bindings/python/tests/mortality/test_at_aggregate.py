@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
-from gaspatchio_core.mortality._mortality_table import MortalityTable
+from gaspatchio.mortality._mortality_table import MortalityTable
 
 if TYPE_CHECKING:
-    from gaspatchio_core.assumptions import Table
+    from gaspatchio.assumptions import Table
 
 
 class TestAggregateAt:

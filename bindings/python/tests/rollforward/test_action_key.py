@@ -10,15 +10,15 @@ from datetime import date
 
 import polars as pl
 
-from gaspatchio_core.rollforward._action_key import (
+from gaspatchio.rollforward._action_key import (
     HermeticContext,
     action_key,
     gather_typed_input_shas,
 )
-from gaspatchio_core.rollforward._ir import IR, State
-from gaspatchio_core.rollforward._ops import Floor
-from gaspatchio_core.rollforward._refs import StateRef
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.rollforward._ir import IR, State
+from gaspatchio.rollforward._ops import Floor
+from gaspatchio.rollforward._refs import StateRef
+from gaspatchio.schedule import Schedule
 
 
 class TestActionKeyFormat:

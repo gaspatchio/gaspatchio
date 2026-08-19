@@ -12,13 +12,13 @@ engine runs them over millions of model points.
 pip install gaspatchio        # or:  uv pip install gaspatchio
 ```
 
-Then `import gaspatchio_core`. For a source/dev build, see [Building from source](#building-from-source).
+Then `import gaspatchio`. For a source/dev build, see [Building from source](#building-from-source).
 
 ## Quick start
 
 ```python
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import Table
 
 # 1. Load assumption tables (registered + optimized by the Rust engine)
 mortality = Table(
@@ -79,7 +79,7 @@ for local benchmarking, **not** for distributable packages or CI builds.
 
 ```bash
 uv run pytest                                                  # tests + docstring-example validation
-uv run python -m mypy.stubtest gaspatchio_core --allowlist stubtest-allowlist.txt --mypy-config-file mypy-stubtest.ini
+uv run python -m mypy.stubtest gaspatchio --allowlist stubtest-allowlist.txt --mypy-config-file mypy-stubtest.ini
 ```
 
 Public-API docstrings carry examples validated against their output. The docstring/style tooling

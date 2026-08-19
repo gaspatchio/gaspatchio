@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
-from gaspatchio_core import MortalityTable
+from gaspatchio import MortalityTable
 
 if TYPE_CHECKING:
-    from gaspatchio_core.assumptions import Table
+    from gaspatchio.assumptions import Table
 
 
 class TestUlWithCoiPattern:

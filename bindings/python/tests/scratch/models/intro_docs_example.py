@@ -13,7 +13,7 @@ Run with: python -m tests.scratch.models.intro_docs_example
 """
 
 import polars as pl
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 # Configure Polars for better display
 pl.Config.set_tbl_cols(-1)

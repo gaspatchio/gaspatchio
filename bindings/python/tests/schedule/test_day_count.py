@@ -11,7 +11,7 @@ from datetime import date
 
 import pytest
 
-from gaspatchio_core.schedule._day_count import (
+from gaspatchio.schedule._day_count import (
     Actual360,
     Actual365Fixed,
     ActualActualISDA,
@@ -224,7 +224,7 @@ class TestDayCountRegistry:
 
     def test_resolve_by_name_returns_instance(self) -> None:
         """day_count_from_name returns the correct DayCount instance for each name."""
-        from gaspatchio_core.schedule._day_count import day_count_from_name
+        from gaspatchio.schedule._day_count import day_count_from_name
 
         assert day_count_from_name("OneTwelfth") == OneTwelfth()
         assert day_count_from_name("Actual365Fixed") == Actual365Fixed()
@@ -234,7 +234,7 @@ class TestDayCountRegistry:
 
     def test_unknown_name_raises_with_suggestions(self) -> None:
         """Unknown name raises ValueError with a close-match suggestion."""
-        from gaspatchio_core.schedule._day_count import day_count_from_name
+        from gaspatchio.schedule._day_count import day_count_from_name
 
         with pytest.raises(
             ValueError,

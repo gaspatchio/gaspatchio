@@ -8,8 +8,8 @@
 
 from __future__ import annotations
 
-from gaspatchio_core.api.models import DocResult, KnowledgeResult
-from gaspatchio_core.api.postprocess import dedupe_results, truncate_result
+from gaspatchio.api.models import DocResult, KnowledgeResult
+from gaspatchio.api.postprocess import dedupe_results, truncate_result
 
 PREAMBLE = (
     "The purpose of this practice note is to provide actuaries with background "

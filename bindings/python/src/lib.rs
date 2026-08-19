@@ -21,7 +21,7 @@ fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
         Err(e) => debug!("env_logger already initialized or error: {}", e),
     }
 
-    info!("Initializing gaspatchio_core");
+    info!("Initializing gaspatchio");
     debug!("Debug logging enabled");
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 

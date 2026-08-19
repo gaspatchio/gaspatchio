@@ -11,7 +11,7 @@ import pytest
 
 # CORRECTED: Import init_logging from _internal temporarily
 try:
-    from gaspatchio_core._internal import init_logging
+    from gaspatchio._internal import init_logging
 except ImportError:
     print("Warning: Could not import init_logging from Rust bindings.")
 

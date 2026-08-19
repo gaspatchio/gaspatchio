@@ -34,7 +34,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 class CpuMonitor:
@@ -195,7 +195,7 @@ def bench_l4(mp_path: Path) -> dict:
 
 def bench_l5(mp_path: Path) -> dict:
     """Benchmark L5 model (with 3 scenarios = 3x effective rows)."""
-    from gaspatchio_core.scenarios import with_scenarios
+    from gaspatchio.scenarios import with_scenarios
 
     mp = pl.read_parquet(mp_path)
     scenarios = ["BASE", "UP", "DOWN"]

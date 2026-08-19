@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 import polars as pl
-from gaspatchio_core import ActuarialFrame, with_scenarios
+from gaspatchio import ActuarialFrame, with_scenarios
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))

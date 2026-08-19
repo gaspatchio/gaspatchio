@@ -10,7 +10,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from gaspatchio_core.tutorial_cli import tutorial_app
+from gaspatchio.tutorial_cli import tutorial_app
 
 runner = CliRunner()
 

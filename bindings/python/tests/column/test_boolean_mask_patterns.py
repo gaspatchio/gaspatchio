@@ -7,7 +7,7 @@
 """Tests for boolean mask patterns: list == scalar and list * bool (GSP-12)."""
 
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 class TestListComparisonToScalar:

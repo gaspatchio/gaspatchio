@@ -403,7 +403,7 @@ You can also import and use the model directly:
 
 ```python
 import polars as pl
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 from appliedlife.model_applied_life import main
 
 # Load model points

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from gaspatchio_core.rollforward._refs import PointRef, StateRef
+from gaspatchio.rollforward._refs import PointRef, StateRef
 
 
 class TestStateRef:

@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from gaspatchio_core.column.namespaces import ColumnProxy, ExpressionProxy
+    from gaspatchio.column.namespaces import ColumnProxy, ExpressionProxy
 
     # Define a type alias for parent proxy types
     ParentProxyType = ColumnProxy | ExpressionProxy
@@ -39,7 +39,7 @@ class DtNamespaceProxy:
             ```python
             import datetime
             # import polars as pl # Removed as pl is not used
-            from gaspatchio_core import ActuarialFrame
+            from gaspatchio import ActuarialFrame
 
             af = ActuarialFrame({
                 "policy_id": ["P001", "P002", "P003"],
@@ -72,7 +72,7 @@ class DtNamespaceProxy:
             ```python
             import datetime
             import polars as pl # pl is used for pl.List and pl.Date
-            from gaspatchio_core import ActuarialFrame
+            from gaspatchio import ActuarialFrame
 
             data = {
                 "policy_id": ["C003", "D004"],

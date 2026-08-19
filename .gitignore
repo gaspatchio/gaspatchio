@@ -45,12 +45,12 @@ htmlcov/
 
 # Documentation
 docs/_build/
-/src/gaspatchio_core/__pycache__/__init__.cpython-313.pyc
-/src/gaspatchio_core/__pycache__/utils.cpython-313.pyc
-/src/gaspatchio_core/_internal.cpython-313-darwin.so
+/src/gaspatchio/__pycache__/__init__.cpython-313.pyc
+/src/gaspatchio/__pycache__/utils.cpython-313.pyc
+/src/gaspatchio/_internal.cpython-313-darwin.so
 /bindings/python/.pypirc
-/bindings/python/gaspatchio_core/_internal.cpython-312-darwin.so
-/bindings/python/gaspatchio_core/_internal.cpython-313-darwin.so
+/bindings/python/gaspatchio/_internal.cpython-312-darwin.so
+/bindings/python/gaspatchio/_internal.cpython-313-darwin.so
 /bindings/python/jobs/*/reconcillation
 /bindings/python/jobs/*/*.xlsm
 /bindings/python/jobs/*/docs
@@ -83,8 +83,8 @@ ref/34-example/p2/*/assumptions/
 # Scenario audit sidecars + tutorial run outputs (runtime artifacts, not source)
 gaspatchio_audit/
 bindings/python/gaspatchio_audit/
-bindings/python/gaspatchio_core/tutorials/**/report/
-bindings/python/gaspatchio_core/tutorials/**/gaspatchio_audit/
+bindings/python/gaspatchio/tutorials/**/report/
+bindings/python/gaspatchio/tutorials/**/gaspatchio_audit/
 
 # Local dogfooding / stress scratch dirs (probes & generated outputs, never shipped)
 /bindings/python/tests/scratch/gsp*/

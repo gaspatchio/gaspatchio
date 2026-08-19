@@ -14,7 +14,7 @@ Run with: uv run python tests/scratch/conditional_premium_holiday.py
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 # Sample data: Three policies with monthly premiums
 data = {

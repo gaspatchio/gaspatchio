@@ -22,7 +22,7 @@ on:
     branches:
       - main
     paths:
-      - "bindings/python/gaspatchio_core/**"
+      - "bindings/python/gaspatchio/**"
 
 jobs:
   trigger:

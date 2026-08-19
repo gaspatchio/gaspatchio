@@ -109,7 +109,7 @@ def run_gaspatchio_model() -> pl.DataFrame:
     is controlled by constants in model_applied.py.
     """
     from appliedlife.model_applied import main
-    from gaspatchio_core import ActuarialFrame
+    from gaspatchio import ActuarialFrame
 
     mp_path = script_dir.parent / "model_points.parquet"
 

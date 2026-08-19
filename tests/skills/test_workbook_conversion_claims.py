@@ -140,8 +140,8 @@ def test_named_api_surface_exists() -> None:
     The prose names round_charge=, .clip(), and .round(); pin each so the
     skill cannot outlive a rename.
     """
-    from gaspatchio_core.column.column_proxy import ColumnProxy
-    from gaspatchio_core.rollforward._builder import _StateHandle
+    from gaspatchio.column.column_proxy import ColumnProxy
+    from gaspatchio.rollforward._builder import _StateHandle
 
     for op_name in ("charge", "grow", "deduct_nar"):
         signature = inspect.signature(getattr(_StateHandle, op_name))

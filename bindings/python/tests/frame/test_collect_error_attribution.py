@@ -19,7 +19,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 @pytest.fixture(autouse=True)
@@ -219,7 +219,7 @@ def test_attribution_appears_exactly_once() -> None:
 
 def test_run_to_parquet_names_the_offending_column(tmp_path: Path) -> None:
     """The at-scale batched path was the reported pain case — cover it."""
-    from gaspatchio_core.scenarios._spill import run_to_parquet
+    from gaspatchio.scenarios._spill import run_to_parquet
 
     def model(af: ActuarialFrame) -> ActuarialFrame:
         af.mismatched = af.six * af.three
