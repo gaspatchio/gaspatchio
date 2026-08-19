@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787087148959,
+  "lastUpdate": 1787114274049,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks (Windows)": [
@@ -6382,6 +6382,130 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 3907.3,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "88f8f1dcf72978e8cc1d963517c1d48b8f185e9a",
+          "message": "chore(deps): bump ruff 0.11.12 → 0.16.3, with the lockfile (#144)\n\n* chore(deps): bump ruff 0.11.12 -> 0.16.3, with the lockfile\n\nReplaces the ruff half of dependabot #124, which died in CI at uv sync\n--locked because the bump landed without a lockfile update. The pip\ngroup also bundled polars 1.42.1 -> 1.43.2 into the same PR — polars is\nthe engine under everything and gets its own deliberately-tested pass\n(with cargo #1), so the group PR is being split rather than merged.\n\nVerified under 0.16.3: uv sync --locked clean; skills suite 144 passed;\nthe 5 excel.py doctest failures in the local --doctest-modules\ninvocation are byte-identical on main under the old pin (pre-existing,\ndate-dependent, not the bump). Formatter drift measured, not applied:\n0.16.3 wants to reformat 20 more files and reports ~21 new findings on\nthe existing debt baseline — CI does not gate ruff, and that churn\nbelongs to a deliberate cleanup commit, not a version bump.\n\n* fix(docstrings): pin the snippet gate's rule set — it floated on ruff defaults\n\nThe docstring harness lints every example with 'ruff check --isolated',\nwhich inherits whichever rule set the installed ruff defaults to. Ruff\n0.16 added import-sorting to its defaults, so the version bump turned\n70 examples red in CI — I001 on two-line import blocks — with no code\nhaving changed. Same species as the #137 lesson: state a gate reads\nmust be written on the gate's own schedule, and a dependency's default\nselect is someone else's schedule.\n\nThe invocation now pins --select E4,E7,E9,F — the correctness rules the\ngate has always actually enforced (syntax errors, undefined names,\nunused imports). Import-order style in examples becomes a deliberate\nchoice for a future cleanup, not a side effect of an upgrade. A new\nharness test locks this: an unsorted-but-valid import block must lint\nclean, red-first verified under 0.16.3 before the pin.\n\nVerified after: 15 harness tests green; 74 examples across the\npreviously-failing files (date.py, excel_functions/, projection.py)\ngreen under 0.16.3.",
+          "timestamp": "2026-08-19T16:15:25+12:00",
+          "tree_id": "10999482167a0fd61b8b7ed7bfa69410e5ecafb7",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/88f8f1dcf72978e8cc1d963517c1d48b8f185e9a"
+        },
+        "date": 1787114270949,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 3.63,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 202.7,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 2754.8,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 39.958,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 556.6,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 2502.6,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-wall",
+            "value": 523.651,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-rss",
+            "value": 599,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-throughput",
+            "value": 1909.7,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 24.678,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 878.4,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 4052.2,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 260.676,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 4820.5,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 3836.2,
             "unit": "scenario-points/sec"
           },
           {
