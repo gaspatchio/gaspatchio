@@ -509,16 +509,20 @@ af = ActuarialFrame({"issue_date": [d]})""",
 
 
 def test_pinned_rule_families_fire_on_violations():
-    """Every family the gate promises (E4, E7, E9, F) actually fires.
+    """The selectable families the gate promises (E4, E7, F) actually fire.
 
     The floating-defaults test proves style rules cannot leak in; this one
     proves a trimmed or typoed select cannot silently stop enforcing the
     families the gate claims — the rest of the suite would stay green.
+
+    E9 has no firing case here on purpose: ruff's parser diagnostics are
+    select-independent (0.16.3 emits identical invalid-syntax diagnostics
+    with and without E9), so no snippet can discriminate its presence.
+    The companion test below pins how those diagnostics surface instead.
     """
     cases = [
         ("E401", "import os, json\nprint(os.sep, json.dumps({}))"),
         ("E711", "x = 1\nprint(x == None)"),
-        ("E999", "def broken(:\n    pass"),
         ("F821", "print(undefined_name)"),
     ]
     for expected_code, snippet in cases:
@@ -536,3 +540,33 @@ def test_pinned_rule_families_fire_on_violations():
             f"{expected_code} did not fire — the pinned select has lost "
             f"one of its promised rule families: {issues}"
         )
+
+
+def test_syntax_errors_surface_with_the_e999_prefix():
+    """Malformed snippets surface as E999-prefixed issues, whatever the select.
+
+    This is the code-shape pin, not a select pin: the harness rewrites
+    ruff's syntax-error code to the stable "E999" prefix that
+    test_lint_non_python_snippet and error-reading tooling key on, and
+    that rewrite matches literal code strings. Ruff has already changed
+    the shape once — 0.11.12 emits ``code: null`` for the same input,
+    which the rewrite misses ("None: SyntaxError: ..."); 0.16.3 emits
+    "invalid-syntax", which it catches. This test goes red at the version
+    bump that changes the shape again, instead of as a confusing
+    downstream failure.
+    """
+    example = DocstringCodeExample(
+        snippet="def broken(:\n    pass",
+        output=None,
+        object_context="test_module.syntax_error_surfacing",
+        example_index=0,
+        raw_source_location=("/fake/violations.py", 5),
+    )
+    issues = example.lint()
+    if any("Linting skipped" in issue for issue in issues):
+        pytest.skip(f"ruff unavailable to the harness: {issues}")
+    assert issues, "a malformed snippet must produce at least one issue"
+    assert any(issue.startswith("E999:") for issue in issues), (
+        "Syntax diagnostics lost the E999 prefix — ruff's syntax-error "
+        f"code shape changed and the harness rewrite missed it: {issues}"
+    )
