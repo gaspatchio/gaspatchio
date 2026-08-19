@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787114072026,
+  "lastUpdate": 1787115859809,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks": [
@@ -6552,6 +6552,130 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 4423.9,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "942513b92feb2ac449482f9852208900d7fe3660",
+          "message": "feat(projection): cumulative_survival accepts survival-shaped input (#143)\n\nA reserving workbook hands you a combined persistency px = (1-qx)(1-lapse)\nfar more often than a bare decrement rate — and the only way to feed it\nto cumulative_survival was to invert it so the method could undo the\ninversion. 1-(1-px) is exact only while px >= 0.5 (Sterbenz); a VM-20\nshock-lapse year sits at px = 0.199, where the round trip loses bits\nthat a strict tie-out sees (vm20 room: 2.1e-17 vs the workbook's cached\nvalues where the direct product is 0.0e0). The error is tiny and\navoidable for free — and it lived in the method whose name is exactly\nwhat a reserving model reaches for.\n\ncumulative_survival(from_survival=True) cumulates the factors directly,\nno inversion anywhere, list and scalar paths both; the timing parameters\nmean the same thing in both shapes. The docstring documents the\ninversion hazard next to the timing notes (per the #42 precedent that\nadjacent traps belong in the method's own contract) and carries an\nexecutable example whose output table is identical to the rate-shaped\nexample — same numbers, honest input shape.\n\nServes Meet-you-where-you-are (accept the shape the source hands you)\nand Audit-by-default (bit-exact against the gold standard where the\nround trip is not). Closes #118.\n\nVerified: 65 projection tests + 42 docstring examples green; stubtest\nclean across 266 modules; ruff/mypy/format deltas zero vs baseline\n(1/51/4 findings and 4 mypy errors are main's pre-existing debt).",
+          "timestamp": "2026-08-19T16:45:12+12:00",
+          "tree_id": "9f272ed53a46bb148e179edcb2b943a231e23289",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/942513b92feb2ac449482f9852208900d7fe3660"
+        },
+        "date": 1787115857593,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 3.519,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 172.7,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 2841.5,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 32.22,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 790.4,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 3103.7,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-wall",
+            "value": 487.298,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-rss",
+            "value": 845.9,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-throughput",
+            "value": 2052.1,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 22.854,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 1127,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 4375.6,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 225.584,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 5888.3,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 4432.9,
             "unit": "scenario-points/sec"
           },
           {
