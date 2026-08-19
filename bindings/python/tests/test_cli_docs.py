@@ -329,6 +329,7 @@ class TestDocsAnswerFallback:
         note = output.get("note") or ""
         assert "--answer" in note, "note must name the flag to retry"
         assert "search results" in note
+        assert "Search still works" in result.stderr
         mock_client.search_docs.assert_called_once()
 
     @patch("gaspatchio_core.cli.KnowledgeAPIClient")
@@ -360,3 +361,27 @@ class TestDocsAnswerFallback:
 
         assert result.exit_code == 1
         mock_client.search_docs.assert_not_called()
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_no_search_promise_when_fallback_search_also_fails(self, mock_client_class):
+        """The notice must not announce search results that never arrive.
+
+        When /answer 5xxs and the fallback search then fails too, a notice
+        printed before the search would promise results the command cannot
+        deliver — contradicting the error that follows it.
+        """
+        mock_client = MagicMock()
+        mock_client.answer_docs.side_effect = APIConnectionError(
+            'API error: 500 - {"detail":"Internal server error."}',
+            status_code=500,
+        )
+        mock_client.search_docs.side_effect = APIConnectionError(
+            "API error: 500 - search is down too",
+            status_code=500,
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["docs", "ActuarialFrame", "--answer"])
+
+        assert result.exit_code == 1
+        assert "Search still works" not in result.stderr

@@ -1492,7 +1492,7 @@ def docs(
     """
     try:
         client = KnowledgeAPIClient()
-        fallback_note: str | None = None
+        fallback_status: int | None = None
         if answer:
             try:
                 result = client.answer_docs(
@@ -1507,8 +1507,7 @@ def docs(
                 # no status at all the whole API is unreachable: fail loudly.
                 if e.status_code is None or e.status_code < _HTTP_SERVER_ERROR:
                     raise
-                fallback_note = _answer_fallback_note(e.status_code)
-                _print_answer_fallback_notice(e.status_code)
+                fallback_status = e.status_code
             else:
                 print(result.model_dump_json(indent=2))
                 return
@@ -1524,8 +1523,14 @@ def docs(
             search = search.model_copy(
                 update={"results": kept, "deduplicated": dropped},
             )
-        if fallback_note is not None:
-            search = search.model_copy(update={"note": fallback_note})
+        if fallback_status is not None:
+            # The notice waits until the fallback search has succeeded —
+            # printed earlier it would promise results that a failed search
+            # then never delivers.
+            _print_answer_fallback_notice(fallback_status)
+            search = search.model_copy(
+                update={"note": _answer_fallback_note(fallback_status)},
+            )
         # Output JSON directly for LLM consumption
         print(search.model_dump_json(indent=2))
     except APIConnectionError as e:
@@ -1705,7 +1710,7 @@ def knowledge(
     """
     try:
         client = KnowledgeAPIClient()
-        fallback_note: str | None = None
+        fallback_status: int | None = None
         if answer:
             try:
                 result = client.answer_knowledge(
@@ -1723,8 +1728,7 @@ def knowledge(
                 # no status at all the whole API is unreachable: fail loudly.
                 if e.status_code is None or e.status_code < _HTTP_SERVER_ERROR:
                     raise
-                fallback_note = _answer_fallback_note(e.status_code)
-                _print_answer_fallback_notice(e.status_code)
+                fallback_status = e.status_code
             else:
                 print(result.model_dump_json(indent=2))
                 return
@@ -1743,8 +1747,14 @@ def knowledge(
             search = search.model_copy(
                 update={"results": kept, "deduplicated": dropped},
             )
-        if fallback_note is not None:
-            search = search.model_copy(update={"note": fallback_note})
+        if fallback_status is not None:
+            # The notice waits until the fallback search has succeeded —
+            # printed earlier it would promise results that a failed search
+            # then never delivers.
+            _print_answer_fallback_notice(fallback_status)
+            search = search.model_copy(
+                update={"note": _answer_fallback_note(fallback_status)},
+            )
         # Output JSON directly for LLM consumption
         print(search.model_dump_json(indent=2))
     except APIConnectionError as e:

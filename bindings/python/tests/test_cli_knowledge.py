@@ -435,4 +435,24 @@ class TestKnowledgeAnswerFallback:
         output = json.loads(result.stdout)
         assert output["results"]
         assert "--answer" in (output.get("note") or "")
+        assert "Search still works" in result.stderr
         mock_client.search_knowledge.assert_called_once()
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_no_search_promise_when_fallback_search_also_fails(self, mock_client_class):
+        """The notice must not announce search results that never arrive."""
+        mock_client = MagicMock()
+        mock_client.answer_knowledge.side_effect = APIConnectionError(
+            'API error: 500 - {"detail":"Internal server error."}',
+            status_code=500,
+        )
+        mock_client.search_knowledge.side_effect = APIConnectionError(
+            "API error: 500 - search is down too",
+            status_code=500,
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["knowledge", "net premium reserve", "--answer"])
+
+        assert result.exit_code == 1
+        assert "Search still works" not in result.stderr
