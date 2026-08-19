@@ -63,13 +63,13 @@ This document provides comprehensive guidelines for writing high-quality docstri
 5. **Executable Accuracy**: All examples MUST be executable and produce the exact output shown
 
 !!! danger "Critical: Executable Examples Required"
-    **All code examples will be executed by the CI/CD pipeline and MUST produce the exact output shown in the docstring.** Additionally, **all code is linted by the harness for correctness** — ruff with the pinned rule set `E4,E7,E9,F` (import errors, statement errors, syntax errors, pyflakes). Style rules (import sorting, formatting, line length) are deliberately NOT gated: a two-line example is no place for style verdicts, and the rule set is pinned so a ruff upgrade cannot silently widen it (PR #144). This means:
+    **All code examples will be executed by the CI/CD pipeline and MUST produce the exact output shown in the docstring.** Additionally, **all code is linted by the harness for correctness** — ruff with the pinned rule set `E4,E7,E9,F` (import statement form, statement errors, syntax errors, pyflakes). Style rules (import sorting, formatting, line length) are deliberately NOT gated: a two-line example is no place for style verdicts, and the rule set is pinned so a ruff upgrade cannot silently widen it (PR #144). This means:
     
     - Every code block must be fully runnable
-    - Code must be free of correctness errors (undefined names, broken imports, syntax)
+    - Code must be free of statically detectable errors (undefined names, unused imports, syntax)
+    - An import that does not *resolve* passes the lint — ruff never imports anything; the execution check is what catches it
     - Output blocks must show exact results (not approximations)
     - Data values must be realistic AND produce expected calculations
-    - Import statements must be correct and complete
     - No hypothetical or placeholder outputs allowed
     - Tidy, conventionally ordered imports are welcome — courtesy, not gate
 
@@ -517,7 +517,7 @@ def calculate_net_premium(self, mortality_rate: float, interest_rate: float) -> 
 
 !!! warning "Common Pitfalls to Avoid"
     - **Rounding Issues**: Don't round outputs manually - show what Polars actually produces
-    - **Linting Failures**: Undefined names, unused or broken imports, and syntax errors fail CI/CD; style violations do not — the gate is pinned to correctness rules
+    - **Linting Failures**: Undefined names, unused imports, and syntax errors fail the lint; an import that does not resolve passes the lint and fails the execution check. Style violations fail neither — the gate is pinned to correctness rules
     - **Import Order**: Conventional ordering (stdlib, third-party, local) is good practice but is NOT CI-gated
     - **Import Errors**: Always test imports in isolation
     - **Data Type Mismatches**: Ensure your input data types produce expected calculations
