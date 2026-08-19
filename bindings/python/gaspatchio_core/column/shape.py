@@ -48,6 +48,37 @@ def _max_shape(a: Shape, b: Shape) -> Shape:
     return "scalar"
 
 
+def shape_from_dtype(dtype: pl.DataType | None) -> Shape:
+    """Classify a resolved Polars dtype as scalar or list.
+
+    The dtype-only entry point for callers that hold a schema or probed
+    dtype rather than an expression (e.g. the calculation-graph exporter).
+    Lives here so the classification rule has exactly one home.
+    """
+    if dtype is None:
+        return "unknown"
+    if isinstance(dtype, pl.List):
+        return "list"
+    return "scalar"
+
+
+def kind_from_dtype(dtype: pl.DataType | None) -> Kind:
+    """Dtype-driven kind fallback for callers without an expression.
+
+    Boolean (or List<Boolean>) dtypes are boolean masks; anything else is
+    a value; an unresolvable dtype is unknown. Same mapping as
+    :func:`_kind_from_dtype`'s dtype branch, exposed for dtype-only
+    callers so the rule is not re-derived elsewhere.
+    """
+    if dtype is None:
+        return "unknown"
+    if dtype == pl.Boolean:
+        return "boolean_mask"
+    if isinstance(dtype, pl.List) and dtype.inner == pl.Boolean:
+        return "boolean_mask"
+    return "value"
+
+
 def _shape_from_schema(parent: ActuarialFrame | None, column_name: str) -> Shape:
     """Read shape from the parent frame's cached schema."""
     if parent is None:
@@ -55,12 +86,7 @@ def _shape_from_schema(parent: ActuarialFrame | None, column_name: str) -> Shape
     schema = getattr(parent, "_schema", None)
     if schema is None:
         return "unknown"
-    dtype = schema.get(column_name)
-    if dtype is None:
-        return "unknown"
-    if isinstance(dtype, pl.List):
-        return "list"
-    return "scalar"
+    return shape_from_dtype(schema.get(column_name))
 
 
 def resolve_shape(value: object, parent: ActuarialFrame | None) -> Shape:

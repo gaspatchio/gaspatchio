@@ -810,13 +810,14 @@ class ActuarialFrame:
             raise type(e)(msg) from e
         return self
 
-    def join(
+    def join(  # noqa: PLR0913 — mirrors pl.LazyFrame.join's own surface
         self,
         other: pl.DataFrame | pl.LazyFrame,
         on: str | list[str] | None = None,
         left_on: str | list[str] | None = None,
         right_on: str | list[str] | None = None,
         how: str = "left",
+        maintain_order: str | None = None,
     ) -> ActuarialFrame:
         """Join with another DataFrame without leaving the ActuarialFrame API.
 
@@ -846,6 +847,13 @@ class ActuarialFrame:
             Column name(s) on the right (other frame).
         how : str, default "left"
             Join type: "left", "inner", "outer", "cross".
+        maintain_order : str | None, default None
+            Row-order guarantee, passed through to Polars: "left" preserves
+            this frame's row order, "right" the other side's, "left_right" /
+            "right_left" both (primary side first). The default leaves order
+            unspecified — under lazy/streaming execution the engine may
+            reorder rows, so pass "left" when downstream logic depends on
+            model-point order rather than sorting afterwards.
 
         Returns
         -------
@@ -900,7 +908,12 @@ class ActuarialFrame:
 
         right = other.lazy() if isinstance(other, pl.DataFrame) else other
         self._df = self._df.join(
-            right, on=on, left_on=left_on, right_on=right_on, how=how
+            right,
+            on=on,
+            left_on=left_on,
+            right_on=right_on,
+            how=how,
+            maintain_order=maintain_order,
         )
         self._reset_attribution_window()
         self._schema = self._df.collect_schema()

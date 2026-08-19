@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio"
-version = "0.8.1"
+version = "0.8.2"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
@@ -55,7 +55,7 @@ dev = [
     # previously-clean examples). The pin states that ruff's version is part of
     # the test contract; uv.lock (tracked, installed with `uv sync --locked`)
     # is what makes every other dev dependency reproducible too — issue #33.
-    "ruff==0.11.12",
+    "ruff==0.16.3",
     "ty>=0.0.2",
     "types-PyYAML>=6.0",
     "xlsxwriter>=3.2.9",

@@ -198,3 +198,82 @@ class TestDocsCommand:
 
         assert result.exit_code == 1
         assert "API unavailable" in result.output
+
+
+class TestDocsPayloadTrimming:
+    """#130: per-result truncation with a snippet window by default."""
+
+    @staticmethod
+    def _hit(text: str) -> DocResult:
+        return DocResult(
+            text=text,
+            score=0.9,
+            content_type="overview",
+            source_file="rollforward.md",
+            object_path=None,
+            has_code=False,
+        )
+
+    def _mock_response(self, hits: list[DocResult]) -> DocsSearchResponse:
+        return DocsSearchResponse(
+            results=hits,
+            query="rollforward state recursion",
+            count=len(hits),
+            search_type="hybrid",
+            took_ms=10.0,
+        )
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_whole_document_hit_truncates_to_window(self, mock_client_class):
+        """The observed #130 case: a 9.3 KB page inlined whole."""
+        page = (
+            "Framework background prose. " * 150
+            + "The rollforward walks the state recursion period by period. "
+            + "More background prose. " * 150
+        )
+        mock_client = MagicMock()
+        mock_client.search_docs.return_value = self._mock_response([self._hit(page)])
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["docs", "rollforward state recursion"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        hit = output["results"][0]
+        assert hit["truncated"] is True
+        assert hit["full_chars"] == len(page)
+        # The window contains the matching sentence, not just the head.
+        assert "rollforward walks the state recursion" in hit["text"]
+        assert "--full" in hit["text"]
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_max_chars_zero_disables_truncation(self, mock_client_class):
+        """--max-chars 0 means unlimited."""
+        page = "Framework background prose. " * 300
+        mock_client = MagicMock()
+        mock_client.search_docs.return_value = self._mock_response([self._hit(page)])
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["docs", "rollforward", "--max-chars", "0"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["results"][0]["text"] == page
+        assert output["results"][0]["truncated"] is False
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_short_results_pass_through_unchanged(self, mock_client_class):
+        """Results within budget are byte-identical to the server payload."""
+        mock_client = MagicMock()
+        mock_client.search_docs.return_value = self._mock_response(
+            [self._hit("previous_period() shifts a list column back one period.")]
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["docs", "previous_period"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        hit = output["results"][0]
+        assert hit["truncated"] is False
+        assert "--full" not in hit["text"]

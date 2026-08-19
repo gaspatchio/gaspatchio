@@ -378,7 +378,7 @@ def _resolve_op(  # noqa: PLR0911, C901 — one flat branch per Op type; both me
     ``{"kind": "state", "state": int, "point": int}`` for cross-state reads.
     """
     # ``classify`` is callable (expr, op_name, field_name) -> dict
-    cls = classify  # type: ignore[assignment]
+    cls = classify
 
     op_name = type(op).__name__
     base: dict[str, object] = {

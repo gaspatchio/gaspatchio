@@ -120,8 +120,41 @@ class GraphExporter:
             if isinstance(operation, tuple):
                 continue
             graph.add_computed_operation(operation)
-        
+
+        self._backfill_unresolved_dtypes(graph)
         return graph
+
+    def _backfill_unresolved_dtypes(self, graph: CalculationGraph) -> None:
+        """Resolve dtype/shape/kind from the final schema where tracing could not.
+
+        Tracing-time dtype inference is a per-assignment probe and can return
+        None (a probe failure also cascades to downstream assignments). The
+        collected schema holds the authoritative dtype for every column that
+        survived to the frame — prefer it over exporting "unknown".
+        """
+        from gaspatchio_core.column.shape import kind_from_dtype, shape_from_dtype
+
+        from .graph_utils import simplify_dtype
+
+        try:
+            schema = self.af._df.collect_schema()  # noqa: SLF001
+        except Exception as e:  # noqa: BLE001 — schema failure downgrades, never breaks export
+            logger.warning(f"Could not collect schema for dtype backfill: {e}")
+            return
+
+        for node in graph.nodes.values():
+            data = node.data
+            if "unknown" not in (data.dtype, data.shape, data.kind):
+                continue
+            dtype = schema.get(node.id)
+            if dtype is None:
+                continue
+            if data.dtype == "unknown":
+                data.dtype = simplify_dtype(str(dtype))
+            if data.shape == "unknown":
+                data.shape = shape_from_dtype(dtype)
+            if data.kind == "unknown":
+                data.kind = kind_from_dtype(dtype)
     
     def _add_input_columns(self, graph: CalculationGraph) -> None:
         """Identify and add input columns to the graph."""

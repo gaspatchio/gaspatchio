@@ -6,6 +6,7 @@
 
 import contextlib
 import importlib.util
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -67,7 +68,15 @@ def load_model_from_path(
         raise ImportError(msg)
 
     model_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(model_module)
+    # Register before exec: dataclasses, get_type_hints, and pickle resolve a
+    # module's string annotations by looking its name up in sys.modules.
+    sys.modules[spec.name] = model_module
+    try:
+        spec.loader.exec_module(model_module)
+    except BaseException:
+        # Don't leave a half-executed module shadowing the next load.
+        del sys.modules[spec.name]
+        raise
 
     # Look specifically for the specified function name
     if hasattr(model_module, function_name) and callable(
@@ -214,6 +223,15 @@ def _execute_model_run(
 
         # Use the enhanced error message if available
         error_message = str(e)
+
+        if "'ActuarialFrame' object has no attribute" in error_message:
+            error_message += (
+                " Note: run-model builds the frame from the model-points file"
+                " and calls main() with only those columns — a column attached"
+                " outside main() (for example in an `if __name__ == '__main__':`"
+                " block) is not visible here. Create it inside main() or add it"
+                " to the model points."
+            )
 
         # Log that model execution failed (without repeating the full error)
         logger.debug("Model execution failed with {}", type(e).__name__)

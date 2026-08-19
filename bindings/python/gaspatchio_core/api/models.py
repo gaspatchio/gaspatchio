@@ -18,6 +18,9 @@ class DocResult(BaseModel):
     source_file: str
     object_path: str | None
     has_code: bool
+    # Set client-side when the text was windowed to --max-chars (#130).
+    truncated: bool = False
+    full_chars: int | None = None
 
 
 class KnowledgeResult(BaseModel):
@@ -33,6 +36,9 @@ class KnowledgeResult(BaseModel):
     chunk_index: int | None = None
     page_number: int | None = None
     title: str | None = None
+    # Set client-side when the text was windowed to --max-chars (#120).
+    truncated: bool = False
+    full_chars: int | None = None
 
 
 class DocsSearchResponse(BaseModel):
@@ -43,6 +49,8 @@ class DocsSearchResponse(BaseModel):
     count: int
     search_type: str
     took_ms: float
+    # Near-duplicate hits collapsed client-side; count keeps the server total.
+    deduplicated: int = 0
 
 
 class KnowledgeSearchResponse(BaseModel):
@@ -54,6 +62,8 @@ class KnowledgeSearchResponse(BaseModel):
     search_type: str
     retrieval_mode: str
     took_ms: float
+    # Near-duplicate hits collapsed client-side; count keeps the server total.
+    deduplicated: int = 0
 
 
 class DocsAnswerResponse(BaseModel):

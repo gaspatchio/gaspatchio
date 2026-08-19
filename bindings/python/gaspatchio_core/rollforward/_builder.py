@@ -64,7 +64,8 @@ def _to_polars_expr(x: object) -> pl.Expr:
     """
     to_expr = getattr(x, "_to_expr", None)
     if callable(to_expr):
-        return to_expr()
+        expr: pl.Expr = to_expr()
+        return expr
     return x  # type: ignore[return-value]
 
 

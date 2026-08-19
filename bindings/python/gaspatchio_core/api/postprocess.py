@@ -1,0 +1,179 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# ABOUTME: Client-side post-processing for docs/knowledge search results.
+# ABOUTME: Collapses near-duplicate hits and windows long texts around the match.
+"""Post-processing for `gspio docs` / `gspio knowledge` search results.
+
+The retrieval surface is a CLI chosen for token efficiency, so per-hit payload
+is part of its contract (#120/#130): near-identical chunks ingested under
+different doc_ids waste every token they repeat, and a full source document
+inlined for one matching section costs ~4k tokens per lookup. Both fixes are
+applied here, after the API client returns and before the JSON is printed —
+nothing is hidden: dropped duplicates are counted on the response, truncated
+texts carry a marker naming ``--full``.
+"""
+
+from __future__ import annotations
+
+import re
+from difflib import SequenceMatcher
+from typing import TypeVar
+
+from gaspatchio_core.api.models import DocResult, KnowledgeResult
+
+_ResultT = TypeVar("_ResultT", DocResult, KnowledgeResult)
+
+# Near-duplicate detection compares the FULL normalised texts; 0.9 collapses
+# re-ingested copies of the same source (which differ in whitespace or a
+# trailing variation) while distinct prose stays comfortably below it. The
+# comparison must never be capped to a prefix: the observed boilerplate
+# preambles run ~3.5 KB, so a prefix probe would collapse two chunks whose
+# substantive content only diverges after the shared preamble.
+_DEDUPE_THRESHOLD = 0.9
+
+# Query terms shorter than this are too common to anchor a snippet window.
+_MIN_TERM_CHARS = 4
+
+# Ingestion noise has a specific shape: one text is exactly the other plus a
+# trailing stamp — a strict extension. Only that shape may collapse without
+# comparing tails, and only when the addendum is stamp-sized (a few words,
+# not a sentence). Divergent continuations — both texts carrying their own
+# words past the shared prefix — are content however short, and when the
+# heuristic cannot tell, it keeps both: a visible near-duplicate is cheap,
+# silently dropped content is not.
+_STAMP_CHARS = 40
+
+
+def _normalise(text: str) -> str:
+    """Lowercase and collapse whitespace for comparison."""
+    return " ".join(text.lower().split())
+
+
+def _common_prefix_len(a: str, b: str) -> int:
+    """Length of the longest common prefix of two strings."""
+    limit = min(len(a), len(b))
+    for i in range(limit):
+        if a[i] != b[i]:
+            return i
+    return limit
+
+
+def _is_near_duplicate(a: str, b: str, threshold: float) -> bool:
+    """Whether two normalised texts carry the same content.
+
+    The global ratio is a fast gate: below threshold the texts are
+    clearly distinct. Above it, the shared prefix is stripped and the
+    remainders judged on their own. A strict extension (one remainder
+    empty) with a stamp-sized addendum is ingestion noise; anything else
+    is duplicate only if the remainders are themselves similar.
+    """
+    matcher = SequenceMatcher(None, a, b)
+    if not (
+        matcher.real_quick_ratio() >= threshold
+        and matcher.quick_ratio() >= threshold
+        and matcher.ratio() >= threshold
+    ):
+        return False
+
+    prefix_len = _common_prefix_len(a, b)
+    rest_a = a[prefix_len:]
+    rest_b = b[prefix_len:]
+    if min(len(rest_a), len(rest_b)) == 0:
+        return max(len(rest_a), len(rest_b)) <= _STAMP_CHARS
+    return SequenceMatcher(None, rest_a, rest_b).ratio() >= threshold
+
+
+def dedupe_results(
+    results: list[_ResultT],
+    threshold: float = _DEDUPE_THRESHOLD,
+) -> tuple[list[_ResultT], int]:
+    """Collapse near-identical hits, keeping the first (highest-ranked) copy.
+
+    Returns the surviving results in their original order and the number of
+    hits dropped as near-duplicates.
+    """
+    kept: list[_ResultT] = []
+    kept_norms: list[str] = []
+    dropped = 0
+    for result in results:
+        norm = _normalise(result.text)
+        is_duplicate = any(
+            _is_near_duplicate(norm, seen, threshold) for seen in kept_norms
+        )
+        if is_duplicate:
+            dropped += 1
+            continue
+        kept.append(result)
+        kept_norms.append(norm)
+    return kept, dropped
+
+
+def _first_match_position(text: str, query: str) -> int | None:
+    """Position of the earliest query-term occurrence in text, if any.
+
+    Three anchor tiers, strongest non-empty tier wins: an exact word
+    ("rate" as its own word), then a boundary prefix ("rate" starting
+    "rates" — inflected forms are usually the match the reader wants),
+    then a bare substring ("flow" inside "cashflow" — still better than
+    windowing the head blindly). Without the tiers a mid-word hit like
+    "rate" inside "generated", or an earlier "rates", would steal the
+    window from the passage the query actually names.
+    """
+    terms = [t for t in re.split(r"\W+", query) if len(t) >= _MIN_TERM_CHARS]
+    lowered = text.lower()
+
+    exact_positions = []
+    prefix_positions = []
+    substring_positions = []
+    for term in terms:
+        escaped = re.escape(term.lower())
+        match = re.search(rf"\b{escaped}\b", lowered)
+        if match:
+            exact_positions.append(match.start())
+        match = re.search(rf"\b{escaped}", lowered)
+        if match:
+            prefix_positions.append(match.start())
+        pos = lowered.find(term.lower())
+        if pos >= 0:
+            substring_positions.append(pos)
+
+    for positions in (exact_positions, prefix_positions, substring_positions):
+        if positions:
+            return min(positions)
+    return None
+
+
+def truncate_result(result: _ResultT, query: str, max_chars: int) -> _ResultT:
+    """Window a long result text around the first query match.
+
+    Texts within ``max_chars`` (or with ``max_chars=0``, meaning unlimited)
+    pass through untouched. Longer texts keep a window of ``max_chars``
+    characters positioned around the earliest query-term match (the head when
+    nothing matches), with a trailing marker naming ``--full`` so the complete
+    chunk is one flag away.
+    """
+    text = result.text
+    if max_chars <= 0 or len(text) <= max_chars:
+        return result
+
+    match_pos = _first_match_position(text, query)
+    start = 0 if match_pos is None else max(0, match_pos - max_chars // 4)
+    start = min(start, len(text) - max_chars)
+    window = text[start : start + max_chars]
+
+    prefix = "… " if start > 0 else ""
+    suffix = " …" if start + max_chars < len(text) else ""
+    marker = (
+        f"\n[showing {len(window):,} of {len(text):,} chars"
+        f"{' around the first match' if match_pos is not None else ''};"
+        f" pass --full for the complete text]"
+    )
+    return result.model_copy(
+        update={
+            "text": f"{prefix}{window}{suffix}{marker}",
+            "truncated": True,
+            "full_chars": len(text),
+        },
+    )
