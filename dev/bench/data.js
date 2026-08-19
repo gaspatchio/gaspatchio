@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787086761913,
+  "lastUpdate": 1787113832700,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -10931,6 +10931,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1593251121,
             "range": "± 3020208",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "88f8f1dcf72978e8cc1d963517c1d48b8f185e9a",
+          "message": "chore(deps): bump ruff 0.11.12 → 0.16.3, with the lockfile (#144)\n\n* chore(deps): bump ruff 0.11.12 -> 0.16.3, with the lockfile\n\nReplaces the ruff half of dependabot #124, which died in CI at uv sync\n--locked because the bump landed without a lockfile update. The pip\ngroup also bundled polars 1.42.1 -> 1.43.2 into the same PR — polars is\nthe engine under everything and gets its own deliberately-tested pass\n(with cargo #1), so the group PR is being split rather than merged.\n\nVerified under 0.16.3: uv sync --locked clean; skills suite 144 passed;\nthe 5 excel.py doctest failures in the local --doctest-modules\ninvocation are byte-identical on main under the old pin (pre-existing,\ndate-dependent, not the bump). Formatter drift measured, not applied:\n0.16.3 wants to reformat 20 more files and reports ~21 new findings on\nthe existing debt baseline — CI does not gate ruff, and that churn\nbelongs to a deliberate cleanup commit, not a version bump.\n\n* fix(docstrings): pin the snippet gate's rule set — it floated on ruff defaults\n\nThe docstring harness lints every example with 'ruff check --isolated',\nwhich inherits whichever rule set the installed ruff defaults to. Ruff\n0.16 added import-sorting to its defaults, so the version bump turned\n70 examples red in CI — I001 on two-line import blocks — with no code\nhaving changed. Same species as the #137 lesson: state a gate reads\nmust be written on the gate's own schedule, and a dependency's default\nselect is someone else's schedule.\n\nThe invocation now pins --select E4,E7,E9,F — the correctness rules the\ngate has always actually enforced (syntax errors, undefined names,\nunused imports). Import-order style in examples becomes a deliberate\nchoice for a future cleanup, not a side effect of an upgrade. A new\nharness test locks this: an unsorted-but-valid import block must lint\nclean, red-first verified under 0.16.3 before the pin.\n\nVerified after: 15 harness tests green; 74 examples across the\npreviously-failing files (date.py, excel_functions/, projection.py)\ngreen under 0.16.3.",
+          "timestamp": "2026-08-19T16:15:25+12:00",
+          "tree_id": "10999482167a0fd61b8b7ed7bfa69410e5ecafb7",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/88f8f1dcf72978e8cc1d963517c1d48b8f185e9a"
+        },
+        "date": 1787113831488,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 157311037,
+            "range": "± 1271069",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 156881168,
+            "range": "± 1099220",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 159945585,
+            "range": "± 352876",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 6332240,
+            "range": "± 31048",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 160139562,
+            "range": "± 2829403",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 3799108,
+            "range": "± 81092",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 160249045,
+            "range": "± 227606",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 3795770,
+            "range": "± 31487",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 546785,
+            "range": "± 5924",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 54924447,
+            "range": "± 627561",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 9634146,
+            "range": "± 106003",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 553050664,
+            "range": "± 3997320",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 388086,
+            "range": "± 4478",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 31581426,
+            "range": "± 294172",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 4066613,
+            "range": "± 40846",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 315918055,
+            "range": "± 2299973",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 389037,
+            "range": "± 769",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 31700029,
+            "range": "± 423258",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 3971069,
+            "range": "± 80583",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 317937551,
+            "range": "± 1680219",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 485981,
+            "range": "± 1011",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 41322495,
+            "range": "± 459288",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 5148242,
+            "range": "± 51431",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 412491541,
+            "range": "± 1117257",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 1807045,
+            "range": "± 3987",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 149656054,
+            "range": "± 78346",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 25355620,
+            "range": "± 69264",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1516762954,
+            "range": "± 8014250",
             "unit": "ns/iter"
           }
         ]
