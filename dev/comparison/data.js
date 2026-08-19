@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787113475274,
+  "lastUpdate": 1787115267051,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib": [
@@ -8295,6 +8295,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 5.4,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "942513b92feb2ac449482f9852208900d7fe3660",
+          "message": "feat(projection): cumulative_survival accepts survival-shaped input (#143)\n\nA reserving workbook hands you a combined persistency px = (1-qx)(1-lapse)\nfar more often than a bare decrement rate — and the only way to feed it\nto cumulative_survival was to invert it so the method could undo the\ninversion. 1-(1-px) is exact only while px >= 0.5 (Sterbenz); a VM-20\nshock-lapse year sits at px = 0.199, where the round trip loses bits\nthat a strict tie-out sees (vm20 room: 2.1e-17 vs the workbook's cached\nvalues where the direct product is 0.0e0). The error is tiny and\navoidable for free — and it lived in the method whose name is exactly\nwhat a reserving model reaches for.\n\ncumulative_survival(from_survival=True) cumulates the factors directly,\nno inversion anywhere, list and scalar paths both; the timing parameters\nmean the same thing in both shapes. The docstring documents the\ninversion hazard next to the timing notes (per the #42 precedent that\nadjacent traps belong in the method's own contract) and carries an\nexecutable example whose output table is identical to the rate-shaped\nexample — same numbers, honest input shape.\n\nServes Meet-you-where-you-are (accept the shape the source hands you)\nand Audit-by-default (bit-exact against the gold standard where the\nround trip is not). Closes #118.\n\nVerified: 65 projection tests + 42 docstring examples green; stubtest\nclean across 266 modules; ruff/mypy/format deltas zero vs baseline\n(1/51/4 findings and 4 mypy errors are main's pre-existing debt).",
+          "timestamp": "2026-08-19T16:45:12+12:00",
+          "tree_id": "9f272ed53a46bb148e179edcb2b943a231e23289",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/942513b92feb2ac449482f9852208900d7fe3660"
+        },
+        "date": 1787115264583,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 3.228,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 3.489,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.122,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 65.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 5.682,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 46.57,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.341,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2932.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 18.807,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 53.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 55.15,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 1.824,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 5482.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 15.825,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 631.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 8.68,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 16.893,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 5919.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 120.099,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 832.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 7.11,
             "unit": "x"
           }
         ]
