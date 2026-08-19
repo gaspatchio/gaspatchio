@@ -31,6 +31,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         self,
         rate_timing: "Literal['beginning_of_period', 'end_of_period'] | None" = None,
         start_at: float | None = 1.0,
+        *,
+        from_survival: bool = False,
     ) -> "ExpressionProxy": ...
     def with_period(
         self, period: int, value: float | str

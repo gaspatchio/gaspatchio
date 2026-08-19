@@ -142,6 +142,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         self,
         rate_timing: Literal["beginning_of_period", "end_of_period"] | None = None,
         start_at: float | None = 1.0,
+        *,
+        from_survival: bool = False,
     ) -> ExpressionProxy:
         """Convert mortality rates to cumulative survival probabilities.
 
@@ -149,6 +151,14 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         using the formula `tpx[t] = (1-qx[0]) * (1-qx[1]) * ... * (1-qx[t])`. Essential
         for life insurance projections, reserve calculations, and any actuarial work
         requiring survival probabilities from mortality assumptions.
+
+        When the source hands you a **survival-shaped** factor instead — a combined
+        persistency `px = (1-qx)(1-lapse)`, extremely common in reserving — pass
+        ``from_survival=True`` and the factors cumulate directly, with no
+        inversion anywhere. Spelling it as ``1 - px`` so the method can undo it
+        is a lossy round trip: ``1 - (1 - px)`` is exact only while
+        ``px >= 0.5``, and a shock-lapse year sits well below that. The error
+        is tiny (~1e-17) but avoidable for free, and a strict tie-out sees it.
 
         For list columns, applies element-wise cumulative product within each list.
         For scalar columns, applies cumulative product across rows (use `.over()` for
@@ -195,6 +205,11 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             - 1.0 (default): Beginning-of-period [1.0, tpx[0], tpx[1], ...]
             - None: End-of-period [tpx[0], tpx[1], ...]
             - Other: Custom initial value (e.g., 0.95 for partial cohort)
+        from_survival : bool, optional
+            The column already holds survival-shaped factors (px, persistency),
+            not decrement rates. Factors cumulate directly — no ``1 - x``
+            anywhere — so shock-lapse years below px = 0.5 stay bit-exact.
+            Timing parameters mean exactly the same thing in both shapes.
 
         Returns
         -------
@@ -271,6 +286,35 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         └───────────────────────┴─────────────────────────────┘
         ```
 
+        **Survival-Shaped Input (Combined Persistency)**
+
+        ```python
+        from gaspatchio_core import ActuarialFrame
+
+        data = {
+            "px": [[0.999, 0.998, 0.997]],
+        }
+        af = ActuarialFrame(data)
+
+        # The column already holds survival factors - cumulate them directly
+        af.cum_px = af.px.projection.cumulative_survival(
+            rate_timing="end_of_period", from_survival=True
+        )
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (1, 2)
+        ┌───────────────────────┬─────────────────────────────┐
+        │ px                    ┆ cum_px                      │
+        │ ---                   ┆ ---                         │
+        │ list[f64]             ┆ list[f64]                   │
+        ╞═══════════════════════╪═════════════════════════════╡
+        │ [0.999, 0.998, 0.997] ┆ [0.999, 0.997002, 0.994011] │
+        └───────────────────────┴─────────────────────────────┘
+        ```
+
         **Custom Initial Value (Partial Cohort)**
 
         ```python
@@ -335,9 +379,12 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         # Apply appropriate calculation based on column type
         if is_list:
             # For list columns, apply element-wise cumulative product within each list.
-            # This computes survival[t] = px[0] * px[1] * ... * px[t]
-            # where px[i] = 1 - qx[i].
-            survival_expr = base_expr.list.eval((1 - pl.element()).cum_prod())
+            # This computes survival[t] = px[0] * px[1] * ... * px[t], where
+            # px[i] = 1 - qx[i] for rate input, or the element itself when the
+            # column is already survival-shaped (from_survival=True) — inverting
+            # twice would lose bits below px = 0.5.
+            factor = pl.element() if from_survival else 1 - pl.element()
+            survival_expr = base_expr.list.eval(factor.cum_prod())
 
             # Apply start_at shift if requested (for list columns)
             if start_at is not None:
@@ -350,7 +397,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         else:
             # For scalar columns, apply cumulative product across rows.
             # User should add .over() for grouping if needed.
-            survival_expr = (1 - base_expr).cum_prod()
+            scalar_factor = base_expr if from_survival else 1 - base_expr
+            survival_expr = scalar_factor.cum_prod()
 
             # Apply start_at shift if requested (for scalar columns)
             if start_at is not None:

@@ -482,8 +482,11 @@ def test_lint_rule_set_does_not_float_on_ruff_defaults():
     harness's --isolated invocation inherited it — 70 docstring examples
     went red in CI on a routine version bump (PR #144) without any code
     changing. The gate's rules are project policy and must be written by
-    the harness, not by whichever ruff version is installed: stylistic
-    import ordering in a two-line example is not what this gate is for.
+    the harness, not by whichever ruff version is installed.
+
+    The fixture's imports are correctly ordered; I001 fires on the missing
+    blank line between the stdlib and third-party sections. A style verdict
+    on section spacing is exactly what this gate must not render.
     """
     example = DocstringCodeExample(
         snippet="""import datetime
@@ -491,15 +494,79 @@ from gaspatchio_core import ActuarialFrame
 d = datetime.date(2023, 1, 1)
 af = ActuarialFrame({"issue_date": [d]})""",
         output=None,
-        object_context="test_module.unsorted_imports",
+        object_context="test_module.adjacent_import_sections",
         example_index=0,
-        raw_source_location=("/fake/unsorted.py", 5),
+        raw_source_location=("/fake/adjacent_sections.py", 5),
     )
-    try:
-        issues = example.lint()
-    except ImportError as e:  # pragma: no cover - env without ruff
-        pytest.skip(f"Skipping lint test, ruff not available: {e}")
+    issues = example.lint()
+    # lint() reports a missing ruff as an issue string, not an ImportError.
+    if any("Linting skipped" in issue for issue in issues):
+        pytest.skip(f"ruff unavailable to the harness: {issues}")
     assert not issues, (
-        "Import-order style leaked into the snippet gate — the ruff "
-        f"invocation is floating on version defaults again: {issues}"
+        "Style rules leaked into the snippet gate — the ruff invocation "
+        f"is floating on version defaults again: {issues}"
+    )
+
+
+def test_pinned_rule_families_fire_on_violations():
+    """The selectable families the gate promises (E4, E7, F) actually fire.
+
+    The floating-defaults test proves style rules cannot leak in; this one
+    proves a trimmed or typoed select cannot silently stop enforcing the
+    families the gate claims — the rest of the suite would stay green.
+
+    E9 has no firing case here on purpose: ruff's parser diagnostics are
+    select-independent (0.16.3 emits identical invalid-syntax diagnostics
+    with and without E9), so no snippet can discriminate its presence.
+    The companion test below pins how those diagnostics surface instead.
+    """
+    cases = [
+        ("E401", "import os, json\nprint(os.sep, json.dumps({}))"),
+        ("E711", "x = 1\nprint(x == None)"),
+        ("F821", "print(undefined_name)"),
+    ]
+    for expected_code, snippet in cases:
+        example = DocstringCodeExample(
+            snippet=snippet,
+            output=None,
+            object_context=f"test_module.fires_{expected_code.lower()}",
+            example_index=0,
+            raw_source_location=("/fake/violations.py", 5),
+        )
+        issues = example.lint()
+        if any("Linting skipped" in issue for issue in issues):
+            pytest.skip(f"ruff unavailable to the harness: {issues}")
+        assert any(expected_code in issue for issue in issues), (
+            f"{expected_code} did not fire — the pinned select has lost "
+            f"one of its promised rule families: {issues}"
+        )
+
+
+def test_syntax_errors_surface_with_the_e999_prefix():
+    """Malformed snippets surface as E999-prefixed issues, whatever the select.
+
+    This is the code-shape pin, not a select pin: the harness rewrites
+    ruff's syntax-error code to the stable "E999" prefix that
+    test_lint_non_python_snippet and error-reading tooling key on, and
+    that rewrite matches literal code strings. Ruff has already changed
+    the shape once — 0.11.12 emits ``code: null`` for the same input,
+    which the rewrite misses ("None: SyntaxError: ..."); 0.16.3 emits
+    "invalid-syntax", which it catches. This test goes red at the version
+    bump that changes the shape again, instead of as a confusing
+    downstream failure.
+    """
+    example = DocstringCodeExample(
+        snippet="def broken(:\n    pass",
+        output=None,
+        object_context="test_module.syntax_error_surfacing",
+        example_index=0,
+        raw_source_location=("/fake/violations.py", 5),
+    )
+    issues = example.lint()
+    if any("Linting skipped" in issue for issue in issues):
+        pytest.skip(f"ruff unavailable to the harness: {issues}")
+    assert issues, "a malformed snippet must produce at least one issue"
+    assert any(issue.startswith("E999:") for issue in issues), (
+        "Syntax diagnostics lost the E999 prefix — ruff's syntax-error "
+        f"code shape changed and the harness rewrite missed it: {issues}"
     )

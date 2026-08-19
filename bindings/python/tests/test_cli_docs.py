@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
+from gaspatchio_core.api.client import APIConnectionError
 from gaspatchio_core.api.models import (
     DocResult,
     DocsAnswerResponse,
@@ -277,3 +278,110 @@ class TestDocsPayloadTrimming:
         hit = output["results"][0]
         assert hit["truncated"] is False
         assert "--full" not in hit["text"]
+
+
+class TestDocsAnswerFallback:
+    """#119: a dead answer backend must not read as a dead retrieval surface."""
+
+    @staticmethod
+    def _hit(text: str) -> DocResult:
+        """Build a minimal doc hit."""
+        return DocResult(
+            text=text,
+            score=0.9,
+            content_type="overview",
+            source_file="frame.md",
+            object_path=None,
+            has_code=False,
+        )
+
+    def _search_response(self) -> DocsSearchResponse:
+        """Build the search response the fallback should surface."""
+        return DocsSearchResponse(
+            results=[self._hit("An ActuarialFrame wraps a Polars DataFrame.")],
+            query="ActuarialFrame",
+            count=1,
+            search_type="hybrid",
+            took_ms=10.0,
+        )
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_answer_server_error_falls_back_to_search(self, mock_client_class):
+        """A 5xx from /answer degrades to search results, not a dead end.
+
+        The vm20 room hit three weeks of 500s and the error text gave no
+        hint that search still worked. The CLI now says so and shows the
+        search results for the same query.
+        """
+        mock_client = MagicMock()
+        mock_client.answer_docs.side_effect = APIConnectionError(
+            'API error: 500 - {"detail":"Internal server error."}',
+            status_code=500,
+        )
+        mock_client.search_docs.return_value = self._search_response()
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["docs", "ActuarialFrame", "--answer"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["results"], "fallback must carry the search results"
+        note = output.get("note") or ""
+        assert "--answer" in note, "note must name the flag to retry"
+        assert "search results" in note
+        assert "Search still works" in result.stderr
+        mock_client.search_docs.assert_called_once()
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_answer_503_also_falls_back(self, mock_client_class):
+        """The server's own declared degradation (503) takes the same path."""
+        mock_client = MagicMock()
+        mock_client.answer_docs.side_effect = APIConnectionError(
+            "API error: 503 - answer generation unavailable",
+            status_code=503,
+        )
+        mock_client.search_docs.return_value = self._search_response()
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["docs", "ActuarialFrame", "--answer"])
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout)["results"]
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_connection_error_still_fails_loudly(self, mock_client_class):
+        """No status code means the whole API is unreachable — no fallback."""
+        mock_client = MagicMock()
+        mock_client.answer_docs.side_effect = APIConnectionError(
+            "API unavailable: Could not connect."
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["docs", "ActuarialFrame", "--answer"])
+
+        assert result.exit_code == 1
+        mock_client.search_docs.assert_not_called()
+
+    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    def test_no_search_promise_when_fallback_search_also_fails(self, mock_client_class):
+        """The notice must not announce search results that never arrive.
+
+        When /answer 5xxs and the fallback search then fails too, a notice
+        printed before the search would promise results the command cannot
+        deliver — contradicting the error that follows it.
+        """
+        mock_client = MagicMock()
+        mock_client.answer_docs.side_effect = APIConnectionError(
+            'API error: 500 - {"detail":"Internal server error."}',
+            status_code=500,
+        )
+        mock_client.search_docs.side_effect = APIConnectionError(
+            "API error: 500 - search is down too",
+            status_code=500,
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["docs", "ActuarialFrame", "--answer"])
+
+        assert result.exit_code == 1
+        assert "Search still works" not in result.stderr

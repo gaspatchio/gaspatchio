@@ -87,6 +87,18 @@ After examining the source data or specification but BEFORE writing any model co
 | **Fund / portfolio aggregate** | Per-entity calculations → aggregate → fund-level outputs (NAV, P&L, balance sheet) | Phase 1-3 per-entity using AF, then `group_by` aggregation. Fund-level financials may use sequential operations IF there are cross-line dependencies. | `accumulate`, `group_by`, see [references/aggregate-patterns.md](references/aggregate-patterns.md) |
 | **Cash flow waterfall** | Sequential allocation with priority rules (debt service, distributions) | `when/then/otherwise` chains for priority logic + `accumulate` for running balances | `when/then/otherwise`, `accumulate` |
 
+**Also classify the run matrix.** If the source has variant runs — scenario tabs,
+sensitivity columns, shock sets — that is a second classification, and it has failed
+silently three conversions in a row when skipped:
+
+- **Input-shaped** (same wiring, different assumptions — shocked mortality, stressed
+  rates): use `with_scenarios` / `ScenarioRun` with shocked tables, and invoke
+  `gaspatchio-model-scenarios` before writing any runner.
+- **Wiring-divergent** (the variant tabs carry *different formulas* — hardcodes,
+  re-pointed references, event years): scenario becomes a model-point **row axis**,
+  divergence expressed as per-variant data columns and documented broadcast constants —
+  never `when(scenario == ...)` control flow.
+
 **Choosing between linear-recurrence and state-machine:**
 
 > "Does the within-period charge depend on the running balance?" — Yes → rollforward. No → accumulate.

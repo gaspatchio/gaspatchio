@@ -263,6 +263,19 @@ Phase 3: All calculations. Lazy only -- no `.collect()`, no Python loops.
 
 ---
 
+## Scenarios: the native shape is rows
+
+A scenario axis in gaspatchio is a **cross-join on the model-point frame** — N policies
+× M scenarios become N×M rows and the model runs once, vectorized. `with_scenarios` /
+`ScenarioRun` are the helpers that build exactly that axis with shocked assumption
+tables; do not hand-roll the cross-join before checking them (`uv run gspio docs
+"with_scenarios"`). If the variants differ in *wiring* rather than inputs — different
+formulas per scenario tab, re-pointed references — the row axis is still the shape, but
+divergence belongs in per-variant data columns, never `when(scenario == ...)` control
+flow. The model-building skill's classification gate routes this decision.
+
+---
+
 ## Skill Routing
 
 | Task | Skill |
