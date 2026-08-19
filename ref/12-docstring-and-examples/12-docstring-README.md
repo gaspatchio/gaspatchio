@@ -10,7 +10,7 @@
 - ✅ **Examples** section (at least one executable example)
 - ✅ **Parameters** (if applicable)
 - ✅ **Returns** (if applicable)
-- ✅ **All code examples MUST pass ruff linting**
+- ✅ **All code examples MUST pass the harness's correctness lint (ruff `E4,E7,E9,F`)**
 - ✅ **All code examples MUST be executable with exact output**
 
 ### Internal Methods (leading underscore: `_method_name`)
@@ -21,7 +21,7 @@
 - ❌ **Examples** section (OPTIONAL)
 - ✅ **Parameters** (if applicable)  
 - ✅ **Returns** (if applicable)
-- ✅ **If examples are included, they MUST pass ruff linting**
+- ✅ **If examples are included, they MUST pass the harness's correctness lint (ruff `E4,E7,E9,F`)**
 - ✅ **If examples are included, they MUST be executable with exact output**
 
 ### Internal Method Template (Complete - No Need to Read Further)
@@ -63,15 +63,15 @@ This document provides comprehensive guidelines for writing high-quality docstri
 5. **Executable Accuracy**: All examples MUST be executable and produce the exact output shown
 
 !!! danger "Critical: Executable Examples Required"
-    **All code examples will be executed by the CI/CD pipeline and MUST produce the exact output shown in the docstring.** Additionally, **all code will be linted using ruff for correctness and style compliance.** If the expected output doesn't match the actual output or if code fails linting, tests will fail. This means:
+    **All code examples will be executed by the CI/CD pipeline and MUST produce the exact output shown in the docstring.** Additionally, **all code is linted by the harness for correctness** — ruff with the pinned rule set `E4,E7,E9,F` (import errors, statement errors, syntax errors, pyflakes). Style rules (import sorting, formatting, line length) are deliberately NOT gated: a two-line example is no place for style verdicts, and the rule set is pinned so a ruff upgrade cannot silently widen it (PR #144). This means:
     
     - Every code block must be fully runnable
-    - Code must pass ruff linting (style, imports, formatting)
+    - Code must be free of correctness errors (undefined names, broken imports, syntax)
     - Output blocks must show exact results (not approximations)
     - Data values must be realistic AND produce expected calculations
-    - Import statements must be correct, complete, and properly ordered
+    - Import statements must be correct and complete
     - No hypothetical or placeholder outputs allowed
-    - Code must follow Python style guidelines (PEP 8 via ruff)
+    - Tidy, conventionally ordered imports are welcome — courtesy, not gate
 
 ## Docstring Structure
 
@@ -376,8 +376,8 @@ Before submitting a docstring, ensure:
 - [ ] Examples use proper life insurance terminology
 - [ ] Data in examples is realistic (ages 20-80, reasonable premiums, etc.)
 - [ ] **CRITICAL**: All code examples have been executed and output blocks verified
-- [ ] **CRITICAL**: Code passes ruff linting without errors or warnings
-- [ ] **CRITICAL**: Import statements are complete, correct, and properly ordered
+- [ ] **CRITICAL**: Code passes the harness's correctness lint (ruff `E4,E7,E9,F`)
+- [ ] **CRITICAL**: Import statements are complete and correct
 - [ ] **CRITICAL**: No placeholder or hypothetical outputs used
 - [ ] Code blocks are complete and runnable without modification
 - [ ] Output formatting matches actual Polars output exactly
@@ -508,21 +508,21 @@ def calculate_net_premium(self, mortality_rate: float, interest_rate: float) -> 
 ## Development Workflow for Docstring Examples
 
 1. **Write the Code**: Create your example with realistic actuarial data
-2. **Lint the Code**: Run `ruff check` and `ruff format` to ensure style compliance
+2. **Lint the Code**: Run `ruff check` for correctness — the harness gates only `E4,E7,E9,F`; broader style findings are yours to take or leave
 3. **Execute Locally**: Run the example and capture the actual output
 4. **Copy Exact Output**: Use the precise output format, including spacing and precision
 5. **Verify Again**: Run once more to ensure consistency
-6. **Final Lint Check**: Ensure the complete docstring passes ruff linting
-7. **Submit**: Only after confirming the example executes correctly AND passes linting
+6. **Final Lint Check**: Ensure the example is free of correctness errors (undefined names, broken imports, syntax)
+7. **Submit**: Only after confirming the example executes correctly AND passes the correctness lint
 
 !!! warning "Common Pitfalls to Avoid"
     - **Rounding Issues**: Don't round outputs manually - show what Polars actually produces
-    - **Linting Failures**: Unused imports, incorrect formatting, or style violations will fail CI/CD
-    - **Import Order**: Use ruff's import sorting (generally: stdlib, third-party, local imports)
+    - **Linting Failures**: Undefined names, unused or broken imports, and syntax errors fail CI/CD; style violations do not — the gate is pinned to correctness rules
+    - **Import Order**: Conventional ordering (stdlib, third-party, local) is good practice but is NOT CI-gated
     - **Import Errors**: Always test imports in isolation
     - **Data Type Mismatches**: Ensure your input data types produce expected calculations
     - **Column Name Typos**: Verify all column references are correct
     - **Output Formatting**: Polars output has specific spacing and alignment - match it exactly
-    - **Line Length**: Keep lines under ruff's configured limit (typically 88 or 100 characters)
+    - **Line Length**: Not CI-gated, but keep example lines narrow so the docs render without wrapping
 
 By following these guidelines, you'll create docstrings that are not only technically correct but also valuable learning resources for actuaries using Gaspatchio.
