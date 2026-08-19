@@ -4,9 +4,19 @@
 
 """Constants for error handling system."""
 
+from pathlib import Path
+
+# The framework's own installed location. Anchored to the real package root —
+# a bare "/gaspatchio/" would also match user model files that merely live
+# under a directory called gaspatchio (the documented multi-repo workspace
+# layout) and silently drop the user's source line from error messages. Both
+# raw and resolved forms are kept: frame filenames come from code objects,
+# which do not resolve symlinks.
+_PACKAGE_ROOTS = {Path(__file__).parents[1], Path(__file__).resolve().parents[1]}
+
 # Patterns to identify internal framework modules (not user code)
 INTERNAL_MODULE_PATTERNS = [
-    "/gaspatchio/",
+    *(f"{root}/" for root in _PACKAGE_ROOTS),
     "/site-packages/",
     "/_internal",
     "/dist-packages/",

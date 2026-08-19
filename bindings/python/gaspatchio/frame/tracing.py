@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime
 import functools
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl  # Used at runtime for dtype comparison in type inference
@@ -25,6 +26,21 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from gaspatchio.frame.base import ActuarialFrame
+
+# Anchored to the framework's installed root — a bare "gaspatchio/frame/"
+# would also match user models under a directory named gaspatchio and drop
+# their source line from expression lineage. Raw and resolved forms both kept:
+# frame filenames come from code objects, which do not resolve symlinks.
+_PACKAGE_ROOTS = {Path(__file__).parents[1], Path(__file__).resolve().parents[1]}
+_INTERNAL_TRACE_PATTERNS = (
+    *(
+        f"{root}/{sub}/"
+        for root in _PACKAGE_ROOTS
+        for sub in ("frame", "column", "errors")
+    ),
+    "<frozen",
+    "site-packages/",
+)
 
 
 def log_query_plan(operations: list[Any], frame_df: pl.LazyFrame) -> None:
@@ -134,14 +150,7 @@ def append_operation_to_graph(
         temp_metadata = capture_source_context(depth=depth)
         # Skip internal frame/column files
         if not any(
-            internal in temp_metadata.file_name
-            for internal in [
-                "gaspatchio/frame/",
-                "gaspatchio/column/",
-                "gaspatchio/errors/",
-                "<frozen",
-                "site-packages/",
-            ]
+            internal in temp_metadata.file_name for internal in _INTERNAL_TRACE_PATTERNS
         ):
             # This looks like user code
             metadata = temp_metadata
