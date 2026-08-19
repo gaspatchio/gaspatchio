@@ -98,8 +98,9 @@ of these produces a model that **runs and is wrong**, not a model that fails.
 | The workbook has | Write it as | Silent failure if you get it wrong |
 |---|---|---|
 | A strongly-connected component in the binding graph | a rollforward state | Members that look like plain schedule lookups get written as closed-form columns. See "the lapse gate" below — this is the most common miss. |
-| A forward row offset (`R[-1]C` — cumulative px, running balances) | `accumulate()` / `cum_prod`-style closed forms | Written as a plain column it reads garbage from an unshifted neighbour — usually loud. The quiet failure is reaching for a full rollforward instead: correct, slow, unreadable. |
-| A backward row offset (`R[1]C` — PV rollbacks, mean reserves) | a **reversed** accumulation (reverse, accumulate, reverse back) or `next_period()` composition | Written as plain column assignments the model **runs and is wrong** — and in a reserving workbook those columns *are* the reserve. No cycle test can see this shape (gaspatchio#115). |
+| A forward offset into its **own** column (`R[-1]C` — cumulative px, running balances) | `accumulate()` / `cum_prod`-style closed forms | Written as a plain column it reads garbage from an unshifted neighbour — usually loud. The quiet failure is reaching for a full rollforward instead: correct, slow, unreadable. |
+| A backward offset into its **own** column (`R[1]C` — PV rollbacks, mean reserves) | a **reversed** accumulation (reverse, accumulate, reverse back) or `next_period()` composition | Written as plain column assignments the model **runs and is wrong** — and in a reserving workbook those columns *are* the reserve. No cycle test can see this shape (gaspatchio#115). |
+| A row offset into a **different, independent** column (`R[-1]C[-2]` — claims from last period's deaths) | `previous_period()` / `at_period(n)` on that column — still a plain assignment | Not a recurrence. Routed to `accumulate()` a one-period lag becomes a running total — runs and is wrong. Written unshifted it is off by one period everywhere. |
 | No cycle **and no row offset** | plain column assignments | Reaching for a rollforward anyway costs clarity and speed for nothing. *Closed-form by default.* |
 | `IF(<prior period cell> > 0, x, 0)` | `lapse_when_all_non_positive=[...]` | The gate makes premium and expense depend on prior state, so they belong **inside** the recursion. Written as columns they are correct until the policy lapses, then silently wrong — and most test policies never lapse. |
 | A circular COI reference (NAR depends on the balance the COI reduces) | `deduct_nar(nar_timing=...)` | There are **three** conventions and they agree when rates are constant. The error only appears once rates vary, so it survives testing. Read the timing section below. |
@@ -115,9 +116,9 @@ of these produces a model that **runs and is wrong**, not a model that fails.
 You do not have to judge which variables are recursive — but it takes **two** tests,
 not one, and order matters.
 
-**Test 1 — order-dependence (run this first).** Any formula that references *another
-row* is order-dependent and must be written as a recurrence. In R1C1 that is exactly a
-non-zero row offset — `R[-1]C`, `R[1]C` — so it is one `LIKE`:
+**Test 1 — the row-offset scan (run this first).** Any formula that reads *another
+row* is time-sensitive and this scan finds every one of them. In R1C1 that is exactly
+a non-zero row offset — `R[-1]C`, `R[1]C[-2]` — so it is one `LIKE`:
 
 ```sql
 -- first pass: bindings whose dominant formula reads another row
@@ -136,11 +137,24 @@ GROUP BY sheet, col;
 A split-off init row often shows a plain pattern while every propagation row beneath it
 carries the offset; the second query is what tells you.)
 
-A **forward** offset (`R[-1]C`) is a rollforward-style accumulation — cumulative
-products and sums usually have closed forms. A **backward** offset (`R[1]C`) is a PV
-rollback — exactly as order-dependent, spelled as a *reversed* accumulation (reverse
-the series, accumulate, reverse back) or `next_period()` composition. Neither needs
-the state machine unless a within-period charge also reads the running balance.
+The scan is deliberately broad — a bracketed row offset does not by itself make a
+recurrence. Classify each hit by **whose** row it reads:
+
+- **Its own column** (`R[-1]C` — no column bracket): a true recurrence. Forward is a
+  rollforward-style accumulation — cumulative products and sums usually have closed
+  forms. Backward (`R[1]C`) is a PV rollback, exactly as order-dependent, spelled as a
+  *reversed* accumulation (reverse the series, accumulate, reverse back) or
+  `next_period()` composition.
+- **Another column that is itself state** (the prior period's account value, a running
+  balance): the reader belongs **inside** the recursion — this is the lapse gate below.
+- **Another, independent column** (`R[-1]C[-2]` into an input, schedule, or closed-form
+  neighbour — claims from last period's deaths): not a recurrence at all. Write it as a
+  plain assignment on a time-shifted input — `af.deaths.projection.previous_period()`
+  (or `at_period(n)`). Forcing it through `accumulate()` turns a one-period lag into a
+  running total.
+
+None of these needs the state machine unless a within-period charge also reads the
+running balance.
 
 **Test 2 — within-period cycles (the escalation detector).** Strongly-connected
 components of the binding dependency graph find the *genuine* cycles — the variables
@@ -306,9 +320,11 @@ Two verified caveats on `formulas` itself:
 ## Before writing any model code
 
 1. **Extract**, do not read by hand. `marinade extract`.
-2. **Scan for row offsets, then partition into SCCs.** The offset scan finds every
-   recurrence (forward *and* backward); the SCCs find which ones must share a
-   rollforward state. Together — not the SCC test alone — they are your
+2. **Scan for row offsets, then partition into SCCs.** The offset scan catches every
+   recurrence (forward *and* backward) — then classify each hit by whose row it reads:
+   own column = recurrence, a state column = inside the rollforward, an independent
+   column = `previous_period()`, still closed-form. The SCCs find which recurrences
+   must share a rollforward state. Together — not the SCC test alone — they are your
    recurrence/closed-form split.
 3. **Confirm consumption with the edge table** for any structure you are about to
    model — a computed cell is not necessarily a used cell.
