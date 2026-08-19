@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787115267051,
+  "lastUpdate": 1787125678285,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib": [
@@ -8429,6 +8429,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 7.11,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a61ed0032da0e2aae3248a46f65517986646f436",
+          "message": "test(docstrings): make the pinned rule-set guard fully binding (#146)\n\n* test(docstrings): make the rule-set guard fully binding\n\nCode review on the pin surfaced three gaps. The guard test's\nexcept-ImportError skip was dead code — lint() reports a missing ruff\nas an issue string, never an exception — so a ruff-less environment\nwould have failed with the misleading floating-defaults message; the\nskip now keys off the issue text. The pin was also only half-guarded:\nnothing proved E4 or E7 actually fire, so a trimmed select would pass\nthe suite silently — the new families test pins all four (E401, E711,\nE999, F821) and goes red under a mutated select (verified). And the\nfixture was mislabelled unsorted_imports when its imports are correctly\nordered — I001 fires on the missing blank line between sections.\n\n* docs(ref): align the docstring README with the correctness-only gate\n\nThe README still told authors that import ordering, formatting, and\nline length fail CI — contradicting the gate's pinned E4,E7,E9,F rule\nset. A contributor following it would re-add style rules to the select\nand re-red the ~70 examples the pin just rescued. Style guidance stays\nas recommendation; only correctness is stated as gated.\n\n* test(docstrings): pin what E999 actually guards — the rewrite, not the select\n\nGreptile round 2: ruff's parser diagnostics are select-independent\n(verified at 0.16.3 — identical invalid-syntax output with and without\nE9), so the families test's E999 case could never detect E9's removal.\nE9 leaves the firing cases; syntax surfacing gets its own test pinning\nthe harness's rewrite to the stable E999 prefix — which is genuinely\nversion-fragile: 0.11.12 emits code null for the same input and the\nrewrite misses it, observed live when a stray resync downgraded the\nvenv. That pin now reds at the bump that changes the shape again.\n\n* docs(ref): imports that do not resolve are the execution check's catch\n\nThe lint bullets implied the pinned rules detect broken imports — ruff\nnever imports anything, so an unresolvable import passes the lint and\nonly fails at execution. Say which gate catches what.",
+          "timestamp": "2026-08-19T19:38:02+12:00",
+          "tree_id": "bddd74db56de4b32538e4ad037fe38246d092c1d",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/a61ed0032da0e2aae3248a46f65517986646f436"
+        },
+        "date": 1787125676625,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 1.926,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.446,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.151,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 53,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 5.91,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 39.14,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.455,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2197.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 20.779,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 48.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 45.67,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.529,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 3954.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 16.887,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 592.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 6.68,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 23.563,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4243.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 119.381,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 837.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.07,
             "unit": "x"
           }
         ]
