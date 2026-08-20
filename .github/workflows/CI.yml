@@ -91,6 +91,51 @@ jobs:
         run: uv run python -m mypy.stubtest gaspatchio --ignore-unused-allowlist --mypy-config-file mypy-stubtest.ini --allowlist stubtest-allowlist.txt
         working-directory: bindings/python
 
+  wheel-import-smoke:
+    name: Wheel Import Smoke (both names)
+    # The editable install used by python-tests cannot prove the WHEEL ships
+    # the gaspatchio_core alias — python-packages in pyproject.toml is
+    # otherwise verified by nothing. Install one built wheel into a clean venv
+    # and import both names from a neutral cwd (sys.path[0] must not rescue a
+    # broken wheel from the source tree).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: false
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+      - name: Cache maturin build artifacts
+        uses: actions/cache@v6
+        with:
+          path: bindings/python/target
+          key: ${{ runner.os }}-maturin-dev-${{ hashFiles('**/Cargo.lock', 'bindings/python/**/*.rs', 'core/src/**/*.rs') }}
+      - name: Build one wheel
+        run: uvx maturin build --profile dev --out /tmp/smoke-dist
+        working-directory: bindings/python
+      - name: Install into a clean venv and assert the alias from a neutral cwd
+        run: |
+          uv venv /tmp/smoke-venv --python 3.12
+          uv pip install --python /tmp/smoke-venv/bin/python /tmp/smoke-dist/*.whl
+          cd /tmp
+          /tmp/smoke-venv/bin/python -c '
+          import gaspatchio
+          import gaspatchio_core
+          assert gaspatchio_core is gaspatchio, "alias is not the same module"
+          import gaspatchio.assumptions
+          import gaspatchio_core.assumptions
+          assert gaspatchio_core.assumptions is gaspatchio.assumptions
+          import gaspatchio_core._internal
+          print("wheel ships both names; alias is identity")
+          '
+
   manylinux:
     name: Manylinux Build
     runs-on: ubuntu-latest

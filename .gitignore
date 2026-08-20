@@ -51,6 +51,11 @@ docs/_build/
 /bindings/python/.pypirc
 /bindings/python/gaspatchio/_internal.cpython-312-darwin.so
 /bindings/python/gaspatchio/_internal.cpython-313-darwin.so
+# Pre-rename maturin-develop artifacts: checking out a post-rename branch
+# leaves these on disk (git never deletes ignored files) — keep them ignored
+# until the gaspatchio_core alias is removed at 1.0.
+/bindings/python/gaspatchio_core/_internal.cpython-312-darwin.so
+/bindings/python/gaspatchio_core/_internal.cpython-313-darwin.so
 /bindings/python/jobs/*/reconcillation
 /bindings/python/jobs/*/*.xlsm
 /bindings/python/jobs/*/docs

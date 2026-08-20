@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Gaspatchio Core - Actuarial computation framework."""
+"""Gaspatchio - Actuarial computation framework."""
 
 # Import key components for easier access
 from __future__ import annotations

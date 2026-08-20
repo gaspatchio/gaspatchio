@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **The import name is now `gaspatchio`**, matching the package name on PyPI
+  and in the documentation — `from gaspatchio import ActuarialFrame`. The old
+  `gaspatchio_core` import keeps working until 1.0 as a deprecated alias that
+  resolves to the same module objects at every depth, and warns once per
+  process — including under `gspio run-model`. Static type checkers resolve
+  only the new name, so rename imports in typed code. The `gspio` CLI is
+  unchanged. (#129)
+
 ## [0.8.2] — The recursion tells the whole truth
 
 Where 0.8.1 made the surface honest about what didn't exist, 0.8.2 ships

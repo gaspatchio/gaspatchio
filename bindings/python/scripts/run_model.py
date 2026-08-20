@@ -10,13 +10,13 @@ This script allows running actuarial models directly from a directory containing
 - model-points.parquet: Parquet file with model points data
 
 Usage:
-    python -m gaspatchio-core.scripts.run_model <directory>
+    uv run python scripts/run_model.py <directory>
 
     # Specify model file or model-points file
-    python -m gaspatchio-core.scripts.run_model <directory> --model-file custom_model.py --model-points-file custom_points.parquet
+    uv run python scripts/run_model.py <directory> --model-file custom_model.py --model-points-file custom_points.parquet
 
     # Compare debug and optimize modes
-    python -m gaspatchio-core.scripts.run_model compare-modes <directory>
+    uv run python scripts/run_model.py compare-modes <directory>
 
     # Run model for a single policy
     python -m gaspatchio-core.scripts.run_model <directory> --policy-id POLICY123

@@ -41,6 +41,10 @@ af.claims = af.sum_assured * af.pols_death        # scalar * list -> list (auto-
 af.net_cf = af.premiums - af.claims - af.expenses  # list - list - list -> list
 ```
 
+If `import gaspatchio` raises ModuleNotFoundError, the installed wheel predates
+0.8.3 — upgrade it (`uv lock --upgrade-package gaspatchio && uv sync`). Do not
+write new code against the deprecated `gaspatchio_core` name.
+
 ---
 
 ## API Patterns

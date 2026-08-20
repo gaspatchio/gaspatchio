@@ -8,6 +8,7 @@ import contextlib
 import importlib.util
 import sys
 import time
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
@@ -61,6 +62,16 @@ def load_model_from_path(
     if not model_path.exists():
         msg = f"Model file not found: {model_path}"
         raise FileNotFoundError(msg)
+
+    # The model runs as "model_module", not __main__, so PEP 565's default
+    # filters would hide the gaspatchio_core rename DeprecationWarning from
+    # the one audience it exists to migrate. Surface exactly that warning;
+    # message-anchoring keeps unrelated library DeprecationWarnings hidden.
+    warnings.filterwarnings(
+        "default",
+        message="The 'gaspatchio_core' import name is deprecated",
+        category=DeprecationWarning,
+    )
 
     spec = importlib.util.spec_from_file_location("model_module", model_path)
     if spec is None or spec.loader is None:
