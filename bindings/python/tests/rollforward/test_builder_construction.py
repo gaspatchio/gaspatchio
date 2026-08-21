@@ -11,8 +11,8 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core.rollforward._builder import RollforwardBuilder
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.schedule import Schedule
 
 
 @pytest.fixture
@@ -94,7 +94,7 @@ class TestBuilderConstruction:
 
 class TestBuild:
     def test_build_returns_ir(self, monthly_sched: Schedule) -> None:
-        from gaspatchio_core.rollforward._ir import IR
+        from gaspatchio.rollforward._ir import IR
 
         b = RollforwardBuilder(
             states={"av": pl.col("init")},

@@ -33,11 +33,15 @@ naming the ambiguity and the fix beats both silently guessing and failing opaque
 An `ActuarialFrame` wraps a Polars DataFrame. Columns are either **scalar** (one value per policy) or **list** (one value per projection period). Arithmetic between scalar and list columns broadcasts automatically.
 
 ```python
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 af = ActuarialFrame(polars_dataframe)
 af.claims = af.sum_assured * af.pols_death        # scalar * list -> list (auto-broadcast)
 af.net_cf = af.premiums - af.claims - af.expenses  # list - list - list -> list
 ```
+
+If `import gaspatchio` raises ModuleNotFoundError, the installed wheel predates
+0.8.3 — upgrade it (`uv lock --upgrade-package gaspatchio && uv sync`). Do not
+write new code against the deprecated `gaspatchio_core` name.
 
 ---
 
@@ -75,7 +79,7 @@ af.commissions = when(af.duration == 0).then(af.premiums).otherwise(0.0)
 ## Assumption Tables
 
 ```python
-from gaspatchio_core.assumptions import Table, TableBuilder
+from gaspatchio.assumptions import Table, TableBuilder
 import polars as pl
 
 df = pl.read_parquet("assumptions/mortality.parquet")
@@ -188,8 +192,8 @@ Let Polars handle parallelization. Never add Rayon or threading inside plugins.
 ## Model Structure: Three Phases
 
 ```python
-from gaspatchio_core import ActuarialFrame, when
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame, when
+from gaspatchio.assumptions import Table
 import polars as pl, datetime
 
 def load_assumptions():

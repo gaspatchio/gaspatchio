@@ -14,7 +14,7 @@ different numbers from production. The graph is record-only metadata now.
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def _frame() -> ActuarialFrame:
@@ -70,7 +70,7 @@ def test_error_boundary_diagnosis_replays_from_pre_op_baseline():
     and misattributes the failing operation. Diagnosis replays against the
     baseline captured when the trace sequence started.
     """
-    from gaspatchio_core.errors.boundary import ErrorBoundaryFinder
+    from gaspatchio.errors.boundary import ErrorBoundaryFinder
 
     af = ActuarialFrame(pl.DataFrame({"x": [1, 2, 3]}))
     af._tracing = True

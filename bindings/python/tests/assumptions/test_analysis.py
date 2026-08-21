@@ -8,7 +8,7 @@ Tests for the enhanced analysis module with analyze_table function.
 
 import polars as pl
 
-from gaspatchio_core.assumptions._analysis import (
+from gaspatchio.assumptions._analysis import (
     DimensionInfo,
     InterpolationHint,
     TableSchema,

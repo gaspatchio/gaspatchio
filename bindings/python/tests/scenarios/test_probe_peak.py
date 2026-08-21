@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 
-from gaspatchio_core.scenarios._for_each import _measure_peak_delta
+from gaspatchio.scenarios._for_each import _measure_peak_delta
 
 
 def test_measure_peak_delta_captures_transient_peak() -> None:

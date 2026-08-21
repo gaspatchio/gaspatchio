@@ -9,8 +9,8 @@ This module tests the error suggestion system's ability to generate helpful
 fix suggestions based on error types and context.
 """
 
-from gaspatchio_core.errors.metadata import OperationMetadata, TracedOperation
-from gaspatchio_core.errors.suggestions import ErrorSuggestionEngine
+from gaspatchio.errors.metadata import OperationMetadata, TracedOperation
+from gaspatchio.errors.suggestions import ErrorSuggestionEngine
 
 
 class TestErrorSuggestionEngine:

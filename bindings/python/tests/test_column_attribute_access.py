@@ -6,7 +6,7 @@ import keyword
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame, ColumnProxy
+from gaspatchio import ActuarialFrame, ColumnProxy
 
 
 @pytest.fixture

@@ -10,10 +10,10 @@ from datetime import date
 
 import polars as pl
 
-from gaspatchio_core.rollforward._builder import RollforwardBuilder
-from gaspatchio_core.rollforward._compile import compile_rollforward
-from gaspatchio_core.rollforward._explain import explain
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.rollforward._compile import compile_rollforward
+from gaspatchio.rollforward._explain import explain
+from gaspatchio.schedule import Schedule
 
 
 class TestUlSmoke:

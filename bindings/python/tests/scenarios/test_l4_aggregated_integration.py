@@ -26,8 +26,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, run_aggregated, run_to_parquet
-from gaspatchio_core.scenarios import PeriodQuantile, PeriodSum, Sum
+from gaspatchio import ActuarialFrame, run_aggregated, run_to_parquet
+from gaspatchio.scenarios import PeriodQuantile, PeriodSum, Sum
 
 if TYPE_CHECKING:
     from collections.abc import Callable

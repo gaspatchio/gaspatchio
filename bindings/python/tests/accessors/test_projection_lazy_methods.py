@@ -10,8 +10,8 @@ from datetime import date
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.schedule import Schedule
+from gaspatchio import ActuarialFrame
+from gaspatchio.schedule import Schedule
 
 
 def _af_with_synthetic_projection(n: int = 12) -> ActuarialFrame:
@@ -37,7 +37,7 @@ class TestReturnsProxyAwareExpressions:
         """Every method returns a ProxyAwareExpr that is still a pl.Expr."""
         import polars as pl
 
-        from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
+        from gaspatchio.column.proxy_aware_expr import ProxyAwareExpr
 
         af = _af_with_synthetic_projection(n=12)
         results = [
@@ -79,7 +79,7 @@ class TestReturnsProxyAwareExpressions:
         """The ``expr * proxy`` order works — it raises on a bare pl.Expr."""
         from datetime import date
 
-        from gaspatchio_core import ActuarialFrame
+        from gaspatchio import ActuarialFrame
 
         af = ActuarialFrame({"id": ["P1"], "scale": [2.0]})
         af = af.projection.set(

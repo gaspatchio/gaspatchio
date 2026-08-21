@@ -8,12 +8,12 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal  # Added import
 
-from gaspatchio_core.column import ExpressionProxy
-from gaspatchio_core.column.dispatch import _NUMERIC_UNARY
+from gaspatchio.column import ExpressionProxy
+from gaspatchio.column.dispatch import _NUMERIC_UNARY
 
 # Assuming ActuarialFrame is importable and can be instantiated with a LazyFrame
 # Adjust the import path if necessary
-from gaspatchio_core.frame import ActuarialFrame
+from gaspatchio.frame import ActuarialFrame
 
 
 # Fixture for a sample ActuarialFrame - UPDATED with more columns
@@ -207,7 +207,7 @@ def test_list_shimming_non_unary_on_list_col(sample_af: ActuarialFrame):
 
 def test_operators_work(sample_af: ActuarialFrame):  # noqa: ANN201
     """Briefly verify standard operators still work after autopatching."""
-    from gaspatchio_core.column.condition_expression import ConditionExpression
+    from gaspatchio.column.condition_expression import ConditionExpression
 
     proxy_add = sample_af["scalar_int"] + sample_af["scalar_float"]
     assert isinstance(proxy_add, ExpressionProxy)  # noqa: S101
@@ -431,7 +431,7 @@ def test_vector_shim_unary_ops_moved(sample_af: ActuarialFrame):
 def test_delegation_non_expression_return(sample_af: ActuarialFrame):
     """Test delegated methods that return non-Expr types (e.g., bool, list)."""
     # Polars methods like is_unique(), is_duplicated() return Series.
-    from gaspatchio_core.column.condition_expression import ConditionExpression
+    from gaspatchio.column.condition_expression import ConditionExpression
     # Methods like .all(), .any() on boolean expressions return Python bool.
     # .to_list() returns a Python list.
 

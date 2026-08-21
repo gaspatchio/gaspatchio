@@ -9,9 +9,9 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-from gaspatchio_core.schedule._business_day import BusinessDayConvention
-from gaspatchio_core.schedule._calendar import UnitedStates
-from gaspatchio_core.schedule._schedule import Schedule
+from gaspatchio.schedule._business_day import BusinessDayConvention
+from gaspatchio.schedule._calendar import UnitedStates
+from gaspatchio.schedule._schedule import Schedule
 
 if TYPE_CHECKING:
     import polars as pl

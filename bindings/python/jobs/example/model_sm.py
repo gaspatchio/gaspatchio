@@ -5,8 +5,8 @@
 import sys
 from pathlib import Path
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.functions import fill_series, floor
+from gaspatchio import ActuarialFrame
+from gaspatchio.functions import fill_series, floor
 from loguru import logger
 
 # Add the current directory to the path so we can import setup.py

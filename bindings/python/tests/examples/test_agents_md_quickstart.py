@@ -22,8 +22,8 @@ import itertools
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import Table
 
 
 def _model_points() -> pl.DataFrame:

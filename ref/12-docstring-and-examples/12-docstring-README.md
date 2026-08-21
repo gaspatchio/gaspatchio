@@ -137,7 +137,7 @@ def method_name(self, param1: type, param2: type = default) -> ReturnType:
     **Scalar Example: Single Policy Calculation**
 
     ```python
-    from gaspatchio_core import ActuarialFrame
+    from gaspatchio import ActuarialFrame
 
     # Single policy data
     data = {
@@ -167,7 +167,7 @@ def method_name(self, param1: type, param2: type = default) -> ReturnType:
     **Vector Example: Portfolio Analysis**
 
     ```python
-    from gaspatchio_core import ActuarialFrame
+    from gaspatchio import ActuarialFrame
 
     # Portfolio of policies
     data = {
@@ -295,7 +295,7 @@ Example scenarios:
 ### Python Code Blocks
 ```python
 # Use proper imports
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 import polars as pl
 
 # Include realistic data setup
@@ -422,7 +422,7 @@ def calculate_net_premium(self, mortality_rate: float, interest_rate: float) -> 
     **Scalar Example: Single Term Life Policy Pricing**
 
     ```python
-    from gaspatchio_core import ActuarialFrame
+    from gaspatchio import ActuarialFrame
 
     data = {
         "policy_id": ["TERM-2024-001"],
@@ -455,7 +455,7 @@ def calculate_net_premium(self, mortality_rate: float, interest_rate: float) -> 
     **Vector Example: Portfolio Premium Analysis by Product**
 
     ```python
-    from gaspatchio_core import ActuarialFrame
+    from gaspatchio import ActuarialFrame
 
     data = {
         "product_type": ["TERM10", "TERM20", "TERM30", "WHOLE"],

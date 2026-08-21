@@ -26,8 +26,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import (
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import (
     Mean,
     PeriodCTE,
     PeriodMean,
@@ -37,7 +37,7 @@ from gaspatchio_core.scenarios import (
     for_each_scenario,
     run_aggregated,
 )
-from gaspatchio_core.scenarios._period_sketch import build_period_sketches
+from gaspatchio.scenarios._period_sketch import build_period_sketches
 
 
 def _period_scenario_model(

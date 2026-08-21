@@ -39,7 +39,7 @@ import time
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 pytestmark = pytest.mark.benchmark
 

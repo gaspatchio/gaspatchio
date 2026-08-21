@@ -14,8 +14,8 @@ unit-length literal key series to the batch length.
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import Table
 
 BANDS = ["18-30", "31-45", "46-65"]
 LIFE_RATES = {"18-30": 0.00012, "31-45": 0.00025, "46-65": 0.00072}

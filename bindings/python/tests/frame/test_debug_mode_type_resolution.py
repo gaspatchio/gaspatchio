@@ -6,8 +6,8 @@
 
 import pytest
 import polars as pl
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.util import set_default_mode, get_default_mode
+from gaspatchio import ActuarialFrame
+from gaspatchio.util import set_default_mode, get_default_mode
 
 
 @pytest.fixture(autouse=True)

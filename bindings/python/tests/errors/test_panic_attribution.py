@@ -28,8 +28,8 @@ import datetime
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, when
-from gaspatchio_core.errors.boundary import is_plan_lowering_panic
+from gaspatchio import ActuarialFrame, when
+from gaspatchio.errors.boundary import is_plan_lowering_panic
 
 VALUATION = datetime.date(2025, 1, 1)
 

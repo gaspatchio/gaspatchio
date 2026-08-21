@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
-from gaspatchio_core.errors.metadata import (
+from gaspatchio.errors.metadata import (
     OperationMetadata,
     TracedOperation,
     _get_source_line_safe,
@@ -206,7 +206,7 @@ class TestCaptureSourceContext:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write("def temp_function():\n")
             f.write(
-                "    from gaspatchio_core.errors.metadata import capture_source_context\n",
+                "    from gaspatchio.errors.metadata import capture_source_context\n",
             )
             f.write("    return capture_source_context(depth=1)\n")
             temp_path = f.name

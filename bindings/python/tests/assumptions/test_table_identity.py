@@ -9,8 +9,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+from gaspatchio.assumptions import Table
+from gaspatchio.scenarios.shocks import MultiplicativeShock
 
 
 @pytest.fixture

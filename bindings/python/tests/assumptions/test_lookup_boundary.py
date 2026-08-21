@@ -21,8 +21,8 @@ import math
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import Table
 
 
 def _age_table(name: str, storage_mode: str = "auto", **kwargs) -> Table:

@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from gaspatchio_core.schedule._day_count import (
+from gaspatchio.schedule._day_count import (
     Actual365Fixed,
     ActualActualISDA,
 )
-from gaspatchio_core.schedule._schedule import Schedule
+from gaspatchio.schedule._schedule import Schedule
 
 if TYPE_CHECKING:
     import polars as pl

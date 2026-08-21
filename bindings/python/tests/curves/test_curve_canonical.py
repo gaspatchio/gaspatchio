@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from gaspatchio_core.curves._curve import Curve
-from gaspatchio_core.schedule._day_count import (
+from gaspatchio.curves._curve import Curve
+from gaspatchio.schedule._day_count import (
     Actual360,
     Actual365Fixed,
     ActualActualISDA,

@@ -27,7 +27,7 @@ def test_stubs_match_runtime():
         sys.executable,
         "-m",
         "mypy.stubtest",
-        "gaspatchio_core",
+        "gaspatchio",
         "--ignore-missing-stub",  # Don't fail on missing stubs for dependencies
     ]
 

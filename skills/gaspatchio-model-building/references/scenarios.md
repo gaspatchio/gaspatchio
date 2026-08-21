@@ -37,7 +37,7 @@ For yield-curve scenarios, you don't pass a single flat rate — you build a
 A flat curve is just a one-tenor curve:
 
 ```python
-from gaspatchio_core import Curve
+from gaspatchio import Curve
 
 curve = Curve.from_zero_rates(tenors=[1.0, 30.0], rates=[0.025, 0.025])
 # Inside the model:
@@ -49,7 +49,7 @@ af.df = curve.discount_factor(t=af["t_years"])
 ```python
 from datetime import date
 
-from gaspatchio_core import Curve, Schedule
+from gaspatchio import Curve, Schedule
 
 # Build the curve from a sparse zero-rate grid; Curve interpolates linearly
 # on the rate between knot tenors.

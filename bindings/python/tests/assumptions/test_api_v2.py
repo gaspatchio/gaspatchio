@@ -8,15 +8,15 @@
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions._analysis import TableSchema
-from gaspatchio_core.assumptions._api import Table
-from gaspatchio_core.assumptions._dimensions import (
+from gaspatchio.assumptions._analysis import TableSchema
+from gaspatchio.assumptions._api import Table
+from gaspatchio.assumptions._dimensions import (
     CategoricalDimension,
     ComputedDimension,
     DataDimension,
     MeltDimension,
 )
-from gaspatchio_core.assumptions._strategies import (
+from gaspatchio.assumptions._strategies import (
     ExtendOverflow,
 )
 

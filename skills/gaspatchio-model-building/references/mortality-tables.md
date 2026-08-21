@@ -1,7 +1,7 @@
 # Mortality Tables (`MortalityTable`)
 
 `MortalityTable` is the typed mortality primitive in gaspatchio. It wraps a
-`gaspatchio_core.assumptions.Table` and adds three actuarial-convention fields —
+`gaspatchio.assumptions.Table` and adds three actuarial-convention fields —
 `age_basis`, `structure`, and `select_period` — that the underlying `Table` does not
 carry. Its `.at()` method routes calls through structure-aware dispatch, handling the
 select-period clamp automatically.
@@ -15,12 +15,12 @@ benefit rates) with no age-basis semantics, use `Table.lookup` directly.
 ## Import
 
 ```python
-from gaspatchio_core import MortalityTable
-from gaspatchio_core.assumptions import Table, TableBuilder
+from gaspatchio import MortalityTable
+from gaspatchio.assumptions import Table, TableBuilder
 ```
 
 `MortalityTable` is exported from the top-level package; the underlying `Table` is
-imported from `gaspatchio_core.assumptions`.
+imported from `gaspatchio.assumptions`.
 
 ---
 
@@ -28,7 +28,7 @@ imported from `gaspatchio_core.assumptions`.
 
 ```python
 MortalityTable(
-    table=<Table>,            # gaspatchio_core.assumptions.Table
+    table=<Table>,            # gaspatchio.assumptions.Table
     age_basis=<AgeBasis>,     # "age_last_birthday" | "age_nearest_birthday"
     structure=<Structure>,    # "aggregate" | "select_ultimate" | "joint"
     select_period=<int|None>, # required for "select_ultimate"; omit/None otherwise
@@ -60,8 +60,8 @@ annuity tables, population mortality, UN life tables.
 
 ```python
 import polars as pl
-from gaspatchio_core import ActuarialFrame, MortalityTable
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame, MortalityTable
+from gaspatchio.assumptions import Table
 
 # Build the underlying Table (age-only dimension)
 agg_df = pl.DataFrame({
@@ -111,8 +111,8 @@ Verified behaviour (from `tests/mortality/test_at_select_ultimate.py`):
 
 ```python
 import polars as pl
-from gaspatchio_core import ActuarialFrame, MortalityTable
-from gaspatchio_core.assumptions import TableBuilder
+from gaspatchio import ActuarialFrame, MortalityTable
+from gaspatchio.assumptions import TableBuilder
 
 # Build the underlying Table
 # Column "select_dur" is the select-period duration (1..SELECT_PERIOD)
@@ -169,8 +169,8 @@ or joint-life products. The underlying `Table` must have two age-dimension colum
 
 ```python
 import polars as pl
-from gaspatchio_core import MortalityTable
-from gaspatchio_core.assumptions import Table
+from gaspatchio import MortalityTable
+from gaspatchio.assumptions import Table
 
 # Joint table: rate is a function of both lives' ages
 pairs = [

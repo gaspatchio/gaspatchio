@@ -10,7 +10,7 @@ import math
 
 import pytest
 
-from gaspatchio_core.scenarios._aggregators import CTE, Median, Quantile, QuantileRank
+from gaspatchio.scenarios._aggregators import CTE, Median, Quantile, QuantileRank
 
 
 def test_median() -> None:

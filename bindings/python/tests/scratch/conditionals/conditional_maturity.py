@@ -13,7 +13,7 @@ Run with: uv run python tests/scratch/conditional_maturity.py
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 # Sample data: Two policies with different terms
 data = {

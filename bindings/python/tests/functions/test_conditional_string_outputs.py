@@ -21,7 +21,7 @@ import datetime
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 
 def _projected_codes() -> ActuarialFrame:
@@ -225,7 +225,7 @@ class TestBroadcastToPeriods:
 
     def test_broadcast_feeds_string_lookup(self) -> None:
         """The end-to-end motivation: string dimension -> per-period lookup."""
-        from gaspatchio_core.assumptions import Table
+        from gaspatchio.assumptions import Table
 
         rates = Table(
             name="occ_rates_gsp110",

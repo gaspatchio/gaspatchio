@@ -15,8 +15,8 @@ import time
 
 import polars as pl
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import Sum, for_each_scenario
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import Sum, for_each_scenario
 
 
 def main() -> None:

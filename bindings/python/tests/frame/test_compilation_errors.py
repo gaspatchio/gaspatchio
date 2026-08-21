@@ -16,9 +16,9 @@ from unittest.mock import patch
 import polars as pl
 import pytest
 
-from gaspatchio_core.errors.models import EnhancedError, ErrorType
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.util import get_error_mode, set_error_mode
+from gaspatchio.errors.models import EnhancedError, ErrorType
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.util import get_error_mode, set_error_mode
 
 
 class TestCompilationErrorHandling:
@@ -212,7 +212,7 @@ class TestCompilationErrorHandling:
         assert not hasattr(error, 'enhanced_error')
         assert not hasattr(error, 'to_json')
     
-    @patch('gaspatchio_core.errors.formatting_errors._is_interactive_console')
+    @patch('gaspatchio.errors.formatting_errors._is_interactive_console')
     def test_console_detection(self, mock_console):
         """Test console detection for emoji display."""
         set_error_mode("enhanced")

@@ -65,8 +65,8 @@ from stochastic_scenarios import (
     generate_stochastic_returns,
 )
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import with_scenarios
+from gaspatchio import ActuarialFrame
+from gaspatchio.scenarios import with_scenarios
 
 
 def load_model_points(size: str) -> pl.DataFrame:

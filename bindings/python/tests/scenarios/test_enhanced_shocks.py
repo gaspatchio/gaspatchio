@@ -17,9 +17,9 @@ This module tests the full range of actuarial stress testing capabilities:
 import polars as pl
 import pytest
 
-from gaspatchio_core.scenarios import ScenarioRun, parse_shock_config
-from gaspatchio_core.scenarios._aggregators import Sum
-from gaspatchio_core.scenarios.shocks import (
+from gaspatchio.scenarios import ScenarioRun, parse_shock_config
+from gaspatchio.scenarios._aggregators import Sum
+from gaspatchio.scenarios.shocks import (
     AdditiveShock,
     ClipShock,
     FilteredShock,
@@ -739,7 +739,7 @@ class TestShockDescribeWithNewShocks:
 
 def test_all_shock_types_importable():
     """All new shock types are importable from scenarios module."""
-    from gaspatchio_core.scenarios import (
+    from gaspatchio.scenarios import (
         AdditiveShock,
         ClipShock,
         FilteredShock,

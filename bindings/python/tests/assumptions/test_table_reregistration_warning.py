@@ -20,7 +20,7 @@ from __future__ import annotations
 import polars as pl
 from loguru import logger
 
-from gaspatchio_core.assumptions import Table
+from gaspatchio.assumptions import Table
 
 
 def _capture_warnings() -> tuple[list[str], int]:

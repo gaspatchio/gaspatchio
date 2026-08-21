@@ -27,8 +27,8 @@ from pathlib import Path
 import polars as pl
 from loguru import logger
 
-from gaspatchio_core import ActuarialFrame, when, with_scenarios
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame, when, with_scenarios
+from gaspatchio.assumptions import Table
 
 
 def setup_assumptions(base_path: Path) -> tuple[Table, Table, Table]:

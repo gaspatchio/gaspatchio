@@ -69,7 +69,7 @@ This skill initializes and runs existing tutorials. It does NOT write model code
 If you catch yourself doing any of the following, STOP and re-read this skill:
 
 - **NEVER write a model from scratch.** Use `gspio tutorial init` to get a working model. The tutorials exist and are tested.
-- **NEVER import internal functions** like `list_conditional`, `accumulate`, or anything from `gaspatchio_core.functions.vector`. These are internal implementation details.
+- **NEVER import internal functions** like `list_conditional`, `accumulate`, or anything from `gaspatchio.functions.vector`. These are internal implementation details.
 - **NEVER use raw Polars patterns** like `af.with_columns(pl.col(...))`. The gaspatchio API uses `af.column_name = expression`.
 - **NEVER build projection timelines manually** with `[[i for i in range(n)]] * rows`. Use `af.projection.set(...)`.
 - **NEVER skip `gspio tutorial init`** and improvise. If the command fails, diagnose why — do not fall back to writing code.

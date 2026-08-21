@@ -11,10 +11,10 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core.rollforward._builder import RollforwardBuilder
-from gaspatchio_core.rollforward._compile import compile_rollforward
-from gaspatchio_core.rollforward._compiled import CompiledRollforward
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.rollforward._compile import compile_rollforward
+from gaspatchio.rollforward._compiled import CompiledRollforward
+from gaspatchio.schedule import Schedule
 
 
 @pytest.fixture
@@ -60,9 +60,9 @@ class TestCompile:
             assert pass_name in log_text
 
     def test_validate_failure_short_circuits(self, sched: Schedule) -> None:
-        from gaspatchio_core.rollforward._ir import IR, State
-        from gaspatchio_core.rollforward._ops import Add
-        from gaspatchio_core.rollforward._refs import StateRef
+        from gaspatchio.rollforward._ir import IR, State
+        from gaspatchio.rollforward._ops import Add
+        from gaspatchio.rollforward._refs import StateRef
 
         ir = IR(
             states=(State(name="av", init=pl.col("init")),),

@@ -65,7 +65,7 @@ Use when you have pre-built scenario files (ESG output, regulatory curves, stres
 ### Pattern
 
 ```python
-from gaspatchio_core import ActuarialFrame, with_scenarios
+from gaspatchio import ActuarialFrame, with_scenarios
 from appliedlife.model_applied_life import main as run_model
 
 # Load and expand across scenarios
@@ -172,8 +172,8 @@ config = [
 ### Running What-If Analysis
 
 ```python
-from gaspatchio_core.scenarios import parse_scenario_config, describe_scenarios
-from gaspatchio_core import Table
+from gaspatchio.scenarios import parse_scenario_config, describe_scenarios
+from gaspatchio import Table
 
 # Parse config to shock objects
 scenarios = parse_scenario_config(config)
@@ -366,7 +366,7 @@ Results saved to: appliedlife/output/stochastic_scenario_results.parquet
 The model is **stochastic-ready** - it automatically detects when scenario returns include a `scenario_id` column:
 
 ```python
-from gaspatchio_core import ActuarialFrame, with_scenarios
+from gaspatchio import ActuarialFrame, with_scenarios
 from appliedlife.model_applied_life import main as run_model
 
 # Generate stochastic returns with scenario_id column

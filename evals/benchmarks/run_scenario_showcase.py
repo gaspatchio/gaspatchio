@@ -31,8 +31,8 @@ from evals.benchmarks.scenario_lib import (
     make_stochastic_model_fn,
     portfolio_cte,
 )
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import Sum, for_each_scenario, with_scenarios
+from gaspatchio import ActuarialFrame
+from gaspatchio.scenarios import Sum, for_each_scenario, with_scenarios
 
 N_SCENARIOS = 1_000
 N_FAN = 100  # scenarios re-run with full grid retained for the per-month fan

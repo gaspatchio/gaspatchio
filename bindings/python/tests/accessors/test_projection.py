@@ -14,7 +14,7 @@ import math
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 class TestCumulativeSurvival:
@@ -1263,7 +1263,7 @@ class TestAccumulate:
 
     def test_broadcast_initial(self):
         """Test single initial value (literal) broadcast to multiple rows."""
-        from gaspatchio_core.functions.vector import accumulate
+        from gaspatchio.functions.vector import accumulate
 
         data = {
             "multiply": [[1.01, 1.01], [2.0, 2.0]],
@@ -1294,7 +1294,7 @@ class TestAccumulate:
 
     def test_null_initial_produces_null_output(self):
         """Test that null initial value produces all-null output row."""
-        from gaspatchio_core.functions.vector import accumulate
+        from gaspatchio.functions.vector import accumulate
 
         data = {
             "initial": [None],
@@ -1316,7 +1316,7 @@ class TestAccumulate:
 
     def test_null_in_inner_list_propagates(self):
         """Test that null in inner list produces null and propagates NaN."""
-        from gaspatchio_core.functions.vector import accumulate
+        from gaspatchio.functions.vector import accumulate
 
         data = {
             "initial": [100.0],
@@ -1341,7 +1341,7 @@ class TestAccumulate:
 
     def test_empty_lists_produce_empty_output(self):
         """Test that empty input lists produce empty output list."""
-        from gaspatchio_core.functions.vector import accumulate
+        from gaspatchio.functions.vector import accumulate
 
         data = {
             "initial": [100.0],
@@ -1361,7 +1361,7 @@ class TestAccumulate:
 
     def test_length_mismatch_raises_error(self):
         """Test that mismatched multiply/add lengths raise error."""
-        from gaspatchio_core.functions.vector import accumulate
+        from gaspatchio.functions.vector import accumulate
         from polars.exceptions import ComputeError
 
         data = {

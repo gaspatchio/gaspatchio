@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios._validate import (
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios._validate import (
     check_no_duplicate_ids,
     check_no_scenario_column,
     check_non_empty,

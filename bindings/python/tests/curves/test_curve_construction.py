@@ -10,8 +10,8 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from gaspatchio_core.curves._curve import Curve
-from gaspatchio_core.schedule._day_count import (
+from gaspatchio.curves._curve import Curve
+from gaspatchio.schedule._day_count import (
     Actual365Fixed,
     ActualActualISDA,
     OneTwelfth,
@@ -127,23 +127,23 @@ class TestFromZeroRates:
 
 
 class TestPublicAPI:
-    """Curve is reachable via gaspatchio_core.Curve and gaspatchio_core.curves.Curve."""
+    """Curve is reachable via gaspatchio.Curve and gaspatchio.curves.Curve."""
 
     def test_curve_importable_from_subpackage(self) -> None:
-        """gaspatchio_core.curves.Curve is the same object as the private one."""
-        from gaspatchio_core.curves import Curve
-        from gaspatchio_core.curves._curve import Curve as PrivateCurve
+        """gaspatchio.curves.Curve is the same object as the private one."""
+        from gaspatchio.curves import Curve
+        from gaspatchio.curves._curve import Curve as PrivateCurve
 
         assert Curve is PrivateCurve
 
     def test_top_level_import(self) -> None:
-        """gaspatchio_core has a Curve attribute."""
-        import gaspatchio_core
+        """gaspatchio has a Curve attribute."""
+        import gaspatchio
 
-        assert hasattr(gaspatchio_core, "Curve")
+        assert hasattr(gaspatchio, "Curve")
 
     def test_top_level___all___includes_curve(self) -> None:
-        """gaspatchio_core.__all__ includes 'Curve'."""
-        import gaspatchio_core
+        """gaspatchio.__all__ includes 'Curve'."""
+        import gaspatchio
 
-        assert "Curve" in gaspatchio_core.__all__
+        assert "Curve" in gaspatchio.__all__

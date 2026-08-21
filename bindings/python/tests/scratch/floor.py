@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 # scalar
 data = {

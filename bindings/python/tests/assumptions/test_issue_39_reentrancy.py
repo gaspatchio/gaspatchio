@@ -12,7 +12,7 @@ without errors when models are run multiple times in the same process.
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
+from gaspatchio.assumptions import Table
 
 
 def test_reentrancy_no_error():
@@ -122,7 +122,7 @@ def test_multiple_model_runs():
 
 def test_registry_state_after_multiple_registrations():
     """Test that the registry is in a valid state after re-registrations."""
-    from gaspatchio_core._internal import PyAssumptionTableRegistry
+    from gaspatchio._internal import PyAssumptionTableRegistry
     
     registry = PyAssumptionTableRegistry()
     

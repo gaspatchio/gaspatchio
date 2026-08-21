@@ -20,15 +20,15 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import Sum
-from gaspatchio_core.scenarios._aggregators import (
+from gaspatchio.assumptions import Table
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import Sum
+from gaspatchio.scenarios._aggregators import (
     _AGGREGATOR_REGISTRY,
     _BaseAggregator,
     scenario_aggregator,
 )
-from gaspatchio_core.scenarios._run import ScenarioRun
+from gaspatchio.scenarios._run import ScenarioRun
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -122,13 +122,13 @@ from typing import Any
 
 import polars as pl
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios._aggregators import (
+from gaspatchio.assumptions import Table
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios._aggregators import (
     _BaseAggregator,
     scenario_aggregator,
 )
-from gaspatchio_core.scenarios._run import ScenarioRun
+from gaspatchio.scenarios._run import ScenarioRun
 
 
 @scenario_aggregator("Skewness")
@@ -263,7 +263,7 @@ def test_cross_process_yaml_round_trip_bit_exact(
     - The subprocess is a real fresh interpreter invocation, not an in-process
       simulation.
     """
-    from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+    from gaspatchio.scenarios.shocks import MultiplicativeShock
 
     plan = ScenarioRun(
         shocks={

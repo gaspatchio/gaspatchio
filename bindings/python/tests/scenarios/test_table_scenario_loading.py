@@ -12,7 +12,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
+from gaspatchio.assumptions import Table
 
 
 class TestTableFromScenarioFiles:
@@ -94,7 +94,7 @@ class TestTableFromScenarioFiles:
 
     def test_lookup_with_scenario_dimension(self, scenario_files):
         """Lookup should work with scenario_id as a dimension."""
-        from gaspatchio_core import ActuarialFrame
+        from gaspatchio import ActuarialFrame
 
         # Arrange
         table = Table.from_scenario_files(

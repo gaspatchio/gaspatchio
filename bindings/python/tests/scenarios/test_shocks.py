@@ -10,7 +10,7 @@
 import polars as pl
 import pytest
 
-from gaspatchio_core.scenarios.shocks import (
+from gaspatchio.scenarios.shocks import (
     AdditiveShock,
     MultiplicativeShock,
     OverrideShock,
@@ -185,7 +185,7 @@ class TestShockEquality:
 
 def test_import_shocks():
     """Shocks should be importable from scenarios.shocks."""
-    from gaspatchio_core.scenarios.shocks import (
+    from gaspatchio.scenarios.shocks import (
         AdditiveShock,
         MultiplicativeShock,
         OverrideShock,

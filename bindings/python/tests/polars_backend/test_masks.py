@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 
 class TestScalarPath:
@@ -62,10 +62,10 @@ class TestDirectModuleImports:
     """Verify the module's public surface is reachable."""
 
     def test_to_boolean_expr_importable(self) -> None:
-        from gaspatchio_core.polars_backend.masks import to_boolean_expr  # noqa: F401
+        from gaspatchio.polars_backend.masks import to_boolean_expr  # noqa: F401
 
     def test_boolean_and_or_not_importable(self) -> None:
-        from gaspatchio_core.polars_backend.masks import (  # noqa: F401
+        from gaspatchio.polars_backend.masks import (  # noqa: F401
             boolean_and,
             boolean_not,
             boolean_or,

@@ -13,8 +13,8 @@ from unittest.mock import patch
 import polars as pl
 import pytest
 
-from gaspatchio_core.errors.metadata import OperationMetadata
-from gaspatchio_core.frame.base import ActuarialFrame
+from gaspatchio.errors.metadata import OperationMetadata
+from gaspatchio.frame.base import ActuarialFrame
 
 
 @pytest.fixture
@@ -111,7 +111,7 @@ class TestDispatchEnhancedErrorHandling:
         )
 
         with patch(
-            "gaspatchio_core.column.dispatch.capture_source_context",
+            "gaspatchio.column.dispatch.capture_source_context",
             return_value=mock_context,
         ):
             try:
@@ -142,7 +142,7 @@ class TestDispatchEnhancedErrorHandling:
         """Test graceful fallback when source capture fails."""
         # Mock source capture to fail
         with patch(
-            "gaspatchio_core.column.dispatch.capture_source_context",
+            "gaspatchio.column.dispatch.capture_source_context",
             side_effect=Exception("Capture failed"),
         ):
             # This should still work - errors in source capture shouldn't break normal operation
@@ -155,7 +155,7 @@ class TestDispatchEnhancedErrorHandling:
         sample_frame._tracing = False
 
         with patch(
-            "gaspatchio_core.column.dispatch.capture_source_context",
+            "gaspatchio.column.dispatch.capture_source_context",
         ) as mock_capture:
             # Perform normal operations
             sample_frame["total"] = sample_frame["premium"].sum()
@@ -174,7 +174,7 @@ class TestDispatchEnhancedErrorHandling:
         )
 
         with patch(
-            "gaspatchio_core.column.dispatch.capture_source_context",
+            "gaspatchio.column.dispatch.capture_source_context",
             return_value=mock_context,
         ):
             proxy = tracing_frame["premium"]
@@ -197,7 +197,7 @@ class TestDispatchPerformance:
 
         # Mock capture_source_context to verify it's not called
         with patch(
-            "gaspatchio_core.column.dispatch.capture_source_context",
+            "gaspatchio.column.dispatch.capture_source_context",
         ) as mock_capture:
             # Perform multiple operations
             for i in range(10):
@@ -238,7 +238,7 @@ class TestDispatchCompatibility:
     def test_import_fallback_handling(self):
         """Test that dispatch works even if errors module import fails."""
         # This tests the ImportError fallback in the dispatch module
-        with patch("gaspatchio_core.column.dispatch.capture_source_context", None):
+        with patch("gaspatchio.column.dispatch.capture_source_context", None):
             df = pl.DataFrame({"test": [1, 2, 3]})
             af = ActuarialFrame(df)
             af._tracing = True  # Enable tracing

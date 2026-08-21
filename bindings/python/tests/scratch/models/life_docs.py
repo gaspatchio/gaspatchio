@@ -6,8 +6,8 @@ import datetime
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import Table
 
 # Configure Polars for better terminal display
 pl.Config.set_tbl_cols(-1)  # Show all columns

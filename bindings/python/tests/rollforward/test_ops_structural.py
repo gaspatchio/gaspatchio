@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import polars as pl
 
-from gaspatchio_core.rollforward._ops import Apply, Floor, Op, Ratchet
-from gaspatchio_core.rollforward._refs import StateRef
+from gaspatchio.rollforward._ops import Apply, Floor, Op, Ratchet
+from gaspatchio.rollforward._refs import StateRef
 
 
 class TestRatchet:

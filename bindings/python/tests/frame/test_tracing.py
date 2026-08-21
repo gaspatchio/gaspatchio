@@ -15,8 +15,8 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from gaspatchio_core import ActuarialFrame, set_default_mode
-from gaspatchio_core.util import set_default_verbose
+from gaspatchio import ActuarialFrame, set_default_mode
+from gaspatchio.util import set_default_verbose
 
 # Sample data for testing
 DATA = {"a": [1, 2, 3], "b": [4, 5, 6]}
@@ -102,7 +102,7 @@ def test_trace_optimize_mode_no_operations(base_frame):
     assert_frame_equal(base_frame.collect(), pl.DataFrame(DATA))
 
 
-@patch("gaspatchio_core.frame.tracing.log_query_plan")
+@patch("gaspatchio.frame.tracing.log_query_plan")
 def test_trace_log_query_plan_called(mock_log_plan, base_frame):
     """Test that log_query_plan is called in debug mode with verbose=True."""
     set_default_mode("debug")
@@ -138,7 +138,7 @@ def test_trace_log_query_plan_called(mock_log_plan, base_frame):
     set_default_verbose(False)  # Reset for other tests
 
 
-@patch("gaspatchio_core.frame.tracing.log_query_plan")
+@patch("gaspatchio.frame.tracing.log_query_plan")
 def test_trace_log_query_plan_not_called(mock_log_plan, base_frame):
     """Test that log_query_plan is NOT called in optimize mode with verbose=False."""
     set_default_mode("optimize")

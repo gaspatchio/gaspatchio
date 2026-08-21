@@ -11,8 +11,8 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, RollforwardCollector, compile_rollforward
-from gaspatchio_core.schedule import Schedule
+from gaspatchio import ActuarialFrame, RollforwardCollector, compile_rollforward
+from gaspatchio.schedule import Schedule
 
 
 class TestRollforwardReadsFromFrame:

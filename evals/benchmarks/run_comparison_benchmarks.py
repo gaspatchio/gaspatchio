@@ -126,13 +126,13 @@ def _load_model_module(model_path: Path, module_name: str) -> ModuleType:
 
 
 def _gaspatchio_setup() -> tuple[float, ModuleType]:
-    """Import gaspatchio_core and load the L4 model module.
+    """Import gaspatchio and load the L4 model module.
 
     Returns:
         A tuple of (setup_time_s, model_module).
     """
     t0 = time.perf_counter()
-    from gaspatchio_core import ActuarialFrame as _AF  # noqa: F401, PLC0415
+    from gaspatchio import ActuarialFrame as _AF  # noqa: F401, PLC0415
 
     model_module = _load_model_module(_L4_MODEL_PATH, "l4_model_comparison")
     setup_time_s = time.perf_counter() - t0
@@ -149,7 +149,7 @@ def _run_gaspatchio(model_module: ModuleType, mp_path: Path) -> dict[str, Any]:
     Returns:
         Dict with keys ``time_s`` and ``peak_mb``.
     """
-    from gaspatchio_core import ActuarialFrame  # noqa: PLC0415
+    from gaspatchio import ActuarialFrame  # noqa: PLC0415
 
     mp = pl.read_parquet(mp_path)
 

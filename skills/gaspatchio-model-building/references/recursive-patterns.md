@@ -5,7 +5,7 @@ Values at time *t* depend on accumulated state at *t-1*. Two primitives cover th
 **"Do the within-period charges depend on the running balance?"**
 
 - **No** — the recurrence collapses to a single multiply-and-add. Use **`accumulate()`** (this page).
-- **Yes** — the running balance is needed *during* the period to compute later steps within the same period. Use the **rollforward kernel** (`af.projection.rollforward(states={…})`). See [Rollforward](../../../gaspatchio-docs/docs/concepts/rollforward/index.md) for the concept page and [`tutorial/patterns/rollforward-patterns/`](../../../bindings/python/gaspatchio_core/tutorials/patterns/rollforward-patterns/) for runnable patterns.
+- **Yes** — the running balance is needed *during* the period to compute later steps within the same period. Use the **rollforward kernel** (`af.projection.rollforward(states={…})`). See [Rollforward](../../../gaspatchio-docs/docs/concepts/rollforward/index.md) for the concept page and [`tutorial/patterns/rollforward-patterns/`](../../../bindings/python/gaspatchio/tutorials/patterns/rollforward-patterns/) for runnable patterns.
 
 | Product mechanic | Primitive |
 |---|---|

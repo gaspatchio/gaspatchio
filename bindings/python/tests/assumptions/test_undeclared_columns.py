@@ -16,7 +16,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import (
+from gaspatchio.assumptions import (
     CategoricalDimension,
     ComputedDimension,
     DataDimension,

@@ -12,10 +12,10 @@ import polars as pl
 import pytest
 import yaml
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.scenarios._aggregators import CTE, ArgMax, Mean, Sum
-from gaspatchio_core.scenarios._run import ScenarioRun
-from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+from gaspatchio.assumptions import Table
+from gaspatchio.scenarios._aggregators import CTE, ArgMax, Mean, Sum
+from gaspatchio.scenarios._run import ScenarioRun
+from gaspatchio.scenarios.shocks import MultiplicativeShock
 
 if TYPE_CHECKING:
     from pathlib import Path

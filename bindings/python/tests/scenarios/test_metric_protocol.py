@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from gaspatchio_core.scenarios._metric import Aggregator, _Partitioned
+from gaspatchio.scenarios._metric import Aggregator, _Partitioned
 
 
 def test_aggregator_protocol_runtime_checkable() -> None:
@@ -189,8 +189,8 @@ def test_partitioned_merge_does_not_alias_input_accumulators() -> None:
     the merge path would let a later `add_input` on the merged state corrupt
     the original `a` accumulator. Pin the no-aliasing contract explicitly.
     """
-    from gaspatchio_core.scenarios import CTE
-    from gaspatchio_core.scenarios._metric import _Partitioned
+    from gaspatchio.scenarios import CTE
+    from gaspatchio.scenarios._metric import _Partitioned
 
     cte = CTE("loss", level=0.05, direction="upper").alias("scr")
     part = _Partitioned(by=("lob",), inner=cte, alias="scr_by_lob")

@@ -6,12 +6,12 @@ import os
 
 import polars as pl
 import pytest
-from gaspatchio_core import (
+from gaspatchio import (
     execution_mode,
     get_default_mode,
     set_default_mode,
 )
-from gaspatchio_core.util import (
+from gaspatchio.util import (
     _expr_to_str,
     get_default_threads,
     get_default_verbose,
@@ -150,7 +150,7 @@ class TestReadModelPoints:
 
     def test_reads_parquet(self, tmp_path):
         """A .parquet path is read into a LazyFrame."""
-        from gaspatchio_core.util import read_model_points
+        from gaspatchio.util import read_model_points
 
         path = tmp_path / "mp.parquet"
         self._frame().write_parquet(path)
@@ -159,7 +159,7 @@ class TestReadModelPoints:
 
     def test_reads_csv(self, tmp_path):
         """A .csv path is read into a LazyFrame (previously Parquet-only)."""
-        from gaspatchio_core.util import read_model_points
+        from gaspatchio.util import read_model_points
 
         path = tmp_path / "mp.csv"
         self._frame().write_csv(path)
@@ -168,7 +168,7 @@ class TestReadModelPoints:
 
     def test_csv_and_parquet_agree(self, tmp_path):
         """The same data read from CSV or Parquet yields identical frames."""
-        from gaspatchio_core.util import read_model_points
+        from gaspatchio.util import read_model_points
 
         df = self._frame()
         df.write_parquet(tmp_path / "mp.parquet")
@@ -179,7 +179,7 @@ class TestReadModelPoints:
 
     def test_accepts_string_path(self, tmp_path):
         """A string path is accepted as well as a Path object."""
-        from gaspatchio_core.util import read_model_points
+        from gaspatchio.util import read_model_points
 
         path = tmp_path / "mp.csv"
         self._frame().write_csv(path)
@@ -187,7 +187,7 @@ class TestReadModelPoints:
 
     def test_unsupported_extension_raises(self, tmp_path):
         """An unsupported extension raises a clear ValueError."""
-        from gaspatchio_core.util import read_model_points
+        from gaspatchio.util import read_model_points
 
         path = tmp_path / "mp.txt"
         path.write_text("policy_id,age\nPOL001,30\n")

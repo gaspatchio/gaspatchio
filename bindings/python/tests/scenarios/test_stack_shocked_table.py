@@ -10,9 +10,9 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.scenarios._stack import stack_shocked_table
-from gaspatchio_core.scenarios.shocks import (
+from gaspatchio.assumptions import Table
+from gaspatchio.scenarios._stack import stack_shocked_table
+from gaspatchio.scenarios.shocks import (
     AdditiveShock,
     MultiplicativeShock,
 )
@@ -143,7 +143,7 @@ class TestScenarioAxisGuard:
 
     def test_scenario_run_surfaces_the_guard(self) -> None:
         """ScenarioRun raises the guard, not a deep duplicate-key error."""
-        from gaspatchio_core.scenarios import ScenarioRun, Sum
+        from gaspatchio.scenarios import ScenarioRun, Sum
 
         disc_rates = Table(
             name="disc_rates_axis_guard_e2e",
@@ -157,7 +157,7 @@ class TestScenarioAxisGuard:
             dimensions={"scenario_id": "scenario_id", "year": "year"},
             value="rate",
         )
-        from gaspatchio_core import ActuarialFrame
+        from gaspatchio import ActuarialFrame
 
         policies = ActuarialFrame(pl.DataFrame({"policy_id": [1], "premium": [100.0]}))
 

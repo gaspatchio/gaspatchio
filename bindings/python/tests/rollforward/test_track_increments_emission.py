@@ -23,9 +23,9 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, compile_rollforward
-from gaspatchio_core.rollforward._builder import RollforwardBuilder
-from gaspatchio_core.schedule import Schedule
+from gaspatchio import ActuarialFrame, compile_rollforward
+from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.schedule import Schedule
 
 
 def _sched(n: int = 12) -> Schedule:
@@ -130,7 +130,7 @@ class TestGates:
         dies as a missing struct field, far from the call that asked (the
         gh#93 rule: refuse at the call, naming the valid labels).
         """
-        from gaspatchio_core.rollforward._collector import RollforwardCollector
+        from gaspatchio.rollforward._collector import RollforwardCollector
 
         af = _frame(av_init=[0.0], premium=[[100.0]])
         b = af.projection.rollforward(

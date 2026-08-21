@@ -45,8 +45,8 @@ from typing import Literal
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame, when
-from gaspatchio_core.assumptions import Table
+from gaspatchio import ActuarialFrame, when
+from gaspatchio.assumptions import Table
 
 StorageModeType = Literal["auto", "hash", "array"]
 

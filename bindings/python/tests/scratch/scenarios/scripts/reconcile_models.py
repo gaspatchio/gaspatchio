@@ -146,7 +146,7 @@ def run_gaspatchio_model(model_name: str = "model_applied_life") -> pl.DataFrame
         # Import the specified model
         model_module = importlib.import_module(f"appliedlife.{model_name}")
 
-        from gaspatchio_core import ActuarialFrame
+        from gaspatchio import ActuarialFrame
 
         mp_path = script_dir.parent / "model_points.parquet"
         if not mp_path.exists():

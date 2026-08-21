@@ -10,7 +10,7 @@
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 
 def test_ne_operator() -> None:

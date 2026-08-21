@@ -17,14 +17,14 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core.rollforward._ir import IR, State
-from gaspatchio_core.rollforward._ops import Grow, Ratchet
-from gaspatchio_core.rollforward._passes import (
+from gaspatchio.rollforward._ir import IR, State
+from gaspatchio.rollforward._ops import Grow, Ratchet
+from gaspatchio.rollforward._passes import (
     AssignCaptureSlots,
     LowerToPolarsPlugin,
 )
-from gaspatchio_core.rollforward._refs import StateRef
-from gaspatchio_core.schedule import Schedule
+from gaspatchio.rollforward._refs import StateRef
+from gaspatchio.schedule import Schedule
 
 
 @pytest.fixture

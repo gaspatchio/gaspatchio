@@ -120,8 +120,8 @@ rebase or a small fix rather than bouncing the PR back to you.
   show the before/after on a reproducible model point and say why the new number is right.
 - Docstring examples are tests. Run
   `uv run pytest --doctest-modules --doctest-glob="*.pyi"`.
-- Both type checkers must pass: `uv run mypy gaspatchio_core` and
-  `uv run pyright gaspatchio_core`.
+- Both type checkers must pass: `uv run mypy gaspatchio` and
+  `uv run pyright gaspatchio`.
 
 `main` rejects force-pushes and deletions, and we **squash merge**.
 

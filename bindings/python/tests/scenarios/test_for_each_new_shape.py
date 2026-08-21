@@ -9,9 +9,9 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios._aggregators import ArgMax, Mean, Sum
-from gaspatchio_core.scenarios._for_each import for_each_scenario
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios._aggregators import ArgMax, Mean, Sum
+from gaspatchio.scenarios._for_each import for_each_scenario
 
 
 def _identity_model(af, *, tables, drivers):  # noqa: ANN202, ARG001

@@ -7,7 +7,7 @@
 # ruff: noqa: INP001, ANN201, S101, PLR2004, T201
 """Integration test for time-shifting methods in actuarial projections."""
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def test_inforce_rollforward_pattern():

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from datetime import date
 
-from gaspatchio_core.schedule._calendar import NullCalendar, UnitedStates
-from gaspatchio_core.schedule._day_count import Actual360
-from gaspatchio_core.schedule._schedule import Schedule
+from gaspatchio.schedule._calendar import NullCalendar, UnitedStates
+from gaspatchio.schedule._day_count import Actual360
+from gaspatchio.schedule._schedule import Schedule
 
 
 class TestCanonicalForm:

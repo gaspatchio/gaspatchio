@@ -4,12 +4,12 @@
 
 import polars as pl
 import pytest
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 # @pytest.mark.parametrize(
 #    "example",
 #    find_examples(
-#        "gaspatchio_core/column/namespaces/dt_proxy.py",
+#        "gaspatchio/column/namespaces/dt_proxy.py",
 #    ),
 #    ids=str,
 # )
@@ -41,10 +41,10 @@ def test_yearfrac_example():
 @pytest.mark.example(ns="dt.year")
 def test_dt_year_example():
     """Test the .dt.year accessor and method."""
-    from gaspatchio_core.column.expression_proxy import (
+    from gaspatchio.column.expression_proxy import (
         ExpressionProxy,  # For type checking
     )
-    from gaspatchio_core.column.namespaces.dt_proxy import (
+    from gaspatchio.column.namespaces.dt_proxy import (
         DtNamespaceProxy,  # For type checking
     )
 

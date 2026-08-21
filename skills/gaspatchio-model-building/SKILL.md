@@ -147,8 +147,8 @@ Model directories (e.g., `my-model/`) are NOT Python packages. To import a model
 ## Model Skeleton
 
 ```python
-from gaspatchio_core import ActuarialFrame, when
-from gaspatchio_core.assumptions import Table, TableBuilder
+from gaspatchio import ActuarialFrame, when
+from gaspatchio.assumptions import Table, TableBuilder
 import polars as pl
 import datetime
 

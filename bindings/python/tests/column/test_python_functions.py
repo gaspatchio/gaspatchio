@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 class TestPolarsFunctions:

@@ -17,16 +17,16 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import (
+from gaspatchio.assumptions import Table
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import (
     ArgMax,
     Mean,
     Sum,
 )
-from gaspatchio_core.scenarios._audit import read_audit
-from gaspatchio_core.scenarios._run import ScenarioRun
-from gaspatchio_core.scenarios.shocks import MultiplicativeShock
+from gaspatchio.scenarios._audit import read_audit
+from gaspatchio.scenarios._run import ScenarioRun
+from gaspatchio.scenarios.shocks import MultiplicativeShock
 
 
 @pytest.fixture
@@ -211,7 +211,7 @@ def test_audit_sidecar_survives_yaml_reload(
 
 def test_audit_records_selection_and_v2_schema(tmp_path: Path) -> None:
     """The audit sidecar carries the batch-search selection at schema 2.0."""
-    from gaspatchio_core.scenarios._audit import AUDIT_SCHEMA_VERSION, read_audit
+    from gaspatchio.scenarios._audit import AUDIT_SCHEMA_VERSION, read_audit
 
     assert AUDIT_SCHEMA_VERSION == "2.0"
 
@@ -240,7 +240,7 @@ def test_audit_coerces_ndarray_outputs_to_reloadable_json() -> None:
 
     import numpy as np
 
-    from gaspatchio_core.scenarios._audit import _coerce_outputs_to_json
+    from gaspatchio.scenarios._audit import _coerce_outputs_to_json
 
     outputs = {
         "period_total": np.array([1.0, 2.0, 3.0]),

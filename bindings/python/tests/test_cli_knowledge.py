@@ -11,13 +11,13 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from gaspatchio_core.api.client import APIConnectionError
-from gaspatchio_core.api.models import (
+from gaspatchio.api.client import APIConnectionError
+from gaspatchio.api.models import (
     KnowledgeAnswerResponse,
     KnowledgeResult,
     KnowledgeSearchResponse,
 )
-from gaspatchio_core.cli import app
+from gaspatchio.cli import app
 
 runner = CliRunner()
 
@@ -50,7 +50,7 @@ class TestKnowledgeCommand:
         assert result.exit_code == 0
         assert "gspio knowledge" in result.output
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_knowledge_returns_json(self, mock_client_class):
         """Knowledge command returns JSON output."""
         mock_client = MagicMock()
@@ -81,7 +81,7 @@ class TestKnowledgeCommand:
         assert "results" in output
         assert output["results"][0]["page_number"] == 42
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_knowledge_with_limit_option(self, mock_client_class):
         """Knowledge -n flag sets result limit."""
         mock_client = MagicMock()
@@ -108,7 +108,7 @@ class TestKnowledgeCommand:
             doc_type=None,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_knowledge_with_tag_filter(self, mock_client_class):
         """Knowledge -T flag filters by tag."""
         mock_client = MagicMock()
@@ -135,7 +135,7 @@ class TestKnowledgeCommand:
             doc_type=None,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_knowledge_with_jurisdiction_filter(self, mock_client_class):
         """Knowledge -j flag filters by jurisdiction."""
         mock_client = MagicMock()
@@ -162,7 +162,7 @@ class TestKnowledgeCommand:
             doc_type=None,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_knowledge_with_doc_type_filter(self, mock_client_class):
         """Knowledge -d flag filters by document type."""
         mock_client = MagicMock()
@@ -189,7 +189,7 @@ class TestKnowledgeCommand:
             doc_type="standard",
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_knowledge_with_retrieval_mode(self, mock_client_class):
         """Knowledge -r flag sets retrieval mode."""
         mock_client = MagicMock()
@@ -218,7 +218,7 @@ class TestKnowledgeCommand:
             doc_type=None,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_knowledge_with_combined_filters(self, mock_client_class):
         """Knowledge command accepts multiple filters together."""
         mock_client = MagicMock()
@@ -259,7 +259,7 @@ class TestKnowledgeCommand:
             doc_type="standard",
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_knowledge_with_answer_flag(self, mock_client_class):
         """Knowledge --answer returns generated answer."""
         mock_client = MagicMock()
@@ -297,10 +297,10 @@ class TestKnowledgeCommand:
             doc_type=None,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_knowledge_api_error_exits_nonzero(self, mock_client_class):
         """Knowledge exits with error code on API failure."""
-        from gaspatchio_core.api.client import APIConnectionError
+        from gaspatchio.api.client import APIConnectionError
 
         mock_client = MagicMock()
         mock_client.search_knowledge.side_effect = APIConnectionError("API unavailable")
@@ -336,7 +336,7 @@ class TestKnowledgePayloadTrimming:
             took_ms=10.0,
         )
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_near_duplicate_hits_collapse_by_default(self, mock_client_class):
         """The observed #120 case: one preamble ingested under two doc_ids."""
         preamble = "The purpose of this practice note is to provide background. " * 60
@@ -357,7 +357,7 @@ class TestKnowledgePayloadTrimming:
         assert output["deduplicated"] == 1
         assert len(output["results"]) == 2
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_long_hit_truncates_with_marker(self, mock_client_class):
         """A long hit is windowed and carries the --full marker."""
         long_text = "Reserve methodology background prose. " * 200
@@ -377,7 +377,7 @@ class TestKnowledgePayloadTrimming:
         assert "--full" in hit["text"]
         assert len(hit["text"]) < len(long_text)
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_full_flag_returns_everything(self, mock_client_class):
         """--full skips both dedup and truncation."""
         long_text = "Reserve methodology background prose. " * 200
@@ -402,7 +402,7 @@ class TestKnowledgePayloadTrimming:
 class TestKnowledgeAnswerFallback:
     """#119: a dead answer backend degrades to search, mirroring docs."""
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_answer_server_error_falls_back_to_search(self, mock_client_class):
         """A 5xx from /answer yields search results with the situation named."""
         mock_client = MagicMock()
@@ -438,7 +438,7 @@ class TestKnowledgeAnswerFallback:
         assert "Search still works" in result.stderr
         mock_client.search_knowledge.assert_called_once()
 
-    @patch("gaspatchio_core.cli.KnowledgeAPIClient")
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
     def test_no_search_promise_when_fallback_search_also_fails(self, mock_client_class):
         """The notice must not announce search results that never arrive."""
         mock_client = MagicMock()

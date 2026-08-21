@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from gaspatchio_core.schedule._business_day import BusinessDayConvention
-from gaspatchio_core.schedule._calendar import UnitedStates
+from gaspatchio.schedule._business_day import BusinessDayConvention
+from gaspatchio.schedule._calendar import UnitedStates
 
 
 class TestBusinessDayConventionEnum:

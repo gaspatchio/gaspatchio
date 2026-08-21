@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gaspatchio_core.api.client import APIConnectionError, KnowledgeAPIClient
-from gaspatchio_core.api.models import (
+from gaspatchio.api.client import APIConnectionError, KnowledgeAPIClient
+from gaspatchio.api.models import (
     DocsAnswerResponse,
     DocsSearchResponse,
     KnowledgeAnswerResponse,

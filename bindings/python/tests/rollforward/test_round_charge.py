@@ -18,8 +18,8 @@ import datetime
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, compile_rollforward
-from gaspatchio_core.rollforward._ops import DeductNAR, Grow
+from gaspatchio import ActuarialFrame, compile_rollforward
+from gaspatchio.rollforward._ops import DeductNAR, Grow
 
 
 def _frame(**cols: object) -> ActuarialFrame:

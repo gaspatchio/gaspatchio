@@ -11,7 +11,7 @@ import math
 import polars as pl
 import pytest
 
-from gaspatchio_core.scenarios._aggregators import Count, Max, Min, Sum
+from gaspatchio.scenarios._aggregators import Count, Max, Min, Sum
 
 
 def test_sum_correctness() -> None:

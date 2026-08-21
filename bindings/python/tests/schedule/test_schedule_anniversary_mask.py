@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import polars as pl
 
-from gaspatchio_core.schedule._schedule import Schedule
+from gaspatchio.schedule._schedule import Schedule
 
 
 class TestAnniversaryMaskFromInception:

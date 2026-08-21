@@ -9,9 +9,9 @@ import math
 import numpy as np
 import polars as pl
 import pytest
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.curves import Curve
-from gaspatchio_core.functions.vector import curve_eval
+from gaspatchio import ActuarialFrame
+from gaspatchio.curves import Curve
+from gaspatchio.functions.vector import curve_eval
 
 
 def test_curve_eval_linear_plugin() -> None:
@@ -156,7 +156,7 @@ def test_log_linear_sloped_cross_path_equivalence() -> None:
 
 def test_pchip_monotone_no_overshoot() -> None:
     """Fritsch-Carlson slopes prevent overshoot on a monotone non-decreasing curve."""
-    from gaspatchio_core.curves._interpolation import hermite_eval, pchip_slopes
+    from gaspatchio.curves._interpolation import hermite_eval, pchip_slopes
 
     xs = [1.0, 2.0, 3.0, 10.0, 15.0]
     ys = [0.01, 0.02, 0.025, 0.05, 0.05]  # monotone non-decreasing

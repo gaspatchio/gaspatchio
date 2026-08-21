@@ -25,8 +25,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.rollforward._compile import compile_rollforward
+from gaspatchio import ActuarialFrame
+from gaspatchio.rollforward._compile import compile_rollforward
 
 if TYPE_CHECKING:
     import polars as pl

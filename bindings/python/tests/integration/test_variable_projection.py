@@ -20,7 +20,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from gaspatchio_core import (
+from gaspatchio import (
     ActuarialFrame,
     get_default_mode,
     set_default_mode,

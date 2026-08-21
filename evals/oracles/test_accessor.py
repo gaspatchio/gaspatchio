@@ -8,7 +8,7 @@
 from evals.oracles.accessor import grade_accessor
 
 CLEAN = """```python
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 def hazard(af):
     return -(1 - af.qx).log()

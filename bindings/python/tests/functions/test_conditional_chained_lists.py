@@ -9,7 +9,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ class TestChainedWhenVector:
         self, af_with_lists: ActuarialFrame, mode: str
     ) -> None:
         """Chained .when() with two vector comparisons and scalar branches."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = af_with_lists
@@ -48,7 +48,7 @@ class TestChainedWhenVector:
     def test_three_case_chain_vector_comparison_scalar_branches(
         self, af_with_lists: ActuarialFrame, mode: str
     ) -> None:
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = af_with_lists
@@ -67,7 +67,7 @@ class TestChainedWhenVector:
     def test_five_case_chain_vector_comparison_scalar_branches(
         self, af_with_lists: ActuarialFrame, mode: str
     ) -> None:
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = af_with_lists
@@ -86,7 +86,7 @@ class TestChainedWhenVector:
         self, af_with_lists: ActuarialFrame, mode: str
     ) -> None:
         """Branch values that are list columns (e.g., pols_if)."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame(
@@ -114,7 +114,7 @@ class TestChainedWhenVector:
         self, af_with_lists: ActuarialFrame, mode: str
     ) -> None:
         """Vector mask predicate built with &."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = af_with_lists
@@ -132,7 +132,7 @@ class TestChainedWhenVector:
     def test_chain_with_or_mask_predicate(
         self, af_with_lists: ActuarialFrame, mode: str
     ) -> None:
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = af_with_lists
@@ -150,7 +150,7 @@ class TestChainedWhenVector:
     def test_chain_with_invert_mask_predicate(
         self, af_with_lists: ActuarialFrame, mode: str
     ) -> None:
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = af_with_lists
@@ -167,7 +167,7 @@ class TestChainedWhenVector:
         self, af_with_lists: ActuarialFrame, mode: str
     ) -> None:
         """Chain with one vector predicate first and one scalar predicate second."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame(
@@ -200,7 +200,7 @@ class TestChainedWhenVector:
         must lift the scalar predicate's pl.when().then(scalar_val).otherwise(list_acc)
         into a list-aware form so the chain produces list[f64] cleanly.
         """
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame(
@@ -228,7 +228,7 @@ class TestChainedWhenVector:
         self, af_with_lists: ActuarialFrame, mode: str
     ) -> None:
         """Two cases that both match — first one should win."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = af_with_lists
@@ -253,7 +253,7 @@ class TestChainedWhenVector:
         Lifting through ``list_conditional`` (with the scalar acc broadcast to
         list shape) is the correct routing.
         """
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame(
@@ -289,7 +289,7 @@ class TestScalarChainParity:
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
     @pytest.mark.parametrize("chain_size", [2, 3, 5])
     def test_scalar_chain_parity(self, mode: str, chain_size: int) -> None:
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
 
@@ -326,7 +326,7 @@ class TestChainedWhenNulls:
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
     def test_null_in_predicate_propagates(self, mode: str) -> None:
         """Null in scalar predicate should select the otherwise branch."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame({"age": [25, None, 65]})
@@ -343,7 +343,7 @@ class TestChainedWhenNulls:
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
     def test_null_in_list_predicate(self, mode: str) -> None:
         """Null inside a list column predicate."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame(
@@ -387,7 +387,7 @@ class TestBarePolarsExprConditionOverListColumn:
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
     def test_chained_with_bare_pl_expr_after_proxy_condition(self, mode: str) -> None:
         """First condition is a proxy; second is a raw ``list.eval`` predicate."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame(
@@ -424,7 +424,7 @@ class TestBarePolarsExprConditionOverListColumn:
         chain-level) routes bare list-shaped expressions through
         ``list_conditional``.
         """
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame(
@@ -471,7 +471,7 @@ class TestCommutedListPredicates:
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
     def test_eq_scalar_on_left(self, mode: str) -> None:
         """``(scalar_expr) == af.list_col`` — eq is self-inverse, just swap."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame(
@@ -491,7 +491,7 @@ class TestCommutedListPredicates:
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
     def test_lt_scalar_on_left(self, mode: str) -> None:
         """``scalar < list`` becomes ``list > scalar`` after operator inversion."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame({"month": [[0, 1, 2, 3, 4]], "term": [2]})
@@ -502,7 +502,7 @@ class TestCommutedListPredicates:
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
     def test_gt_scalar_on_left(self, mode: str) -> None:
         """``scalar > list`` becomes ``list < scalar``."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame({"month": [[0, 1, 2, 3, 4]], "term": [2]})
@@ -513,7 +513,7 @@ class TestCommutedListPredicates:
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
     def test_canonical_order_unchanged(self, mode: str) -> None:
         """``list OP scalar`` (already canonical) routes without operand swap."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame({"month": [[0, 1, 2, 3, 4]], "term": [3]})
@@ -523,7 +523,7 @@ class TestCommutedListPredicates:
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
     def test_chained_with_commuted_predicate(self, mode: str) -> None:
         """Commuted predicate inside a chained when() (per-step lowering path)."""
-        from gaspatchio_core.util import set_default_mode
+        from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
         af = ActuarialFrame({"month": [[0, 1, 2, 3, 4]], "term": [2]})

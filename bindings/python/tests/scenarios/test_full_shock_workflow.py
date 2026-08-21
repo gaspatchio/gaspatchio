@@ -11,15 +11,15 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gaspatchio_core import (
+from gaspatchio import (
     ActuarialFrame,
     Table,
     with_scenarios,
 )
-from gaspatchio_core.scenarios import ScenarioRun
-from gaspatchio_core.scenarios._aggregators import Sum
-from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
-from gaspatchio_core.scenarios.shocks import (
+from gaspatchio.scenarios import ScenarioRun
+from gaspatchio.scenarios._aggregators import Sum
+from gaspatchio.scenarios._sensitivity import sensitivity_analysis
+from gaspatchio.scenarios.shocks import (
     AdditiveShock,
     MultiplicativeShock,
 )
@@ -275,12 +275,12 @@ class TestAuditTrailIntegration:
 
 def test_workflow_imports():
     """Workflow functions are importable; retired helpers via private paths."""
-    from gaspatchio_core import (
+    from gaspatchio import (
         Table,
         with_scenarios,
     )
-    from gaspatchio_core.scenarios import ScenarioRun
-    from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
+    from gaspatchio.scenarios import ScenarioRun
+    from gaspatchio.scenarios._sensitivity import sensitivity_analysis
 
     assert callable(sensitivity_analysis)
     assert callable(with_scenarios)

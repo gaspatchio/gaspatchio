@@ -24,7 +24,7 @@ Run with: uv run python tests/scratch/conditional_surrender.py
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 # Sample data: Three policies with different account values
 data = {

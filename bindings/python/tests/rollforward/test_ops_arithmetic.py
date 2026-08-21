@@ -9,7 +9,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core.rollforward._ops import (
+from gaspatchio.rollforward._ops import (
     Add,
     Apply,
     Charge,
@@ -18,7 +18,7 @@ from gaspatchio_core.rollforward._ops import (
     Op,
     Subtract,
 )
-from gaspatchio_core.rollforward._refs import StateRef
+from gaspatchio.rollforward._refs import StateRef
 
 
 class TestAdd:

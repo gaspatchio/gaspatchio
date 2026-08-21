@@ -10,8 +10,8 @@
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import with_scenarios
+from gaspatchio import ActuarialFrame
+from gaspatchio.scenarios import with_scenarios
 
 
 class TestWithScenariosBasic:
@@ -249,7 +249,7 @@ class TestWithScenariosValidation:
 
 
 def test_import_from_top_level():
-    """with_scenarios should be importable from gaspatchio_core."""
-    from gaspatchio_core import with_scenarios
+    """with_scenarios should be importable from gaspatchio."""
+    from gaspatchio import with_scenarios
 
     assert callable(with_scenarios)

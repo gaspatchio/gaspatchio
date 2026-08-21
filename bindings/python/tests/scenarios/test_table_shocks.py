@@ -13,8 +13,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.scenarios.shocks import (
+from gaspatchio.assumptions import Table
+from gaspatchio.scenarios.shocks import (
     AdditiveShock,
     MultiplicativeShock,
     OverrideShock,

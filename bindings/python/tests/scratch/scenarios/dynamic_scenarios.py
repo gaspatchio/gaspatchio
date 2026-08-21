@@ -33,8 +33,8 @@ import polars as pl
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from gaspatchio_core import ActuarialFrame, Table
-from gaspatchio_core.scenarios import parse_scenario_config, describe_scenarios
+from gaspatchio import ActuarialFrame, Table
+from gaspatchio.scenarios import parse_scenario_config, describe_scenarios
 
 ASSUMPTIONS_DIR = Path(__file__).parent / "assumptions"
 

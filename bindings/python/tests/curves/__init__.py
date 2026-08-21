@@ -2,4 +2,4 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for gaspatchio_core.curves."""
+"""Tests for gaspatchio.curves."""

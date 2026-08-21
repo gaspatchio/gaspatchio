@@ -11,8 +11,8 @@ from typing import Any
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.accessors.excel_functions.yearfrac import BasisType, yearfrac
+from gaspatchio import ActuarialFrame
+from gaspatchio.accessors.excel_functions.yearfrac import BasisType, yearfrac
 
 
 class TestYearfracInterface:

@@ -34,7 +34,7 @@ Bundled reference data — lifelib (Level 4 tutorial)
 ================================================================================
 
 The Level 4 tutorial at
-"bindings/python/gaspatchio_core/tutorials/level-4-lifelib/" reconciles a
+"bindings/python/gaspatchio/tutorials/level-4-lifelib/" reconciles a
 gaspatchio-native model against lifelib's "IntegratedLife" example model. The
 reference outputs and the assumption / model-point data distributed with that
 tutorial (the ".parquet" files under "reference/" and "base/") are derived from

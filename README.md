@@ -30,7 +30,7 @@ Actuaries audit every calculation for regulatory compliance, so the maths stays 
 hidden framework magic:
 
 ```python
-from gaspatchio_core import when
+from gaspatchio import when
 
 # Simple maths uses operators directly
 af.pols_death = af.pols_if * af.mort_rate_mth
@@ -88,7 +88,7 @@ per-row Python anywhere on the hot path.
 ## Repository layout
 
 - **[`bindings/python/`](bindings/python/README.md)** — the user-facing Python package
-  (`gaspatchio_core`), PyO3 bindings, and the `gspio` CLI. **Model developers start here.**
+  (`gaspatchio`), PyO3 bindings, and the `gspio` CLI. **Model developers start here.**
 - **[`core/`](core/README.md)** — the Rust engine: assumption registry, vector/Excel plugins,
   projection kernels.
 - **`tutorial/`** — incremental tutorial models (hello-world → reconciled lifelib → scenarios).

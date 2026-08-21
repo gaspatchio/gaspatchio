@@ -12,9 +12,9 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import (
+from gaspatchio.assumptions import Table
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import (
     MultiplicativeShock,
     Sum,
     for_each_scenario,

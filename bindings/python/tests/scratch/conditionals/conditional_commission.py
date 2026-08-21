@@ -16,7 +16,7 @@ Run with: uv run python tests/scratch/conditional_commission.py
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 # Sample data: Three policies with different sum assured amounts
 data = {

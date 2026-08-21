@@ -11,7 +11,7 @@ import statistics
 
 import pytest
 
-from gaspatchio_core.scenarios._aggregators import Mean, Std, Variance
+from gaspatchio.scenarios._aggregators import Mean, Std, Variance
 
 
 def test_mean_matches_statistics() -> None:

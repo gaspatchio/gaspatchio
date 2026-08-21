@@ -12,8 +12,8 @@ from datetime import date
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.schedule import Schedule
+from gaspatchio import ActuarialFrame
+from gaspatchio.schedule import Schedule
 
 
 def _make_sched() -> Schedule:

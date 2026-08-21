@@ -18,9 +18,9 @@ import os
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.errors.metadata import OperationMetadata, TracedOperation
-from gaspatchio_core.util import get_error_mode, set_error_mode
+from gaspatchio import ActuarialFrame
+from gaspatchio.errors.metadata import OperationMetadata, TracedOperation
+from gaspatchio.util import get_error_mode, set_error_mode
 
 
 class TestMixedGraphFormats:
@@ -161,12 +161,12 @@ class TestErrorModeConfiguration:
         # Force reload of the module to pick up environment variable
         import importlib
 
-        import gaspatchio_core.util
+        import gaspatchio.util
 
-        importlib.reload(gaspatchio_core.util)
+        importlib.reload(gaspatchio.util)
 
         # Re-import after reload
-        from gaspatchio_core.util import get_error_mode as get_error_mode_reloaded
+        from gaspatchio.util import get_error_mode as get_error_mode_reloaded
 
         assert get_error_mode_reloaded() == "debug"
 

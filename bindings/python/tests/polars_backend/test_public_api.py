@@ -9,7 +9,7 @@ from __future__ import annotations
 
 def test_functions_vector_imports_still_work() -> None:
     """Legacy import path remains stable for external code."""
-    from gaspatchio_core.functions.vector import (  # noqa: F401
+    from gaspatchio.functions.vector import (  # noqa: F401
         accumulate,
         fill_series,
         list_clip,
@@ -21,11 +21,11 @@ def test_functions_vector_imports_still_work() -> None:
 def test_polars_backend_plugins_imports() -> None:
     """New canonical import path resolves directly from the submodule.
 
-    The package-root re-export (``from gaspatchio_core.polars_backend
+    The package-root re-export (``from gaspatchio.polars_backend
     import accumulate``) is wired in Task 3.5; tests for that path live
     there. For now the canonical path is ``polars_backend.plugins``.
     """
-    from gaspatchio_core.polars_backend.plugins import (  # noqa: F401
+    from gaspatchio.polars_backend.plugins import (  # noqa: F401
         accumulate,
         fill_series,
         list_clip,
@@ -36,15 +36,15 @@ def test_polars_backend_plugins_imports() -> None:
 
 def test_re_exports_are_same_function() -> None:
     """Old and new paths reach the same callable, not a copy."""
-    from gaspatchio_core.functions.vector import accumulate as old_accumulate
-    from gaspatchio_core.polars_backend.plugins import accumulate as new_accumulate
+    from gaspatchio.functions.vector import accumulate as old_accumulate
+    from gaspatchio.polars_backend.plugins import accumulate as new_accumulate
 
     assert old_accumulate is new_accumulate
 
 
 def test_polars_backend_package_root_imports() -> None:
     """All public names resolve from the polars_backend package root."""
-    from gaspatchio_core.polars_backend import (  # noqa: F401
+    from gaspatchio.polars_backend import (  # noqa: F401
         accumulate,
         boolean_and,
         boolean_not,

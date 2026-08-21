@@ -12,7 +12,7 @@ and computation graph integration.
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 # Test constants
 RETIREMENT_AGE = 65
@@ -190,7 +190,7 @@ class TestWhenListBroadcasting:
         list broadcasting now works in debug/tracing mode with eager execution.
         """
         # Save current mode
-        from gaspatchio_core import get_default_mode, set_default_mode
+        from gaspatchio import get_default_mode, set_default_mode
 
         original_mode = get_default_mode()
 

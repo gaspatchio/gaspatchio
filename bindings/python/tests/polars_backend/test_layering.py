@@ -11,15 +11,15 @@ implementation (``polars_backend/``). Frontend modules import from
 from ``column/`` at module load time.
 
 There is one bounded exception: ``masks.py`` and ``list_eval.py`` both have
-function-local ``from gaspatchio_core.column...`` imports inside helper
+function-local ``from gaspatchio.column...`` imports inside helper
 functions (deferred to break the masks↔condition_expression cycle and to
-avoid pulling the whole frontend during ``import gaspatchio_core``). Those
+avoid pulling the whole frontend during ``import gaspatchio``). Those
 deferred imports are documented at the call sites and do not violate the
 load-order invariant.
 
 This test parses each ``polars_backend/*.py`` file with ``ast`` and walks
-its top-level statements. Any ``from gaspatchio_core.column...`` or
-``import gaspatchio_core.column...`` at module scope fails the test.
+its top-level statements. Any ``from gaspatchio.column...`` or
+``import gaspatchio.column...`` at module scope fails the test.
 Function-local and ``TYPE_CHECKING``-guarded imports are ignored — those
 do not contribute to module-load order.
 
@@ -37,16 +37,16 @@ import pytest
 
 POLARS_BACKEND_DIR = (
     Path(__file__).resolve().parent.parent.parent
-    / "gaspatchio_core"
+    / "gaspatchio"
     / "polars_backend"
 )
 
 # String prefixes that identify a frontend column-package import.
 COLUMN_IMPORT_PREFIXES = (
-    "gaspatchio_core.column",
-    "gaspatchio_core.frame",
-    "gaspatchio_core.functions",
-    "gaspatchio_core.accessors",
+    "gaspatchio.column",
+    "gaspatchio.frame",
+    "gaspatchio.functions",
+    "gaspatchio.accessors",
 )
 
 
@@ -109,10 +109,10 @@ def test_no_top_level_column_imports(module_path: Path) -> None:
     )
 
 
-# Note: a runtime "import gaspatchio_core.polars_backend pulls no column
-# modules" check is not feasible — the parent ``gaspatchio_core`` package
+# Note: a runtime "import gaspatchio.polars_backend pulls no column
+# modules" check is not feasible — the parent ``gaspatchio`` package
 # eager-loads its public surface in ``__init__.py``, so ``import
-# gaspatchio_core.polars_backend`` always triggers the frontend load via
+# gaspatchio.polars_backend`` always triggers the frontend load via
 # the package init. The AST check above is the actual invariant: it
 # verifies the polars_backend submodules don't *themselves* import from
 # the frontend at top level, which is what the layering rule actually

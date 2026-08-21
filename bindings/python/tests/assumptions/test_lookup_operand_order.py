@@ -21,10 +21,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.column.expression_proxy import ExpressionProxy
-from gaspatchio_core.column.proxy_aware_expr import ProxyAwareExpr
+from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import Table
+from gaspatchio.column.expression_proxy import ExpressionProxy
+from gaspatchio.column.proxy_aware_expr import ProxyAwareExpr
 
 if TYPE_CHECKING:
     from collections.abc import Callable

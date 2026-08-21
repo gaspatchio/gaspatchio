@@ -15,8 +15,8 @@ import polars as pl
 import pytest
 from loguru import logger
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import (
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import (
     BatchSnapshot,
     PeriodQuantile,
     PeriodSum,
@@ -67,7 +67,7 @@ def test_in_memory_request_reaches_collect(
     af: ActuarialFrame, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A resolved 'in-memory' batch must collect in-memory, not degrade to auto (#4)."""
-    from gaspatchio_core.scenarios import _for_each
+    from gaspatchio.scenarios import _for_each
 
     seen: list[str | None] = []
     orig = _for_each._collect_with_peak  # noqa: SLF001

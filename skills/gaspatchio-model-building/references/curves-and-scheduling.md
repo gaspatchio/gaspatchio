@@ -1,7 +1,7 @@
 # Curves and Scheduling
 
 Term-structure discounting with `Curve` and explicit schedule construction with
-`Schedule`. Both modules are public in `gaspatchio_core`; this reference covers
+`Schedule`. Both modules are public in `gaspatchio`; this reference covers
 construction, the key patterns, and the actuarial rationale for each.
 
 ---
@@ -31,7 +31,7 @@ is intentionally awkward.
 #### From zero (spot) rates
 
 ```python
-from gaspatchio_core import Curve
+from gaspatchio import Curve
 
 # EIOPA-style EUR zero-rate curve (illustrative; not official data)
 rfr_curve = Curve.from_zero_rates(
@@ -77,7 +77,7 @@ they differ only *between* knots:
 | `"pchip"` | Fritsch-Carlson monotone cubic Hermite — smooth but shape-preserving (no overshoot) | A smooth curve is wanted without the overshoot a plain cubic spline introduces |
 
 ```python
-from gaspatchio_core import Curve
+from gaspatchio import Curve
 
 knots = {"tenors": [1.0, 2.0, 5.0, 10.0], "rates": [0.020, 0.025, 0.030, 0.033]}
 linear = Curve.from_zero_rates(**knots)                          # default
@@ -226,7 +226,7 @@ computing per-row via a list-column expression:
 
 ```python
 from datetime import date
-from gaspatchio_core import Curve, Schedule
+from gaspatchio import Curve, Schedule
 
 rfr_curve = Curve.from_zero_rates(
     tenors=[1.0, 5.0, 10.0, 20.0, 30.0],
@@ -306,7 +306,7 @@ a common valuation grid.
 
 ```python
 from datetime import date
-from gaspatchio_core import Schedule
+from gaspatchio import Schedule
 
 sched = Schedule.from_calendar_grid(
     start_date=date(2025, 1, 31),   # normalised to month-end by default
@@ -330,7 +330,7 @@ Use when each policy has its own inception date and the period boundaries should
 be anniversaries of that date.
 
 ```python
-from gaspatchio_core import Schedule
+from gaspatchio import Schedule
 
 sched = Schedule.from_inception(
     inception_column="contract_inception",  # column name in the DataFrame
@@ -355,7 +355,7 @@ policy gets a different number of projection periods.
 
 ```python
 from datetime import date
-from gaspatchio_core import Schedule
+from gaspatchio import Schedule
 
 sched = Schedule.from_per_policy_grid(
     start_date=date(2025, 1, 31),
@@ -375,12 +375,12 @@ count_expr = sched.per_policy_period_count_expr()   # pl.Expr → Int64 (per-pol
 ### Supporting types
 
 ```python
-from gaspatchio_core import (
+from gaspatchio import (
     Calendar,           # Abstract base
     DayCount,           # Abstract base
     BusinessDayConvention,
 )
-from gaspatchio_core.schedule import (
+from gaspatchio.schedule import (
     NullCalendar,       # Default — every day is a business day
     TARGET,             # TARGET2 / Eurozone
     UnitedKingdom,      # England-and-Wales bank holidays
@@ -404,8 +404,8 @@ use `ActualActualISDA`:
 
 ```python
 from datetime import date
-from gaspatchio_core import Schedule
-from gaspatchio_core.schedule import ActualActualISDA
+from gaspatchio import Schedule
+from gaspatchio.schedule import ActualActualISDA
 
 sched = Schedule.from_calendar_grid(
     start_date=date(2025, 12, 31),
@@ -420,8 +420,8 @@ convention is `UNADJUSTED` automatically. When you pass a real calendar, the
 default flips to `MODIFIED_FOLLOWING`:
 
 ```python
-from gaspatchio_core import Schedule
-from gaspatchio_core.schedule import TARGET
+from gaspatchio import Schedule
+from gaspatchio.schedule import TARGET
 from datetime import date
 
 sched = Schedule.from_calendar_grid(

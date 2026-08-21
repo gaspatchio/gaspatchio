@@ -10,8 +10,8 @@ from unittest.mock import patch
 import polars as pl
 from polars.exceptions import ColumnNotFoundError
 
-from gaspatchio_core.errors.boundary import ErrorBoundaryFinder
-from gaspatchio_core.errors.metadata import OperationMetadata, TracedOperation
+from gaspatchio.errors.boundary import ErrorBoundaryFinder
+from gaspatchio.errors.metadata import OperationMetadata, TracedOperation
 
 
 @dataclass
@@ -404,7 +404,7 @@ class TestErrorBoundaryFinder:
         expected_cols = {"a", "b", "sum_ab", "ratio", "product", "log_a"}
         assert set(last_df.columns) == expected_cols
 
-    @patch("gaspatchio_core.errors.boundary.logger")
+    @patch("gaspatchio.errors.boundary.logger")
     def test_logging_behavior(self, mock_logger):
         """Test that appropriate logging occurs during binary search."""
         df = pl.DataFrame({"a": [1, 2, 3]})

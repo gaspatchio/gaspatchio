@@ -8,13 +8,13 @@ Tests for metadata functionality in the new Table API (v2).
 
 import polars as pl
 
-from gaspatchio_core.assumptions import (
+from gaspatchio.assumptions import (
     Table,
     get_table_metadata,
     list_tables,
     list_tables_with_metadata,
 )
-from gaspatchio_core.assumptions._dimensions import DataDimension
+from gaspatchio.assumptions._dimensions import DataDimension
 
 
 class TestTableMetadata:

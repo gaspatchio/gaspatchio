@@ -9,8 +9,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core.scenarios._aggregators import CTE, ArgMax, Mean, Sum
-from gaspatchio_core.scenarios._metric import _Partitioned
+from gaspatchio.scenarios._aggregators import CTE, ArgMax, Mean, Sum
+from gaspatchio.scenarios._metric import _Partitioned
 
 
 def test_alias_returns_new_instance() -> None:

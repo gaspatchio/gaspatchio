@@ -9,7 +9,7 @@ Tests for strategy implementations in _strategies.py
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions._strategies import (
+from gaspatchio.assumptions._strategies import (
     AutoDetectOverflow,
     ExtendOverflow,
     FillConstant,

@@ -9,9 +9,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions._api import Table
-from gaspatchio_core.assumptions._builder import TableBuilder
-from gaspatchio_core.assumptions._dimensions import (
+from gaspatchio.assumptions._api import Table
+from gaspatchio.assumptions._builder import TableBuilder
+from gaspatchio.assumptions._dimensions import (
     CategoricalDimension,
     ComputedDimension,
     DataDimension,

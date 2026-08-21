@@ -5,9 +5,9 @@
 import sys
 from pathlib import Path
 
-import gaspatchio_core as gs
+import gaspatchio as gs
 import polars as pl
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 from loguru import logger
 
 # Add the current directory to the path so we can import setup.py

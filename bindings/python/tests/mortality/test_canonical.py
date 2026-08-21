@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import polars as pl
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.mortality._mortality_table import MortalityTable
+from gaspatchio.assumptions import Table
+from gaspatchio.mortality._mortality_table import MortalityTable
 
 
 class TestCanonicalForm:

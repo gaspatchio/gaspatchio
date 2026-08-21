@@ -17,8 +17,8 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.rollforward._compile import compile_rollforward
+from gaspatchio import ActuarialFrame
+from gaspatchio.rollforward._compile import compile_rollforward
 
 N = 6
 INIT = 1_000.0

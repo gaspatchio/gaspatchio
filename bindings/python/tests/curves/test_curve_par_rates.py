@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from gaspatchio_core.curves._bootstrap import zero_to_par_rates
-from gaspatchio_core.curves._curve import Curve
-from gaspatchio_core.schedule._day_count import Actual360
+from gaspatchio.curves._bootstrap import zero_to_par_rates
+from gaspatchio.curves._curve import Curve
+from gaspatchio.schedule._day_count import Actual360
 
 
 class TestFromParRates:

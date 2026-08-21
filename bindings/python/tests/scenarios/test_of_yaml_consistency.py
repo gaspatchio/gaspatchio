@@ -11,10 +11,10 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-import gaspatchio_core.scenarios._aggregators as _agg_module
-from gaspatchio_core.scenarios._aggregators import _AGGREGATOR_REGISTRY, _BaseAggregator
-from gaspatchio_core.scenarios._config import parse_aggregations
-from gaspatchio_core.scenarios._run import _agg_to_dict
+import gaspatchio.scenarios._aggregators as _agg_module
+from gaspatchio.scenarios._aggregators import _AGGREGATOR_REGISTRY, _BaseAggregator
+from gaspatchio.scenarios._config import parse_aggregations
+from gaspatchio.scenarios._run import _agg_to_dict
 
 # Only exercise aggregators shipped in the core module; custom aggregators
 # registered by test helpers (e.g. Skewness in test_governance_cross_process)

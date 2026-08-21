@@ -20,7 +20,7 @@ from datetime import date
 import polars as pl
 import pytest
 
-from gaspatchio_core import ActuarialFrame, compile_rollforward
+from gaspatchio import ActuarialFrame, compile_rollforward
 
 
 def test_scalar_ties_round_away_from_zero() -> None:
@@ -92,13 +92,13 @@ def test_matches_the_rollforward_round_op() -> None:
 def test_dead_plugin_wrappers_are_gone() -> None:
     """floor/round/round_to_int panicked on a missing Rust symbol; they are
     removed rather than left as landmines."""
-    import gaspatchio_core.polars_backend.plugins as plugins
+    import gaspatchio.polars_backend.plugins as plugins
 
     assert not hasattr(plugins, "round")
     assert not hasattr(plugins, "round_to_int")
     assert not hasattr(plugins, "floor")
     with pytest.raises(ImportError):
-        from gaspatchio_core.functions.vector import round  # noqa: A004
+        from gaspatchio.functions.vector import round  # noqa: A004
 
 
 def test_composed_list_expression_rounds_element_wise() -> None:

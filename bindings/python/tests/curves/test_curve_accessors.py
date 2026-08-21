@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from gaspatchio_core.curves._curve import Curve
+from gaspatchio.curves._curve import Curve
 
 
 class TestSpotRateScalar:

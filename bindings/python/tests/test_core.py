@@ -7,7 +7,7 @@ import unittest
 
 import numpy as np
 import polars as pl
-from gaspatchio_core import (
+from gaspatchio import (
     ActuarialFrame,
     ColumnProxy,
     ExpressionProxy,

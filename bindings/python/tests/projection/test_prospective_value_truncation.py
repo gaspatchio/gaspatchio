@@ -29,7 +29,7 @@ in practice.
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 RATE = 0.05
 V = 1.0 / (1.0 + RATE)

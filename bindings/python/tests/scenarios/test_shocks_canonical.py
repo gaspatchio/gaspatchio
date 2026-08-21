@@ -9,7 +9,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from gaspatchio_core.scenarios.shocks import (
+from gaspatchio.scenarios.shocks import (
     AdditiveShock,
     ClipShock,
     FilteredShock,

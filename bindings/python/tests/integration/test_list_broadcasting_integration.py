@@ -11,7 +11,7 @@
 
 import sys
 
-from gaspatchio_core import ActuarialFrame, when
+from gaspatchio import ActuarialFrame, when
 
 
 def test_basic_term_pattern():

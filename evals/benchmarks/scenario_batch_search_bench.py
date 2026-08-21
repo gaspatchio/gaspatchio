@@ -83,8 +83,8 @@ def _run_cell(n_pts: int, n_scen: int, *, verify: bool) -> dict[str, object]:
     import polars as pl  # noqa: PLC0415
     from scenario_lib import generate_stochastic_returns, load_l5_model  # noqa: PLC0415
 
-    from gaspatchio_core import ActuarialFrame  # noqa: PLC0415
-    from gaspatchio_core.scenarios import Sum, for_each_scenario  # noqa: PLC0415
+    from gaspatchio import ActuarialFrame  # noqa: PLC0415
+    from gaspatchio.scenarios import Sum, for_each_scenario  # noqa: PLC0415
 
     l5 = load_l5_model()
     returns = generate_stochastic_returns(n_scen, n_months=180, seed=12345)
@@ -93,8 +93,8 @@ def _run_cell(n_pts: int, n_scen: int, *, verify: bool) -> dict[str, object]:
     def fn(af, *, tables=None, drivers=None, _r=returns):  # noqa: ANN001, ANN202, ARG001
         return l5.main(af, scenario_returns_override=_r, projection_months=82)
 
-    from gaspatchio_core.scenarios._auto_batch import memory_budget_bytes  # noqa: PLC0415
-    from gaspatchio_core.scenarios._memory import DEFAULTS  # noqa: PLC0415
+    from gaspatchio.scenarios._auto_batch import memory_budget_bytes  # noqa: PLC0415
+    from gaspatchio.scenarios._memory import DEFAULTS  # noqa: PLC0415
 
     agg = (Sum("pv_net_cf").alias("total").over("scenario_id"),)
     gc.collect()
@@ -166,9 +166,9 @@ def _floor_worker(n_scen: int, engine: str) -> None:
     logger.remove()  # silence the DEBUG firehose (RAM-buffering it crashed an early probe)
     from scenario_lib import generate_stochastic_returns, load_l5_model  # noqa: PLC0415
 
-    import gaspatchio_core.scenarios._for_each as fe  # noqa: PLC0415
-    from gaspatchio_core import ActuarialFrame  # noqa: PLC0415
-    from gaspatchio_core.scenarios import Sum, for_each_scenario  # noqa: PLC0415
+    import gaspatchio.scenarios._for_each as fe  # noqa: PLC0415
+    from gaspatchio import ActuarialFrame  # noqa: PLC0415
+    from gaspatchio.scenarios import Sum, for_each_scenario  # noqa: PLC0415
 
     l5 = load_l5_model()
     orig = fe._collect_with_peak  # noqa: SLF001
@@ -260,7 +260,7 @@ def main() -> None:
     parser.add_argument("--skip-heavy", action="store_true", help="1K/10K only; no 100K + no floor")
     args = parser.parse_args()
 
-    from gaspatchio_core.scenarios._memory import IrreducibleCellError  # noqa: PLC0415
+    from gaspatchio.scenarios._memory import IrreducibleCellError  # noqa: PLC0415
 
     rows: list[dict[str, object]] = []
     cells = list(_LIGHT_CELLS) + ([] if args.skip_heavy else list(_HEAVY_CELLS))

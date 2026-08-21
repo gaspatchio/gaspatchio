@@ -15,14 +15,14 @@ import polars as pl
 import pytest
 from loguru import logger
 
-from gaspatchio_core.frame import ActuarialFrame
-from gaspatchio_core.scenarios import (
+from gaspatchio.frame import ActuarialFrame
+from gaspatchio.scenarios import (
     BatchSnapshot,
     ScenarioRun,
     Sum,
     for_each_scenario,
 )
-from gaspatchio_core.scenarios._for_each import _fmt_duration
+from gaspatchio.scenarios._for_each import _fmt_duration
 
 
 @pytest.mark.parametrize(

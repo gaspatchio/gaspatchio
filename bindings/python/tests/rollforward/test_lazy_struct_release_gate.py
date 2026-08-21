@@ -22,14 +22,14 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.rollforward._builder import RollforwardBuilder
-from gaspatchio_core.rollforward._collector import RollforwardCollector
-from gaspatchio_core.rollforward._compile import compile_rollforward
-from gaspatchio_core.schedule import Schedule
+from gaspatchio import ActuarialFrame
+from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.rollforward._collector import RollforwardCollector
+from gaspatchio.rollforward._compile import compile_rollforward
+from gaspatchio.schedule import Schedule
 
 if TYPE_CHECKING:
-    from gaspatchio_core.rollforward._compiled import CompiledRollforward
+    from gaspatchio.rollforward._compiled import CompiledRollforward
 
 
 def _compile_two_point_av() -> CompiledRollforward:

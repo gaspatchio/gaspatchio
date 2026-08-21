@@ -21,7 +21,7 @@ def test_pyright_sees_columnproxy_on_attribute(tmp_path):
 
     code = textwrap.dedent(
         """
-        from gaspatchio_core import ActuarialFrame
+        from gaspatchio import ActuarialFrame
         
         af = ActuarialFrame({"age": [1, 2, 3]})
         _x = af.age.ceil()  # should be valid if __getattr__ -> ColumnProxy
@@ -62,7 +62,7 @@ def test_pyright_rollforward_chain_types(tmp_path):
 
         import polars as pl
 
-        from gaspatchio_core import (
+        from gaspatchio import (
             ActuarialFrame,
             Curve,
             MortalityTable,

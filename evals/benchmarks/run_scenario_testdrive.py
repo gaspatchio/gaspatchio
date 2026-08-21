@@ -27,8 +27,8 @@ from evals.benchmarks.scenario_lib import (
     make_stochastic_model_fn,
     read_result_metrics,
 )
-from gaspatchio_core import ActuarialFrame
-from gaspatchio_core.scenarios import Sum, for_each_scenario
+from gaspatchio import ActuarialFrame
+from gaspatchio.scenarios import Sum, for_each_scenario
 
 N_SCENARIOS = 24
 N_POINTS_PATH = L5_DIR / "model_points_1k.parquet"

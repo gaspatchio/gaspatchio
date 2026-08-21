@@ -20,7 +20,7 @@ uv run gspio docs "TableBuilder" -t code_example
 ### Basic Pattern
 
 ```python
-from gaspatchio_core.assumptions import Table
+from gaspatchio.assumptions import Table
 import polars as pl
 
 df = pl.read_parquet("assumptions/mortality.parquet")
@@ -52,7 +52,7 @@ af.rate = table.lookup(attained_age=af.attained_age, policy_dur=af.duration)
 For complex or programmatically-constructed tables:
 
 ```python
-from gaspatchio_core.assumptions import TableBuilder
+from gaspatchio.assumptions import TableBuilder
 
 mortality_table = (
     TableBuilder("mortality_vbt")

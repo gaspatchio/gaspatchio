@@ -10,7 +10,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from gaspatchio_core.curves._curve import Curve
+from gaspatchio.curves._curve import Curve
 
 
 class TestShiftParallel:

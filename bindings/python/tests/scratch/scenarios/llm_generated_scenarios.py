@@ -29,10 +29,10 @@ from pathlib import Path
 import polars as pl
 from loguru import logger
 
-from gaspatchio_core import ActuarialFrame, when
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.scenarios import describe_scenarios
-from gaspatchio_core.scenarios._config import parse_scenario_config
+from gaspatchio import ActuarialFrame, when
+from gaspatchio.assumptions import Table
+from gaspatchio.scenarios import describe_scenarios
+from gaspatchio.scenarios._config import parse_scenario_config
 
 # =============================================================================
 # STEP 1: LLM GENERATES THIS CONFIG FROM NATURAL LANGUAGE

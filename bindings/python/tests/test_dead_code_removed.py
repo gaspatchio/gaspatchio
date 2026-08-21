@@ -16,28 +16,28 @@ import pytest
 
 def test_columntypedetector_removed() -> None:
     """ColumnTypeDetector should no longer be importable from dispatch."""
-    from gaspatchio_core.column import dispatch
+    from gaspatchio.column import dispatch
 
     assert not hasattr(dispatch, "ColumnTypeDetector")
 
 
 def test_expr_references_list_column_removed() -> None:
     """The regex-based reference helper is gone."""
-    from gaspatchio_core.column import dispatch
+    from gaspatchio.column import dispatch
 
     assert not hasattr(dispatch, "_expr_references_list_column")
 
 
 def test_get_list_columns_from_graph_removed() -> None:
     """The computation-graph dtype probe is gone — schema is the only SOT."""
-    from gaspatchio_core.column import dispatch
+    from gaspatchio.column import dispatch
 
     assert not hasattr(dispatch, "_get_list_columns_from_graph")
 
 
 def test_list_broadcast_metadata_removed() -> None:
     """ExpressionProxy no longer carries the duck-typed _list_broadcast_metadata."""
-    from gaspatchio_core.column.expression_proxy import ExpressionProxy
+    from gaspatchio.column.expression_proxy import ExpressionProxy
 
     proxy = ExpressionProxy(pl.lit(1), parent=None)
     assert not hasattr(proxy, "_list_broadcast_metadata")
@@ -45,14 +45,14 @@ def test_list_broadcast_metadata_removed() -> None:
 
 def test_actuarialframe_expr_to_str_removed() -> None:
     """ActuarialFrame._expr_to_str method is gone."""
-    from gaspatchio_core.frame import base
+    from gaspatchio.frame import base
 
     assert not hasattr(base.ActuarialFrame, "_expr_to_str")
 
 
 def test_is_boolean_list_attribute_not_set_by_mask_ops() -> None:
     """The mask-producing operators no longer stamp the duck-typed flag."""
-    from gaspatchio_core import ActuarialFrame
+    from gaspatchio import ActuarialFrame
 
     af = ActuarialFrame({"x": [1, 2, 3]})
     cond = (af["x"] > 1) & (af["x"] < 3)
@@ -76,7 +76,7 @@ def test_no_direct_underlying_df_writes_outside_property() -> None:
 
     base_py = (
         Path(__file__).resolve().parent.parent
-        / "gaspatchio_core"
+        / "gaspatchio"
         / "frame"
         / "base.py"
     )

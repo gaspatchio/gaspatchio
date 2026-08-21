@@ -60,7 +60,7 @@ Demonstrates running the model across BASE/UP/DOWN interest rate scenarios using
 """
 Explicit Scenario Example: Interest Rate Sensitivity (BASE/UP/DOWN)
 """
-from gaspatchio_core import ActuarialFrame, with_scenarios
+from gaspatchio import ActuarialFrame, with_scenarios
 import polars as pl
 
 from appliedlife.model_applied_life import main as run_model

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from gaspatchio_core.curves._interpolation import linear_interpolate
+from gaspatchio.curves._interpolation import linear_interpolate
 
 
 class TestLinearInterpolate:

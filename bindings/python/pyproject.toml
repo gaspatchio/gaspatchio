@@ -88,8 +88,11 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
-module-name = "gaspatchio_core._internal"
-python-packages = ["gaspatchio_core"]
+module-name = "gaspatchio._internal"
+# gaspatchio_core is the deprecated import alias — a one-file shim kept until
+# 1.0 so existing models keep running. It must ship in the wheel alongside the
+# real package.
+python-packages = ["gaspatchio", "gaspatchio_core"]
 python-source = ""
 
 # Linting, formatting, type checking
@@ -125,7 +128,7 @@ extend-ignore = [
     "PT011",   # ValueError matches are tested via match= where it matters; broad use is intentional in fixture-style helpers
     "SLF001",  # tests assert on _internal attrs of frozen dataclasses by design
 ]
-"gaspatchio_core/rollforward/**/*.py" = [
+"gaspatchio/rollforward/**/*.py" = [
     "SLF001",  # _StateHandle is a friend class that mutates RollforwardBuilder._transitions etc. by design
 ]
 "benchmarks/**/*.py" = [
@@ -143,7 +146,7 @@ extend-ignore = [
     "D301",    # backslash-as-line-continuation in module docstrings is fine
     "D103",    # function docstrings optional for tiny demos
 ]
-"gaspatchio_core/tutorials/**/*.py" = [
+"gaspatchio/tutorials/**/*.py" = [
     "INP001",  # tutorials are standalone scripts, not part of a namespace package
     "T201",    # print() is expected in tutorial output
     "S101",    # asserts OK in tutorial code
@@ -182,7 +185,7 @@ extend-ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["gaspatchio_core"]
+known-first-party = ["gaspatchio", "gaspatchio_core"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]
@@ -207,17 +210,17 @@ config-settings = { "build-args" = "--profile=dev" }
 # Testing
 [tool.pytest.ini_options]
 addopts = [
-    "--gp-docstring-paths=gaspatchio_core/column/namespaces/dt_proxy.py",
-    "--gp-docstring-paths=gaspatchio_core/column/namespaces/string_proxy.py",
-    "--gp-docstring-paths=gaspatchio_core/accessors/date.py",
-    "--gp-docstring-paths=gaspatchio_core/accessors/excel.py",
-    "--gp-docstring-paths=gaspatchio_core/accessors/finance.py",
-    "--gp-docstring-paths=gaspatchio_core/accessors/projection.py",
-    "--gp-docstring-paths=gaspatchio_core/column/proxy.pyi",
-    "--gp-docstring-paths=gaspatchio_core/assumptions/_api.py",
-    "--gp-docstring-paths=gaspatchio_core/accessors/excel_functions/*.py",
+    "--gp-docstring-paths=gaspatchio/column/namespaces/dt_proxy.py",
+    "--gp-docstring-paths=gaspatchio/column/namespaces/string_proxy.py",
+    "--gp-docstring-paths=gaspatchio/accessors/date.py",
+    "--gp-docstring-paths=gaspatchio/accessors/excel.py",
+    "--gp-docstring-paths=gaspatchio/accessors/finance.py",
+    "--gp-docstring-paths=gaspatchio/accessors/projection.py",
+    "--gp-docstring-paths=gaspatchio/column/proxy.pyi",
+    "--gp-docstring-paths=gaspatchio/assumptions/_api.py",
+    "--gp-docstring-paths=gaspatchio/accessors/excel_functions/*.py",
     "-p",
-    "gaspatchio_core.examples.docstrings.pytest_plugin",
+    "gaspatchio.examples.docstrings.pytest_plugin",
     "-m",
     "not benchmark",
     "--ignore=pyfuncs-outputs",
@@ -230,5 +233,5 @@ markers = [
 
 # Scripts / CLI paths
 [project.scripts]
-gp-docstrings = "gaspatchio_core.examples.docstrings.cli:app"
-gspio = "gaspatchio_core.cli:app"
+gp-docstrings = "gaspatchio.examples.docstrings.cli:app"
+gspio = "gaspatchio.cli:app"

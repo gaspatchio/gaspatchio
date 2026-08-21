@@ -29,10 +29,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
-from gaspatchio_core.schedule._business_day import BusinessDayConvention
-from gaspatchio_core.schedule._calendar import NullCalendar, UnitedStates
-from gaspatchio_core.schedule._day_count import ActualActualISDA, Actual365Fixed, OneTwelfth
-from gaspatchio_core.schedule._schedule import Schedule
+from gaspatchio.schedule._business_day import BusinessDayConvention
+from gaspatchio.schedule._calendar import NullCalendar, UnitedStates
+from gaspatchio.schedule._day_count import ActualActualISDA, Actual365Fixed, OneTwelfth
+from gaspatchio.schedule._schedule import Schedule
 
 if TYPE_CHECKING:
     pass

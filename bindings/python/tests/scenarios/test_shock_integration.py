@@ -12,9 +12,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gaspatchio_core.assumptions import Table
-from gaspatchio_core.scenarios._sensitivity import sensitivity_analysis
-from gaspatchio_core.scenarios.shocks import (
+from gaspatchio.assumptions import Table
+from gaspatchio.scenarios._sensitivity import sensitivity_analysis
+from gaspatchio.scenarios.shocks import (
     MultiplicativeShock,
 )
 

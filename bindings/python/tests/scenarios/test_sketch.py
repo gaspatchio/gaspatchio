@@ -12,7 +12,7 @@ import random
 
 import pytest
 
-from gaspatchio_core.scenarios._sketch import (
+from gaspatchio.scenarios._sketch import (
     DEFAULT_RELATIVE_ACCURACY,
     SignedSketch,
 )

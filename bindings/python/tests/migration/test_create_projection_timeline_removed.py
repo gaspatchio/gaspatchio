@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from gaspatchio_core import ActuarialFrame
+from gaspatchio import ActuarialFrame
 
 
 def test_create_projection_timeline_attribute_error() -> None:
