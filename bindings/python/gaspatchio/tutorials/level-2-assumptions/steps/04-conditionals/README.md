@@ -22,7 +22,8 @@ af.pols_if = (
 )
 ```
 
-`af.duration_mth_t` is a list `[0, 1, 2, ..., 23]`. `af.maturity_month` is a
+`af.duration_mth_t` is a list `[0, 1, 2, ..., 24]` (the timeline runs to the
+24-month boundary inclusive). `af.maturity_month` is a
 scalar per policy (e.g., 12 for a 1-year term). gaspatchio broadcasts the
 scalar, evaluating the condition independently for each month. Months before
 maturity get `survival_bop`; months at or after get `0.0`.
@@ -73,5 +74,6 @@ The API is identical — gaspatchio handles both cases transparently.
 data/
   model_points.parquet   — 3 policies with policy_term column
   mortality.parquet      — 92 rows (ages 25–70, M and F)
-  lapse_rates.parquet    — 24 rows (two projection years)
+  lapse_rates.parquet    — 25 rows (months 0–24: two projection years plus
+                           the closing boundary month)
 ```

@@ -322,6 +322,13 @@ jobs:
           # L4 has no __main__ block, test via its runner
           echo "Running L4 benchmark runner..."
           uv run python ../../tutorial/level-4-lifelib/base/run_benchmark.py || exit 1
+          # L2 steps 03/04 look up month-keyed lapse tables that must cover the
+          # n+1 timeline boundary — run them so data/model drift goes red here
+          for model_file in ../../tutorial/level-2-assumptions/steps/03-lapse/model.py \
+                            ../../tutorial/level-2-assumptions/steps/04-conditionals/model.py; do
+            echo "Running $model_file..."
+            uv run python "$model_file" || exit 1
+          done
 
   release:
     name: Release

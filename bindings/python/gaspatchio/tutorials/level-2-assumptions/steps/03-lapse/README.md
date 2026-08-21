@@ -55,5 +55,6 @@ lapse in month 0 (rate 1.2%) than Step 02's constant monthly equivalent of
 data/
   model_points.parquet   — 3 policies (no lapse_rate column)
   mortality.parquet      — 92 rows (ages 25–70, M and F)
-  lapse_rates.parquet    — 12 rows (one per projection month)
+  lapse_rates.parquet    — 13 rows (months 0–12: every month the timeline
+                           materialises, including the closing boundary)
 ```
