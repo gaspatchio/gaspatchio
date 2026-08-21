@@ -22,11 +22,14 @@ af.pols_if = (
 )
 ```
 
-`af.duration_mth_t` is a list `[0, 1, 2, ..., 24]` (the timeline runs to the
-24-month boundary inclusive). `af.maturity_month` is a
-scalar per policy (e.g., 12 for a 1-year term). gaspatchio broadcasts the
-scalar, evaluating the condition independently for each month. Months before
-maturity get `survival_bop`; months at or after get `0.0`.
+`af.duration_mth_t` counts months since **issue** — `duration_mth_init +
+af.month`, one list per policy over the 25-period timeline (projection months
+0–24 inclusive). A policy issued at the valuation date sees `[0, 1, ..., 24]`;
+POL003, issued 22 months earlier, sees `[22, 23, ..., 46]`.
+`af.maturity_month` is a scalar per policy (e.g., 12 for a 1-year term).
+gaspatchio broadcasts the scalar, evaluating the condition independently for
+each month. Months before maturity get `survival_bop`; months at or after get
+`0.0`.
 
 ### Conditional commissions
 
@@ -40,7 +43,7 @@ af.commissions = (
 
 `af.month` is the projection month index `[0, 1, ..., 23]`. The comparison
 `af.month < 12` produces a boolean list. Months 0–11 pay 50% commission;
-months 12–23 pay nothing.
+months 12–24 pay nothing.
 
 ## How it differs from Level 1 `when/then/otherwise`
 
@@ -63,10 +66,16 @@ The API is identical — gaspatchio handles both cases transparently.
 
 ## Observable effects
 
-- **POL001** (term=1 year): zero policies in force from month 12 onward.
-  Only 12 months of cash flows contribute to `pv_net_cf`.
-- **POL002/POL003** (term=2 years): full 24 months of cash flows, but
-  year-1 commissions reduce profit in months 0–11.
+- **POL001** (term=1 year, issued at valuation): zero policies in force from
+  projection month 12 onward. Only 12 months of cash flows contribute to
+  `pv_net_cf`.
+- **POL002** (term=2 years, issued Jun 2023): already 7 months into its term
+  at valuation, so it matures at projection month 17 — months 0–16 contribute,
+  with 50% commissions dragging on months 0–11.
+- **POL003** (term=2 years, issued Mar 2022): already 22 months into its term,
+  so it matures at projection month 2 — **only months 0–1 contribute**. Its
+  small `pv_net_cf` is maturity truncation, not claims experience (claims
+  total ~25.6 against ~231.9 of commissions over those two months).
 
 ## Data directory
 

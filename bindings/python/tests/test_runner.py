@@ -33,10 +33,11 @@ class TestResolveIdColumn:
         assert _resolve_id_column(["Policy number", "age"], None) == "Policy number"
 
     def test_auto_detects_point_id(self):
-        """point_id — the tutorials' model-point convention — is auto-detected.
+        """point_id — the L3/L4 tutorials' model-point convention — is detected.
 
-        Every tutorial model-point file names its ID column point_id; every
-        documented run-single-policy command relies on auto-detection finding it.
+        The L3, L3-typed, and L4 tutorial model-point files name their ID
+        column point_id (the L2 steps use policy_id), and every documented
+        run-single-policy command relies on auto-detection finding it.
         """
         assert _resolve_id_column(["point_id", "age"], None) == "point_id"
 

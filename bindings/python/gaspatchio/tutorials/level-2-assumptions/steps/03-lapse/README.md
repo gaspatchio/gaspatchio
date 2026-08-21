@@ -20,7 +20,8 @@ lapse_table = Table(
 af.lapse_rate_monthly = lapse_table.lookup(month=af.month)
 ```
 
-The lapse table contains one row per projection month (0–11). The lookup
+The lapse table contains one row per projection month (0–12 — every month
+the timeline materialises, closing boundary included). The lookup
 returns the pre-computed monthly rate directly — no annual-to-monthly
 conversion needed because the table already holds monthly values.
 

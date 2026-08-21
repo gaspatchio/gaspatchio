@@ -154,5 +154,6 @@ out reduce net CF, which is consistent.
 ## Running this step
 
 ```bash
-uv run python tutorial/level-3-mini-va-typed/steps/07-anniversary-aware/model.py
+cd bindings/python
+uv run python ../../tutorial/level-3-mini-va-typed/steps/07-anniversary-aware/model.py
 ```
