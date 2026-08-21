@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787285602990,
+  "lastUpdate": 1787301783154,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -11699,6 +11699,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1540756131,
             "range": "± 5094312",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5a2d4fa1ee4603f5fe9f84b9ba11e55fcbaf83a5",
+          "message": "fix: the docs tell the truth — GSP-128 batch (runner point_id, L2 data, skill examples, nits, pickle wire) (#148)\n\n* fix(cli): auto-detect point_id as a policy-ID column (GSP-134)\n\nEvery tutorial model-point file names its ID column point_id, but the\nrunner's auto-detect candidates only knew policy-flavoured names — so\nall seven documented run-single-policy commands failed unless the user\nadded --policy-id-column. point_id joins the candidates ahead of the\ngeneric id, so a frame carrying both resolves to the domain name.\n\nServes Meet-you-where-you-are: the documented commands now run as\nprinted against the data shapes we ourselves ship.\n\n* fix(tutorials): L2 lapse tables cover the timeline they project (GSP-135)\n\nprojection.set materialises months 0..n inclusive — the n+1 boundary —\nbut step 03's lapse table stopped at month 11 (12-month projection) and\nstep 04's at month 23 (24-month projection), so both steps crashed on\ntheir own documented 'uv run python model.py' with a lookup miss at the\nboundary month. Each table gains its boundary month at the flat ultimate\nrate, the READMEs' row counts and month-list claims move with the data,\nand Tutorial Smoke now runs both steps so data/model drift goes red in\nCI instead of in a reader's terminal.\n\nThe crash itself is Sharp-knives working as designed (on_missing raises\nrather than silently NaN-ing) — the data was lying, not the lookup.\n\n* docs(skills): four model-building examples now run as printed (GSP-136)\n\nEach crashed verbatim, proven by execution in the 2026-08-20 skills\nsweep, and each fix was re-executed before landing:\n\n- from_par_rates example used non-contiguous tenors, violating the\n  constraint stated two lines below it — now 1..10 annual.\n- fit_svensson example passed 5 knots against a 6-parameter form —\n  now 6, with the >=6 constraint stated inline.\n- accumulate(multiply=1.0) scalar shorthand documented in three places;\n  the kernel requires a list-shaped multiply — all three now build the\n  ones from the flow column and say why. The neighbouring\n  '.list.cumsum()' claim fell to the same execution check (no such\n  attribute) and is corrected alongside.\n- The select-ultimate snippet imported TableBuilder but called Table —\n  imports now match the calls.\n\nA new claims-as-tests module executes the fenced code straight out of\nthe markdown (the #114 pattern), including a pin that scalar multiply\nstill raises — if the kernel starts broadcasting it, the caveats become\nfiction and the suite says so. The recursive-patterns relative link to\ngaspatchio-docs also gains its missing '../' (GSP-137 checklist item)\nsince the surrounding lines were already under edit.\n\n* docs: six documentation nits — paths, ladder numbering, stale names (GSP-137)\n\nAll pre-existing, all verified against the tree before fixing:\n\n- Discovery's CLI reference pointer now names the real path\n  (bindings/python/docs/cli-knowledge-command.md).\n- The extending skill and its performance ladder disagreed on level\n  numbering (SKILL said Rust=L6/accessors=L4-5; the ladder's headers\n  and all four decision examples say Rust=L4, column=L5, frame=L6).\n  The ladder's internally consistent numbering wins — SKILL.md's four\n  mentions and the ladder's one self-contradicting table row move to it.\n- Non-canonical skill names in prose (gaspatchio-discovery,\n  gaspatchio-building, gaspatchio-reconciliation, extending-gaspatchio)\n  now use the canonical directory names the routing table teaches.\n- Stale 'gaspatchio-core' repo naming in AGENTS.md's contributor half\n  and the accessor template — the repo is gaspatchio/gaspatchio and the\n  import is gaspatchio (copilot-instructions regenerated).\n- tutorials/README's directory tree claimed a level-5 README.md and\n  charts.py that do not exist and missed the 05-stochastic step — the\n  tree now matches the tree.\n- L3-typed step 07's run block used a source-tree path; it now follows\n  the tutorial/... convention every sibling step documents.\n\n* docs(rollforward): the kwargs wire is pickle, not JSON (GSP-138)\n\nTwo docstrings in the lowering pass described plugin_kwargs as\nJSON-serialisable. The dict actually crosses the plugin boundary as\npickle protocol 5 — Polars pickles plugin kwargs and the Rust kernel\ndeserialises them via serde into RollforwardKwargs — and JSON appears\nonly in the fingerprint path's canonical form. The serialization\ncontract is exactly what an extender must get right, so the docstring\nnow states the real one. Divergence #7 from the rollforward deep-read;\nthe remaining six carry roadmap verdicts under GSP-131.\n\n* fix(tutorials): the L2 truth cluster and step-07 command the review caught\n\nReview round on the batch (15 verified findings; this commit takes the\ntutorial half). The serious ones were mine: the step-04 sentence this PR\nintroduced conflated duration_mth_t with af.month — duration counts from\nISSUE, so only a valuation-date policy sees [0..24]; POL003 (issued 22\nmonths earlier) sees [22..46] and matures at projection month 2. That\nalso fell the neighbouring pre-existing lies, all fixed against executed\nvalues: 'full 24 months of cash flows' (POL002 contributes months 0–16,\nPOL003 months 0–1), the 'high claims' misattribution of POL003's small\npv_net_cf (claims ~25.6 vs ~231.9 commissions — the driver is maturity\ntruncation), the phantom '20' maturity_month, and every remaining\n[0..23]/(0–11) range in both steps' READMEs and models.\n\nThe step guard moves to where it runs locally too: both step models now\ncarry expected_output.txt and tests/skills/test_tutorial_outputs.py\ndiffs them (numeric drift reds, not just crashes — the CI loop's comment\nnow claims exactly what it delivers). Step-07's run command is restored\nto a form that works from a repo checkout — its only real audience,\nsince tutorial init never ships steps. The tutorials README tree now\nmatches the tree: typed L3, 07-rollforward, reconcile_full, benchmark,\nstress. The point_id test docstring no longer overclaims 'every'\ntutorial (the L2 steps use policy_id).\n\n* docs(skills): a running balance is a cumulative sum, not an accumulate incantation\n\nThe review's best catch: af.x.cum_sum() is a first-class proxy method\nthat applies within each policy's list, and its own docstring names\nrunning balances as a use case — so the three sites that taught\nmultiply=flow*0.0+1.0 now teach the closed form instead\n(initial + flow.cum_sum(), verified equal to the kernel result). That\nalso retires the NaN-poisoning hazard the ones-vector carried: a null\nor NaN in the flow no longer infects the multiplier. accumulate() keeps\none canonical statement of its list-shaped multiply constraint, where\nthe method is actually taught.\n\nThe guards tighten to match their stated guarantee: the scalar-multiply\nscan now catches multiply=1 / 1.0 / pl.lit(1.0) across every skill\nmarkdown file (multiply=1 raises the identical ComputeError, verified),\nand the fence extractor adopts the evals oracle grammar (case-insensitive\ntag, CRLF, trailing whitespace) with a keep-in-sync note. The\nbroadcast-vs-better-error framework question is out-scoped to GSP-156.",
+          "timestamp": "2026-08-21T20:27:54+12:00",
+          "tree_id": "19652f0d276e1e467e31203f425a52f83ff4ee62",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/5a2d4fa1ee4603f5fe9f84b9ba11e55fcbaf83a5"
+        },
+        "date": 1787301782288,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 160749661,
+            "range": "± 628221",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 160629013,
+            "range": "± 1380891",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 164811326,
+            "range": "± 207047",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 6379852,
+            "range": "± 22983",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 164989843,
+            "range": "± 259825",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 4066901,
+            "range": "± 21095",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 164993214,
+            "range": "± 207449",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 4156771,
+            "range": "± 75969",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 547627,
+            "range": "± 1391",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 53531603,
+            "range": "± 84201",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 9989269,
+            "range": "± 53082",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 536237107,
+            "range": "± 1960761",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 432871,
+            "range": "± 1570",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 30633868,
+            "range": "± 35130",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 4420392,
+            "range": "± 17931",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 306437664,
+            "range": "± 2368772",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 432029,
+            "range": "± 1560",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 31103025,
+            "range": "± 77492",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 4421894,
+            "range": "± 29446",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 310454939,
+            "range": "± 1801465",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 491629,
+            "range": "± 1311",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 40432451,
+            "range": "± 43148",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 5021775,
+            "range": "± 18888",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 400506511,
+            "range": "± 448424",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 1912856,
+            "range": "± 5635",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 151992684,
+            "range": "± 75855",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 27718685,
+            "range": "± 62526",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1531660252,
+            "range": "± 2120928",
             "unit": "ns/iter"
           }
         ]
