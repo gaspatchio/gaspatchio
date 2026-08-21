@@ -214,10 +214,15 @@ def _single_column_name(expr: pl.Expr, op_name: str, field_name: str) -> str:
 
 @dataclass(frozen=True)
 class LowerToPolarsPlugin:
-    """Lower an IR + slot table into a JSON-serialisable plugin_kwargs dict.
+    """Lower an IR + slot table into the kernel's plugin_kwargs dict.
 
     The dict is consumed by the Rust kernel as the bridge between the
-    compile-time IR and runtime execution.
+    compile-time IR and runtime execution. It crosses the plugin boundary
+    as pickle (protocol 5): Polars pickles plugin kwargs and the kernel
+    deserialises them via serde into ``RollforwardKwargs``
+    (``core/src/polars_functions/rollforward.rs``), so every value here
+    must be picklable and match that struct — JSON appears only in the
+    fingerprint path, which hashes the IR's canonical form.
 
     Kwargs schema:
       ir: canonical_form dict
@@ -371,7 +376,7 @@ def _resolve_op(  # noqa: PLR0911, C901 — one flat branch per Op type; both me
     target_point: int,
     classify: object,
 ) -> dict[str, object]:
-    """Resolve a single Op into the JSON-serialisable kernel dict shape.
+    """Resolve a single Op into the kernel's tagged-dict shape.
 
     Every ``*_arg`` slot is a tagged dict —
     ``{"kind": "input", "idx": int}`` for precomputed list-column refs,

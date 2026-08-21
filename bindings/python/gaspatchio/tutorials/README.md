@@ -174,28 +174,36 @@ tutorial/
 │       ├── 03-guarantees/       <- GMDB, GMAB, surrender charges
 │       ├── 04-dynamic-lapse/    <- ITM ratio, dynamic lapse formula
 │       ├── 05-rate-curves/      <- risk-free rate curve discounting
-│       └── 06-reconcile/        <- bridge to Level 4
-└── level-4-lifelib/
-    ├── README.md
-    ├── reconcile.py             <- verify model matches lifelib
-    ├── reference/
-    │   └── lifelib_reference.parquet  <- lifelib PV output for comparison
-    └── base/                    <- 860-line reconciled appliedlife model
-        ├── model.py
-        ├── model_points.parquet
-        └── assumptions/         <- 14 parquet files
-└── level-5-scenarios/
-    ├── README.md
-    ├── charts.py                <- shared Altair chart helpers
-    ├── base/
-    │   ├── model.py             <- scenario-ready L4 model
-    │   ├── run_scenarios.py     <- BASE/UP/DOWN rate scenarios
-    │   └── assumptions/         <- full copy from L4
-    └── steps/
-        ├── 01-parameter-shocks/ <- declarative JSON shocks, tornado chart
-        ├── 02-conditional-shocks/ <- where/when/pipeline shocks
-        ├── 03-sensitivity/      <- 1D sweep + 2D heatmap
-        └── 04-scenario-comparison/ <- regulatory stress test report
+│       ├── 06-reconcile/        <- bridge to Level 4
+│       └── 07-rollforward/      <- account value via the rollforward kernel
+├── level-3-mini-va-typed/       <- typed variant of L3 (Schedule/Curve APIs)
+│   ├── README.md
+│   ├── base/model.py
+│   └── steps/                   <- 01, 02, 05, 06, 07-anniversary-aware
+├── level-4-lifelib/
+│   ├── README.md
+│   ├── reconcile.py             <- verify model matches lifelib
+│   ├── reconcile_full.py        <- 25-variable full reconciliation
+│   ├── reconciliation_report.md <- 0.0000% result across 1,016 points
+│   ├── reference/
+│   │   └── lifelib_reference.parquet  <- lifelib PV output for comparison
+│   └── base/                    <- 860-line reconciled appliedlife model
+│       ├── model.py
+│       ├── model_points.parquet
+│       └── assumptions/         <- 14 parquet files
+├── level-5-scenarios/
+│   ├── benchmark.py             <- scenario-scale timing harness
+│   ├── base/
+│   │   ├── model.py             <- scenario-ready L4 model
+│   │   ├── run_scenarios.py     <- BASE/UP/DOWN rate scenarios
+│   │   └── assumptions/         <- full copy from L4
+│   ├── steps/
+│   │   ├── 01-parameter-shocks/ <- declarative JSON shocks, tornado chart
+│   │   ├── 02-conditional-shocks/ <- where/when/pipeline shocks
+│   │   ├── 03-sensitivity/      <- 1D sweep + 2D heatmap
+│   │   ├── 04-scenario-comparison/ <- regulatory stress test report
+│   │   └── 05-stochastic/       <- seeded per-scenario RNG via ScenarioRun
+│   └── stress/                  <- feature_variants + perf_scaling probes
 └── patterns/                   <- concept guides (each asserts against a closed form)
     ├── rollforward-patterns/   <- stateful per-period rollforward
     ├── aggregate-at-scale/     <- run_aggregated / run_to_parquet / batching

@@ -18,7 +18,7 @@ Do NOT write model code until the model spec is approved by the user. Do NOT ski
 
 **Understand before you build.** This skill drives a strict discovery workflow so you fully specify the model before touching `model_*.py`.
 
-The **ultimate output** of this skill is a single **Gaspatchio Model Specification document** that you can hand directly to `gaspatchio-building`
+The **ultimate output** of this skill is a single **Gaspatchio Model Specification document** that you can hand directly to `gaspatchio-model-building`
 
 You use it to pin down, in that spec document:
 - Source specification (Excel, lifelib, other systems, docs)
@@ -133,7 +133,7 @@ uv run gspio knowledge "technical provisions" -j EU -T SolvencyII
 uv run gspio knowledge "mortality improvement" -T mortality
 ```
 
-For full command reference, see: `docs/cli-knowledge-command.md` in gaspatchio-core.
+For full command reference, see: `bindings/python/docs/cli-knowledge-command.md` in the gaspatchio repo.
 
 **Do NOT:**
 - Ask the user to explain standard actuarial concepts you can look up
@@ -235,7 +235,7 @@ Consider discovery complete when:
 - You know **exactly** which variables you will calculate in the first MVP.
 - You could hand your notes to another engineer and they could build the same model.
 
-At that point, switch to `gaspatchio-building` for actual implementation.
+At that point, switch to `gaspatchio-model-building` for actual implementation.
 
 **Tutorial shortcut**: If the model is similar to a standard VA projection, start from the closest tutorial level rather than building from scratch:
 - `tutorial/level-3-mini-va/base/` — inline data, 11-section model, good for learning
@@ -251,7 +251,7 @@ If the user mentions:
 then:
 
 - Finish high-level discovery here, but
-- Immediately hand off to `gaspatchio-reconciliation` for the strict reconciliation workflow.
+- Immediately hand off to `gaspatchio-model-reconciliation` for the strict reconciliation workflow.
 
 Treat reconciliation as a separate, **hard-mode** process layered on top of discovery.
 

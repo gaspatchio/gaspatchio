@@ -51,10 +51,10 @@ Rules:
 #### From par (coupon swap) rates — bootstrap
 
 ```python
-# Boot-strap par coupon rates to zero rates — annual tenors only, starting at 1
+# Boot-strap par coupon rates to zero rates — contiguous annual tenors, starting at 1
 par_curve = Curve.from_par_rates(
-    tenors=[1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0, 30.0],
-    par_rates=[0.028, 0.030, 0.031, 0.032, 0.033, 0.035, 0.037, 0.038],
+    tenors=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+    par_rates=[0.028, 0.030, 0.031, 0.032, 0.033, 0.034, 0.035, 0.036, 0.037, 0.038],
 )
 ```
 
@@ -95,7 +95,10 @@ parametric constructors. Both return an ordinary `Curve`; `spot_rate` /
 ```python
 # Nelson-Siegel-Svensson — the form the Fed and ECB publish (six parameters)
 nss = Curve.from_svensson(b0=0.04, b1=-0.01, b2=0.005, b3=0.002, tau1=1.5, tau2=10.0)
-nss_fit = Curve.fit_svensson(tenors=[1, 2, 5, 10, 30], rates=[0.030, 0.032, 0.035, 0.037, 0.039])
+nss_fit = Curve.fit_svensson(  # needs >=6 observations — one per NSS parameter
+    tenors=[1, 2, 5, 10, 20, 30],
+    rates=[0.030, 0.032, 0.035, 0.037, 0.038, 0.039],
+)
 
 # Smith-Wilson — the EIOPA / Solvency II extrapolation to an Ultimate Forward Rate.
 # Fits the liquid knots, then pulls smoothly to `ufr` beyond the last point.

@@ -38,8 +38,9 @@ New concept — when/then/otherwise on list columns:
         .then(af.premium_income * 0.50)
         .otherwise(0.0)
     )
-  af.month is a list [0, 1, 2, ..., 23]. months 0–11 pay 50% commission,
-  months 12–23 pay nothing.
+  af.month is a list [0, 1, 2, ..., 24] — the timeline materialises the
+  24-month boundary inclusive. Months 0–11 pay 50% commission, months
+  12–24 pay nothing.
 
 Why maturity matters:
   A 10-year term policy expires after 120 months. Without zeroing pols_if
@@ -159,8 +160,10 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # Zero out pols_if after policy maturity.
     # when/then/otherwise on a list column:
-    #   - af.duration_mth_t is a list [0, 1, 2, ..., 23]
-    #   - af.maturity_month is a scalar per policy (12 or 24 or 20)
+    #   - af.duration_mth_t lists months since issue: duration_mth_init + [0..24],
+    #     so a policy issued 22 months before valuation sees [22..46]
+    #   - af.maturity_month is a scalar per policy (12 for the 1-year policy,
+    #     24 for the two 2-year policies)
     #   - gaspatchio broadcasts the scalar and evaluates element-wise
     af.pols_if = (
         when(af.duration_mth_t < af.maturity_month).then(af.survival_bop).otherwise(0.0)
@@ -198,8 +201,9 @@ if __name__ == "__main__":
 
     print(result.select(["policy_id", "sex", "policy_term", "pv_net_cf"]))
 
-    # Expected output (POL001 term=1 yr: matures after 12 months and pays
-    # 50% first-year commissions; POL003 high claims reduce profit):
+    # Expected output (POL001 term=1 yr matures at projection month 12;
+    # POL003, issued 22 months before valuation, matures at projection
+    # month 2 — its small pv_net_cf is maturity truncation, not claims):
     # ┌───────────┬─────┬─────────────┬────────────┐
     # │ policy_id ┆ sex ┆ policy_term ┆ pv_net_cf  │
     # │ ---       ┆ --- ┆ ---         ┆ ---        │

@@ -5,7 +5,7 @@ Values at time *t* depend on accumulated state at *t-1*. Two primitives cover th
 **"Do the within-period charges depend on the running balance?"**
 
 - **No** — the recurrence collapses to a single multiply-and-add. Use **`accumulate()`** (this page).
-- **Yes** — the running balance is needed *during* the period to compute later steps within the same period. Use the **rollforward kernel** (`af.projection.rollforward(states={…})`). See [Rollforward](../../../gaspatchio-docs/docs/concepts/rollforward/index.md) for the concept page and [`tutorial/patterns/rollforward-patterns/`](../../../bindings/python/gaspatchio/tutorials/patterns/rollforward-patterns/) for runnable patterns.
+- **Yes** — the running balance is needed *during* the period to compute later steps within the same period. Use the **rollforward kernel** (`af.projection.rollforward(states={…})`). See [Rollforward](../../../../gaspatchio-docs/docs/concepts/rollforward/index.md) for the concept page and [`tutorial/patterns/rollforward-patterns/`](../../../bindings/python/gaspatchio/tutorials/patterns/rollforward-patterns/) for runnable patterns.
 
 | Product mechanic | Primitive |
 |---|---|
@@ -134,17 +134,19 @@ Cash balance with irregular deposits and withdrawals:
 cash[t] = cash[t-1] + inflows[t] - outflows[t]
 ```
 
-This is `accumulate` with `multiply=1.0`:
+With no growth on the balance this is not a recursion at all — the closed
+form is a cumulative sum (*Closed-form by default*), and `cum_sum()` applies
+within each policy's list:
 
 ```python
 af.net_flow = af.inflows - af.outflows
 
-af.cash_balance = af.net_flow.projection.accumulate(
-    initial=af.opening_cash,
-    multiply=1.0,        # no growth — just sum
-    add=af.net_flow,
-)
+af.cash_balance = af.opening_cash + af.net_flow.cum_sum()
 ```
+
+Reach for `accumulate()` only when the balance genuinely grows (`multiply`
+≠ 1). Its `multiply` must be **list-shaped**, one factor per period — a bare
+scalar (`multiply=1.0`) raises a `ComputeError` rather than broadcasting.
 
 ---
 

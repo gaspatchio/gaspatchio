@@ -380,6 +380,6 @@ af.rounded = af.value.round(2)
 | `math.sqrt(x)` | `af.col.sqrt()` | Yes |
 | `results[i-1]["col"]` | `af.col.projection.previous_period()` | Yes |
 | `pl.col("x").shift(1)` | `af.x.projection.previous_period()` | Yes |
-| `pl.col("x").cum_sum()` | `af.x.projection.accumulate(initial=0, multiply=1.0, add=af.x)` | Yes |
+| `pl.col("x").cum_sum()` | `af.x.cum_sum()` — applies within each policy's list; a running balance is `initial + af.x.cum_sum()`, no `accumulate` needed | Yes |
 
 **Key insight:** `previous_period()`, `accumulate()`, `ceil()`, `round()`, and all other AF methods work on **both** list columns (within-list operation) and scalar columns (across-row operation). The same methods you use in Phase 3 per-entity calculations also work in Phase 4 fund-level calculations.

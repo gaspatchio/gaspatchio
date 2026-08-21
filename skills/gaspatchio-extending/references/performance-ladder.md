@@ -203,6 +203,6 @@ If your calculation has the form `state[t] = f(state[t-1])` or `state[t] = f(sta
 | Backward recursion: `V(t) = f(V(t+1))` | Yes | `projection.prospective_value()` |
 | Cumulative product: `tpx[t] = prod(1-qx[0..t])` | Yes | `projection.cumulative_survival()` |
 | Multi-step rollforward: AV with charges, credits, premiums | Yes | `projection.rollforward()` |
-| Custom recurrence not matching above | No | Flag for Rust (Level 6) |
+| Custom recurrence not matching above | No | Flag for Rust (Level 4) |
 
 **Rule:** Always check for an existing kernel before flagging for Rust. The most common actuarial sequential calculations already have Rust implementations.
