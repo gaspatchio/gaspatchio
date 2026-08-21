@@ -5,7 +5,7 @@ Values at time *t* depend on accumulated state at *t-1*. Two primitives cover th
 **"Do the within-period charges depend on the running balance?"**
 
 - **No** — the recurrence collapses to a single multiply-and-add. Use **`accumulate()`** (this page).
-- **Yes** — the running balance is needed *during* the period to compute later steps within the same period. Use the **rollforward kernel** (`af.projection.rollforward(states={…})`). See [Rollforward](../../../gaspatchio-docs/docs/concepts/rollforward/index.md) for the concept page and [`tutorial/patterns/rollforward-patterns/`](../../../bindings/python/gaspatchio/tutorials/patterns/rollforward-patterns/) for runnable patterns.
+- **Yes** — the running balance is needed *during* the period to compute later steps within the same period. Use the **rollforward kernel** (`af.projection.rollforward(states={…})`). See [Rollforward](../../../../gaspatchio-docs/docs/concepts/rollforward/index.md) for the concept page and [`tutorial/patterns/rollforward-patterns/`](../../../bindings/python/gaspatchio/tutorials/patterns/rollforward-patterns/) for runnable patterns.
 
 | Product mechanic | Primitive |
 |---|---|
@@ -134,14 +134,16 @@ Cash balance with irregular deposits and withdrawals:
 cash[t] = cash[t-1] + inflows[t] - outflows[t]
 ```
 
-This is `accumulate` with `multiply=1.0`:
+This is `accumulate` with a multiply of ones. The kernel requires `multiply`
+to be **list-shaped** (one factor per period) — a bare scalar `1.0` raises a
+`ComputeError` — so build the ones from the flow column itself:
 
 ```python
 af.net_flow = af.inflows - af.outflows
 
 af.cash_balance = af.net_flow.projection.accumulate(
     initial=af.opening_cash,
-    multiply=1.0,        # no growth — just sum
+    multiply=af.net_flow * 0.0 + 1.0,   # no growth — a list of 1.0s, one per period
     add=af.net_flow,
 )
 ```
