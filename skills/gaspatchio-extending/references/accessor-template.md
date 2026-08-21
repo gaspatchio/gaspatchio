@@ -296,7 +296,7 @@ Location of existing accessors:
 
 The accessor is registered when the module containing the `@register_accessor` decorator is imported.
 
-### For new namespaces in gaspatchio-core:
+### For new namespaces in the gaspatchio repo:
 
 1. Create your accessor file in `gaspatchio/accessors/your_accessor.py`
 2. Add the import to `gaspatchio/accessors/__init__.py`:

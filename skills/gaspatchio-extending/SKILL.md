@@ -46,7 +46,7 @@ This skill can be used standalone. Combine with `gaspatchio-model-review` for qu
 
 **Do NOT guess. Do NOT skip the lookup. Do NOT assume you know what methods exist.**
 
-**Early exit:** If the performance ladder places your calculation at Level 1 (already exists), Level 2 (one-off formula), Level 3 (setup utility), or Level 6 (needs Rust), you are done with this skill. Route to the appropriate next step — do not proceed to the accessor pattern or completion gate.
+**Early exit:** If the performance ladder places your calculation at Level 1 (already exists), Level 2 (one-off formula), Level 3 (setup utility), or Level 4 (needs Rust), you are done with this skill. Route to the appropriate next step — do not proceed to the accessor pattern or completion gate.
 
 ---
 
@@ -201,16 +201,16 @@ Load these when working in the relevant area:
 
 ## Completion Gate
 
-### For non-accessor placements (Levels 1, 2, 3, 6)
+### For non-accessor placements (Levels 1, 2, 3, 4)
 
 If the performance ladder placed the calculation outside accessor territory, the gate is:
 
 - [ ] Calculation placement determined and documented
 - [ ] User informed of the correct approach (use existing method, write inline, write setup utility, or flag for Rust)
 - [ ] If Level 3 (setup utility): function is typed, has docstring, and is called in the model's setup phase (Phase 1)
-- [ ] If Level 6 (Rust): user told this needs a core contribution, with suggestion of existing methods that may approximate the need
+- [ ] If Level 4 (Rust): user told this needs a core contribution, with suggestion of existing methods that may approximate the need
 
-### For accessor implementations (Levels 4, 5)
+### For accessor implementations (Levels 5, 6)
 
 Extension is complete when:
 

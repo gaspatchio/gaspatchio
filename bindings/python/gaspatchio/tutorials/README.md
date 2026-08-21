@@ -185,8 +185,6 @@ tutorial/
         ├── model_points.parquet
         └── assumptions/         <- 14 parquet files
 └── level-5-scenarios/
-    ├── README.md
-    ├── charts.py                <- shared Altair chart helpers
     ├── base/
     │   ├── model.py             <- scenario-ready L4 model
     │   ├── run_scenarios.py     <- BASE/UP/DOWN rate scenarios
@@ -195,7 +193,8 @@ tutorial/
         ├── 01-parameter-shocks/ <- declarative JSON shocks, tornado chart
         ├── 02-conditional-shocks/ <- where/when/pipeline shocks
         ├── 03-sensitivity/      <- 1D sweep + 2D heatmap
-        └── 04-scenario-comparison/ <- regulatory stress test report
+        ├── 04-scenario-comparison/ <- regulatory stress test report
+        └── 05-stochastic/       <- seeded per-scenario RNG via ScenarioRun
 └── patterns/                   <- concept guides (each asserts against a closed form)
     ├── rollforward-patterns/   <- stateful per-period rollforward
     ├── aggregate-at-scale/     <- run_aggregated / run_to_parquet / batching

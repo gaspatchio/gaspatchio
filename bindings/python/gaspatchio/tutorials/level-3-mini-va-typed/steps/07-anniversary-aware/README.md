@@ -154,6 +154,5 @@ out reduce net CF, which is consistent.
 ## Running this step
 
 ```bash
-cd bindings/python
-uv run gaspatchio/tutorials/level-3-mini-va-typed/steps/07-anniversary-aware/model.py
+uv run python tutorial/level-3-mini-va-typed/steps/07-anniversary-aware/model.py
 ```

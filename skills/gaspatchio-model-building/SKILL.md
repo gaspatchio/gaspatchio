@@ -28,7 +28,7 @@ Every concept in this skill has a worked example in the tutorial:
 
 ## When to Use
 
-Use this skill when you create, edit, or debug a `model_*.py` gaspatchio model. Combine with `gaspatchio-discovery` for new models and `gaspatchio-reconciliation` when matching a gold standard.
+Use this skill when you create, edit, or debug a `model_*.py` gaspatchio model. Combine with `gaspatchio-model-discovery` for new models and `gaspatchio-model-reconciliation` when matching a gold standard.
 
 ---
 
@@ -69,7 +69,7 @@ If a query returns irrelevant results, add 2-3 descriptive words about what the 
 
 **Do NOT guess method signatures. Do NOT assume you know how a method works. Look it up.**
 
-**Missing a method?** If the calculation you need does not exist as a built-in method, do not implement it inline with raw Python. Invoke the `extending-gaspatchio` skill to create a proper accessor. This ensures the calculation is reusable, vectorized, and follows the framework's performance patterns.
+**Missing a method?** If the calculation you need does not exist as a built-in method, do not implement it inline with raw Python. Invoke the `gaspatchio-extending` skill to create a proper accessor. This ensures the calculation is reusable, vectorized, and follows the framework's performance patterns.
 
 ---
 
