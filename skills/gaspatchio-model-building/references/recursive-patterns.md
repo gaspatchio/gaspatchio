@@ -134,19 +134,19 @@ Cash balance with irregular deposits and withdrawals:
 cash[t] = cash[t-1] + inflows[t] - outflows[t]
 ```
 
-This is `accumulate` with a multiply of ones. The kernel requires `multiply`
-to be **list-shaped** (one factor per period) — a bare scalar `1.0` raises a
-`ComputeError` — so build the ones from the flow column itself:
+With no growth on the balance this is not a recursion at all — the closed
+form is a cumulative sum (*Closed-form by default*), and `cum_sum()` applies
+within each policy's list:
 
 ```python
 af.net_flow = af.inflows - af.outflows
 
-af.cash_balance = af.net_flow.projection.accumulate(
-    initial=af.opening_cash,
-    multiply=af.net_flow * 0.0 + 1.0,   # no growth — a list of 1.0s, one per period
-    add=af.net_flow,
-)
+af.cash_balance = af.opening_cash + af.net_flow.cum_sum()
 ```
+
+Reach for `accumulate()` only when the balance genuinely grows (`multiply`
+≠ 1). Its `multiply` must be **list-shaped**, one factor per period — a bare
+scalar (`multiply=1.0`) raises a `ComputeError` rather than broadcasting.
 
 ---
 

@@ -35,9 +35,14 @@ AGGREGATE_MD = REFERENCES / "aggregate-patterns.md"
 MORTALITY_MD = REFERENCES / "mortality-tables.md"
 
 
+# Same fence grammar as evals/oracles/base.py::_FENCE (case-insensitive tag,
+# tolerant of trailing whitespace and CRLF) — keep the two in sync.
+_FENCE = re.compile(r"```[ \t]*python[ \t]*\r?\n(.*?)```", re.DOTALL | re.IGNORECASE)
+
+
 def _fence_containing(md_path: Path, marker: str) -> str:
     """Return the single ```python fence in *md_path* whose body has *marker*."""
-    fences = re.findall(r"```python\n(.*?)```", md_path.read_text(), re.DOTALL)
+    fences = _FENCE.findall(md_path.read_text())
     matches = [fence for fence in fences if marker in fence]
     assert len(matches) == 1, (
         f"Expected exactly one fence containing {marker!r} in {md_path.name}; "
@@ -89,12 +94,12 @@ class TestAccumulateMultiplyShape:
         assert result == [[105.0, 120.0, 145.0]]
 
     def test_cum_sum_table_row_executes(self) -> None:
-        """common-mistakes #22's accumulate form reproduces cum_sum."""
+        """common-mistakes #22's cum_sum idiom applies within the list."""
         row = re.search(
-            r"`pl\.col\(\"x\"\)\.cum_sum\(\)`\s*\|\s*`(af\.x\.projection\.accumulate\([^`]+\))`",
+            r"`pl\.col\(\"x\"\)\.cum_sum\(\)`\s*\|\s*`(af\.x\.cum_sum\(\))`",
             MISTAKES_MD.read_text(),
         )
-        assert row, "The cum_sum table row's accumulate form has moved or vanished"
+        assert row, "The cum_sum table row's idiom has moved or vanished"
         af = ActuarialFrame({"x": [[1.0, 2.0, 3.0]]})
         namespace = _execute(f"result = {row.group(1)}", MISTAKES_MD, {"af": af})
         af.run = namespace["result"]
@@ -104,8 +109,8 @@ class TestAccumulateMultiplyShape:
         """The caveat's premise holds: a scalar multiply is rejected.
 
         If this starts passing, the kernel now broadcasts scalar multiply and
-        every 'must be list-shaped' warning added for GSP-136 is fiction —
-        update the three references, then this test.
+        the 'must be list-shaped' warnings added for GSP-136 are fiction —
+        update the references that state the constraint, then this test.
         """
         af = ActuarialFrame({"x": [[1.0, 2.0, 3.0]]})
         af.bad = af.x.projection.accumulate(initial=0, multiply=1.0, add=af.x)
@@ -113,16 +118,22 @@ class TestAccumulateMultiplyShape:
             af.collect()
 
     def test_no_scalar_multiply_documented(self) -> None:
-        """No reference documents the crashing ``multiply=1.0`` form."""
-        for md_path in (RECURSIVE_MD, MISTAKES_MD, AGGREGATE_MD):
-            offending = [
-                line.strip()
-                for line in md_path.read_text().splitlines()
-                if re.search(r"multiply=1\.0", line)
-            ]
-            assert not offending, (
-                f"{md_path.name} documents scalar multiply again: {offending}"
-            )
+        """No skill documents the crashing scalar-multiply form.
+
+        The kernel rejects ``multiply=1`` exactly as it rejects ``1.0`` and
+        ``pl.lit(1.0)``, so the guard matches all three spellings — and scans
+        every skill markdown file, not just the three that once taught it.
+        Prose stating the constraint is fine; a keyword argument is not.
+        """
+        scalar_multiply = re.compile(r"multiply\s*=\s*(pl\.lit\(\s*)?1(\.0)?\s*[,)\s]")
+        skills_root = REPO_ROOT / "skills"
+        offending = [
+            f"{md_path.relative_to(skills_root)}: {line.strip()}"
+            for md_path in sorted(skills_root.rglob("*.md"))
+            for line in md_path.read_text().splitlines()
+            if scalar_multiply.search(line)
+        ]
+        assert not offending, f"Scalar multiply documented again: {offending}"
 
 
 class TestSelectUltimateExample:
