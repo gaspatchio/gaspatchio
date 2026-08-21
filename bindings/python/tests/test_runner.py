@@ -32,6 +32,19 @@ class TestResolveIdColumn:
         """Legacy 'Policy number' is still auto-detected (case-insensitive)."""
         assert _resolve_id_column(["Policy number", "age"], None) == "Policy number"
 
+    def test_auto_detects_point_id(self):
+        """point_id — the L3/L4 tutorials' model-point convention — is detected.
+
+        The L3, L3-typed, and L4 tutorial model-point files name their ID
+        column point_id (the L2 steps use policy_id), and every documented
+        run-single-policy command relies on auto-detection finding it.
+        """
+        assert _resolve_id_column(["point_id", "age"], None) == "point_id"
+
+    def test_specific_names_win_over_generic_id(self):
+        """A domain name like point_id outranks the generic 'id' column."""
+        assert _resolve_id_column(["id", "point_id"], None) == "point_id"
+
     def test_explicit_exact_match(self):
         """An explicit column that exists is used verbatim."""
         assert _resolve_id_column(["pol", "age"], "pol") == "pol"

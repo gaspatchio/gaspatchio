@@ -110,15 +110,16 @@ Verified behaviour (from `tests/mortality/test_at_select_ultimate.py`):
 - `select_period=4`, policy in year 25: same clamp to `duration=4`
 
 ```python
+import itertools
+
 import polars as pl
 from gaspatchio import ActuarialFrame, MortalityTable
-from gaspatchio.assumptions import TableBuilder
+from gaspatchio.assumptions import Table
 
 # Build the underlying Table
 # Column "select_dur" is the select-period duration (1..SELECT_PERIOD)
 # In source data, durations beyond select_period are NOT stored — clamping handles that.
 SELECT_PERIOD = 5
-import itertools
 
 ages = list(range(20, 71))
 durations = list(range(1, SELECT_PERIOD + 1))

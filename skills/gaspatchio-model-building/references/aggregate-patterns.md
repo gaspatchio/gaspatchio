@@ -72,8 +72,8 @@ These CAN be handled with gaspatchio methods — the same tools used in Phase 3 
 | Pattern | Method |
 |---------|--------|
 | "Prior period's value" | `previous_period(fill_value=0.0)` or Polars `.shift(1).fill_null(0.0)` |
-| "Running balance" | `accumulate(initial=X, multiply=1.0, add=flow)` |
-| "Cumulative total" | `.list.cumsum()` or Polars `.cum_sum()` |
+| "Running balance" | `initial + flow.cum_sum()` — a growth-free balance is a cumulative sum, not a recursion; `accumulate()` is for genuine growth and needs a list-shaped `multiply` |
+| "Cumulative total" | `af.x.cum_sum()` (applies within a list column) or Polars `.cum_sum()` (across rows) |
 | "Circular dependency" (expenses depend on equity, equity depends on expenses) | Rearrange into `accumulate()` form — see example below |
 
 **Phase 3 methods work in Phase 4 too.** `previous_period()`, `accumulate()`, `ceil()`, `round()`, and all other AF column methods work on scalar columns (across rows), not just list columns (within lists). You don't need to drop to raw Polars for fund-level calculations.

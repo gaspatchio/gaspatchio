@@ -371,6 +371,7 @@ _ID_COLUMN_CANDIDATES = (
     "policy number",
     "policyid",
     "pol_id",
+    "point_id",
     "id",
 )
 

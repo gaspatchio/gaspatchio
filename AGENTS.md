@@ -333,10 +333,10 @@ The accessor pattern (`@register_accessor` + base classes) is the primary extens
 
 ---
 
-# Contributing to gaspatchio-core
+# Contributing to gaspatchio
 
 > The sections above describe how to **use** gaspatchio to build models.
-> The sections below are for **developing** gaspatchio-core itself.
+> The sections below are for **developing** gaspatchio itself.
 
 ## Development rules (where they live)
 

@@ -74,7 +74,7 @@ def load_assumptions() -> tuple[Table, Table]:
     lapse_table = Table(
         name="lapse",
         source=pl.read_parquet(DATA_DIR / "lapse_rates.parquet"),
-        dimensions={"month": "month"},  # lookup key is projection month (0–11)
+        dimensions={"month": "month"},  # lookup key is projection month (0–12)
         value="lapse_rate_mth",
     )
 
