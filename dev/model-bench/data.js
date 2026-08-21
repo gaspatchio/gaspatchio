@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787285147640,
+  "lastUpdate": 1787301355173,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Model Benchmarks": [
@@ -20953,6 +20953,310 @@ window.BENCHMARK_DATA = {
           {
             "name": "VA + Scenarios (3x)/100K-rss",
             "value": 8552.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-cpu-avg",
+            "value": 99.4,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5a2d4fa1ee4603f5fe9f84b9ba11e55fcbaf83a5",
+          "message": "fix: the docs tell the truth — GSP-128 batch (runner point_id, L2 data, skill examples, nits, pickle wire) (#148)\n\n* fix(cli): auto-detect point_id as a policy-ID column (GSP-134)\n\nEvery tutorial model-point file names its ID column point_id, but the\nrunner's auto-detect candidates only knew policy-flavoured names — so\nall seven documented run-single-policy commands failed unless the user\nadded --policy-id-column. point_id joins the candidates ahead of the\ngeneric id, so a frame carrying both resolves to the domain name.\n\nServes Meet-you-where-you-are: the documented commands now run as\nprinted against the data shapes we ourselves ship.\n\n* fix(tutorials): L2 lapse tables cover the timeline they project (GSP-135)\n\nprojection.set materialises months 0..n inclusive — the n+1 boundary —\nbut step 03's lapse table stopped at month 11 (12-month projection) and\nstep 04's at month 23 (24-month projection), so both steps crashed on\ntheir own documented 'uv run python model.py' with a lookup miss at the\nboundary month. Each table gains its boundary month at the flat ultimate\nrate, the READMEs' row counts and month-list claims move with the data,\nand Tutorial Smoke now runs both steps so data/model drift goes red in\nCI instead of in a reader's terminal.\n\nThe crash itself is Sharp-knives working as designed (on_missing raises\nrather than silently NaN-ing) — the data was lying, not the lookup.\n\n* docs(skills): four model-building examples now run as printed (GSP-136)\n\nEach crashed verbatim, proven by execution in the 2026-08-20 skills\nsweep, and each fix was re-executed before landing:\n\n- from_par_rates example used non-contiguous tenors, violating the\n  constraint stated two lines below it — now 1..10 annual.\n- fit_svensson example passed 5 knots against a 6-parameter form —\n  now 6, with the >=6 constraint stated inline.\n- accumulate(multiply=1.0) scalar shorthand documented in three places;\n  the kernel requires a list-shaped multiply — all three now build the\n  ones from the flow column and say why. The neighbouring\n  '.list.cumsum()' claim fell to the same execution check (no such\n  attribute) and is corrected alongside.\n- The select-ultimate snippet imported TableBuilder but called Table —\n  imports now match the calls.\n\nA new claims-as-tests module executes the fenced code straight out of\nthe markdown (the #114 pattern), including a pin that scalar multiply\nstill raises — if the kernel starts broadcasting it, the caveats become\nfiction and the suite says so. The recursive-patterns relative link to\ngaspatchio-docs also gains its missing '../' (GSP-137 checklist item)\nsince the surrounding lines were already under edit.\n\n* docs: six documentation nits — paths, ladder numbering, stale names (GSP-137)\n\nAll pre-existing, all verified against the tree before fixing:\n\n- Discovery's CLI reference pointer now names the real path\n  (bindings/python/docs/cli-knowledge-command.md).\n- The extending skill and its performance ladder disagreed on level\n  numbering (SKILL said Rust=L6/accessors=L4-5; the ladder's headers\n  and all four decision examples say Rust=L4, column=L5, frame=L6).\n  The ladder's internally consistent numbering wins — SKILL.md's four\n  mentions and the ladder's one self-contradicting table row move to it.\n- Non-canonical skill names in prose (gaspatchio-discovery,\n  gaspatchio-building, gaspatchio-reconciliation, extending-gaspatchio)\n  now use the canonical directory names the routing table teaches.\n- Stale 'gaspatchio-core' repo naming in AGENTS.md's contributor half\n  and the accessor template — the repo is gaspatchio/gaspatchio and the\n  import is gaspatchio (copilot-instructions regenerated).\n- tutorials/README's directory tree claimed a level-5 README.md and\n  charts.py that do not exist and missed the 05-stochastic step — the\n  tree now matches the tree.\n- L3-typed step 07's run block used a source-tree path; it now follows\n  the tutorial/... convention every sibling step documents.\n\n* docs(rollforward): the kwargs wire is pickle, not JSON (GSP-138)\n\nTwo docstrings in the lowering pass described plugin_kwargs as\nJSON-serialisable. The dict actually crosses the plugin boundary as\npickle protocol 5 — Polars pickles plugin kwargs and the Rust kernel\ndeserialises them via serde into RollforwardKwargs — and JSON appears\nonly in the fingerprint path's canonical form. The serialization\ncontract is exactly what an extender must get right, so the docstring\nnow states the real one. Divergence #7 from the rollforward deep-read;\nthe remaining six carry roadmap verdicts under GSP-131.\n\n* fix(tutorials): the L2 truth cluster and step-07 command the review caught\n\nReview round on the batch (15 verified findings; this commit takes the\ntutorial half). The serious ones were mine: the step-04 sentence this PR\nintroduced conflated duration_mth_t with af.month — duration counts from\nISSUE, so only a valuation-date policy sees [0..24]; POL003 (issued 22\nmonths earlier) sees [22..46] and matures at projection month 2. That\nalso fell the neighbouring pre-existing lies, all fixed against executed\nvalues: 'full 24 months of cash flows' (POL002 contributes months 0–16,\nPOL003 months 0–1), the 'high claims' misattribution of POL003's small\npv_net_cf (claims ~25.6 vs ~231.9 commissions — the driver is maturity\ntruncation), the phantom '20' maturity_month, and every remaining\n[0..23]/(0–11) range in both steps' READMEs and models.\n\nThe step guard moves to where it runs locally too: both step models now\ncarry expected_output.txt and tests/skills/test_tutorial_outputs.py\ndiffs them (numeric drift reds, not just crashes — the CI loop's comment\nnow claims exactly what it delivers). Step-07's run command is restored\nto a form that works from a repo checkout — its only real audience,\nsince tutorial init never ships steps. The tutorials README tree now\nmatches the tree: typed L3, 07-rollforward, reconcile_full, benchmark,\nstress. The point_id test docstring no longer overclaims 'every'\ntutorial (the L2 steps use policy_id).\n\n* docs(skills): a running balance is a cumulative sum, not an accumulate incantation\n\nThe review's best catch: af.x.cum_sum() is a first-class proxy method\nthat applies within each policy's list, and its own docstring names\nrunning balances as a use case — so the three sites that taught\nmultiply=flow*0.0+1.0 now teach the closed form instead\n(initial + flow.cum_sum(), verified equal to the kernel result). That\nalso retires the NaN-poisoning hazard the ones-vector carried: a null\nor NaN in the flow no longer infects the multiplier. accumulate() keeps\none canonical statement of its list-shaped multiply constraint, where\nthe method is actually taught.\n\nThe guards tighten to match their stated guarantee: the scalar-multiply\nscan now catches multiply=1 / 1.0 / pl.lit(1.0) across every skill\nmarkdown file (multiply=1 raises the identical ComputeError, verified),\nand the fence extractor adopts the evals oracle grammar (case-insensitive\ntag, CRLF, trailing whitespace) with a keep-in-sync note. The\nbroadcast-vs-better-error framework question is out-scoped to GSP-156.",
+          "timestamp": "2026-08-21T20:27:54+12:00",
+          "tree_id": "19652f0d276e1e467e31203f425a52f83ff4ee62",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/5a2d4fa1ee4603f5fe9f84b9ba11e55fcbaf83a5"
+        },
+        "date": 1787301353823,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "VA Model (GMDB/GMAB)/8-points",
+            "value": 0.121,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-throughput",
+            "value": 66.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-memory",
+            "value": 69.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-data-mb",
+            "value": 0.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-rss",
+            "value": 242.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cores",
+            "value": 3,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/8-cpu-avg",
+            "value": 18.6,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-points",
+            "value": 0.428,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-throughput",
+            "value": 2336.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-memory",
+            "value": 43.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-data-mb",
+            "value": 38,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-rss",
+            "value": 286.4,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/1K-cpu-avg",
+            "value": 76.2,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-points",
+            "value": 2.507,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-throughput",
+            "value": 3988.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-memory",
+            "value": 256,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-data-mb",
+            "value": 252.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-rss",
+            "value": 530,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/10K-cpu-avg",
+            "value": 95,
+            "unit": "%"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-points",
+            "value": 23.736,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-throughput",
+            "value": 4213,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-memory",
+            "value": 2754.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-data-mb",
+            "value": 2499.9,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-rss",
+            "value": 3192.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA Model (GMDB/GMAB)/100K-cpu-avg",
+            "value": 99.2,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-points",
+            "value": 0.104,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-throughput",
+            "value": 76.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-memory",
+            "value": -40.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-data-mb",
+            "value": 0.7,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-rss",
+            "value": 2574.4,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/8-cpu-avg",
+            "value": 34.8,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-points",
+            "value": 0.974,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-throughput",
+            "value": 1026.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-memory",
+            "value": -1582,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-data-mb",
+            "value": 114,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-rss",
+            "value": 976.8,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/1K-cpu-avg",
+            "value": 87.6,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-points",
+            "value": 6.813,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-throughput",
+            "value": 1467.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-memory",
+            "value": 469,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-data-mb",
+            "value": 771.2,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-rss",
+            "value": 1444.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cores",
+            "value": 4,
+            "unit": "cores"
+          },
+          {
+            "name": "VA + Scenarios (3x)/10K-cpu-avg",
+            "value": 98.6,
+            "unit": "%"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-points",
+            "value": 67.514,
+            "unit": "seconds"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-throughput",
+            "value": 1481.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-memory",
+            "value": 7208.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-data-mb",
+            "value": 7629.6,
+            "unit": "MB"
+          },
+          {
+            "name": "VA + Scenarios (3x)/100K-rss",
+            "value": 8649.4,
             "unit": "MB"
           },
           {
