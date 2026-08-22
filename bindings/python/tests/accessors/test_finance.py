@@ -29,9 +29,9 @@ class TestToMonthlyScalar:
         result = af.collect()
         monthly_rates = result["monthly_rate"].to_list()
 
-        assert monthly_rates[0] == pytest.approx(0.0040741238, rel=1e-6)  # noqa: S101
-        assert monthly_rates[1] == pytest.approx(0.0048675506, rel=1e-6)  # noqa: S101
-        assert monthly_rates[2] == pytest.approx(0.0032737398, rel=1e-6)  # noqa: S101
+        assert monthly_rates[0] == pytest.approx(0.0040741238, rel=1e-6)
+        assert monthly_rates[1] == pytest.approx(0.0048675506, rel=1e-6)
+        assert monthly_rates[2] == pytest.approx(0.0032737398, rel=1e-6)
 
     def test_simple_conversion_scalar(self) -> None:
         """Test simple conversion on scalar column.
@@ -48,9 +48,9 @@ class TestToMonthlyScalar:
         result = af.collect()
         monthly_rates = result["monthly_rate"].to_list()
 
-        assert monthly_rates[0] == pytest.approx(0.004166667, rel=1e-6)  # noqa: S101
-        assert monthly_rates[1] == pytest.approx(0.005, rel=1e-6)  # noqa: S101
-        assert monthly_rates[2] == pytest.approx(0.003333333, rel=1e-6)  # noqa: S101
+        assert monthly_rates[0] == pytest.approx(0.004166667, rel=1e-6)
+        assert monthly_rates[1] == pytest.approx(0.005, rel=1e-6)
+        assert monthly_rates[2] == pytest.approx(0.003333333, rel=1e-6)
 
 
 class TestToMonthlyList:
@@ -72,10 +72,10 @@ class TestToMonthlyList:
         monthly_rates = result["monthly_rates"][0]
 
         # Each element should be converted independently
-        assert monthly_rates[0] == pytest.approx(0.0040741238, rel=1e-6)  # noqa: S101
-        assert monthly_rates[1] == pytest.approx(0.0040741238, rel=1e-6)  # noqa: S101
-        assert monthly_rates[2] == pytest.approx(0.0048675506, rel=1e-6)  # noqa: S101
-        assert monthly_rates[3] == pytest.approx(0.0048675506, rel=1e-6)  # noqa: S101
+        assert monthly_rates[0] == pytest.approx(0.0040741238, rel=1e-6)
+        assert monthly_rates[1] == pytest.approx(0.0040741238, rel=1e-6)
+        assert monthly_rates[2] == pytest.approx(0.0048675506, rel=1e-6)
+        assert monthly_rates[3] == pytest.approx(0.0048675506, rel=1e-6)
 
 
 class TestComposedListExpressions:
@@ -162,14 +162,14 @@ class TestFrameDiscountFactor:
 
         # Check first policy
         factors_1 = result["disc_factors"][0]
-        assert factors_1[0] == pytest.approx(0.952380952, rel=1e-6)  # noqa: S101
-        assert factors_1[1] == pytest.approx(0.889996441, rel=1e-6)  # noqa: S101
-        assert factors_1[2] == pytest.approx(0.888996359, rel=1e-6)  # noqa: S101
+        assert factors_1[0] == pytest.approx(0.952380952, rel=1e-6)
+        assert factors_1[1] == pytest.approx(0.889996441, rel=1e-6)
+        assert factors_1[2] == pytest.approx(0.888996359, rel=1e-6)
 
         # Check second policy
         factors_2 = result["disc_factors"][1]
-        assert factors_2[0] == pytest.approx(0.970873786, rel=1e-6)  # noqa: S101
-        assert factors_2[1] == pytest.approx(0.942595909, rel=1e-6)  # noqa: S101
+        assert factors_2[0] == pytest.approx(0.970873786, rel=1e-6)
+        assert factors_2[1] == pytest.approx(0.942595909, rel=1e-6)
 
     def test_spot_with_period_zero(self) -> None:
         """Test that period 0 always returns v=1.0.
@@ -191,10 +191,10 @@ class TestFrameDiscountFactor:
         result = af.collect()
         factors = result["v"][0]
 
-        assert factors[0] == pytest.approx(1.0, rel=1e-6)  # noqa: S101
-        assert factors[1] == pytest.approx(0.996015936, rel=1e-6)  # noqa: S101
-        assert factors[2] == pytest.approx(0.992047748, rel=1e-6)  # noqa: S101
-        assert factors[3] == pytest.approx(0.988095425, rel=1e-6)  # noqa: S101
+        assert factors[0] == pytest.approx(1.0, rel=1e-6)
+        assert factors[1] == pytest.approx(0.996015936, rel=1e-6)
+        assert factors[2] == pytest.approx(0.992047748, rel=1e-6)
+        assert factors[3] == pytest.approx(0.988095425, rel=1e-6)
 
     def test_forward_discounting_list_columns(self) -> None:
         """Test forward method with period-specific rates.
@@ -224,10 +224,10 @@ class TestFrameDiscountFactor:
         result = af.collect()
         factors = result["v"][0]
 
-        assert factors[0] == pytest.approx(1.0, rel=1e-6)  # noqa: S101
-        assert factors[1] == pytest.approx(0.997009, rel=1e-4)  # noqa: S101
-        assert factors[2] == pytest.approx(0.993036, rel=1e-4)  # noqa: S101
-        assert factors[3] == pytest.approx(0.988095, rel=1e-4)  # noqa: S101
+        assert factors[0] == pytest.approx(1.0, rel=1e-6)
+        assert factors[1] == pytest.approx(0.997009, rel=1e-4)
+        assert factors[2] == pytest.approx(0.993036, rel=1e-4)
+        assert factors[3] == pytest.approx(0.988095, rel=1e-4)
 
     def test_multiple_policies_different_lengths(self) -> None:
         """Test that different list lengths per policy work correctly."""
@@ -254,14 +254,14 @@ class TestFrameDiscountFactor:
 
         # Verify lengths are preserved
         expected_lengths = [3, 2, 1]
-        assert len(result["disc_factors"][0]) == expected_lengths[0]  # noqa: S101
-        assert len(result["disc_factors"][1]) == expected_lengths[1]  # noqa: S101
-        assert len(result["disc_factors"][2]) == expected_lengths[2]  # noqa: S101
+        assert len(result["disc_factors"][0]) == expected_lengths[0]
+        assert len(result["disc_factors"][1]) == expected_lengths[1]
+        assert len(result["disc_factors"][2]) == expected_lengths[2]
 
         # Verify calculations
-        assert result["disc_factors"][0][0] == pytest.approx(0.952380952, rel=1e-6)  # noqa: S101
-        assert result["disc_factors"][1][0] == pytest.approx(0.961538462, rel=1e-6)  # noqa: S101
-        assert result["disc_factors"][2][0] == pytest.approx(0.943396226, rel=1e-6)  # noqa: S101
+        assert result["disc_factors"][0][0] == pytest.approx(0.952380952, rel=1e-6)
+        assert result["disc_factors"][1][0] == pytest.approx(0.961538462, rel=1e-6)
+        assert result["disc_factors"][2][0] == pytest.approx(0.943396226, rel=1e-6)
 
 
 class TestCompound:
@@ -291,10 +291,10 @@ class TestCompound:
         result = af.collect()
         factors = result["inflation_factor"][0]
 
-        assert factors[0] == pytest.approx(1.0, rel=1e-6)  # noqa: S101
-        assert factors[1] == pytest.approx(1.000829, rel=1e-5)  # noqa: S101
-        assert factors[2] == pytest.approx(1.004987, rel=1e-5)  # noqa: S101
-        assert factors[3] == pytest.approx(1.01, rel=1e-6)  # noqa: S101
+        assert factors[0] == pytest.approx(1.0, rel=1e-6)
+        assert factors[1] == pytest.approx(1.000829, rel=1e-5)
+        assert factors[2] == pytest.approx(1.004987, rel=1e-5)
+        assert factors[3] == pytest.approx(1.01, rel=1e-6)
 
     def test_compound_scalar_column(self) -> None:
         """Test compound growth on scalar column.
@@ -318,6 +318,6 @@ class TestCompound:
         result = af.collect()
         factors = result["growth_factor"].to_list()
 
-        assert factors[0] == pytest.approx(1.0, rel=1e-6)  # noqa: S101
-        assert factors[1] == pytest.approx(1.004963, rel=1e-5)  # noqa: S101
-        assert factors[2] == pytest.approx(1.02, rel=1e-6)  # noqa: S101
+        assert factors[0] == pytest.approx(1.0, rel=1e-6)
+        assert factors[1] == pytest.approx(1.004963, rel=1e-5)
+        assert factors[2] == pytest.approx(1.02, rel=1e-6)

@@ -8,7 +8,7 @@ Provides the Python interface for the table registry.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 # Import the internal Rust module. The exact name depends on your maturin setup.
 # It's often `_internal` or `package_name._internal`.
@@ -30,10 +30,10 @@ if TYPE_CHECKING:
 
 # Define a simple structure for the transform spec dictionary for type hinting
 # This could eventually be a Pydantic model if more complex validation is needed.
-class WideToLongTransformSpec(Dict[str, Any]):
+class WideToLongTransformSpec(dict[str, Any]):
     transform_type: str = "WideToLong"
-    id_vars: List[str]
-    value_vars: List[str]
+    id_vars: list[str]
+    value_vars: list[str]
     var_name: str
     value_name: str
 
@@ -56,9 +56,9 @@ class TableRegistry:
         self,
         name: str,
         df: pl.DataFrame,
-        keys: List[str],
+        keys: list[str],
         value_column: str,
-        transform_spec: Optional[WideToLongTransformSpec] = None,
+        transform_spec: WideToLongTransformSpec | None = None,
     ) -> None:
         """Registers a table (DataFrame) with the global registry.
 
@@ -74,6 +74,7 @@ class TableRegistry:
         Raises:
             ValueError: If registration fails in the underlying Rust implementation
                 (e.g., duplicate name, invalid keys/columns, transformation error).
+
         """
         try:
             # Call the Rust method via the internal instance
@@ -105,7 +106,7 @@ class AssumptionTableRegistry:
         self,
         name: str,
         df: pl.DataFrame,
-        keys: List[str],
+        keys: list[str],
         value_column: str,
     ) -> None:
         """Registers a table (DataFrame) with the global registry.
@@ -122,6 +123,7 @@ class AssumptionTableRegistry:
         Raises:
             ValueError: If registration fails in the underlying Rust implementation
                 (e.g., duplicate name, invalid keys/columns, transformation error).
+
         """
         try:
             # Call the Rust method via the internal instance

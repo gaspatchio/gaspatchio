@@ -4,7 +4,6 @@
 
 # ABOUTME: End-to-end audit-chain integration test for v0.2 ScenarioRun.
 # ABOUTME: Pins SHA stability, batch-equiv, YAML round-trip, audit sidecar.
-# ruff: noqa: PD901
 """End-to-end v0.2 audit-chain integration test (GSP-101)."""
 
 from __future__ import annotations

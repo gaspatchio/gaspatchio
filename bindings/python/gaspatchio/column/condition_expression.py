@@ -173,7 +173,7 @@ class ConditionExpression:
         from gaspatchio.column.expression_proxy import ExpressionProxy
         from gaspatchio.polars_backend.masks import boolean_and_reflected
 
-        combined = boolean_and_reflected(other._expr, self)  # noqa: SLF001
+        combined = boolean_and_reflected(other._expr, self)
         return ExpressionProxy(combined, self._parent, kind="boolean_mask")
 
     def __or__(self, other: ConditionExpression) -> ExpressionProxy:
@@ -196,7 +196,7 @@ class ConditionExpression:
         from gaspatchio.column.expression_proxy import ExpressionProxy
         from gaspatchio.polars_backend.masks import boolean_or_reflected
 
-        combined = boolean_or_reflected(other._expr, self)  # noqa: SLF001
+        combined = boolean_or_reflected(other._expr, self)
         return ExpressionProxy(combined, self._parent, kind="boolean_mask")
 
     def __invert__(self) -> ExpressionProxy:

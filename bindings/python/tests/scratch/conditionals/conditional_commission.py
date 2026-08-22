@@ -4,7 +4,7 @@
 
 # ABOUTME: Scratch test showing commission schedule calculation with conditionals.
 # ABOUTME: Demonstrates commission rates that vary by policy year and sum assured.
-# ruff: noqa: T201, INP001, ANN201, PLR2004
+# ruff: noqa: T201, INP001
 """Commission Schedule Example.
 
 Shows how to implement tiered commission schedules based on policy year

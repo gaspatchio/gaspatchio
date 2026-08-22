@@ -5,7 +5,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional, cast
+from typing import cast
 
 import typer
 
@@ -30,7 +30,7 @@ app = typer.Typer(
 
 @app.command()
 def parse(
-    root_dir: Optional[Path] = typer.Argument(
+    root_dir: Path | None = typer.Argument(
         None,
         help="Root directory to scan for Python files. Ignored if --file is used.",
         exists=True,
@@ -39,7 +39,7 @@ def parse(
         readable=True,
         show_default=False,
     ),
-    target_file: Optional[Path] = typer.Option(
+    target_file: Path | None = typer.Option(
         None,
         "--file",
         help="Target a single Python file.",
@@ -49,13 +49,13 @@ def parse(
         readable=True,
         show_default=False,
     ),
-    target_method: Optional[str] = typer.Option(
+    target_method: str | None = typer.Option(
         None,
         "--method",
         help="Target a specific method/function (e.g., 'ClassName.method'). Applied after file/dir parsing.",
         show_default=False,
     ),
-    output_file: Optional[Path] = typer.Option(
+    output_file: Path | None = typer.Option(
         None,
         "--out",
         help="JSON output file path. Prints to stdout if not provided.",
@@ -73,7 +73,7 @@ def parse(
         raise typer.Exit(code=1)
 
     parser = GaspatchioDocstringParser()
-    docstrings: List[GaspatchioDocstring] = []
+    docstrings: list[GaspatchioDocstring] = []
 
     if target_file:
         typer.echo(f"Parsing single file: {target_file}")
@@ -112,7 +112,7 @@ def parse(
 
 @app.command(name="run-print-check")
 def run_print_check_command(
-    root_dir: Optional[Path] = typer.Argument(
+    root_dir: Path | None = typer.Argument(
         None,
         help="Root directory to scan. Ignored if --file is used.",
         exists=True,
@@ -121,7 +121,7 @@ def run_print_check_command(
         readable=True,
         show_default=False,
     ),
-    target_file: Optional[Path] = typer.Option(
+    target_file: Path | None = typer.Option(
         None,
         "--file",
         help="Target a single Python file.",
@@ -131,7 +131,7 @@ def run_print_check_command(
         readable=True,
         show_default=False,
     ),
-    target_method: Optional[str] = typer.Option(
+    target_method: str | None = typer.Option(
         None,
         "--method",
         help="Target a specific method/function (e.g., 'ClassName.method'). Applied after file/dir parsing.",
@@ -180,7 +180,7 @@ def run_print_check_command(
                 bold=True,
             )
         )
-        lint_pytest_args: List[str] = [
+        lint_pytest_args: list[str] = [
             "-m",
             "gaspatchio_docstring_structure_check",  # Only structural checks
             path_to_check,
@@ -246,7 +246,7 @@ def run_print_check_command(
     parser_logger.setLevel(logging.DEBUG)
 
     parser = GaspatchioDocstringParser()
-    parsed_docstrings: List[GaspatchioDocstring] = []
+    parsed_docstrings: list[GaspatchioDocstring] = []
 
     if target_file:
         typer.echo(f"Checking examples in single file: {target_file}")
@@ -259,7 +259,7 @@ def run_print_check_command(
         typer.echo(typer.style("No docstrings found to check.", fg=typer.colors.YELLOW))
         raise typer.Exit(code=0)
 
-    all_examples: List[DocstringCodeExample] = []
+    all_examples: list[DocstringCodeExample] = []
     for docstring_obj in parsed_docstrings:
         all_examples.extend(docstring_obj.examples)
 
@@ -294,7 +294,7 @@ def run_print_check_command(
     eval_example_checker = GaspatchioEvalExample(update_examples_mode=False)
     total_examples_checked = 0
     total_errors_found = 0
-    error_details: List[str] = []
+    error_details: list[str] = []
 
     typer.echo(f"Found {len(all_examples)} examples to check.")
 
@@ -324,16 +324,15 @@ def run_print_check_command(
         summary_message = f"\\nFound issues in {total_errors_found} out of {total_examples_checked} examples checked."
         typer.echo(typer.style(summary_message, fg=typer.colors.RED, bold=True))
         raise typer.Exit(code=1)
-    else:
-        summary_message = (
-            f"\\nAll {total_examples_checked} examples checked passed execution checks."
-        )
-        typer.echo(typer.style(summary_message, fg=typer.colors.GREEN, bold=True))
+    summary_message = (
+        f"\\nAll {total_examples_checked} examples checked passed execution checks."
+    )
+    typer.echo(typer.style(summary_message, fg=typer.colors.GREEN, bold=True))
 
 
 @app.command()
 def lint(
-    root_dir: Optional[Path] = typer.Argument(
+    root_dir: Path | None = typer.Argument(
         None,
         help="Root directory to scan. Ignored if --file is used.",
         exists=True,
@@ -342,7 +341,7 @@ def lint(
         readable=True,
         show_default=False,
     ),
-    target_file: Optional[Path] = typer.Option(
+    target_file: Path | None = typer.Option(
         None,
         "--file",
         help="Target a single Python file for linting.",
@@ -352,7 +351,7 @@ def lint(
         readable=True,
         show_default=False,
     ),
-    target_method: Optional[str] = typer.Option(
+    target_method: str | None = typer.Option(
         None,
         "--method",
         "-k",
@@ -404,7 +403,7 @@ def lint(
 
     try:
         # Pytest expects list of strings. Cast to avoid mypy complaint if pytest is None (though guarded).
-        exit_code_val = pytest.main(cast(List[str], pytest_args))
+        exit_code_val = pytest.main(cast("list[str]", pytest_args))
         # Map pytest.ExitCode enum to integer if necessary for typer.Exit
         exit_code = int(exit_code_val)
 
@@ -442,7 +441,7 @@ def lint(
 
 @app.command()
 def update(
-    root_dir: Optional[Path] = typer.Argument(
+    root_dir: Path | None = typer.Argument(
         None,
         help="Root directory to scan. Ignored if --file is used.",
         exists=True,
@@ -451,7 +450,7 @@ def update(
         readable=True,
         show_default=False,
     ),
-    target_file: Optional[Path] = typer.Option(
+    target_file: Path | None = typer.Option(
         None,
         "--file",
         help="Target a single Python file for update.",
@@ -461,7 +460,7 @@ def update(
         readable=True,
         show_default=False,
     ),
-    target_method: Optional[str] = typer.Option(
+    target_method: str | None = typer.Option(
         None,
         "--method",
         "-k",
@@ -503,7 +502,7 @@ def update(
         pytest_args.extend(["-k", target_method])
 
     try:
-        exit_code_val = pytest.main(cast(List[str], pytest_args))
+        exit_code_val = pytest.main(cast("list[str]", pytest_args))
         exit_code = int(exit_code_val)
     except Exception as e:  # pylint: disable=broad-except
         typer.echo(

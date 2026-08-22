@@ -1128,7 +1128,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         return ExpressionProxy(shifted_expr, parent_af)
 
     def broadcast_to_periods(
-        self, like: "ColumnProxy | ExpressionProxy | pl.Expr | None" = None
+        self, like: ColumnProxy | ExpressionProxy | pl.Expr | None = None
     ) -> ExpressionProxy:
         """Broadcast a per-policy scalar column across the projection periods.
 

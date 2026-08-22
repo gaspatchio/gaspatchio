@@ -6,10 +6,10 @@ from pathlib import Path
 
 import polars as pl  # For multi_example_fixture global_vars
 import pytest
+
 from gaspatchio.examples.docstrings.models import DocstringCodeExample
 from gaspatchio.examples.docstrings.parse import GaspatchioDocstringParser
 from gaspatchio.examples.docstrings.validate import GaspatchioEvalExample
-
 from tests.examples.docstrings.fixtures.multi_example_fixture import PremiumCalculator
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -97,6 +97,7 @@ def test_gaspatchio_eval_example_check_example_integration(
     # errors = eval_example.check_example(example_to_test, global_vars=local_global_vars)
     # assert len(errors) == 0
     ```
+
     """
     if example_index is not None:
         examples_to_test = get_examples_from_fixture(

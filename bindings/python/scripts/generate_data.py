@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from typing import Annotated
 
 import numpy as np
 import polars as pl
 import typer
 from loguru import logger
-from typing_extensions import Annotated
 
 
 def expand_dataset(

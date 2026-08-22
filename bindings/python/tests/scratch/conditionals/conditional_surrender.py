@@ -4,7 +4,7 @@
 
 # ABOUTME: Scratch test showing surrender charge calculation with conditionals.
 # ABOUTME: Demonstrates decreasing surrender charges based on policy duration.
-# ruff: noqa: T201, INP001, ANN201, PLR2004
+# ruff: noqa: T201, INP001
 """Surrender Charge Example.
 
 Shows how to implement surrender charges that decrease over time based on

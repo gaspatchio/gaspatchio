@@ -4,7 +4,7 @@
 
 # ABOUTME: Test tracing functionality for ActuarialFrame debug mode
 # ABOUTME: Verifies operation capture, log_query_plan calls, and mode switching
-# ruff: noqa: S101, PLR2004, ANN201, SLF001, ANN202, D100, INP001, ARG001, T201
+# ruff: noqa: SLF001, ANN202, ARG001, T201
 # type: ignore[attr-defined]
 
 """Tests for ActuarialFrame tracing functionality."""

@@ -1361,8 +1361,9 @@ class TestAccumulate:
 
     def test_length_mismatch_raises_error(self):
         """Test that mismatched multiply/add lengths raise error."""
-        from gaspatchio.functions.vector import accumulate
         from polars.exceptions import ComputeError
+
+        from gaspatchio.functions.vector import accumulate
 
         data = {
             "initial": [100.0],

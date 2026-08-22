@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# ruff: noqa: SLF001, PD901, D103
+# ruff: noqa: SLF001
 """Test stack_shocked_table for batched per-scenario shocks."""
 
 from __future__ import annotations

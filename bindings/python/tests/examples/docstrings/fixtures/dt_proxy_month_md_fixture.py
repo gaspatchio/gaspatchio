@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class DtNamespaceProxy:
-    def month(self) -> "ExpressionProxy":
+    def month(self) -> ExpressionProxy:
         """Extract the month number (1-12) from a date or datetime expression.
 
         This function allows you to isolate the month component from a series of
@@ -100,5 +100,5 @@ class DtNamespaceProxy:
             │ D004      ┆ [1, 11]          │
             └───────────┴──────────────────┘
             ```
+
         """
-        pass

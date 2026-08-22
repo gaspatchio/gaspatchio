@@ -11,7 +11,6 @@ piece of the shape-SOT cutover.
 from __future__ import annotations
 
 import polars as pl
-import pytest
 
 
 def test_columntypedetector_removed() -> None:

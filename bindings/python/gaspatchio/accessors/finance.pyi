@@ -13,36 +13,36 @@ from .base import BaseColumnAccessor, BaseFrameAccessor
 if TYPE_CHECKING:
     from ..column.column_proxy import ColumnProxy
     from ..column.expression_proxy import ExpressionProxy
-    from ..typing import IntoExprColumn
     from ..frame.base import ActuarialFrame
+    from ..typing import IntoExprColumn
 
 class FinanceFrameAccessor(BaseFrameAccessor):
-    def __init__(self, frame: "ActuarialFrame") -> None: ...
+    def __init__(self, frame: ActuarialFrame) -> None: ...
     def discount_factor(
         self,
         rate_col: str,
         periods_col: str,
         output_col: str,
-        method: "Literal['spot', 'forward']" = "spot",
-    ) -> "ActuarialFrame": ...
+        method: Literal["spot", "forward"] = "spot",
+    ) -> ActuarialFrame: ...
     def present_value(
         self,
-        cashflow_col: "IntoExprColumn",
-        rate_col: "IntoExprColumn",
-        period_col: "IntoExprColumn",
-    ) -> "ExpressionProxy": ...
+        cashflow_col: IntoExprColumn,
+        rate_col: IntoExprColumn,
+        period_col: IntoExprColumn,
+    ) -> ExpressionProxy: ...
 
 class FinanceColumnAccessor(BaseColumnAccessor):
-    _proxy: "ColumnProxy | ExpressionProxy"
+    _proxy: ColumnProxy | ExpressionProxy
 
-    def __init__(self, proxy: "ColumnProxy | ExpressionProxy") -> None: ...
+    def __init__(self, proxy: ColumnProxy | ExpressionProxy) -> None: ...
     def _get_polars_expr(self) -> pl.Expr: ...
     def to_monthly(
-        self, method: "Literal['compound', 'simple']" = "compound"
-    ) -> "ExpressionProxy": ...
+        self, method: Literal["compound", "simple"] = "compound"
+    ) -> ExpressionProxy: ...
     def compound(
         self, rate: float, periods_per_year: int
-    ) -> "ExpressionProxy": ...
+    ) -> ExpressionProxy: ...
     def discount(
-        self, rate_expr: "IntoExprColumn", n_periods_expr: "IntoExprColumn"
-    ) -> "ExpressionProxy": ...
+        self, rate_expr: IntoExprColumn, n_periods_expr: IntoExprColumn
+    ) -> ExpressionProxy: ...

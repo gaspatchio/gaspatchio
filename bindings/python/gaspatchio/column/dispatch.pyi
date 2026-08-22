@@ -4,9 +4,8 @@
 
 """Type stubs for dispatch.py."""
 
-from typing import TYPE_CHECKING, Any, Callable, Optional, Set, Type
-
-import polars as pl
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 # Use forward references for types defined elsewhere to avoid circular imports
 if TYPE_CHECKING:
@@ -15,13 +14,13 @@ if TYPE_CHECKING:
     from .expression_proxy import ExpressionProxy
 
 # Constants
-_NUMERIC_UNARY: Set[str]
-_NUMERIC_ELEMENTWISE: Set[str]
-_NAMESPACES: Set[str]
+_NUMERIC_UNARY: set[str]
+_NUMERIC_ELEMENTWISE: set[str]
+_NAMESPACES: set[str]
 
 # Helper Functions
 def _unwrap(arg: Any) -> Any: ...
-def _wrap(parent: Optional["ActuarialFrame"], result: Any) -> Any: ...
+def _wrap(parent: ActuarialFrame | None, result: Any) -> Any: ...
 def _ensure_polars_expr_or_literal(arg: Any) -> Any: ...
 
 # Descriptor
@@ -31,11 +30,11 @@ class DelegatorDescriptor:
 
     def __init__(self, name: str) -> None: ...
     def __get__(
-        self, instance: Optional["ColumnProxy | ExpressionProxy"], owner: Optional[Type["ColumnProxy | ExpressionProxy"]] = None
+        self, instance: ColumnProxy | ExpressionProxy | None, owner: type[ColumnProxy | ExpressionProxy] | None = None
     ) -> Any: ...
 
 # Wrapper Factory
 def _make_wrapper(name: str) -> Callable[..., Any]: ...
 
 # Autopatching Function
-def _autopatch(proxy_cls: Type["ColumnProxy | ExpressionProxy"]) -> None: ...
+def _autopatch(proxy_cls: type[ColumnProxy | ExpressionProxy]) -> None: ...

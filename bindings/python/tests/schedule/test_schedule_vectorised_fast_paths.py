@@ -24,26 +24,21 @@ These tests verify:
 from __future__ import annotations
 
 from datetime import date
-from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
 
 from gaspatchio.schedule._business_day import BusinessDayConvention
 from gaspatchio.schedule._calendar import NullCalendar, UnitedStates
-from gaspatchio.schedule._day_count import ActualActualISDA, Actual365Fixed, OneTwelfth
+from gaspatchio.schedule._day_count import Actual365Fixed, ActualActualISDA, OneTwelfth
 from gaspatchio.schedule._schedule import Schedule
-
-if TYPE_CHECKING:
-    pass
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def multi_row_df() -> pl.DataFrame:
     """Three inception dates spanning a leap year, identical to conftest fixture."""
     return pl.DataFrame(

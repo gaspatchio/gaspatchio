@@ -130,7 +130,7 @@ class TestPublicAPI:
         assert MortalityTable is Private
 
     def test_top_level_import(self) -> None:
-        """gaspatchio has a MortalityTable attribute."""
+        """Gaspatchio has a MortalityTable attribute."""
         import gaspatchio
 
         assert hasattr(gaspatchio, "MortalityTable")

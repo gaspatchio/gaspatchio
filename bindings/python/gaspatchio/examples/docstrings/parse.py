@@ -9,7 +9,6 @@ import re
 import shlex
 import textwrap
 from pathlib import Path
-from typing import List, Optional
 
 import polars as pl
 from docstring_parser import parse as docstring_parse_lib
@@ -51,7 +50,7 @@ class GaspatchioDocstringParser:
 
     def _extract_parameters(
         self, parsed_doc_lib: Docstring
-    ) -> List[DocstringParameter]:
+    ) -> list[DocstringParameter]:
         params_list = []
         if parsed_doc_lib.params:
             for p_lib in parsed_doc_lib.params:
@@ -64,7 +63,7 @@ class GaspatchioDocstringParser:
                 )
         return params_list
 
-    def _extract_returns(self, parsed_doc_lib: Docstring) -> Optional[DocstringReturn]:
+    def _extract_returns(self, parsed_doc_lib: Docstring) -> DocstringReturn | None:
         if parsed_doc_lib.returns:
             r_lib = parsed_doc_lib.returns
             return DocstringReturn(
@@ -73,12 +72,12 @@ class GaspatchioDocstringParser:
             )
         return None
 
-    def _extract_when_to_use(self, docstring_text: str) -> Optional[str]:
+    def _extract_when_to_use(self, docstring_text: str) -> str | None:
         """Extracts the 'When to use' section from a docstring."""
         cleaned_doc = inspect.cleandoc(docstring_text)
         lines = cleaned_doc.splitlines()
 
-        when_to_use_content_lines: List[str] = []
+        when_to_use_content_lines: list[str] = []
         in_when_to_use_block = False
         marker_line_found = False
 
@@ -113,8 +112,8 @@ class GaspatchioDocstringParser:
         docstring_text: str,
         object_path: str,
         file_path_str: str,
-    ) -> List[DocstringCodeExample]:
-        examples_list: List[DocstringCodeExample] = []
+    ) -> list[DocstringCodeExample]:
+        examples_list: list[DocstringCodeExample] = []
         if not docstring_text:
             return examples_list
 
@@ -162,7 +161,7 @@ class GaspatchioDocstringParser:
                     "\n"
                 )
 
-                extracted_output: Optional[str] = None
+                extracted_output: str | None = None
                 consumed_next_block = False
 
                 # Check if there's a next block that could be an output
@@ -225,7 +224,7 @@ class GaspatchioDocstringParser:
         object_path: str,
         file_path_str: str,
         docstring_start_line: int,
-    ) -> Optional[GaspatchioDocstring]:
+    ) -> GaspatchioDocstring | None:
         """
         Parses a raw docstring string and its context into a GaspatchioDocstring object.
 
@@ -237,6 +236,7 @@ class GaspatchioDocstringParser:
 
         Returns:
             A GaspatchioDocstring object if parsing is successful, otherwise None.
+
         """
         if not docstring_text:
             return None
@@ -317,13 +317,13 @@ class GaspatchioDocstringParser:
 
         return ".".join(reversed(name_parts))
 
-    def process_file(self, file_path: Path) -> List[GaspatchioDocstring]:
+    def process_file(self, file_path: Path) -> list[GaspatchioDocstring]:
         """Processes a single Python file and extracts docstrings."""
-        collected_docstrings: List[GaspatchioDocstring] = []
+        collected_docstrings: list[GaspatchioDocstring] = []
         try:
             file_content = file_path.read_text(encoding="utf-8")
             tree = ast.parse(file_content, filename=str(file_path))
-        except (IOError, OSError) as e:
+        except OSError as e:
             logger.error(f"Error reading file {file_path}: {e}")
             return collected_docstrings
         except SyntaxError as e:
@@ -447,9 +447,9 @@ class GaspatchioDocstringParser:
 
         return collected_docstrings
 
-    def process_files(self, root_dir: Path) -> List[GaspatchioDocstring]:
+    def process_files(self, root_dir: Path) -> list[GaspatchioDocstring]:
         """Recursively processes all Python files in a directory."""
-        all_docstrings: List[GaspatchioDocstring] = []
+        all_docstrings: list[GaspatchioDocstring] = []
         for py_file in root_dir.rglob("*.py"):
             if py_file.is_file():
                 all_docstrings.extend(self.process_file(py_file))

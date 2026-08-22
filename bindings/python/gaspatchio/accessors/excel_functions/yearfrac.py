@@ -153,6 +153,7 @@ def yearfrac(
     │ P001      ┆ [2024-01-01, 2024-02-01, 2024-03-01] ┆ 2024-01-01 ┆ [0.0, 0.084699, 0.163934] │
     └───────────┴──────────────────────────────────────┴────────────┴───────────────────────────┘
     ```
+
     """
     # Convert inputs to Polars expressions, handling literals with pl.lit()
     def ensure_polars_expr(arg):
@@ -162,10 +163,10 @@ def yearfrac(
         if not isinstance(expr_candidate, pl.Expr):
             return pl.lit(expr_candidate)
         return expr_candidate
-    
+
     start_date_expr = ensure_polars_expr(start_date)
     end_date_expr = ensure_polars_expr(end_date)
-    
+
     # Convert basis to integer if it's a string
     if isinstance(basis, str):
         # Map string basis to integer
@@ -217,7 +218,7 @@ def yearfrac(
         except:
             # If dt.date() doesn't work, try casting
             return expr.cast(pl.Date, strict=False)
-    
+
     # Apply conversions - these are lazy operations
     # For scalar columns: cast datetime to date
     # For list columns: pass through unchanged (Rust handles list validation)

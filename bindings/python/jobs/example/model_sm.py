@@ -5,9 +5,10 @@
 import sys
 from pathlib import Path
 
+from loguru import logger
+
 from gaspatchio import ActuarialFrame
 from gaspatchio.functions import fill_series, floor
-from loguru import logger
 
 # Add the current directory to the path so we can import setup.py
 current_dir = Path(__file__).parent

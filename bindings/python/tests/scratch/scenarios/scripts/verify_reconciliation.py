@@ -32,8 +32,9 @@ def main():
 
     # Import and run the model
     print("\n1. Running gaspatchio model (model_applied_life.py)...")
-    from gaspatchio import ActuarialFrame
     from appliedlife.model_applied_life import main as run_model
+
+    from gaspatchio import ActuarialFrame
 
     mp_path = script_dir.parent / "model_points.parquet"
     mp = pl.read_parquet(mp_path)
@@ -127,10 +128,9 @@ def main():
         print("\nThe gaspatchio model matches the lifelib reference implementation")
         print("with differences at the level of floating-point precision (~10^-12%).")
         return 0
-    else:
-        print("RESULT: RECONCILIATION FAILED")
-        print("=" * 70)
-        return 1
+    print("RESULT: RECONCILIATION FAILED")
+    print("=" * 70)
+    return 1
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# ruff: noqa: INP001, D200, D400, D415, SLF001, E501, PT011
+# ruff: noqa: D400, D415, SLF001, E501, PT011
 """Tests for the new Table API (v2) - dimension-based assumption tables."""
 
 import polars as pl
@@ -1038,8 +1038,8 @@ class TestStorageMode:
         # Create a dense table with contiguous integer keys
         data = pl.DataFrame(
             {
-                "age": list(range(0, 121)),  # 121 ages, fully dense
-                "rate": [0.001 * (1 + a / 100) for a in range(0, 121)],
+                "age": list(range(121)),  # 121 ages, fully dense
+                "rate": [0.001 * (1 + a / 100) for a in range(121)],
             },
         )
 

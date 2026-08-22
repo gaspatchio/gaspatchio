@@ -13,11 +13,11 @@ if TYPE_CHECKING:
     from ..frame.base import ActuarialFrame
 
 class BaseFrameAccessor(ABC):
-    _frame: "ActuarialFrame"
+    _frame: ActuarialFrame
     @abstractmethod
-    def __init__(self, frame: "ActuarialFrame") -> None: ...
+    def __init__(self, frame: ActuarialFrame) -> None: ...
 
 class BaseColumnAccessor(ABC):
-    _proxy: "ColumnProxy | ExpressionProxy | Any"
+    _proxy: ColumnProxy | ExpressionProxy | Any
     @abstractmethod
-    def __init__(self, proxy: "ColumnProxy | ExpressionProxy | Any") -> None: ...
+    def __init__(self, proxy: ColumnProxy | ExpressionProxy | Any) -> None: ...

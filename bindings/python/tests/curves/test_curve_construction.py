@@ -137,7 +137,7 @@ class TestPublicAPI:
         assert Curve is PrivateCurve
 
     def test_top_level_import(self) -> None:
-        """gaspatchio has a Curve attribute."""
+        """Gaspatchio has a Curve attribute."""
         import gaspatchio
 
         assert hasattr(gaspatchio, "Curve")

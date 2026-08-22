@@ -18,14 +18,15 @@ def clean_expression_string(expr_str: str) -> str:
         
     Returns:
         Cleaned expression string
+
     """
     # Pattern to match file paths in the expression
-    path_pattern = r'\.?/[\w/\-\.]+\.(py|so|cpython[^:]+):'
-    expr_str = re.sub(path_pattern, '.', expr_str)
-    
+    path_pattern = r"\.?/[\w/\-\.]+\.(py|so|cpython[^:]+):"
+    expr_str = re.sub(path_pattern, ".", expr_str)
+
     # Clean up internal function patterns
-    expr_str = re.sub(r'\.gaspatchio\._internal[^:]+:', '.', expr_str)
-    
+    expr_str = re.sub(r"\.gaspatchio\._internal[^:]+:", ".", expr_str)
+
     return expr_str
 
 
@@ -38,6 +39,7 @@ def simplify_dtype(dtype_str: str) -> str:
         
     Returns:
         Simplified type name
+
     """
     type_map = {
         "Int64": "int",
@@ -51,9 +53,9 @@ def simplify_dtype(dtype_str: str) -> str:
         "Duration": "duration",
         "List": "list",
     }
-    
+
     for polars_type, simple_type in type_map.items():
         if dtype_str.startswith(polars_type):
             return simple_type
-    
+
     return dtype_str.lower()

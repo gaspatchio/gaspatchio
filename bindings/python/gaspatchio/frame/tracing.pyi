@@ -2,9 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, Callable, List, Tuple
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -12,7 +11,7 @@ if TYPE_CHECKING:
     from .base import ActuarialFrame
 
 def log_query_plan(
-    operations: List[Tuple[str, Any]], frame_df: pl.LazyFrame
+    operations: list[tuple[str, Any]], frame_df: pl.LazyFrame
 ) -> None: ...
 def build_trace_decorator(
     frame_instance: ActuarialFrame,

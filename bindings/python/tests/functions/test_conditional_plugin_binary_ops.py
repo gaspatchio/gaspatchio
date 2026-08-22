@@ -4,7 +4,6 @@
 
 # ABOUTME: Tests for binary operations (&, |, ~) with list_conditional plugin
 # ABOUTME: Verifies AND, OR, NOT work correctly with plugin integration
-# ruff: noqa: S101, PLR2004
 # type: ignore[call-non-callable]
 """Tests for binary operations with list_conditional plugin integration."""
 

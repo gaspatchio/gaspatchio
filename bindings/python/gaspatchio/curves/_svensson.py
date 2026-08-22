@@ -68,6 +68,7 @@ def svensson_spot_cc(
 
     Returns:
         Continuously-compounded spot rate at ``t``.
+
     """
     l1, c1 = _loadings(t / tau1)
     _, c2 = _loadings(t / tau2)
@@ -105,6 +106,7 @@ def svensson_spot(
     Returns:
         Annually-compounded spot rate at ``t``, or ``nan`` when ``t`` is
         non-finite.
+
     """
     if not math.isfinite(t):
         return math.nan

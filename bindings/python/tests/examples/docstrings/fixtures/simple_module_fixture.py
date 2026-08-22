@@ -14,8 +14,8 @@ class SimpleDateTimeProcessor:
         Instantiate this class if you need a basic date string processor for testing
         purposes. Its methods demonstrate docstring example extraction and validation.
 
-    Examples:
-    ---------
+    Examples
+    --------
     ```python
     # Define the class for the example
     class SimpleDateTimeProcessor:
@@ -31,6 +31,7 @@ class SimpleDateTimeProcessor:
     ```text
     test_source
     ```
+
     """
 
     def __init__(self, data_source: str):
@@ -47,7 +48,7 @@ class SimpleDateTimeProcessor:
             data_source (str): An identifier for the data source.
 
         Examples:
-        ---------
+        --------
         ```python
         # Define the class for the example
         class SimpleDateTimeProcessor:
@@ -61,6 +62,7 @@ class SimpleDateTimeProcessor:
         ```text
         my_data
         ```
+
         """
         self.data_source = data_source
 
@@ -75,8 +77,8 @@ class SimpleDateTimeProcessor:
             is in a format where the year is represented by the first four characters.
             Suitable for testing docstring examples that include self-contained class definitions.
 
-        Examples:
-        ---------
+        Examples
+        --------
         ```python
         # Define needed class for self-contained example
         class SimpleDateTimeProcessor:
@@ -89,6 +91,7 @@ class SimpleDateTimeProcessor:
         ```text
         2023
         ```
+
         """
         if not isinstance(date_input, str) or len(date_input) < 4:
             raise ValueError("Invalid date string format")
@@ -105,8 +108,8 @@ class SimpleDateTimeProcessor:
             This method is also a test case for docstring examples that include self-contained
             class definitions for execution.
 
-        Examples:
-        ---------
+        Examples
+        --------
         ```python
         # Define needed class for self-contained example
         class SimpleDateTimeProcessor:
@@ -119,6 +122,7 @@ class SimpleDateTimeProcessor:
         ```text
         7
         ```
+
         """
         if (
             not isinstance(date_input, str)
@@ -150,8 +154,8 @@ class SimpleDateTimeProcessor:
             Use to get the day component from a date string. Note that this docstring intentionally
             omits runnable examples to test validation rules concerning missing examples.
 
-        Examples:
-        ---------
+        Examples
+        --------
         ```python
         # This is a placeholder example as the original had none.
         # Define needed class for self-contained example
@@ -165,6 +169,7 @@ class SimpleDateTimeProcessor:
         ```text
         20
         ```
+
         """
         if not isinstance(date_input, str) or len(date_input) < 10:
             raise ValueError("Invalid date string format")
@@ -190,7 +195,7 @@ def utility_function(name: str, value: int = 0) -> str:
         str: A greeting string.
 
     Examples:
-    ---------
+    --------
     ```python
     # Example for utility_function
     # To make it self-contained for linting, we'd typically define it here or import it.
@@ -207,6 +212,7 @@ def utility_function(name: str, value: int = 0) -> str:
     ```text
     Hello, Alice! Value is 42.
     ```
+
     """
     return f"Hello, {name}! Value is {value}."
 
@@ -220,13 +226,14 @@ def module_level_function_simple():
         Use this function when you need a straightforward example
         of a module-level function with a docstring.
 
-    Examples:
-    ---------
+    Examples
+    --------
     ```python
     def module_level_function_simple():
         return "module_level_output"
     assert module_level_function_simple() == "module_level_output"
     ```
+
     """
     return "module_level_output"
 
@@ -249,7 +256,7 @@ def module_level_function_with_params(param1: int, param2: str = "default") -> s
         str: A string combining the parameters.
 
     Examples:
-    ---------
+    --------
     ```python
     def module_level_function_with_params(param1: int, param2: str = "default") -> str:
         return f"{param1} and {param2}"
@@ -260,6 +267,7 @@ def module_level_function_with_params(param1: int, param2: str = "default") -> s
     ```text
     5 and default
     ```
+
     """
     return f"{param1} and {param2}"
 

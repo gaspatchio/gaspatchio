@@ -9,7 +9,6 @@ Script to rename columns in parquet files.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import polars as pl
 import typer
@@ -22,7 +21,7 @@ def rename_column(
     input_file: Path = typer.Argument(..., help="Input parquet file path"),
     old_name: str = typer.Argument(..., help="Current column name to rename"),
     new_name: str = typer.Argument(..., help="New column name"),
-    output_file: Optional[Path] = typer.Option(
+    output_file: Path | None = typer.Option(
         None, "--output", "-o", help="Output file path (defaults to input file)"
     ),
     dry_run: bool = typer.Option(
@@ -30,7 +29,6 @@ def rename_column(
     ),
 ) -> None:
     """Rename a column in a parquet file."""
-
     # Validate input file exists
     if not input_file.exists():
         typer.echo(f"Error: Input file {input_file} does not exist", err=True)
@@ -90,7 +88,6 @@ def inspect(
     show_sample: bool = typer.Option(False, "--sample", help="Show first 5 rows"),
 ) -> None:
     """Inspect the schema and contents of a parquet file."""
-
     if not file_path.exists():
         typer.echo(f"Error: File {file_path} does not exist", err=True)
         raise typer.Exit(1)

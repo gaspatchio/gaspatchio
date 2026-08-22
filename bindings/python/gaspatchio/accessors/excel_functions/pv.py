@@ -98,6 +98,7 @@ def pv(
     │ POL003    ┆ 0.06          ┆ 20.0        ┆ 2000.0  ┆ -22939.842437 │
     └───────────┴───────────────┴─────────────┴─────────┴───────────────┘
     ```
+
     """
     rate_expr = to_polars_expression(rate)
     nper_expr = to_polars_expression(nper)

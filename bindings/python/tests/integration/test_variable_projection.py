@@ -27,7 +27,6 @@ from gaspatchio import (
     when,
 )
 
-
 VALUATION_DATE = datetime.date(2025, 1, 1)
 
 
@@ -121,7 +120,7 @@ def build_model_variable(mp: pl.DataFrame) -> pl.DataFrame:
     return af.collect()
 
 
-@pytest.fixture()
+@pytest.fixture
 def model_points():
     """4 policies with different terms, same structure as L3 Mini-VA."""
     return pl.DataFrame(
@@ -268,7 +267,8 @@ class TestJaggedUniformProperty:
 
     def test_jagged_model_runs_in_optimize_mode(self) -> None:
         """The jagged model must collect in optimize mode (no map_elements
-        FATAL) — the discount/curve regression was optimize-only."""
+        FATAL) — the discount/curve regression was optimize-only.
+        """
         prev = get_default_mode()
         try:
             set_default_mode("optimize")

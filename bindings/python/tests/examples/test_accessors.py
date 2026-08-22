@@ -4,6 +4,7 @@
 
 import polars as pl
 import pytest
+
 from gaspatchio import ActuarialFrame
 
 # @pytest.mark.parametrize(
@@ -30,7 +31,7 @@ def test_yearfrac_example():
         pl.col("start").str.to_date(),
         pl.col("end").str.to_date(),
     )
-    
+
     af = ActuarialFrame(df)
     af["yearfrac"] = af["start"].excel.yearfrac(af["end"])
 

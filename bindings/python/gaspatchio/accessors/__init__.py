@@ -10,7 +10,7 @@ from . import (
     excel,
     finance,
     projection,
-    projection_frame,  # noqa: F401
+    projection_frame,
 )
 
 __all__ = ["base", "date", "excel", "finance", "projection", "projection_frame"]

@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
+
 from gaspatchio.functions.utils import to_polars_expression
 
 if TYPE_CHECKING:
@@ -119,14 +120,15 @@ def edate(
     │ P002      ┆ 2024-03-15 ┆ [0, 6, … 18]      ┆ [2024-01-31, 2024-07-31, … 2025-07-31] │
     └───────────┴────────────┴───────────────────┴────────────────────────────────────────┘
     ```
+
     """
     start_date_expr = to_polars_expression(start_date)
     months_expr = to_polars_expression(months)
-    
+
     # Cast to appropriate types
     start_date_expr = start_date_expr.cast(pl.Date, strict=False)
     months_expr = months_expr.cast(pl.Int64, strict=False)
-    
+
     # Add months using Polars datetime arithmetic
     # Convert months to a duration string and use offset_by
     # This handles month boundaries correctly (e.g., Jan 31 + 1 month = Feb 28/29)

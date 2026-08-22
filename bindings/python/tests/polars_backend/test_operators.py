@@ -39,12 +39,11 @@ class TestScalarPowList:
         result_list = result["r"][0]
         if expected_present:
             assert result_list is not None
-        else:
-            # negative base with fractional exponent -> all-null list or null list
-            if result_list is not None:
-                values = result_list.to_list()
-                # must not be the naive negative-power result
-                assert values != [-2.0, 4.0, -8.0]
+        # negative base with fractional exponent -> all-null list or null list
+        elif result_list is not None:
+            values = result_list.to_list()
+            # must not be the naive negative-power result
+            assert values != [-2.0, 4.0, -8.0]
 
 
 class TestListPowList:

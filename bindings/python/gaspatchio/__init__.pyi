@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ruff: noqa: F401 - symbols are publicly exposed
-from __future__ import annotations
 
 import sys
 from types import ModuleType

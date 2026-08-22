@@ -10,8 +10,6 @@ Provides type hints for Excel-style IF() functionality with automatic
 list broadcasting for actuarial projections.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 import polars as pl
@@ -29,7 +27,6 @@ class ConditionalProxy:
     def when(self, condition: Any) -> ConditionalProxy: ...  # noqa: ANN401
     def otherwise(self, value: Any) -> ExpressionProxy: ...  # noqa: ANN401
     def needs_list_broadcasting(self) -> bool: ...
-    def __repr__(self) -> str: ...
     def _to_expr(self) -> pl.Expr: ...
 
 def when(condition: Any) -> ConditionalProxy: ...  # noqa: ANN401

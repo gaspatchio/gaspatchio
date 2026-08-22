@@ -4,7 +4,7 @@
 
 # ABOUTME: Performance benchmarking script for assumption lookups.
 # ABOUTME: Runs model with .profile() and categorizes timing by LOOKUP vs CALC.
-# ruff: noqa: INP001, T201, D400, D415, E402, PGH003
+# ruff: noqa: INP001, T201, E402, PGH003
 # type: ignore
 """
 Assumption Lookup Performance Benchmark.
@@ -337,13 +337,13 @@ def print_results(results: dict) -> None:
 def get_git_info() -> dict:
     """Get current git commit and branch info."""
     try:
-        commit = subprocess.run(  # noqa: S603
+        commit = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607
             capture_output=True,
             text=True,
             check=True,
         ).stdout.strip()
-        branch = subprocess.run(  # noqa: S603
+        branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],  # noqa: S607
             capture_output=True,
             text=True,

@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 import polars as pl
+
 from gaspatchio import ActuarialFrame, with_scenarios
 
 # Add parent directory to path for imports
@@ -54,7 +55,7 @@ def main():
     print("\n3. Running projection...")
     result = run_model(af)
     result_df = result.collect()
-    print(f"   Projection complete")
+    print("   Projection complete")
 
     # 4. Aggregate by scenario
     print("\n4. Aggregating results by scenario...")

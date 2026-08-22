@@ -17,14 +17,11 @@ reads `shape` and `kind` as properties on proxies, never re-derives them.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Union
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
 if TYPE_CHECKING:
-    from gaspatchio.column.column_proxy import ColumnProxy
-    from gaspatchio.column.condition_expression import ConditionExpression
-    from gaspatchio.column.expression_proxy import ExpressionProxy
     from gaspatchio.frame.base import ActuarialFrame
 
 

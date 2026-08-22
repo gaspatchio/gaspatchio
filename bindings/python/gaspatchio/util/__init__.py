@@ -79,7 +79,7 @@ def get_error_mode() -> str:
         if env_mode == "standard":
             env_mode = "basic"
         return env_mode
-    
+
     # Fall back to global setting if no environment variable
     return _DEFAULT_ERROR_MODE
 
@@ -91,7 +91,7 @@ def set_error_mode(mode: str) -> None:
     mode = mode.lower()
     if mode == "standard":
         mode = "basic"
-    
+
     if mode not in ("basic", "enhanced", "debug", "off"):
         raise ValueError(
             f"Invalid error mode: {mode}. Must be 'basic', 'enhanced', 'debug', or 'off'",

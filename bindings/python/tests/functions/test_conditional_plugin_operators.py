@@ -4,7 +4,6 @@
 
 # ABOUTME: Tests for all comparison operators with list_conditional plugin
 # ABOUTME: Verifies all 6 operators (==, !=, <, <=, >, >=) work with plugin integration
-# ruff: noqa: S101, PLR2004
 # type: ignore[call-non-callable]
 """Tests for all comparison operators with list_conditional plugin integration."""
 

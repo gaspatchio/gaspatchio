@@ -4,7 +4,7 @@
 
 # ABOUTME: Type stubs for the public scenarios module surface.
 # ABOUTME: GSP-101 (v0.2): Beam-style Aggregator Protocol + .over() partitioning.
-# ruff: noqa: F401, ANN401, E501
+# ruff: noqa: ANN401
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass

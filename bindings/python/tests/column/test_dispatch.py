@@ -205,21 +205,21 @@ def test_list_shimming_non_unary_on_list_col(sample_af: ActuarialFrame):
 # --- Operator Tests ---
 
 
-def test_operators_work(sample_af: ActuarialFrame):  # noqa: ANN201
+def test_operators_work(sample_af: ActuarialFrame):
     """Briefly verify standard operators still work after autopatching."""
     from gaspatchio.column.condition_expression import ConditionExpression
 
     proxy_add = sample_af["scalar_int"] + sample_af["scalar_float"]
-    assert isinstance(proxy_add, ExpressionProxy)  # noqa: S101
-    assert str(proxy_add._expr) == '[(col("scalar_int")) + (col("scalar_float"))]'  # noqa: S101, SLF001
+    assert isinstance(proxy_add, ExpressionProxy)
+    assert str(proxy_add._expr) == '[(col("scalar_int")) + (col("scalar_float"))]'  # noqa: SLF001
 
     # Comparison operations return ConditionExpression (for list_conditional support)
     proxy_eq = sample_af["str_col"] == "apple"
-    assert isinstance(proxy_eq, ConditionExpression)  # noqa: S101
+    assert isinstance(proxy_eq, ConditionExpression)
     expected_expr_str_v1 = '[(col("str_col")) == (String(apple))]'
     expected_expr_str_v2 = '[(col("str_col")) == ("apple")]'
     current_expr_str = str(proxy_eq._expr)  # noqa: SLF001
-    assert (  # noqa: S101
+    assert (
         current_expr_str == expected_expr_str_v1
         or current_expr_str == expected_expr_str_v2
     )

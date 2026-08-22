@@ -45,14 +45,14 @@ def test_stubs_match_runtime():
         text=True,
         cwd=str(test_dir),  # Run from package directory
     )
-    
+
     # Check if there are actual errors (not just unused allowlist entries)
     # Stubtest exits with 1 even for just unused allowlist entries
     stdout = result.stdout or ""
     has_actual_errors = any(
         line.startswith("error:") for line in stdout.splitlines()
     )
-    
+
     if has_actual_errors:
         # Format output for readable pytest failure
         failure_msg = "stubtest found stub/runtime mismatches:\n"

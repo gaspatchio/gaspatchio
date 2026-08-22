@@ -220,7 +220,8 @@ class TestJaggedAccessors:
     def test_t_years_per_policy_length_for_discounting(self) -> None:
         """t_years() yields per-policy cumulative year fractions (length =
         per-policy boundaries) — the input to per-period discounting via
-        af.finance.discount_factor on jagged frames."""
+        af.finance.discount_factor on jagged frames.
+        """
         af = self._jagged([12, 24])
         af.ty = af.projection.t_years()
         rows = af.collect()["ty"].to_list()
@@ -234,7 +235,8 @@ class TestMustFixHardening:
 
     def test_num_proj_months_is_signed_no_underflow(self) -> None:
         """num_proj_months must be a signed int so `num_proj_months - k` can go
-        negative instead of underflowing the unsigned list.len()."""
+        negative instead of underflowing the unsigned list.len().
+        """
         af = ActuarialFrame({"pid": [0, 1], "term_months": [12, 24]})
         af = af.projection.set(
             valuation_date=VALUATION,
@@ -249,7 +251,8 @@ class TestMustFixHardening:
 
     def test_with_period_positive_index_does_not_grow_short_policies(self) -> None:
         """A fixed positive period index must not append a phantom value to
-        policies shorter than that index."""
+        policies shorter than that index.
+        """
         af = ActuarialFrame({"pid": [0, 1, 2], "term_months": [4, 7, 3]})
         af = af.projection.set(
             valuation_date=VALUATION,
@@ -278,7 +281,8 @@ class TestMustFixHardening:
 
     def test_with_period_negative_oor_does_not_grow_short_policies(self) -> None:
         """A negative period index out of range for a short (jagged) policy must
-        leave that row unchanged, not grow/corrupt it."""
+        leave that row unchanged, not grow/corrupt it.
+        """
         af = ActuarialFrame({"pid": [0, 1], "term_months": [2, 5]})
         af = af.projection.set(
             valuation_date=VALUATION,

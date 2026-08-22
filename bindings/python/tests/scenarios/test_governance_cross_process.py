@@ -5,7 +5,7 @@
 # ABOUTME: Cross-process YAML round-trip governance test for ScenarioRun.
 # ABOUTME: Proves bit-exact aggregations + source_sha across fresh interpreters,
 # ABOUTME: including custom user-registered aggregators (Welford-Chan Skewness).
-# ruff: noqa: S603, S607, PLR0913
+# ruff: noqa: S603
 """Cross-process governance test: process A builds + saves; process B reloads + runs."""
 
 from __future__ import annotations

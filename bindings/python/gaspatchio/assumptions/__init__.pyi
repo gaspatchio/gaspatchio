@@ -10,8 +10,6 @@ that drifts from the runtime fails CI rather than lying to editors and type
 checkers (see gh#72).
 """
 
-from __future__ import annotations
-
 import abc
 from dataclasses import dataclass
 from pathlib import Path

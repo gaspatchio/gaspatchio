@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .models import DocstringCodeExample
 
@@ -18,8 +18,8 @@ class GaspatchioEvalExample:
     def run_custom_check(
         self,
         example: DocstringCodeExample,
-        global_vars: Optional[Dict[str, Any]] = None,
-    ) -> List[str]:
+        global_vars: dict[str, Any] | None = None,
+    ) -> list[str]:
         """Runs custom check on the example and returns a list of error messages."""
         if not hasattr(example, "run"):
             return [
@@ -34,7 +34,7 @@ class GaspatchioEvalExample:
                 f"[Custom Check Error] Runtime error for {example.object_context} ex#{example.example_index} (file: {example.raw_source_location[0]}, line: {example.raw_source_location[1]}): {type(exc).__name__}: {exc}. Snippet:\n{example.snippet}"
             ]
 
-        issues: List[str] = []
+        issues: list[str] = []
 
         if example.output is not None:
             expected_output_str = textwrap.dedent(example.output).rstrip("\n")
@@ -101,10 +101,10 @@ class GaspatchioEvalExample:
     def check_example(
         self,
         example: DocstringCodeExample,
-        global_vars: Optional[Dict[str, Any]] = None,
-    ) -> List[str]:
+        global_vars: dict[str, Any] | None = None,
+    ) -> list[str]:
         """Orchestrates checks for an example. Now only runs custom_check."""
-        errors: List[str] = []
+        errors: list[str] = []
 
         # Previously, there was a call to run_doctest_check here.
         # With DocstringCodeExample.snippet being clean, multi-line code,

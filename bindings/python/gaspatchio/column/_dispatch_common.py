@@ -13,7 +13,7 @@ dispatch concerns:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -53,7 +53,7 @@ def _unwrap_for_arithmetic(arg: Any) -> Any:  # noqa: ANN401
 
 
 def _wrap(
-    parent: Optional["ActuarialFrame"],
+    parent: ActuarialFrame | None,
     result: Any,  # noqa: ANN401
 ) -> Any:  # noqa: ANN401
     """Wrap Polars Expressions into ExpressionProxy."""
@@ -73,7 +73,7 @@ def _ensure_polars_expr_or_literal(
     return _unwrap(arg) if hasattr(arg, "_expr") or hasattr(arg, "name") else arg
 
 
-def _get_proxy_base_expr(proxy: "ProxyType") -> pl.Expr:
+def _get_proxy_base_expr(proxy: ProxyType) -> pl.Expr:
     """Get the base expression from a proxy object."""
     from .column_proxy import ColumnProxy
     from .expression_proxy import ExpressionProxy

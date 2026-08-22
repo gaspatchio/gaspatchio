@@ -10,7 +10,7 @@ import pytest
 from gaspatchio import ActuarialFrame
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_af():
     """Create a sample ActuarialFrame for testing."""
     return ActuarialFrame({

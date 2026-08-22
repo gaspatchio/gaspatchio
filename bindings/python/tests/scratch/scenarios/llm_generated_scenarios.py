@@ -4,7 +4,7 @@
 
 # ABOUTME: Worked example of LLM-friendly scenario config parsing.
 # ABOUTME: Shows LLM-generated scenarios from natural language, no Python needed.
-# ruff: noqa: INP001, T201, PLR0915, PGH003
+# ruff: noqa: T201, PLR0915
 
 """
 LLM-Generated Scenario Analysis.

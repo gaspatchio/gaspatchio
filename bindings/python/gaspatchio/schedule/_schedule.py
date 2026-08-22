@@ -225,6 +225,7 @@ def _offset_str(frequency: Frequency, i: int) -> str:
 
     Returns:
         A Polars-compatible offset string such as ``"3mo"``, ``"1y"``, ``"2w"``.
+
     """
     _freq_to_polars: dict[str, tuple[int, str]] = {
         "1M": (1, "mo"),
@@ -919,6 +920,7 @@ class Schedule:
         Returns:
             A Polars expression of type ``List<Boolean>`` with length
             ``n_periods`` per row.
+
         """
         n = self.n_periods
 

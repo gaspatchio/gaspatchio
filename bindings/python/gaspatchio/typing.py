@@ -4,17 +4,17 @@
 
 # ADDED: Import necessary types outside TYPE_CHECKING block
 import sys
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import polars as pl
 
 if sys.version_info >= (3, 10):
     from typing import TypeAlias
 else:
-    from typing_extensions import TypeAlias
+    from typing import TypeAlias
 
 # ADDED: Define IntoExprColumn outside TYPE_CHECKING block
-IntoExprColumn: TypeAlias = Union[pl.Expr, str, pl.Series]
+IntoExprColumn: TypeAlias = pl.Expr | str | pl.Series
 
 if TYPE_CHECKING:
     # import sys # Removed, imported above
@@ -28,4 +28,4 @@ if TYPE_CHECKING:
     from polars.datatypes import DataType, DataTypeClass
 
     # IntoExprColumn: TypeAlias = Union[pl.Expr, str, pl.Series] # Removed, defined above
-    PolarsDataType: TypeAlias = Union[DataType, DataTypeClass]
+    PolarsDataType: TypeAlias = DataType | DataTypeClass

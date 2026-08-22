@@ -31,7 +31,7 @@ INTERNAL_MODULE_PATTERNS = [
 # Specific framework files to skip when looking for user code
 FRAMEWORK_FILE_PATTERNS = [
     "/validation.py",
-    "/formatting_errors.py", 
+    "/formatting_errors.py",
     "/formatter.py",
     "/runner.py",
     "/tracing.py",
@@ -46,7 +46,7 @@ FRAMEWORK_FILE_PATTERNS = [
 COMMON_VALIDATION_VALUES = {
     # Date/time frequencies
     "frequencies": ["monthly", "quarterly", "semi-annual", "annual", "daily", "weekly"],
-    
+
     # Projection end types
     # Values accepted by `projection.set(until=...)`. Kept in sync with the
     # Literal in accessors/projection_frame.py by
@@ -59,12 +59,12 @@ COMMON_VALIDATION_VALUES = {
         "fixed_date",
         "next_anniversary",
     ],
-    
+
     # Common durations
     "duration_units": ["days", "months", "years", "hours", "minutes", "seconds"],
-    
+
     # Actuarial terms
-    "actuarial_terms": ["mortality", "morbidity", "lapse", "premium", "benefit", 
+    "actuarial_terms": ["mortality", "morbidity", "lapse", "premium", "benefit",
                        "interest", "discount", "reserve", "annuity", "surrender"],
 }
 
@@ -73,18 +73,18 @@ COMMON_VALIDATION_VALUES = {
 COMMON_ATTRIBUTES = {
     "datetime": {
         "module": ["date", "datetime", "time", "timedelta", "timezone", "MAXYEAR", "MINYEAR"],
-        "date_class": ["today", "fromtimestamp", "fromisoformat", "fromordinal", 
+        "date_class": ["today", "fromtimestamp", "fromisoformat", "fromordinal",
                       "min", "max", "resolution"],
         "datetime_class": ["now", "today", "utcnow", "fromtimestamp", "utcfromtimestamp",
                           "strptime", "combine", "fromisoformat"],
         "instance_methods": ["strftime", "replace", "timetuple", "toordinal", "weekday",
                            "isoweekday", "isocalendar", "isoformat", "ctime"]
     },
-    "str": ["split", "strip", "replace", "format", "join", "upper", "lower", 
+    "str": ["split", "strip", "replace", "format", "join", "upper", "lower",
             "startswith", "endswith", "find", "index", "count", "encode"],
-    "list": ["append", "extend", "insert", "remove", "pop", "clear", "index", 
+    "list": ["append", "extend", "insert", "remove", "pop", "clear", "index",
              "count", "sort", "reverse", "copy"],
-    "dict": ["get", "keys", "values", "items", "update", "pop", "clear", 
+    "dict": ["get", "keys", "values", "items", "update", "pop", "clear",
              "setdefault", "copy", "fromkeys"],
     "pandas_dataframe": ["head", "tail", "info", "describe", "columns", "index",
                         "shape", "dtypes", "values", "empty", "size"],

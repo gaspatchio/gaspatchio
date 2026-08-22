@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ruff: noqa: TID252, TRY003, EM101, EM102, E501, PLR0913, ANN204, FBT001, FBT002
-# ruff: noqa: C901, PD901, SIM102, PLR0912, F821, SLF001, PGH003, B007, PERF102
-# ruff: noqa: ANN003, BLE001, D413
+# ruff: noqa: C901, SIM102, PLR0912, F821, SLF001, B007, PERF102
+# ruff: noqa: ANN003, BLE001
 # mypy: disable-error-code="import-untyped,arg-type,name-defined"
 """
 Main assumption table API (v2) - Table class with dimension-based structure.
@@ -1693,7 +1693,7 @@ class Table:
         except Exception:
             return self._storage_mode
         else:
-            return mode if mode else self._storage_mode
+            return mode or self._storage_mode
 
     def canonical_form(self) -> dict[str, Any]:
         """Deterministic JSON-encodable identity recipe for the audit chain.

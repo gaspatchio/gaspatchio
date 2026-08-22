@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# ruff: noqa: T201, PD901, ANN201, E501
+# ruff: noqa: T201, ANN201
 # pyright: reportAttributeAccessIssue=false
 """
 ABOUTME: Example showing how to integrate list vs scalar conditionals.

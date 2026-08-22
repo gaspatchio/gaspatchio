@@ -107,6 +107,9 @@ extend-ignore = [
     "D213",   # allow either one-line or two-line docstring summaries
     "ANN001", # sometimes self/cls isn't annotated
     "COM812", # conflicts with formatter
+    "D413",   # conflicts with docstring-code-format: the fix adds a blank line
+              # after a final docstring section that the formatter then strips —
+              # an infinite fix/format oscillation. The formatter wins.
 ]
 
 [tool.ruff.lint.flake8-copyright]

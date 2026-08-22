@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """ABOUTME: Utility functions for Excel and other function implementations.
-ABOUTME: Provides proxy unwrapping and common patterns for plugin functions."""
+ABOUTME: Provides proxy unwrapping and common patterns for plugin functions.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
     from gaspatchio.typing import IntoExprColumn
 
 
-def to_polars_expression(arg: "IntoExprColumn") -> pl.Expr:
+def to_polars_expression(arg: IntoExprColumn) -> pl.Expr:
     """Convert any proxy or expression to a Polars expression.
 
     This function handles the common pattern of unwrapping proxy objects
@@ -45,17 +46,18 @@ def to_polars_expression(arg: "IntoExprColumn") -> pl.Expr:
         # With raw Polars expression
         expr = to_polars_expression(pl.col("column_name"))
         ```
+
     """
     # Handle ExpressionProxy objects first (they have both _expr and _parent)
     if hasattr(arg, "_expr") and hasattr(arg, "_parent"):
         # This is likely an ExpressionProxy object
         return arg._expr
-    
+
     # Handle ColumnProxy objects by extracting the column name
-    elif hasattr(arg, "name") and hasattr(arg, "_parent") and isinstance(arg.name, str):
+    if hasattr(arg, "name") and hasattr(arg, "_parent") and isinstance(arg.name, str):
         # This is likely a ColumnProxy object (name must be a string)
         return pl.col(arg.name)
-    
+
     # Return pl.Expr objects as-is, or pass through other types
     # (which may cause errors downstream if not compatible)
     return arg

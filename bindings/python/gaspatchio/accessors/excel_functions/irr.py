@@ -91,6 +91,7 @@ def irr(
     │ INV003        ┆ [-2000.0, 500.0, … 900.0]   ┆ 0.134072 │
     └───────────────┴─────────────────────────────┴──────────┘
     ```
+
     """
     values_expr = to_polars_expression(values)
     args = [values_expr]

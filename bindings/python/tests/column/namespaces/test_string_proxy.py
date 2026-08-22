@@ -6,11 +6,12 @@
 
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
+
 from gaspatchio.column.column_proxy import ColumnProxy
 from gaspatchio.column.expression_proxy import ExpressionProxy
 from gaspatchio.column.namespaces.string_proxy import StringNamespaceProxy
 from gaspatchio.frame.base import ActuarialFrame
-from polars.testing import assert_frame_equal
 
 
 @pytest.fixture
