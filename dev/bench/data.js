@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787349623515,
+  "lastUpdate": 1787373529553,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -12083,6 +12083,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1474553200,
             "range": "± 1040084",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2c96d1a7f0cede444da413eacf43267ec54cb463",
+          "message": "chore(lint): tier 1 config truth — CPY001 matches the SPDX convention, tests ignores match enforcement (#150)\n\nTwo config-only changes (GSP-148), zero code edits. All 510 Python files\ncarry REUSE-style SPDX-FileCopyrightText headers, but CPY001's default\npattern doesn't recognise them — 557 findings against fully-compliant\nfiles, and a genuinely missing header invisible in the noise. notice-rgx\nnow matches the real convention; the residue is zero, so the rule is a\nworking local gate. The tests tree adds D101/D102/D103/PLC0415 to its\nignores — test names are the documentation (the tests/rollforward block\nalready said so) and per-test local imports are deliberate; D100 stays\nenforced because a module docstring in a test file is worth writing.\n\nFindings: 7134 -> 5928. Every remaining finding is one we'd accept a\npatch for, which is what makes tiers 2-4 measure real debt.",
+          "timestamp": "2026-08-22T16:23:27+12:00",
+          "tree_id": "adf9e943bbc46d3b693a17f22e091ec88b990894",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/2c96d1a7f0cede444da413eacf43267ec54cb463"
+        },
+        "date": 1787373528140,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 161410354,
+            "range": "± 443634",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 161376245,
+            "range": "± 1829884",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 159882371,
+            "range": "± 1221580",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 5568520,
+            "range": "± 40294",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 160097687,
+            "range": "± 158590",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 3911522,
+            "range": "± 28430",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 160212578,
+            "range": "± 1500006",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 3935621,
+            "range": "± 24315",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 577834,
+            "range": "± 8831",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 53768871,
+            "range": "± 338645",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 9729967,
+            "range": "± 43903",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 536620391,
+            "range": "± 2690689",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 468191,
+            "range": "± 2255",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 30806096,
+            "range": "± 33701",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 5000110,
+            "range": "± 39297",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 308200069,
+            "range": "± 312473",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 485646,
+            "range": "± 1968",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 31027618,
+            "range": "± 21981",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 5013415,
+            "range": "± 29166",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 311197534,
+            "range": "± 273416",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 523282,
+            "range": "± 778",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 40056010,
+            "range": "± 91577",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 5522032,
+            "range": "± 24908",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 400505076,
+            "range": "± 211752",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 2093204,
+            "range": "± 6450",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 153347212,
+            "range": "± 213244",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 28969405,
+            "range": "± 115100",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1539295213,
+            "range": "± 3238040",
             "unit": "ns/iter"
           }
         ]
