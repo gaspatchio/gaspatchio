@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787349498754,
+  "lastUpdate": 1787373294896,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib (Windows)": [
@@ -8697,6 +8697,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 5.57,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2c96d1a7f0cede444da413eacf43267ec54cb463",
+          "message": "chore(lint): tier 1 config truth — CPY001 matches the SPDX convention, tests ignores match enforcement (#150)\n\nTwo config-only changes (GSP-148), zero code edits. All 510 Python files\ncarry REUSE-style SPDX-FileCopyrightText headers, but CPY001's default\npattern doesn't recognise them — 557 findings against fully-compliant\nfiles, and a genuinely missing header invisible in the noise. notice-rgx\nnow matches the real convention; the residue is zero, so the rule is a\nworking local gate. The tests tree adds D101/D102/D103/PLC0415 to its\nignores — test names are the documentation (the tests/rollforward block\nalready said so) and per-test local imports are deliberate; D100 stays\nenforced because a module docstring in a test file is worth writing.\n\nFindings: 7134 -> 5928. Every remaining finding is one we'd accept a\npatch for, which is what makes tiers 2-4 measure real debt.",
+          "timestamp": "2026-08-22T16:23:27+12:00",
+          "tree_id": "adf9e943bbc46d3b693a17f22e091ec88b990894",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/2c96d1a7f0cede444da413eacf43267ec54cb463"
+        },
+        "date": 1787373290338,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 2.506,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.21,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.115,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 69.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 5.329,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 46.34,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.377,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2652.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 18.829,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 53.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 49.94,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.046,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 4887.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 15.455,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 647,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 7.55,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 20.095,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4976.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 117.424,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 851.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.84,
             "unit": "x"
           }
         ]
