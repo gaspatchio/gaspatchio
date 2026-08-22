@@ -109,11 +109,21 @@ extend-ignore = [
     "COM812", # conflicts with formatter
 ]
 
+[tool.ruff.lint.flake8-copyright]
+# The repo uses REUSE-style headers ("SPDX-FileCopyrightText: 2026 Opio Inc."),
+# which the rule's default pattern does not recognise. With the real convention
+# matched, CPY001 is a genuine local gate for a missing SPDX header.
+notice-rgx = 'SPDX-FileCopyrightText: \d{4} Opio Inc\.'
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101",    # asserts are ok in tests
     "ANN201",  # test functions don't need return type annotations
     "PLR2004", # magic values are ok in tests
+    "D101",    # test classes are descriptive by name
+    "D102",    # test methods are descriptive by name
+    "D103",    # test helper functions are descriptive by name
+    "PLC0415", # per-test local imports are deliberate (fixture isolation, optional deps)
 ]
 "tests/rollforward/**/*.py" = [
     "S101",    # asserts are ok in tests
