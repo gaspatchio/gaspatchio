@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787464913265,
+  "lastUpdate": 1787465675375,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib": [
@@ -9367,6 +9367,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 7.11,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "85f39fad53f18107883fba3b5256a0166e2babbd",
+          "message": "fix(docstrings): harness robustness — kill timed-out ruff, stdout-first parsing, message-based E999 (#153)\n\nlint() now guarantees the ruff child is dead and reaped on every path\nout of communicate(): TimeoutExpired documentedly leaves the child\nrunning, and each escaped timeout leaked one process for the rest of\nthe pytest run — a long doctest run leaked enough to exhaust the\nper-user process table and stop the machine forking (GSP-154, observed\nlive twice on 2026-08-23). The timeout is injectable so the kill path\nis testable.\n\nDiagnostics parse stdout first: --output-format json pins findings to\nstdout, and the old stderr-first order returned tool chatter while\ndropping real diagnostics — a failing snippet could read as clean\n(GSP-152). Syntax errors classify by message when the code is missing\nor unrecognised rather than by matching code literals — ruff 0.11.x\nshipped null-code SyntaxErrors that dodged the E999 contract (GSP-153).\n\nThe four sibling tests carrying the dead except-ImportError skip\n(lint() reports a missing ruff as an issue string, never raises) now\nkey their skip off the issue text, the #146 pattern (GSP-155). Three\nregression tests pin the new behaviours: a timed-out child leaves no\nprocess behind, stdout diagnostics survive stderr noise, null-code\nSyntaxErrors format as E999.",
+          "timestamp": "2026-08-23T18:05:01+12:00",
+          "tree_id": "29d8c118b1fd37b452e60cdb79da67e61c1e93ba",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/85f39fad53f18107883fba3b5256a0166e2babbd"
+        },
+        "date": 1787465674060,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 1.894,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.028,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.149,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 53.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 5.767,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 38.7,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.46,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2173.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 20.253,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 49.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 44.03,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.515,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 3976.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 16.105,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 620.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 6.4,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 23.406,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4272.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 118.699,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 842.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.07,
             "unit": "x"
           }
         ]
