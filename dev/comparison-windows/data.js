@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787465921986,
+  "lastUpdate": 1787466717211,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib (Windows)": [
@@ -9233,6 +9233,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 4.38,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "030b7e54e355a35c58368290a12751f615b5591b",
+          "message": "docs(spec): shipped-truth pass on the rollforward v2 design (#154)\n\nThe GSP-131 verdict sitting ruled amend-spec on four divergences; this\nrecords the shipped Phase-1/2 contracts in the document that promised\notherwise. Rates apply as quoted — dt-threading is arc-deferred with an\naddendum and three inline notes (GSP-142). Cross-state reads are the\nvalidated 'state@point' string form, with typed .at() arc-deferred as an\nadditive successor (GSP-146). Apply's evaluability is an unresolved\nv1-vs-v2 contradiction routed to arc, the kernel's loud refusal standing\nuntil the ruling (GSP-143). The 4.9 worked example and its explain()\nrendering now show the materialise-first pattern the shipped validator\nenforces (GSP-145).",
+          "timestamp": "2026-08-23T18:19:10+12:00",
+          "tree_id": "5e7d7403165ecd26b3a492e7d927207f89a8cf1f",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/030b7e54e355a35c58368290a12751f615b5591b"
+        },
+        "date": 1787466712504,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 2.801,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.844,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.184,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 43.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 7.483,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 40.67,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.617,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 1620.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 24.832,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 40.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 40.25,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 2.575,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 3883.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 19.936,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 501.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 7.74,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 24.563,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 4071.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 145.399,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 687.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.92,
             "unit": "x"
           }
         ]
