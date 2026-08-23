@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787461894263,
+  "lastUpdate": 1787465100138,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib (Windows)": [
@@ -8965,6 +8965,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 5.54,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "31ce4a5922248675f3d4612a290be607d92b439b",
+          "message": "fix(tutorials): GSP-129 batch — jagged reconcile index, orphaned benchmark, L5 mortality wiring (GSP-139/140/141) (#152)\n\n* fix(tutorials): jagged-safe time index in L4 reconcile; drop orphaned L5 benchmark\n\nreconcile_full.explode_gaspatchio built its time index as\nrange(list_len) * n_points from row 0's list length — misaligned for\nevery policy on a jagged timeline (GSP-139). The index now comes from\neach row's own list length via int_ranges, exploded together with the\ndata columns so polars enforces per-row alignment.\n\nlevel-5-scenarios/benchmark.py benchmarked against\ntutorial/level-5-scenarios-typed, a directory that has never existed in\nthis repository (GSP-140) — the script never ran here and never could.\nDeleted rather than retargeted: its sole purpose was the typed/untyped\ncomparison, and git history keeps it if a typed variant ever lands.\n\n* fix(tutorials): wire ultimate rates into L5 mortality; honest single-model perf stress\n\nThe L5 model declared structure='select_ultimate' (clamp duration at\nselect_period=25) but built its Table from mortality_select.parquet\nalone, which stops at duration 24 — any projection past the select\nperiod looked up a key that does not exist, while the shipped\nmortality_ultimate.parquet sat unwired. The ultimate rates now merge in\nas the duration-25 clamp rows (GSP-141's 63-row lookup miss). Baseline\nbehaviour is untouched: durations below 25 never probe the new rows.\n\nperf_scaling.py is rewritten around what actually exists: its 'typed vs\nuntyped' comparison resolved both model paths to the same file (the\ntyped variant was never imported into this repository), so it\nbenchmarked the model against itself. Now a single-model stress. Policy\nterms are capped at the mortality table's limiting age minus entry age,\nread from the table itself, so the 1200-month grid stress demonstrates\nthe AGENTS.md coverage rule instead of violating it. The dead branch\nlabel is gone from the report header; 80M/Phase-4B mislabels corrected\nto the actual 82M.\n\nAll CI-mode variants run: baseline 1k (0.27s) and 10k (0.88s), the\npreviously-crashing 1200M variant (0.59s), calendar fast/slow paths.",
+          "timestamp": "2026-08-23T17:53:44+12:00",
+          "tree_id": "dec1f0b451947a73180808e6394416df065a41e5",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/31ce4a5922248675f3d4612a290be607d92b439b"
+        },
+        "date": 1787465088791,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 2.614,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.625,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.141,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 56.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 5.975,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 42.38,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.363,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2754.8,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 20.264,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 49.3,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 55.82,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 1.876,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 5330.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 17.035,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 587,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 9.08,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 18.101,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 5524.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 139.104,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 718.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 7.68,
             "unit": "x"
           }
         ]
