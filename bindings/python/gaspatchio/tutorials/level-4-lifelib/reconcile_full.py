@@ -115,10 +115,10 @@ def explode_gaspatchio(gaspatchio_df: pl.DataFrame) -> pl.DataFrame:
     if not list_cols:
         return gaspatchio_df
 
-    # Add a time index column before exploding
-    # Each list has the same length (PROJECTION_MONTHS)
+    # The time index must come from each row's own list length, not a global
+    # constant: timelines are jagged (each policy projects to its own
+    # maturity), so a single length misaligns t for every other policy.
     first_list_col = list_cols[0]
-    list_len = gaspatchio_df[first_list_col].list.len()[0]
 
     # Select point_id, product_id, plan_id + all list columns, then explode
     id_cols = ["point_id", "product_id", "plan_id", "fund_index"]
@@ -130,17 +130,13 @@ def explode_gaspatchio(gaspatchio_df: pl.DataFrame) -> pl.DataFrame:
     select_cols = keep_cols + list_cols + pv_cols
     select_cols = [c for c in select_cols if c in gaspatchio_df.columns]
 
-    df = gaspatchio_df.select(select_cols)
+    df = gaspatchio_df.select(select_cols).with_columns(
+        pl.int_ranges(0, pl.col(first_list_col).list.len()).alias("t")
+    )
 
-    # Explode all list columns together
-    exploded = df.explode(list_cols)
-
-    # Add time index
-    n_points = len(gaspatchio_df)
-    t_values = list(range(list_len)) * n_points
-    exploded = exploded.with_columns(pl.Series("t", t_values))
-
-    return exploded
+    # Explode the time index together with the list columns; polars raises
+    # if any row's lists disagree on length, so t stays aligned per policy.
+    return df.explode([*list_cols, "t"])
 
 
 def pct_diff(g_val: float, l_val: float) -> float:
