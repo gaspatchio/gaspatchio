@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787373529553,
+  "lastUpdate": 1787462040285,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -12275,6 +12275,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1539295213,
             "range": "± 3238040",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "67f07b65913e088b880c231b571863bf003ab848",
+          "message": "chore(lint): tier 2 — apply the safe autofixables, driven to the fix/format fixpoint (#151)\n\nOne ruff check --fix pass (safe fixes only; the 1,393 unsafe-fixables are\ndeliberately untouched) on top of tier 1's config: 1,730 fixes across 55\nrule families, 5,928 findings -> 4,200, zero safe fixes remaining. The\nfix set was driven to a joint fix/format fixpoint: 15 files the fixer\nmade format-dirty were formatted; pre-existing format debt shrank 164 ->\n156 files and the tier-3 sweep stays untouched.\n\nThree fixer-vs-reality conflicts resolved by hand, each with the intent\nnow stated in place so it cannot be 'fixed' away again:\n\n- test_excel_round: F401 replaced the import inside pytest.raises with\n  pass — the import IS the assertion (the dead plugins.round wrapper\n  must stay gone). Restored with noqa and a comment.\n- _dispatch_autopatch: B010 rewrote the deliberate setattr of __dir__\n  into direct method assignment — runtime-identical, but mypy rejects\n  method-assign and stubtest then refuses the whole package. Reverted\n  with the reason documented.\n- D413 retired to extend-ignore: its fix and docstring-code-format\n  oscillate forever (proven — fix 28, format strips 3 files, repeat).\n  The formatter wins, same policy as COM812.\n\nSuite: 3064 passed, 0 failed on this tree (GSP-149).",
+          "timestamp": "2026-08-23T16:58:48+12:00",
+          "tree_id": "310f5639712f279d2096c46ab6923547b443ebfc",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/67f07b65913e088b880c231b571863bf003ab848"
+        },
+        "date": 1787462038590,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 152602734,
+            "range": "± 314066",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 152558694,
+            "range": "± 844544",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 150146306,
+            "range": "± 139663",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 5557147,
+            "range": "± 85962",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 150584571,
+            "range": "± 484236",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 3939011,
+            "range": "± 71899",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 150456589,
+            "range": "± 289129",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 3934579,
+            "range": "± 41298",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 571180,
+            "range": "± 7828",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 51134222,
+            "range": "± 172929",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 10799374,
+            "range": "± 322524",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 513872815,
+            "range": "± 1321895",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 390188,
+            "range": "± 286",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 28918555,
+            "range": "± 44980",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 4287111,
+            "range": "± 104470",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 289604718,
+            "range": "± 298385",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 396862,
+            "range": "± 656",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 29006532,
+            "range": "± 122423",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 4588636,
+            "range": "± 158088",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 289946129,
+            "range": "± 1524735",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 521871,
+            "range": "± 776",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 36858508,
+            "range": "± 52214",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 6198104,
+            "range": "± 116935",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 368200789,
+            "range": "± 554953",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 1921531,
+            "range": "± 35440",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 147710435,
+            "range": "± 234781",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 30484222,
+            "range": "± 406806",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1492229836,
+            "range": "± 1482169",
             "unit": "ns/iter"
           }
         ]
