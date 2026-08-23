@@ -3,34 +3,35 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-L5 Typed-Inputs Performance Scaling Stress
+L5 Performance Scaling Stress
 
 Exercises three shapes that matter for the GSP-92 spec target
 (1200 periods x 100k policies = 120M policy-months) and that the
-standard Phase 4B benchmark does not cover.
+standard benchmark does not cover.
 
 Variant 1 — Long projection (1200 months, monthly)
-    Override projection_months to 1200.  The 10k model-point file has
-    policy_term values of 5-20 years; ``remaining_term_months`` is clamped
-    to min(policy_term * 12, 1200), so each policy still terminates at its
-    contracted maturity.  The Schedule builds a 1201-element t-grid and the
-    Curve pre-computes 1201 discount factors; per-policy ``list.head(n)``
-    trimming then selects the correct slice.
+    Override projection_months to 1200.  The Schedule builds a 1201-element
+    t-grid and the Curve pre-computes 1201 discount factors; per-policy
+    ``list.head(n)`` trimming then selects the correct slice.
 
-    Because ``scenario_returns.parquet`` only covers t=0..179 (15 years), the
-    script tiles the last 12-month cycle to produce t=0..719 (the maximum
-    per-policy horizon for a policy_term=60 policy in the 1k dataset, which
-    has all-60-year terms — but note that in the 10k dataset the maximum
-    policy_term is 20 years, so t=0..239 would suffice; the script always
-    tiles to t=0..719 for safety).
+    Two data extensions keep the long horizon honest:
+
+    - ``scenario_returns.parquet`` covers t=0..179 (15 years); the last
+      12-month cycle is tiled out to t=0..719 as a steady-state proxy
+      (performance-only, not actuarially validated).
+    - Policy terms are capped so entry age + term never runs past the
+      mortality table's limiting age — the AGENTS.md rule in action:
+      *your mortality table must cover every attained age the projection
+      reaches.* The full 1200-month grid is still built and stressed;
+      per-policy trimming keeps every lookup on-table.
 
 Variant 2 — 10k × 1200 (full stress)
     Runs only when ``--full`` is passed (default off). Same data extension as
-    Variant 1. Memory could be the bottleneck; a hard 60s timeout per run
+    Variant 1. Memory could be the bottleneck; a hard timeout per run
     skips the variant if exceeded.
 
 Variant 3 — Slow-path calendar (TARGET + MODIFIED_FOLLOWING)
-    The typed L5 base uses ``NullCalendar`` + ``UNADJUSTED`` which triggers the
+    The L5 base model uses ``NullCalendar`` + ``UNADJUSTED`` which triggers the
     fast path in ``Schedule.period_dates()`` (simple Python-level offset loop).
     Switching to ``TARGET()`` + ``MODIFIED_FOLLOWING`` forces a per-date
     business-day adjustment on every step. The slow path overhead is measured
@@ -80,15 +81,14 @@ from gaspatchio.schedule import (
 
 _THIS_FILE = Path(__file__).resolve()
 _STRESS_DIR = _THIS_FILE.parent
-_L5T_DIR = _STRESS_DIR.parent
-_TUTORIALS_ROOT = _L5T_DIR.parent
+_L5_DIR = _STRESS_DIR.parent
+_BASE_DIR = _L5_DIR / "base"
 
-TYPED_MODEL_PATH = _L5T_DIR / "base" / "model.py"
-UNTYPED_MODEL_PATH = _TUTORIALS_ROOT / "level-5-scenarios" / "base" / "model.py"
-ASSUMPTIONS_DIR = _TUTORIALS_ROOT / "level-5-scenarios" / "base" / "assumptions"
-POINTS_1K = _TUTORIALS_ROOT / "level-5-scenarios" / "base" / "model_points_1k.parquet"
-POINTS_10K = _TUTORIALS_ROOT / "level-5-scenarios" / "base" / "model_points_10k.parquet"
-REPORT_DIR = _L5T_DIR / "report"
+MODEL_PATH = _BASE_DIR / "model.py"
+ASSUMPTIONS_DIR = _BASE_DIR / "assumptions"
+POINTS_1K = _BASE_DIR / "model_points_1k.parquet"
+POINTS_10K = _BASE_DIR / "model_points_10k.parquet"
+REPORT_DIR = _L5_DIR / "report"
 
 # ---------------------------------------------------------------------------
 # Platform helpers
@@ -161,6 +161,34 @@ def _extend_scenario_returns(max_t: int = 719) -> pl.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# Mortality-coverage guard
+# ---------------------------------------------------------------------------
+
+
+def _cap_terms_to_table_coverage(mp: pl.DataFrame) -> pl.DataFrame:
+    """Cap each policy's term so its attained age stays on the mortality table.
+
+    AGENTS.md rule: *your mortality table must cover every attained age the
+    projection reaches.* A 1200-month horizon takes a 75-year-old entrant to
+    attained age 135, past the table's limiting age — and the lookup raises
+    on the miss, as it should. The stress demonstrates the rule instead of
+    violating it: the limiting age is read from the table itself and each
+    policy's term is capped at (limiting age − entry age). The full-length
+    t-grid is still built; per-policy trimming keeps every lookup on-table.
+    """
+    limiting_age = int(
+        pl.read_parquet(ASSUMPTIONS_DIR / "mortality_select.parquet")
+        .get_column("attained_age")
+        .max()
+    )
+    return mp.with_columns(
+        pl.min_horizontal(
+            pl.col("policy_term"), limiting_age - pl.col("age_at_entry")
+        ).alias("policy_term")
+    )
+
+
+# ---------------------------------------------------------------------------
 # Single run measurement
 # ---------------------------------------------------------------------------
 
@@ -191,7 +219,7 @@ def _run_once(
     rss_before = _peak_rss_mb()
     t0 = time.perf_counter()
 
-    mp = pl.read_parquet(points_path)
+    mp = _cap_terms_to_table_coverage(pl.read_parquet(points_path))
     af = ActuarialFrame(mp)
     af = with_scenarios(af, scenarios)
     result_af = model_mod.main(
@@ -357,7 +385,7 @@ def _benchmark_slow_calendar(
     ``TARGET() + MODIFIED_FOLLOWING`` for the slow-path run, then restores it.
 
     Args:
-        model_mod: Typed L5 model module.
+        model_mod: L5 model module.
         points_path: Model-points parquet path.
         proj_months: Projection months override.
         n_repeats: Number of timing repetitions.
@@ -370,7 +398,7 @@ def _benchmark_slow_calendar(
     fast_result = _benchmark(
         model_mod,
         points_path,
-        "Typed L5 (fast calendar)",
+        "L5 (fast calendar)",
         proj_months,
         ["BASE"],
         n_repeats=n_repeats,
@@ -406,7 +434,7 @@ def _benchmark_slow_calendar(
         slow_result = _benchmark(
             model_mod,
             points_path,
-            "Typed L5 (slow calendar TARGET+MDFOL)",
+            "L5 (slow calendar TARGET+MDFOL)",
             proj_months,
             ["BASE"],
             n_repeats=n_repeats,
@@ -440,10 +468,10 @@ def _write_report(
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = []
-    lines.append("# L5 Typed-Inputs Performance Scaling Stress")
+    lines.append("# L5 Performance Scaling Stress")
     lines.append("")
     lines.append(f"Date: {today}")
-    lines.append(f"Branch: gsp-92-rollforward-redesign @ {git_sha}")
+    lines.append(f"Commit: {git_sha}")
     lines.append(f"Hardware: {arch} / Python {python_version}")
     lines.append(f"Mode: {'FULL (--full)' if full_mode else 'CI (default)'}")
     lines.append("")
@@ -475,7 +503,7 @@ def _write_report(
         )
 
     # Baseline
-    lines.append("## Baseline (80 months — Phase 4B reference)")
+    lines.append("## Baseline (82 months)")
     lines.append("")
     lines.extend(_table_header())
     for r in baseline_results:
@@ -486,11 +514,11 @@ def _write_report(
     lines.append("## Variant 1 — Long Projection (1200 months)")
     lines.append("")
     lines.append(
-        "Projection horizon extended to 1200 months. Policies in the 1k dataset "
-        "all have 60-year terms; `remaining_term_months = min(60*12, 1200) = 720`. "
-        "In the 10k dataset terms range from 5–20 years giving max 240 months per policy. "
-        "The Schedule builds a 1201-element t-grid; per-policy `list.head(n)` trimming "
-        "selects the correct discount-factor slice."
+        "Projection horizon extended to 1200 months. The Schedule builds a "
+        "1201-element t-grid; per-policy `list.head(n)` trimming selects the "
+        "correct slice. Policy terms are capped at the mortality table's "
+        "limiting age minus entry age, so every attained age the projection "
+        "reaches stays on the table (the AGENTS.md coverage rule)."
     )
     lines.append("")
     if v1_results:
@@ -581,73 +609,30 @@ def _generate_findings(
     """Auto-generate narrative findings from results."""
     lines: list[str] = []
 
-    # Baseline memory ratio
-    for n_pts in sorted({r["n_points"] for r in baseline}):
-        scale_r = {r["label"]: r for r in baseline if r["n_points"] == n_pts}
-        untyped = scale_r.get("Untyped L5")
-        typed = scale_r.get("Typed L5")
-        if untyped and typed:
-            mem_ratio = (untyped["peak_rss_mb"] + 1e-6) / (typed["peak_rss_mb"] + 1e-6)
-            tput_ratio = typed["throughput_pts_per_s"] / untyped["throughput_pts_per_s"]
-            lines.append(
-                f"**Baseline 80M @ {n_pts:,} pts:** typed L5 uses "
-                f"{mem_ratio:.1f}x less memory than untyped "
-                f"({typed['peak_rss_mb']:.1f} MB vs {untyped['peak_rss_mb']:.1f} MB delta); "
-                f"throughput ratio {tput_ratio:.2f}x (typed "
-                f"{'faster' if tput_ratio > 1 else 'slower'})."
-            )
+    for r in baseline:
+        lines.append(
+            f"**Baseline 82M @ {r['n_points']:,} pts:** "
+            f"{r['time_median_s']:.3f}s median, "
+            f"{r['throughput_pts_per_s']:,.1f} pts/s, "
+            f"peak RSS delta {r['peak_rss_mb']:.1f} MB."
+        )
 
-    # Variant 1: 1200M comparison
-    if v1:
-        for n_pts in sorted({r["n_points"] for r in v1}):
-            scale_r = {r["label"]: r for r in v1 if r["n_points"] == n_pts}
-            untyped = scale_r.get("Untyped L5")
-            typed = scale_r.get("Typed L5")
-            if untyped and typed:
-                mem_ratio = (untyped["peak_rss_mb"] + 1e-6) / (typed["peak_rss_mb"] + 1e-6)
-                tput_ratio = typed["throughput_pts_per_s"] / untyped["throughput_pts_per_s"]
-                lines.append(
-                    f"**Variant 1 (1200M) @ {n_pts:,} pts:** typed memory advantage "
-                    f"{mem_ratio:.1f}x; throughput {tput_ratio:.2f}x vs untyped. "
-                    "Schedule fast-paths (Phase 2.5b) keep the 1201-element t-grid build "
-                    "at <15ms, negligible relative to model runtime."
-                )
+    for r in v1:
+        lines.append(
+            f"**Variant 1 (1200M) @ {r['n_points']:,} pts:** "
+            f"{r['time_median_s']:.3f}s median, "
+            f"{r['throughput_pts_per_s']:,.1f} pts/s, peak RSS delta "
+            f"{r['peak_rss_mb']:.1f} MB. Schedule fast-paths keep the "
+            "1201-element t-grid build negligible relative to model runtime."
+        )
 
-    # Variant 2
-    if v2:
-        for n_pts in sorted({r["n_points"] for r in v2}):
-            scale_r = {r["label"]: r for r in v2 if r["n_points"] == n_pts}
-            untyped = scale_r.get("Untyped L5")
-            typed = scale_r.get("Typed L5")
-            if untyped and typed:
-                typed_mem = typed["peak_rss_mb"]
-                untyped_mem = untyped["peak_rss_mb"]
-                tput_ratio = typed["throughput_pts_per_s"] / untyped["throughput_pts_per_s"]
-                if typed_mem > untyped_mem:
-                    # Reversal — typed is heavier (broadcast list cost dominates)
-                    approx_broadcast_mb = (
-                        1201 * 8 * 3 * n_pts / 1e6
-                    )  # 3 lists x 1201 float64s x n policies
-                    lines.append(
-                        f"**Variant 2 (10k × 1200M) — CONCERN:** typed memory "
-                        f"REVERSES at this scale ({typed_mem:.1f} MB vs "
-                        f"{untyped_mem:.1f} MB for untyped; throughput "
-                        f"{tput_ratio:.2f}x). Root cause: the typed model broadcasts "
-                        f"three full 1201-element discount-factor lists (BASE/UP/DOWN) "
-                        f"as literal list columns even for single-scenario runs. "
-                        f"At {n_pts:,} policies × 1201 elements × 3 lists × 8 bytes "
-                        f"≈ {approx_broadcast_mb:.0f} MB. Mitigation: lazy-build only "
-                        f"the required scenario's list when one scenario is run."
-                    )
-                else:
-                    mem_ratio = (untyped_mem + 1e-6) / (typed_mem + 1e-6)
-                    lines.append(
-                        f"**Variant 2 (10k × 1200M):** typed memory "
-                        f"{mem_ratio:.1f}x vs untyped at {n_pts:,} pts "
-                        f"({typed_mem:.1f} MB vs {untyped_mem:.1f} MB); "
-                        f"throughput {tput_ratio:.2f}x."
-                    )
-    elif not v2:
+    for r in v2:
+        lines.append(
+            f"**Variant 2 (10k × 1200M):** {r['time_median_s']:.3f}s median, "
+            f"{r['throughput_pts_per_s']:,.1f} pts/s, peak RSS delta "
+            f"{r['peak_rss_mb']:.1f} MB."
+        )
+    if not v2:
         lines.append(
             "**Variant 2 (10k × 1200M):** not run in CI mode — use `--full` to enable."
         )
@@ -704,7 +689,7 @@ def main(full: bool = False) -> None:
                 [
                     "git",
                     "-C",
-                    str(_TUTORIALS_ROOT.parent.parent),  # gaspatchio-core root
+                    str(_STRESS_DIR),  # git resolves the repo from any subdir
                     "rev-parse",
                     "--short",
                     "HEAD",
@@ -720,9 +705,8 @@ def main(full: bool = False) -> None:
     python_version = platform.python_version()
     arch = platform.machine()
 
-    logger.info(f"Loading model modules (branch @ {git_sha})...")
-    typed_mod = _load_module(TYPED_MODEL_PATH, "typed_l5_stress")
-    untyped_mod = _load_module(UNTYPED_MODEL_PATH, "untyped_l5_stress")
+    logger.info(f"Loading model module ({git_sha})...")
+    model_mod = _load_module(MODEL_PATH, "l5_stress_model")
 
     # Extend scenario returns (tile to t=0..719 for 60-year policy terms)
     MAX_T = 719
@@ -734,19 +718,18 @@ def main(full: bool = False) -> None:
     logger.info(f"scenario_returns extended: {extended_sr.shape}")
 
     # -----------------------------------------------------------------------
-    # Baseline: 80M (reproduces Phase 4B reference at 1k and 10k)
+    # Baseline: 82M at 1k and 10k
     # -----------------------------------------------------------------------
-    logger.info("=== Baseline (80M) ===")
+    logger.info("=== Baseline (82M) ===")
     baseline_results: list[dict[str, Any]] = []
 
-    for pts_path, label_prefix in [(POINTS_1K, "1k"), (POINTS_10K, "10k")]:
+    for pts_path in [POINTS_1K, POINTS_10K]:
         if not pts_path.exists():
             logger.warning(f"Skipping {pts_path.name} — not found")
             continue
-        for mod, label in [(untyped_mod, "Untyped L5"), (typed_mod, "Typed L5")]:
-            r = _benchmark(mod, pts_path, label, 82, ["BASE"], n_repeats=3)
-            if r is not None:
-                baseline_results.append(r)
+        r = _benchmark(model_mod, pts_path, "L5", 82, ["BASE"], n_repeats=3)
+        if r is not None:
+            baseline_results.append(r)
 
     # -----------------------------------------------------------------------
     # Variant 1: 1200M × 1k
@@ -755,21 +738,20 @@ def main(full: bool = False) -> None:
     v1_results: list[dict[str, Any]] = []
 
     if POINTS_1K.exists():
-        for mod, label in [(untyped_mod, "Untyped L5"), (typed_mod, "Typed L5")]:
-            r = _benchmark(
-                mod,
-                POINTS_1K,
-                label,
-                1200,
-                ["BASE"],
-                n_repeats=3,
-                scenario_returns_override=extended_sr,
-                timeout_s=60.0,
-            )
-            if r is not None:
-                v1_results.append(r)
-            else:
-                logger.warning(f"  {label} 1200M 1k timed out — skipping pair")
+        r = _benchmark(
+            model_mod,
+            POINTS_1K,
+            "L5",
+            1200,
+            ["BASE"],
+            n_repeats=3,
+            scenario_returns_override=extended_sr,
+            timeout_s=60.0,
+        )
+        if r is not None:
+            v1_results.append(r)
+        else:
+            logger.warning("  L5 1200M 1k timed out — skipping")
 
     # -----------------------------------------------------------------------
     # Variant 2: 1200M × 10k (full mode only)
@@ -779,21 +761,20 @@ def main(full: bool = False) -> None:
     if full:
         logger.info("=== Variant 2: 1200M × 10k (--full mode) ===")
         if POINTS_10K.exists():
-            for mod, label in [(untyped_mod, "Untyped L5"), (typed_mod, "Typed L5")]:
-                r = _benchmark(
-                    mod,
-                    POINTS_10K,
-                    label,
-                    1200,
-                    ["BASE"],
-                    n_repeats=3,
-                    scenario_returns_override=extended_sr,
-                    timeout_s=300.0,  # 5-min max for full stress
-                )
-                if r is not None:
-                    v2_results.append(r)
-                else:
-                    logger.warning(f"  {label} 1200M 10k timed out — skipping")
+            r = _benchmark(
+                model_mod,
+                POINTS_10K,
+                "L5",
+                1200,
+                ["BASE"],
+                n_repeats=3,
+                scenario_returns_override=extended_sr,
+                timeout_s=300.0,  # 5-min max for full stress
+            )
+            if r is not None:
+                v2_results.append(r)
+            else:
+                logger.warning("  L5 1200M 10k timed out — skipping")
         else:
             logger.warning("Skipping Variant 2 — model_points_10k.parquet not found")
     else:
@@ -819,7 +800,7 @@ def main(full: bool = False) -> None:
     v3_slow: dict[str, Any] | None = None
 
     if POINTS_1K.exists():
-        v3_fast, v3_slow = _benchmark_slow_calendar(typed_mod, POINTS_1K, 82, n_repeats=3)
+        v3_fast, v3_slow = _benchmark_slow_calendar(model_mod, POINTS_1K, 82, n_repeats=3)
 
     # -----------------------------------------------------------------------
     # Print summary to stdout

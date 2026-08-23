@@ -157,9 +157,22 @@ def load_assumptions(storage_mode: StorageModeType = "auto") -> dict:
     # Swap 1: MortalityTable wraps the raw Table.
     # DataDimension(rename_to="age") renames parquet column "attained_age" → "age"
     # so that MortalityTable._at_select_ultimate can dispatch via table.lookup(age=...).
+    # select_ultimate clamps duration at select_period, so the source table
+    # must carry the ultimate rates as duration == SELECT_PERIOD_LEN rows —
+    # the select parquet alone stops at duration 24, and any projection past
+    # the select period would look up a key that does not exist. The ultimate
+    # rates ship alongside in mortality_ultimate.parquet; merge them in as
+    # the clamp row (the table must cover every attained age and duration
+    # the projection reaches).
+    select_df = pl.read_parquet(ASSUMPTIONS_DIR / "mortality_select.parquet")
+    ultimate_df = (
+        pl.read_parquet(ASSUMPTIONS_DIR / "mortality_ultimate.parquet")
+        .with_columns(pl.lit(SELECT_PERIOD_LEN, dtype=pl.Int64).alias("duration"))
+        .select(select_df.columns)
+    )
     mortality_select_raw = Table(
         name="mortality_select",
-        source=pl.read_parquet(ASSUMPTIONS_DIR / "mortality_select.parquet"),
+        source=pl.concat([select_df, ultimate_df]),
         dimensions={
             "table_id": "table_id",
             "age": DataDimension(column="attained_age", rename_to="age"),
