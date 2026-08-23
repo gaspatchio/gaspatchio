@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787466527355,
+  "lastUpdate": 1787470773372,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib": [
@@ -9635,6 +9635,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 7.14,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a372d310c58ba9529381ec3b84297c5d3c68746d",
+          "message": "feat(projection): accumulate() broadcasts scalar multiply/add to the sibling timeline (GSP-156) (#155)\n\n* feat(projection): accumulate() broadcasts scalar multiply/add to the sibling timeline\n\ninitial= has always accepted a scalar; multiply= and add= refused with a\nkernel error naming the constraint but not the fix — the natural\nspelling accumulate(multiply=1.02) died at collect (gh#128, GSP-156).\nA scalar has no period axis of its own, so it now borrows the sibling\nlist's per-row lengths via repeat_by — jagged-safe, since each policy's\nown timeline sets its repetition count, and the same normalisation\nseam the #60 broadcast fix proved. The Rust kernel's List contract is\nuntouched; the boundary normalises, the kernel stays strict.\n\nTwo scalars leave no timeline to infer, so that refusal stays — but now\nteaches: the error names the growth-free closed form\n(initial + flow.cum_sum()) instead of dead-ending. Shape detection\nroutes through resolve_shape(), the same oracle the excel.round gate\nuses; unknown shapes pass through to the kernel's check unchanged.\n\nCloses gh#128.\n\n* fix(projection): resolve string-named siblings via their expression; unwind the skills tripwire\n\nGreptile's P1 on #155 was right and the review tests were not: a bare\nstring is deliberately ambiguous to resolve_shape(), so a scalar paired\nwith add='net_flow' skipped the broadcast and died at the kernel — the\ndocstring's own example, which the docstring harness nonetheless\nreported green (harness blind spot, tracked separately). Strings are\ncolumn names in this signature, so their shape now resolves from the\nconverted pl.col expression; a regression test pins the exact spelling.\n\nThe GSP-156 unwind map was also real: the repo-root skills-claims suite\ncarried the deliberate tripwire (test_scalar_multiply_still_raises) and\nthe two reference passages teaching the old constraint. Both references\nnow state the broadcast (and keep steering the growth-free case at\ncum_sum); the tripwire asserts the broadcast instead, and the\nidentity-multiply documentation guard survives as a style rule.\n\nThe broadcast decision moved to _broadcast_accumulate_operands — the\nstring branch tipped accumulate() over the complexity threshold, and\nextraction beats noqa-stacking.",
+          "timestamp": "2026-08-23T19:29:49+12:00",
+          "tree_id": "e1e139918afa2585823bbdabdd942e6389f5e1c8",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/a372d310c58ba9529381ec3b84297c5d3c68746d"
+        },
+        "date": 1787470771405,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 2.755,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.033,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.133,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 60.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 5.898,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 44.35,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.37,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 2702.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 20.203,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 49.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 54.6,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 1.943,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 5146.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 17.166,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 582.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 8.83,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 18.001,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 5555.2,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 130.472,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 766.4,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 7.25,
             "unit": "x"
           }
         ]
