@@ -1217,6 +1217,21 @@ class TestAccumulate:
         # Policy 2 (jagged, 3 periods): 400, 800, 1600
         assert result["av"].to_list()[1] == [400.0, 800.0, 1600.0]
 
+    def test_scalar_multiply_with_string_named_sibling(self):
+        """The docstring's own spelling: multiply=1.5, add="net_flow".
+
+        resolve_shape() deliberately calls a raw string ambiguous, so the
+        accessor must resolve the converted pl.col expression instead —
+        this is the Greptile P1 regression case from PR #155.
+        """
+        af = ActuarialFrame(
+            {"av_init": [1000.0], "net_flow": [[100.0, 100.0, 100.0]]}
+        )
+        af.av = af.net_flow.projection.accumulate(
+            initial="av_init", multiply=1.5, add="net_flow"
+        )
+        assert af.collect()["av"].to_list() == [[1600.0, 2500.0, 3850.0]]
+
     def test_scalar_add_broadcasts_to_the_multiply_timeline(self):
         """A numeric add broadcasts to multiply's per-policy lengths."""
         data = {

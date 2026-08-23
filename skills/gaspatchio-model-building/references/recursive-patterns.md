@@ -145,8 +145,9 @@ af.cash_balance = af.opening_cash + af.net_flow.cum_sum()
 ```
 
 Reach for `accumulate()` only when the balance genuinely grows (`multiply`
-≠ 1). Its `multiply` must be **list-shaped**, one factor per period — a bare
-scalar (`multiply=1.0`) raises a `ComputeError` rather than broadcasting.
+≠ 1). Its `multiply` takes a list (one factor per period) or a scalar — a
+bare `multiply=1.02` broadcasts to each policy's own timeline. A growth-free
+`multiply=1` still reads better as the `cum_sum()` closed form above.
 
 ---
 

@@ -20,6 +20,7 @@ from gaspatchio.frame.registry import register_accessor
 if TYPE_CHECKING:
     from gaspatchio.column.column_proxy import ColumnProxy
     from gaspatchio.column.expression_proxy import ExpressionProxy
+    from gaspatchio.column.shape import Shape
     from gaspatchio.frame.base import ActuarialFrame
 
 
@@ -1811,24 +1812,47 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
                 return pl.col(param)
             return param
 
-        from gaspatchio.column.shape import Shape, resolve_shape
+        from gaspatchio.column.shape import resolve_shape
 
         def _normalise(
             param: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
         ) -> tuple[pl.Expr, Shape]:
             if isinstance(param, int | float) and not isinstance(param, bool):
                 return pl.lit(float(param)), "scalar"
+            if isinstance(param, str):
+                # A bare string is a column name in this signature, but
+                # resolve_shape() deliberately treats raw strings as
+                # ambiguous/unknown — so resolve the converted pl.col
+                # expression instead, which classifies via the schema.
+                expr = _to_expr(param)
+                return expr, resolve_shape(expr, parent_af)
             return _to_expr(param), resolve_shape(param, parent_af)
 
         initial_expr = _to_expr(initial)
         multiply_expr, multiply_shape = _normalise(multiply)
         add_expr, add_shape = _normalise(add)
+        multiply_expr, add_expr = self._broadcast_accumulate_operands(
+            multiply_expr, multiply_shape, add_expr, add_shape
+        )
 
-        # A scalar multiply/add has no period axis of its own, so it borrows
-        # the sibling list's per-row lengths — jagged-safe, since each
-        # policy's own timeline sets its repetition count (mirrors initial=,
-        # which already broadcasts; GSP-156 / gh#128). Two scalars leave no
-        # axis to infer; unknown shapes pass through to the kernel's check.
+        result_expr = _accumulate(initial_expr, multiply_expr, add_expr)
+        return ExpressionProxy(result_expr, parent_af)
+
+    @staticmethod
+    def _broadcast_accumulate_operands(
+        multiply_expr: pl.Expr,
+        multiply_shape: Shape,
+        add_expr: pl.Expr,
+        add_shape: Shape,
+    ) -> tuple[pl.Expr, pl.Expr]:
+        """Broadcast a scalar multiply/add over the sibling list's lengths.
+
+        A scalar has no period axis of its own, so it borrows the sibling
+        list's per-row lengths — jagged-safe, since each policy's own
+        timeline sets its repetition count (mirrors ``initial=``, which
+        already broadcasts; GSP-156 / gh#128). Two scalars leave no axis to
+        infer; unknown shapes pass through to the kernel's check.
+        """
         if multiply_shape == "scalar" and add_shape == "list":
             multiply_expr = multiply_expr.cast(pl.Float64).repeat_by(
                 add_expr.list.len()
@@ -1844,6 +1868,4 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
                 "initial + flow.cum_sum()."
             )
             raise ValueError(msg)
-
-        result_expr = _accumulate(initial_expr, multiply_expr, add_expr)
-        return ExpressionProxy(result_expr, parent_af)
+        return multiply_expr, add_expr
