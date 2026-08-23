@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787466893378,
+  "lastUpdate": 1787471125938,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -12659,6 +12659,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1538832101,
             "range": "± 2569371",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a372d310c58ba9529381ec3b84297c5d3c68746d",
+          "message": "feat(projection): accumulate() broadcasts scalar multiply/add to the sibling timeline (GSP-156) (#155)\n\n* feat(projection): accumulate() broadcasts scalar multiply/add to the sibling timeline\n\ninitial= has always accepted a scalar; multiply= and add= refused with a\nkernel error naming the constraint but not the fix — the natural\nspelling accumulate(multiply=1.02) died at collect (gh#128, GSP-156).\nA scalar has no period axis of its own, so it now borrows the sibling\nlist's per-row lengths via repeat_by — jagged-safe, since each policy's\nown timeline sets its repetition count, and the same normalisation\nseam the #60 broadcast fix proved. The Rust kernel's List contract is\nuntouched; the boundary normalises, the kernel stays strict.\n\nTwo scalars leave no timeline to infer, so that refusal stays — but now\nteaches: the error names the growth-free closed form\n(initial + flow.cum_sum()) instead of dead-ending. Shape detection\nroutes through resolve_shape(), the same oracle the excel.round gate\nuses; unknown shapes pass through to the kernel's check unchanged.\n\nCloses gh#128.\n\n* fix(projection): resolve string-named siblings via their expression; unwind the skills tripwire\n\nGreptile's P1 on #155 was right and the review tests were not: a bare\nstring is deliberately ambiguous to resolve_shape(), so a scalar paired\nwith add='net_flow' skipped the broadcast and died at the kernel — the\ndocstring's own example, which the docstring harness nonetheless\nreported green (harness blind spot, tracked separately). Strings are\ncolumn names in this signature, so their shape now resolves from the\nconverted pl.col expression; a regression test pins the exact spelling.\n\nThe GSP-156 unwind map was also real: the repo-root skills-claims suite\ncarried the deliberate tripwire (test_scalar_multiply_still_raises) and\nthe two reference passages teaching the old constraint. Both references\nnow state the broadcast (and keep steering the growth-free case at\ncum_sum); the tripwire asserts the broadcast instead, and the\nidentity-multiply documentation guard survives as a style rule.\n\nThe broadcast decision moved to _broadcast_accumulate_operands — the\nstring branch tipped accumulate() over the complexity threshold, and\nextraction beats noqa-stacking.",
+          "timestamp": "2026-08-23T19:29:49+12:00",
+          "tree_id": "e1e139918afa2585823bbdabdd942e6389f5e1c8",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/a372d310c58ba9529381ec3b84297c5d3c68746d"
+        },
+        "date": 1787471125007,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 164649006,
+            "range": "± 1253689",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 164423935,
+            "range": "± 2029249",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 160871693,
+            "range": "± 378787",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 3846267,
+            "range": "± 34267",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 162058441,
+            "range": "± 776771",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 3882521,
+            "range": "± 27145",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 160949289,
+            "range": "± 252610",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 3988676,
+            "range": "± 76419",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 550043,
+            "range": "± 673",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 52620285,
+            "range": "± 70341",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 9882156,
+            "range": "± 52587",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 526630295,
+            "range": "± 3103262",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 399710,
+            "range": "± 888",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 30433574,
+            "range": "± 23913",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 4675486,
+            "range": "± 27981",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 304620959,
+            "range": "± 3198849",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 413399,
+            "range": "± 1117",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 30853809,
+            "range": "± 31204",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 4667482,
+            "range": "± 27360",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 308571407,
+            "range": "± 245700",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 495173,
+            "range": "± 4581",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 39518013,
+            "range": "± 66116",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 5342663,
+            "range": "± 13099",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 393348976,
+            "range": "± 267241",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 1872216,
+            "range": "± 3790",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 156302676,
+            "range": "± 512469",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 28867112,
+            "range": "± 136498",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1574005231,
+            "range": "± 1480470",
             "unit": "ns/iter"
           }
         ]
