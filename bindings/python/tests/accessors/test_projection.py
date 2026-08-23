@@ -1179,6 +1179,86 @@ class TestAccumulate:
         assert pytest.approx(av[1], abs=1e-6) == 122.11
         assert pytest.approx(av[2], abs=1e-6) == 133.3311
 
+    def test_scalar_multiply_broadcasts_to_the_flow_timeline(self):
+        """A numeric multiply broadcasts to add's per-policy lengths (gh#128).
+
+        The result must match the same recurrence with the factor written
+        out as a list — broadcast is a spelling, not a different formula.
+        """
+        data = {
+            "initial": [100.0],
+            "multiply_list": [[1.01, 1.01, 1.01]],
+            "add": [[10.0, 10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+        af.spelled_out = af.initial.projection.accumulate(
+            initial=af.initial, multiply=af.multiply_list, add=af.add
+        )
+        af.broadcast = af.initial.projection.accumulate(
+            initial=af.initial, multiply=1.01, add=af.add
+        )
+        result = af.collect()
+        assert result["broadcast"].to_list() == result["spelled_out"].to_list()
+
+    def test_scalar_column_multiply_broadcasts(self):
+        """A scalar *column* multiply broadcasts the same way as a literal."""
+        data = {
+            "initial": [100.0, 200.0],
+            "growth": [1.5, 2.0],
+            "add": [[10.0, 10.0], [0.0, 0.0, 0.0]],
+        }
+        af = ActuarialFrame(data)
+        af.av = af.initial.projection.accumulate(
+            initial=af.initial, multiply=af.growth, add=af.add
+        )
+        result = af.collect()
+        # Policy 1: 100*1.5+10 = 160, 160*1.5+10 = 250
+        assert result["av"].to_list()[0] == [160.0, 250.0]
+        # Policy 2 (jagged, 3 periods): 400, 800, 1600
+        assert result["av"].to_list()[1] == [400.0, 800.0, 1600.0]
+
+    def test_scalar_multiply_with_string_named_sibling(self):
+        """The docstring's own spelling: multiply=1.5, add="net_flow".
+
+        resolve_shape() deliberately calls a raw string ambiguous, so the
+        accessor must resolve the converted pl.col expression instead —
+        this is the Greptile P1 regression case from PR #155.
+        """
+        af = ActuarialFrame(
+            {"av_init": [1000.0], "net_flow": [[100.0, 100.0, 100.0]]}
+        )
+        af.av = af.net_flow.projection.accumulate(
+            initial="av_init", multiply=1.5, add="net_flow"
+        )
+        assert af.collect()["av"].to_list() == [[1600.0, 2500.0, 3850.0]]
+
+    def test_scalar_add_broadcasts_to_the_multiply_timeline(self):
+        """A numeric add broadcasts to multiply's per-policy lengths."""
+        data = {
+            "initial": [100.0],
+            "multiply": [[1.5, 1.5, 1.5]],
+        }
+        af = ActuarialFrame(data)
+        af.av = af.initial.projection.accumulate(
+            initial=af.initial, multiply=af.multiply, add=100.0
+        )
+        result = af.collect()
+        # 100*1.5+100 = 250, 250*1.5+100 = 475, 475*1.5+100 = 812.5
+        assert result["av"].to_list()[0] == [250.0, 475.0, 812.5]
+
+    def test_two_scalars_refuse_with_the_closed_form_named(self):
+        """Both scalar: no timeline to broadcast onto — the refusal teaches.
+
+        Sharp knives: refuse rather than guess a period count; the error
+        names the growth-free closed form so the next attempt converges.
+        """
+        data = {"initial": [100.0], "flow": [5.0]}
+        af = ActuarialFrame(data)
+        with pytest.raises(ValueError, match=r"cum_sum"):
+            af.initial.projection.accumulate(
+                initial=af.initial, multiply=1.02, add=af.flow
+            )
+
     def test_multiply_only_cumulative_product(self):
         """Test that add=0 gives cumulative product with initial."""
         data = {

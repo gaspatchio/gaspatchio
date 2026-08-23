@@ -20,7 +20,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import polars as pl
 import pytest
 
 from gaspatchio import ActuarialFrame, Curve
@@ -105,25 +104,26 @@ class TestAccumulateMultiplyShape:
         af.run = namespace["result"]
         assert af.collect()["run"].to_list() == [[1.0, 3.0, 6.0]]
 
-    def test_scalar_multiply_still_raises(self) -> None:
-        """The caveat's premise holds: a scalar multiply is rejected.
+    def test_scalar_multiply_broadcasts(self) -> None:
+        """The references' updated premise holds: a scalar multiply broadcasts.
 
-        If this starts passing, the kernel now broadcasts scalar multiply and
-        the 'must be list-shaped' warnings added for GSP-136 are fiction —
-        update the references that state the constraint, then this test.
+        Until PR #155 the kernel rejected a scalar multiply and the
+        references warned about it; the warnings now state the broadcast.
+        If this fails, the constraint is back and the references are fiction
+        again — update both together.
         """
         af = ActuarialFrame({"x": [[1.0, 2.0, 3.0]]})
-        af.bad = af.x.projection.accumulate(initial=0, multiply=1.0, add=af.x)
-        with pytest.raises(pl.exceptions.ComputeError):
-            af.collect()
+        af.run = af.x.projection.accumulate(initial=0, multiply=1.0, add=af.x)
+        assert af.collect()["run"].to_list() == [[1.0, 3.0, 6.0]]
 
-    def test_no_scalar_multiply_documented(self) -> None:
-        """No skill documents the crashing scalar-multiply form.
+    def test_identity_multiply_not_documented(self) -> None:
+        """No skill teaches ``multiply=1`` — the closed form is the idiom.
 
-        The kernel rejects ``multiply=1`` exactly as it rejects ``1.0`` and
-        ``pl.lit(1.0)``, so the guard matches all three spellings — and scans
-        every skill markdown file, not just the three that once taught it.
-        Prose stating the constraint is fine; a keyword argument is not.
+        Since PR #155 a scalar multiply broadcasts, so this is a style guard,
+        not a crash guard: a growth-free balance is
+        ``initial + flow.cum_sum()``, and the references must keep steering
+        there rather than at a degenerate recursion. The regex matches the
+        identity factor in all three spellings across every skill markdown.
         """
         scalar_multiply = re.compile(r"multiply\s*=\s*(pl\.lit\(\s*)?1(\.0)?\s*[,)\s]")
         skills_root = REPO_ROOT / "skills"
