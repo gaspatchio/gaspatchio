@@ -44,8 +44,39 @@ class DocstringCodeExample(BaseModel):
         # The snippet from Markdown fenced blocks is already clean Python.
         return self.snippet
 
-    def lint(self) -> list[str]:  # noqa: C901, PLR0911, PLR0912, PLR0915
-        """Lints the code snippet using Ruff CLI via subprocess."""
+    @staticmethod
+    def _format_ruff_diagnostic(problem: dict[str, Any]) -> str:
+        """Format one ruff JSON diagnostic, normalising syntax errors to E999.
+
+        Ruff has shipped syntax errors as ``invalid-syntax``, ``syntax-error``,
+        and (0.11.x) a null code with a "SyntaxError: ..." message — so a
+        missing or unrecognised code whose message names a SyntaxError is
+        classified by the message, not by matching code literals (GSP-153).
+        """
+        code = problem.get("code")
+        message = str(problem.get("message", "Unknown error"))
+        row = problem.get("location", {}).get("row", 0)
+        if code in {"invalid-syntax", "syntax-error"} or (
+            not code and "SyntaxError" in message
+        ):
+            if not message.startswith("SyntaxError"):
+                message = f"SyntaxError: {message}"
+            code = "E999"
+        elif not code:
+            code = "UnknownCode"
+        return f"{code}: {message} at line {row}"
+
+    def lint(self, timeout_s: float = 10.0) -> list[str]:  # noqa: PLR0911
+        """Lint the code snippet using the Ruff CLI via subprocess.
+
+        Args:
+            timeout_s: Seconds to wait for the ruff child before it is killed
+                and the example reported as timed out.
+
+        Returns:
+            Human-readable issue strings; empty when the snippet is clean.
+
+        """
         issues: list[str] = []
 
         # Skip linting if this example has no_run or similar skip tags
@@ -76,29 +107,29 @@ class DocstringCodeExample(BaseModel):
         if not code_to_lint.strip():
             return issues  # No code to lint
 
-        try:
-            # Command: ruff check --output-format json - (read from stdin)
-            # Adding --no-cache to ensure fresh linting of snippet
-            # Adding --isolated to prevent pyproject.toml from current dir
-            # from interfering too much, though ruff might still pick some
-            # global configs. For snippet linting, this is safer.
-            # The select is pinned: --isolated otherwise inherits whichever
-            # rule set the installed ruff defaults to, and that set moves —
-            # 0.16 added import-sorting, which turned 70 examples red on a
-            # version bump. These are the correctness rules the gate is for
-            # (syntax errors, undefined names, unused imports), not style.
-            command = [
-                ruff_exe,
-                "check",
-                "--output-format",
-                "json",
-                "--no-cache",
-                "--isolated",
-                "--select",
-                "E4,E7,E9,F",
-                "-",
-            ]
+        # Command: ruff check --output-format json - (read from stdin)
+        # Adding --no-cache to ensure fresh linting of snippet
+        # Adding --isolated to prevent pyproject.toml from current dir
+        # from interfering too much, though ruff might still pick some
+        # global configs. For snippet linting, this is safer.
+        # The select is pinned: --isolated otherwise inherits whichever
+        # rule set the installed ruff defaults to, and that set moves —
+        # 0.16 added import-sorting, which turned 70 examples red on a
+        # version bump. These are the correctness rules the gate is for
+        # (syntax errors, undefined names, unused imports), not style.
+        command = [
+            ruff_exe,
+            "check",
+            "--output-format",
+            "json",
+            "--no-cache",
+            "--isolated",
+            "--select",
+            "E4,E7,E9,F",
+            "-",
+        ]
 
+        try:
             process = subprocess.Popen(  # noqa: S603
                 command,
                 stdin=subprocess.PIPE,
@@ -106,99 +137,93 @@ class DocstringCodeExample(BaseModel):
                 stderr=subprocess.PIPE,
                 text=True,  # Work with text streams
             )
-            stdout, stderr = process.communicate(
-                input=code_to_lint, timeout=10
-            )  # 10-second timeout
-
-            if process.returncode == 0:  # No lint issues found by ruff
-                return issues
-
-            # Ruff usually exits with 1 if lint issues are found and
-            # output is JSON to stdout.
-            # If stderr has content, it might be a Ruff error itself,
-            # not lint messages.
-            if stderr:
-                # Attempt to parse stderr as JSON first, as ruff might
-                # output JSON errors
-                try:
-                    error_json = json.loads(stderr)
-                    if (
-                        isinstance(error_json, list) and error_json
-                    ):  # It might be a list of diagnostics
-                        for problem in error_json:
-                            code = problem.get("code", "UnknownCode")
-                            message = problem.get("message", "Unknown error")
-                            row = problem.get("location", {}).get("row", 0)
-
-                            if code in {"invalid-syntax", "syntax-error"}:
-                                code = "E999"
-                                message = f"SyntaxError: {message}"
-
-                            issues.append(f"{code}: {message} at line {row}")
-                        # Return parsed errors from stderr if they look
-                        # like diagnostics
-                        return issues
-                    if isinstance(error_json, dict) and error_json.get("message"):
-                        issues.append(
-                            f"Ruff CLI Error (JSON): {error_json.get('message')}"
-                        )
-                        return issues
-
-                except json.JSONDecodeError:
-                    # If stderr is not JSON, treat it as a general error
-                    # message
-                    issues.append(f"Ruff CLI Error: {stderr.strip()}")
-                    return issues  # Return the raw stderr if it wasn't JSON
-
-            # If stdout has content, try to parse it as JSON
-            # (expected for --output-format json)
-            if stdout:
-                try:
-                    ruff_output = json.loads(stdout)
-                    if isinstance(
-                        ruff_output, list
-                    ):  # Expected: list of diagnostic dicts
-                        for problem in ruff_output:
-                            code = problem.get("code", "UnknownCode")
-                            message = problem.get("message", "Unknown error")
-                            row = problem.get("location", {}).get("row", 0)
-
-                            if code in {"invalid-syntax", "syntax-error"}:
-                                code = "E999"
-                                message = f"SyntaxError: {message}"
-
-                            # Add line number adjustment relative to snippet
-                            # start if needed here. For now, using Ruff's
-                            # reported line number within the snippet
-                            issues.append(f"{code}: {message} at line {row}")
-                    else:
-                        msg = "Ruff output was not a list of issues: "
-                        msg += f"{stdout[:200]}..."
-                        issues.append(msg)
-                except json.JSONDecodeError:
-                    msg = "Could not parse Ruff JSON output: "
-                    msg += f"{stdout[:200]}..."
-                    issues.append(msg)
-
-            # If no specific issues parsed but non-zero exit code,
-            # add generic message
-            if not issues and process.returncode != 0:
-                issues.append(
-                    "Ruff CLI exited with code "
-                    f"{process.returncode} but no issues parsed. "
-                    f"stdout: {stdout[:100]}, stderr: {stderr[:100]}"
-                )
-
-        except subprocess.TimeoutExpired:
-            issues.append("Ruff linting timed out.")
         except FileNotFoundError:
             # Popen can raise this if ruff_exe is somehow invalid
             # despite find_ruff_bin
-            msg = f"Ruff executable not found at: {ruff_exe}. Linting skipped."
-            issues.append(msg)
+            issues.append(f"Ruff executable not found at: {ruff_exe}. Linting skipped.")
+            return issues
         except Exception as e:  # noqa: BLE001
             issues.append(
                 f"Error during Ruff subprocess execution: {type(e).__name__}: {e}"
+            )
+            return issues
+
+        # The child must be dead and reaped on every path out of communicate().
+        # TimeoutExpired leaves the child running by contract; escaping without
+        # kill() plus a reaping communicate() leaks one ruff process per
+        # timed-out example, and a long doctest run can leak enough to exhaust
+        # the per-user process table and stop the machine forking (GSP-154).
+        try:
+            stdout, stderr = process.communicate(input=code_to_lint, timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            issues.append("Ruff linting timed out.")
+            return issues
+        except Exception as e:  # noqa: BLE001
+            process.kill()
+            process.communicate()
+            issues.append(
+                f"Error during Ruff subprocess execution: {type(e).__name__}: {e}"
+            )
+            return issues
+
+        if process.returncode == 0:  # No lint issues found by ruff
+            return issues
+
+        return self._parse_ruff_output(stdout, stderr, process.returncode)
+
+    def _parse_ruff_output(  # noqa: C901
+        self, stdout: str, stderr: str, returncode: int
+    ) -> list[str]:
+        """Parse ruff's JSON output streams into issue strings, stdout first.
+
+        Diagnostics are pinned to stdout by ``--output-format json``; parsing
+        stdout first means real findings survive even when ruff also writes
+        to stderr (the old stderr-first order dropped stdout diagnostics and
+        could let a failing snippet read as clean — GSP-152).
+        """
+        issues: list[str] = []
+        if stdout:
+            try:
+                ruff_output = json.loads(stdout)
+            except json.JSONDecodeError:
+                issues.append(f"Could not parse Ruff JSON output: {stdout[:200]}...")
+            else:
+                if isinstance(ruff_output, list):
+                    issues.extend(
+                        self._format_ruff_diagnostic(problem) for problem in ruff_output
+                    )
+                else:
+                    issues.append(
+                        f"Ruff output was not a list of issues: {stdout[:200]}..."
+                    )
+        if issues:
+            return issues
+
+        # Nothing usable on stdout — fall back to stderr, which may carry a
+        # JSON diagnostic list, a JSON error object, or plain text.
+        if stderr:
+            try:
+                error_json = json.loads(stderr)
+            except json.JSONDecodeError:
+                issues.append(f"Ruff CLI Error: {stderr.strip()}")
+                return issues
+            if isinstance(error_json, list) and error_json:
+                issues.extend(
+                    self._format_ruff_diagnostic(problem) for problem in error_json
+                )
+                return issues
+            if isinstance(error_json, dict) and error_json.get("message"):
+                issues.append(f"Ruff CLI Error (JSON): {error_json.get('message')}")
+                return issues
+
+        # No specific issues parsed but a non-zero exit code
+        if not issues and returncode != 0:
+            issues.append(
+                "Ruff CLI exited with code "
+                f"{returncode} but no issues parsed. "
+                f"stdout: {stdout[:100]}, stderr: {stderr[:100]}"
             )
 
         return issues
