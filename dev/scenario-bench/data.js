@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787373756037,
+  "lastUpdate": 1787462264667,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks": [
@@ -7296,6 +7296,130 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 4363.6,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "67f07b65913e088b880c231b571863bf003ab848",
+          "message": "chore(lint): tier 2 — apply the safe autofixables, driven to the fix/format fixpoint (#151)\n\nOne ruff check --fix pass (safe fixes only; the 1,393 unsafe-fixables are\ndeliberately untouched) on top of tier 1's config: 1,730 fixes across 55\nrule families, 5,928 findings -> 4,200, zero safe fixes remaining. The\nfix set was driven to a joint fix/format fixpoint: 15 files the fixer\nmade format-dirty were formatted; pre-existing format debt shrank 164 ->\n156 files and the tier-3 sweep stays untouched.\n\nThree fixer-vs-reality conflicts resolved by hand, each with the intent\nnow stated in place so it cannot be 'fixed' away again:\n\n- test_excel_round: F401 replaced the import inside pytest.raises with\n  pass — the import IS the assertion (the dead plugins.round wrapper\n  must stay gone). Restored with noqa and a comment.\n- _dispatch_autopatch: B010 rewrote the deliberate setattr of __dir__\n  into direct method assignment — runtime-identical, but mypy rejects\n  method-assign and stubtest then refuses the whole package. Reverted\n  with the reason documented.\n- D413 retired to extend-ignore: its fix and docstring-code-format\n  oscillate forever (proven — fix 28, format strips 3 files, repeat).\n  The formatter wins, same policy as COM812.\n\nSuite: 3064 passed, 0 failed on this tree (GSP-149).",
+          "timestamp": "2026-08-23T16:58:48+12:00",
+          "tree_id": "310f5639712f279d2096c46ab6923547b443ebfc",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/67f07b65913e088b880c231b571863bf003ab848"
+        },
+        "date": 1787462263337,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 3.48,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 188.8,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 2873.5,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 31.963,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 791.2,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 3128.7,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-wall",
+            "value": 475.419,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-rss",
+            "value": 874.7,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-throughput",
+            "value": 2103.4,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 21.94,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 1150.4,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 4557.8,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 216.034,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 5924.4,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 4628.9,
             "unit": "scenario-points/sec"
           },
           {
