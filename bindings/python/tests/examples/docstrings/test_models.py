@@ -292,57 +292,55 @@ def empty_snippet_example() -> DocstringCodeExample:
 
 
 def test_lint_clean_code(clean_code_example: DocstringCodeExample):
-    try:
-        issues = clean_code_example.lint()
-        assert not issues, f"Expected no linting issues for clean code, got: {issues}"
-    except ImportError as e:
-        pytest.skip(f"Skipping lint test, ruff not available: {e}")
+    # lint() never raises ImportError — a missing ruff is reported as a
+    # "Linting skipped" issue string, so the skip keys off that (GSP-155).
+    issues = clean_code_example.lint()
+    if any("Linting skipped" in issue for issue in issues):
+        pytest.skip(f"ruff unavailable to the harness: {issues}")
+    assert not issues, f"Expected no linting issues for clean code, got: {issues}"
 
 
 def test_lint_with_violations(ruff_violation_example: DocstringCodeExample):
-    try:
-        issues = ruff_violation_example.lint()
-        assert len(issues) >= 1, (
-            f"Expected linting issues, got none or not enough: {issues}"
-        )
+    issues = ruff_violation_example.lint()
+    if any("Linting skipped" in issue for issue in issues):
+        pytest.skip(f"ruff unavailable to the harness: {issues}")
+    assert len(issues) >= 1, (
+        f"Expected linting issues, got none or not enough: {issues}"
+    )
 
-        # Ruff JSON output for "import sys" (unused) should be something like:
-        # {"code": "F401", "message": "'sys' imported but unused", "location": {"row": 1, ...}, ...}
-        # Our formatted string becomes: "F401: `sys` imported but unused at line 1"
+    # Ruff JSON output for "import sys" (unused) should be something like:
+    # {"code": "F401", "message": "'sys' imported but unused",
+    #  "location": {"row": 1, ...}, ...}
+    # Our formatted string becomes: "F401: `sys` imported but unused at line 1"
 
-        found_F401 = any(
-            issue.startswith("F401:") and "`sys` imported but unused" in issue
-            for issue in issues
-        )
-        # The undefined_variable (F821) might also be caught by ruff check on stdin.
-        # Example: "F821: Undefined name `undefined_variable` at line 2"
-        found_F821 = any(
-            issue.startswith("F821:") and "Undefined name `undefined_variable`" in issue
-            for issue in issues
-        )
+    found_F401 = any(
+        issue.startswith("F401:") and "`sys` imported but unused" in issue
+        for issue in issues
+    )
+    # The undefined_variable (F821) might also be caught by ruff check on stdin.
+    # Example: "F821: Undefined name `undefined_variable` at line 2"
+    found_F821 = any(
+        issue.startswith("F821:") and "Undefined name `undefined_variable`" in issue
+        for issue in issues
+    )
 
-        assert found_F401, f"F401 (unused 'sys') not found in issues: {issues}"
-        # Depending on Ruff's behavior with isolated snippets, F821 might or might not appear.
-        # For now, asserting F401 is primary. If F821 is also expected, it can be added here.
-        # assert found_F821, f"F821 (undefined_variable) not found in issues: {issues}"
+    assert found_F401, f"F401 (unused 'sys') not found in issues: {issues}"
+    # Depending on Ruff's behavior with isolated snippets, F821 might or might
+    # not appear. For now, asserting F401 is primary. If F821 is also
+    # expected, it can be added here.
+    # assert found_F821, f"F821 (undefined_variable) not found in issues: {issues}"
 
-        # Ensure at least one of the expected violations is present
-        assert found_F401 or found_F821, (
-            f"Neither F401 nor F821 found in issues: {issues}"
-        )
-
-    except ImportError as e:
-        pytest.skip(f"Skipping lint test, ruff not available: {e}")
+    # Ensure at least one of the expected violations is present
+    assert found_F401 or found_F821, f"Neither F401 nor F821 found in issues: {issues}"
 
 
 def test_lint_empty_snippet(empty_snippet_example: DocstringCodeExample):
-    try:
-        issues = empty_snippet_example.lint()
-        assert not issues, (
-            f"Expected no issues for empty/comment-only snippet, got: {issues}"
-        )
-    except ImportError as e:
-        pytest.skip(f"Skipping lint test, ruff not available: {e}")
+    issues = empty_snippet_example.lint()
+    if any("Linting skipped" in issue for issue in issues):
+        pytest.skip(f"ruff unavailable to the harness: {issues}")
+    assert not issues, (
+        f"Expected no issues for empty/comment-only snippet, got: {issues}"
+    )
 
 
 def test_lint_non_python_snippet():
@@ -355,6 +353,8 @@ def test_lint_non_python_snippet():
     )
     try:
         issues = example.lint()
+        if any("Linting skipped" in issue for issue in issues):
+            pytest.skip(f"ruff unavailable to the harness: {issues}")
         assert isinstance(issues, list)
         if issues:
             # Ruff CLI with JSON output for syntax errors might produce an error message directly
@@ -381,10 +381,91 @@ def test_lint_non_python_snippet():
             # This case might need refinement based on actual ruff behavior for truly garbled input.
             pass  # Allow no issues if ruff CLI handles extreme syntax error silently (unlikely for JSON output mode)
 
-    except ImportError as e:
-        pytest.skip(f"Skipping lint test, ruff not available: {e}")
     except Exception as e:
         pytest.fail(f"Linting non-python snippet raised an unexpected exception: {e}")
+
+
+def test_lint_timeout_kills_the_ruff_child(
+    clean_code_example: DocstringCodeExample,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    """A timed-out ruff child is killed and reaped, not leaked (GSP-154).
+
+    The stand-in "ruff" sleeps far past the timeout; lint() must come back at
+    the timeout with the timed-out issue and leave no child process behind —
+    a leaked child per timeout is how a long doctest run exhausts the
+    machine's process table.
+    """
+    import sys
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX shell stand-in")
+    psutil = pytest.importorskip("psutil")
+
+    import ruff.__main__ as ruff_main
+
+    slow_ruff = tmp_path / "slow_ruff.sh"
+    slow_ruff.write_text("#!/bin/sh\nsleep 30\n")
+    slow_ruff.chmod(0o755)
+    monkeypatch.setattr(ruff_main, "find_ruff_bin", lambda: str(slow_ruff))
+
+    children_before = {p.pid for p in psutil.Process().children(recursive=True)}
+    issues = clean_code_example.lint(timeout_s=0.5)
+    children_after = {p.pid for p in psutil.Process().children(recursive=True)}
+
+    assert any("timed out" in issue for issue in issues), issues
+    leaked = children_after - children_before
+    assert not leaked, f"lint() leaked child processes: {leaked}"
+
+
+def test_lint_stdout_diagnostics_survive_stderr_noise(
+    clean_code_example: DocstringCodeExample,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    """Diagnostics on stdout must not be displaced by stderr chatter (GSP-152).
+
+    The old flow parsed stderr first and returned its content, silently
+    dropping real stdout diagnostics — a failing snippet could read as clean.
+    """
+    import sys
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX shell stand-in")
+
+    import ruff.__main__ as ruff_main
+
+    fake_ruff = tmp_path / "fake_ruff.sh"
+    fake_ruff.write_text(
+        "#!/bin/sh\n"
+        "echo 'warning: incidental tool chatter' >&2\n"
+        'echo \'[{"code": "F401", "message": "`sys` imported but unused",'
+        ' "location": {"row": 1}}]\'\n'
+        "exit 1\n"
+    )
+    fake_ruff.chmod(0o755)
+    monkeypatch.setattr(ruff_main, "find_ruff_bin", lambda: str(fake_ruff))
+
+    issues = clean_code_example.lint()
+    assert issues == ["F401: `sys` imported but unused at line 1"], issues
+
+
+def test_null_code_syntax_diagnostic_normalises_to_e999():
+    """A null-code SyntaxError diagnostic is classified by message (GSP-153).
+
+    ruff 0.11.x emitted syntax errors with ``"code": null``; matching only
+    literal code strings produced "None: SyntaxError: ..." lines that dodge
+    the E999 contract the harness promises.
+    """
+    formatted = DocstringCodeExample._format_ruff_diagnostic(  # noqa: SLF001
+        {
+            "code": None,
+            "message": "SyntaxError: unexpected token",
+            "location": {"row": 3},
+        }
+    )
+    assert formatted == "E999: SyntaxError: unexpected token at line 3"
 
 
 def test_dt_proxy_month_docstring_lint():
