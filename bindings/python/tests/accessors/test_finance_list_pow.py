@@ -32,7 +32,7 @@ def test_discount_factor_spot_uses_list_pow() -> None:
     # Verify shape
     expected_rows = 2
     expected_cols = 4
-    assert result.shape == (expected_rows, expected_cols)  # noqa: S101
+    assert result.shape == (expected_rows, expected_cols)
 
     # Verify discount factors
     # Spot formula: (1 + rate)^(-period)
@@ -41,13 +41,13 @@ def test_discount_factor_spot_uses_list_pow() -> None:
     # Row 1, period 2: (1 + 0.004)^(-2) = 0.992048
     disc_factors = result["disc_factors"].to_list()
     expected_len_row1 = 3
-    assert len(disc_factors[0]) == expected_len_row1  # noqa: S101
-    assert disc_factors[0][0] == pytest.approx(1.0, abs=1e-6)  # noqa: S101
-    assert disc_factors[0][1] == pytest.approx(0.996016, abs=1e-6)  # noqa: S101
-    assert disc_factors[0][2] == pytest.approx(0.992048, abs=1e-6)  # noqa: S101
+    assert len(disc_factors[0]) == expected_len_row1
+    assert disc_factors[0][0] == pytest.approx(1.0, abs=1e-6)
+    assert disc_factors[0][1] == pytest.approx(0.996016, abs=1e-6)
+    assert disc_factors[0][2] == pytest.approx(0.992048, abs=1e-6)
 
     # Row 2
     expected_len_row2 = 2
-    assert len(disc_factors[1]) == expected_len_row2  # noqa: S101
-    assert disc_factors[1][0] == pytest.approx(1.0, abs=1e-6)  # noqa: S101
-    assert disc_factors[1][1] == pytest.approx(0.997009, abs=1e-6)  # noqa: S101
+    assert len(disc_factors[1]) == expected_len_row2
+    assert disc_factors[1][0] == pytest.approx(1.0, abs=1e-6)
+    assert disc_factors[1][1] == pytest.approx(0.997009, abs=1e-6)

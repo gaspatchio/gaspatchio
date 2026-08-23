@@ -29,4 +29,4 @@ FIXTURES_DIR = TESTS_DIR / "fixtures"
 def setup_logging():
     """Ensure logging is configured for tests."""
     # init_logging(level=logging.DEBUG) # Or configure as needed
-    pass  # Temporarily disable explicit init during refactor if causing issues
+    # Temporarily disable explicit init during refactor if causing issues

@@ -4,7 +4,6 @@
 
 # ABOUTME: Test for previous_period/next_period with float columns
 # ABOUTME: Reproduces issue where Polars rejects integer fill_value
-# ruff: noqa: S101, PLR2004, ANN201
 # type: ignore[attr-defined]
 
 """Test that time-shifting methods handle float columns with integer fill_value."""

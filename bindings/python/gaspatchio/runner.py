@@ -254,7 +254,7 @@ def _execute_model_run(
             metrics=None,
             errors=[error_message],
             error_message=error_message,
-            error_context=error_context if error_context else None,
+            error_context=error_context or None,
         )
 
     # Capture the column order from the ActuarialFrame
@@ -296,7 +296,7 @@ def _execute_model_run(
         status="success",
         result=result_df,
         metrics=metrics,
-        errors=errors if errors else None,
+        errors=errors or None,
         error_message=None,
         error_context=None,
     )

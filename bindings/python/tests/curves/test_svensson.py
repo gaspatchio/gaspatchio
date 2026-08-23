@@ -58,7 +58,7 @@ def test_svensson_value_independent_formula() -> None:
 
 
 def test_svensson_cross_path() -> None:
-    """scalar / Series / scalar-Expr / list-column all agree to machine precision."""
+    """Scalar / Series / scalar-Expr / list-column all agree to machine precision."""
     c = Curve.from_svensson(b0=0.04, b1=-0.01, b2=0.005, b3=0.002, tau1=1.5, tau2=10.0)
     ts = [0.5, 1.0, 5.0, 10.0, 30.0]
 

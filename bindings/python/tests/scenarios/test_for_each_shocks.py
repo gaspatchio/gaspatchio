@@ -4,7 +4,6 @@
 
 # ABOUTME: Tests for for_each_scenario with dict[ID, list[Shock]] shape.
 # ABOUTME: Verifies batched scenario-stacked Tables match per-scenario runs.
-# ruff: noqa: PD901
 """Test for_each_scenario with dict[ID, list[Shock]] shape."""
 
 from __future__ import annotations

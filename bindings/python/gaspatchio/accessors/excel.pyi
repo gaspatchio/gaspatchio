@@ -4,7 +4,7 @@
 
 """Type stubs for Excel accessors."""
 
-from typing import TYPE_CHECKING, Literal, Union
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from ..column.column_proxy import ColumnProxy
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ..frame.base import ActuarialFrame
     from ..typing import IntoExprColumn  # For yearfrac
 
-BasisType = Union[
+type BasisType = (
     Literal[
         0,
         1,
@@ -24,10 +24,10 @@ BasisType = Union[
         "actual/360",
         "actual/365",
         "european_30_360",
-    ],
-    int,
-    str,
-]
+    ]
+    | int
+    | str
+)
 
 class ExcelFrameAccessor:
     _frame: ActuarialFrame

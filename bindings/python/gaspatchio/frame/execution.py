@@ -4,14 +4,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .base import ActuarialFrame
 
 
 # Keep run_model for now, it might be moved later or stay as a top-level function
-def run_model(model_func: Callable, df: "ActuarialFrame") -> "ActuarialFrame":
+def run_model(model_func: Callable, df: ActuarialFrame) -> ActuarialFrame:
     """Run a model function on an ActuarialFrame"""
     # If we're in debug mode, use the tracer for enhanced error handling
     if df._mode == "debug":

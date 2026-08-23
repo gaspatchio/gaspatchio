@@ -354,7 +354,7 @@ class ConditionalProxy:
 
         return _shape_from_expr_dtype(self._parent, expr) == "list"
 
-    def _lower_one_case(  # noqa: PLR0911
+    def _lower_one_case(
         self,
         condition: Any,  # noqa: ANN401
         then_val: pl.Expr,

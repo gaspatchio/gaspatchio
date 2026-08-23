@@ -27,7 +27,6 @@ pl.Config.set_tbl_rows(20)
 
 def setup_assumptions():
     """Load all assumption tables for the model"""
-
     # Create sample mortality data (wide format with MNS, FNS, MS, FS columns)
     mortality_df = pl.DataFrame({
         "age_last": list(range(30, 70)),
@@ -52,7 +51,7 @@ def setup_assumptions():
 
     # Create sample lapse data (simple 1D table)
     lapse_df = pl.DataFrame({
-        "policy_duration": list(range(0, 50)),
+        "policy_duration": list(range(50)),
         "lapse_rate": [0.15 if d == 0 else 0.10 if d < 3 else 0.05 if d < 10 else 0.02 for d in range(50)]
     })
 
@@ -92,7 +91,6 @@ def setup_assumptions():
 
 def life_model(policies_df):
     """Complete life insurance projection model"""
-
     # Setup assumption tables
     mortality_table, lapse_table, premium_table = setup_assumptions()
 

@@ -410,4 +410,4 @@ class TestRealWorldErrorScenarios:
 
         # Check that we have inf values
         expense_ratios = result["expense_ratio"].to_list()
-        assert any(val == float('inf') for val in expense_ratios), "Should have inf values from division by zero"
+        assert any(val == float("inf") for val in expense_ratios), "Should have inf values from division by zero"

@@ -160,7 +160,8 @@ def test_from_shocks_preserves_explicit_rename_to() -> None:
 
 def test_melt_dimension_named_differently_from_dict_key() -> None:
     """A MeltDimension whose `name` differs from its dict key: lookups and
-    shock reconstruction both speak the dict key."""
+    shock reconstruction both speak the dict key.
+    """
     from gaspatchio.assumptions import MeltDimension
     from gaspatchio.scenarios.shocks import MultiplicativeShock
 

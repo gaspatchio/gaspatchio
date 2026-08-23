@@ -4,7 +4,7 @@
 
 """Tests for ActuarialFrame._projection slot — preservation through frame operations."""
 
-# ruff: noqa: S101, SLF001, D102, E501
+# ruff: noqa: SLF001, E501
 
 from __future__ import annotations
 

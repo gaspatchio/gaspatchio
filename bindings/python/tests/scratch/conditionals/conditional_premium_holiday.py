@@ -4,7 +4,7 @@
 
 # ABOUTME: Scratch test showing premium holiday calculation with conditionals.
 # ABOUTME: Demonstrates zeroing premiums at specific months using when/then/otherwise.
-# ruff: noqa: T201, INP001, ANN201, PLR2004
+# ruff: noqa: T201, INP001
 """Premium Holiday Example.
 
 Shows how to implement premium holidays (e.g., no premium in month 5).

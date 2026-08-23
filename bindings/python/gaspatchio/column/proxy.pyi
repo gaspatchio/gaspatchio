@@ -4,7 +4,6 @@
 
 """Base type stubs for common proxy elements."""
 
-from __future__ import annotations
 
 import builtins
 from typing import TYPE_CHECKING, Any
@@ -24,8 +23,6 @@ if TYPE_CHECKING:
     from polars.type_aliases import (
         ExprList as PolarsExprList,  # Alias for use in string hint
     )
-
-    from .column_proxy import ColumnProxy  # For DtNamespaceProxy.__init__ parent type
 
     # Import local types carefully
     from .expression_proxy import ExpressionProxy
@@ -189,6 +186,7 @@ class _BaseProxy:
         │ 500000.0    ┆ 4500.0  ┆ 55  ┆ 9.0              ┆ 50         │
         └─────────────┴─────────┴─────┴──────────────────┴────────────┘
         ```
+
         """
     def clip(self, lower_bound: float, upper_bound: float) -> ExpressionProxy:
         """Constrain values to specified minimum and maximum bounds.
@@ -294,6 +292,7 @@ class _BaseProxy:
         │ P002      ┆ 42  ┆ [1, 2, … 4] ┆ [8000.0, 75000.0, … 45000.0]   ┆ [10000.0, 75000.0, … 45000.0]   │
         └───────────┴─────┴─────────────┴────────────────────────────────┴─────────────────────────────────┘
         ```
+
         """
     def cast(self, dtype: PolarsDataType, *, strict: bool = True) -> ExpressionProxy:
         """Cast values in this expression to a different data type.
@@ -393,6 +392,7 @@ class _BaseProxy:
         │ 56-65     ┆ 0.008000      │
         └───────────┴───────────────┘
         ```
+
         """
     def sum(self) -> ExpressionProxy: ...
     def cum_prod(self, *, reverse: bool = False) -> ExpressionProxy:
@@ -494,6 +494,7 @@ class _BaseProxy:
         │ P002      ┆ 38  ┆ [1, 2, … 4] ┆ [0.9998, 0.9998, … 0.9997] ┆ [0.9998, 0.9996, … 0.999]       │
         └───────────┴─────┴─────────────┴────────────────────────────┴─────────────────────────────────┘
         ```
+
         """
     def cum_sum(self, *, reverse: bool = False) -> ExpressionProxy:
         """Compute the cumulative sum of numeric values.
@@ -511,14 +512,17 @@ class _BaseProxy:
             * **Running Balances:** Compute cumulative deposits or withdrawals
                 for account balance projections.
 
-        Parameters:
+        Parameters
+        ----------
             reverse: If True, compute the cumulative sum in reverse order
                 (from last to first).
 
-        Returns:
+        Returns
+        -------
             ExpressionProxy with the cumulative sum applied.
 
-        Examples:
+        Examples
+        --------
             **Scalar Example: Cumulative Premiums**
 
             ```python
@@ -545,6 +549,7 @@ class _BaseProxy:
             │ P001      ┆ [100, 100, … 150]   ┆ [100, 200, … 600]  │
             └───────────┴──────────────────────┴─────────────────────┘
             ```
+
         """
     def cum_min(self, *, reverse: bool = False) -> ExpressionProxy:
         """Compute the cumulative minimum of numeric values.
@@ -559,13 +564,16 @@ class _BaseProxy:
             * **Minimum Balance Tracking:** Monitor the lowest point of a
                 policy's account value for risk analysis.
 
-        Parameters:
+        Parameters
+        ----------
             reverse: If True, compute cumulative minimum in reverse order.
 
-        Returns:
+        Returns
+        -------
             ExpressionProxy with the cumulative minimum applied.
 
-        Examples:
+        Examples
+        --------
             ```python
             from gaspatchio import ActuarialFrame
 
@@ -585,6 +593,7 @@ class _BaseProxy:
             │ P001      ┆ [100, 90, … 80]    ┆ [100, 90, … 80]    │
             └───────────┴─────────────────────┴─────────────────────┘
             ```
+
         """
     def cum_max(self, *, reverse: bool = False) -> ExpressionProxy:
         """Compute the cumulative maximum of numeric values.
@@ -599,13 +608,16 @@ class _BaseProxy:
             * **Peak Exposure:** Monitor the highest account value for
                 fee-tier determination and risk management.
 
-        Parameters:
+        Parameters
+        ----------
             reverse: If True, compute cumulative maximum in reverse order.
 
-        Returns:
+        Returns
+        -------
             ExpressionProxy with the cumulative maximum applied.
 
-        Examples:
+        Examples
+        --------
             ```python
             from gaspatchio import ActuarialFrame
 
@@ -625,6 +637,7 @@ class _BaseProxy:
             │ P001      ┆ [100, 110, … 115]  ┆ [100, 110, … 120]  │
             └───────────┴─────────────────────┴─────────────────────┘
             ```
+
         """
     def diff(self, n: int = 1, null_behavior: builtins.str = "ignore") -> ExpressionProxy:
         """Compute the difference between consecutive values.
@@ -642,14 +655,17 @@ class _BaseProxy:
             * **Rate Changes:** Calculate year-on-year changes in mortality
                 or lapse rates for experience studies.
 
-        Parameters:
+        Parameters
+        ----------
             n: Number of periods to look back (default 1).
             null_behavior: How to handle nulls — "ignore" or "drop".
 
-        Returns:
+        Returns
+        -------
             ExpressionProxy with the differences applied.
 
-        Examples:
+        Examples
+        --------
             ```python
             from gaspatchio import ActuarialFrame
 
@@ -669,8 +685,9 @@ class _BaseProxy:
             │ P001      ┆ [100, 120, … 125]  ┆ [null, 20, … -5]        │
             └───────────┴─────────────────────┴──────────────────────────┘
             ```
+
         """
-    def fill_nan(self, value: float | int | None = None) -> ExpressionProxy:
+    def fill_nan(self, value: float | None = None) -> ExpressionProxy:
         """Replace NaN values with a specified value.
 
         Distinct from ``fill_null`` — this targets IEEE 754 NaN values
@@ -683,14 +700,17 @@ class _BaseProxy:
             * **Investment Return Data:** Clean NaN values in market data
                 feeds before using in projections.
 
-        Parameters:
+        Parameters
+        ----------
             value: The value to replace NaN with. If None, NaN is replaced
                 with null.
 
-        Returns:
+        Returns
+        -------
             ExpressionProxy with NaN values replaced.
 
-        Examples:
+        Examples
+        --------
             ```python
             from gaspatchio import ActuarialFrame
 
@@ -710,6 +730,7 @@ class _BaseProxy:
             │ P001      ┆ [0.01, NaN, 0.03]┆ [0.01, 0.0, 0.03]│
             └───────────┴──────────────────┴──────────────────┘
             ```
+
         """
     def interpolate(self, method: builtins.str = "linear") -> ExpressionProxy:
         """Interpolate null values using the specified method.
@@ -724,13 +745,16 @@ class _BaseProxy:
             * **Yield Curve Interpolation:** Fill missing tenors in a
                 yield curve for discount rate calculations.
 
-        Parameters:
+        Parameters
+        ----------
             method: Interpolation method — "linear" or "nearest".
 
-        Returns:
+        Returns
+        -------
             ExpressionProxy with interpolated values.
 
-        Examples:
+        Examples
+        --------
             ```python
             from gaspatchio import ActuarialFrame
 
@@ -750,6 +774,7 @@ class _BaseProxy:
             │ P001      ┆ [0.01, null, … 0.04]┆ [0.01, 0.02, … 0.04]│
             └───────────┴────────────────────┴────────────────────────┘
             ```
+
         """
     def mean(self) -> ExpressionProxy:
         """Compute the arithmetic mean of numeric values in this expression or column.
@@ -844,6 +869,7 @@ class _BaseProxy:
         │ UL          ┆ 1100.0  ┆ 1320.0      │
         └─────────────┴─────────┴─────────────┘
         ```
+
         """
     def min(self) -> ExpressionProxy:
         """Find the minimum value in this expression or column.
@@ -937,6 +963,7 @@ class _BaseProxy:
         │ UL          ┆ 1100.0  ┆ 800.0       │
         └─────────────┴─────────┴─────────────┘
         ```
+
         """
     def max(self) -> ExpressionProxy:
         """Find the maximum value in this expression or column.
@@ -1030,6 +1057,7 @@ class _BaseProxy:
         │ UL          ┆ 1100.0  ┆ 2000.0      │
         └─────────────┴─────────┴─────────────┘
         ```
+
         """
     def count(self) -> ExpressionProxy:
         """Count the number of non-null values in this expression or column.
@@ -1123,6 +1151,7 @@ class _BaseProxy:
         │ UL          ┆ P005      ┆ 4            │
         └─────────────┴───────────┴──────────────┘
         ```
+
         """
     def is_null(self) -> ExpressionProxy:
         """Check which values are null (missing) in this expression or column.
@@ -1214,6 +1243,7 @@ class _BaseProxy:
         │ UL          ┆ Bob Wilson  ┆ 2                         │
         └─────────────┴─────────────┴───────────────────────────┘
         ```
+
         """
     def fill_null(
         self,
@@ -1328,6 +1358,7 @@ class _BaseProxy:
         │ 6     ┆ null             ┆ 1200.0         ┆ 0.0         │
         └───────┴──────────────────┴────────────────┴─────────────┘
         ```
+
         """
     def unique(self) -> ExpressionProxy:
         """Return unique values from this expression or column.
@@ -1412,6 +1443,7 @@ class _BaseProxy:
         │ P002      ┆ [1100.0, 1150.0, … 1200.0] ┆ [1100.0, 1150.0, 1200.0] │
         └───────────┴────────────────────────────┴──────────────────────────┘
         ```
+
         """
     def sort(self, *, descending: bool = False) -> ExpressionProxy:
         """Sort values in this expression or column.
@@ -1508,6 +1540,7 @@ class _BaseProxy:
         │ UL          ┆ 62  ┆ 62          │
         └─────────────┴─────┴─────────────┘
         ```
+
         """
     def head(self, n: int = 5) -> ExpressionProxy:
         """Return the first n values from this expression or column.
@@ -1600,6 +1633,7 @@ class _BaseProxy:
         │ P002      ┆ [1100.0, 1150.0, … 1250.0] ┆ [1100.0, 1150.0, 1100.0] │
         └───────────┴────────────────────────────┴──────────────────────────┘
         ```
+
         """
     def tail(self, n: int = 5) -> ExpressionProxy:
         """Return the last n values from this expression or column.
@@ -1690,6 +1724,7 @@ class _BaseProxy:
         │ P002      ┆ [1100.0, 1150.0, … 1250.0] ┆ [1100.0, 1200.0, 1250.0] │
         └───────────┴────────────────────────────┴──────────────────────────┘
         ```
+
         """
     def filter(self, predicate: ExpressionProxy | pl.Expr) -> ExpressionProxy:
         """Filter values based on a boolean condition.
@@ -1783,6 +1818,7 @@ class _BaseProxy:
         │ P002      ┆ [1100.0, 1150.0, … 1050.0] ┆ [1300.0, 1200.0]         │
         └───────────┴────────────────────────────┴──────────────────────────┘
         ```
+
         """
     def shift(self, n: builtins.int = 1, *, fill_value: Any = None) -> ExpressionProxy:
         """Shift values by a specified number of periods.
@@ -1887,6 +1923,7 @@ class _BaseProxy:
         │ Q4      ┆ 49             ┆ null                ┆ 38                      │
         └─────────┴────────────────┴─────────────────────┴─────────────────────────┘
         ```
+
         """
     def over(
         self,
@@ -1996,6 +2033,7 @@ class _BaseProxy:
         │ 30-39    ┆ 900.0        ┆ 1            │
         └──────────┴──────────────┴──────────────┘
         ```
+
         """
     def when(self, *predicates: ExpressionProxy | pl.Expr) -> ExpressionProxy:
         """Begin a conditional expression chain with specified conditions.
@@ -2103,6 +2141,7 @@ class _BaseProxy:
         │ WHOLE       ┆ 1000000     ┆ 40  ┆ STANDARD   │
         └─────────────┴─────────────┴─────┴────────────┘
         ```
+
         """
     def then(self, expr: Any) -> ExpressionProxy:
         """Specify the value to return when the preceding when() condition is true.
@@ -2310,6 +2349,7 @@ class _BaseProxy:
         │ WHOLE       ┆ 0.04               ┆ 0.044            │
         └─────────────┴────────────────────┴──────────────────┘
         ```
+
         """
     def sign(self) -> ExpressionProxy:
         """Compute the sign of numeric values.
@@ -2400,6 +2440,7 @@ class _BaseProxy:
         │ Cash        ┆ 0.002         ┆ 1.0              ┆ 4     │
         └─────────────┴───────────────┴──────────────────┴───────┘
         ```
+
         """
     def floor(self) -> ExpressionProxy:
         """Round numeric values down to the nearest integer.
@@ -2489,6 +2530,7 @@ class _BaseProxy:
         │ ANNUITY     ┆ 10.0            │
         └─────────────┴─────────────────┘
         ```
+
         """
     def ceil(self) -> ExpressionProxy:
         """Round numeric values up to the nearest integer.
@@ -2578,6 +2620,7 @@ class _BaseProxy:
         │ West   ┆ 3422.0          │
         └────────┴─────────────────┘
         ```
+
         """
     def round(self, decimals: int = 0) -> ExpressionProxy:
         """Round numeric values to specified number of decimal places.
@@ -2673,6 +2716,7 @@ class _BaseProxy:
         │ interest_rate  ┆ 0.0325   ┆ 0.0325      ┆ 0.03               │
         └────────────────┴──────────┴─────────────┴────────────────────┘
         ```
+
         """
     def round_sig_figs(self, sig_figs: int) -> ExpressionProxy:
         """Round numeric values to a specified number of significant figures.
@@ -2763,6 +2807,7 @@ class _BaseProxy:
         │ P002      ┆ [0.00234, 0.00256, … 0.00301]   ┆ [0.0023, 0.0026, … 0.003]     │
         └───────────┴─────────────────────────────────┴───────────────────────────────┘
         ```
+
         """
     def exp(self) -> ExpressionProxy:
         """Compute the exponential function (e^x) of numeric values.
@@ -2861,6 +2906,7 @@ class _BaseProxy:
         │ 85  ┆ 0.301194      │
         └─────┴───────────────┘
         ```
+
         """
     def pow(self, exponent: float | ExpressionProxy) -> ExpressionProxy:
         """Raise numeric values to specified power.
@@ -2963,6 +3009,7 @@ class _BaseProxy:
         │ P002      ┆ 45  ┆ [1, 2, … 4] ┆ [1.03, 1.035, … 1.045] ┆ [1.0609, 1.071225, … 1.092025] │
         └───────────┴─────┴─────────────┴────────────────────────┴────────────────────────────────┘
         ```
+
         """
     def log(self, base: float = ...) -> ExpressionProxy:
         """Compute logarithm of numeric values with specified base.
@@ -3060,6 +3107,7 @@ class _BaseProxy:
         │ Health     ┆ 6.0          │
         └────────────┴──────────────┘
         ```
+
         """
     def log1p(self) -> ExpressionProxy:
         """Compute the natural logarithm of (1 + x) with improved numerical precision.
@@ -3144,6 +3192,7 @@ class _BaseProxy:
         │ P002      ┆ [0.008, 0.012, … 0.018] ┆ [0.007968, 0.011929, … 0.01784… │
         └───────────┴─────────────────────────┴─────────────────────────────────┘
         ```
+
         """
     def ln(self) -> ExpressionProxy:
         """Compute the natural logarithm (base e) of numeric values.
@@ -3234,6 +3283,7 @@ class _BaseProxy:
         │ Catastrophic   ┆ 13.122363 │
         └────────────────┴───────────┘
         ```
+
         """
     def log10(self) -> ExpressionProxy:
         """Compute the base-10 logarithm of numeric values.
@@ -3317,6 +3367,7 @@ class _BaseProxy:
         │ P002      ┆ [500.0, 2500.0, … 62500.0]  ┆ [2.69897, 3.39794, … 4.79588] │
         └───────────┴─────────────────────────────┴───────────────────────────────┘
         ```
+
         """
     def sqrt(self) -> ExpressionProxy:
         """Compute the square root of numeric values.
@@ -3407,6 +3458,7 @@ class _BaseProxy:
         │ 2023 ┆ 0.07       │
         └──────┴────────────┘
         ```
+
         """
     def cbrt(self) -> ExpressionProxy:
         """Compute the cube root of numeric values.
@@ -3488,6 +3540,7 @@ class _BaseProxy:
         │ P002      ┆ [125.0, 343.0, … 1331.0]     ┆ [5.0, 7.0, … 11.0]       │
         └───────────┴──────────────────────────────┴──────────────────────────┘
         ```
+
         """
     def gamma(self) -> ExpressionProxy:
         """Compute the gamma function of numeric values.
@@ -3572,6 +3625,7 @@ class _BaseProxy:
         │ D2              ┆ [0.5, 1.5, … 3.5]   ┆ [1.772454, 0.886227, … 3.32… │
         └─────────────────┴─────────────────────┴──────────────────────────────┘
         ```
+
         """
     def is_nan(self) -> ExpressionProxy:
         """Check which values are NaN (Not a Number) in this expression or column.
@@ -3654,6 +3708,7 @@ class _BaseProxy:
         │ P002      ┆ [0.004, 0.005, … NaN]   ┆ [false, false, … true]        │
         └───────────┴─────────────────────────┴───────────────────────────────┘
         ```
+
         """
     def is_finite(self) -> ExpressionProxy:
         """Check which values are finite numbers in this expression or column.
@@ -3736,6 +3791,7 @@ class _BaseProxy:
         │ P002      ┆ [2000.0, NaN, … 2300.0]   ┆ [true, false, … true]       │
         └───────────┴───────────────────────────┴─────────────────────────────┘
         ```
+
         """
     def is_infinite(self) -> ExpressionProxy:
         """Check which values are infinite in this expression or column.
@@ -3818,6 +3874,7 @@ class _BaseProxy:
         │ P002      ┆ [1.0, 0.0, … 0.75]        ┆ [false, false, … false]     │
         └───────────┴───────────────────────────┴─────────────────────────────┘
         ```
+
         """
     def is_not_nan(self) -> ExpressionProxy:
         """Check which values are not NaN (Not a Number) in this expression or column.
@@ -3900,6 +3957,7 @@ class _BaseProxy:
         │ P002      ┆ [200.0, 210.0, … NaN]    ┆ 3            │
         └───────────┴──────────────────────────┴──────────────┘
         ```
+
         """
     def is_not_null(self) -> ExpressionProxy:
         """Check which values are not null (not missing) in this expression or column.
@@ -3994,4 +4052,5 @@ class _BaseProxy:
         │ UL          ┆ Complete     ┆ 5              ┆ 3              │
         └─────────────┴──────────────┴────────────────┴────────────────┘
         ```
+
         """

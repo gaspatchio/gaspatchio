@@ -21,6 +21,7 @@ Examples:
 
     # Custom config from JSON
     uv run python appliedlife/dynamic_scenarios.py --config '[{"id": "BASE"}, {"id": "TEST", "shocks": [{"table": "mortality", "multiply": 1.5}]}]'
+
 """
 
 import argparse
@@ -33,8 +34,8 @@ import polars as pl
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from gaspatchio import ActuarialFrame, Table
-from gaspatchio.scenarios import parse_scenario_config, describe_scenarios
+from gaspatchio import Table
+from gaspatchio.scenarios import describe_scenarios, parse_scenario_config
 
 ASSUMPTIONS_DIR = Path(__file__).parent / "assumptions"
 
@@ -119,6 +120,7 @@ def run_what_if_analysis(config: list[dict], tables: dict[str, Table]) -> pl.Dat
 
     Returns:
         DataFrame with scenario results
+
     """
     # Parse config to shock objects
     scenarios = parse_scenario_config(config)

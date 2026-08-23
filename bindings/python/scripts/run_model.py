@@ -29,9 +29,12 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Annotated
 
 import polars as pl
 import typer
+from loguru import logger
+
 from gaspatchio.runner import (
     ModelRunConfig,
     ModelRunResult,
@@ -40,8 +43,6 @@ from gaspatchio.runner import (
 from gaspatchio.runner import (
     run_model as execute_runner_run_model,
 )
-from loguru import logger
-from typing_extensions import Annotated
 
 # Set the RUST_LOG environment variable before importing any modules
 os.environ["RUST_LOG"] = "debug"  # or "info" if you only want info logs
@@ -370,8 +371,8 @@ def main(
 
             # Check if --output-csv was specified
             if output_csv is not None:
-                csv_dir = Path(output_csv) or Path(
-                    "."
+                csv_dir = (
+                    Path(output_csv) or Path()
                 )  # Default to current dir if empty string
                 csv_dir.mkdir(parents=True, exist_ok=True)
                 csv_path = csv_dir / f"{policy_id}_gs_output.csv"
@@ -398,32 +399,31 @@ def main(
 
             else:
                 logger.info("Transposed results saved to CSV, skipping print.")
-        else:
-            # Print the (potentially ID-filtered but not transposed) results
-            if len(result_df) == 0 and policy_id:
-                logger.info("No data to display for the specified policy ID.")
-            elif len(result_df) > 0:
-                # Use the column selection calculated before the policy_id check for non-transposed output
-                with pl.Config(
-                    tbl_cols=-1,  # Show all columns initially to select from
-                    tbl_rows=rows,
-                    tbl_width_chars=1500,
-                    fmt_str_lengths=30,
-                ):
-                    print(
-                        "\nResult (Columns ordered by assignment - best effort, filtered by -f/-l):"
+        # Print the (potentially ID-filtered but not transposed) results
+        elif len(result_df) == 0 and policy_id:
+            logger.info("No data to display for the specified policy ID.")
+        elif len(result_df) > 0:
+            # Use the column selection calculated before the policy_id check for non-transposed output
+            with pl.Config(
+                tbl_cols=-1,  # Show all columns initially to select from
+                tbl_rows=rows,
+                tbl_width_chars=1500,
+                fmt_str_lengths=30,
+            ):
+                print(
+                    "\nResult (Columns ordered by assignment - best effort, filtered by -f/-l):"
+                )
+                if not final_cols_to_print:
+                    logger.warning(
+                        "No columns selected or available to display based on -f/-l settings."
                     )
-                    if not final_cols_to_print:
-                        logger.warning(
-                            "No columns selected or available to display based on -f/-l settings."
-                        )
-                        print(
-                            result_df
-                        )  # Print dataframe with default columns if selection fails
-                    else:
-                        print(result_df.select(final_cols_to_print))
-            else:
-                logger.info("No results to display.")
+                    print(
+                        result_df
+                    )  # Print dataframe with default columns if selection fails
+                else:
+                    print(result_df.select(final_cols_to_print))
+        else:
+            logger.info("No results to display.")
 
 
 # Run the Typer app

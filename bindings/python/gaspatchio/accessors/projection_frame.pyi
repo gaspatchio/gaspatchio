@@ -4,11 +4,9 @@
 
 """Type stubs for ProjectionFrameAccessor."""
 
-from __future__ import annotations
-
 import datetime as dt
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 
@@ -20,14 +18,14 @@ if TYPE_CHECKING:
     from ..rollforward._builder import RollforwardBuilder
     from ..schedule import Schedule
 
-    ExprLike: TypeAlias = pl.Expr | ColumnProxy | ExpressionProxy
+    type ExprLike = pl.Expr | ColumnProxy | ExpressionProxy
 
 class ProjectionFrameAccessor(BaseFrameAccessor):
-    def __init__(self, frame: "ActuarialFrame") -> None: ...
+    def __init__(self, frame: ActuarialFrame) -> None: ...
     def set(
         self,
         *,
-        schedule: "Schedule | None" = ...,
+        schedule: Schedule | None = ...,
         valuation_date: dt.date | None = ...,
         until: Literal[
             "maximum_age",
@@ -44,7 +42,7 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         n_periods: int | None = ...,
         frequency: str | None = ...,
         per_policy: bool | None = ...,
-    ) -> "ActuarialFrame": ...
+    ) -> ActuarialFrame: ...
     def rollforward(
         self,
         *,
@@ -55,7 +53,7 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         contract_boundary: ExprLike | None = ...,
         batch_axes: tuple[str, ...] = ...,
         schedule: None = ...,
-    ) -> "RollforwardBuilder": ...
+    ) -> RollforwardBuilder: ...
     def period_dates(self) -> pl.Expr: ...
     def year_fractions(self) -> pl.Expr: ...
     def t_years(self) -> pl.Expr: ...

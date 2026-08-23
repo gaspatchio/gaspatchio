@@ -10,9 +10,8 @@ ExpressionProxy look like Polars expressions.
 
 from __future__ import annotations
 
-import functools
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from loguru import logger
@@ -26,8 +25,9 @@ from ._dispatch_namespaces import (
 )
 
 if TYPE_CHECKING:
-    from ._dispatch_common import ProxyType
     from gaspatchio.frame.base import ActuarialFrame
+
+    from ._dispatch_common import ProxyType
 
 
 class DelegatorDescriptor:
@@ -39,7 +39,7 @@ class DelegatorDescriptor:
         self.wrapper_logic = _make_wrapper(self.name)
 
     def __get__(
-        self, instance: Optional["ProxyType"], owner: type["ProxyType"] | None = None
+        self, instance: ProxyType | None, owner: type[ProxyType] | None = None
     ) -> Any:  # noqa: ANN401
         """Handle attribute access on the proxy instance or class."""
         if instance is None:
@@ -55,8 +55,8 @@ class DelegatorDescriptor:
 def _create_method_wrapper(
     name: str,
     polars_attr: Callable,
-    self_proxy: "ProxyType",
-    parent_af: Optional["ActuarialFrame"],
+    self_proxy: ProxyType,
+    parent_af: ActuarialFrame | None,
     base_expr: pl.Expr,
 ) -> Callable:
     """Create a wrapper for a Polars method."""
@@ -89,7 +89,7 @@ def _make_wrapper(name: str) -> Callable[..., Any]:
     """Create the core logic function used by DelegatorDescriptor."""
 
     def wrapper(
-        self_proxy: "ProxyType",
+        self_proxy: ProxyType,
         *args: Any,  # noqa: ANN401
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
@@ -122,7 +122,7 @@ def _make_wrapper(name: str) -> Callable[..., Any]:
     return wrapper
 
 
-def _autopatch(proxy_cls: type["ProxyType"]) -> None:
+def _autopatch(proxy_cls: type[ProxyType]) -> None:
     """Dynamically add Polars expression methods to proxy classes."""
     processed_attrs: set[str] = set()
     attrs_to_process = dir(pl.Expr) + list(_dispatch_namespace_names())
@@ -157,12 +157,15 @@ def _autopatch(proxy_cls: type["ProxyType"]) -> None:
 
     original_dir = getattr(proxy_cls, "__dir__", object.__dir__)
 
-    def enhanced_dir(self: "ProxyType") -> list[str]:
+    def enhanced_dir(self: ProxyType) -> list[str]:
         """Return all attributes on this proxy, including dynamic Polars attrs."""
         dynamic_attrs = {attr for attr in processed_attrs if hasattr(proxy_cls, attr)}
         return sorted(set(original_dir(self)) | dynamic_attrs)
 
-    setattr(proxy_cls, "__dir__", enhanced_dir)
+    # setattr, not direct assignment: mypy rejects assigning to a method
+    # (method-assign), and stubtest refuses to run on a package that doesn't
+    # type-check. The dynamic patch is the point — do not "fix" to B010's form.
+    setattr(proxy_cls, "__dir__", enhanced_dir)  # noqa: B010
 
 
 def _dispatch_namespace_names() -> set[str]:

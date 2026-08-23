@@ -4,7 +4,7 @@
 
 # ABOUTME: Tests for the enhanced tracing system with metadata capture
 # ABOUTME: Tests cover metadata capture, performance characteristics, and graph storage
-# ruff: noqa: S101, PLR2004, ANN201, SLF001, ANN202, ANN204, D107, INP001, FBT001, FBT002, T201, E501, ARG002, SIM117
+# ruff: noqa: SLF001, ANN202, ANN204, D107, FBT001, FBT002, E501, ARG002, SIM117
 # type: ignore[arg-type,invalid-argument-type]
 
 """

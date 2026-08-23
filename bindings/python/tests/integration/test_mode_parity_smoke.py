@@ -12,8 +12,6 @@ mixed model.
 
 from __future__ import annotations
 
-import pytest
-
 from gaspatchio import ActuarialFrame, when
 from gaspatchio.util import set_default_mode
 

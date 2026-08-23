@@ -91,14 +91,17 @@ def test_matches_the_rollforward_round_op() -> None:
 
 def test_dead_plugin_wrappers_are_gone() -> None:
     """floor/round/round_to_int panicked on a missing Rust symbol; they are
-    removed rather than left as landmines."""
-    import gaspatchio.polars_backend.plugins as plugins
+    removed rather than left as landmines.
+    """
+    from gaspatchio.polars_backend import plugins
 
     assert not hasattr(plugins, "round")
     assert not hasattr(plugins, "round_to_int")
     assert not hasattr(plugins, "floor")
     with pytest.raises(ImportError):
-        from gaspatchio.functions.vector import round  # noqa: A004
+        # The import IS the assertion: the dead wrapper must stay gone, so
+        # importing it must fail. Not unused, not dead — do not "fix" it away.
+        from gaspatchio.functions.vector import round  # noqa: A004, F401
 
 
 def test_composed_list_expression_rounds_element_wise() -> None:

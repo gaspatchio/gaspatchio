@@ -4,7 +4,7 @@
 
 # ABOUTME: Scratch test comparing old map_elements approach vs new when/then/otherwise.
 # ABOUTME: Demonstrates maturity calculation pattern for actuarial projections.
-# ruff: noqa: T201, INP001, ANN201, PLR2004
+# ruff: noqa: T201, INP001
 """Maturity Calculation Example.
 
 Shows the before/after of replacing map_elements with when/then/otherwise.

@@ -91,17 +91,17 @@ def test_quantile():
         "scores": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     }
     af = ActuarialFrame(data)
-    
+
     # Test 25th percentile (with nearest interpolation)
     q25 = af.quantile(0.25)
     assert q25["values"] == 3.0
     assert q25["scores"] == 30.0
-    
+
     # Test 75th percentile (with nearest interpolation)
     q75 = af.quantile(0.75)
     assert q75["values"] == 8.0
     assert q75["scores"] == 80.0
-    
+
     # Test median (50th percentile with nearest interpolation)
     q50 = af.quantile(0.5)
     assert q50["values"] == 6.0  # With nearest, it picks the higher value for even count

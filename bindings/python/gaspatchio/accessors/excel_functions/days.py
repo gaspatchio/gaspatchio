@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
+
 from gaspatchio.functions.utils import to_polars_expression
 
 if TYPE_CHECKING:
@@ -125,14 +126,15 @@ def days(
     │ P002      ┆ [2024-01-15, 2024-02-15, 2024-03-15] ┆ 2024-01-01 ┆ [14, 45, 74]    │
     └───────────┴──────────────────────────────────────┴────────────┴─────────────────┘
     ```
+
     """
     end_date_expr = to_polars_expression(end_date)
     start_date_expr = to_polars_expression(start_date)
-    
+
     # Simple scalar date handling
     # Cast to Date to ensure we're working with dates, not datetimes
     end_date_expr = end_date_expr.cast(pl.Date, strict=False)
     start_date_expr = start_date_expr.cast(pl.Date, strict=False)
-    
+
     # Return the difference in days
     return (end_date_expr - start_date_expr).dt.total_days()

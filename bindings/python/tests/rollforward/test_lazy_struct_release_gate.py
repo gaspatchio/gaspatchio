@@ -135,7 +135,7 @@ class TestOneKernelCallByConstruction:
         af.av_eop = compiled.expr_for("av")
         af.av_post_coi = compiled.expr_for("av", point="post_coi")
 
-        plan = af._df.explain()  # noqa: SLF001
+        plan = af._df.explain()
         plugin_count = plan.lower().count("rollforward([")
         assert plugin_count == 1, (
             f"Expected 1 plugin call; got {plugin_count}\nPlan:\n{plan}"

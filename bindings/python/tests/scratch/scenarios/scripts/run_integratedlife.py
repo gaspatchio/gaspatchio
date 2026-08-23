@@ -31,22 +31,22 @@ def get_memory_usage():
     """
     current, peak = tracemalloc.get_traced_memory()
     result = {
-        'tracemalloc_current': current,
-        'tracemalloc_peak': peak,
+        "tracemalloc_current": current,
+        "tracemalloc_peak": peak,
     }
 
     if HAS_PSUTIL:
         process = psutil.Process()
         mem_info = process.memory_info()
-        result['process_rss'] = mem_info.rss  # Resident Set Size
-        result['process_vms'] = mem_info.vms  # Virtual Memory Size
+        result["process_rss"] = mem_info.rss  # Resident Set Size
+        result["process_vms"] = mem_info.vms  # Virtual Memory Size
 
     return result
 
 
 def format_memory(bytes_val):
     """Format bytes as human-readable memory string."""
-    for unit in ['B', 'KB', 'MB', 'GB']:
+    for unit in ["B", "KB", "MB", "GB"]:
         if bytes_val < 1024:
             return f"{bytes_val:.1f} {unit}"
         bytes_val /= 1024
@@ -62,16 +62,17 @@ def parse_ids(spec_string):
 
     Returns:
         "all" or list of integers
+
     """
     if spec_string.lower() == "all":
         return "all"
 
     ids = []
     try:
-        for part in spec_string.split(','):
+        for part in spec_string.split(","):
             part = part.strip()
-            if '-' in part:
-                start, end = map(int, part.split('-'))
+            if "-" in part:
+                start, end = map(int, part.split("-"))
                 ids.extend(range(start, end + 1))
             else:
                 ids.append(int(part))
@@ -89,6 +90,7 @@ def parse_file(filepath):
 
     Returns:
         List of integers
+
     """
     if not Path(filepath).exists():
         raise FileNotFoundError(f"File not found: {filepath}")
@@ -97,7 +99,7 @@ def parse_file(filepath):
     with open(filepath) as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
-            if line and not line.startswith('#'):
+            if line and not line.startswith("#"):
                 try:
                     ids.append(int(line))
                 except ValueError:
@@ -117,6 +119,7 @@ def filter_results(results_dict, model_points, scenarios, verbose=False):
 
     Returns:
         Dictionary of filtered DataFrames
+
     """
     if model_points == "all" and scenarios == "all":
         return results_dict
@@ -130,21 +133,21 @@ def filter_results(results_dict, model_points, scenarios, verbose=False):
         # We'll try to filter by index first, then columns
         try:
             if model_points != "all":
-                if 'point_id' in df.index.names:
-                    df = df.loc[df.index.get_level_values('point_id').isin(model_points)]
-                elif 'point_id' in df.columns:
-                    df = df[df['point_id'].isin(model_points)]
+                if "point_id" in df.index.names:
+                    df = df.loc[df.index.get_level_values("point_id").isin(model_points)]
+                elif "point_id" in df.columns:
+                    df = df[df["point_id"].isin(model_points)]
 
             if scenarios != "all":
                 # Check for both 'scen' and 'scen_id' as the name might vary
-                if 'scen' in df.index.names:
-                    df = df.loc[df.index.get_level_values('scen').isin(scenarios)]
-                elif 'scen_id' in df.index.names:
-                    df = df.loc[df.index.get_level_values('scen_id').isin(scenarios)]
-                elif 'scen' in df.columns:
-                    df = df[df['scen'].isin(scenarios)]
-                elif 'scen_id' in df.columns:
-                    df = df[df['scen_id'].isin(scenarios)]
+                if "scen" in df.index.names:
+                    df = df.loc[df.index.get_level_values("scen").isin(scenarios)]
+                elif "scen_id" in df.index.names:
+                    df = df.loc[df.index.get_level_values("scen_id").isin(scenarios)]
+                elif "scen" in df.columns:
+                    df = df[df["scen"].isin(scenarios)]
+                elif "scen_id" in df.columns:
+                    df = df[df["scen_id"].isin(scenarios)]
         except Exception as e:
             if verbose:
                 print(f"    Warning: Could not filter {name}: {e}")
@@ -166,6 +169,7 @@ def save_results(results_dict, output_dir, format_type, verbose=False):
 
     Returns:
         List of (filename, size_bytes) tuples
+
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -192,7 +196,7 @@ def save_results(results_dict, output_dir, format_type, verbose=False):
 
 def format_bytes(bytes_val):
     """Format bytes as human-readable string."""
-    for unit in ['B', 'KB', 'MB', 'GB']:
+    for unit in ["B", "KB", "MB", "GB"]:
         if bytes_val < 1024:
             return f"{bytes_val:.1f} {unit}"
         bytes_val /= 1024
@@ -203,12 +207,11 @@ def format_time(seconds):
     """Format seconds as human-readable string."""
     if seconds < 1:
         return f"{seconds*1000:.0f}ms"
-    elif seconds < 60:
+    if seconds < 60:
         return f"{seconds:.1f}s"
-    else:
-        mins = int(seconds / 60)
-        secs = seconds % 60
-        return f"{mins}m {secs:.1f}s"
+    mins = int(seconds / 60)
+    secs = seconds % 60
+    return f"{mins}m {secs:.1f}s"
 
 
 def main():
@@ -240,34 +243,34 @@ Examples:
         """
     )
 
-    parser.add_argument('--model-points', type=str, default='all',
+    parser.add_argument("--model-points", type=str, default="all",
                         help='Model points to run (e.g., "1-5,8,10" or "all")')
-    parser.add_argument('--model-points-file', type=str,
-                        help='File with model point IDs (one per line)')
-    parser.add_argument('--scenarios', type=str, default='all',
+    parser.add_argument("--model-points-file", type=str,
+                        help="File with model point IDs (one per line)")
+    parser.add_argument("--scenarios", type=str, default="all",
                         help='Scenarios to run (e.g., "1-100" or "all")')
-    parser.add_argument('--scenarios-file', type=str,
-                        help='File with scenario IDs (one per line)')
-    parser.add_argument('--products', type=str, default='gmxb,glwb',
+    parser.add_argument("--scenarios-file", type=str,
+                        help="File with scenario IDs (one per line)")
+    parser.add_argument("--products", type=str, default="gmxb,glwb",
                         help='Products to run: "gmxb", "glwb", or "gmxb,glwb" (default: gmxb,glwb)')
-    parser.add_argument('--format', type=str, default='csv', choices=['csv', 'parquet', 'both'],
-                        help='Output format (default: csv)')
-    parser.add_argument('--output-dir', type=str,
-                        help='Output directory (default: appliedlife/output/{timestamp})')
-    parser.add_argument('--verbose', action='store_true',
-                        help='Enable detailed progress reporting')
-    parser.add_argument('--num-scenarios', type=int, default=None,
-                        help='Number of stochastic scenarios to generate (default: 100). '
-                             'Use 1 for deterministic mode for comparison with Gaspatchio.')
-    parser.add_argument('--run-id', type=int, default=1,
-                        help='Run ID from run_params (default: 1). '
-                             'Use 2 for 8-point 2023Q4IF model points.')
+    parser.add_argument("--format", type=str, default="csv", choices=["csv", "parquet", "both"],
+                        help="Output format (default: csv)")
+    parser.add_argument("--output-dir", type=str,
+                        help="Output directory (default: appliedlife/output/{timestamp})")
+    parser.add_argument("--verbose", action="store_true",
+                        help="Enable detailed progress reporting")
+    parser.add_argument("--num-scenarios", type=int, default=None,
+                        help="Number of stochastic scenarios to generate (default: 100). "
+                             "Use 1 for deterministic mode for comparison with Gaspatchio.")
+    parser.add_argument("--run-id", type=int, default=1,
+                        help="Run ID from run_params (default: 1). "
+                             "Use 2 for 8-point 2023Q4IF model points.")
 
     args = parser.parse_args()
 
     # Parse products
-    products_to_run = [p.strip().lower() for p in args.products.split(',')]
-    valid_products = {'gmxb', 'glwb'}
+    products_to_run = [p.strip().lower() for p in args.products.split(",")]
+    valid_products = {"gmxb", "glwb"}
     invalid_products = set(products_to_run) - valid_products
     if invalid_products:
         print(f"Error: Invalid products {invalid_products}. Must be 'gmxb', 'glwb', or 'gmxb,glwb'", file=sys.stderr)
@@ -316,14 +319,14 @@ Examples:
         match = re.search(pattern, content)
         if match:
             original_scen_size_line = match.group(0)
-            new_content = re.sub(pattern, f'\\g<1>{args.num_scenarios}', content)
+            new_content = re.sub(pattern, f"\\g<1>{args.num_scenarios}", content)
             scenarios_file.write_text(new_content)
             if args.verbose:
                 print(f"Patched {scenarios_file.name}: scen_size() returns {args.num_scenarios}")
 
     # Start memory tracking
     tracemalloc.start()
-    memory_snapshots = {'start': get_memory_usage()}
+    memory_snapshots = {"start": get_memory_usage()}
 
     if args.verbose:
         print(f"Changed working directory to: {model_dir}")
@@ -351,8 +354,8 @@ Examples:
         print(f"Error loading model: {e}", file=sys.stderr)
         return 1
 
-    timings['model_load'] = time.time() - load_start
-    memory_snapshots['model_load'] = get_memory_usage()
+    timings["model_load"] = time.time() - load_start
+    memory_snapshots["model_load"] = get_memory_usage()
 
     if args.verbose:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Model loaded ({format_time(timings['model_load'])})")
@@ -366,18 +369,18 @@ Examples:
     results = {}
     calculations = []
 
-    if 'gmxb' in products_to_run:
+    if "gmxb" in products_to_run:
         calculations.extend([
-            ('gmxb_pv', 'GMXB present values', lambda: run.GMXB.result_pv()),
-            ('gmxb_cf', 'GMXB cashflows', lambda: run.GMXB.result_cf()),
-            ('gmxb_pols', 'GMXB policy counts', lambda: run.GMXB.result_pols()),
+            ("gmxb_pv", "GMXB present values", lambda: run.GMXB.result_pv()),
+            ("gmxb_cf", "GMXB cashflows", lambda: run.GMXB.result_cf()),
+            ("gmxb_pols", "GMXB policy counts", lambda: run.GMXB.result_pols()),
         ])
 
-    if 'glwb' in products_to_run:
+    if "glwb" in products_to_run:
         calculations.extend([
-            ('glwb_pv', 'GLWB present values', lambda: run.GLWB.result_pv()),
-            ('glwb_cf', 'GLWB cashflows', lambda: run.GLWB.result_cf()),
-            ('glwb_pols', 'GLWB policy counts', lambda: run.GLWB.result_pols()),
+            ("glwb_pv", "GLWB present values", lambda: run.GLWB.result_pv()),
+            ("glwb_cf", "GLWB cashflows", lambda: run.GLWB.result_cf()),
+            ("glwb_pols", "GLWB policy counts", lambda: run.GLWB.result_pols()),
         ])
 
     for calc_name, calc_desc, calc_func in calculations:
@@ -398,7 +401,7 @@ Examples:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] {calc_desc.capitalize()} complete ({format_time(timings[calc_name])})")
 
     # Capture final memory snapshot
-    memory_snapshots['final'] = get_memory_usage()
+    memory_snapshots["final"] = get_memory_usage()
 
     # Filter results
     if args.verbose and (model_points != "all" or scenarios != "all"):
@@ -406,31 +409,31 @@ Examples:
 
     filter_start = time.time()
     results = filter_results(results, model_points, scenarios, args.verbose)
-    timings['filtering'] = time.time() - filter_start
+    timings["filtering"] = time.time() - filter_start
 
     # Determine actual counts for metrics
     # Try to infer from first result DataFrame
     first_result = next(iter(results.values()))
     try:
         if model_points == "all":
-            if 'point_id' in first_result.index.names:
-                num_points = first_result.index.get_level_values('point_id').nunique()
-            elif 'point_id' in first_result.columns:
-                num_points = first_result['point_id'].nunique()
+            if "point_id" in first_result.index.names:
+                num_points = first_result.index.get_level_values("point_id").nunique()
+            elif "point_id" in first_result.columns:
+                num_points = first_result["point_id"].nunique()
             else:
                 num_points = "unknown"
         else:
             num_points = len(model_points)
 
         if scenarios == "all":
-            if 'scen' in first_result.index.names:
-                num_scenarios = first_result.index.get_level_values('scen').nunique()
-            elif 'scen_id' in first_result.index.names:
-                num_scenarios = first_result.index.get_level_values('scen_id').nunique()
-            elif 'scen' in first_result.columns:
-                num_scenarios = first_result['scen'].nunique()
-            elif 'scen_id' in first_result.columns:
-                num_scenarios = first_result['scen_id'].nunique()
+            if "scen" in first_result.index.names:
+                num_scenarios = first_result.index.get_level_values("scen").nunique()
+            elif "scen_id" in first_result.index.names:
+                num_scenarios = first_result.index.get_level_values("scen_id").nunique()
+            elif "scen" in first_result.columns:
+                num_scenarios = first_result["scen"].nunique()
+            elif "scen_id" in first_result.columns:
+                num_scenarios = first_result["scen_id"].nunique()
             else:
                 num_scenarios = "unknown"
         else:
@@ -445,11 +448,11 @@ Examples:
 
     save_start = time.time()
     saved_files = save_results(results, output_dir, args.format, args.verbose)
-    timings['saving'] = time.time() - save_start
+    timings["saving"] = time.time() - save_start
 
     # Calculate total execution time
     total_time = time.time() - start_time
-    calc_time = sum(t for k, t in timings.items() if k.startswith(('gmxb_', 'glwb_')))
+    calc_time = sum(t for k, t in timings.items() if k.startswith(("gmxb_", "glwb_")))
 
     # Generate run summary
     mode_str = "DETERMINISTIC" if args.num_scenarios == 1 else "STOCHASTIC"
@@ -478,11 +481,11 @@ Examples:
 
     # Add calculation timings with per-scenario metrics
     for calc_name in sorted(timings.keys()):
-        if not calc_name.startswith(('gmxb_', 'glwb_')):
+        if not calc_name.startswith(("gmxb_", "glwb_")):
             continue
 
         calc_time = timings[calc_name]
-        calc_label = calc_name.replace('_', ' ').upper()
+        calc_label = calc_name.replace("_", " ").upper()
 
         if isinstance(num_scenarios, int) and isinstance(num_points, int):
             per_scenario = calc_time / num_scenarios
@@ -494,7 +497,7 @@ Examples:
         else:
             summary_lines.append(f"{calc_label}: {format_time(calc_time)}")
 
-    if timings['filtering'] > 0.01:
+    if timings["filtering"] > 0.01:
         summary_lines.append(f"Filtering: {format_time(timings['filtering'])}")
 
     summary_lines.append(f"Saving: {format_time(timings['saving'])}")
@@ -512,7 +515,7 @@ Examples:
         ])
 
     # Add memory metrics
-    final_mem = memory_snapshots['final']
+    final_mem = memory_snapshots["final"]
     summary_lines.extend([
         "",
         "Memory Usage:",
@@ -528,10 +531,10 @@ Examples:
         ])
 
         # Add memory growth by stage
-        if 'model_load' in memory_snapshots:
-            start_rss = memory_snapshots['start'].get('process_rss', 0)
-            load_rss = memory_snapshots['model_load'].get('process_rss', 0)
-            final_rss = final_mem.get('process_rss', 0)
+        if "model_load" in memory_snapshots:
+            start_rss = memory_snapshots["start"].get("process_rss", 0)
+            load_rss = memory_snapshots["model_load"].get("process_rss", 0)
+            final_rss = final_mem.get("process_rss", 0)
 
             summary_lines.extend([
                 "",

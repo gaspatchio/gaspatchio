@@ -47,6 +47,7 @@ def validate_lifelib_output(output_dir: Path) -> tuple[bool, str]:
 
     Returns:
         (is_valid, message) tuple
+
     """
     summary_path = output_dir / "run_summary.txt"
     if not summary_path.exists():
@@ -84,6 +85,7 @@ def find_valid_lifelib_output(output_base: Path) -> Path | None:
 
     Returns:
         Path to valid output directory, or None if not found
+
     """
     if not output_base.exists():
         return None
@@ -109,6 +111,7 @@ def run_gaspatchio_model() -> pl.DataFrame:
     is controlled by constants in model_applied.py.
     """
     from appliedlife.model_applied import main
+
     from gaspatchio import ActuarialFrame
 
     mp_path = script_dir.parent / "model_points.parquet"
@@ -293,7 +296,7 @@ def compare_metrics(gaspatchio: dict, lifelib: dict) -> list[dict]:
             if life_val != 0:
                 pct_diff = (gasp_val - life_val) / life_val * 100
             else:
-                pct_diff = float('inf') if gasp_val != 0 else 0
+                pct_diff = float("inf") if gasp_val != 0 else 0
 
             comparisons.append({
                 "metric": label,
@@ -320,10 +323,9 @@ def format_number(val):
         return "N/A"
     if abs(val) >= 1_000_000:
         return f"{val:,.0f}"
-    elif abs(val) >= 1:
+    if abs(val) >= 1:
         return f"{val:,.2f}"
-    else:
-        return f"{val:.6f}"
+    return f"{val:.6f}"
 
 
 def print_comparison_report(comparisons: list[dict], gaspatchio_df: pl.DataFrame):
@@ -434,7 +436,7 @@ def main():
     print("=" * 60)
     print("LIKE-FOR-LIKE MODEL COMPARISON")
     print("=" * 60)
-    print(f"Expected configuration:")
+    print("Expected configuration:")
     print(f"  - Run ID:       {LIFELIB_RUN_ID} (2023Q4IF in-force)")
     print(f"  - Model Points: {EXPECTED_MODEL_POINTS}")
     print(f"  - Scenarios:    {EXPECTED_SCENARIOS} (deterministic)")
@@ -460,7 +462,7 @@ def main():
         is_valid, msg = validate_lifelib_output(lifelib_dir)
         if not is_valid:
             print(f"Error: {msg}")
-            print(f"\nTo generate matching lifelib output, run:")
+            print("\nTo generate matching lifelib output, run:")
             print(f"  uv run python appliedlife/scripts/run_integratedlife.py "
                   f"--run-id {LIFELIB_RUN_ID} --num-scenarios 1 --products gmxb --verbose")
             return 1
@@ -482,7 +484,7 @@ def main():
             print(f"  - Model Points: {EXPECTED_MODEL_POINTS}")
             print(f"  - Scenarios: {EXPECTED_SCENARIOS}")
             print(f"  - Product: {EXPECTED_PRODUCT}")
-            print(f"\nRun lifelib first with matching settings:")
+            print("\nRun lifelib first with matching settings:")
             print(f"  uv run python appliedlife/scripts/run_integratedlife.py "
                   f"--run-id {LIFELIB_RUN_ID} --num-scenarios 1 --products gmxb --verbose")
             return 1

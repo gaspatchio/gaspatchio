@@ -3,16 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """ABOUTME: Tests for yearfrac Python-Rust interface - type marshalling and parameter validation.
-ABOUTME: Does not test Excel calculation logic which is handled by Rust tests."""
+ABOUTME: Does not test Excel calculation logic which is handled by Rust tests.
+"""
 
 import datetime
-from typing import Any
 
 import polars as pl
 import pytest
 
 from gaspatchio import ActuarialFrame
-from gaspatchio.accessors.excel_functions.yearfrac import BasisType, yearfrac
+from gaspatchio.accessors.excel_functions.yearfrac import yearfrac
 
 
 class TestYearfracInterface:
@@ -46,7 +46,7 @@ class TestYearfracInterface:
             datetime.date(2021, 7, 1),
             datetime.date(2022, 7, 1),
         ]
-        
+
         af = ActuarialFrame({"start": start_dates, "end": end_dates})
 
         # Test that vector operations work
@@ -54,7 +54,7 @@ class TestYearfracInterface:
             af["start"].excel.yearfrac(af["end"], basis="act/act").alias("year_frac")
         )
         results = res_af.collect()["year_frac"]
-        
+
         # Should have same length as input
         assert len(results) == len(start_dates)
         # All results should be floats
@@ -81,7 +81,7 @@ class TestYearfracInterface:
             af["start"].excel.yearfrac(af["end"], basis="act/act").alias("year_frac")
         )
         results = res_af.collect()["year_frac"]
-        
+
         # First result should be a float, others should be null
         assert isinstance(results[0], float)
         assert results[1] is None
@@ -102,7 +102,7 @@ class TestYearfracInterface:
         ).with_columns(
             (pl.col("year_frac") * 12).alias("months")  # Should be able to use result in further ops
         )
-        
+
         result = res_af.collect()
         assert "year_frac" in result.columns
         assert "months" in result.columns
@@ -118,9 +118,9 @@ class TestYearfracInterface:
             pl.col("start_str").str.to_date().alias("start_date"),
             pl.col("end_str").str.to_date().alias("end_date")
         ])
-        
+
         af = ActuarialFrame(df)
-        
+
         res_af = af.with_columns(
             af["start_date"].excel.yearfrac(af["end_date"]).alias("year_frac")
         )
@@ -134,7 +134,7 @@ class TestYearfracInterface:
             "start": [datetime.datetime(2020, 1, 1, 10, 30)],
             "end": [datetime.datetime(2020, 7, 1, 15, 45)]
         })
-        
+
         # Should work - datetime should be cast to date
         res_af = af.with_columns(
             af["start"].excel.yearfrac(af["end"]).alias("year_frac")
@@ -149,12 +149,12 @@ class TestYearfracInterface:
             "start_dates": [[datetime.date(2020, 1, 1), datetime.date(2020, 6, 1)]],
             "end_dates": [[datetime.date(2021, 1, 1), datetime.date(2021, 6, 1)]]
         })
-        
+
         res_af = af.with_columns(
             af["start_dates"].excel.yearfrac(af["end_dates"], basis="act/act").alias("year_fracs")
         )
         result = res_af.collect()["year_fracs"]
-        
+
         # Should return list of floats
         assert result.dtype == pl.List(pl.Float64)
         values = result[0]
@@ -324,7 +324,7 @@ class TestEdgeCasesAndErrorHandling:
             af["start_list"].excel.yearfrac(datetime.date(2021, 1, 1)).alias("year_frac")
         )
         result = res_af.collect()["year_frac"]
-        
+
         # Should return a list of float values
         assert result.dtype == pl.List(pl.Float64)
         values = result[0]
@@ -338,7 +338,7 @@ class TestEdgeCasesAndErrorHandling:
             "not_a_date": ["2020-01-01"],  # String, not converted
             "number": [42],
         })
-        
+
         # String column should fail
         with pytest.raises(Exception):  # Rust will handle the actual error
             res_af = af.with_columns(
@@ -352,7 +352,7 @@ class TestEdgeCasesAndErrorHandling:
             "start": [datetime.date(2020, 7, 1)],
             "end": [datetime.date(2020, 1, 1)]
         })
-        
+
         # Should work and return negative value
         res_af = af.with_columns(
             af["start"].excel.yearfrac(af["end"]).alias("year_frac")
@@ -367,7 +367,7 @@ class TestEdgeCasesAndErrorHandling:
             "start": [datetime.date(2020, 1, 1)],
             "end": [datetime.date(2020, 1, 1)]
         })
-        
+
         res_af = af.with_columns(
             af["start"].excel.yearfrac(af["end"]).alias("year_frac")
         )
@@ -384,16 +384,16 @@ class TestDirectFunctionAPI:
         # Create expressions
         start_expr = pl.col("start")
         end_expr = pl.col("end")
-        
+
         # Call yearfrac directly
         result_expr = yearfrac(start_expr, end_expr, basis=1)
-        
+
         # Use in a DataFrame context
         df = pl.DataFrame({
             "start": [datetime.date(2020, 1, 1)],
             "end": [datetime.date(2020, 7, 1)]
         })
-        
+
         result = df.select(result_expr.alias("year_frac"))["year_frac"][0]
         assert isinstance(result, float)
 
@@ -402,12 +402,12 @@ class TestDirectFunctionAPI:
         # This tests the low-level API
         start_expr = pl.col("start")
         end_literal = pl.lit(datetime.date(2020, 7, 1))
-        
+
         result_expr = yearfrac(start_expr, end_literal, basis="act/act")
-        
+
         df = pl.DataFrame({
             "start": [datetime.date(2020, 1, 1)]
         })
-        
+
         result = df.select(result_expr.alias("year_frac"))["year_frac"][0]
         assert isinstance(result, float)

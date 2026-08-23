@@ -10,7 +10,7 @@ from typing import TypeVar
 T = TypeVar("T")
 
 _ACCESSOR_REGISTRY: dict[str, dict[str, type]]
-"""Global registry mapping accessor name to ``{kind: accessor_class}``."""  # noqa: D400
+"""Global registry mapping accessor name to ``{kind: accessor_class}``."""
 
 def register_accessor(name: str, *, kind: str = ...) -> Callable[[type[T]], type[T]]:
     """
@@ -28,8 +28,8 @@ def register_accessor(name: str, *, kind: str = ...) -> Callable[[type[T]], type
         ValueError: If the kind is not 'frame' or 'column'.
         ValueError: If a different class is already registered under the same name and kind.
         TypeError: If the decorated class does not inherit from the expected base class.
+
     """
-    ...
 
 def get_accessor(name: str, kind: str) -> type | None:
     """
@@ -41,8 +41,8 @@ def get_accessor(name: str, kind: str) -> type | None:
 
     Returns:
         The registered class, or None if not found.
+
     """
-    ...
 
 def list_registered_accessors() -> dict[str, dict[str, type]]:
     """
@@ -54,5 +54,5 @@ def list_registered_accessors() -> dict[str, dict[str, type]]:
 
     Returns:
         Shallow copy of the registry mapping ``{name: {kind: accessor_class}}``.
+
     """
-    ...

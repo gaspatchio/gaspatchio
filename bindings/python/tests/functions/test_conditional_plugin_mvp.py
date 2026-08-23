@@ -4,7 +4,6 @@
 
 # ABOUTME: MVP test for list_conditional plugin integration with when/then/otherwise
 # ABOUTME: Tests simplest case: when(af.month == af.term).then(1.0).otherwise(0.0)
-# ruff: noqa: S101
 # type: ignore[call-non-callable]
 """MVP test for list_conditional plugin integration.
 

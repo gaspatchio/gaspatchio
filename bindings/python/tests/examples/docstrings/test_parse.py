@@ -7,6 +7,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
+
 from gaspatchio.examples.docstrings.parse import GaspatchioDocstringParser
 
 
@@ -151,6 +152,7 @@ def temp_sample_module(tmp_path: Path, sample_module_content: str) -> Path:
     #     results = parser.process_file(temp_sample_module)
     #     assert len(results) > 0
     ```
+
     """
     sample_file = tmp_path / "sample_module.py"
     sample_file.write_text(sample_module_content)
@@ -945,6 +947,7 @@ def test_process_fileloggingence(
     # # assert "bad_func" not in [r.object_path for r in results] # if skipped
     # # assert "error processing bad_func" in caplog.text
     ```
+
     """
     caplog.set_level(logging.ERROR)  # Capture ERROR level logs from our logger
 

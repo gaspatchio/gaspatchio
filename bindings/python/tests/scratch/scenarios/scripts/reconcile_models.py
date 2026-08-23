@@ -46,6 +46,7 @@ TOLERANCE_PCT = 0.01  # 0.01% = essentially exact match
 @dataclass
 class VariableMapping:
     """Maps a Gaspatchio variable to its lifelib equivalent."""
+
     gaspatchio_name: str
     lifelib_name: str
     lifelib_file: str  # 'pols', 'cf', or 'pv'
@@ -82,6 +83,7 @@ VARIABLE_MAPPINGS = [
 @dataclass
 class ReconciliationResult:
     """Result of comparing a single variable."""
+
     variable: str
     description: str
     status: str  # 'MATCH', 'MISMATCH', 'GASPATCHIO_MISSING', 'LIFELIB_MISSING'
@@ -139,6 +141,7 @@ def run_gaspatchio_model(model_name: str = "model_applied_life") -> pl.DataFrame
 
     Args:
         model_name: Name of the model module (without .py), e.g., 'model_applied_life'
+
     """
     try:
         import importlib
@@ -243,8 +246,7 @@ def get_gaspatchio_pv_by_point(df: pl.DataFrame, column: str) -> pl.Series | Non
         if isinstance(col.dtype, pl.List):
             # Sum each list to get total per point
             return df.select(pl.col(column).list.sum())[column]
-        else:
-            return col
+        return col
     except Exception as e:
         print(f"  Warning: Could not get PV for {column}: {e}")
         return None
@@ -256,7 +258,6 @@ def compare_time_series(
     variable_name: str
 ) -> ReconciliationResult:
     """Compare two time series and return reconciliation result."""
-
     # Align lengths (use shorter length)
     min_len = min(len(gaspatchio_series), len(lifelib_series))
     g_vals = gaspatchio_series[:min_len].to_list()
@@ -314,7 +315,6 @@ def compare_totals_by_point(
     variable_name: str
 ) -> ReconciliationResult:
     """Compare PV totals by model point."""
-
     g_vals = gaspatchio_series.to_list()
     l_vals = lifelib_series.to_list()
 
@@ -369,7 +369,6 @@ def reconcile_variable(
     lifelib_data: dict
 ) -> ReconciliationResult:
     """Reconcile a single variable between Gaspatchio and lifelib."""
-
     # Check if Gaspatchio has this variable
     if gaspatchio_df is None or mapping.gaspatchio_name not in gaspatchio_df.columns:
         return ReconciliationResult(
@@ -444,7 +443,6 @@ def reconcile_variable(
 
 def print_reconciliation_report(results: list[ReconciliationResult], gaspatchio_df: pl.DataFrame | None):
     """Print a formatted reconciliation report."""
-
     print("\n" + "=" * 90)
     print("VARIABLE-BY-VARIABLE RECONCILIATION REPORT")
     print("=" * 90)
@@ -557,7 +555,7 @@ def main():
     print("VARIABLE-BY-VARIABLE RECONCILIATION")
     print("=" * 60)
     print(f"Gaspatchio model: {args.model}")
-    print(f"Expected configuration:")
+    print("Expected configuration:")
     print(f"  - Run ID:       {LIFELIB_RUN_ID} (2023Q4IF in-force)")
     print(f"  - Model Points: {EXPECTED_MODEL_POINTS}")
     print(f"  - Scenarios:    {EXPECTED_SCENARIOS} (deterministic)")

@@ -4,7 +4,7 @@
 
 # ABOUTME: Tests for .over(by) partitioning semantics on v0.2 aggregators.
 # ABOUTME: Covers tuple normalisation, multi-key partitions, batch-equivalence, errors.
-# ruff: noqa: PD901, ERA001
+# ruff: noqa: ERA001
 """Partitioned-aggregator semantics for for_each_scenario."""
 
 from __future__ import annotations

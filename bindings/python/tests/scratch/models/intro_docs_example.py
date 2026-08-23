@@ -13,6 +13,7 @@ Run with: python -m tests.scratch.models.intro_docs_example
 """
 
 import polars as pl
+
 from gaspatchio import ActuarialFrame
 
 # Configure Polars for better display
@@ -23,7 +24,6 @@ pl.Config.set_tbl_rows(20)
 
 def intro_example():
     """Actuarial example: Calculate present value and IRR for policy cash flows."""
-
     # Portfolio of 3 policies with monthly cash flows over 5 years (60 months)
     # Premiums are received monthly, claims are sporadic
     policies = ActuarialFrame(

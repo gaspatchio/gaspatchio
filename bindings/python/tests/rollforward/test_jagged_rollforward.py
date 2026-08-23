@@ -149,7 +149,8 @@ class TestPerPolicyProjectionRollforward:
     def test_no_input_rollforward_uses_per_policy_horizon(self) -> None:
         """A rollforward with no per-period input list still projects each
         policy's own horizon (the kernel reads the schedule-supplied length),
-        not the portfolio maximum."""
+        not the portfolio maximum.
+        """
         af = ActuarialFrame({"init": [100.0, 100.0], "term_months": [2, 4]})
         af = af.projection.set(
             valuation_date=date(2025, 1, 31),
@@ -166,7 +167,8 @@ class TestPerPolicyProjectionRollforward:
     def test_null_term_rollforward_emits_empty(self) -> None:
         """A null term_months policy projects an empty list end-to-end — the
         num_proj_months feeder must stamp 0 (not null), else the kernel rejects
-        the resulting null input list."""
+        the resulting null input list.
+        """
         af = ActuarialFrame({"init": [100.0, 100.0], "term_months": [None, 3]})
         af = af.projection.set(
             valuation_date=date(2025, 1, 31),
@@ -186,7 +188,8 @@ class TestPerPolicyProjectionRollforward:
 
     def test_multistate_jagged_rollforward(self) -> None:
         """Two states with different ops project correct variable-length output
-        per policy — exercises the per-row stride across multiple states."""
+        per policy — exercises the per-row stride across multiple states.
+        """
         af = ActuarialFrame(
             {"av0": [100.0, 100.0], "res0": [50.0, 50.0], "term_months": [2, 3]}
         )

@@ -291,7 +291,7 @@ class DateColumnAccessor(BaseColumnAccessor):
         """
         super().__init__(proxy)
         # Refine type hint now that we expect specific proxy types
-        self._proxy: "ColumnProxy | ExpressionProxy" = proxy
+        self._proxy: ColumnProxy | ExpressionProxy = proxy
 
     def to_period(self, freq: str = "M") -> "ExpressionProxy":
         """Converts a date/datetime column to a period representation (e.g., year-month).

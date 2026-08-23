@@ -5,10 +5,11 @@
 import sys
 from pathlib import Path
 
-import gaspatchio as gs
 import polars as pl
-from gaspatchio import ActuarialFrame
 from loguru import logger
+
+import gaspatchio as gs
+from gaspatchio import ActuarialFrame
 
 # Add the current directory to the path so we can import setup.py
 current_dir = Path(__file__).parent
@@ -153,6 +154,7 @@ def probability_in_force(
 
     Returns:
         The ActuarialFrame with the 'P[IF]' column added.
+
     """
     af["P[IF]"] = pl.col(monthly_persist_prob_col).list.eval(
         # Calculate cumulative product, shift down for start-of-period, fill first with 1.0
@@ -179,6 +181,7 @@ def probability_of_death(
 
     Returns:
         The ActuarialFrame with the 'P[death]' column added.
+
     """
     p_if_expr = pl.col(p_if_col)
     mort_rate_expr = pl.col(annual_mortality_rate_col)
@@ -213,6 +216,7 @@ def probability_of_lapse(
 
     Returns:
         The ActuarialFrame with the 'P[lapse]' column added.
+
     """
     p_if_expr = pl.col(p_if_col)
     mort_rate_expr = pl.col(annual_mortality_rate_col)
@@ -241,6 +245,7 @@ def discount_rate(af: ActuarialFrame, interest_rate: float) -> ActuarialFrame:
 
     Returns:
         The ActuarialFrame with the 'discount_rate' column added.
+
     """
     logger.info("Calculating discount rate")
     monthly_interest_rate = interest_rate / 12.0

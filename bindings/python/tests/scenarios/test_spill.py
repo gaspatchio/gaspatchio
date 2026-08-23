@@ -119,7 +119,7 @@ def test_run_to_parquet_top_level_export():
 
 
 def test_run_to_parquet_auto_batches_to_budget(tmp_path, monkeypatch):
-    """auto path: the shared sizer's B drives the number of batch files."""
+    """Auto path: the shared sizer's B drives the number of batch files."""
     import gaspatchio.scenarios._spill as spill
 
     mp = pl.DataFrame({"value": [float(i) for i in range(1, 11)]})  # 10 policies

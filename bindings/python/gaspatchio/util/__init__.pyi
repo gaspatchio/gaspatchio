@@ -14,46 +14,38 @@ import polars as pl
 
 def get_default_mode() -> str:
     """Get the default execution mode ('debug' or 'optimize')."""
-    ...
 
 def set_default_mode(mode: str) -> None:
     """Set the default execution mode ('debug' or 'optimize').
 
     Raises:
         ValueError: If mode is not 'debug' or 'optimize'.
+
     """
-    ...
 
 def get_default_verbose() -> bool:
     """Get the default verbosity setting."""
-    ...
 
 def set_default_verbose(verbose: bool) -> None:
     """Set the default verbosity setting."""
-    ...
 
 def get_default_threads() -> int:
     """Get the default number of threads Polars should use (0 = auto)."""
-    ...
 
 def get_error_mode() -> str:
     """Get the error handling mode ('enhanced' (default), 'basic', 'debug', or 'off')."""
-    ...
 
 def set_error_mode(mode: str) -> None:
     """Set the error handling mode ('enhanced', 'basic', 'debug', or 'off')."""
-    ...
 
 def execution_mode(mode: str) -> _GeneratorContextManager[None]:
     """Context manager for temporarily changing the execution mode."""
-    ...
 
 def _expr_to_str(expr: pl.Expr | str) -> str:
     """Convert a Polars expression or literal to a string representation.
 
     Note: This is intended for internal use.
     """
-    ...
 
 # Added from utils.py
 def read_model_points(path: Path | str) -> pl.LazyFrame: ...

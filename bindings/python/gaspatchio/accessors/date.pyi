@@ -16,29 +16,29 @@ if TYPE_CHECKING:
     from ..typing import IntoExprColumn
 
 class DateFrameAccessor(BaseFrameAccessor):
-    def __init__(self, frame: "ActuarialFrame") -> None: ...
+    def __init__(self, frame: ActuarialFrame) -> None: ...
     def create_timeline(
         self,
-        start_col: "IntoExprColumn",
-        end_col: "IntoExprColumn",
+        start_col: IntoExprColumn,
+        end_col: IntoExprColumn,
         freq: str = ...,  # Ellipsis for default
         new_col_name: str = ...,  # Ellipsis for default
         closed: str = ...,  # Ellipsis for default
-    ) -> "ActuarialFrame": ...
+    ) -> ActuarialFrame: ...
     def add_duration(
         self,
-        date_col: "IntoExprColumn",
+        date_col: IntoExprColumn,
         duration_str: str,
         new_col_name: str | None = ...,  # Ellipsis for default
-    ) -> "ActuarialFrame": ...
+    ) -> ActuarialFrame: ...
 
 class DateColumnAccessor(BaseColumnAccessor):
-    _proxy: "ColumnProxy | ExpressionProxy"
+    _proxy: ColumnProxy | ExpressionProxy
 
-    def __init__(self, proxy: "ColumnProxy | ExpressionProxy") -> None: ...
+    def __init__(self, proxy: ColumnProxy | ExpressionProxy) -> None: ...
     def months_between(
         self,
-        other: "ColumnProxy | ExpressionProxy | datetime.date",
-    ) -> "ExpressionProxy": ...
-    def to_period(self, freq: str = ...) -> "ExpressionProxy":  # Ellipsis for default
+        other: ColumnProxy | ExpressionProxy | datetime.date,
+    ) -> ExpressionProxy: ...
+    def to_period(self, freq: str = ...) -> ExpressionProxy:  # Ellipsis for default
         ...

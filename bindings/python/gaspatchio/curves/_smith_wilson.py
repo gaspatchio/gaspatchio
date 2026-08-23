@@ -22,6 +22,7 @@ def sw_heart(u: np.ndarray, v: np.ndarray, alpha: float) -> np.ndarray:
 
     Returns:
         Matrix of shape ``(m, n)`` with ``H(u_i, v_j)`` entries.
+
     """
     u = u[:, None]
     v = v[None, :]
@@ -50,6 +51,7 @@ def solve_zeta(u: np.ndarray, r: np.ndarray, ufr: float, alpha: float) -> np.nda
     Returns:
         Weight vector ``zeta`` of shape ``(n,)`` to pass to :func:`sw_price` /
         :func:`sw_spot`.
+
     """
     omega = np.log(1.0 + ufr)
     mu = np.exp(-omega * u)
@@ -78,6 +80,7 @@ def sw_price(
 
     Returns:
         Zero-coupon prices at ``t``, shape ``(k,)``.
+
     """
     t = np.atleast_1d(np.asarray(t, dtype=float))
     h = sw_heart(t, u, alpha)
@@ -186,6 +189,7 @@ def sw_spot(t: float, u: np.ndarray, zeta: np.ndarray, omega: float, alpha: floa
     Returns:
         Annually-compounded spot rate at ``t``, or ``nan`` when ``t`` is
         non-finite or ``t <= 0``.
+
     """
     if not math.isfinite(t) or t <= 0.0:
         return math.nan

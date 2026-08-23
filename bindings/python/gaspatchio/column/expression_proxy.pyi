@@ -4,9 +4,7 @@
 
 """Type stubs for expression_proxy.py."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 
@@ -29,12 +27,12 @@ class ExpressionProxy(_BaseProxy):
 
     # Keep specific attributes
     _expr: pl.Expr
-    _parent: Optional[ActuarialFrame]
-    _date_accessor_instance_expr: Optional[DateColumnAccessor]
-    _finance_accessor_instance_expr: Optional[FinanceColumnAccessor]
-    _projection_accessor_instance_expr: Optional[ProjectionColumnAccessor]
-    _dynamic_accessor_cache: Dict[str, Any]
-    _kind_explicit: Optional[str]
+    _parent: ActuarialFrame | None
+    _date_accessor_instance_expr: DateColumnAccessor | None
+    _finance_accessor_instance_expr: FinanceColumnAccessor | None
+    _projection_accessor_instance_expr: ProjectionColumnAccessor | None
+    _dynamic_accessor_cache: dict[str, Any]
+    _kind_explicit: str | None
     _shape_cached: Any
     _kind_cached: Any
 
@@ -42,12 +40,11 @@ class ExpressionProxy(_BaseProxy):
     def __init__(
         self,
         expr: pl.Expr,
-        parent: Optional[ActuarialFrame],
+        parent: ActuarialFrame | None,
         *,
-        kind: Optional[str] = ...,
+        kind: str | None = ...,
     ) -> None: ...
     def _to_expr(self) -> pl.Expr: ...
-    def __repr__(self) -> str: ...
 
     # Keep specific properties
     @property
@@ -55,11 +52,11 @@ class ExpressionProxy(_BaseProxy):
     @property
     def kind(self) -> Literal["value", "comparison", "boolean_mask", "unknown"]: ...
     @property
-    def date(self) -> "DateColumnAccessor": ...
+    def date(self) -> DateColumnAccessor: ...
     @property
-    def finance(self) -> "FinanceColumnAccessor": ...
+    def finance(self) -> FinanceColumnAccessor: ...
     @property
-    def projection(self) -> "ProjectionColumnAccessor": ...
+    def projection(self) -> ProjectionColumnAccessor: ...
 
     # REMOVED: Operator Overloads (inherited)
     # REMOVED: Common Autopatched Methods/Namespaces (inherited)

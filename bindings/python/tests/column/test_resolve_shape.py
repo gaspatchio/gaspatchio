@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 class TestMaxShape:
     def test_two_scalars_is_scalar(self) -> None:

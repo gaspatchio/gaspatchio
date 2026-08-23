@@ -4,9 +4,8 @@
 
 """Type stubs for column_proxy.py."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Literal, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import polars as pl
 from polars.type_aliases import PolarsDataType
@@ -31,35 +30,34 @@ class ColumnProxy(_BaseProxy):
 
     # Keep specific attributes
     name: str
-    _parent: Optional[ActuarialFrame]
-    _date_accessor_instance_col: Optional[DateColumnAccessor]
-    _excel_accessor_instance_col: Optional[ExcelColumnAccessor]
-    _finance_accessor_instance_col: Optional[FinanceColumnAccessor]
-    _projection_accessor_instance_col: Optional[ProjectionColumnAccessor]
-    _dynamic_accessor_cache: Dict[str, Any]
+    _parent: ActuarialFrame | None
+    _date_accessor_instance_col: DateColumnAccessor | None
+    _excel_accessor_instance_col: ExcelColumnAccessor | None
+    _finance_accessor_instance_col: FinanceColumnAccessor | None
+    _projection_accessor_instance_col: ProjectionColumnAccessor | None
+    _dynamic_accessor_cache: dict[str, Any]
     _shape_cached: Any
 
     kind: ClassVar[Literal["value"]]
 
     # Keep specific methods
-    def __init__(self, name: str, parent: Optional[ActuarialFrame]) -> None: ...
+    def __init__(self, name: str, parent: ActuarialFrame | None) -> None: ...
     def _to_expr(self) -> pl.Expr: ...
-    def __repr__(self) -> str: ...
     def apply(
         self, func: Callable, return_dtype: PolarsDataType | None = None
-    ) -> "ExpressionProxy": ...
+    ) -> ExpressionProxy: ...
 
     # Keep specific properties
     @property
     def shape(self) -> Literal["scalar", "list", "unknown"]: ...
     @property
-    def date(self) -> "DateColumnAccessor": ...
+    def date(self) -> DateColumnAccessor: ...
     @property
-    def finance(self) -> "FinanceColumnAccessor": ...
+    def finance(self) -> FinanceColumnAccessor: ...
     @property
-    def excel(self) -> "ExcelColumnAccessor": ...
+    def excel(self) -> ExcelColumnAccessor: ...
     @property
-    def projection(self) -> "ProjectionColumnAccessor": ...
+    def projection(self) -> ProjectionColumnAccessor: ...
 
     # REMOVED: Operator Overloads (inherited)
     # REMOVED: Common Autopatched Methods/Namespaces (inherited)

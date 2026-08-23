@@ -6,9 +6,9 @@ import importlib.util
 import inspect
 import sys
 from pathlib import Path
-from typing import List
 
 import pytest
+
 from gaspatchio.examples.docstrings.models import (
     DocstringCodeExample,
     GaspatchioDocstring,  # Added for completeness
@@ -209,7 +209,7 @@ def test_validate_structure_example_assignment_no_output(
 def test_iter_examples(
     valid_docstring: GaspatchioDocstring, basic_code_example: DocstringCodeExample
 ):
-    examples_list: List[DocstringCodeExample] = []
+    examples_list: list[DocstringCodeExample] = []
     for ex in valid_docstring.iter_examples():
         examples_list.append(ex)
 
@@ -459,7 +459,7 @@ def test_dt_proxy_month_docstring_lint():
         "No examples found in the parsed docstring"
     )
 
-    all_lint_issues: List[str] = []
+    all_lint_issues: list[str] = []
     for example in parsed_docstring.examples:
         issues = example.lint()
         if issues:

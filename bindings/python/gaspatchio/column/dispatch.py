@@ -33,21 +33,21 @@ from ._dispatch_execution import (
     capture_source_context,
 )
 from ._dispatch_namespaces import (
-    SPECIALIZED_NAMESPACES,
     _NAMESPACES,
+    SPECIALIZED_NAMESPACES,
     GenericNamespaceProxy,
 )
 
 __all__ = [
+    "SPECIALIZED_NAMESPACES",
     "_ARITHMETIC_OPS",
     "_BACKEND_LIST_OPS",
     "_NAMESPACES",
     "_NUMERIC_ELEMENTWISE",
     "_NUMERIC_UNARY",
+    "DelegatorDescriptor",
     "ErrorEnhancer",
     "GenericNamespaceProxy",
-    "SPECIALIZED_NAMESPACES",
-    "DelegatorDescriptor",
     "_autopatch",
     "_ensure_polars_expr_or_literal",
     "_execute_list_shim",

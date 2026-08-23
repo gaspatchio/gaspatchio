@@ -46,7 +46,7 @@ SPECIALIZED_NAMESPACES = {
 
 
 def get_generic_namespace_proxy(
-    proxy: "ProxyType",
+    proxy: ProxyType,
     namespace_name: str,
 ) -> GenericNamespaceProxy:
     """Build a generic namespace proxy for non-specialized namespaces."""
@@ -56,7 +56,7 @@ def get_generic_namespace_proxy(
 class GenericNamespaceProxy:
     """A generic proxy for Polars expression namespaces (list, arr, struct, etc.)."""
 
-    def __init__(self, parent_proxy: "ProxyType", namespace_name: str) -> None:
+    def __init__(self, parent_proxy: ProxyType, namespace_name: str) -> None:
         self._parent_proxy = parent_proxy
         self._namespace_name = namespace_name
         self._parent_af = getattr(parent_proxy, "_parent", None)

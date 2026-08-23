@@ -100,6 +100,7 @@ class ParametricPayload:
         zeta: Wilson weight vector from ``solve_zeta`` (Smith-Wilson only).
         omega: ``log(1 + UFR)`` — the continuously-compounded UFR (Smith-Wilson only).
         alpha: Mean-reversion speed (Smith-Wilson only).
+
     """
 
     kind: Literal["svensson", "smith_wilson"]

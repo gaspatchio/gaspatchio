@@ -4,7 +4,7 @@
 
 # ABOUTME: Scratch test showing policy value zeroing after maturity date.
 # ABOUTME: Demonstrates setting all policy values to zero once maturity is reached.
-# ruff: noqa: T201, INP001, ANN201, PLR2004
+# ruff: noqa: T201, INP001
 """Zeroing After Maturity Example.
 
 Shows how to zero out policy values (death benefits, premiums, reserves)

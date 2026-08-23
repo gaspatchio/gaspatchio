@@ -68,13 +68,11 @@ def test_from_binned_equals_per_value_build() -> None:
 
 
 import numpy as np
-import polars as pl
 
 from gaspatchio.scenarios._period_sketch import (
     PeriodCTE,
     PeriodMedian,
     PeriodQuantile,
-    build_period_sketches,
 )
 
 

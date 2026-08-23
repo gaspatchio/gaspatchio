@@ -27,6 +27,7 @@ class BaseFrameAccessor(ABC):
 
         Args:
             frame: The ActuarialFrame instance this accessor is bound to.
+
         """
         self._frame = frame
 
@@ -47,5 +48,6 @@ class BaseColumnAccessor(ABC):
             proxy: The ColumnProxy or ExpressionProxy instance this
                    accessor is bound to. Using Any initially for flexibility,
                    will be refined.
+
         """
         self._proxy = proxy

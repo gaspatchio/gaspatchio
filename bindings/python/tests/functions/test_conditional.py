@@ -41,7 +41,7 @@ class TestWhenBasics:
         af.rate = when(af.age > RETIREMENT_AGE).then(0.05).otherwise(0.02)
 
         result = af.collect()
-        assert result["rate"].to_list() == [0.02, 0.02, 0.05]  # noqa: S101
+        assert result["rate"].to_list() == [0.02, 0.02, 0.05]
 
 
 class TestWhenMultipleConditions:
@@ -60,7 +60,7 @@ class TestWhenMultipleConditions:
         )
 
         result = af.collect()
-        assert result["category"].to_list() == ["child", "adult", "adult", "senior"]  # noqa: S101
+        assert result["category"].to_list() == ["child", "adult", "adult", "senior"]
 
     def test_first_match_wins(self) -> None:
         """Test that first matching condition wins (like if/elif)."""
@@ -75,7 +75,7 @@ class TestWhenMultipleConditions:
         )
 
         result = af.collect()
-        assert result["category"].to_list() == ["low", "low", "medium"]  # noqa: S101
+        assert result["category"].to_list() == ["low", "low", "medium"]
 
 
 class TestWhenListBroadcasting:
@@ -160,12 +160,12 @@ class TestWhenListBroadcasting:
         # Policy 1: month 12 should have 88
         maturity_1 = result["pols_maturity"][0].to_list()
         expected_1 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 88]
-        assert maturity_1 == expected_1  # noqa: S101
+        assert maturity_1 == expected_1
 
         # Policy 2: month 24 should have 76
         maturity_2 = result["pols_maturity"][1].to_list()
         expected_2 = [0] * 24 + [76]
-        assert maturity_2 == expected_2  # noqa: S101
+        assert maturity_2 == expected_2
 
     def test_mixed_list_and_scalar_values(self) -> None:
         """Test list condition with mixed list/scalar then values."""
@@ -181,7 +181,7 @@ class TestWhenListBroadcasting:
 
         result = af.collect()
         # 2*12=24 but month only goes to 5, so none should match
-        assert result["is_maturity"][0].to_list() == [0, 0, 0, 0, 0, 0]  # noqa: S101
+        assert result["is_maturity"][0].to_list() == [0, 0, 0, 0, 0, 0]
 
     def test_tracing_mode_works(self) -> None:
         """Test that list broadcasting works in tracing mode (Task 5).
@@ -213,8 +213,8 @@ class TestWhenListBroadcasting:
             af.result = when(af.month == af.policy_term * 12).then(1).otherwise(0)
 
             # Verify operation was captured in computation graph
-            assert len(af._computation_graph) > 0  # noqa: SLF001, S101
-            assert any(  # noqa: S101
+            assert len(af._computation_graph) > 0  # noqa: SLF001
+            assert any(
                 getattr(op, "alias", None) == "result"
                 for op in af._computation_graph  # noqa: SLF001
             )
@@ -223,7 +223,7 @@ class TestWhenListBroadcasting:
             # month values: [0, 12, 24], policy_term * 12 = 12
             # Result: [0, 1, 0] (only month=12 matches)
             result_data = af.collect()
-            assert result_data["result"][0].to_list() == [0, 1, 0]  # noqa: S101
+            assert result_data["result"][0].to_list() == [0, 1, 0]
 
         finally:
             # Restore original mode
@@ -254,8 +254,8 @@ class TestWhenErrorHandling:
         proxy = when(af.value > TEST_THRESHOLD).then(100)
 
         repr_str = repr(proxy)
-        assert "incomplete" in repr_str.lower()  # noqa: S101
-        assert "otherwise" in repr_str.lower()  # noqa: S101
+        assert "incomplete" in repr_str.lower()
+        assert "otherwise" in repr_str.lower()
 
 
 class TestConditionalProxyMetadata:
@@ -268,7 +268,7 @@ class TestConditionalProxyMetadata:
         conditional = when(af.age > RETIREMENT_AGE).then(0.05)
 
         # Should be False - no list columns involved
-        assert not conditional.needs_list_broadcasting()  # noqa: S101
+        assert not conditional.needs_list_broadcasting()
 
     def test_needs_list_broadcasting_returns_true_for_list(self) -> None:
         """Test needs_list_broadcasting returns True for list conditionals."""
@@ -282,7 +282,7 @@ class TestConditionalProxyMetadata:
         conditional = when(af.month == af.policy_term * 12).then(1)
 
         # Should detect list columns immediately (month is a list column)
-        assert conditional.needs_list_broadcasting()  # noqa: S101
+        assert conditional.needs_list_broadcasting()
 
 
 class TestWhenEdgeCases:
@@ -303,7 +303,7 @@ class TestWhenEdgeCases:
 
         res = af.collect()
         # Empty list produces empty list - no elements to process
-        assert res["res"][0].to_list() == []  # noqa: S101
+        assert res["res"][0].to_list() == []
 
     def test_single_element_list_conditional(self) -> None:
         """Test conditional with single element list."""
@@ -319,7 +319,7 @@ class TestWhenEdgeCases:
 
         result = af.collect()
         # Single element at position 0 matches (12 == 1*12)
-        assert result["result"][0].to_list() == [100]  # noqa: S101
+        assert result["result"][0].to_list() == [100]
 
     def test_mixed_list_lengths(self) -> None:
         """Test conditional with varying list lengths across rows."""
@@ -336,11 +336,11 @@ class TestWhenEdgeCases:
         result = af.collect()
 
         # Row 1: [0, 1] >= 1 -> [0, 1]
-        assert result["flag"][0].to_list() == [0, 1]  # noqa: S101
+        assert result["flag"][0].to_list() == [0, 1]
         # Row 2: [0, 1, 2, 3, 4] >= 3 -> [0, 0, 0, 1, 1]
-        assert result["flag"][1].to_list() == [0, 0, 0, 1, 1]  # noqa: S101
+        assert result["flag"][1].to_list() == [0, 0, 0, 1, 1]
         # Row 3: [0] >= 0 -> [1]
-        assert result["flag"][2].to_list() == [1]  # noqa: S101
+        assert result["flag"][2].to_list() == [1]
 
     def test_null_handling_in_scalar_conditional(self) -> None:
         """Test conditional handles null values in scalar columns."""
@@ -350,9 +350,9 @@ class TestWhenEdgeCases:
 
         res = af.collect()
         # Polars conditionals with null return "other" when null fails condition
-        assert res["age_cat"][0] == "other"  # noqa: S101
-        assert res["age_cat"][1] == "other"  # noqa: S101  # Null > 65 is False
-        assert res["age_cat"][2] == "senior"  # noqa: S101
+        assert res["age_cat"][0] == "other"
+        assert res["age_cat"][1] == "other"  # Null > 65 is False
+        assert res["age_cat"][2] == "senior"
 
     def test_boolean_value_conditions(self) -> None:
         """Test conditional with boolean column values."""
@@ -366,7 +366,7 @@ class TestWhenEdgeCases:
         af.rate = when(af.is_active).then(af.base_rate).otherwise(0.0)
 
         result = af.collect()
-        assert result["rate"].to_list() == [0.05, 0.0, 0.05, 0.0]  # noqa: S101
+        assert result["rate"].to_list() == [0.05, 0.0, 0.05, 0.0]
 
     def test_complex_expression_in_condition(self) -> None:
         """Test conditional with complex multi-column expressions."""
@@ -391,7 +391,7 @@ class TestWhenEdgeCases:
         result = af.collect()
         # Only row 5 (age=75, income=60000) meets both conditions
         expected = [100, 150, 200, 250, 180, 220 * 0.9]
-        assert result["discount"].to_list() == expected  # noqa: S101
+        assert result["discount"].to_list() == expected
 
     def test_string_conditions_and_values(self) -> None:
         """Test conditional with string comparisons and values."""
@@ -412,7 +412,7 @@ class TestWhenEdgeCases:
 
         res = af.collect()
         expected = [0.05 * 0.8, 0.08 * 1.2, 0.05 * 0.8, 0.10]
-        assert res["commission"].to_list() == expected  # noqa: S101
+        assert res["commission"].to_list() == expected
 
 
 class TestWhenErrorValidation:
@@ -447,7 +447,7 @@ class TestWhenErrorValidation:
         # 25: not >65, not >50 -> 0.02
         # 45: not >65, not >50 -> 0.02
         # 70: >65 -> 0.05
-        assert collected["rate"].to_list() == [0.02, 0.02, 0.05]  # noqa: S101
+        assert collected["rate"].to_list() == [0.02, 0.02, 0.05]
 
     def test_type_coercion_in_then_values(self) -> None:
         """Test that different numeric types are coerced properly."""
@@ -458,7 +458,7 @@ class TestWhenErrorValidation:
 
         result = af.collect()
         # Should coerce to same type (float)
-        assert result["rate"].to_list() == [2.5, 2.5, 5.0]  # noqa: S101
+        assert result["rate"].to_list() == [2.5, 2.5, 5.0]
 
     def test_conditional_with_division_by_zero(self) -> None:
         """Test conditional handles division by zero in expressions."""
@@ -470,7 +470,7 @@ class TestWhenErrorValidation:
         result = af.collect()
         # Positions with 0 should be None, others should be 100/value
         expected = [10.0, None, 20.0, None]
-        assert result["result"].to_list() == expected  # noqa: S101
+        assert result["result"].to_list() == expected
 
 
 class TestWhenComputationGraph:
@@ -494,7 +494,7 @@ class TestWhenComputationGraph:
 
         # Verify the chain worked correctly
         expected = [1000 * 1.0 * 1.1, 1500 * 1.0 * 1.1, 2000 * 1.5 * 1.1]
-        assert result["final_premium"].to_list() == expected  # noqa: S101
+        assert result["final_premium"].to_list() == expected
 
     def test_nested_conditionals_in_graph(self) -> None:
         """Test multiple conditionals depending on each other."""
@@ -524,7 +524,7 @@ class TestWhenComputationGraph:
 
         # Verify both conditionals worked in sequence
         expected = [1.0 * 1.3, 1.2 * 1.0, 1.2 * 1.3, 1.5 * 1.0]
-        assert result["total_factor"].to_list() == expected  # noqa: S101
+        assert result["total_factor"].to_list() == expected
 
     def test_conditional_references_computed_column(self) -> None:
         """Test conditional that references a computed column."""
@@ -551,7 +551,7 @@ class TestWhenComputationGraph:
         # Row 1: 1500*0.8=1200 < 1500 -> 1200
         # Row 2: 2000*0.95=1900 >= 1500 -> 1900*0.95=1805
         expected = [900.0, 1200.0, 1805.0]
-        assert result["final_premium"].to_list() == expected  # noqa: S101
+        assert result["final_premium"].to_list() == expected
 
     def test_multiple_conditionals_same_columns(self) -> None:
         """Test multiple conditionals operating on same source columns."""
@@ -584,8 +584,8 @@ class TestWhenComputationGraph:
         expected_age = ["young", "middle", "senior", "senior"]
         expected_income = ["low", "medium", "high", "medium"]
 
-        assert result["age_category"].to_list() == expected_age  # noqa: S101
-        assert result["income_category"].to_list() == expected_income  # noqa: S101
+        assert result["age_category"].to_list() == expected_age
+        assert result["income_category"].to_list() == expected_income
 
 
 class TestWhenPerformance:

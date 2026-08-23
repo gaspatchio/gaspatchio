@@ -23,8 +23,6 @@ class PerformanceViolationError(Exception):
     Exception raised when a performance-critical violation occurs in optimize mode.
     """
 
-    pass
-
 
 # Store the original map_elements function
 original_map_elements = pl.Expr.map_elements
@@ -40,6 +38,7 @@ def _get_mode() -> str:
 
     Returns:
         Current execution mode ("debug" or "optimize")
+
     """
     # Use dynamic import to avoid circular imports
     from gaspatchio import get_default_mode
@@ -103,28 +102,28 @@ def _map_with_warning_impl(
                 f"{'=' * 80}\n"
             )
             raise PerformanceViolationError(error_message)
-        else:  # debug mode
-            logger.warning(
-                "MAP_ELEMENTS_PERFORMANCE_ISSUE | {issue_type} | {file}:{line} | {func} | {dtype} | ID:{call_id}",
-                issue_type="SLOW_OPERATION",
-                file=filename,
-                line=info.lineno,
-                func=func_name,
-                dtype=return_dtype,
-                call_id=call_site_id,
-            )
-            logger.warning(
-                "MAP_ELEMENTS_CODE_CONTEXT | ID:{call_id} | {context_func} | CODE: {snippet} | SUGGESTION: {suggestion}",
-                call_id=call_site_id,
-                context_func=context_function,
-                snippet=code_snippet,
-                suggestion=suggestion,
-            )
+        # debug mode
+        logger.warning(
+            "MAP_ELEMENTS_PERFORMANCE_ISSUE | {issue_type} | {file}:{line} | {func} | {dtype} | ID:{call_id}",
+            issue_type="SLOW_OPERATION",
+            file=filename,
+            line=info.lineno,
+            func=func_name,
+            dtype=return_dtype,
+            call_id=call_site_id,
+        )
+        logger.warning(
+            "MAP_ELEMENTS_CODE_CONTEXT | ID:{call_id} | {context_func} | CODE: {snippet} | SUGGESTION: {suggestion}",
+            call_id=call_site_id,
+            context_func=context_function,
+            snippet=code_snippet,
+            suggestion=suggestion,
+        )
         return original_map_elements(
             expr_instance, function, return_dtype=return_dtype, **kwargs
         )
 
-    elif mapping_method == "map_batches":
+    if mapping_method == "map_batches":
         if return_dtype is None:
             logger.warning(
                 "MAP_BATCHES_PERFORMANCE_ISSUE | {issue_type} | {file}:{line} | {func} | ID:{call_id}",
@@ -144,8 +143,7 @@ def _map_with_warning_impl(
         return original_map_batches(
             expr_instance, function, return_dtype=return_dtype, **kwargs
         )
-    else:
-        raise ValueError(f"Invalid mapping_method: {mapping_method}")
+    raise ValueError(f"Invalid mapping_method: {mapping_method}")
 
 
 def install_performance_monitors():
@@ -181,6 +179,7 @@ def configure_telemetry(enable=True):
 
     Args:
         enable: Whether to enable telemetry
+
     """
     if enable:
         install_performance_monitors()

@@ -4,7 +4,7 @@
 
 # ABOUTME: Integration test demonstrating time-shifting API with actuarial patterns.
 # ABOUTME: Shows inforce rollforward, reserve calculations, and period comparisons.
-# ruff: noqa: INP001, ANN201, S101, PLR2004, T201
+# ruff: noqa: INP001, T201
 """Integration test for time-shifting methods in actuarial projections."""
 
 from gaspatchio import ActuarialFrame

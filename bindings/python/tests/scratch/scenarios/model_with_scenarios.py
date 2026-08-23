@@ -4,7 +4,7 @@
 
 # ABOUTME: Sample actuarial model demonstrating scenario support.
 # ABOUTME: Runs BasicTerm_ME across BASE, UP, DOWN discount rate scenarios.
-# ruff: noqa: INP001, T201, PLR0915, PGH003
+# ruff: noqa: T201
 
 """
 BasicTerm_ME with Scenario Support.

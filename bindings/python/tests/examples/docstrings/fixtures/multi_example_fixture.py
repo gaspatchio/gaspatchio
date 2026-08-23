@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Union
 
 
 class PremiumCalculator:
@@ -18,8 +17,8 @@ class PremiumCalculator:
         It's particularly useful for testing docstring parsing capabilities related
         to classes, methods, and multiple examples within a single docstring.
 
-    Examples:
-    ---------
+    Examples
+    --------
     ```python
     # Define the class for the example to be self-contained
     class PremiumCalculator:
@@ -33,6 +32,7 @@ class PremiumCalculator:
     ```text
     <class '__main__.PremiumCalculator'>
     ```
+
     """
 
     def __init__(self, base_rate: float):
@@ -52,7 +52,7 @@ class PremiumCalculator:
             base_rate (float): The base premium rate.
 
         Examples:
-        ---------
+        --------
         ```python
         # Define the class for the example to be self-contained
         class PremiumCalculator:
@@ -66,6 +66,7 @@ class PremiumCalculator:
         ```text
         150.0
         ```
+
         """
         self.base_rate = base_rate
 
@@ -73,7 +74,7 @@ class PremiumCalculator:
         self,
         age: int,
         risk_factor: float,
-        coverage_amount: Union[int, float],
+        coverage_amount: float,
         term_years: int = 10,
     ) -> float:
         """
@@ -101,7 +102,6 @@ class PremiumCalculator:
             float: The calculated adjusted premium.
 
         Examples:
-
             Example 1: Standard Risk Profile as DataFrame Output
 
             ```python
@@ -168,6 +168,7 @@ class PremiumCalculator:
             │ Higher Risk ┆ 45  ┆ 1.5         ┆ [200000, 250000, 300000] ┆ 5          ┆ [4785.0, 5981.25, 7177.5] │
             └─────────────┴─────┴─────────────┴──────────────────────────┴────────────┴───────────────────────────┘
             ```
+
         """
         # Illustrative calculation
         age_adjustment = 1 + (age / 100)  # Simple age factor

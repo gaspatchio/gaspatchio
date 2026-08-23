@@ -83,7 +83,7 @@ def _sweep(df: pl.DataFrame, build, check) -> None:
 
 @pytest.fixture(scope="module")
 def age_table() -> Table:
-    ages = list(range(0, 200))
+    ages = list(range(200))
     return Table(
         name="sweep_age",
         source=pl.DataFrame(
@@ -98,8 +98,8 @@ def age_table() -> Table:
 def age_duration_table() -> Table:
     rows = [
         {"age": a, "duration": d, "rate": _rate(a, d)}
-        for a in range(0, 200)
-        for d in range(0, N_PERIODS + 1)
+        for a in range(200)
+        for d in range(N_PERIODS + 1)
     ]
     return Table(
         name="sweep_age_duration",
@@ -114,7 +114,7 @@ def sex_age_table() -> Table:
     rows = [
         {"sex": s, "age": a, "rate": _rate(a) * (1.1 if s == "M" else 0.9)}
         for s in ("M", "F")
-        for a in range(0, 200)
+        for a in range(200)
     ]
     return Table(
         name="sweep_sex_age",
@@ -256,7 +256,7 @@ class TestListKeyPaths:
 class TestStructuredTablePaths:
     def test_melt_dimension_wide_table_with_list_key(self) -> None:
         # Wide select table: one column per select duration, melted to long.
-        ages = list(range(0, 200))
+        ages = list(range(200))
         wide = pl.DataFrame(
             {
                 "age": ages,

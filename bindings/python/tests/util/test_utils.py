@@ -6,6 +6,7 @@ import os
 
 import polars as pl
 import pytest
+
 from gaspatchio import (
     execution_mode,
     get_default_mode,

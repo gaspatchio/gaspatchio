@@ -9,6 +9,7 @@ import math
 import numpy as np
 import polars as pl
 import pytest
+
 from gaspatchio import ActuarialFrame
 from gaspatchio.curves import Curve
 from gaspatchio.functions.vector import curve_eval
@@ -60,7 +61,8 @@ def test_discount_factor_expr_no_map_elements() -> None:
 
 def test_curve_expr_paths_are_native_streaming() -> None:
     """GSP-116: spot_rate/discount_factor Expr paths must be native plugin
-    expressions (no python_udf streaming barrier) for both scalar and list cols."""
+    expressions (no python_udf streaming barrier) for both scalar and list cols.
+    """
     c = _linear_curve()
     plans = [
         pl.LazyFrame({"t": [[0.5, 1.0, 7.5]]})
@@ -88,7 +90,8 @@ def test_spot_rate_scalar_column_expr() -> None:
 
 def test_discount_factor_cross_path_equivalence() -> None:
     """DF(t) = (1+r)^(-t) must agree across scalar / list / numpy / Series /
-    scalar-col Expr / list-col Expr (spec section 9, one curve one answer)."""
+    scalar-col Expr / list-col Expr (spec section 9, one curve one answer).
+    """
     c = _linear_curve()
     ts = [0.5, 1.0, 3.0, 7.5, 11.0]
     scalar = [c.discount_factor(t) for t in ts]
@@ -171,7 +174,7 @@ def test_pchip_monotone_no_overshoot() -> None:
 
 
 def test_pchip_reproduces_knots() -> None:
-    """pchip spot_rate must reproduce exact knot values at each tenor."""
+    """Pchip spot_rate must reproduce exact knot values at each tenor."""
     c = Curve.from_zero_rates(
         tenors=[1.0, 2.0, 5.0, 10.0], rates=[0.01, 0.02, 0.03, 0.035], interpolation="pchip"
     )
@@ -180,7 +183,7 @@ def test_pchip_reproduces_knots() -> None:
 
 
 def test_pchip_cross_path() -> None:
-    """pchip must agree across scalar / list / Series / scalar-Expr / list-Expr paths."""
+    """Pchip must agree across scalar / list / Series / scalar-Expr / list-Expr paths."""
     c = Curve.from_zero_rates(
         tenors=[1.0, 2.0, 5.0, 10.0], rates=[0.01, 0.02, 0.03, 0.035], interpolation="pchip"
     )
@@ -266,7 +269,7 @@ def test_non_finite_t_is_nan_all_methods(method: str, t: float) -> None:
 @pytest.mark.parametrize("method", ["log_linear", "smith_wilson"])
 @pytest.mark.parametrize("t", [0.0, -1.0])
 def test_nonpositive_t_is_nan_for_log_linear_and_smith_wilson(method: str, t: float) -> None:
-    """t <= 0 -> NaN for log_linear & smith_wilson (replaces ZeroDivisionError / inf)."""
+    """T <= 0 -> NaN for log_linear & smith_wilson (replaces ZeroDivisionError / inf)."""
     c = _all_curves()[method]
     eager = c.spot_rate(t)
     assert math.isnan(eager), f"{method}: eager spot_rate({t}) = {eager}, expected NaN"
@@ -296,7 +299,7 @@ def test_normal_positive_t_unaffected(method: str) -> None:
 
 
 def test_svensson_t_zero_short_rate_limit() -> None:
-    """svensson at finite t=0 keeps the closed form (short-rate limit), agreeing across paths.
+    """Svensson at finite t=0 keeps the closed form (short-rate limit), agreeing across paths.
 
     The contract says "finite t <= 0 keeps current behaviour" for svensson; only
     non-finite t -> NaN. Both the eager ``_loadings`` and the Rust ``svensson_load``

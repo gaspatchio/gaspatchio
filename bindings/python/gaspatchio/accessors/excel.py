@@ -159,6 +159,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             │ P003      ┆ 44927             ┆ 2023-01-01  │
             └───────────┴───────────────────┴─────────────┘
             ```
+
         """
         base_expr = self._get_polars_expr()
         numeric_expr = base_expr.cast(pl.Float64, strict=False)
@@ -631,6 +632,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         )
         print(af_with_days.collect())
         ```
+
         """
         from .excel_functions.days import days
 
@@ -684,6 +686,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         )
         print(af_with_new_dates.collect())
         ```
+
         """
         from .excel_functions.edate import edate
 
@@ -736,6 +739,7 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         )
         print(af_with_eom_dates.collect())
         ```
+
         """
         from .excel_functions.eomonth import eomonth
 

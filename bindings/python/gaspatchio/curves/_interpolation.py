@@ -16,7 +16,6 @@ import math
 from bisect import bisect_right
 from collections.abc import Sequence
 
-
 # A boundary segment needs two knots; a single knot only defines its own spot.
 _MIN_SEGMENT_KNOTS = 2
 
@@ -61,6 +60,7 @@ def log_df_knots(tenors: Sequence[float], rates: Sequence[float]) -> list[float]
 
     Returns:
         List of log-discount-factor values, one per knot.
+
     """
     return [-u * math.log(1.0 + r) for u, r in zip(tenors, rates, strict=True)]
 
@@ -137,6 +137,7 @@ def pchip_slopes(xs: Sequence[float], ys: Sequence[float]) -> list[float]:
     Returns:
         A list of slope values ``m[i]`` at each knot, ready for use in
         :func:`hermite_eval`.
+
     """
     n = len(xs)
     if n < 2:  # noqa: PLR2004
@@ -187,6 +188,7 @@ def hermite_eval(
 
     Returns:
         The interpolated (or extrapolated) value at ``t``.
+
     """
     if not math.isfinite(t):
         return math.nan

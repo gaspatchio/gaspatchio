@@ -25,7 +25,11 @@ from .models import (
     Suggestion,
     SuggestionType,
 )
-from .validation import ValidationError, capture_validation_context, raise_validation_error
+from .validation import (
+    ValidationError,
+    capture_validation_context,
+    raise_validation_error,
+)
 
 __all__ = [
     "ColumnInfo",

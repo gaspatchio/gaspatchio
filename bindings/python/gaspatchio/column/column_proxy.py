@@ -64,6 +64,7 @@ class _RollforwardFieldAccessor:
         -------
         ExpressionProxy
             A lazy expression that extracts the named field.
+
         """
         hidden_col = f"__rollforward_{self._column_name}"
         struct_field = f"{self._prefix}{field_name}{self._suffix}"

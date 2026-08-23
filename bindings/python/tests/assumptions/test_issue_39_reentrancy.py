@@ -50,7 +50,7 @@ def test_reentrancy_with_different_data():
     """Test that re-registration actually replaces the data."""
     # First registration
     data1 = pl.DataFrame({"x": [1, 2, 3], "y": [10.0, 20.0, 30.0]})
-    
+
     table1 = Table(
         name="replace_test",
         source=data1,
@@ -60,7 +60,7 @@ def test_reentrancy_with_different_data():
 
     # Second registration with different data
     data2 = pl.DataFrame({"x": [1, 2, 3], "y": [100.0, 200.0, 300.0]})
-    
+
     table2 = Table(
         name="replace_test",  # Same name, different data
         source=data2,
@@ -78,7 +78,7 @@ def test_multiple_model_runs():
     """Simulate running a full model multiple times (common in notebooks)."""
     for run in range(3):
         # Each run registers the same set of tables
-        
+
         # Mortality table
         mortality = Table(
             name="mort_table",
@@ -90,7 +90,7 @@ def test_multiple_model_runs():
             value="qx",
         )
 
-        # Lapse table  
+        # Lapse table
         lapse = Table(
             name="lapse_table",
             source=pl.DataFrame({
@@ -123,9 +123,9 @@ def test_multiple_model_runs():
 def test_registry_state_after_multiple_registrations():
     """Test that the registry is in a valid state after re-registrations."""
     from gaspatchio._internal import PyAssumptionTableRegistry
-    
+
     registry = PyAssumptionTableRegistry()
-    
+
     # Register a table
     Table(
         name="state_test",
@@ -133,18 +133,18 @@ def test_registry_state_after_multiple_registrations():
         dimensions={"a": "a"},
         value="b",
     )
-    
+
     # Check it exists
     assert registry.table_exists("state_test")
-    
+
     # Re-register with different data
     Table(
         name="state_test",
         source=pl.DataFrame({"a": [1, 2], "b": [5.0, 6.0]}),
-        dimensions={"a": "a"}, 
+        dimensions={"a": "a"},
         value="b",
     )
-    
+
     # Should still exist (not duplicated, just replaced)
     assert registry.table_exists("state_test")
     tables = registry.list_tables()

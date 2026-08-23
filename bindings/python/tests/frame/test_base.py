@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import polars as pl
 import pytest
+
 from gaspatchio import (
     ActuarialFrame,
     ColumnProxy,
@@ -77,7 +78,7 @@ def test_getitem_invalid_type(sample_lazy_frame):
 def test_setitem_adds_column(sample_lazy_frame):
     # Arrange - create ActuarialFrame in optimize mode to test direct execution
     af = ActuarialFrame(sample_lazy_frame, mode="optimize")
-    
+
     # Act
     af["c"] = af["a"] + 1
 
@@ -189,7 +190,7 @@ def test_pipe_applies_function(sample_lazy_frame):
 
     assert result_af is af  # Function modified in place
     assert "c" in af.get_column_order()  # Should be in column order
-    
+
     # In debug/tracing mode, column only exists after collection
     collected = af.collect()
     assert "c" in collected.columns  # Should exist after collection
