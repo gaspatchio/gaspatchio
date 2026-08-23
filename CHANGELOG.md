@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.9.0] — One name, and the surfaces meet you halfway
+
+The release's headline is the smallest possible diff with the largest reach:
+the import is now the package name. Around it, the API surfaces got more
+liberal about the shapes they accept — a scalar growth factor, a
+survival-shaped column — while keeping the refusals sharp where meaning is
+genuinely ambiguous, and a season of truth-telling landed: the docs, the
+tutorials, the design spec, and the validation harness all now describe the
+framework that actually ships.
+
 ### Changed
 
 - **The import name is now `gaspatchio`**, matching the package name on PyPI
@@ -11,6 +21,58 @@
   process — including under `gspio run-model`. Static type checkers resolve
   only the new name, so rename imports in typed code. The `gspio` CLI is
   unchanged. (#129)
+
+### Added
+
+- **`accumulate()` broadcasts a scalar `multiply`/`add`** to the sibling
+  list's per-policy timeline — `accumulate(multiply=1.02)`, the natural
+  spelling for a level growth factor, now works, jagged timelines included.
+  `initial=` always broadcast; the asymmetry is gone. Two scalars still
+  refuse (no timeline to infer), and the refusal now names the growth-free
+  closed form (`initial + flow.cum_sum()`). Closes #128. (#155)
+- **`cumulative_survival()` accepts survival-shaped input** — pass the
+  survival probabilities you already have instead of reshaping them into
+  decrements first. (#143)
+- **The workbook-conversion discipline is a skill** —
+  `gaspatchio-workbook-conversion` walks an agent through converting an
+  Excel model end to end. (#114)
+- `gspio docs`/`gspio knowledge` results get deduplication and snippet
+  windows by default (#138), and a failed `--answer` degrades to search
+  results instead of a dead end (#142).
+- Calc-graph nodes carry shape and kind from the shape source of truth
+  (#134); `ActuarialFrame.join` passes `maintain_order` through (#131).
+
+### Fixed
+
+- **The docs tell the truth batch**: the runner's `point_id` contract, the
+  Level-2 tutorial data, four skill examples that crashed verbatim, and the
+  kwargs wire format documented as it actually is. (#148)
+- **Lookups from a superseded `Table` object refuse loudly** instead of
+  silently reading stale rates. (#137)
+- The runner registers the model module in `sys.modules` before exec —
+  dataclasses and pickling inside models work again. (#135)
+- Frame-level projection methods return wrapped expressions, keeping
+  accessor chaining intact. (#133)
+- **Tutorial repairs**: the Level-4 reconcile builds its time index
+  per-policy (jagged-safe), the Level-5 model wires its shipped ultimate
+  mortality rates into the select/ultimate structure, and the perf stress
+  demonstrates the table-coverage rule instead of violating it. (#152)
+- The docstring-example harness can no longer leak subprocesses (a
+  timed-out ruff child is killed and reaped), parses diagnostics
+  stdout-first, and classifies syntax errors by message rather than
+  code-literal roulette. (#153)
+
+### Internal
+
+- Ruff 0.11.12 → 0.16.3 with the rule-set pinned as part of the test
+  contract (#144, #146), then the lint burn-down: config truth (#150) and
+  1,728 safe autofixes driven to the fix/format fixpoint (#151).
+- The rollforward v2 design spec now records the shipped Phase-1/2
+  contracts — as-quoted rates, `"state@point"` reads, the `Apply` refusal —
+  with the deferred end-states routed to the arc backlog. (#154)
+- Benchmark model points are generated instead of committed as 22.8 MB of
+  LFS (#140), with LFS fetches cached and scoped in CI (#139); transitive
+  `h2` bumped for RUSTSEC-2026-0258 (#149).
 
 ## [0.8.2] — The recursion tells the whole truth
 
