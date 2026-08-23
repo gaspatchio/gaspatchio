@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787373294896,
+  "lastUpdate": 1787461894263,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Gaspatchio vs Lifelib (Windows)": [
@@ -8831,6 +8831,140 @@ window.BENCHMARK_DATA = {
           {
             "name": "speedup/100K",
             "value": 5.84,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "67f07b65913e088b880c231b571863bf003ab848",
+          "message": "chore(lint): tier 2 — apply the safe autofixables, driven to the fix/format fixpoint (#151)\n\nOne ruff check --fix pass (safe fixes only; the 1,393 unsafe-fixables are\ndeliberately untouched) on top of tier 1's config: 1,730 fixes across 55\nrule families, 5,928 findings -> 4,200, zero safe fixes remaining. The\nfix set was driven to a joint fix/format fixpoint: 15 files the fixer\nmade format-dirty were formatted; pre-existing format debt shrank 164 ->\n156 files and the tier-3 sweep stays untouched.\n\nThree fixer-vs-reality conflicts resolved by hand, each with the intent\nnow stated in place so it cannot be 'fixed' away again:\n\n- test_excel_round: F401 replaced the import inside pytest.raises with\n  pass — the import IS the assertion (the dead plugins.round wrapper\n  must stay gone). Restored with noqa and a comment.\n- _dispatch_autopatch: B010 rewrote the deliberate setattr of __dir__\n  into direct method assignment — runtime-identical, but mypy rejects\n  method-assign and stubtest then refuses the whole package. Reverted\n  with the reason documented.\n- D413 retired to extend-ignore: its fix and docstring-code-format\n  oscillate forever (proven — fix 28, format strips 3 files, repeat).\n  The formatter wins, same policy as COM812.\n\nSuite: 3064 passed, 0 failed on this tree (GSP-149).",
+          "timestamp": "2026-08-23T16:58:48+12:00",
+          "tree_id": "310f5639712f279d2096c46ab6923547b443ebfc",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/67f07b65913e088b880c231b571863bf003ab848"
+        },
+        "date": 1787461889278,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "gaspatchio-setup",
+            "value": 2.825,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib-setup",
+            "value": 2.888,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-points",
+            "value": 0.175,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/8-throughput",
+            "value": 45.7,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/8-points",
+            "value": 7.432,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/8-throughput",
+            "value": 1.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/8",
+            "value": 42.47,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/1K-points",
+            "value": 0.508,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/1K-throughput",
+            "value": 1968.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/1K-points",
+            "value": 25.95,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/1K-throughput",
+            "value": 38.5,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/1K",
+            "value": 51.08,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/10K-points",
+            "value": 3.782,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/10K-throughput",
+            "value": 2644.1,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/10K-points",
+            "value": 23.641,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/10K-throughput",
+            "value": 423,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/10K",
+            "value": 6.25,
+            "unit": "x"
+          },
+          {
+            "name": "gaspatchio/100K-points",
+            "value": 28.028,
+            "unit": "seconds"
+          },
+          {
+            "name": "gaspatchio/100K-throughput",
+            "value": 3567.9,
+            "unit": "points/sec"
+          },
+          {
+            "name": "lifelib/100K-points",
+            "value": 155.379,
+            "unit": "seconds"
+          },
+          {
+            "name": "lifelib/100K-throughput",
+            "value": 643.6,
+            "unit": "points/sec"
+          },
+          {
+            "name": "speedup/100K",
+            "value": 5.54,
             "unit": "x"
           }
         ]
