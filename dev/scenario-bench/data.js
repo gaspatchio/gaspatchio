@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787467105728,
+  "lastUpdate": 1787471329470,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Benchmarks": [
@@ -7544,6 +7544,130 @@ window.BENCHMARK_DATA = {
           {
             "name": "port-scaling/100Kpts-0010sc-throughput",
             "value": 4450.6,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-batch",
+            "value": 1,
+            "unit": "count"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a372d310c58ba9529381ec3b84297c5d3c68746d",
+          "message": "feat(projection): accumulate() broadcasts scalar multiply/add to the sibling timeline (GSP-156) (#155)\n\n* feat(projection): accumulate() broadcasts scalar multiply/add to the sibling timeline\n\ninitial= has always accepted a scalar; multiply= and add= refused with a\nkernel error naming the constraint but not the fix — the natural\nspelling accumulate(multiply=1.02) died at collect (gh#128, GSP-156).\nA scalar has no period axis of its own, so it now borrows the sibling\nlist's per-row lengths via repeat_by — jagged-safe, since each policy's\nown timeline sets its repetition count, and the same normalisation\nseam the #60 broadcast fix proved. The Rust kernel's List contract is\nuntouched; the boundary normalises, the kernel stays strict.\n\nTwo scalars leave no timeline to infer, so that refusal stays — but now\nteaches: the error names the growth-free closed form\n(initial + flow.cum_sum()) instead of dead-ending. Shape detection\nroutes through resolve_shape(), the same oracle the excel.round gate\nuses; unknown shapes pass through to the kernel's check unchanged.\n\nCloses gh#128.\n\n* fix(projection): resolve string-named siblings via their expression; unwind the skills tripwire\n\nGreptile's P1 on #155 was right and the review tests were not: a bare\nstring is deliberately ambiguous to resolve_shape(), so a scalar paired\nwith add='net_flow' skipped the broadcast and died at the kernel — the\ndocstring's own example, which the docstring harness nonetheless\nreported green (harness blind spot, tracked separately). Strings are\ncolumn names in this signature, so their shape now resolves from the\nconverted pl.col expression; a regression test pins the exact spelling.\n\nThe GSP-156 unwind map was also real: the repo-root skills-claims suite\ncarried the deliberate tripwire (test_scalar_multiply_still_raises) and\nthe two reference passages teaching the old constraint. Both references\nnow state the broadcast (and keep steering the growth-free case at\ncum_sum); the tripwire asserts the broadcast instead, and the\nidentity-multiply documentation guard survives as a style rule.\n\nThe broadcast decision moved to _broadcast_accumulate_operands — the\nstring branch tipped accumulate() over the complexity threshold, and\nextraction beats noqa-stacking.",
+          "timestamp": "2026-08-23T19:29:49+12:00",
+          "tree_id": "e1e139918afa2585823bbdabdd942e6389f5e1c8",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/a372d310c58ba9529381ec3b84297c5d3c68746d"
+        },
+        "date": 1787471328547,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scen-scaling/1Kpts-0010sc-wall",
+            "value": 3.546,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-rss",
+            "value": 166.5,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-throughput",
+            "value": 2820.2,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-wall",
+            "value": 32.26,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-rss",
+            "value": 789.8,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-throughput",
+            "value": 3099.8,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-0100sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-wall",
+            "value": 486.451,
+            "unit": "seconds"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-rss",
+            "value": 837.8,
+            "unit": "MB"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-throughput",
+            "value": 2055.7,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "scen-scaling/1Kpts-1000sc-batch",
+            "value": 16,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-wall",
+            "value": 22.879,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-rss",
+            "value": 1131.3,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-throughput",
+            "value": 4370.9,
+            "unit": "scenario-points/sec"
+          },
+          {
+            "name": "port-scaling/10Kpts-0010sc-batch",
+            "value": 4,
+            "unit": "count"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-wall",
+            "value": 225.718,
+            "unit": "seconds"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-rss",
+            "value": 5911.9,
+            "unit": "MB"
+          },
+          {
+            "name": "port-scaling/100Kpts-0010sc-throughput",
+            "value": 4430.3,
             "unit": "scenario-points/sec"
           },
           {
