@@ -1694,8 +1694,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         self,
         *,
         initial: str | pl.Expr | ExpressionProxy | ColumnProxy,
-        multiply: str | pl.Expr | ExpressionProxy | ColumnProxy,
-        add: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        multiply: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
+        add: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
     ) -> ExpressionProxy:
         """Accumulate values using a linear recurrence.
 
@@ -1728,13 +1728,19 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         initial : str or pl.Expr or ExpressionProxy or ColumnProxy
             Initial state per policy (e.g., starting account value). A scalar
             column with one value per row. Broadcasts when length is 1.
-        multiply : str or pl.Expr or ExpressionProxy or ColumnProxy
+        multiply : float or str or pl.Expr or ExpressionProxy or ColumnProxy
             Multiplicative growth factor per time step (e.g.,
-            ``1 + interest_rate``). A list column with one list per policy.
-        add : str or pl.Expr or ExpressionProxy or ColumnProxy
+            ``1 + interest_rate``). A list column with one list per policy,
+            or a scalar (number or scalar column) — a scalar broadcasts to
+            the ``add`` list's per-policy lengths.
+        add : float or str or pl.Expr or ExpressionProxy or ColumnProxy
             Additive flow per time step (e.g., premiums minus charges, grown
-            by the interest factor). A list column with one list per policy.
-            Inner list lengths must match ``multiply``.
+            by the interest factor). A list column with one list per policy,
+            or a scalar — broadcasts to ``multiply``'s per-policy lengths.
+            When both are lists, inner lengths must match. At least one of
+            ``multiply``/``add`` must be a list: two scalars leave no
+            timeline to broadcast onto, and the growth-free case has a
+            closed form (``initial + flow.cum_sum()``).
 
         Returns
         -------
@@ -1764,6 +1770,29 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         # [[1060.0, 1120.6, 1181.8059999999998], [2140.0, 2282.8, 2428.456]]
         ```
 
+        **Scalar Growth Factor**
+
+        A scalar ``multiply`` broadcasts to the flow's per-policy timeline —
+        each policy's list length sets its own repetition count:
+
+        ```python
+        from gaspatchio import ActuarialFrame
+
+        af = ActuarialFrame(
+            {
+                "av_init": [1000.0],
+                "net_flow": [[100.0, 100.0, 100.0]],
+            }
+        )
+        af.av = af.net_flow.projection.accumulate(
+            initial="av_init",
+            multiply=1.5,
+            add="net_flow",
+        )
+        print(af.collect()["av"].to_list())
+        # [[1600.0, 2500.0, 3850.0]]
+        ```
+
         """
         from gaspatchio.column.column_proxy import ColumnProxy
         from gaspatchio.column.expression_proxy import ExpressionProxy
@@ -1782,9 +1811,39 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
                 return pl.col(param)
             return param
 
+        from gaspatchio.column.shape import Shape, resolve_shape
+
+        def _normalise(
+            param: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
+        ) -> tuple[pl.Expr, Shape]:
+            if isinstance(param, int | float) and not isinstance(param, bool):
+                return pl.lit(float(param)), "scalar"
+            return _to_expr(param), resolve_shape(param, parent_af)
+
         initial_expr = _to_expr(initial)
-        multiply_expr = _to_expr(multiply)
-        add_expr = _to_expr(add)
+        multiply_expr, multiply_shape = _normalise(multiply)
+        add_expr, add_shape = _normalise(add)
+
+        # A scalar multiply/add has no period axis of its own, so it borrows
+        # the sibling list's per-row lengths — jagged-safe, since each
+        # policy's own timeline sets its repetition count (mirrors initial=,
+        # which already broadcasts; GSP-156 / gh#128). Two scalars leave no
+        # axis to infer; unknown shapes pass through to the kernel's check.
+        if multiply_shape == "scalar" and add_shape == "list":
+            multiply_expr = multiply_expr.cast(pl.Float64).repeat_by(
+                add_expr.list.len()
+            )
+        elif add_shape == "scalar" and multiply_shape == "list":
+            add_expr = add_expr.cast(pl.Float64).repeat_by(multiply_expr.list.len())
+        elif multiply_shape == "scalar" and add_shape == "scalar":
+            msg = (
+                "accumulate() needs a per-period axis: multiply and add are "
+                "both scalar, so there is no timeline to broadcast onto. "
+                "Pass at least one list column (one value per period) — or, "
+                "for growth-free accumulation, use the closed form: "
+                "initial + flow.cum_sum()."
+            )
+            raise ValueError(msg)
 
         result_expr = _accumulate(initial_expr, multiply_expr, add_expr)
         return ExpressionProxy(result_expr, parent_af)

@@ -64,6 +64,6 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         self,
         *,
         initial: str | pl.Expr | ExpressionProxy | ColumnProxy,
-        multiply: str | pl.Expr | ExpressionProxy | ColumnProxy,
-        add: str | pl.Expr | ExpressionProxy | ColumnProxy,
+        multiply: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
+        add: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
     ) -> ExpressionProxy: ...
