@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787462040285,
+  "lastUpdate": 1787466893378,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks": [
@@ -12467,6 +12467,198 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 1492229836,
             "range": "± 1482169",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "1277725+mrmattwright@users.noreply.github.com",
+            "name": "Matt Wright",
+            "username": "mrmattwright"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "030b7e54e355a35c58368290a12751f615b5591b",
+          "message": "docs(spec): shipped-truth pass on the rollforward v2 design (#154)\n\nThe GSP-131 verdict sitting ruled amend-spec on four divergences; this\nrecords the shipped Phase-1/2 contracts in the document that promised\notherwise. Rates apply as quoted — dt-threading is arc-deferred with an\naddendum and three inline notes (GSP-142). Cross-state reads are the\nvalidated 'state@point' string form, with typed .at() arc-deferred as an\nadditive successor (GSP-146). Apply's evaluability is an unresolved\nv1-vs-v2 contradiction routed to arc, the kernel's loud refusal standing\nuntil the ruling (GSP-143). The 4.9 worked example and its explain()\nrendering now show the materialise-first pattern the shipped validator\nenforces (GSP-145).",
+          "timestamp": "2026-08-23T18:19:10+12:00",
+          "tree_id": "5e7d7403165ecd26b3a492e7d927207f89a8cf1f",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/030b7e54e355a35c58368290a12751f615b5591b"
+        },
+        "date": 1787466892298,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 163182238,
+            "range": "± 1587671",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 163266091,
+            "range": "± 310042",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 163620975,
+            "range": "± 314671",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 7038275,
+            "range": "± 51768",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 163707604,
+            "range": "± 1021009",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 3879245,
+            "range": "± 25030",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 163985838,
+            "range": "± 396937",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 3900283,
+            "range": "± 25479",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 550593,
+            "range": "± 5911",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 53544562,
+            "range": "± 91160",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 10214371,
+            "range": "± 51819",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 536676847,
+            "range": "± 1705061",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 413560,
+            "range": "± 1493",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 30746963,
+            "range": "± 119202",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 4477336,
+            "range": "± 62020",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 307030413,
+            "range": "± 2411882",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 414058,
+            "range": "± 1758",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 30891455,
+            "range": "± 193763",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 4490475,
+            "range": "± 48574",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 310079133,
+            "range": "± 2347753",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 494463,
+            "range": "± 1547",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 40030154,
+            "range": "± 29884",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 5242633,
+            "range": "± 15558",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 401715890,
+            "range": "± 1412474",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 1891442,
+            "range": "± 3232",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 152275845,
+            "range": "± 152586",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 28468991,
+            "range": "± 125274",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 1538832101,
+            "range": "± 2569371",
             "unit": "ns/iter"
           }
         ]
