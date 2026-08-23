@@ -13,6 +13,14 @@
 - Real-evidence pass (primary regulations, OSS issue trackers, published industry papers) — synthesis captured in §17.2 of this spec; standalone writeup at `research/2026-05-03-real-evidence-grounding.md` is pending
 - `research/2026-05-03-schedule-design.md` — Schedule design pass (QuantLib lineage, actuarial OSS state, jurisdictional conventions, GSP-92 pain probe)
 
+**Shipped-truth addendum (2026-08-23, GSP-131 verdict sitting):** Phases 1–2 are shipped; three places below describe semantics *ahead of* the shipped kernel, by explicit verdict rather than drift:
+
+1. **dt-aware `Grow` is arc-deferred** — the shipped kernel applies rates **as quoted** per period (`s *= 1 + rate[t]`); pre-scale rates to the period (e.g. `finance.to_monthly`) before passing them. §3, §4.2 and §5 carry inline notes (GSP-142: amend-spec).
+2. **Typed `.at()` reads are arc-deferred** — the shipped Phase-1 contract is the validated `"state@point"` string form; `.at()` arrives additively (GSP-146: bless strings).
+3. **`Apply` evaluability is unresolved** — v1 §6.4 excludes an apply() escape; §6 here specs an evaluable one. The shipped kernel refuses `Apply` loudly, and the ruling is routed to arc rather than settled by default (GSP-143: defer). The refusal stands until that ruling.
+
+Worked examples originally passed compound expressions directly to ops; the shipped validator requires **materialise-first** — assign the compound to a named frame column and pass that. §4.9 and the §8 `explain()` rendering now show the pattern (GSP-145: amend-examples).
+
 ---
 
 ## 1. What this is
@@ -62,8 +70,8 @@ A rollforward is a graph of `(states, points, transitions, schedule, batch_axes)
 - A **state** is a named accumulator with an initial value (e.g., `"av"`, `"aw"`, `"shadow"`).
 - A **point** is a named structural location within a single time period. Every period has implicit `bop` and `eop` points. Additional points (`post_coi`, `after_growth`, `after_payment`, etc.) are declared by the actuary when mid-period state needs to be addressable.
 - A **transition** writes one state and is located between two points (or implicitly `bop → eop` if points are not declared). A transition's body is either a named primitive operation (`.add(...)`, `.grow(...)`, `.ratchet(...)`) or — when primitives run out — a semantic-IR expression.
-- A **read** of state `S` at point `P` is written `rf["S"].at("P")`. It is a typed reference, resolved by the compiler to a kernel capture slot. There are no string labels in the addressing.
-- A **schedule** is a typed `Schedule` value (see §4.16) carrying period boundaries, day-count, and calendar. The kernel reads `dt[t]` from the schedule for time-aware operations like `.grow(rate)`. Default for products that don't need calendar discipline: `Schedule.integer_periods(n_periods, OneTwelfth)` — a constant 1/12 dt with no calendar arithmetic.
+- A **read** of state `S` at point `P` is written `rf["S"].at("P")`. It is a typed reference, resolved by the compiler to a kernel capture slot. There are no string labels in the addressing. *Shipped (Phase 1): reads are the validated `"state@point"` string form — the blessed Phase-1 contract; `.at()` is the arc-deferred typed successor and arrives additively (GSP-146).*
+- A **schedule** is a typed `Schedule` value (see §4.16) carrying period boundaries, day-count, and calendar. The kernel reads `dt[t]` from the schedule for time-aware operations like `.grow(rate)`. *Shipped: dt is not yet threaded into ops — rates apply as quoted; see the addendum (GSP-142).* Default for products that don't need calendar discipline: `Schedule.integer_periods(n_periods, OneTwelfth)` — a constant 1/12 dt with no calendar arithmetic.
 - **`batch_axes`** is a tuple of axis names the kernel iterates over. Default: `("policy",)` — Polars parallelises across rows. Future: `("scenario", "policy")` for stochastic projection (Phase 3+ sibling primitive). Phase 1's Polars backend asserts `batch_axes == ("policy",)` and rejects others. The field exists in the IR today as cheap forward-compat for canonical-form stability when the JAX-backed stochastic primitive lands; see §13.3. **Honest framing:** this is speculative forward-compat informed by JAX's `vmap`-over-`scan` pattern, not field-validated as an actuarial primitive. Phase 1 commits to the metadata slot only.
 
 The kernel evaluates one period at a time, walking transitions in declared order. Within a period, the points define a partial order: writes to a state must respect the point sequence, and reads must reference points that have been written or are `bop`.
@@ -121,6 +129,8 @@ rf = af.projection.rollforward(
 | `.ratchet(*, to, when=None, label=...)` | `s = max(s, to[t]) if when[t] else s` | GMxB ratchet |
 | `.floor(value)` | `s = max(s, value)` | Non-negativity |
 | `.between(p1, p2)` | scope-marker | Subsequent ops apply between points `p1` and `p2` |
+
+**Shipped semantics (GSP-142):** the kernel applies `rate[t]` as quoted — `s *= 1 + rate[t]` for `.grow`, likewise un-scaled for `.grow_capped`; the `* dt[t]` factor in those two rows is the arc-deferred dt-threading. Pre-scale rates to the period (e.g. `finance.to_monthly`) before passing them.
 
 `rf["av"]` returns a `pl.Expr` — a lazy reference to the rollforward kernel's per-period result for state `"av"`. Assigning it (`af.av = rf["av"]`) registers a column expression in the ActuarialFrame's lazy plan; nothing computes until `af.collect()`. Multiple references to the same rollforward (`rf["av"]`, `rf["av"].at("post_coi")`, `rf.increment("COI")`) share the underlying plugin call **by construction**: the compiler walks every `rf[...]` accessor in the lazy plan, gathers the union of requested fields into a single `captures` kwarg, and emits one plugin Expr that all accessors field-extract from. The kernel is invoked once per chunk by construction — Polars CSE has nothing to fold. See §7 for the Struct-emission shape and §8.3 for what the lazy plan looks like at `af.collect()`.
 
@@ -324,17 +334,20 @@ rf["fund"].between("bop", "after_growth") \
     .grow(af.one_plus_ba - af.gib_rate - af.z_rate, label="Net growth")
 
 # Actual payment = (1+BA) · max(stated AW, formulaic = fund · bc_factor / 12)
-withdrawal = af.one_plus_ba * pl.max_horizontal(
+# Materialise-first: op inputs are named frame columns, so the payment
+# formula is itself a visible, auditable column (GSP-145).
+af.withdrawal = af.one_plus_ba * pl.max_horizontal(
     rf["aw"].at("bop"),
     rf["fund"].at("after_growth") * af.bc_factor / 12,
 )
 
-rf["fund"].between("after_growth", "after_payment").subtract(withdrawal, label="Payment")
+rf["fund"].between("after_growth", "after_payment").subtract(af.withdrawal, label="Payment")
 rf["fund"].between("after_payment", "eop").floor(0)
 
-# AW: anniversary step-up
+# AW: anniversary step-up — the step-up target is likewise a named column
+af.aw_stepup_target = rf["fund"].at("after_growth") * af.bc_factor * af.fac / 12
 rf["aw"].ratchet(
-    to=rf["fund"].at("after_growth") * af.bc_factor * af.fac / 12,
+    to=af.aw_stepup_target,
     when=rf.schedule.anniversary_mask(),
     label="AW step-up",
 )
@@ -682,7 +695,7 @@ These are *not* in Phase 1's scope but they share the IR — adding them later r
 
 A transition `.between(p_a, p_b)` is a function: read state at `p_a` (and any cross-state reads at their named points), evaluate the body, write the result at `p_b`. The kernel walks transitions in declared order. "Between" is structural — it identifies which two points the transition reads-from and writes-to, not a duration.
 
-**Discrete vs continuous Ops.** Time-aware Ops (`.grow(rate)`, `.grow_capped(rate, …)`) consume `dt[t]` to scale rates over the period (`s *= 1 + rate[t] * dt[t]`). Discrete Ops (`.add`, `.subtract`, `.charge`, `.ratchet`, `.deduct_nar`, `.floor`) fire instantaneously at a point and ignore `dt`. The schedule's `dt[t]` is the year-fraction of the **whole period**, independent of how many mid-period points partition it. To split the period's accrual across two intervals (rare), declare two `.grow` transitions and pass each a fraction of the rate.
+**Discrete vs continuous Ops.** Time-aware Ops (`.grow(rate)`, `.grow_capped(rate, …)`) consume `dt[t]` to scale rates over the period (`s *= 1 + rate[t] * dt[t]`). *(Arc-deferred: the shipped kernel applies rates as quoted — this paragraph describes the dt-threading end-state; GSP-142.)* Discrete Ops (`.add`, `.subtract`, `.charge`, `.ratchet`, `.deduct_nar`, `.floor`) fire instantaneously at a point and ignore `dt`. The schedule's `dt[t]` is the year-fraction of the **whole period**, independent of how many mid-period points partition it. To split the period's accrual across two intervals (rare), declare two `.grow` transitions and pass each a fraction of the rate.
 
 **Period 0.** `bop[0]` is the `init` expression for each state (e.g., `states={"av": af.cv_init}`); `dt[0]` is the schedule's first interval. Phase 1's `Schedule.from_inception` makes period 0 align with the first interval after `contract_inception` — full-period semantics, no proration (terminating-period and inception-period proration deferred to Phase 2 per §4.16).
 
@@ -840,6 +853,8 @@ class Apply(Op):
 
 **`Apply.body` and engine-portability.** `Apply.body` is an unbounded `Expr`; users can use closed-subset operators (engine-portable) or Polars-only escape hatches (`pl.max_horizontal`, raw `pl.Expr`, autopatched methods). The static walk in §6 inspects `Apply.body` alongside transition bodies and `contract_boundary` masks: any non-closed-subset operator flips `engine_binding` to `'polars'`, which propagates into `spec_fingerprint`. Models using such escape hatches are explicitly Polars-bound and rejected by the future JAX backend. `Apply` is therefore not a hidden audit-boundary breach — its portability cost is machine-checkable, not silent.
 
+**Status (GSP-143, 2026-08-23):** the shipped kernel refuses to evaluate `Apply` ("escape hatch and is not yet evaluable"), and the v1 spec's §6.4 takes the opposite position — no apply() escape at all. The two documents disagree; the ruling is deliberately routed to arc rather than settled by default, and the loud refusal stands until then.
+
 `verify()` runs at construction. Compile-time errors for impossible Ops (point precedence violations, dtype mismatches, missing labels when `track_increments=True`).
 
 ---
@@ -964,9 +979,9 @@ Schedule: from_inception(af.contract_inception, 1200, "1M", NullCalendar, Unadju
 
 Transitions (in order):
   fund.between(bop, after_growth):   *= 1 + (af.one_plus_ba - af.gib_rate - af.z_rate) * dt   [label="Net growth"]
-  fund.between(after_growth, after_payment): -= af.one_plus_ba * max(aw.at(bop), fund.at(after_growth) * af.bc_factor / 12)  [label="Payment"]
+  fund.between(after_growth, after_payment): -= af.withdrawal  [label="Payment"]
   fund.between(after_payment, eop): floor(0)
-  aw.ratchet(to=fund.at(after_growth) * af.bc_factor * af.fac / 12, when=schedule.anniversary_mask(), label="AW step-up")
+  aw.ratchet(to=af.aw_stepup_target, when=schedule.anniversary_mask(), label="AW step-up")
 
 batch_axes: (policy,)
 track_increments: True
