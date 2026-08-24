@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786943935177,
+  "lastUpdate": 1787548865041,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Scenario Batch Search": [
@@ -468,6 +468,73 @@ window.BENCHMARK_DATA = {
           {
             "name": "Batch Search/100K-10sc-auto-peak",
             "value": 4802.1,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Matt Wright",
+            "username": "mrmattwright",
+            "email": "1277725+mrmattwright@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "03406f74d9d047f6791799e54b4d6794ef2a13b4",
+          "message": "chore(release): 0.9.0 — one name, and the surfaces meet you halfway (#156)\n\nThe import is the package name (gaspatchio_core stays as a deprecated\nalias until 1.0), accumulate() broadcasts scalar multiply/add,\ncumulative_survival() accepts survival-shaped input, and the\ntruth-telling season lands: docs, tutorials, the v2 spec, and the\ndocstring harness all describe the framework that ships. Version bumped\nin both crates, the Python project, and both lockfiles; the changelog\npromotes and curates the 26 commits since v0.8.2.",
+          "timestamp": "2026-08-23T07:57:46Z",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/03406f74d9d047f6791799e54b4d6794ef2a13b4"
+        },
+        "date": 1787548863212,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Batch Search/1K-100sc-auto-wall",
+            "value": 32.293,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-100sc-auto-peak",
+            "value": 791.1,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/1K-100sc-checksum",
+            "value": 1,
+            "unit": "bool"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-wall",
+            "value": 478.941,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/1K-1000sc-auto-peak",
+            "value": 477,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-wall",
+            "value": 225.713,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/10K-100sc-auto-peak",
+            "value": 782.3,
+            "unit": "MB"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-wall",
+            "value": 218.2,
+            "unit": "seconds"
+          },
+          {
+            "name": "Batch Search/100K-10sc-auto-peak",
+            "value": 4781,
             "unit": "MB"
           }
         ]
