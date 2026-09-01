@@ -11,12 +11,14 @@ on:
   workflow_dispatch:
 
 permissions:
+  # Both jobs below call a reusable workflow whose own job declares
+  # security-events: write for its (currently unused, upload-sarif: false)
+  # SARIF step. GitHub validates that requirement against the caller's grant
+  # before the run starts — dropping it here fails the whole run at startup,
+  # not just the SARIF step, even though the step itself never executes.
   actions: read
   contents: read
-  # security-events: write would be needed to upload SARIF, but both jobs below
-  # pass upload-sarif: false (GitHub Advanced Security isn't enabled on this
-  # repo) so the reusable workflow's SARIF-upload step never runs. Re-add it
-  # if that ever flips to true.
+  security-events: write
 
 jobs:
   scan-pr:
