@@ -33,9 +33,11 @@ on:
           - benchmarks
           - performance
 
+# Least-privilege default. Only the jobs that push to gh-pages or comment on
+# a PR request elevated permissions of their own, below — scenario-showcase
+# and policy-axis-sweep just upload artifacts and never touch either.
 permissions:
-  contents: write  # for gh-pages push
-  pull-requests: write  # for benchmark alert comments on PRs
+  contents: read
 
 env:
   # Windows runners default stdout/stderr to the legacy cp1252 code page, which
@@ -54,6 +56,8 @@ concurrency:
 jobs:
   rust-benchmarks:
     name: Criterion Benchmarks (${{ matrix.display }})
+    permissions:
+      contents: write  # for gh-pages push
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -83,7 +87,7 @@ jobs:
             benchmark_name: Rust Benchmarks (Windows)
             benchmark_path: dev/bench-windows
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           lfs: false
       - name: Pull the LFS objects this job reads
@@ -91,11 +95,11 @@ jobs:
         with:
           include: "core/benches/**"
           scope: rust
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable   # intentionally not SHA-pinned — no `toolchain:` version is set, so this ref *is* the mechanism that tracks current stable Rust; pinning it would freeze the toolchain instead
       # Cache compiled dependencies (polars, criterion, …) to keep the cold
       # Windows build inside the timeout. Only deps are cached — the bench crate
       # is recompiled and run fresh each time, so measured numbers stay accurate.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6   # v2
         with:
           key: bench-${{ matrix.os }}
       - name: Run benchmarks
@@ -106,7 +110,7 @@ jobs:
       - name: Clean working tree for gh-pages push
         run: git checkout -- .
       - name: Store benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: cargo
@@ -121,6 +125,8 @@ jobs:
 
   model-benchmarks:
     name: End-to-End Model Benchmarks (${{ matrix.display }})
+    permissions:
+      contents: write  # for gh-pages push
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -151,7 +157,7 @@ jobs:
             benchmark_name: Model Benchmarks (Windows)
             benchmark_path: dev/model-bench-windows
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           lfs: false
       - name: Pull the LFS objects this job reads
@@ -159,7 +165,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
       - name: Install dependencies
         run: uv sync --locked --no-dev
       - name: Generate 100K model points
@@ -172,7 +178,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store model benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: customSmallerIsBetter
@@ -187,6 +193,8 @@ jobs:
 
   aggregated-benchmarks:
     name: Aggregation Surface Benchmarks
+    permissions:
+      contents: write  # for gh-pages push
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -199,7 +207,7 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           lfs: false
       - name: Pull the LFS objects this job reads
@@ -207,7 +215,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
       - name: Install dependencies
         run: uv sync --locked
       - name: Run aggregation-surface benchmarks (baseline vs run_aggregated vs spill)
@@ -216,7 +224,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store aggregation benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
         with:
           name: Aggregation Surface Benchmarks
           tool: customSmallerIsBetter
@@ -234,6 +242,8 @@ jobs:
     # Clones the private opioinc/gaspatchio-benchmarks lifelib reference data via
     # the BENCHMARKS_DEPLOY_KEY secret (read-only deploy key), configured on both
     # the private and public repos.
+    permissions:
+      contents: write  # for gh-pages push
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -266,7 +276,7 @@ jobs:
             benchmark_name: Gaspatchio vs Lifelib (Windows)
             benchmark_path: dev/comparison-windows
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           lfs: false
       - name: Pull the LFS objects this job reads
@@ -275,13 +285,13 @@ jobs:
           include: "bindings/python/**,evals/**"
           scope: evals
       - name: Set up SSH agent for benchmarks deploy key
-        uses: webfactory/ssh-agent@v0.10.0
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555   # v0.10.0
         with:
           ssh-private-key: ${{ secrets.BENCHMARKS_DEPLOY_KEY }}
       - name: Clone gaspatchio-benchmarks (lifelib reference data)
         run: git clone --depth 1 git@github.com:opioinc/gaspatchio-benchmarks.git "$GASPATCHIO_BENCHMARKS_DIR"
         working-directory: .
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
       - name: Install dependencies (with lifelib)
         run: uv sync --locked --no-dev --group benchmark
       - name: Generate model points (all scales)
@@ -295,7 +305,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store comparison results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: customSmallerIsBetter
@@ -310,6 +320,8 @@ jobs:
 
   scenario-benchmarks:
     name: Scenario Throughput & Memory (${{ matrix.display }})
+    permissions:
+      contents: write  # for gh-pages push
     if: >-
       (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -341,7 +353,7 @@ jobs:
             benchmark_name: Scenario Benchmarks (Windows)
             benchmark_path: dev/scenario-bench-windows
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           lfs: false
       - name: Pull the LFS objects this job reads
@@ -349,7 +361,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
       - name: Install dependencies
         run: uv sync --locked --no-dev
       - name: Generate model points (incl. 100K L5)
@@ -362,7 +374,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store scenario benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: customSmallerIsBetter
@@ -377,6 +389,8 @@ jobs:
 
   batch-search-benchmarks:
     name: Scenario Batch Search
+    permissions:
+      contents: write  # for gh-pages push
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -388,7 +402,7 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           lfs: false
       - name: Pull the LFS objects this job reads
@@ -396,7 +410,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
       - name: Install dependencies
         run: uv sync --locked
       - name: Generate model points (incl. 100K L5)
@@ -407,7 +421,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store batch-search benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
         with:
           name: Scenario Batch Search
           tool: customSmallerIsBetter
@@ -436,7 +450,7 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           lfs: false
       - name: Pull the LFS objects this job reads
@@ -444,7 +458,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
       - name: Install dependencies
         run: uv sync --locked
       - name: Run stochastic showcase (1000 scenarios)
@@ -452,7 +466,7 @@ jobs:
       - name: Render showcase chart
         run: uv run python ../../evals/benchmarks/render_scenario_showcase.py
       - name: Upload showcase artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
         with:
           name: scenario-showcase
           path: |
@@ -473,7 +487,7 @@ jobs:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           lfs: false
       - name: Pull the LFS objects this job reads
@@ -481,7 +495,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
       - name: Install dependencies
         run: uv sync --locked
       - name: Sweep run_aggregated batch size (1K..1M ladder + 10M auto — bounded seed)
@@ -493,7 +507,7 @@ jobs:
           --auto-only-scales 10000000
           --out /tmp/policy-axis-sweep.json
       - name: Upload sweep results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
         with:
           name: policy-axis-sweep
           path: /tmp/policy-axis-sweep.json
@@ -504,12 +518,15 @@ jobs:
     # per-run cost) that are not configured on the public repo.
     if: github.repository == 'opioinc/gaspatchio-core'
     needs: [rust-benchmarks, model-benchmarks, comparison-benchmarks]
+    permissions:
+      contents: write       # for gh-pages push
+      pull-requests: write  # for benchmark alert comments on PRs
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: bindings/python
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           lfs: false
       - name: Pull the LFS objects this job reads
@@ -517,7 +534,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
       - name: Install dependencies
         run: uv sync --locked --group evals
       - name: Run evals
@@ -526,7 +543,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: uv run python ../../evals/run_evals.py
       - name: Upload capability matrix
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
         with:
           name: capability-matrix
           path: |
@@ -536,7 +553,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store eval results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
         with:
           name: Skill Evals
           tool: customBiggerIsBetter
@@ -555,13 +572,15 @@ jobs:
     # Private-repo only: renders the capability matrix from skill-evals output.
     if: github.repository == 'opioinc/gaspatchio-core'
     needs: skill-evals
+    permissions:
+      contents: write  # pushes the rendered matrix directly to gh-pages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
         with:
           ref: gh-pages
       - name: Download eval results
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8
         with:
           name: capability-matrix
           path: dev/capability/
