@@ -27,6 +27,10 @@ on:
       # to its docstring/warning must reach the knowledge base too.
       - "bindings/python/gaspatchio_core/**"
 
+# The one step here doesn't check out the repo or touch the GITHUB_TOKEN at
+# all — it authenticates to the target repo with MIX_DISPATCH_PAT instead.
+permissions: {}
+
 jobs:
   trigger:
     name: Trigger RAG Store Rebuild

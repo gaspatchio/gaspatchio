@@ -11,15 +11,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  # Required by the reusable workflow to upload SARIF for the Security tab.
   actions: read
   contents: read
-  security-events: write
+  # security-events: write would be needed to upload SARIF, but both jobs below
+  # pass upload-sarif: false (GitHub Advanced Security isn't enabled on this
+  # repo) so the reusable workflow's SARIF-upload step never runs. Re-add it
+  # if that ever flips to true.
 
 jobs:
   scan-pr:
     if: ${{ github.event_name == 'pull_request' }}
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.5.0
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@8deb546fdb875b9996d27d4950be7312dac076a1   # v2.5.0
     with:
       # GitHub Advanced Security / Code Scanning is not enabled on this repo,
       # so skip SARIF upload. The scan itself still runs and fails on any
@@ -36,7 +38,7 @@ jobs:
 
   scan-scheduled:
     if: ${{ github.event_name != 'pull_request' }}
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.5.0
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@8deb546fdb875b9996d27d4950be7312dac076a1   # v2.5.0
     with:
       upload-sarif: false
       # Keep in sync with scan-pr above — see the --config note there.
