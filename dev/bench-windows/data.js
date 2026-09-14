@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788768311069,
+  "lastUpdate": 1789375254802,
   "repoUrl": "https://github.com/gaspatchio/gaspatchio",
   "entries": {
     "Rust Benchmarks (Windows)": [
@@ -7667,6 +7667,196 @@ window.BENCHMARK_DATA = {
             "name": "realistic_vector/combined_model/hash_10000/10000",
             "value": 2413695650,
             "range": "± 73092210",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Matt Wright",
+            "username": "mrmattwright",
+            "email": "1277725+mrmattwright@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "323d0931fb91e19041f80d25e13e44e3a18ea1cd",
+          "message": "ci: pin GitHub Actions by hash, scope workflow token permissions (#161)\n\n* ci: pin GitHub Actions by hash, scope workflow token permissions\n\nRan the OpenSSF Scorecard CLI against this repo and the two lowest,\nconcretely-fixable scores were Pinned-Dependencies (1/10) and\nToken-Permissions (0/10):\n\n- SHA-pin every floating action tag across CI.yml, bench-pr.yml,\n  evals.yml, licence-check.yml, and security.yml. dtolnay/rust-toolchain\n  stays on @stable, annotated — no toolchain: version is set, so that\n  ref is the mechanism that tracks current stable Rust; pinning it would\n  freeze the toolchain instead.\n- security.yml: drop security-events: write — both jobs pass\n  upload-sarif: false, so the reusable workflow's SARIF step never runs\n  and the permission was unused.\n- licence-check.yml, trigger-rag-rebuild.yml: declare explicit\n  least-privilege permissions instead of relying on the repo-level\n  default.\n- evals.yml: move contents: write / pull-requests: write from\n  workflow-level down to only the jobs that actually push to gh-pages\n  or comment on PR alerts — scenario-showcase and policy-axis-sweep\n  only upload artifacts and never needed either.\n\nAlso corrected two stale version comments on already-pinned actions in\nCI.yml's release job (labelled v4/v6, actually resolve to today's v7).\n\n* fix(ci): restore security-events: write on the Security Scan workflow\n\nThe startup_failure on the previous commit's PR run confirms this:\nGitHub validates a called reusable workflow's declared job-level\npermissions against what the caller grants before the run starts, not\njust when a step actually tries to use the token. The OSV-scanner\nreusable workflow's job declares security-events: write regardless of\nupload-sarif, so the caller must grant it even though the SARIF step\nitself never executes here.",
+          "timestamp": "2026-09-01T08:57:09Z",
+          "url": "https://github.com/gaspatchio/gaspatchio/commit/323d0931fb91e19041f80d25e13e44e3a18ea1cd"
+        },
+        "date": 1789375250842,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "assumption_table_lookup_1k/mortality_assumption_table_lookup_1k",
+            "value": 250601050,
+            "range": "± 7010958",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "assumption_table_vector_lookup_1k/mortality_assumption_table_vector_lookup_1k",
+            "value": 247960200,
+            "range": "± 6165816",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/hash_lookup_1k",
+            "value": 246127800,
+            "range": "± 6099873",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hash_vs_array_1k/array_lookup_1k",
+            "value": 5667605,
+            "range": "± 172945",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/hash_vector_lookup_1k",
+            "value": 246680200,
+            "range": "± 4277656",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "vector_hash_vs_array_1k/array_vector_lookup_1k",
+            "value": 5646944,
+            "range": "± 222427",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/hash/1000",
+            "value": 246727800,
+            "range": "± 6788834",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "lookup_scaling/array/1000",
+            "value": 5673388,
+            "range": "± 413703",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_1000/1000",
+            "value": 1051875,
+            "range": "± 59938",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_1000/1000",
+            "value": 87589000,
+            "range": "± 1949422",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/array_10000/10000",
+            "value": 11003560,
+            "range": "± 152569",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/mortality_select/hash_10000/10000",
+            "value": 897351000,
+            "range": "± 30013096",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_1000/1000",
+            "value": 410790,
+            "range": "± 48947",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_1000/1000",
+            "value": 48578841,
+            "range": "± 2495560",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/array_10000/10000",
+            "value": 9029047,
+            "range": "± 248051",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/lapse_rates/hash_10000/10000",
+            "value": 480468050,
+            "range": "± 5358473",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_1000/1000",
+            "value": 397209,
+            "range": "± 4464",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_1000/1000",
+            "value": 48037808,
+            "range": "± 505989",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/array_10000/10000",
+            "value": 7502921,
+            "range": "± 216806",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/surrender_charges/hash_10000/10000",
+            "value": 505980000,
+            "range": "± 11193527",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_1000/1000",
+            "value": 532915,
+            "range": "± 14209",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_1000/1000",
+            "value": 57592650,
+            "range": "± 694781",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/array_10000/10000",
+            "value": 11176207,
+            "range": "± 345828",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/risk_free_rates/hash_10000/10000",
+            "value": 607274550,
+            "range": "± 16508351",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_1000/1000",
+            "value": 2411126,
+            "range": "± 62018",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_1000/1000",
+            "value": 251552350,
+            "range": "± 13255014",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/array_10000/10000",
+            "value": 41764567,
+            "range": "± 1976878",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "realistic_vector/combined_model/hash_10000/10000",
+            "value": 2416205150,
+            "range": "± 54957274",
             "unit": "ns/iter"
           }
         ]
