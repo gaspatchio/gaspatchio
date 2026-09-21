@@ -110,7 +110,7 @@ jobs:
       - name: Clean working tree for gh-pages push
         run: git checkout -- .
       - name: Store benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc   # v1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: cargo
@@ -165,7 +165,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4   # v10.1.0
       - name: Install dependencies
         run: uv sync --locked --no-dev
       - name: Generate 100K model points
@@ -178,7 +178,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store model benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc   # v1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: customSmallerIsBetter
@@ -215,7 +215,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4   # v10.1.0
       - name: Install dependencies
         run: uv sync --locked
       - name: Run aggregation-surface benchmarks (baseline vs run_aggregated vs spill)
@@ -224,7 +224,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store aggregation benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc   # v1
         with:
           name: Aggregation Surface Benchmarks
           tool: customSmallerIsBetter
@@ -291,7 +291,7 @@ jobs:
       - name: Clone gaspatchio-benchmarks (lifelib reference data)
         run: git clone --depth 1 git@github.com:opioinc/gaspatchio-benchmarks.git "$GASPATCHIO_BENCHMARKS_DIR"
         working-directory: .
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4   # v10.1.0
       - name: Install dependencies (with lifelib)
         run: uv sync --locked --no-dev --group benchmark
       - name: Generate model points (all scales)
@@ -305,7 +305,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store comparison results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc   # v1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: customSmallerIsBetter
@@ -361,7 +361,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4   # v10.1.0
       - name: Install dependencies
         run: uv sync --locked --no-dev
       - name: Generate model points (incl. 100K L5)
@@ -374,7 +374,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store scenario benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc   # v1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: customSmallerIsBetter
@@ -410,7 +410,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4   # v10.1.0
       - name: Install dependencies
         run: uv sync --locked
       - name: Generate model points (incl. 100K L5)
@@ -421,7 +421,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store batch-search benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc   # v1
         with:
           name: Scenario Batch Search
           tool: customSmallerIsBetter
@@ -458,7 +458,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4   # v10.1.0
       - name: Install dependencies
         run: uv sync --locked
       - name: Run stochastic showcase (1000 scenarios)
@@ -495,7 +495,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4   # v10.1.0
       - name: Install dependencies
         run: uv sync --locked
       - name: Sweep run_aggregated batch size (1K..1M ladder + 10M auto — bounded seed)
@@ -534,7 +534,7 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4   # v10.1.0
       - name: Install dependencies
         run: uv sync --locked --group evals
       - name: Run evals
@@ -553,7 +553,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store eval results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc   # v1
         with:
           name: Skill Evals
           tool: customBiggerIsBetter
