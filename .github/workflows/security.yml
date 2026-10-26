@@ -23,7 +23,7 @@ permissions:
 jobs:
   scan-pr:
     if: ${{ github.event_name == 'pull_request' }}
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@8deb546fdb875b9996d27d4950be7312dac076a1   # v2.5.0
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36   # v2.7.0
     with:
       # GitHub Advanced Security / Code Scanning is not enabled on this repo,
       # so skip SARIF upload. The scan itself still runs and fails on any
@@ -40,7 +40,7 @@ jobs:
 
   scan-scheduled:
     if: ${{ github.event_name != 'pull_request' }}
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@8deb546fdb875b9996d27d4950be7312dac076a1   # v2.5.0
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36   # v2.7.0
     with:
       upload-sarif: false
       # Keep in sync with scan-pr above — see the --config note there.
