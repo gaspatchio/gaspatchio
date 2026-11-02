@@ -59,6 +59,122 @@ Check that:
 - Projection length is correct
 - Signs are correct (claims positive, net cashflows can be negative, survival in [0,1])
 
+### Step 3b: Ask the model what it uses, and what it cannot account for
+
+Every model can say, without running again, what each column read, what reads
+it, and what nothing reads. Export the audit file once and ask it — or ask
+`af.graph` on the live frame; the answers are the same, from one
+implementation.
+
+```bash
+uv run gspio calc-graph model.py data.parquet -o /tmp/audit.json --results /tmp/results.parquet
+
+# What nothing reads, each under one class. Name the model's results in --keep.
+uv run gspio graph unused /tmp/audit.json --keep pv_net_cf,reserve
+
+# Columns the model cannot account for, and lines outside the core vocabulary
+uv run gspio graph holes /tmp/audit.json
+uv run gspio graph tiers /tmp/audit.json
+
+# Everything behind a result, each arrow with the period it read (t−1, first…t)
+uv run gspio graph trace /tmp/audit.json reserve --depth 2
+
+# What moves if an assumption table moves
+uv run gspio graph affected /tmp/audit.json --assumption mortality
+```
+
+The same questions in Python, on the frame or on the file:
+
+```python
+af.graph.unused(keep=["pv_net_cf", "reserve"])
+af.graph.trace("reserve", depth=2)
+af.graph.affected(assumption="mortality")
+
+from gaspatchio.graph import read_artifact
+read_artifact("/tmp/audit.json").unused(keep=["pv_net_cf", "reserve"])
+```
+
+How to classify what `unused` reports:
+
+| Class | What it is | Severity |
+|---|---|---|
+| `superseded` | A definition a later line replaced, never read. Dead code. | Important |
+| `terminal` (not kept) | A live calculation nothing reads: a result, or dead code. Ask the author which; keep the results. | Important until answered |
+| `data` | An input column nothing reads. | Minor (unless the spec says it should be used — then Critical) |
+| `stamp` | A projection column nothing reads. | Not an issue |
+| `length_only` | Read only for its length (`broadcast_to_periods(like=...)`). | Not an issue |
+
+Any hole from `gspio graph holes` is **Important**: a column the model cannot
+account for is a number nobody can audit. In CI, `--fail-on superseded,terminal`
+exits 1 when either class is not empty; `--keep-from results.toml` reads the
+results from a top-level `keep = [...]` array (a provisional file shape in 1.0).
+
+`calc-graph` runs the whole book but writes values for the policies it samples,
+and the default is **one** — `:1`, the first row. Name the policies the review
+needs (`--policies id:POL-000343`, `--policies all`); the export says which it
+took. Each arrow of `trace` states the periods it read (`(t−1)`, `(first…t−1)`,
+`(t…last)`): read the window, never the formula text. The glossary of a read's
+kinds (`DIRECT`, `INDIRECT`, `TRANSFORMATION`, `AGGREGATION`) is in
+[references/audit-record.md](references/audit-record.md).
+
+### Step 3c: Hold the files you were handed against the record
+
+`gspio verify` holds the files you have against the audit file that records
+them — results, policy data, the model file and every local module it
+imports, and each assumption table read back from its file — and exits 0 only
+when every check asked for agrees; library versions and git are evidence and
+move no exit status. Hand `Table` the file path (not a frame you built) so
+`--assumptions` can decide it.
+
+```bash
+uv run gspio verify /tmp/audit.json --model model.py --model-points data.parquet \
+    --results /tmp/results.parquet --assumptions assumptions/
+# exit 0 agrees · 1 a check disagrees · 4 a check could not be made · 2 a file could not be read
+```
+
+With `--model` and `--model-points` it also rebuilds the model's graph from
+the files in hand and decides on it: a value read from a parameter file, a
+config, an environment variable or a module outside the model's folder that
+moved is `✗ graph differs`, naming the line, even where every file stamp
+agrees. A scenario plan's record needs `--scenarios run_scenarios.py` too.
+
+Exit 4 is not a pass. Its usual causes: `--assumptions NAME=FILE` given for one
+table, which leaves every other recorded table "not found" (give the
+directory); a table the model built from a frame in its own code, matched
+to a file of other values — nothing records that the frame was that file, so
+it cannot be decided; and a record whose `holes` section is not empty — a
+column joined or written past the frame reached the record by name only, so
+`? holes could not be checked` names it and what rests on it. Which identity answers which question —
+`graph_fingerprint` (formulas and table content, **not** the book),
+`formulas_fingerprint`, `book.digest`, `Table.fingerprint()`, `source_sha`,
+`document_digest` — is the table in
+[references/audit-record.md](references/audit-record.md).
+
+### Step 3d: For a change, say which numbers moved
+
+```bash
+uv run gspio diff before.audit.json after.audit.json            # formulas, tables, data; and values
+uv run gspio diff git:main:model.audit.json /tmp/audit.json     # against the committed record
+```
+
+`gspio diff` on two audit files says what changed — formulas, tables, policy
+data — and, reading the two results files the audit files record, which
+lines' numbers moved, in how many policies, from which period and by how
+much; `gspio compare` answers a different question, whether two runs of *one*
+artifact agree. Give `--results BEFORE AFTER` where the audit files record no
+results file. Put the moved lines in the review: a line marked `(self)` whose
+formula the change did not mean to touch, or numbers that move under an
+unchanged `formulas_fingerprint` with no table or data change, is a finding.
+
+For a scenario run, the BASE scenario must be the reconciled model:
+`result.fingerprint("BASE") == model.main(af).graph.fingerprint()`. If it is
+not, BASE is not the model that was reconciled — Critical.
+
+To hand one policy to a reviewer who does not read Python:
+`uv run gspio sheet /tmp/audit.json -o policy.xlsx --results /tmp/results.parquet`
+(one Timeline per sampled policy, every formula and tier, every number the
+run's own double, no cell a formula).
+
 ### Step 4: Classify issues
 
 Every issue gets a file:line reference, a severity, and a concrete description. See the Issue Classification section below.
@@ -81,6 +197,11 @@ Check for anti-patterns against the reference file: [references/gaspatchio-antip
 | Hardcoded assumptions (magic numbers) | Important | Literal numbers like `0.015` instead of `Table.lookup()` or named constants |
 | Missing `when/then/otherwise` for conditionals | Minor | Boolean masking like `value * (condition)` instead of explicit conditionals |
 | No section header comments | Minor | Model code without `# SECTION N: DESCRIPTION` headers |
+| Dead code | Important | `gspio graph unused` lists a `superseded` definition, or a `terminal` the author cannot name as a result |
+| A line through `.polars_native()` | Important | It records as `engine_native`: it runs only on Polars, and so does every calculation that reads it. `gspio graph tiers` names the line; `gspio validate audit.json --engine jax` names it and every calculation that reads it. Ask for the declared form where one exists (`fill_nan(0.0)`, `list.reverse()`, `norm_cdf()`, `accumulate(reverse=True)`, `(af.x >= lo) & (af.x <= hi)` for `is_between`); where none exists, the escape is the honest line — record why |
+| A band written in raw Polars | Important | `pl.col("x").is_in([...])`, `.cut([...])` record Polars' display text, so a change to the values can leave the fingerprint unmoved. Use `af.x.is_in([...])` / `af.x.cut(...)`, which record their values |
+| An escape that works around a refusal | Important | The framework refuses a table, curve or schedule read inside an undeclared engine expression (the fingerprint would not move with the table), and refuses a line that would convert one kind into another (a number filled with text, branches of two kinds, a date compared with a number). A model that casts or escapes past either has hidden what the refusal named: check the read is stored as its own column first, and the conversion is written (`.to_text()`, `.to_float()`) where it is meant |
+| Assumption table built from a frame in code | Important (production) | `Table(source=df)` with `df` built or filtered in the model: `gspio verify --assumptions` cannot decide it. Hand `Table` the file path |
 
 ### Anti-Pattern Check: Python Loops Over Data
 
@@ -125,7 +246,7 @@ These issues produce wrong numbers. Every one must be verified:
 These apply when reviewing changes to an existing model:
 
 - **Change propagated to all dependent locations?** If a mortality rate formula changed, did all downstream variables (deaths, claims, reserves, PVs) get re-validated?
-- **Unintended side effects?** Run the model before and after the change. Compare key outputs. A "small" change to lapse rates can move BEL by double digits.
+- **Unintended side effects?** Export the model before and after the change and run `gspio diff before.audit.json after.audit.json` (Step 3d): it names every line whose numbers moved, by how much and from which period. A "small" change to lapse rates can move BEL by double digits.
 - **Analysis of change plausible?** The direction and magnitude of output changes should make actuarial sense. If increasing mortality rates causes reserves to decrease, something is wrong.
 - **Boundary conditions preserved?** Edge cases (duration 0, maturity month, zero account value) should still behave correctly after the change.
 
@@ -205,6 +326,7 @@ Present review findings in this structure:
 |---|---|---|
 | **Gaspatchio anti-patterns** | [references/gaspatchio-antipatterns.md](references/gaspatchio-antipatterns.md) | When checking code quality (Layer 1) |
 | **ASOP 56 checklist** | [references/asop56-checklist.md](references/asop56-checklist.md) | When checking actuarial methodology (Layer 2) |
+| **The audit record** | [references/audit-record.md](references/audit-record.md) | Steps 3b–3d: which identity answers what, `gspio verify`, `gspio diff`, read windows, the one-policy workbook, the Python doors, what 1.0 does not do |
 
 ---
 
@@ -217,6 +339,10 @@ Present review findings in this structure:
 | "Review is only for production models" | Catching anti-patterns early is cheaper. Review now. |
 | "The model is simple, review is overkill" | Simple models still have scalar/list confusion, missing section headers, and hardcoded assumptions. |
 | "I wrote the model, I know it's good" | Self-review is necessary but insufficient. Fresh eyes catch different issues. |
+| "`verify` didn't say differs, so it passed" | Exit 4 is "could not be checked", not agreement. Find what it could not decide and make it decidable. |
+| "The graph fingerprints match, so the numbers match" | `graph_fingerprint` does not cover the policy data. Check `book.digest` too, or `verify --model-points`. |
+| "The refusal is in the way; `.polars_native()` gets past it" | The refusal named what the line would hide. Escaping it makes the line Polars-only and can take its table out of the fingerprint. |
+| "The artifact shows one policy, so that's the book's shape" | `calc-graph` samples one policy by default (`:1`). Say whose numbers you read, or export the ones you mean. |
 
 ---
 
@@ -243,6 +369,10 @@ The review is complete when:
 - [ ] All Important issues have been fixed or have an agreed remediation plan with a deadline
 - [ ] Minor issues have been logged (fix not required to pass review)
 - [ ] The model runs successfully: `uv run gspio run-single-policy model.py data.parquet 1`
+- [ ] `gspio graph unused` and `gspio graph holes` were run, and every `superseded`, unkept `terminal` and hole is in the review
+- [ ] `gspio verify` was run on the audit file against the files reviewed, and exited 0 — or every indeterminate line is in the review with its cause
+- [ ] For a change: `gspio diff` on the before and after audit files is in the review, and every moved line is explained
+- [ ] For a scenario run: `result.fingerprint("BASE")` equals the standalone model's `graph.fingerprint()`
 - [ ] The review output has been written in the format above
 
 If any Critical or Important issue remains unaddressed, the review is **not complete**.

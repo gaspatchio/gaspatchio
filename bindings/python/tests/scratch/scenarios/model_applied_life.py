@@ -289,7 +289,8 @@ def main(
     # Calculate initial duration in months (lifelib formula)
     # duration_mth_init = (val_date.year * 12 + val_date.month) - (entry_date.year * 12 + entry_date.month)
     af.duration_mth_init = (VALUATION_DATE.year * 12 + VALUATION_DATE.month) - (
-        af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
+        af.entry_date_parsed.polars_native().dt.year() * 12
+        + af.entry_date_parsed.polars_native().dt.month()
     )
 
     # Create projection timeline
@@ -302,8 +303,12 @@ def main(
     )
 
     # Month index (0 = valuation date)
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
+    af.month = (
+        af.projection_date.polars_native().list.eval(pl.element().dt.year())
+        - VALUATION_DATE.year
+    ) * 12 + (
+        af.projection_date.polars_native().list.eval(pl.element().dt.month())
+        - VALUATION_DATE.month
     )
 
     # Duration at time t (months since issue) - rename to avoid conflict with input column
@@ -550,7 +555,7 @@ def main(
     # - For non-GMDB products: just av_pp_mid_mth
 
     # Cast sum_assured to Float64 for type consistency
-    af.sum_assured_f = af.sum_assured.cast(pl.Float64)
+    af.sum_assured_f = af.sum_assured.polars_native().cast(pl.Float64)
 
     # For GMDB products, calculate max(sum_assured, av_pp_mid_mth)
     # For non-GMDB products, just use av_pp_mid_mth
@@ -822,7 +827,9 @@ def main(
     # Using exp/log identity: a^b = exp(b * ln(a))
     # So (1 + r)^(-t) = exp(-t * ln(1 + r))
     af.disc_factors = (
-        af.month.cast(pl.Float64) * -1.0 * (1.0 + af.disc_rate_mth).log()
+        af.month.polars_native().list.eval(pl.element().cast(pl.Float64))
+        * -1.0
+        * (1.0 + af.disc_rate_mth).log()
     ).exp()
 
     # =========================================================================

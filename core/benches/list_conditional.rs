@@ -36,6 +36,7 @@ fn bench_list_conditional_eq(c: &mut Criterion) {
 
         let kwargs = ConditionalKwargs {
             operator: "eq".to_string(),
+            unknown_is_nan: false,
         };
 
         group.bench_function(format!("{}_rows", num_rows), |b| {
@@ -77,6 +78,7 @@ fn bench_list_conditional_lt_scalar(c: &mut Criterion) {
 
         let kwargs = ConditionalKwargs {
             operator: "lt".to_string(),
+            unknown_is_nan: false,
         };
 
         group.bench_function(format!("{}_rows", num_rows), |b| {
@@ -137,6 +139,7 @@ fn bench_list_conditional_gte_all_lists(c: &mut Criterion) {
 
         let kwargs = ConditionalKwargs {
             operator: "gte".to_string(),
+            unknown_is_nan: false,
         };
 
         group.bench_function(format!("{}_rows", num_rows), |b| {

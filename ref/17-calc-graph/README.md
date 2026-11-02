@@ -263,12 +263,17 @@ All graph-related components are now organized in the `frame/graph/` subdirector
 
 7. **`graph/trace_generator.py`**: Calculation trace generation:
    - `TraceGenerator`: Creates simplified traces showing formula → values → result
-   - `_minimal_clean()`: Uses only string replacements, no regex
+   - `_minimal_clean()`: A module-level function beside the class rather than a
+     method on it — the conformance reading in `graph/validate.py` calls the same
+     one, which is why it was lifted off. Uses only string replacements, no regex
    - **No regex usage** - all complex arithmetic evaluation removed
 
 8. **`graph/graph_utils.py`**: Common utilities:
    - `clean_expression_string()`: Removes file paths from expressions
-   - `simplify_dtype()`: Maps Polars types to simple names
+
+9. **`graph/dtypes.py`**: The artifact's own type names:
+   - `neutral_dtype()`: Maps a Polars type to the closed vocabulary, or refuses
+   - `NEUTRAL_SCALARS` / `EXECUTION_TYPES`: The names, and how an engine carries each
 
 ## What's Left to Implement
 
@@ -411,8 +416,13 @@ dependencies = extract_dependencies(expr)
 
 The module has been completely refactored to eliminate all regex usage:
 
+It has since been lifted off `TraceGenerator` and is a module-level function in
+`trace_generator.py`, because the conformance reading in `graph/validate.py` compares
+a walk-through's first line against the same cleaning and needed to call it without
+building a generator:
+
 ```python
-def _minimal_clean(self, formula: str) -> str:
+def _minimal_clean(formula: str) -> str:
     """Minimal cleaning using simple string replacements."""
     clean = formula
     # Remove Polars column syntax

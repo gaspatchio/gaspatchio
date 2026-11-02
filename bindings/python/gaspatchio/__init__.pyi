@@ -6,12 +6,17 @@
 
 import sys
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import Any, TypeAlias
 
 import polars as pl
 
-# Expose the functions submodule
+# The package's submodules, reachable as attributes; only functions is in __all__
+from . import accessors as accessors
+from . import assumptions as assumptions
+from . import errors as errors
+from . import frame as frame
 from . import functions as functions
+from . import util as util
 
 # Import types for the public API - NEW v2 assumption API
 from .assumptions import Table as Table
@@ -28,6 +33,7 @@ from .column import ExpressionProxy as ExpressionProxy
 from .curves import Curve as Curve
 
 # Frame and error classes
+from .errors import GaspatchioWarning as GaspatchioWarning
 from .errors import PerformanceWarning as PerformanceWarning
 from .frame import ActuarialFrame as ActuarialFrame
 from .frame import run_model as run_model
@@ -38,7 +44,6 @@ from .mortality import MortalityTable as MortalityTable
 
 # Rollforward surface
 from .rollforward._builder import RollforwardBuilder as RollforwardBuilder
-from .rollforward._collector import RollforwardCollector as RollforwardCollector
 from .rollforward._compile import compile_rollforward as compile_rollforward
 from .rollforward._compiled import CompiledRollforward as CompiledRollforward
 
@@ -75,18 +80,16 @@ from .schedule import Thirty360 as Thirty360
 from .schedule import UnitedKingdom as UnitedKingdom
 from .schedule import UnitedStates as UnitedStates
 
+# Performance monitoring of map_elements / map_batches, on by default
+from .telemetry import configure_telemetry as configure_telemetry
+
 # Utility functions
 from .util import execution_mode as execution_mode
 from .util import get_default_mode as get_default_mode
 from .util import set_default_mode as set_default_mode
 
-if TYPE_CHECKING:
-    # Make submodules available for type checking if needed, but not strictly part of __all__
-    from . import accessors as accessors
-    from . import assumptions as assumptions
-    from . import errors as errors
-    from . import frame as frame
-    from . import util as util
+# The installed distribution's version, as ``gspio --version`` reports it
+__version__: str
 
 # Define __all__ to match __init__.py exactly
 __all__: list[str] = [
@@ -103,6 +106,7 @@ __all__: list[str] = [
     "Curve",
     "DayCount",
     "ExpressionProxy",
+    "GaspatchioWarning",
     "MortalityTable",
     "NullCalendar",
     "OneTwelfth",
@@ -118,7 +122,6 @@ __all__: list[str] = [
     "PeriodSum",
     "PeriodVariance",
     "RollforwardBuilder",
-    "RollforwardCollector",
     "ScenarioRun",
     "Schedule",
     "SpillResult",

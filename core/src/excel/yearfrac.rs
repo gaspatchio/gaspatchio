@@ -11,6 +11,8 @@ use chrono::{Datelike, NaiveDate};
 use polars::prelude::*;
 use serde::Deserialize;
 
+use crate::polars_functions::slices::same_periods;
+
 // Day count convention constants
 const DAYS_30_360: f64 = 360.0;
 const DAYS_ACTUAL_365: f64 = 365.0;
@@ -32,7 +34,12 @@ pub struct YearFracKwargs {
 
 /// Calculates the year fraction between two dates based on the specified basis.
 ///
-/// This function replicates Excel's YEARFRAC behavior exactly, including all quirks.
+/// This function replicates Excel's YEARFRAC, including its quirks: the answer
+/// does not depend on the order the two dates are given in (the earlier one is
+/// the start), basis 0 adjusts the day of month in Excel's order, and basis 1
+/// decides between a one-year and a multi-year denominator by whether the end
+/// date falls on or before the start date's anniversary, as D. A. Wheeler's
+/// reverse-engineered algorithm (the one OpenFormula and Gnumeric follow) does.
 ///
 /// # Basis options:
 /// - 0 (default): US (NASD) 30/360
@@ -44,8 +51,18 @@ pub struct YearFracKwargs {
 /// # Errors
 /// Returns an error if an unsupported basis is provided or if series processing fails.
 pub fn yearfrac(inputs: &[Series], kwargs: &YearFracKwargs) -> PolarsResult<Series> {
-    let mut start_date_series = inputs[0].clone();
-    let mut end_date_series = inputs[1].clone();
+    // The kernels below walk the two dates in step, so a one-row operand --
+    // `pl.lit(date(2025, 1, 1))`, which the in-memory engine hands over
+    // unbroadcast -- is repeated for every policy first, as the streaming
+    // engine reads it; otherwise the walk stops after the first policy.
+    let operands = crate::polars_functions::slices::rows_per_policy(inputs, true)?;
+    let [start, end] = operands.as_slice() else {
+        return Err(PolarsError::ComputeError(
+            format!("yearfrac takes two dates, got {}", operands.len()).into(),
+        ));
+    };
+    let mut start_date_series = start.clone();
+    let mut end_date_series = end.clone();
 
     let basis = kwargs.basis.unwrap_or(BASIS_30_360_US);
 
@@ -248,17 +265,9 @@ fn yearfrac_list_list(
     let end_list = end_series.list()?;
 
     // First, validate that all list pairs have matching lengths
-    for (idx, (start_opt, end_opt)) in start_list.into_iter().zip(end_list.into_iter()).enumerate()
-    {
+    for (start_opt, end_opt) in start_list.into_iter().zip(end_list.into_iter()) {
         if let (Some(start_s), Some(end_s)) = (start_opt, end_opt) {
-            if start_s.len() != end_s.len() {
-                return Err(PolarsError::ComputeError(
-                    format!(
-                        "List length mismatch at row {}: start has {} elements, end has {} elements. Lists must have the same length",
-                        idx, start_s.len(), end_s.len()
-                    ).into(),
-                ));
-            }
+            same_periods("start", start_s.len(), "end", end_s.len())?;
         }
     }
 
@@ -297,36 +306,35 @@ fn yearfrac_list_list(
 }
 
 /// Calculate year fraction for a single pair of dates
+///
+/// Excel's YEARFRAC does not depend on argument order: the earlier date is the
+/// start and the answer is never negative, so `YEARFRAC(valuation, issue)` and
+/// `YEARFRAC(issue, valuation)` agree.
 #[inline]
-fn calculate_yearfrac(start_date: NaiveDate, end_date: NaiveDate, basis: i32) -> f64 {
-    // Check if we need to return a negative value
-    let is_negative = start_date > end_date;
-
-    // Always calculate with start <= end for the algorithms
-    let (start, end) = if start_date <= end_date {
-        (start_date, end_date)
+fn calculate_yearfrac(first: NaiveDate, second: NaiveDate, basis: i32) -> f64 {
+    let (start, end) = if first <= second {
+        (first, second)
     } else {
-        (end_date, start_date)
+        (second, first)
     };
 
-    let fraction = match basis {
+    match basis {
         BASIS_30_360_US => calculate_30_360_us(start, end),
         BASIS_ACTUAL_ACTUAL => calculate_actual_actual(start, end),
         BASIS_ACTUAL_360 => calculate_actual_360(start, end),
         BASIS_ACTUAL_365 => calculate_actual_365(start, end),
         BASIS_30_360_EU => calculate_30_360_eu(start, end),
         _ => unreachable!(), // Already validated
-    };
-
-    // Return negative fraction if start was after end
-    if is_negative {
-        -fraction
-    } else {
-        fraction
     }
 }
 
 /// US (NASD) 30/360 day count convention
+///
+/// Excel applies the first of these adjustments that matches, in this order,
+/// and no other: both days the 31st; the start day the 31st; the start day
+/// the 30th and the end day the 31st; both dates the last day of February;
+/// the start date the last day of February. So a start on the last day of
+/// February leaves an end day of 31 as it is.
 fn calculate_30_360_us(start: NaiveDate, end: NaiveDate) -> f64 {
     let mut d1 = i32::try_from(start.day()).expect("Day fits in i32");
     let m1 = i32::try_from(start.month()).expect("Month fits in i32");
@@ -336,28 +344,20 @@ fn calculate_30_360_us(start: NaiveDate, end: NaiveDate) -> f64 {
     let m2 = i32::try_from(end.month()).expect("Month fits in i32");
     let y2 = end.year();
 
-    // Check if dates are last day of February
     let start_is_feb_last = start.month() == 2 && is_last_day_of_month(start);
     let end_is_feb_last = end.month() == 2 && is_last_day_of_month(end);
 
-    // Apply US 30/360 rules
-    // Rule 1: If both dates are last day of February, set d2 to 30
-    if start_is_feb_last && end_is_feb_last {
+    // The five first-match rules above, read off the calendar's own days: the
+    // end day becomes 30 where it is the 31st beside a start day of 30 or 31,
+    // or where both dates are February's last day; the start day becomes 30
+    // where it is the 31st or February's last day.
+    let end_to_thirty =
+        (d2 == 31 && d1 >= DAYS_PER_MONTH_30_360) || (start_is_feb_last && end_is_feb_last);
+    let start_to_thirty = d1 == 31 || start_is_feb_last;
+    if end_to_thirty {
         d2 = DAYS_PER_MONTH_30_360;
     }
-
-    // Rule 2: If start date is last day of February, set d1 to 30
-    if start_is_feb_last {
-        d1 = DAYS_PER_MONTH_30_360;
-    }
-
-    // Rule 3: If d2 is 31 and d1 is 30 or 31, set d2 to 30
-    if d2 == 31 && d1 >= DAYS_PER_MONTH_30_360 {
-        d2 = DAYS_PER_MONTH_30_360;
-    }
-
-    // Rule 4: If d1 is 31, set d1 to 30
-    if d1 == 31 {
+    if start_to_thirty {
         d1 = DAYS_PER_MONTH_30_360;
     }
 
@@ -389,12 +389,16 @@ fn calculate_30_360_eu(start: NaiveDate, end: NaiveDate) -> f64 {
     f64::from(days) / DAYS_30_360
 }
 
-/// Actual/Actual day count convention
+/// Actual/Actual day count convention, as Excel's YEARFRAC computes it
 ///
-/// This implementation handles the Feb 29 (leap day) edge case correctly:
-/// - When the start date IS Feb 29 and the period is exactly 365 days,
-///   this represents a full year (since Feb 29 doesn't exist in non-leap years).
-///   In this case, we return 1.0 instead of 365/366.
+/// - Same calendar year: the elapsed days over that year's 365 or 366.
+/// - The end in the next calendar year and on or before the start's
+///   month and day (the interval "appears" to be a year or less): over 366
+///   if the closed interval holds a 29 February, else over 365. A start on
+///   29 February and an end on 28 February a year later is 365/366.
+/// - Otherwise -- including 366 days that run past the anniversary, such
+///   as 25 September 2020 to 26 September 2021 -- over the mean length of
+///   every calendar year from the start's through the end's.
 #[allow(clippy::cast_precision_loss)]
 fn calculate_actual_actual(start: NaiveDate, end: NaiveDate) -> f64 {
     let days_diff = (end - start).num_days();
@@ -409,24 +413,8 @@ fn calculate_actual_actual(start: NaiveDate, end: NaiveDate) -> f64 {
         return days_diff as f64 / year_days;
     }
 
-    // Case 2: Different years but less than or equal to 1 year span
-    if days_diff <= 366 {
-        // Special case: Start is Feb 29 (leap day)
-        // When starting from Feb 29, a "full year" is 365 days because
-        // Feb 29 doesn't exist in non-leap years. The anniversary date
-        // is Feb 28 of the following year.
-        if start.month() == 2 && start.day() == 29 && days_diff == 365 {
-            return 1.0;
-        }
-
-        // Special case: End is Feb 29 (leap day)
-        // When ending on Feb 29, we're coming from a previous year
-        // and the denominator should be 366 (the leap year)
-        if end.month() == 2 && end.day() == 29 {
-            return days_diff as f64 / DAYS_ACTUAL_366;
-        }
-
-        // General case: Check if Feb 29 is in the range
+    // Case 2: The end appears to be a year or less after the start
+    if appears_within_a_year(start, end) {
         let contains_leap_day = contains_feb_29(start, end);
         let year_days = if contains_leap_day {
             DAYS_ACTUAL_366
@@ -477,6 +465,12 @@ fn is_leap_year(year: i32) -> bool {
 fn is_last_day_of_month(date: NaiveDate) -> bool {
     let next_day = date + chrono::Duration::days(1);
     next_day.month() != date.month()
+}
+
+/// Whether `end` falls in the year after `start` and on or before the start's
+/// month and day: Excel's test for a one-year denominator under basis 1.
+fn appears_within_a_year(start: NaiveDate, end: NaiveDate) -> bool {
+    end.year() == start.year() + 1 && (end.month(), end.day()) <= (start.month(), start.day())
 }
 
 /// Check if the date range contains February 29
@@ -549,6 +543,32 @@ pub fn yearfrac_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_short_end_list_is_refused_by_both_lengths_and_no_row() {
+        let dates = |rows: &[&[i32]]| -> Series {
+            let rows: Vec<Series> = rows
+                .iter()
+                .map(|days| {
+                    Series::new("".into(), days.to_vec())
+                        .cast(&DataType::Date)
+                        .unwrap()
+                })
+                .collect();
+            Series::new("d".into(), rows)
+        };
+        let start = dates(&[&[18_262, 18_293], &[18_262, 18_293, 18_322]]);
+        let end = dates(&[&[18_628, 18_659], &[18_628, 18_659]]);
+        let err = yearfrac(&[start, end], &YearFracKwargs { basis: Some(1) })
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("mismatched inner list lengths in one policy: end against start"),
+            "{err}"
+        );
+        assert!(err.contains("start=3, end=2 in that policy."), "{err}");
+        assert!(!err.contains("at row"), "{err}");
+    }
 
     #[test]
     fn test_yearfrac_output_type_accepts_datetime() {

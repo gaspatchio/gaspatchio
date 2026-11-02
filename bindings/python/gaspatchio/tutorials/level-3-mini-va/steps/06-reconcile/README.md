@@ -88,8 +88,8 @@ af.av_pp = af.av_pp_init * af.prev_cumulative_growth
 ```python
 af.av_pp_bef_fee = af.shifted_growth.projection.accumulate(
     initial=af.av_pp_init,
-    multiply=af.shifted_growth,
-    add=af.prem_to_av,
+    multiplier=af.shifted_growth,
+    addend=af.prem_to_av,
 )
 af.av_pp_bef_prem = af.av_pp_bef_fee - af.prem_to_av
 af.maint_fee_pp = af.av_pp_bef_fee * af.maint_fee_rate / 12.0
@@ -99,10 +99,10 @@ af.av_pp_bef_inv = af.av_pp_bef_fee - af.maint_fee_pp
 **Why it matters:**
 - `accumulate()` handles the linear recurrence `state[t] = state[t-1] * M[t] + A[t]` in one call
 - For IF business (no premium injection), results are identical to cum_prod
-- For NB business (premium at entry), `add=prem_to_av` creates the initial AV — cum_prod cannot do this
+- For NB business (premium at entry), `addend=prem_to_av` creates the initial AV — cum_prod cannot do this
 - Decomposing AV into timing stages exposes intermediate values needed for correct claim calculations
 
-**gaspatchio concept:** `projection.accumulate(initial=..., multiply=..., add=...)`
+**gaspatchio concept:** `projection.accumulate(initial=..., multiplier=..., addend=...)`
 
 ---
 
@@ -121,7 +121,12 @@ af.pols_lapse = (af.pols_if - af.pols_death) * af.lapse_rate_mth
 **The fix:** Implement the BEF_MAT/BEF_DECR ordering:
 ```python
 # 1. Policies before maturity (includes maturity month)
-af.pols_if_bef_mat = af.survival_prob * af.policy_count * (af.duration_mth_t <= af.maturity_month) * (af.duration_mth_t > 0)
+af.pols_if_bef_mat = (
+    af.survival_prob
+    * af.policy_count
+    * (af.duration_mth_t <= af.maturity_month)
+    * (af.duration_mth_t > 0)
+)
 
 # 2. Remove maturities
 af.pols_maturity = af.pols_if_bef_mat * (af.duration_mth_t == af.maturity_month)
@@ -166,7 +171,7 @@ Applying DL001 to GMAB points gives a factor of 1.0, but the correct DL002 facto
 af.dl001_factor = (1.0 - af.M * (1.0 / af.itm - af.D)).clip(af.L, af.U)
 
 # DL002: clip(Y * ITM^Power, FactorFloor, FactorCap)
-af.dl002_factor = (af.Y * af.itm ** af.Power).clip(af.FactorFloor, af.FactorCap)
+af.dl002_factor = (af.Y * af.itm**af.Power).clip(af.FactorFloor, af.FactorCap)
 
 # Select by formula_id
 af.dyn_lapse_factor = (
@@ -198,12 +203,11 @@ af.disc_factors = af.per_period_disc.cum_prod()
 
 **The fix:**
 ```python
-af.disc_factors = (
-    af.month.cast(pl.Float64) * -1.0 * (1.0 + af.disc_rate_mth).log()
-).exp()
+af.disc_factors = (1.0 + af.disc_rate_mth) ** (af.month * -1.0)
 ```
 
-This computes `(1 + r_mth)^(-t)` using the exp/log identity, matching lifelib's convention.
+This computes `(1 + r_mth)^(-t)` in closed form, matching lifelib's convention. `**`
+applies directly to a list column, so no exp/log rewrite is needed.
 
 **Why it matters:**
 - When rates change between years, `cum_prod` and the closed-form give different results
@@ -212,7 +216,7 @@ This computes `(1 + r_mth)^(-t)` using the exp/log identity, matching lifelib's 
 - Neither is objectively "more correct" — but **reconciliation means matching the reference**
 - This teaches a key reconciliation lesson: your formula might be defensible, but if the reference uses a different convention, you match the reference first, then discuss the difference
 
-**gaspatchio concepts:** `.log()`, `.exp()`, `.cast()` on list columns
+**gaspatchio concepts:** `**`, `.cum_prod()`, `.list.sum()` on list columns
 
 ## Recommended fix order
 

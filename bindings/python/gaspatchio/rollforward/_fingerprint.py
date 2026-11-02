@@ -2,29 +2,28 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""spec_fingerprint — sha256 over canonical-form bytes.
+"""spec_fingerprint — the compiled machine's identity, as a reader recomputes it.
 
-This is the engine-portable recipe identity. Two IRs with the same
-spec_fingerprint produce identical numerical output for identical inputs
-on any engine that implements the closed semantic subset correctly.
+The section 12.3 recipe-grammar hash of the compilation body the
+``gaspatchio_rollforward_ir`` facet publishes, less its schedule (spec 12.1). Two
+IRs with the same spec_fingerprint publish the same machine, and so produce
+identical numerical output for identical inputs on any engine that implements
+the closed semantic subset correctly.
 """
 
 from __future__ import annotations
 
-import hashlib
 from typing import TYPE_CHECKING
 
-from gaspatchio._identity import canonical_bytes
-from gaspatchio.rollforward._canonical import canonical_form
+from gaspatchio.rollforward._canonical import compiled_identity, identity_form
 
 if TYPE_CHECKING:
     from gaspatchio.rollforward._ir import IR
 
 
 def spec_fingerprint(ir: IR) -> str:
-    """Return ``"sha256:<hex>"`` over the IR's canonical-form bytes."""
-    digest = hashlib.sha256(canonical_bytes(canonical_form(ir))).hexdigest()
-    return f"sha256:{digest}"
+    """Return ``"sha256:<hex>"`` over the machine's published body, less schedule."""
+    return compiled_identity(identity_form(ir))
 
 
 __all__ = ["spec_fingerprint"]

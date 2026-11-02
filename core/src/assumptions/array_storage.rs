@@ -23,7 +23,11 @@ pub struct ArrayStorage {
 
 impl ArrayStorage {
     /// Build array storage from DataFrame.
-    /// Returns None if table is too sparse (< 30% density).
+    /// Returns None when the table cannot be addressed by an array index and
+    /// hash storage should own it instead: a key value outside the whole
+    /// numbers an index is built from, a key space too large to count, density
+    /// below 10%, or an array over the 100 MB limit. Each of those says so at
+    /// debug level, because hash storage answers the same lookups 20-40x slower.
     /// If string_mappings is provided, creates CategoricalWithStringFallback encoders
     /// for columns that have mappings, enabling transparent string lookup.
     pub fn build(df: &DataFrame, keys: &[String], value: &str) -> PolarsResult<Option<Self>> {
@@ -44,6 +48,49 @@ impl ArrayStorage {
         for key_name in keys {
             let column = df.column(key_name)?;
 
+            // IntRange stores an i64 offset. Let hash storage own numeric
+            // domains that cannot be represented by that encoder instead of
+            // reaching a saturating cast or attempting an enormous array.
+            // Keep the first value that does not fit, so the fallback can say
+            // which key sent the table down the slower path.
+            let series = column.as_materialized_series();
+            let outside_int_range: Option<String> = match series.dtype() {
+                DataType::UInt64 => series
+                    .u64()?
+                    .into_iter()
+                    .flatten()
+                    .find(|value| *value > i64::MAX as u64)
+                    .map(|value| value.to_string()),
+                DataType::Float64 => series
+                    .f64()?
+                    .into_iter()
+                    .flatten()
+                    .find(|value| {
+                        value.is_finite()
+                            && value.fract() == 0.0
+                            && !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
+                                .contains(value)
+                    })
+                    // `{:.0}` and not `to_string()`: Display prints the
+                    // shortest decimal that reads back as the same f64, which
+                    // for 2^63 is 9223372036854776000 -- a different number in
+                    // a line whose whole job is naming the number. This branch
+                    // only ever holds a whole number, so the exact expansion
+                    // is both right and finite.
+                    .map(|value| format!("{value:.0}")),
+                _ => None,
+            };
+            if let Some(offending) = outside_int_range {
+                log::debug!(
+                    "Key column '{}' holds {}, outside {}..={}, falling back to hash storage",
+                    key_name,
+                    offending,
+                    i64::MIN,
+                    i64::MAX
+                );
+                return Ok(None);
+            }
+
             // If we have a string mapping for this column, create a hybrid encoder
             // that can handle both categorical and string input
             if let Some(mappings) = string_mappings {
@@ -61,7 +108,17 @@ impl ArrayStorage {
 
         // Compute dimensions and total capacity
         let dims: Vec<usize> = encoders.iter().map(|e| e.size()).collect();
-        let capacity: usize = dims.iter().product();
+        let Some(capacity) = dims
+            .iter()
+            .try_fold(1usize, |total, dimension| total.checked_mul(*dimension))
+        else {
+            log::debug!(
+                "Key space {:?} multiplies past usize::MAX {}, falling back to hash storage",
+                dims,
+                usize::MAX
+            );
+            return Ok(None);
+        };
 
         // Check density - only use array if > 10% filled.
         // Array is 67-126x faster than hash, so even sparse tables benefit.
@@ -75,7 +132,19 @@ impl ArrayStorage {
         }
 
         // Check memory limit - don't create arrays > 100MB
-        let memory_bytes = capacity * std::mem::size_of::<f64>();
+        // No test reaches this line, and none can: the density check above
+        // wants one row per ten cells, so a capacity big enough to overflow
+        // eight bytes a cell would need ~2.3e17 rows. It stays because the
+        // multiply must not wrap, and it says its piece for the same reason
+        // its neighbours do.
+        let Some(memory_bytes) = capacity.checked_mul(std::mem::size_of::<f64>()) else {
+            log::debug!(
+                "Array of {} cells needs more than usize::MAX {} bytes, falling back to hash storage",
+                capacity,
+                usize::MAX
+            );
+            return Ok(None);
+        };
         if memory_bytes > 100 * 1024 * 1024 {
             log::debug!(
                 "Array would be {}MB > 100MB limit, falling back to hash storage",
@@ -534,6 +603,187 @@ mod tests {
         let storage = ArrayStorage::build(&df, &["key1".to_string(), "key2".to_string()], "value")?;
 
         assert!(storage.is_none(), "Should return None for sparse table");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_full_width_numeric_ranges_fall_back_without_allocating() -> PolarsResult<()> {
+        let signed = df! {
+            "key" => [i64::MIN, i64::MAX],
+            "rate" => [0.1, 0.2],
+        }?;
+        let unsigned = df! {
+            "key" => [9_223_372_036_854_775_808_u64, u64::MAX],
+            "rate" => [0.1, 0.2],
+        }?;
+        let float = df! {
+            "key" => [9_223_372_036_854_775_808.0],
+            "rate" => [0.1],
+        }?;
+
+        assert!(ArrayStorage::build(&signed, &["key".to_string()], "rate")?.is_none());
+        assert!(ArrayStorage::build(&unsigned, &["key".to_string()], "rate")?.is_none());
+        assert!(ArrayStorage::build(&float, &["key".to_string()], "rate")?.is_none());
+        Ok(())
+    }
+
+    /// Reads back what was logged on the calling thread.
+    ///
+    /// A fallback that is taken silently and a fallback that explains itself
+    /// are the same `Ok(None)` to a caller, so a test that only looks at the
+    /// return value cannot tell them apart. Each test thread keeps its own
+    /// lines, so tests running side by side do not read each other's.
+    mod log_capture {
+        use std::cell::RefCell;
+        use std::sync::Once;
+
+        thread_local! {
+            static LINES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        }
+
+        struct ThreadLocalLogger;
+
+        impl log::Log for ThreadLocalLogger {
+            fn enabled(&self, _metadata: &log::Metadata<'_>) -> bool {
+                true
+            }
+
+            fn log(&self, record: &log::Record<'_>) {
+                LINES.with(|lines| lines.borrow_mut().push(record.args().to_string()));
+            }
+
+            fn flush(&self) {}
+        }
+
+        static INSTALL: Once = Once::new();
+
+        /// Run `body` and return what it produced beside what it logged.
+        ///
+        /// Nothing else in this crate's tests installs a logger, so the one
+        /// installed here is the one that runs. If that ever changes the
+        /// capture comes back empty and the assertions on it fail, which is
+        /// the honest outcome -- an empty capture is never read as silence
+        /// having been intended.
+        pub fn lines_from<T>(body: impl FnOnce() -> T) -> (T, Vec<String>) {
+            INSTALL.call_once(|| {
+                if log::set_boxed_logger(Box::new(ThreadLocalLogger)).is_ok() {
+                    log::set_max_level(log::LevelFilter::Debug);
+                }
+            });
+            LINES.with(|lines| lines.borrow_mut().clear());
+            let produced = body();
+            (produced, LINES.with(|lines| lines.borrow().clone()))
+        }
+    }
+
+    #[test]
+    fn test_a_key_outside_the_index_range_names_itself_when_it_forces_hash_storage(
+    ) -> PolarsResult<()> {
+        // 2**63 -- one past the largest whole number an array index is built
+        // from -- spelled as each of the two dtypes that can carry it.
+        let unsigned = df! {
+            "policy_number" => [9_223_372_036_854_775_808_u64, u64::MAX],
+            "rate" => [0.1, 0.2],
+        }?;
+        let float = df! {
+            "policy_number" => [9_223_372_036_854_775_808.0],
+            "rate" => [0.1],
+        }?;
+
+        for (dtype_spelling, frame) in [("unsigned", &unsigned), ("float", &float)] {
+            let (built, lines) = log_capture::lines_from(|| {
+                ArrayStorage::build(frame, &["policy_number".to_string()], "rate")
+            });
+            assert!(
+                built?.is_none(),
+                "a {dtype_spelling} key past the index range should leave array storage",
+            );
+
+            let said = lines.join("\n");
+            assert!(
+                said.contains("'policy_number'"),
+                "the {dtype_spelling} fallback should name the key column; it said: {said}",
+            );
+            // "holds <value>" and not the digits alone: the line also prints
+            // the range it left, and i64::MIN is -9223372036854775808, which
+            // carries the same digits. A bare substring test for them passes
+            // on a line that never names the value at all.
+            assert!(
+                said.contains("holds 9223372036854775808,"),
+                "the {dtype_spelling} fallback should name the value that did not fit; \
+                 it said: {said}",
+            );
+            assert!(
+                said.contains("falling back to hash storage"),
+                "the {dtype_spelling} fallback should say where the table went; it said: {said}",
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_a_key_space_too_large_to_count_says_so_when_it_forces_hash_storage() -> PolarsResult<()>
+    {
+        // One full-width key saturates its encoder at usize::MAX and is caught
+        // by the density check. Two of them multiply past usize::MAX, which is
+        // the only way to reach the capacity guard.
+        let df = df! {
+            "left" => [i64::MIN, i64::MAX],
+            "right" => [i64::MIN, i64::MAX],
+            "rate" => [0.1, 0.2],
+        }?;
+
+        let (built, lines) = log_capture::lines_from(|| {
+            ArrayStorage::build(&df, &["left".to_string(), "right".to_string()], "rate")
+        });
+        assert!(
+            built?.is_none(),
+            "an uncountable key space leaves array storage"
+        );
+
+        let said = lines.join("\n");
+        assert!(
+            said.contains("Key space"),
+            "the fallback should say the key space was the reason; it said: {said}",
+        );
+        assert!(
+            said.contains("multiplies past usize::MAX"),
+            "the fallback should say the key space could not be counted; it said: {said}",
+        );
+        assert!(
+            said.contains("falling back to hash storage"),
+            "the fallback should say where the table went; it said: {said}",
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_a_key_outside_the_index_range_leaves_a_table_on_hash_storage() -> PolarsResult<()> {
+        let unsigned = df! {
+            "policy_number" => [9_223_372_036_854_775_808_u64, u64::MAX],
+            "rate" => [0.1, 0.2],
+        }?;
+        let float = df! {
+            "policy_number" => [9_223_372_036_854_775_808.0],
+            "rate" => [0.1],
+        }?;
+
+        for (dtype_spelling, frame) in [("unsigned", unsigned), ("float", float)] {
+            let table = crate::assumptions::AssumptionTable::build_with_mode(
+                frame,
+                vec!["policy_number".to_string()],
+                "rate".to_string(),
+                crate::assumptions::StorageMode::Auto,
+            )?;
+            assert!(
+                !table.is_array_storage(),
+                "a {dtype_spelling} key past the index range should leave the table on hash \
+                 storage, not array",
+            );
+        }
 
         Ok(())
     }

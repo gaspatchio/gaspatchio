@@ -1,0 +1,94 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Opio Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The identity, as tokens — gaspatchio.dev's own.
+ *
+ * One accent and it is the red; amber is reserved for a hole and for a
+ * disagreement flag and is used for nothing else, so that a reader who sees
+ * amber on this page knows without being told that the file is admitting
+ * something. Two faces: iA Writer Quattro S for text, Zed Plex Mono for every
+ * number, formula and identifier, with tabular figures so a column of values
+ * is a column and not a ragged edge.
+ *
+ * No dark mode in the first cut, deliberately rather than by omission: the
+ * page is an audit object, and a document that looks different on two desks is
+ * two documents.
+ *
+ * The three faces themselves are not declared here. `build.mjs` writes them
+ * into `assets/fonts.css` as `data:font/woff2;base64,…` and `styles()` puts
+ * that after this file, so the page carries each face exactly once.
+ */
+
+:root {
+  /* The one accent, and the two hovers the site uses with it. */
+  --red: #ff3b30;
+  --red-light: #ff7066;
+  --red-dark: #e61a0f;
+
+  /* Ink on paper. */
+  --ink: rgba(0, 0, 0, 0.87);
+  --ink-secondary: #5a6771;
+  --paper: #fff;
+  --rule: #e2e5e7;
+
+  /* Code, formulas and the identifiers inside them. */
+  --code-surface: #f5f5f5;
+  --code-blue: #4ea1ff;
+
+  /*
+   * The model's own text, coloured the way gaspatchio.dev colours it.
+   *
+   * Material for MkDocs' light code colours, which is what the documentation
+   * site renders under, plus the one override that
+   * gaspatchio-docs/docs/stylesheets/extra.css makes: every name, attribute,
+   * function, module and builtin in the blue above. A model file read in this
+   * page and the same code read on the site are then the same colours, and a
+   * reader moving between them is not learning a second palette.
+   *
+   * Comments and punctuation take this page's own secondary ink rather than
+   * Material's grey: they are the parts of a line that should recede, and this
+   * page already has a colour for receding.
+   */
+  --code-keyword: #3f6ec6;
+  --code-string: #1c7d4d;
+  --code-number: #d52a2a;
+
+  /* Holes, and disagreement. Never the red. */
+  --amber: #b7791f;
+
+  /* The two washes the grid marks with: the selected column, the row cursor. */
+  --selected: #fff1f0;
+  --cursor: #fff8e6;
+
+  /* The two faces, with the fallbacks a machine missing them would reach for. */
+  --face-text: "iA Writer Quattro S", "Segoe UI", system-ui, sans-serif;
+  --face-mono: "Zed Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--face-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+#root {
+  height: 100%;
+}
+
+/* Every number on the page is read down a column, so every number is tabular. */
+.mono {
+  font-family: var(--face-mono);
+  font-variant-numeric: tabular-nums;
+}

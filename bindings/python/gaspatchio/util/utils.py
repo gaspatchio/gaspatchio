@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+"""Read model points from Parquet or CSV files, local or on S3."""
+
 from pathlib import Path
 from typing import Any
 
@@ -34,10 +36,11 @@ def _scan_model_points(
     if suffix == ".csv":
         return pl.scan_csv(source, infer_schema_length=10000, **scan_kwargs)
 
-    raise ValueError(
+    msg = (
         f"Unsupported model points format: {suffix or '(no file extension)'}. "
-        f"Model points must be a .parquet or .csv file (got: {source}).",
+        f"Model points must be a .parquet or .csv file (got: {source})."
     )
+    raise ValueError(msg)
 
 
 def read_model_points(path: Path | str) -> pl.LazyFrame:

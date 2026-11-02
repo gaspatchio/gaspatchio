@@ -27,7 +27,6 @@ from gaspatchio.scenarios.shocks import (
     MinShock,
     MultiplicativeShock,
     OverrideShock,
-    ParameterShock,
     PipelineShock,
     Shock,
     TimeConditionalShock,
@@ -158,10 +157,12 @@ class TestFilteredShock:
             where={"product": "TERM"},
         )
 
-        rates = pl.DataFrame({
-            "product": ["TERM", "WL", "TERM", "WL"],
-            "rate": [0.10, 0.05, 0.08, 0.04],
-        })
+        rates = pl.DataFrame(
+            {
+                "product": ["TERM", "WL", "TERM", "WL"],
+                "rate": [0.10, 0.05, 0.08, 0.04],
+            }
+        )
 
         result = rates.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
@@ -178,10 +179,12 @@ class TestFilteredShock:
             where={"duration": {"lte": 3}},
         )
 
-        lapse_by_duration = pl.DataFrame({
-            "duration": [1, 2, 3, 4, 5],
-            "rate": [0.10, 0.08, 0.06, 0.05, 0.04],
-        })
+        lapse_by_duration = pl.DataFrame(
+            {
+                "duration": [1, 2, 3, 4, 5],
+                "rate": [0.10, 0.08, 0.06, 0.05, 0.04],
+            }
+        )
 
         result = lapse_by_duration.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
@@ -198,10 +201,12 @@ class TestFilteredShock:
             where={"age": {"between": [30, 50]}},
         )
 
-        mortality_by_age = pl.DataFrame({
-            "age": [25, 30, 40, 50, 60],
-            "rate": [0.001, 0.002, 0.004, 0.008, 0.015],
-        })
+        mortality_by_age = pl.DataFrame(
+            {
+                "age": [25, 30, 40, 50, 60],
+                "rate": [0.001, 0.002, 0.004, 0.008, 0.015],
+            }
+        )
 
         result = mortality_by_age.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
@@ -218,11 +223,13 @@ class TestFilteredShock:
             where={"sex": "F", "smoker": "NS"},
         )
 
-        segment_rates = pl.DataFrame({
-            "sex": ["M", "F", "F", "M"],
-            "smoker": ["NS", "S", "NS", "NS"],
-            "rate": [0.01, 0.02, 0.015, 0.012],
-        })
+        segment_rates = pl.DataFrame(
+            {
+                "sex": ["M", "F", "F", "M"],
+                "smoker": ["NS", "S", "NS", "NS"],
+                "rate": [0.01, 0.02, 0.015, 0.012],
+            }
+        )
 
         result = segment_rates.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
@@ -254,10 +261,12 @@ class TestTimeConditionalShock:
             when={"t": {"eq": 0}},
         )
 
-        lapse_proj = pl.DataFrame({
-            "t": [0, 1, 2, 3],
-            "rate": [0.05, 0.05, 0.05, 0.05],
-        })
+        lapse_proj = pl.DataFrame(
+            {
+                "t": [0, 1, 2, 3],
+                "rate": [0.05, 0.05, 0.05, 0.05],
+            }
+        )
 
         result = lapse_proj.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
@@ -274,10 +283,12 @@ class TestTimeConditionalShock:
             when={"t": {"lte": 5}},
         )
 
-        lapse_proj = pl.DataFrame({
-            "t": [1, 3, 5, 7, 10],
-            "rate": [0.10, 0.10, 0.10, 0.10, 0.10],
-        })
+        lapse_proj = pl.DataFrame(
+            {
+                "t": [1, 3, 5, 7, 10],
+                "rate": [0.10, 0.10, 0.10, 0.10, 0.10],
+            }
+        )
 
         result = lapse_proj.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked_rate")
@@ -367,7 +378,7 @@ class TestParseShockConfigExtended:
             "pipeline": [
                 {"multiply": 1.5},
                 {"clip": {"max": 1.0}},
-            ]
+            ],
         }
         shock = parse_shock_config(config)
         assert isinstance(shock, PipelineShock)
@@ -387,7 +398,7 @@ class TestParseShockConfigExtended:
             "max": [
                 {"multiply": 0.5},
                 {"add": -0.2},
-            ]
+            ],
         }
         shock = parse_shock_config(config)
         assert isinstance(shock, MaxShock)
@@ -458,7 +469,7 @@ class TestSolvency2SCRScenarios:
             "pipeline": [
                 {"multiply": 1.5},
                 {"clip": {"max": 1.0}},
-            ]
+            ],
         }
         shock = parse_shock_config(config)
 
@@ -481,7 +492,7 @@ class TestSolvency2SCRScenarios:
             "max": [
                 {"multiply": 0.5},
                 {"add": -0.2},
-            ]
+            ],
         }
         shock = parse_shock_config(config)
 
@@ -507,10 +518,12 @@ class TestSolvency2SCRScenarios:
         }
         shock = parse_shock_config(config)
 
-        lapse_proj = pl.DataFrame({
-            "t": [0, 1, 2, 3],
-            "rate": [0.05, 0.05, 0.04, 0.04],
-        })
+        lapse_proj = pl.DataFrame(
+            {
+                "t": [0, 1, 2, 3],
+                "rate": [0.05, 0.05, 0.04, 0.04],
+            }
+        )
         result = lapse_proj.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked")
         )
@@ -544,10 +557,12 @@ class TestSolvency2SCRScenarios:
         }
         shock = parse_shock_config(config)
 
-        lapse_by_duration = pl.DataFrame({
-            "duration": [1, 2, 3, 4, 5],
-            "rate": [0.10, 0.08, 0.06, 0.05, 0.04],
-        })
+        lapse_by_duration = pl.DataFrame(
+            {
+                "duration": [1, 2, 3, 4, 5],
+                "rate": [0.10, 0.08, 0.06, 0.05, 0.04],
+            }
+        )
         result = lapse_by_duration.with_columns(
             shock.to_expression(pl.col("rate")).alias("shocked")
         )
@@ -556,66 +571,28 @@ class TestSolvency2SCRScenarios:
         assert result["shocked"].to_list() == pytest.approx(expected)
 
 
-class TestParameterShock:
-    """Tests for ParameterShock - GSP-73."""
+class TestParamReadsAsColumn:
+    """``param:`` is read as ``column:`` -- the scalar a shock moves is a model-point column."""
 
-    def test_parameter_shock_multiply(self):
-        """ParameterShock with multiply operation."""
-        shock = ParameterShock(param="discount_spread", operation="multiply", value=1.5)
+    @pytest.mark.parametrize(
+        ("operation", "cls"),
+        [
+            ("add", AdditiveShock),
+            ("multiply", MultiplicativeShock),
+            ("set", OverrideShock),
+        ],
+    )
+    def test_param_parses_to_a_column_shock(self, operation, cls):
+        """A recipe written with param: keeps working, as a column shock."""
+        shock = parse_shock_config({"param": "infl_rate", operation: 0.01})
+        assert isinstance(shock, cls)
+        assert shock.column == "infl_rate"
+        assert shock.table is None
 
-        result = shock.apply(0.02)
-        assert result == pytest.approx(0.03)
-
-    def test_parameter_shock_add(self):
-        """ParameterShock with add operation."""
-        shock = ParameterShock(param="expense_inflation", operation="add", value=0.01)
-
-        result = shock.apply(0.02)
-        assert result == pytest.approx(0.03)
-
-    def test_parameter_shock_set(self):
-        """ParameterShock with set operation."""
-        shock = ParameterShock(
-            param="mortality_improvement", operation="set", value=0.0
-        )
-
-        result = shock.apply(0.005)
-        assert result == 0.0
-
-    def test_parameter_shock_invalid_operation(self):
-        """ParameterShock rejects invalid operations."""
-        with pytest.raises(ValueError, match="operation must be one of"):
-            ParameterShock(param="test", operation="invalid", value=1.0)
-
-    def test_parameter_shock_describe(self):
-        """ParameterShock has descriptive string representation."""
-        shock = ParameterShock(param="expense_inflation", operation="add", value=0.01)
-        desc = shock.describe()
-        assert "param" in desc.lower()
-        assert "expense_inflation" in desc
-
-    def test_parse_parameter_shock_add(self):
-        """Parse parameter shock with add operation."""
-        config = {"param": "infl_rate", "add": 0.01}
-        shock = parse_shock_config(config)
-        assert isinstance(shock, ParameterShock)
-        assert shock.param == "infl_rate"
-        assert shock.operation == "add"
-        assert shock.value == 0.01
-
-    def test_parse_parameter_shock_multiply(self):
-        """Parse parameter shock with multiply operation."""
-        config = {"param": "discount_spread", "multiply": 1.5}
-        shock = parse_shock_config(config)
-        assert isinstance(shock, ParameterShock)
-        assert shock.operation == "multiply"
-
-    def test_parse_parameter_shock_set(self):
-        """Parse parameter shock with set operation."""
-        config = {"param": "mort_improvement", "set": 0.0}
-        shock = parse_shock_config(config)
-        assert isinstance(shock, ParameterShock)
-        assert shock.operation == "set"
+    def test_param_and_column_together_are_refused(self):
+        """param: is an alias of column:, so naming both is refused."""
+        with pytest.raises(ValueError, match="param: is read as column:"):
+            parse_shock_config({"param": "a", "column": "b", "add": 0.01})
 
 
 class TestBackwardCompatibility:
@@ -747,7 +724,6 @@ def test_all_shock_types_importable():
         MinShock,
         MultiplicativeShock,
         OverrideShock,
-        ParameterShock,
         PipelineShock,
         Shock,
         TimeConditionalShock,
@@ -761,7 +737,6 @@ def test_all_shock_types_importable():
     assert MinShock is not None
     assert MultiplicativeShock is not None
     assert OverrideShock is not None
-    assert ParameterShock is not None
     assert PipelineShock is not None
     assert Shock is not None
     assert TimeConditionalShock is not None

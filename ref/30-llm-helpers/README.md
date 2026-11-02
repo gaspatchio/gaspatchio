@@ -122,9 +122,18 @@ Gaspatchio has the surfaces (CLI commands, external MCP, agent skills) but **no 
 30-llm-helpers/
 ├── README.md                              ← this file
 └── skills/
-    ├── gaspatchio-building.md              ← existing agent skill
-    ├── gaspatchio-building-references/     ← reference files for building skill
-    ├── gaspatchio-discovery.md             ← existing agent skill
-    ├── gaspatchio-reconciliation.md        ← existing agent skill
-    └── gaspatchio-reconciliation-references/ ← reference files for reconciliation skill
+    ├── gaspatchio-building.md              ← pre-migration skill draft
+    ├── gaspatchio-building-references/     ← copy of the shipped reference files
+    ├── gaspatchio-discovery.md             ← pre-migration skill draft
+    ├── gaspatchio-reconciliation.md        ← pre-migration skill draft
+    └── gaspatchio-reconciliation-references/ ← copy of the shipped reference files
 ```
+
+**The maintained skills live at the repository root, in `skills/`.** The three
+`.md` files above are the drafts the migration copied from and are kept as the
+design record; the two `*-references/` directories are copies of what shipped —
+`skills/gaspatchio-model-building/references/` and
+`skills/gaspatchio-model-reconciliation/references/`, which are the canonical
+ones. Read a reference file there, not here, and edit it there: a copy is only
+ever as current as the last time somebody put it back in step, and the building
+references had drifted a release behind before this line was written.

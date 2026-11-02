@@ -1,0 +1,735 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "A NaN put right with a stated value or column",
+  "cases": [
+    {
+      "id": "fill-nan-f64-policies",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.5,
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "+inf"
+            },
+            {
+              "nonfinite": "-inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.5,
+          0.0,
+          {
+            "nonfinite": "+inf"
+          },
+          {
+            "nonfinite": "-inf"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-f64-periods",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.25,
+              {
+                "nonfinite": "nan"
+              },
+              0.75
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.25,
+            0.0,
+            0.75
+          ],
+          [
+            0.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-null-stays-null-policies",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            null,
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          null,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-null-stays-null-periods",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              null
+            ],
+            null,
+            [
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            null
+          ],
+          null,
+          [
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-column-fill-policies",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            {
+              "nonfinite": "nan"
+            }
+          ]
+        },
+        "fill": {
+          "dtype": "f64",
+          "values": [
+            9.0,
+            8.0,
+            7.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "col",
+            "name": "fill"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          9.0,
+          2.0,
+          7.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-policy-fill-over-periods",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              0.5,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              0.25,
+              {
+                "nonfinite": "nan"
+              }
+            ]
+          ]
+        },
+        "fill": {
+          "dtype": "f64",
+          "values": [
+            9.0,
+            8.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "col",
+            "name": "fill"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            9.0,
+            0.5,
+            9.0
+          ],
+          [
+            0.25,
+            8.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-period-fill-over-periods",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              0.5,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              0.25,
+              {
+                "nonfinite": "nan"
+              }
+            ]
+          ]
+        },
+        "fill": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              4.0,
+              5.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "col",
+            "name": "fill"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.5,
+            3.0
+          ],
+          [
+            0.25,
+            5.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-expression-fill-over-periods",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              0.5
+            ],
+            [
+              0.25,
+              {
+                "nonfinite": "nan"
+              }
+            ]
+          ]
+        },
+        "fill": {
+          "dtype": "f64",
+          "values": [
+            4.5,
+            4.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "binop",
+            "kind": "mul",
+            "left": {
+              "op": "col",
+              "name": "fill"
+            },
+            "right": {
+              "op": "lit",
+              "value": 2.0
+            }
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            9.0,
+            0.5
+          ],
+          [
+            0.25,
+            8.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-i64-decimal-fill",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            1,
+            -2,
+            3
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          -2.0,
+          3.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-i64-whole-fill",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            1,
+            -2,
+            3
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          1,
+          -2,
+          3
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-i64-periods",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              1,
+              2
+            ],
+            [
+              3
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            2.0
+          ],
+          [
+            3.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-nan-whole-fill-over-decimal",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            1.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          1.5
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "empty-portfolio-fill_nan",
+      "covers": [
+        "fill_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    }
+  ]
+}

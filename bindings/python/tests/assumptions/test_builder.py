@@ -394,6 +394,18 @@ class TestTableBuilderEdgeCases:
         result = builder.from_source(df)
         assert result._source is df
 
+    def test_repr_with_a_dataframe_source(self):
+        """A DataFrame source reads as set.
+
+        The repr tested the source's truth value, and a DataFrame has none:
+        printing a builder with a DataFrame source raised TypeError.
+        """
+        builder = TableBuilder("test").from_source(pl.DataFrame({"col": [1, 2, 3]}))
+
+        assert repr(builder) == (
+            "TableBuilder(name='test', dimensions=0, source=set, value='rate')"
+        )
+
     def test_empty_name_builder(self):
         """Test builder with empty name."""
         builder = TableBuilder("")

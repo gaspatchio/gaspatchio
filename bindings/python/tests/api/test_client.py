@@ -264,12 +264,53 @@ class TestKnowledgeAPIClient:
             doc_type="standard",
         )
 
-        # Verify the request payload
+        # Verify the request payload: the index stores filters in lower case
         call_args = mock_post.call_args
         payload = call_args.kwargs["json"]
-        assert payload["tags"] == ["IFRS17"]
-        assert payload["jurisdiction"] == "EU"
+        assert payload["tags"] == ["ifrs17"]
+        assert payload["jurisdiction"] == "eu"
         assert payload["doc_type"] == "standard"
+
+    @pytest.mark.parametrize(
+        ("method", "endpoint"),
+        [
+            ("search_knowledge", "/api/v1/knowledge/search"),
+            ("answer_knowledge", "/api/v1/knowledge/answer"),
+        ],
+    )
+    @patch("httpx.Client.post")
+    def test_knowledge_filters_are_sent_in_lower_case(
+        self, mock_post, method, endpoint
+    ):
+        """-T IFRS17 matched nothing: the index matches lower-case values exactly."""
+        mock_post.return_value = MagicMock(status_code=500, text="stop here")
+
+        client = KnowledgeAPIClient()
+        with pytest.raises(APIConnectionError):
+            getattr(client, method)(
+                "CSM",
+                tags=["IFRS17", "Solvency"],
+                jurisdiction="International",
+                doc_type="Practice-Note",
+            )
+
+        assert mock_post.call_args.args[0].endswith(endpoint)
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["tags"] == ["ifrs17", "solvency"]
+        assert payload["jurisdiction"] == "international"
+        assert payload["doc_type"] == "practice-note"
+
+    @patch("httpx.Client.post")
+    def test_knowledge_filters_not_given_are_not_sent(self, mock_post):
+        """No filter asked for means none in the payload, not an empty one."""
+        mock_post.return_value = MagicMock(status_code=500, text="stop here")
+
+        client = KnowledgeAPIClient()
+        with pytest.raises(APIConnectionError):
+            client.search_knowledge("CSM")
+
+        payload = mock_post.call_args.kwargs["json"]
+        assert not {"tags", "jurisdiction", "doc_type"} & payload.keys()
 
 
 class TestErrorStatusCode:

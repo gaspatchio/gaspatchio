@@ -22,6 +22,7 @@ order = [
     "gaspatchio-model-reconciliation",
     "gaspatchio-model-review",
     "gaspatchio-model-scenarios",
+    "gaspatchio-results-analysis",
     "gaspatchio-extending",
 ]
 
@@ -29,7 +30,7 @@ order = [
 name         = "gaspatchio"
 display_name = "Gaspatchio"
 description  = "Actuarial modeling skills for gaspatchio (Python + Rust/Polars)."
-version      = "1.2.0"
+version      = "1.4.0"
 author_name  = "Opio Inc."
 author_url   = "https://github.com/gaspatchio"
 homepage     = "https://github.com/gaspatchio/gaspatchio"

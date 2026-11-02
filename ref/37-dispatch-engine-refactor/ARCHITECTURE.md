@@ -61,7 +61,7 @@ flowchart TB
         subgraph pb["polars_backend/ (Polars boundary)"]
             PL["plugins.py — register_plugin_function wrappers"]
             OP["operators.py — execute_list_pow · execute_list_clip · dispatch_list_op"]
-            MK["masks.py — boolean_and / _or / _not · to_boolean_expr"]
+            MK["masks.py — to_boolean_expr · boolean_and/_or_reflected"]
             LE["list_eval.py — unwrap_for_list_eval"]
             SHR["_shared.py — _unwrap_proxy (duck-typed)"]
         end
@@ -303,13 +303,22 @@ asymmetric routing strategies because their constraints differ:
 ## Boolean-mask path
 
 `ConditionExpression`'s `&` / `|` / `~` overloads are now thin
-delegating stubs. The arithmetic-as-logic implementation lives in
-`polars_backend/masks.py`, which routes by shape.
+delegating stubs.
+
+> **Superseded.** The forward AND/OR/NOT of two predicates no longer routes
+> through `polars_backend/masks.py`. It is a lowering rule over the op tree
+> (`frame/lowering/rules/predicates.py`), which makes the same shape
+> decision once against the node instead of re-deriving it from proxy types
+> at expression-build time; `boolean_and`/`boolean_or`/`boolean_not` were
+> deleted once they had no callers. What remains in `masks.py` is
+> `to_boolean_expr` and the two `*_reflected` combinators for the
+> `__rand__`/`__ror__` path. The shape branch below still describes the
+> semantics accurately — only its address changed.
 
 ```mermaid
 flowchart TD
     Op["cond1 &amp; cond2 / cond1 | cond2 / ~cond"] --> Front["ConditionExpression.__and__/__or__/__invert__"]
-    Front --> Backend["polars_backend.masks.boolean_and / _or / _not"]
+    Front --> Backend["frame.lowering.rules.predicates — and_ / or_ / not_"]
 
     Backend --> ShapeBranch{"left.shape == 'list'<br/>or other.shape == 'list'?"}
 
@@ -323,13 +332,8 @@ flowchart TD
 The pre-PR-3 implementation always returned Float64 over arithmetic
 identities — fine for the list path but broken for the scalar path
 because `pl.when()` rejects Float64 predicates with `SchemaError`. The
-shape branch in `boolean_or` and `boolean_not` fixes that latent bug.
-
-`boolean_and` returns `(combined_expr, is_list_path)`; the frontend
-uses `is_list_path` to decide whether to stamp `kind="boolean_mask"`.
-The list path always stamps; the scalar path preserves an existing
-quirk (no kind stamp), which keeps native `&` results going through
-`_kind_from_dtype` inference downstream.
+shape branch fixes that latent bug, and the lowering rules that replaced
+these functions keep it.
 
 ### `to_boolean_expr` — predicate to Float64
 

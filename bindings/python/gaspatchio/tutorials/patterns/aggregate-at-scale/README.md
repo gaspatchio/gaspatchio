@@ -65,8 +65,7 @@ its own directory and cleans them up — never under `/tmp`.
 
 ## Provenance
 
-The batched aggregate-and-stream design lives in the repo under
-`ref/41-backend-portability` (GSP-89, shipped in PR #111). `run_aggregated` and
+The batched aggregate-and-stream design shipped in PR #111. `run_aggregated` and
 `run_to_parquet` are the user-facing surface of that work: cap peak memory at
 roughly one batch regardless of total portfolio scale, while keeping the
 aggregate bit-for-bit identical to a full-frame run.

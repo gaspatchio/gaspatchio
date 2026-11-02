@@ -28,9 +28,9 @@ import polars as pl
 import pytest
 
 from gaspatchio.rollforward._builder import RollforwardBuilder
-from gaspatchio.rollforward._collector import RollforwardCollector
 from gaspatchio.rollforward._compile import compile_rollforward
 from gaspatchio.schedule import Schedule
+from tests.rollforward.conftest import _standalone_state_expr
 
 N_POLICIES = 300
 N_PERIODS = 24
@@ -42,7 +42,6 @@ def _compiled_ul_rollforward(*, jagged: bool = False):
     if jagged:
         sched = Schedule.from_per_policy_grid(
             start_date=date(2025, 1, 31),
-            n_periods=N_PERIODS,
             frequency="1M",
             until_kind="term_months",
             until_value_column="term",
@@ -106,7 +105,7 @@ def _in_chunks(df: pl.DataFrame, width: int) -> pl.DataFrame:
 
 def _run_av(compiled, df: pl.DataFrame) -> list[list[float]]:
     return (
-        df.with_columns(av=RollforwardCollector(compiled).expr_for("av"))
+        df.with_columns(av=_standalone_state_expr(compiled, "av"))
         .get_column("av")
         .to_list()
     )

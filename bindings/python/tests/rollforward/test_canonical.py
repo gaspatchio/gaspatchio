@@ -24,7 +24,6 @@ class TestCanonicalForm:
             "states",
             "points",
             "transitions",
-            "schedule",
             "track_increments",
             "lapse_when_all_non_positive",
             "contract_boundary",
@@ -41,11 +40,12 @@ class TestCanonicalForm:
         cf = canonical_form(single_state_ir)
         assert "batch_axes" not in cf
 
-    def test_schedule_canonical_embedded(self, single_state_ir: IR) -> None:
+    def test_the_schedule_is_left_out(self, single_state_ir: IR) -> None:
+        # The form is the machine; the schedule it runs on is data, stated
+        # beside the fingerprint on every rollforward call instead.
         cf = canonical_form(single_state_ir)
-        # Schedule's canonical form is embedded as a dict
-        assert isinstance(cf["schedule"], dict)
-        assert cf["schedule"]["kind"] == "from_calendar_grid"
+        assert "schedule" not in cf
+        assert "from_calendar_grid" not in repr(cf)
 
     def test_two_identical_irs_have_identical_canonical(
         self,

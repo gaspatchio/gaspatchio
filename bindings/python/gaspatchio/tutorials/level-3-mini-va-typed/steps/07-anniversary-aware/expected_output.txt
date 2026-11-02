@@ -13,7 +13,7 @@ shape: (4, 5)
 └──────────┴───────────────┴───────────┴─────────────┴───────────────────────────┘
 
 Anniversary count check (True values in mask, capped at policy_term):
-  policy 1: term=10y  → expect 10 anniversaries in projection
-  policy 2: term=20y  → expect 20 anniversaries in projection
-  policy 3: term=5y  → expect 5 anniversaries in projection
-  policy 4: term=15y  → expect 15 anniversaries in projection
+  policy 1: term=10y  → full-life count=10 (projection starts in-force; fewer in remaining term)
+  policy 2: term=20y  → full-life count=20 (projection starts in-force; fewer in remaining term)
+  policy 3: term=5y  → full-life count=5 (projection starts in-force; fewer in remaining term)
+  policy 4: term=15y  → full-life count=15 (projection starts in-force; fewer in remaining term)

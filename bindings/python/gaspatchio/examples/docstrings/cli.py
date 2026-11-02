@@ -2,14 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+"""Command-line utilities that parse, check and update docstring examples."""
+
 import json
 import logging
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
-
-from .models import DocstringCodeExample, GaspatchioDocstring
 
 # Assume these modules and classes will exist and be importable
 from .parse import GaspatchioDocstringParser
@@ -19,50 +19,90 @@ from .validate import GaspatchioEvalExample
 try:
     import pytest
 except ImportError:
-    pytest = None  # type: ignore
+    pytest = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from .models import DocstringCodeExample, GaspatchioDocstring
 
 app = typer.Typer(
-    help="Gaspatchio Docstring Utilities.\n\nPolars DataFrame print formatting is now standardized for all docstring example checks (wide tables, no wrapping, long strings). This can be globally overridden by calling GaspatchioDocstringParser.set_polars_print_config(...) before running checks.\n\nCode block execution now supports multi-line blocks: the last line is evaluated if it's an expression, otherwise the whole block is executed.",
+    help=(
+        "Gaspatchio Docstring Utilities.\n\nPolars DataFrame print formatting is "
+        "now standardized for all docstring example checks (wide tables, no "
+        "wrapping, long strings). This can be globally overridden by calling "
+        "GaspatchioDocstringParser.set_polars_print_config(...) before running "
+        "checks.\n\nCode block execution now supports multi-line blocks: the last "
+        "line is evaluated if it's an expression, otherwise the whole block is "
+        "executed."
+    ),
     context_settings={"help_option_names": ["-h", "--help"]},
     add_completion=False,
+)
+
+# The parameters more than one command declares, declared once. Defaults stay
+# with each command.
+_ROOT_DIR_ARGUMENT = typer.Argument(
+    help="Root directory to scan. Ignored if --file is used.",
+    exists=True,
+    file_okay=False,
+    dir_okay=True,
+    readable=True,
+    show_default=False,
+)
+
+# parse and run-print-check select their docstrings the same way.
+_FILE_OPTION = typer.Option(
+    "--file",
+    help="Target a single Python file.",
+    exists=True,
+    file_okay=True,
+    dir_okay=False,
+    readable=True,
+    show_default=False,
+)
+_METHOD_OPTION = typer.Option(
+    "--method",
+    help=(
+        "Target a specific method/function (e.g., 'ClassName.method'). "
+        "Applied after file/dir parsing."
+    ),
+    show_default=False,
+)
+
+# lint and update hand the method on to pytest as its -k pattern.
+_PYTEST_METHOD_OPTION = typer.Option(
+    "--method",
+    "-k",
+    help="Target a specific method/function (pytest -k pattern).",
+    show_default=False,
 )
 
 
 @app.command()
 def parse(
-    root_dir: Path | None = typer.Argument(
-        None,
-        help="Root directory to scan for Python files. Ignored if --file is used.",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        readable=True,
-        show_default=False,
-    ),
-    target_file: Path | None = typer.Option(
-        None,
-        "--file",
-        help="Target a single Python file.",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        show_default=False,
-    ),
-    target_method: str | None = typer.Option(
-        None,
-        "--method",
-        help="Target a specific method/function (e.g., 'ClassName.method'). Applied after file/dir parsing.",
-        show_default=False,
-    ),
-    output_file: Path | None = typer.Option(
-        None,
-        "--out",
-        help="JSON output file path. Prints to stdout if not provided.",
-        show_default=False,
-    ),
-):
-    """Parses Gaspatchio docstrings and outputs them as JSON."""
+    *,
+    root_dir: Annotated[
+        Path | None,
+        typer.Argument(
+            help="Root directory to scan for Python files. Ignored if --file is used.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+            show_default=False,
+        ),
+    ] = None,
+    target_file: Annotated[Path | None, _FILE_OPTION] = None,
+    target_method: Annotated[str | None, _METHOD_OPTION] = None,
+    output_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--out",
+            help="JSON output file path. Prints to stdout if not provided.",
+            show_default=False,
+        ),
+    ] = None,
+) -> None:
+    """Parse Gaspatchio docstrings and output them as JSON."""
     if not root_dir and not target_file:
         typer.echo(
             typer.style(
@@ -87,7 +127,8 @@ def parse(
         docstrings = [d for d in docstrings if target_method in d.object_path]
         filter_target_name = str(target_file) if target_file else str(root_dir)
         typer.echo(
-            f"Filtered {original_count} docstrings down to {len(docstrings)} matching method '*{target_method}*' in {filter_target_name}"
+            f"Filtered {original_count} docstrings down to {len(docstrings)} "
+            f"matching method '*{target_method}*' in {filter_target_name}"
         )
 
     docstrings_json = [d.model_dump() for d in docstrings]
@@ -98,11 +139,11 @@ def parse(
                 "No docstrings found or matched the criteria.", fg=typer.colors.YELLOW
             )
         )
-        # Allow empty output if no docstrings are found, don't exit with error
-        # raise typer.Exit(code=0) # No, just proceed to output empty if applicable
+        # Allow empty output if no docstrings are found: don't exit with an
+        # error, just proceed to output empty if applicable.
 
     if output_file:
-        with open(output_file, "w") as f:
+        with output_file.open("w") as f:
             json.dump(docstrings_json, f, indent=2)
         typer.echo(f"Docstrings saved to {output_file}")
     elif docstrings_json:  # Only print to stdout if there's something to print
@@ -112,33 +153,16 @@ def parse(
 
 @app.command(name="run-print-check")
 def run_print_check_command(
-    root_dir: Path | None = typer.Argument(
-        None,
-        help="Root directory to scan. Ignored if --file is used.",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        readable=True,
-        show_default=False,
-    ),
-    target_file: Path | None = typer.Option(
-        None,
-        "--file",
-        help="Target a single Python file.",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        show_default=False,
-    ),
-    target_method: str | None = typer.Option(
-        None,
-        "--method",
-        help="Target a specific method/function (e.g., 'ClassName.method'). Applied after file/dir parsing.",
-        show_default=False,
-    ),
-):
-    """Parses and runs execution checks (doctest & custom) for examples.\n\nPolars DataFrame print formatting is standardized (see app help).\nCode block execution supports multi-line blocks and last-line eval.\n"""
+    *,
+    root_dir: Annotated[Path | None, _ROOT_DIR_ARGUMENT] = None,
+    target_file: Annotated[Path | None, _FILE_OPTION] = None,
+    target_method: Annotated[str | None, _METHOD_OPTION] = None,
+) -> None:
+    """Parse and run execution checks (doctest & custom) for examples.
+
+    Polars DataFrame print formatting is standardized (see app help).
+    Code block execution supports multi-line blocks and last-line eval.
+    """
     if not root_dir and not target_file:
         typer.echo(
             typer.style(
@@ -152,7 +176,10 @@ def run_print_check_command(
     if pytest is None:
         typer.echo(
             typer.style(
-                "Warning: pytest is not installed. Structural linting of docstrings (e.g., for legacy formats) will be skipped.",
+                (
+                    "Warning: pytest is not installed. Structural linting of "
+                    "docstrings (e.g., for legacy formats) will be skipped."
+                ),
                 fg=typer.colors.YELLOW,
             )
         )
@@ -175,7 +202,10 @@ def run_print_check_command(
 
         typer.echo(
             typer.style(
-                f"\\n--- Running Structural Docstring Lint Check on: {path_to_check} ---",
+                (
+                    "\\n--- Running Structural Docstring Lint Check on: "
+                    f"{path_to_check} ---"
+                ),
                 fg=typer.colors.BLUE,
                 bold=True,
             )
@@ -191,43 +221,41 @@ def run_print_check_command(
             )
             lint_pytest_args.extend(["-k", target_method])
 
-        # Optionally, make pytest quieter if it passes, e.g., by adding "-q" or "--tb=no"
-        # lint_pytest_args.append("-q")
+        # Optionally, make pytest quieter if it passes, e.g., by adding "-q"
+        # or "--tb=no"
 
-        try:
-            lint_exit_code_val = pytest.main(
-                lint_pytest_args
-            )  # pytest.main can accept List[str]
-            lint_exit_code = int(lint_exit_code_val)
+        # pytest.main reports its failures, usage errors included, as an exit
+        # code rather than by raising
+        lint_exit_code = int(pytest.main(lint_pytest_args))
 
-            if lint_exit_code == 0:  # pytest.ExitCode.OK
-                typer.echo(
-                    typer.style("Structural lint checks passed.", fg=typer.colors.GREEN)
-                )
-            elif lint_exit_code == 5:  # pytest.ExitCode.NO_TESTS_COLLECTED
-                typer.echo(
-                    typer.style(
-                        "No items found for structural lint check (this is usually OK if scope is narrow).",
-                        fg=typer.colors.YELLOW,
-                    )
-                )
-            else:
-                typer.echo(
-                    typer.style(
-                        f"Structural docstring lint checks FAILED (e.g., legacy '>>>' examples found or other issues). Pytest exited with code {lint_exit_code}. Review output above and convert examples to Markdown format if necessary.",
-                        fg=typer.colors.RED,
-                        bold=True,
-                    )
-                )
-                raise typer.Exit(code=lint_exit_code)
-        except Exception as e:  # Catch broad exceptions from pytest.main or casting
+        if lint_exit_code == pytest.ExitCode.OK:
+            typer.echo(
+                typer.style("Structural lint checks passed.", fg=typer.colors.GREEN)
+            )
+        elif lint_exit_code == pytest.ExitCode.NO_TESTS_COLLECTED:
             typer.echo(
                 typer.style(
-                    f"Error invoking pytest for structural lint check: {e}",
-                    fg=typer.colors.RED,
+                    (
+                        "No items found for structural lint check (this is "
+                        "usually OK if scope is narrow)."
+                    ),
+                    fg=typer.colors.YELLOW,
                 )
             )
-            raise typer.Exit(code=1)
+        else:
+            typer.echo(
+                typer.style(
+                    (
+                        "Structural docstring lint checks FAILED (e.g., legacy "
+                        "'>>>' examples found or other issues). Pytest exited "
+                        f"with code {lint_exit_code}. Review output above and "
+                        "convert examples to Markdown format if necessary."
+                    ),
+                    fg=typer.colors.RED,
+                    bold=True,
+                )
+            )
+            raise typer.Exit(code=lint_exit_code)
     typer.echo(  # Add a blank line for separation before execution checks start
         ""
     )
@@ -264,7 +292,8 @@ def run_print_check_command(
         all_examples.extend(docstring_obj.examples)
 
     typer.echo(
-        f"DEBUG: Total examples found by parser before any filtering: {len(all_examples)}"
+        "DEBUG: Total examples found by parser before any filtering: "
+        f"{len(all_examples)}"
     )
     for i, ex in enumerate(all_examples):
         typer.echo(f"DEBUG: Example {i} object_context: {ex.object_context}")
@@ -279,7 +308,8 @@ def run_print_check_command(
         ]
         filter_target_name = str(target_file) if target_file else str(root_dir)
         typer.echo(
-            f"Filtered {original_count} examples down to {len(all_examples)} matching method '*{target_method}*' in {filter_target_name}"
+            f"Filtered {original_count} examples down to {len(all_examples)} "
+            f"matching method '*{target_method}*' in {filter_target_name}"
         )
 
     if not all_examples:
@@ -300,18 +330,22 @@ def run_print_check_command(
 
     for example in all_examples:
         total_examples_checked += 1
-        global_vars = {}  # Placeholder for future global context
+        global_vars: dict[str, Any] = {}  # Placeholder for future global context
         errors = eval_example_checker.check_example(example, global_vars=global_vars)
         if errors:
             total_errors_found += (
                 1  # Count as one example with errors, not number of error messages
             )
-            error_header = f"Errors in {example.object_context} - Example #{example.example_index} (File: {example.raw_source_location[0]}, Line: {example.raw_source_location[1]}):"
+            error_header = (
+                f"Errors in {example.object_context} - Example "
+                f"#{example.example_index} "
+                f"(File: {example.raw_source_location[0]}, "
+                f"Line: {example.raw_source_location[1]}):"
+            )
             error_details.append(
                 typer.style(error_header, fg=typer.colors.RED, bold=True)
             )
-            for error_msg in errors:
-                error_details.append(f"- {error_msg}")
+            error_details.extend(f"- {error_msg}" for error_msg in errors)
         else:
             pass  # Example passed
 
@@ -321,7 +355,10 @@ def run_print_check_command(
             typer.echo(detail)
 
     if total_errors_found > 0:
-        summary_message = f"\\nFound issues in {total_errors_found} out of {total_examples_checked} examples checked."
+        summary_message = (
+            f"\\nFound issues in {total_errors_found} out of "
+            f"{total_examples_checked} examples checked."
+        )
         typer.echo(typer.style(summary_message, fg=typer.colors.RED, bold=True))
         raise typer.Exit(code=1)
     summary_message = (
@@ -332,39 +369,30 @@ def run_print_check_command(
 
 @app.command()
 def lint(
-    root_dir: Path | None = typer.Argument(
-        None,
-        help="Root directory to scan. Ignored if --file is used.",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        readable=True,
-        show_default=False,
-    ),
-    target_file: Path | None = typer.Option(
-        None,
-        "--file",
-        help="Target a single Python file for linting.",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        show_default=False,
-    ),
-    target_method: str | None = typer.Option(
-        None,
-        "--method",
-        "-k",
-        help="Target a specific method/function (pytest -k pattern).",
-        show_default=False,
-    ),
-    strict: bool = typer.Option(
-        False,
-        "--strict",
-        "-x",
-        help="Enable strict mode (pytest -x: stop on first failure).",
-    ),
-):
+    *,
+    root_dir: Annotated[Path | None, _ROOT_DIR_ARGUMENT] = None,
+    target_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--file",
+            help="Target a single Python file for linting.",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            show_default=False,
+        ),
+    ] = None,
+    target_method: Annotated[str | None, _PYTEST_METHOD_OPTION] = None,
+    strict: Annotated[
+        bool,
+        typer.Option(
+            "--strict",
+            "-x",
+            help="Enable strict mode (pytest -x: stop on first failure).",
+        ),
+    ] = False,
+) -> None:
     """Lints and validates Gaspatchio docstring examples using pytest."""
     if pytest is None:
         typer.echo(
@@ -378,7 +406,10 @@ def lint(
     if not root_dir and not target_file:
         typer.echo(
             typer.style(
-                "Error: Either root_dir argument or --file option must be provided for linting.",
+                (
+                    "Error: Either root_dir argument or --file option must be "
+                    "provided for linting."
+                ),
                 fg=typer.colors.RED,
             )
         )
@@ -401,30 +432,24 @@ def lint(
     if strict:
         pytest_args.append("-x")
 
-    try:
-        # Pytest expects list of strings. Cast to avoid mypy complaint if pytest is None (though guarded).
-        exit_code_val = pytest.main(cast("list[str]", pytest_args))
-        # Map pytest.ExitCode enum to integer if necessary for typer.Exit
-        exit_code = int(exit_code_val)
+    # pytest.main reports its failures as an exit code rather than by raising,
+    # and the parser logs and skips a file it cannot read
+    exit_code = int(pytest.main(pytest_args))
 
-        # Print summary of examples linted
-        parser = GaspatchioDocstringParser()
-        if target_file:
-            docstrings = parser.process_file(target_file)
-        elif root_dir:
-            docstrings = parser.process_files(root_dir)
-        else:
-            docstrings = []
-        total_examples = sum(len(d.examples) for d in docstrings)
-        typer.echo(f"Linted {total_examples} docstring example(s) successfully.")
+    # Print summary of examples linted
+    parser = GaspatchioDocstringParser()
+    if target_file:
+        docstrings = parser.process_file(target_file)
+    elif root_dir:
+        docstrings = parser.process_files(root_dir)
+    else:
+        docstrings = []
+    total_examples = sum(len(d.examples) for d in docstrings)
+    typer.echo(f"Linted {total_examples} docstring example(s) successfully.")
 
-    except Exception as e:  # pylint: disable=broad-except
-        typer.echo(typer.style(f"Error invoking pytest: {e}", fg=typer.colors.RED))
-        raise typer.Exit(code=1)
-
-    if exit_code == 0:  # pytest.ExitCode.OK
+    if exit_code == pytest.ExitCode.OK:
         typer.echo(typer.style("Lint checks passed.", fg=typer.colors.GREEN, bold=True))
-    elif exit_code == 5:  # pytest.ExitCode.NO_TESTS_COLLECTED
+    elif exit_code == pytest.ExitCode.NO_TESTS_COLLECTED:
         typer.echo(
             typer.style("No docstring examples found to lint.", fg=typer.colors.YELLOW)
         )
@@ -441,34 +466,27 @@ def lint(
 
 @app.command()
 def update(
-    root_dir: Path | None = typer.Argument(
-        None,
-        help="Root directory to scan. Ignored if --file is used.",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        readable=True,
-        show_default=False,
-    ),
-    target_file: Path | None = typer.Option(
-        None,
-        "--file",
-        help="Target a single Python file for update.",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        show_default=False,
-    ),
-    target_method: str | None = typer.Option(
-        None,
-        "--method",
-        "-k",
-        help="Target a specific method/function (pytest -k pattern).",
-        show_default=False,
-    ),
-):
-    """Updates Gaspatchio docstring example outputs in-place using pytest.\n\nPolars DataFrame print formatting is standardized (see app help).\nCode block execution supports multi-line blocks and last-line eval.\n"""
+    *,
+    root_dir: Annotated[Path | None, _ROOT_DIR_ARGUMENT] = None,
+    target_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--file",
+            help="Target a single Python file for update.",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            show_default=False,
+        ),
+    ] = None,
+    target_method: Annotated[str | None, _PYTEST_METHOD_OPTION] = None,
+) -> None:
+    """Update Gaspatchio docstring example outputs in-place using pytest.
+
+    Polars DataFrame print formatting is standardized (see app help).
+    Code block execution supports multi-line blocks and last-line eval.
+    """
     if pytest is None:
         typer.echo(
             typer.style(
@@ -481,7 +499,10 @@ def update(
     if not root_dir and not target_file:
         typer.echo(
             typer.style(
-                "Error: Either root_dir argument or --file option must be provided for update.",
+                (
+                    "Error: Either root_dir argument or --file option must be "
+                    "provided for update."
+                ),
                 fg=typer.colors.RED,
             )
         )
@@ -501,16 +522,10 @@ def update(
     if target_method:
         pytest_args.extend(["-k", target_method])
 
-    try:
-        exit_code_val = pytest.main(cast("list[str]", pytest_args))
-        exit_code = int(exit_code_val)
-    except Exception as e:  # pylint: disable=broad-except
-        typer.echo(
-            typer.style(f"Error invoking pytest for update: {e}", fg=typer.colors.RED)
-        )
-        raise typer.Exit(code=1)
+    # pytest.main reports its failures as an exit code rather than by raising
+    exit_code = int(pytest.main(pytest_args))
 
-    if exit_code == 0:  # pytest.ExitCode.OK
+    if exit_code == pytest.ExitCode.OK:
         typer.echo(
             typer.style(
                 "Docstring examples update process completed successfully.",
@@ -518,7 +533,7 @@ def update(
                 bold=True,
             )
         )
-    elif exit_code == 5:  # pytest.ExitCode.NO_TESTS_COLLECTED
+    elif exit_code == pytest.ExitCode.NO_TESTS_COLLECTED:
         typer.echo(
             typer.style(
                 "No docstring examples found to update.", fg=typer.colors.YELLOW
@@ -527,14 +542,18 @@ def update(
     else:
         typer.echo(
             typer.style(
-                f"Docstring examples update process failed or had issues. Pytest exited with code {exit_code}",
+                (
+                    "Docstring examples update process failed or had issues. "
+                    f"Pytest exited with code {exit_code}"
+                ),
                 fg=typer.colors.RED,
                 bold=True,
             )
         )
-        # For update, a non-zero exit might indicate test failures even if update was attempted.
-        # Depending on desired behavior, may or may not raise typer.Exit(code=exit_code)
-        # The spec implies raising an error if pytest doesn't return OK or NO_TESTS_COLLECTED
+        # For update, a non-zero exit might indicate test failures even if update
+        # was attempted. Depending on desired behavior, may or may not raise
+        # typer.Exit(code=exit_code). The spec implies raising an error if pytest
+        # doesn't return OK or NO_TESTS_COLLECTED
         raise typer.Exit(code=exit_code)
 
 

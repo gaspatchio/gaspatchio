@@ -12,33 +12,45 @@ for actuarial projections using Polars' explode/re-aggregate pattern.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import polars as pl
 
+from gaspatchio._semantic.ir import WhenThen
+from gaspatchio.column.column_proxy import ColumnProxy
+from gaspatchio.column.condition_expression import ConditionExpression
+from gaspatchio.column.expression_proxy import ExpressionProxy
+from gaspatchio.column.proxy_aware_expr import ProxyAwareExpr
+from gaspatchio.frame.lowering.context import context_for
+from gaspatchio.frame.lowering.ingress import to_node
+from gaspatchio.frame.lowering.polars import shape_of
+
 if TYPE_CHECKING:
-    from gaspatchio.column.expression_proxy import ExpressionProxy
+    from gaspatchio._semantic.ir import OpNode
     from gaspatchio.frame.base import ActuarialFrame
 
 
 class ConditionalProxy:
     """Represents an in-progress conditional expression chain.
 
-    This class builds up when/then chains and completes them with otherwise().
-    It automatically routes to the list_conditional Rust plugin for list columns
-    or standard Polars when/then/otherwise for scalar columns.
+    Each ``.when()``/``.then()`` pair is recorded as a pair of semantic
+    op-tree nodes; ``.otherwise()`` folds the chain into nested ``WhenThen``
+    nodes, innermost-default-first, exactly the shape the reverse fold used
+    to build by hand. Whether a case lowers to the ``list_conditional`` Rust
+    kernel or to a native ``pl.when()`` is decided by lowering, from the
+    frame's own dtypes -- see ``frame/lowering/polars.py``.
     """
 
-    def __init__(self, condition_expr: pl.Expr, parent: ActuarialFrame | None) -> None:
+    def __init__(self, condition: OpNode, parent: ActuarialFrame | None) -> None:
         """Initialize conditional with first condition.
 
         Args:
-            condition_expr: The condition expression (result of comparison)
+            condition: The first condition, as an op-tree node
             parent: Parent ActuarialFrame for context (can be None)
 
         """
-        self._conditions: list[pl.Expr] = [condition_expr]
-        self._values: list[pl.Expr] = []
+        self._conditions: list[OpNode] = [condition]
+        self._values: list[OpNode] = []
         self._parent = parent
 
     def then(self, value: Any) -> ConditionalProxy:  # noqa: ANN401
@@ -131,23 +143,8 @@ class ConditionalProxy:
         │ P001      ┆ [0, 1, … 12] ┆ 100.0    ┆ [100.0, 100.0, … 100.0] │
         └───────────┴──────────────┴──────────┴─────────────────────────┘
         ```
-
         """
-        # Convert value to expression
-        if self._parent is not None:
-            value_expr = self._parent._convert_to_expr(value)  # noqa: SLF001
-        else:
-            # No parent - convert directly
-            from gaspatchio.column.expression_proxy import ExpressionProxy
-
-            if isinstance(value, ExpressionProxy):
-                value_expr = value._expr  # noqa: SLF001
-            elif isinstance(value, pl.Expr):
-                value_expr = value
-            else:
-                value_expr = pl.lit(value)
-
-        self._values.append(value_expr)
+        self._values.append(to_node(value))
         return self
 
     def when(self, condition: Any) -> ConditionalProxy:  # noqa: ANN401
@@ -160,26 +157,7 @@ class ConditionalProxy:
             Self for chaining .then()
 
         """
-        from gaspatchio.column.condition_expression import ConditionExpression
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-
-        # Handle ConditionExpression directly (don't try to convert)
-        if isinstance(condition, ConditionExpression):
-            self._conditions.append(condition)
-            return self
-
-        # Convert other conditions to expression
-        if isinstance(condition, ExpressionProxy):
-            condition_expr = condition._expr  # noqa: SLF001
-        elif isinstance(condition, pl.Expr):
-            condition_expr = condition
-        elif self._parent is not None:
-            condition_expr = self._parent._convert_to_expr(condition)  # noqa: SLF001
-        else:
-            msg = f"Condition must be an expression, got {type(condition)}"
-            raise TypeError(msg)
-
-        self._conditions.append(condition_expr)
+        self._conditions.append(_condition_to_node(condition, self._parent))
         return self
 
     def needs_list_broadcasting(self) -> bool:
@@ -189,7 +167,8 @@ class ConditionalProxy:
             True if any columns involved are list columns, False otherwise
 
         """
-        return self._any_condition_has_list_columns()
+        ctx = context_for(self._parent)
+        return any(shape_of(condition, ctx) == "list" for condition in self._conditions)
 
     def otherwise(self, value: Any) -> ExpressionProxy:  # noqa: ANN401
         """Complete conditional chain with default value.
@@ -276,216 +255,12 @@ class ConditionalProxy:
         - Default growth rates: `.otherwise(0.03)` broadcasts to all months
 
         """
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-
-        # Convert otherwise value to expression
-        otherwise_expr = self._convert_value_to_expr(value)
-
-        # Build expression - routes to plugin for lists, Polars for scalars
-        expr = self._build_scalar_conditional(otherwise_expr)
-
-        return ExpressionProxy(expr, self._parent)
-
-    def _convert_value_to_expr(self, value: Any) -> pl.Expr:  # noqa: ANN401
-        """Convert a value to a Polars expression."""
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-
-        if self._parent is not None:
-            return self._parent._convert_to_expr(value)  # noqa: SLF001
-        if isinstance(value, ExpressionProxy):
-            return value._expr  # noqa: SLF001
-        if isinstance(value, pl.Expr):
-            return value
-        return pl.lit(value)
-
-    def _extract_column_names(self, expr: pl.Expr) -> list[str]:
-        """Extract column names from an expression, returning empty list on failure."""
-        try:
-            return expr.meta.root_names()
-        except (AttributeError, RuntimeError):
-            # meta.root_names() may fail for some expressions
-            return []
-
-    def _condition_has_list_columns(self, condition: Any) -> bool:  # noqa: ANN401
-        """Check whether a condition involves a list-shaped operand.
-
-        Reads the resolved shape from the condition (or its proxy) directly via
-        the cached ``shape`` property when wrapped. For bare ``pl.Expr``
-        conditions appended through chained ``.when()`` calls, falls back to
-        ``_shape_from_expr_dtype`` against the parent frame so list-typed
-        Polars predicates still route through ``list_conditional`` instead of
-        colliding with scalar ``pl.when()``.
-        """
-        from gaspatchio.column.condition_expression import ConditionExpression
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-
-        if isinstance(condition, (ConditionExpression, ExpressionProxy)):
-            return condition.shape == "list"
-        if isinstance(condition, pl.Expr):
-            return self._expr_is_list_shaped(condition)
-        return False
-
-    def _any_condition_has_list_columns(self) -> bool:
-        """Check if any condition in the chain involves list columns.
-
-        Returns:
-            True if any condition involves list columns
-
-        """
-        for condition in self._conditions:
-            if self._condition_has_list_columns(condition):
-                return True
-        return False
-
-    def _expr_is_list_shaped(self, expr: pl.Expr) -> bool:
-        """Check whether a Polars expression resolves to a list-shaped output.
-
-        Used by chain-shape detection to decide whether reverse-fold should
-        run in 'list mode' (lifting scalar predicates through list_conditional
-        so a scalar then() doesn't collide with a list-shaped acc).
-
-        Routes through the shape SOT — `_shape_from_expr_dtype` probes the
-        wrapped expression's dtype against the parent frame's `_df`.
-        """
-        if self._parent is None or not isinstance(expr, pl.Expr):
-            return False
-
-        from gaspatchio.column.shape import _shape_from_expr_dtype
-
-        return _shape_from_expr_dtype(self._parent, expr) == "list"
-
-    def _lower_one_case(
-        self,
-        condition: Any,  # noqa: ANN401
-        then_val: pl.Expr,
-        acc: pl.Expr,
-        *,
-        acc_is_list: bool = False,
-    ) -> tuple[pl.Expr, bool]:
-        """Lower a single (condition, then, else=acc) tuple to a Polars expression.
-
-        Returns (lowered_expr, output_is_list). The caller threads `output_is_list`
-        as `acc_is_list` for the next iteration so the fold knows when the running
-        accumulator becomes list-shaped.
-
-        Routes per the design's per-case lowering rules:
-        - ConditionExpression involving a list column -> list_conditional kernel
-        - ExpressionProxy with _is_boolean_list -> list_conditional with mask
-        - Scalar predicate where any operand (acc or then) is list-shaped ->
-          list_conditional with the scalar predicate broadcast via `repeat_by`
-          so left satisfies the kernel's List-dtype requirement
-        - Otherwise -> native pl.when().then().otherwise()
-        """
-        from gaspatchio.column.condition_expression import ConditionExpression
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-        from gaspatchio.functions.vector import list_conditional
-
-        # Vector comparison predicate (ConditionExpression with list operands).
-        # Normalize operand order so the list-typed side is on `left` (plugin
-        # contract). Handles commuted predicates like (scalar) == af.list_col.
-        if isinstance(condition, ConditionExpression) and self._condition_has_list_columns(
-            condition
-        ):
-            left, right, operator = condition.normalize_for_list_path()
-            return list_conditional(
-                left=left,
-                right=right,
-                then_val=then_val,
-                otherwise_val=acc,
-                operator=operator,
-            ), True
-
-        # Vector boolean-mask predicate (Float64-list masks from &/|/~ on lists).
-        # `condition.shape == "list"` distinguishes these from native pl.Boolean
-        # masks (e.g. scalar `&`, `is_null`, `is_in`) which would route through
-        # native pl.when() in the scalar branch below.
-        if (
-            isinstance(condition, ExpressionProxy)
-            and condition.kind == "boolean_mask"
-            and condition.shape == "list"
-        ):
-            return list_conditional(
-                left=condition._expr,  # noqa: SLF001
-                right=pl.lit(1.0),
-                then_val=then_val,
-                otherwise_val=acc,
-                operator="eq",
-            ), True
-
-        # Bare ``pl.Expr`` that resolves to a list-shaped boolean mask — e.g.
-        # ``pl.col(list_col).list.eval(pl.element() > k)`` produces ``list[bool]``.
-        # Treat the same way as the proxy boolean_mask path: ``mask == 1.0``
-        # under list_conditional.
-        if (
-            isinstance(condition, pl.Expr)
-            and not isinstance(condition, (ConditionExpression, ExpressionProxy))
-            and self._expr_is_list_shaped(condition)
-        ):
-            return list_conditional(
-                left=condition,
-                right=pl.lit(1.0),
-                then_val=then_val,
-                otherwise_val=acc,
-                operator="eq",
-            ), True
-
-        # Scalar predicate over a list-shaped acc OR list-shaped then-branch:
-        # broadcast via list_conditional. Without this,
-        # `pl.when(scalar).then(scalar).otherwise(list_acc)` or
-        # `pl.when(scalar).then(list).otherwise(scalar_acc)` raises
-        # `SchemaError: failed to determine supertype of f64 and list[f64]`.
-        # We broadcast the scalar predicate to list shape via repeat_by()
-        # using the list-shaped operand's length.
-        then_is_list = self._expr_is_list_shaped(then_val)
-        if acc_is_list or then_is_list:
-            if isinstance(condition, (ConditionExpression, ExpressionProxy)):
-                cond_expr = condition._expr  # noqa: SLF001
-            elif isinstance(condition, pl.Expr):
-                cond_expr = condition
-            else:
-                msg = (
-                    f"Unexpected condition type {type(condition)} "
-                    "in chained when() lowering"
-                )
-                raise TypeError(msg)
-            length_ref = acc.list.len() if acc_is_list else then_val.list.len()
-            cond_broadcast = cond_expr.cast(pl.Float64).repeat_by(length_ref)
-            return list_conditional(
-                left=cond_broadcast,
-                right=pl.lit(1.0),
-                then_val=then_val,
-                otherwise_val=acc,
-                operator="eq",
-            ), True
-
-        # Scalar predicate over a scalar acc — native pl.when().then().otherwise()
-        if isinstance(condition, (ConditionExpression, ExpressionProxy)):
-            return pl.when(condition._expr).then(then_val).otherwise(acc), False  # noqa: SLF001
-
-        if isinstance(condition, pl.Expr):
-            return pl.when(condition).then(then_val).otherwise(acc), False
-
-        msg = f"Unexpected condition type {type(condition)} in chained when() lowering"
-        raise TypeError(msg)
-
-    def _build_scalar_conditional(self, otherwise_expr: pl.Expr) -> pl.Expr:
-        """Build conditional expression via per-case lowering + reverse-fold.
-
-        Single-when (n=1) is treated as a degenerate chain — same lowering as
-        the chained case, just one iteration. This means a scalar predicate
-        over a list-shaped ``then`` (or vice versa) routes through
-        ``list_conditional`` instead of native ``pl.when`` which can't resolve
-        the supertype and produces ``Unknown`` dtype downstream.
-        """
-        acc = otherwise_expr
-        acc_is_list = self._expr_is_list_shaped(otherwise_expr)
-        for cond, then_val in reversed(
+        node = to_node(value)
+        for condition, then_value in reversed(
             list(zip(self._conditions, self._values, strict=True))
         ):
-            acc, acc_is_list = self._lower_one_case(
-                cond, then_val, acc, acc_is_list=acc_is_list
-            )
-        return acc
+            node = WhenThen(cond=condition, then=then_value, otherwise=node)
+        return ExpressionProxy._from_node(node, self._parent)  # noqa: SLF001
 
     def __repr__(self) -> str:
         """Provide helpful error message for incomplete conditionals."""
@@ -501,13 +276,36 @@ class ConditionalProxy:
             TypeError: Always - conditional must be completed with .otherwise()
 
         """
+        self._refuse_unfinished()
+
+    def _refuse_unfinished(self, *_operands: object) -> NoReturn:
+        """Refuse a chain with no ``.otherwise()`` wherever it is used as a value.
+
+        An unfinished chain has no value for a policy none of its tests holds
+        for, so there is nothing to compute with. With no operators of its
+        own, ``when(af.age > 60).then(1.2) == 1.2`` fell through to Python's
+        identity test and answered a Python ``False`` -- stored, a column of
+        False on every policy -- while ``+`` raised Python's own TypeError and
+        the chain beside a column raised Polars' words about a literal.
+        """
         msg = (
             "Conditional expression requires .otherwise(). "
-            "Complete the chain with .otherwise(value) before using it. "
+            "Complete the chain with .otherwise(value) before using it: "
+            "an unfinished when(...).then(...) has no value for a policy none "
+            "of its tests holds for, so it cannot be compared, combined or "
+            "computed with. "
             f"Current state: {len(self._conditions)} condition(s), "
             f"{len(self._values)} value(s)."
         )
         raise TypeError(msg)
+
+    # Every operator, and a truth test, is refused in the chain's own words.
+    __eq__ = __ne__ = __lt__ = __le__ = __gt__ = __ge__ = _refuse_unfinished  # type: ignore[assignment]
+    __and__ = __rand__ = __or__ = __ror__ = __xor__ = __rxor__ = _refuse_unfinished
+    __add__ = __radd__ = __sub__ = __rsub__ = __mul__ = __rmul__ = _refuse_unfinished
+    __truediv__ = __rtruediv__ = __floordiv__ = __rfloordiv__ = _refuse_unfinished
+    __mod__ = __rmod__ = __pow__ = __rpow__ = _refuse_unfinished
+    __neg__ = __pos__ = __abs__ = __invert__ = __bool__ = _refuse_unfinished
 
 
 def when(condition: Any) -> ConditionalProxy:  # noqa: ANN401
@@ -630,35 +428,36 @@ def when(condition: Any) -> ConditionalProxy:  # noqa: ANN401
     - Result: maturity value appears only at the matching month, zeros elsewhere
 
     """
-    # Extract parent ActuarialFrame from condition if possible
+    # Try to get parent from condition. A producer's expression bound to a
+    # frame (``af.projection.anniversary_mask()``, a lookup keyed by a
+    # column) carries one too; without it a per-period mask reached
+    # ``pl.when`` as if it held one flag per policy.
     parent = None
-
-    # Import here to avoid circular imports
-    from gaspatchio.column.column_proxy import ColumnProxy
-    from gaspatchio.column.condition_expression import ConditionExpression
-    from gaspatchio.column.expression_proxy import ExpressionProxy
-
-    # Try to get parent from condition
-    if isinstance(condition, (ColumnProxy, ExpressionProxy, ConditionExpression)):
+    if isinstance(
+        condition, (ColumnProxy, ExpressionProxy, ConditionExpression, ProxyAwareExpr)
+    ):
         parent = getattr(condition, "_parent", None)
 
-    # Pass through ConditionExpression as-is (don't convert to pl.Expr!)
-    if isinstance(condition, ConditionExpression):
-        return ConditionalProxy(condition, parent)
+    return ConditionalProxy(_condition_to_node(condition, parent), parent)
 
-    # Pass through ExpressionProxy with kind="boolean_mask" (from binary ops)
-    if isinstance(condition, ExpressionProxy) and condition.kind == "boolean_mask":
-        return ConditionalProxy(condition, parent)
 
-    # Convert other conditions to Polars expression
-    if isinstance(condition, ExpressionProxy):
-        condition_expr = condition._expr  # noqa: SLF001
-    elif isinstance(condition, pl.Expr):
-        condition_expr = condition
-    elif parent is not None:
-        condition_expr = parent._convert_to_expr(condition)  # noqa: SLF001
-    else:
+def _condition_to_node(condition: Any, parent: ActuarialFrame | None) -> OpNode:  # noqa: ANN401
+    """Turn one ``when()`` condition into the op-tree node standing for it.
+
+    A predicate that is neither an expression nor attached to a frame has
+    no meaning the chain can use, so it is refused by name rather than
+    quietly becoming a constant.
+    """
+    if isinstance(condition, ConditionalProxy):
+        condition._refuse_unfinished()  # noqa: SLF001 - its own refusal
+    is_expression = getattr(condition, "_node", None) is not None or isinstance(
+        condition, pl.Expr
+    )
+    if not is_expression and parent is None:
         msg = f"Condition must be an expression, got {type(condition)}"
         raise TypeError(msg)
+    return to_node(condition)
 
-    return ConditionalProxy(condition_expr, parent)
+
+# What the API reference documents from this module.
+__all__ = ["ConditionalProxy", "when"]

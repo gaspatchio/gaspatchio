@@ -87,7 +87,9 @@ def main() -> None:
     print(f"  Base rates           : {ZERO_RATES}")
     print(f"  +100bp parallel      : {[round(up100.spot_rate(t), 4) for t in TENORS]}")
     print(f"  10y +25bp key-rate   : {[round(kr10.spot_rate(t), 4) for t in TENORS]}")
-    print(f"  Base after shifts    : {[curve.spot_rate(t) for t in TENORS]}  (unchanged)")
+    print(
+        f"  Base after shifts    : {[curve.spot_rate(t) for t in TENORS]}  (unchanged)"
+    )
     print("  key_rate_shift(7.0)  : raised ValueError (non-knot tenor)")
 
 

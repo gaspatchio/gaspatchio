@@ -5,6 +5,8 @@ target*
 *.pyd
 *.pyw
 *.pyz
+# The public conformance reader is distributed as a reproducible source archive.
+!/bindings/python/gaspatchio/schemas/conformance/reader.pyz
 *.pywz
 # Python bytecode
 __pycache__/
@@ -17,12 +19,18 @@ build/
 *.egg-info/
 *.egg
 
-# Virtual environments
-venv/
+# Virtual environments. Without a trailing slash, so each pattern also matches
+# a symbolic link of that name: a worktree that borrows another checkout's
+# environment links it in, and `dir/` matches only a real directory, so a
+# `git add -A` there would commit the link and the home path it points at.
+venv
 env/
 .env
 .env/
-.venv/
+.venv
+# The viewer's packages, linked the same way. viewer/.gitignore's
+# `node_modules/` covers only the real directory.
+node_modules
 
 # Testing
 .pytest_cache/
@@ -51,11 +59,6 @@ docs/_build/
 /bindings/python/.pypirc
 /bindings/python/gaspatchio/_internal.cpython-312-darwin.so
 /bindings/python/gaspatchio/_internal.cpython-313-darwin.so
-# Pre-rename maturin-develop artifacts: checking out a post-rename branch
-# leaves these on disk (git never deletes ignored files) — keep them ignored
-# until the gaspatchio_core alias is removed at 1.0.
-/bindings/python/gaspatchio_core/_internal.cpython-312-darwin.so
-/bindings/python/gaspatchio_core/_internal.cpython-313-darwin.so
 /bindings/python/jobs/*/reconcillation
 /bindings/python/jobs/*/*.xlsm
 /bindings/python/jobs/*/docs
@@ -90,11 +93,24 @@ gaspatchio_audit/
 bindings/python/gaspatchio_audit/
 bindings/python/gaspatchio/tutorials/**/report/
 bindings/python/gaspatchio/tutorials/**/gaspatchio_audit/
+# The YAML recipe level 5 step 04 writes beside itself. Run from a copy the
+# reader made, that file is the step's own output and belongs next to the
+# model; run in place from a checkout, it is the same output landing in the
+# package tree. Ignored rather than redirected, because moving it would take
+# the lesson -- the recipe sits beside the model it is a recipe for -- with it.
+bindings/python/gaspatchio/tutorials/**/plan.yaml
 
 # Local dogfooding / stress scratch dirs (probes & generated outputs, never shipped)
 /bindings/python/tests/scratch/gsp*/
 /evals/benchmarks/aggregated_results/
 /evals/benchmarks/batch_search_results/
+
+# Emission-graph performance probe: the synthesized 100k-policy fixture and
+# the machine-local reference JSON reports it produces are generated
+# artifacts, not source — only the harness and synthesizer scripts are
+# tracked (tests/probe/*.py).
+/bindings/python/tests/probe/fixtures/
+/bindings/python/tests/probe/reference/*.json
 
 # Artifact of the repository-root workspace boundary in ./pyproject.toml: any uv command
 # run from the repository root writes an empty 3-line lockfile here. It is meaningless —
@@ -108,3 +124,14 @@ bindings/python/gaspatchio/tutorials/**/gaspatchio_audit/
 # depends only on its own diff. Distribution is still via the built wheel, whose deps come
 # from pyproject.toml — consumers never see this file.
 # To take a new dependency version: run `uv lock` and commit the result as part of the PR.
+
+# What the Measurement Ratchets steps leave behind. Each step redirects its
+# tool's output to a file beside the package and reads the count back out of
+# it, so a contributor reproducing a step at a keyboard -- which is the whole
+# design of those steps -- leaves the same four files in the working tree. The
+# steps write them here rather than somewhere already ignored precisely so
+# that the keyboard command and the CI command stay identical.
+/bindings/python/ruff.json
+/bindings/python/mypy.txt
+/bindings/python/pyright.json
+/bindings/python/pyright.err

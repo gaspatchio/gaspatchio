@@ -3,7 +3,7 @@
 ## GSP-87: Declarative Model Validation, Diffing, and Change Control
 
 ### Status: Design Proposal
-### Authors: Matt Wright, Claude
+### Author: Matt Wright
 ### Date: 2026-03-25
 ### Depends on: GSP-86 (Rollforward Builder)
 

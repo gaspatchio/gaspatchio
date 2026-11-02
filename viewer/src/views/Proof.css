@@ -1,0 +1,368 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Opio Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The proof panel, set as a worked example rather than as a report.
+ *
+ * A label down the left, the quoted line beside it, in the mono face wherever
+ * the line is a number, a formula or an identifier — which is most of them.
+ * Drawn on the tokens in `theme/tokens.css` and on nothing else.
+ *
+ * Amber appears twice on this page and both are the file admitting something:
+ * the header's holes chip, and the disagreement flag here. A dead branch is
+ * grey rather than amber — the export not being asked for both branches is not
+ * an admission, it is an option somebody did not pass.
+ */
+
+.proof {
+  height: 100%;
+  overflow: auto;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.proof .prompt {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 0.86rem;
+}
+
+.proof-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+.proof .idiom {
+  font-weight: 700;
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--red-dark);
+}
+
+.proof .at {
+  color: var(--ink-secondary);
+  font-size: 0.8rem;
+}
+
+/* The second of the page's two amber marks. Never the red. */
+.proof .chip.disagreement {
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  border-radius: 10px;
+  padding: 1px 10px;
+  font-weight: 700;
+  font-size: 0.76rem;
+}
+
+.proof .lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.proof .line {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  font-size: 0.84rem;
+}
+
+.proof .label {
+  color: var(--ink-secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: right;
+}
+
+.proof .text,
+.proof .term {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The formula and the producer's own substitution are code, and are set as code. */
+.proof .line.formula .text,
+.proof .line.substitution .text {
+  font-family: var(--face-mono);
+  font-variant-numeric: tabular-nums;
+  background: var(--code-surface);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* A term the reader can point at: hovering it lights its cell in the grid. */
+.proof .term {
+  cursor: default;
+  border-bottom: 1px dotted var(--rule);
+}
+
+.proof .term:hover {
+  color: var(--red-dark);
+  border-bottom-color: var(--red);
+}
+
+/* A read that looked at another period says so in the grid; here it is weighted. */
+/* The run a windowed read reached, said after the value it quotes. */
+.proof .term .window {
+  color: var(--ink-secondary);
+}
+
+.proof .term[data-offset] {
+  border-bottom-style: solid;
+}
+
+.proof .line.result .text {
+  font-weight: 700;
+}
+
+.proof .line.fired .text {
+  font-weight: 700;
+}
+
+/* The branch the condition did not take: present, priced, and plainly not it. */
+.proof .line.dead .text {
+  color: var(--ink-secondary);
+  text-decoration: line-through;
+  text-decoration-color: var(--rule);
+}
+
+.proof .line.note .text,
+.proof .line.convention .text {
+  color: var(--ink-secondary);
+}
+
+.proof .line.convention .text {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.excerpt {
+  flex: 0 0 auto;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  overflow: auto;
+}
+
+.excerpt-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.78rem;
+}
+
+.excerpt-name {
+  font-weight: 700;
+}
+
+.proof .chip.fingerprint-chip {
+  font-size: 0.74rem;
+  padding: 1px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--code-surface);
+  color: var(--ink-secondary);
+}
+
+.excerpt-rows {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.78rem;
+}
+
+.excerpt-rows th,
+.excerpt-rows td {
+  padding: 2px 8px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--rule);
+}
+
+.excerpt-rows th {
+  color: var(--ink-secondary);
+  font-weight: 400;
+}
+
+.excerpt-rows tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* The row the keys named. Everything around it is context. */
+.excerpt-rows tr[data-hit] td {
+  background: var(--selected);
+  font-weight: 700;
+}
+
+/*
+ * The fixed facts, at the foot: where the column is defined and what the two
+ * stamps are, whole. Not truncated, because this is the place a reviewing
+ * actuary copies them out of.
+ */
+.proof-foot {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.72rem;
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+  flex: 0 0 auto;
+}
+
+.proof-foot .where {
+  color: var(--ink);
+}
+
+/*
+ * The lowered expression, folded.
+ *
+ * `lines` lays a label against a body; this body is a disclosure, so it takes
+ * the body's column and nothing else. Closed it is one short sentence, which is
+ * the point — a reviewer who wants the expression the producer actually ran
+ * opens it, and everyone else reads their own arithmetic without stepping over
+ * it.
+ */
+.line.lowered .label {
+  visibility: hidden;
+}
+
+.lowered summary {
+  cursor: pointer;
+  color: var(--ink-secondary);
+  font-size: 0.78rem;
+  user-select: none;
+}
+
+.lowered summary:hover {
+  color: var(--ink);
+}
+
+.lowered .text {
+  display: block;
+  margin-top: 4px;
+}
+
+/*
+ * A line about the fold rather than about the arithmetic: that this number is
+ * the book totalled, or that this column was never totalled at all. Set like
+ * the note it is — secondary, not amber. Nothing is admitted here: a fold that
+ * declines to total a mortality rate is answering a question that has no
+ * answer, which is a different thing from a hole.
+ */
+.proof .line.fold .text {
+  color: var(--ink-secondary);
+  font-style: italic;
+}
+
+/*
+ * A compiled rollforward's check line: `closing = opening + Σ movements`.
+ *
+ * The one arithmetic this page states, because it is the definition of a
+ * rollforward rather than a calculation of the model's, and every term in it
+ * is quoted off the file. Set as code and weighted, so a reader coming down
+ * the waterfall's own figures meets it in the type they were written in.
+ */
+.proof .line.check .text {
+  font-family: var(--face-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  background: var(--code-surface);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/*
+ * And the page's amber, on the one line it can be about. A check that does not
+ * close means the movements and the balance beside them are not the same run;
+ * amber is this page's mark for an admission, and that is one.
+ */
+.proof .line.check.flagged .text {
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  background: var(--paper);
+  font-weight: 400;
+}
+
+/*
+ * Two proofs, side by side, on a changed column.
+ *
+ * *before* on the left and *after* on the right, with a rule between them and
+ * each headed by its own word. Side by side rather than one above the other
+ * because what a reader is doing here is reading one line against the line
+ * opposite it — a formula against a formula, a substitution against a
+ * substitution — and a stacked pair makes that a scroll instead of a glance.
+ *
+ * Below 760 px the pair stacks, because two columns of substituted arithmetic
+ * in 380 px each is two columns of ellipses. The order is kept: *before* is
+ * still first, so the reading is still earlier-then-later whichever way the
+ * pane is shaped.
+ */
+.proof.compared {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+}
+
+.proof-one {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 14px;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.proof.compared .proof-one.before {
+  border-right: 1px solid var(--rule);
+  background: var(--code-surface);
+}
+
+.proof-side {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+@media (width <= 760px) {
+  .proof.compared {
+    flex-direction: column;
+  }
+
+  .proof.compared .proof-one.before {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+}
+
+/*
+ * The earlier side while the cursor is moving.
+ *
+ * One word in the secondary ink, the way a rail says what it is doing, in a
+ * pane that keeps its width and its heading. The pane's shape is held on
+ * purpose: a side that collapsed and came back would move the live proof
+ * beside it on every period step, which is a worse thing to read than a word.
+ */
+.proof-one.settling .settles {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-style: italic;
+}

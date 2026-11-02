@@ -1,5 +1,37 @@
 # JAX Backend Feasibility for gaspatchio-core
 
+> **Superseded in part — 2026-09-08.** This assessment is dated **2026-05-11** and is kept
+> exactly as written; nothing beneath this note has been edited. Three of its claims are now
+> false. Full evidence in [`README.md`](README.md); the short form:
+>
+> - **§3, "Ragged lists": *"it is rectangular by construction"* is false.** The kernel has a
+>   first-class ragged path. `core/src/polars_functions/rollforward.rs` carries
+>   `per_policy_lengths_arg` (:60) as each policy's authoritative horizon, and the uniform-length
+>   check (:466) is conditional on `require_uniform` (:69), set only for calendar-grid / inception
+>   schedules (`rollforward/_passes.py:378`). The kernel's refusal message (:492) *recommends*
+>   the per-policy grid.
+> - **§3: *"that pattern doesn't exist in this codebase"* is false.** Per-policy variable
+>   `n_periods` is the ordinary case, and has been the **default** projection shape since v0.4.0
+>   (merged 2026-06-14). Measured 2026-09-08 on two policies differing only in `term_years` (10, 20):
+>   `until='maximum_age'` gives `month` lengths `[21, 21]`; `until='term_years'` gives
+>   `[11, 21]`. §6's open question — *"do users build per-policy schedules with different
+>   `n_periods`?"* — is the right question, and §3 answers it the wrong way. **What raggedness
+>   costs a second engine is open and is not settled here.**
+> - **§3, "Column proxy generates `pl.Expr`, not an IR": *"There is no neutral AST to
+>   retarget"* is false.** The `OpNode` union in `frame/graph/ir.py` closes over seven node
+>   types, `walk`'s `match` in the same module ends on `assert_never`, and
+>   `frame/lowering/polars.py` holds 55 registered lowerings. The
+>   observation the sentence rests on is still true — `ColumnProxy._to_expr` does still return
+>   `pl.col(...)` (`column_proxy.py:156`) — but every operator now emits a semantic node
+>   (`column_proxy.py:114`) and the Polars expression is derived by lowering afterwards.
+>
+> **What stands.** The three-layer architecture map, the effort buckets for the kernels, the
+> `Apply`-escape-hatch analysis, and the string-key / `map_batches` friction are all still
+> accurate descriptions of the rollforward path — Op fields are still `pl.Expr`
+> (`rollforward/_ops.py`) and `derive_engine_binding` still string-matches. §5's judgement that
+> unifying backends needs a neutral expression IR, and that it is the largest refactor in the
+> codebase, is what actually happened.
+
 ## 1. Architecture map
 
 The codebase already has a deliberate "portable vs polars" split. That seam is the most important fact for this assessment — the authors have anticipated alternative backends, but only at one of three layers, not all three.
@@ -62,7 +94,8 @@ In scope:
 - Assumption lookups with pre-encoded integer keys only — string fallback rejected.
 - Accumulate, list_pow, list_clip, list_conditional, fill_series — straightforward JAX ports.
 - Inputs: caller supplies a dict of `jnp.ndarray` (shape `[n_rows, n_periods]` for list cols, `[n_rows]` for scalar cols). Outputs: same shape.
-- `vmap` over a scenario axis (the IR's `batch_axes` field is forward-compatible per `_ir.py:11`).
+- `vmap` over a scenario axis (the `batch_axes` field on `IR` in `rollforward/_ir.py` is
+  forward-compatible).
 
 Out of scope for v0.1:
 - `ActuarialFrame.with_columns` / `collect` parity. Users invoke the JAX backend explicitly: `compile_rollforward(ir).run_jax(inputs)`.

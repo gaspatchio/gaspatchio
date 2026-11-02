@@ -1,0 +1,723 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0"
+  },
+  "created_at": "2026-09-29T00:31:43Z",
+  "model": {
+    "label": null,
+    "source_path": null,
+    "source_sha": null,
+    "git": null,
+    "model_points": null
+  },
+  "graph_fingerprint": "sha256:20882cdb67b31e9dd707eaa518b99cde4c5a51499bcc18dbd049dcf9e3e675ed",
+  "book": {
+    "columns": [
+      "entry_date",
+      "sum_assured"
+    ],
+    "digest": "sha256:98383cfc454af25556dffd8182c4e5e543d74036c35b0c389a944463e5f1c0c7"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "sum_assured",
+      "column": "sum_assured",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b643510e5bc2884efbc56ffc1b90fca82f7cc07abb692dd75abb3cf7d1f60b38",
+      "fingerprint": "sha256:c7d944982f89b2858870c74491fff1c28758dbead932cdaa6ba90157ec2b3778",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "entry_date",
+      "column": "entry_date",
+      "version": null,
+      "kind": "input",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:680fe476f58e01f99da4b11dfb89138dd5df719e0eaa763a42c8cf33b8b63364",
+      "fingerprint": "sha256:5e88b3fc7020a83b2efa2bee8ddd96c559b7eb4a4c65b5199946a9bb69367049",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "death_claims@1",
+      "column": "death_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * 0.001_23",
+      "reads": [
+        "sum_assured"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:b49aa4a4748ec6573286d9401d4adeae21cb8b154fc3f9ae49f9fbf7f363ce5b",
+      "fingerprint": "sha256:9bc483fe29a43ab5d080d973ed916dfc622a92b9420e0791c793645220aa5619",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:111",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ceded_claims@1",
+      "column": "ceded_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "when(af.sum_assured > 200_000.0).then(af.death_claims).otherwise(0.0)",
+      "reads": [
+        "sum_assured",
+        "death_claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5c174ac4e152918c28d4b7eba56ce0ac8f69e5d1f274ae693f3437f665b5208f",
+      "fingerprint": "sha256:83a1396aad170c59ca9aebe357a8e686a8e7d5233d1c31202c43bce8ab71e0e2",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:112",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "CONDITIONAL"
+                }
+              ]
+            },
+            {
+              "source": "death_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "select_loaded_claims@1",
+      "column": "select_loaded_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.death_claims * [1.5, 1.25, 1.0]",
+      "reads": [
+        "death_claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:e1bb14b04beeb8f13b4a054464cf7fe13d0aa30f5cd0490718edf8c0a1648eac",
+      "fingerprint": "sha256:1e16bb8e7dbdac91fbab8445915a42252fe5865331d2c599b02971e05752bb3f",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:115",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "death_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "prior_period_claims@1",
+      "column": "prior_period_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.select_loaded_claims.projection.at_period(-1)",
+      "reads": [
+        "select_loaded_claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:55364b07a9c09f8a1357b7b85e7575b66e13e7d5a7d03cda49985f69860d3795",
+      "fingerprint": "sha256:93c1ba8ed1eb44a1d39dc6e7ab18c97d595b0548cb4a9a37b226014f507a2c2c",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:116",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "select_loaded_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION",
+                  "offset": -1
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "simulated_shock@1",
+      "column": "simulated_shock",
+      "version": 1,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "injected",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:89ca8ced673d17ff6d5e87916397cf9bb5483658021e6ac0ff08be1d6f96dc03",
+      "fingerprint": "sha256:3f46ec6c4d8ca5cdb2d2dd0078d125cffb6f095c9d6505ddea3048bf4701bcd8",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:117",
+      "facets": {}
+    },
+    {
+      "id": "net_cashflow@1",
+      "column": "net_cashflow",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "unknown",
+      "shape": "unknown",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * 0.02 - af.death_claims + af.ceded_claims",
+      "reads": [
+        "sum_assured",
+        "death_claims@1",
+        "ceded_claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:e37e5f058300dcc00ace9d4a83a92a5d0afb395fbd7c1731a683fc2aeb600f5d",
+      "fingerprint": "sha256:81f51cba1a85d7b6af7c4cba33dab979fcd04d48acd3847b756daf98e8f4e284",
+      "in_final_schema": false,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:118",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "death_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "ceded_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "net_cashflow@2",
+      "column": "net_cashflow",
+      "version": 2,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.net_cashflow * (1.0 + af.simulated_shock)",
+      "reads": [
+        "net_cashflow@1",
+        "simulated_shock@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:63b0e83ed9c4d6c0ebd3ff5dba3978392217e5fbf8a2a06c4b27d97622f2fba3",
+      "fingerprint": "sha256:e957038a0d0ffad8d9c43ffbabd60872ed8d80fe00315b7be9184f8f40f877d9",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:119",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "net_cashflow@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "simulated_shock@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "post_reform@1",
+      "column": "post_reform",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "when(af.entry_date > datetime.date(2022, 1, 1)).then(1.0).otherwise(0.0)",
+      "reads": [
+        "entry_date"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:ef85e9164e298e9a645f0d3bb9ee60188961d5a122d638a380cc0319e804280d",
+      "fingerprint": "sha256:510149594f8d8111253bdd50a23e35eeaf9fce4fb1ae0ee84b489f1626fc4431",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:120",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "entry_date",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "CONDITIONAL"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "total_claims@1",
+      "column": "total_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.select_loaded_claims.list.sum()",
+      "reads": [
+        "select_loaded_claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:53eb3fde2e217dd1d1edf7cef774d1106f079c8c8150826098623f06edaf9337",
+      "fingerprint": "sha256:5fd1848b3f591685a2bc0a11b999da6ee66aff9abc45333d5489c3d3547f08d7",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:123",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "select_loaded_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "unceded_claims@1",
+      "column": "unceded_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "when(af.ceded_claims == 0.0).then(af.death_claims).otherwise(-0.0)",
+      "reads": [
+        "ceded_claims@1",
+        "death_claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:a6c2ab21f3e726745876ab9adc7f88b8f013f5c3e06ffec25b771ebdd570f7c4",
+      "fingerprint": "sha256:d97fed6e4fcebcf79fa18070448cdcb243bdf4c56f3460f8b0777aeb01afbe13",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_conformance_corpus.py:124",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "ceded_claims@1",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "CONDITIONAL"
+                }
+              ]
+            },
+            {
+              "source": "death_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "reserve_override",
+      "column": "reserve_override",
+      "version": null,
+      "kind": "hole",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": null,
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:12339f1632fd446659844906c4cfbf0f9600406dee4904e8603a6cc25d855f06",
+      "fingerprint": "sha256:9e71f53fd7f6d31406ec12fa44e357d6c393d24513b5a4ace781953a8757d5e9",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "experience_adjustment@1",
+      "column": "experience_adjustment",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "unknown",
+      "shape": "unknown",
+      "provenance": "assignment",
+      "formula": null,
+      "reads": [
+        "death_claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:d155316bf4a292b05d46b1841ea636e330285b446bc20c439c786cc1ca91d6ce",
+      "fingerprint": "sha256:fbea00a87d142b9b025a6c2479b07b29495bae39271af8aba43f53e476757638",
+      "in_final_schema": false,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "death_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "experience_adjustment@2",
+      "column": "experience_adjustment",
+      "version": 2,
+      "kind": "hole",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": null,
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:12dd1c783c8dfea3ce3014c06e3b22c847078b9c4b8016128500e45323576267",
+      "fingerprint": "sha256:20f56427f8f833075c6b0ee1f7561e3acce119396a213afe411e6be182ab3ccd",
+      "in_final_schema": false,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "experience_adjustment@3",
+      "column": "experience_adjustment",
+      "version": 3,
+      "kind": "computed",
+      "dtype": "unknown",
+      "shape": "unknown",
+      "provenance": "assignment",
+      "formula": null,
+      "reads": [
+        "death_claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:e188446f69a979d10d3aaa89282a38fdfcbd33091fdae3a6718aa815ffc663ad",
+      "fingerprint": "sha256:78268c416ed0271661411eec72dde161f6a68cdb84274bc58f06af3dc84bd944",
+      "in_final_schema": false,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "death_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "experience_adjustment@4",
+      "column": "experience_adjustment",
+      "version": 4,
+      "kind": "hole",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": null,
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:12dd1c783c8dfea3ce3014c06e3b22c847078b9c4b8016128500e45323576267",
+      "fingerprint": "sha256:20f56427f8f833075c6b0ee1f7561e3acce119396a213afe411e6be182ab3ccd",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    }
+  ],
+  "edges": [
+    {
+      "source": "sum_assured",
+      "target": "death_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "sum_assured",
+      "target": "ceded_claims@1",
+      "relationship": "INDIRECT"
+    },
+    {
+      "source": "death_claims@1",
+      "target": "ceded_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "death_claims@1",
+      "target": "select_loaded_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "select_loaded_claims@1",
+      "target": "prior_period_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "sum_assured",
+      "target": "net_cashflow@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "death_claims@1",
+      "target": "net_cashflow@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "ceded_claims@1",
+      "target": "net_cashflow@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "net_cashflow@1",
+      "target": "net_cashflow@2",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "simulated_shock@1",
+      "target": "net_cashflow@2",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "entry_date",
+      "target": "post_reform@1",
+      "relationship": "INDIRECT"
+    },
+    {
+      "source": "select_loaded_claims@1",
+      "target": "total_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "ceded_claims@1",
+      "target": "unceded_claims@1",
+      "relationship": "INDIRECT"
+    },
+    {
+      "source": "death_claims@1",
+      "target": "unceded_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "death_claims@1",
+      "target": "experience_adjustment@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "death_claims@1",
+      "target": "experience_adjustment@3",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [],
+  "holes": [
+    {
+      "column": "reserve_override",
+      "reason": "unrecorded",
+      "closes_with": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3#holes"
+    },
+    {
+      "column": "experience_adjustment",
+      "reason": "overwritten",
+      "closes_with": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3#holes"
+    }
+  ],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "bindings/python/tests/graph/test_conformance_corpus.py",
+      "fingerprint": "sha256:5ee4385d6c3ce877e503f37b006d8604d8386d9d771c9e13839d46ffd654dc0a",
+      "payload": {
+        "omitted": "withheld"
+      }
+    }
+  ],
+  "enrichment": null,
+  "policies": [],
+  "facets": {},
+  "document_digest": "sha256:a83bb944e80f42456bfc2d54f6f4564be64bddad3fe551db915d665682a26a6c"
+}

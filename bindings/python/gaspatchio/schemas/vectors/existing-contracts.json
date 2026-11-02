@@ -1,0 +1,3270 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "existing-contracts",
+  "cases": [
+    {
+      "id": "abs-bounded-False",
+      "covers": [
+        "abs"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -8.0,
+            0.0,
+            8.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "abs",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          8.0,
+          0.0,
+          8.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "abs-bounded-True",
+      "covers": [
+        "abs"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -8.0,
+              0.0,
+              8.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "abs",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            8.0,
+            0.0,
+            8.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sign-bounded-False",
+      "covers": [
+        "sign"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -8.0,
+            0.0,
+            8.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sign",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sign-bounded-True",
+      "covers": [
+        "sign"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -8.0,
+              0.0,
+              8.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sign",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -1.0,
+            0.0,
+            1.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sqrt-bounded-False",
+      "covers": [
+        "sqrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            4.0,
+            9.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sqrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          2.0,
+          3.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sqrt-bounded-True",
+      "covers": [
+        "sqrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              4.0,
+              9.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sqrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            2.0,
+            3.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "cbrt-bounded-False",
+      "covers": [
+        "cbrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -8.0,
+            0.0,
+            27.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cbrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -2.0,
+          0.0,
+          3.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "cbrt-bounded-True",
+      "covers": [
+        "cbrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -8.0,
+              0.0,
+              27.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cbrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -2.0,
+            0.0,
+            3.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "exp-bounded-False",
+      "covers": [
+        "exp"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -1.0,
+            0.0,
+            1.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "exp",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.36787944117144233,
+          1.0,
+          2.718281828459045
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "exp-bounded-True",
+      "covers": [
+        "exp"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              1.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "exp",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.36787944117144233,
+            1.0,
+            2.718281828459045
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "log-bounded-False",
+      "covers": [
+        "log"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            2.718281828459045,
+            7.3890560989306495
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "log-bounded-True",
+      "covers": [
+        "log"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.718281828459045,
+              7.3890560989306495
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            2.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "log10-bounded-False",
+      "covers": [
+        "log10"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            10.0,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log10",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "log10-bounded-True",
+      "covers": [
+        "log10"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              10.0,
+              100.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log10",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            2.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "log1p-bounded-False",
+      "covers": [
+        "log1p"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.718281828459045,
+            6.3890560989306495
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log1p",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "log1p-bounded-True",
+      "covers": [
+        "log1p"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              1.718281828459045,
+              6.3890560989306495
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log1p",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            2.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floor-bounded-False",
+      "covers": [
+        "floor"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -1.9,
+            0.0,
+            1.9
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "floor",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -2.0,
+          0.0,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floor-bounded-True",
+      "covers": [
+        "floor"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.9,
+              0.0,
+              1.9
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "floor",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -2.0,
+            0.0,
+            1.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "ceil-bounded-False",
+      "covers": [
+        "ceil"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -1.9,
+            0.0,
+            1.9
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "ceil",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -1.0,
+          0.0,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "ceil-bounded-True",
+      "covers": [
+        "ceil"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.9,
+              0.0,
+              1.9
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "ceil",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -1.0,
+            0.0,
+            2.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "round-significant-digits",
+      "covers": [
+        "round_sig_figs"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1234.0,
+            0.01234,
+            -1234.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "round_sig_figs",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "digits": 3
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1230.0,
+          0.0123,
+          -1230.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "round-half_to_even",
+      "covers": [
+        "round"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.5,
+              -2.5,
+              3.5
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "round",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "decimals": 0,
+          "mode": "half_to_even"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            2.0,
+            -2.0,
+            4.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "round-half_away_from_zero",
+      "covers": [
+        "round"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.5,
+              -2.5,
+              3.5
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "round",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "decimals": 0,
+          "mode": "half_away_from_zero"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            3.0,
+            -3.0,
+            4.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_null-missing-False",
+      "covers": [
+        "is_null"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "+inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_null",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_null-missing-True",
+      "covers": [
+        "is_null"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              null,
+              {
+                "nonfinite": "nan"
+              },
+              {
+                "nonfinite": "+inf"
+              }
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_null",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            true,
+            false,
+            false
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_not_null-missing-False",
+      "covers": [
+        "is_not_null"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "+inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_not_null",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_not_null-missing-True",
+      "covers": [
+        "is_not_null"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              null,
+              {
+                "nonfinite": "nan"
+              },
+              {
+                "nonfinite": "+inf"
+              }
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_not_null",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            true,
+            false,
+            true,
+            true
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_nan-missing-False",
+      "covers": [
+        "is_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "+inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          null,
+          true,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_nan-missing-True",
+      "covers": [
+        "is_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              null,
+              {
+                "nonfinite": "nan"
+              },
+              {
+                "nonfinite": "+inf"
+              }
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            null,
+            true,
+            false
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_not_nan-missing-False",
+      "covers": [
+        "is_not_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "+inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_not_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          null,
+          false,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_not_nan-missing-True",
+      "covers": [
+        "is_not_nan"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              null,
+              {
+                "nonfinite": "nan"
+              },
+              {
+                "nonfinite": "+inf"
+              }
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_not_nan",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            true,
+            null,
+            false,
+            true
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_finite-missing-False",
+      "covers": [
+        "is_finite"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "+inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_finite",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          null,
+          false,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_finite-missing-True",
+      "covers": [
+        "is_finite"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              null,
+              {
+                "nonfinite": "nan"
+              },
+              {
+                "nonfinite": "+inf"
+              }
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_finite",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            true,
+            null,
+            false,
+            false
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_infinite-missing-False",
+      "covers": [
+        "is_infinite"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "+inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_infinite",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          null,
+          false,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is_infinite-missing-True",
+      "covers": [
+        "is_infinite"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              null,
+              {
+                "nonfinite": "nan"
+              },
+              {
+                "nonfinite": "+inf"
+              }
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_infinite",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            null,
+            false,
+            true
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-null-keeps-nan",
+      "covers": [
+        "fill_null"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              2.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_null",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 9.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            9.0,
+            2.0,
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sum-period-reduction",
+      "covers": [
+        "sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          6.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mean-period-reduction",
+      "covers": [
+        "mean"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "mean",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          2.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "min-period-reduction",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "max-period-reduction",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          3.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "cum_sum-False",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            3.0,
+            6.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "cum_sum-True",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            6.0,
+            5.0,
+            3.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "cum_prod-False",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            2.0,
+            6.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "cum_prod-True",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            6.0,
+            6.0,
+            3.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "clip-two-bounds",
+      "covers": [
+        "clip"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -1.0,
+            0.0,
+            1.0,
+            2.0,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "clip",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          },
+          {
+            "op": "lit",
+            "value": 1.0
+          }
+        ],
+        "attrs": {
+          "bounds": "both"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "membership-null",
+      "covers": [
+        "is_in"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_in",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "values": [
+              "A",
+              "C"
+            ]
+          }
+        ],
+        "attrs": {
+          "nulls_equal": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "replace-simultaneous",
+      "covers": [
+        "replace"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            "C",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "replace",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "values": [
+              "A",
+              "B"
+            ]
+          },
+          {
+            "op": "lit",
+            "values": [
+              "B",
+              "C"
+            ]
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "B",
+          "C",
+          "C",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "parse-explicit-date",
+      "covers": [
+        "str.to_date"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "str",
+          "values": [
+            "2024/02/29",
+            "bad",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "str.to_date",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "format": "%Y/%m/%d",
+          "strict": false,
+          "exact": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2024-02-29",
+          null,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "integer-checked-conversion",
+      "covers": [
+        "to_integer"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -2.0,
+            2.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_integer",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          -2,
+          2,
+          0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "list-get-negative",
+      "covers": [
+        "list.get"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              null,
+              3.0
+            ],
+            [
+              4.0,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.get",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": -1
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          2.0,
+          3.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "integer-fraction-refuses",
+      "covers": [
+        "to_integer"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.9
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_integer",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "refusal": "checked-integer-conversion",
+      "case_kind": "portable-domain-refusal",
+      "producer_message": "checked Int64 conversion"
+    },
+    {
+      "id": "list-get-empty-refuses",
+      "covers": [
+        "list.get"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.get",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": -1
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "refusal": "list-get-bounds",
+      "case_kind": "portable-domain-refusal",
+      "producer_message": "index is out of bounds"
+    },
+    {
+      "id": "cut-through-label-comparison",
+      "covers": [
+        "cut"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            2.0,
+            2.5,
+            3.0,
+            4.0,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "call",
+          "name": "cut",
+          "args": [
+            {
+              "op": "col",
+              "name": "x"
+            },
+            {
+              "op": "lit",
+              "values": [
+                2.0,
+                3.0
+              ]
+            },
+            {
+              "op": "lit",
+              "values": [
+                "low",
+                "middle",
+                "high"
+              ]
+            }
+          ],
+          "attrs": {
+            "left_closed": false,
+            "include_breaks": false
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": "middle"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          0.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "projection.previous_period-bounded",
+      "covers": [
+        "projection.previous_period"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.previous_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            2.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "projection.next_period-bounded",
+      "covers": [
+        "projection.next_period"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.next_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            2.0,
+            3.0,
+            0.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "projection.at_period-bounded",
+      "covers": [
+        "projection.at_period"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.at_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 0.0
+          }
+        ],
+        "attrs": {
+          "relative_period": -2
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            0.0,
+            1.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "survival-None",
+      "covers": [
+        "projection.cumulative_survival"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2,
+              0.3
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.cumulative_survival",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "start_at": null,
+          "from_survival": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.9,
+            0.72,
+            0.504
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "survival-1.0",
+      "covers": [
+        "projection.cumulative_survival"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2,
+              0.3
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.cumulative_survival",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "start_at": 1.0,
+          "from_survival": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.9,
+            0.72
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "remaining-sum",
+      "covers": [
+        "projection.remaining_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.remaining_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            6.0,
+            5.0,
+            3.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "prospective-value-end_of_period",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              110.0,
+              120.0
+            ],
+            []
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "end_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            190.9090909090909,
+            100.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "prospective-value-beginning_of_period",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              110.0,
+              120.0
+            ],
+            []
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "beginning_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            219.09090909090907,
+            120.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "linear-accumulation",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            20.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              3.0
+            ],
+            []
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            21.0,
+            65.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "membership-of-a-nan-is-false",
+      "covers": [
+        "is_in"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            {
+              "nonfinite": "nan"
+            },
+            3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_in",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "values": [
+              1.0,
+              2.0
+            ]
+          }
+        ],
+        "attrs": {
+          "nulls_equal": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "membership-of-a-nan-is-false-per-period",
+      "covers": [
+        "is_in"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_in",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "values": [
+              1.0,
+              2.0
+            ]
+          }
+        ],
+        "attrs": {
+          "nulls_equal": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            true,
+            false
+          ],
+          [
+            false,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "membership-in-a-set-holding-a-nan",
+      "covers": [
+        "is_in"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            {
+              "nonfinite": "nan"
+            },
+            3.0
+          ]
+        },
+        "members": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              }
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_in",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "col",
+            "name": "members"
+          }
+        ],
+        "attrs": {
+          "nulls_equal": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "accumulate-product-rounded-before-addend",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            1234.56,
+            987.65
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0267,
+              0.989,
+              1.0267,
+              0.9801
+            ],
+            [
+              0.9853,
+              1.0135,
+              1.0025,
+              1.0137
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              346.62,
+              389.1,
+              156.26,
+              270.16
+            ],
+            [
+              97.64,
+              344.13,
+              142.72,
+              121.29
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1614.1427519999997,
+            1985.4871817279995,
+            2194.7596894801372,
+            2421.243971659482
+          ],
+          [
+            1070.771545,
+            1429.3569608575003,
+            1575.6503532596441,
+            1718.5267630993012
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    }
+  ]
+}

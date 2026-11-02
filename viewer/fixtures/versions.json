@@ -1,0 +1,676 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0"
+  },
+  "created_at": "2026-09-19T01:16:37Z",
+  "model": {
+    "label": null,
+    "source_path": "model.py",
+    "source_sha": "sha256:8a78b21e28c3fc02d567e4c48b8603f38a692482d77f29dd1199a565cf4d95b3",
+    "git": null,
+    "model_points": {
+      "path": "points.parquet",
+      "fingerprint": "sha256:cdba563842d4785b86a9dcca1987ddce70a5cd343a1537fe5aa5a6601d857114"
+    }
+  },
+  "graph_fingerprint": "sha256:3f5c19cb64874e7f97c5c1f847be3efa15bf2176e15e9a74056243b8526ce140",
+  "book": {
+    "columns": [
+      "annual_premium",
+      "mortality_rate",
+      "policy_id",
+      "sum_assured"
+    ],
+    "digest": {
+      "omitted": "unavailable",
+      "detail": "Written before documents recorded their book, and the policy data it was exported over is not kept with it."
+    }
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "policy_id",
+      "column": "policy_id",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b398b35427f0f53c4e58d7cef7eec6c65b1f946cfc1d9785381196ef10541a59",
+      "fingerprint": "sha256:78b37d7dd3523f7be5e475317b76036afa247a5657685f9f33267fd531412ef2",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "POL001",
+      "trace": null
+    },
+    {
+      "id": "sum_assured",
+      "column": "sum_assured",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b643510e5bc2884efbc56ffc1b90fca82f7cc07abb692dd75abb3cf7d1f60b38",
+      "fingerprint": "sha256:c7d944982f89b2858870c74491fff1c28758dbead932cdaa6ba90157ec2b3778",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 500000.0,
+      "trace": null
+    },
+    {
+      "id": "annual_premium",
+      "column": "annual_premium",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:5e3559f6e87b88652821f6ab5a9dea406dfb00ed6317057f35cfb2daf597eb34",
+      "fingerprint": "sha256:10b98cc0323fe215b04b26d862fa4fff149d9903bfa1ba27cfe655f04f745bfb",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 450.0,
+      "trace": null
+    },
+    {
+      "id": "mortality_rate",
+      "column": "mortality_rate",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:64f120b2abf9efb4420476dbe0b6cd2f652fa191e45f624913888fe91831eaee",
+      "fingerprint": "sha256:2015f7398ec61fc2d380baff909a8698d3a8ab08efb8d0e051b0d5f724e89005",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 0.001,
+      "trace": null
+    },
+    {
+      "id": "projection_start_date@1",
+      "column": "projection_start_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:02fd52ce6b46e5a315d14eb5fb0904d7920117dccf03e2e7e6c3cea751c57dac",
+      "fingerprint": "sha256:12f91072af6d08fa40fd574b5a323e56e023ad3b1bd6625a76cb0e19a2ed2d18",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:22",
+      "facets": {},
+      "value_sample": "2025-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_start_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_start_date",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2025-01-31",
+          "result": "2025-01-31"
+        }
+      ]
+    },
+    {
+      "id": "projection_end_date@1",
+      "column": "projection_end_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:02fd52ce6b46e5a315d14eb5fb0904d7920117dccf03e2e7e6c3cea751c57dac",
+      "fingerprint": "sha256:12f91072af6d08fa40fd574b5a323e56e023ad3b1bd6625a76cb0e19a2ed2d18",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:22",
+      "facets": {},
+      "value_sample": "2026-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_end_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_end_date",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2026-01-31",
+          "result": "2026-01-31"
+        }
+      ]
+    },
+    {
+      "id": "num_proj_months@1",
+      "column": "num_proj_months",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:02fd52ce6b46e5a315d14eb5fb0904d7920117dccf03e2e7e6c3cea751c57dac",
+      "fingerprint": "sha256:12f91072af6d08fa40fd574b5a323e56e023ad3b1bd6625a76cb0e19a2ed2d18",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:22",
+      "facets": {},
+      "value_sample": 13,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "num_proj_months"
+        },
+        {
+          "step": 2,
+          "expr": "num_proj_months",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "13",
+          "result": 13
+        }
+      ]
+    },
+    {
+      "id": "month@1",
+      "column": "month",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:02fd52ce6b46e5a315d14eb5fb0904d7920117dccf03e2e7e6c3cea751c57dac",
+      "fingerprint": "sha256:12f91072af6d08fa40fd574b5a323e56e023ad3b1bd6625a76cb0e19a2ed2d18",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:22",
+      "facets": {},
+      "value_sample": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "month"
+        },
+        {
+          "step": 2,
+          "expr": "month  (13 periods)",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "[0, 1, 2, \u2025, 12]  (13 periods)",
+          "result": 0,
+          "shape": "13 periods \u00b7 first 0 \u00b7 last 12 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "premium_earned@1",
+      "column": "premium_earned",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.annual_premium * af.month / 12",
+      "reads": [
+        "annual_premium",
+        "month@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:39489631e55ef515b0bd4ae72f3243e9bb8a96bb559015634a56264b892c30b3",
+      "fingerprint": "sha256:685283b8b2964912deddfae24391f8e4890203031e29d9637d57e515364f3a3e",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:24",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "annual_premium",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "month@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        0.0,
+        37.5,
+        75.0,
+        112.5,
+        150.0,
+        187.5,
+        225.0,
+        262.5,
+        300.0,
+        337.5,
+        375.0,
+        412.5,
+        450.0
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(annual_premium) * (month).eval((element()) / (12))"
+        },
+        {
+          "step": 2,
+          "expr": "((450)) * (([0, 1, 2, \u2025, 12])).eval((element()) / (12))  (13 periods)",
+          "values": {
+            "annual_premium": 450.0,
+            "month": "[0, 1, 2, \u2025, 12] (13 periods)"
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[0, 37.5, 75, \u2025, 450]  (13 periods)",
+          "result": 0.0,
+          "shape": "13 periods \u00b7 first 0 \u00b7 last 450 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "claims_incurred@1",
+      "column": "claims_incurred",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * af.mortality_rate * af.month / 12",
+      "reads": [
+        "sum_assured",
+        "mortality_rate",
+        "month@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:76711775d30387e506b1afe769cc1741804516ba4103f4faf9100bcead3502ac",
+      "fingerprint": "sha256:ce19dbdcb1c02257602dcc82c79984f22b8d7e46120afc9dd496da7294ae9445",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:25",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "mortality_rate",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "month@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        0.0,
+        41.666667,
+        83.333333,
+        125.0,
+        166.666667,
+        208.333333,
+        250.0,
+        291.666667,
+        333.333333,
+        375.0,
+        416.666667,
+        458.333333,
+        500.0
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "((sum_assured) * (mortality_rate)) * (month).eval((element()) / (12))"
+        },
+        {
+          "step": 2,
+          "expr": "(((500000)) * ((0.001))) * (([0, 1, 2, \u2025, 12])).eval((element()) / (12))  (13 periods)",
+          "values": {
+            "mortality_rate": 0.001,
+            "sum_assured": 500000.0,
+            "month": "[0, 1, 2, \u2025, 12] (13 periods)"
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[0, 41.6667, 83.3333, \u2025, 500]  (13 periods)",
+          "result": 0.0,
+          "shape": "13 periods \u00b7 first 0 \u00b7 last 500 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "reserve@1",
+      "column": "reserve",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.claims_incurred - af.premium_earned",
+      "reads": [
+        "claims_incurred@1",
+        "premium_earned@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:77d9c88a51ceec1ecbc5a9068dd7960bf9771854b5f644fbb454dbf4d68796f5",
+      "fingerprint": "sha256:ef5635b5e27f4bbb69c3867e8df858187361578f117179d0666fbf14aa6341bd",
+      "in_final_schema": false,
+      "retained": true,
+      "materialized_at": null,
+      "source_location": "model.py:29",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "claims_incurred@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "premium_earned@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        0.0,
+        4.166667,
+        8.333333,
+        12.5,
+        16.666667,
+        20.833333,
+        25.0,
+        29.166667,
+        33.333333,
+        37.5,
+        41.666667,
+        45.833333,
+        50.0
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(claims_incurred) - (premium_earned)"
+        },
+        {
+          "step": 2,
+          "expr": "(([0, 41.6667, 83.3333, \u2025, 500])) - (([0, 37.5, 75, \u2025, 450]))  (13 periods)",
+          "values": {
+            "claims_incurred": "[0, 41.6667, 83.3333, \u2025, 500] (13 periods)",
+            "premium_earned": "[0, 37.5, 75, \u2025, 450] (13 periods)"
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[0, 4.16667, 8.33333, \u2025, 50]  (13 periods)",
+          "result": 0.0,
+          "shape": "13 periods \u00b7 first 0 \u00b7 last 50 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "reserve@2",
+      "column": "reserve",
+      "version": 2,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "when(af.reserve < 0).then(0.0).otherwise(af.reserve)",
+      "reads": [
+        "reserve@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:faa11763afacc9f3cdbd306000eee4ebbbdd2b9632d057350ebb41ebc692f402",
+      "fingerprint": "sha256:9b24ce962cc460405c6137fd3de8a22cc625aa0e333614288e3a837c3877cba9",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:31",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "reserve@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        0.0,
+        4.166667,
+        8.333333,
+        12.5,
+        16.666667,
+        20.833333,
+        25.0,
+        29.166667,
+        33.333333,
+        37.5,
+        41.666667,
+        45.833333,
+        50.0
+      ],
+      "trace": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "annual_premium",
+      "target": "premium_earned@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "month@1",
+      "target": "premium_earned@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "sum_assured",
+      "target": "claims_incurred@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "mortality_rate",
+      "target": "claims_incurred@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "month@1",
+      "target": "claims_incurred@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "claims_incurred@1",
+      "target": "reserve@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "premium_earned@1",
+      "target": "reserve@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "reserve@1",
+      "target": "reserve@2",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [],
+  "holes": [],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "model.py",
+      "fingerprint": "sha256:8a78b21e28c3fc02d567e4c48b8603f38a692482d77f29dd1199a565cf4d95b3",
+      "payload": {
+        "text": "# SPDX-FileCopyrightText: 2026 Opio Inc.\n#\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"A twelve-month reserve, written once and then floored at zero.\n\nThe point of this model is the second assignment. `reserve` is defined, and\nthen defined again over the top of it, so the artifact carries two accounts\nof one column: the definition the frame ended up holding, and the one it\nwrote over. That is what a reader meets as the versions badge on a node.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom datetime import date\n\nfrom gaspatchio import ActuarialFrame, when\n\n\ndef main(af: ActuarialFrame) -> ActuarialFrame:\n    \"\"\"Earn the premium, incur the claims, and floor what is left at zero.\"\"\"\n    af = af.projection.set(start_date=date(2025, 1, 31), n_periods=12, frequency=\"monthly\")\n\n    af.premium_earned = af.annual_premium * af.month / 12\n    af.claims_incurred = af.sum_assured * af.mortality_rate * af.month / 12\n\n    # Written once, as the difference the two sides come to, and then written\n    # again with the floor on it. Both definitions travel.\n    af.reserve = af.claims_incurred - af.premium_earned\n\n    af.reserve = when(af.reserve < 0).then(0.0).otherwise(af.reserve)\n\n    return af\n"
+      }
+    }
+  ],
+  "enrichment": {
+    "policy_id": "POL001",
+    "aggregation": null,
+    "periods": null,
+    "filter": null
+  },
+  "policies": [
+    {
+      "policy_id": "POL001",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 0 of 3 in points.parquet, selected by ':1'"
+    }
+  ],
+  "facets": {},
+  "document_digest": "sha256:4c20b69746854ba636d3e5c3d51bee6dd6b3560dcbf92b474f31284c7bdb9bd4"
+}

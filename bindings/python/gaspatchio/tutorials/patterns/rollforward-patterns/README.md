@@ -25,6 +25,33 @@ uv run python \
 Each script asserts internally; a clean run with the printed terminal
 values is the success signal.
 
+## Exporting the audit artifact
+
+The first two patterns are `main(af)` models with a model-point file beside
+them, so `calc-graph` runs them like any other model:
+
+```bash
+uv run gspio calc-graph 01_single_state_fund.py 01_model_points.parquet -o fund.json
+uv run gspio calc-graph 02_multistate_ratchet.py 02_model_points.parquet -o ratchet.json
+```
+
+What that gets you is the thing a rollforward is audited by: **the movement
+schedule**. Every step of the chain carries its own signed amount per period,
+under the name it was declared by — and a step with no name to give, a `floor`
+or a `round`, under the key the kernel gives it: `floor@3` for a floor declared
+third. Opening plus the movements is closing, and the viewer draws that as a
+waterfall with the check line under it.
+
+Two rows are worth looking at, because they are the ones a reader would
+otherwise have to guess at:
+
+- pattern 01's floor reads `0.00` in every period. It cannot bite —
+  `AV × (1 + r) × (1 − m)` is non-negative for any `r > −100%` and any
+  `m < 100%` — so those zeros are the guarantee holding, stated rather than
+  left off the file;
+- pattern 02's ratchet reads `0.00` for eleven months and the step-up on the
+  twelfth. *Nothing happened here* is a quotation, not an inference.
+
 ## API surface used
 
 - `af.projection.set(start_date=..., n_periods=..., frequency=...)` — declare the projection grid on the frame

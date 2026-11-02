@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import math
 from bisect import bisect_right
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # A boundary segment needs two knots; a single knot only defines its own spot.
 _MIN_SEGMENT_KNOTS = 2
@@ -121,7 +124,9 @@ def log_linear_spot(
         ld = log_df[0] * (t / tenors[0])
     else:
         ld = linear_interpolate(t, tenors, log_df)
-    return math.exp(ld) ** (-1.0 / t) - 1.0
+    # exp() is never negative, so its power is a real number.
+    spot: float = math.exp(ld) ** (-1.0 / t) - 1.0
+    return spot
 
 
 def pchip_slopes(xs: Sequence[float], ys: Sequence[float]) -> list[float]:

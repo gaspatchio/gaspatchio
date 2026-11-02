@@ -133,8 +133,17 @@ class TestExtendedKwargs:
             contract_boundary=None,
         )
         _, slots = AssignCaptureSlots().apply_with_slots(ir)
-        with pytest.raises(NotImplementedError, match="Op exprs must be"):
+        with pytest.raises(
+            NotImplementedError, match="is an expression over 2 of them"
+        ) as refused:
             LowerToPolarsPlugin().lower(ir, slots)
+        # The refusal is read by an actuary holding arithmetic they meant as a
+        # premium, so it has to say what an op is and what to do next as well
+        # as what is wrong.
+        assert "reads one named column of the frame at each period" in str(
+            refused.value
+        )
+        assert "before the rollforward runs" in str(refused.value)
 
     def test_input_columns_deduplicated(self, sched: Schedule) -> None:
         ir = IR(

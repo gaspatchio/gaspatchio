@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for polars_backend.masks — boolean-mask arithmetic."""
+"""Behavior tests for boolean-mask arithmetic through authoring proxies."""
 
 from __future__ import annotations
 
@@ -56,17 +56,3 @@ class TestListPath:
         af.r = when(~(af.month > 2)).then(1.0).otherwise(0.0)
         result = af.collect()["r"][0].to_list()
         assert result == [1.0, 1.0, 1.0, 0.0, 0.0]
-
-
-class TestDirectModuleImports:
-    """Verify the module's public surface is reachable."""
-
-    def test_to_boolean_expr_importable(self) -> None:
-        from gaspatchio.polars_backend.masks import to_boolean_expr  # noqa: F401
-
-    def test_boolean_and_or_not_importable(self) -> None:
-        from gaspatchio.polars_backend.masks import (  # noqa: F401
-            boolean_and,
-            boolean_not,
-            boolean_or,
-        )

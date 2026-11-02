@@ -8,22 +8,50 @@ Pydantic models for structured error handling.
 This module provides structured models for error information that can be
 formatted for multiple outputs: console display, JSON APIs, and LLM context.
 """
+
 from __future__ import annotations
 
-import sys
 from datetime import datetime
 from enum import Enum
+from textwrap import dedent
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-# Import Rich for syntax highlighting
-try:
-    from rich.console import Console
-    from rich.syntax import Syntax
-    RICH_AVAILABLE = True
-except ImportError:
-    RICH_AVAILABLE = False
+from .constants import PLAN_DUMP_BOUNDARY, PLAN_DUMP_OMITTED
+
+# The report's compact column line lists every column of a frame this narrow;
+# a wider frame gets its first _COLUMNS_LISTED_BEFORE_COUNT and a count.
+_COLUMNS_LISTED_IN_FULL = 8
+_COLUMNS_LISTED_BEFORE_COUNT = 6
+
+# What a statement's own closing line starts with, where it has one.
+_CLOSERS = (")", "]", "}")
+
+
+def source_block(statement: str) -> list[str]:
+    """Return a model's statement as an error panel shows it: fenced and plain.
+
+    A panel becomes the exception's own message, and where that message is
+    read is not known when it is written -- a terminal, a log file, CI output,
+    a notebook cell, a subprocess another tool parses. Terminal colour codes
+    written into it would travel to every one of those as escape sequences,
+    so the statement is plain text, every line of it indented under its
+    heading. Colour, if a reader wants it, is for whatever displays the text.
+
+    **A statement reads as it was written, wherever in the file it was.** Its
+    source is read from its first token, so the first line arrives with no
+    indentation and every line after it with the file's. Those lines move
+    left together, keeping their shape: the statement's own closing line,
+    where it has one -- a bracket, as a multi-line call closes -- lands under
+    the first, and a continuation with none sits one indent in from it.
+    """
+    first, *rest = statement.strip().splitlines() or [""]
+    body = dedent("\n".join(rest)).splitlines()
+    if body and not body[-1].startswith(_CLOSERS):
+        body = [f"    {line}" if line.strip() else line for line in body]
+    fenced = [f"   {line}".rstrip() for line in (first, *body)]
+    return ["   ```python", *fenced, "   ```"]
 
 
 class ErrorType(str, Enum):
@@ -37,27 +65,34 @@ class ErrorType(str, Enum):
 
 
 class SuggestionType(str, Enum):
-    """Types of suggestions."""
+    """Kinds of advice a suggestion can carry.
+
+    Two members, because two are what the advice builder stamps: a
+    named column to use instead of the one that was not found, and a
+    pointer to the documentation. Three more once described kinds of
+    advice this package has never given -- a cast, a split operation, a
+    worked example -- and nothing ever constructed them.
+    """
 
     TYPO_FIX = "typo_fix"
-    TYPE_CAST = "type_cast"
-    OPERATION_SPLIT = "operation_split"
     DOCUMENTATION = "documentation"
-    CODE_EXAMPLE = "code_example"
 
 
 class SourceLocation(BaseModel):
-    """Source code location information."""
+    """Source code location information.
+
+    ``source_line`` is the text of the line, when there is text to read.
+    A frame can genuinely have none -- stdin, an ``exec``-compiled snippet,
+    a file edited since it was imported -- and the location is still worth
+    reporting: the file and the line number are what send a reader to the
+    right place. It is ``None`` in that case, never an empty string standing
+    in for a line nobody can show.
+    """
 
     file_path: str
     line_number: int
     function_name: str | None
-    source_line: str
-
-    @property
-    def display_location(self) -> str:
-        """Format for display."""
-        return f"{self.file_path}:{self.line_number}"
+    source_line: str | None
 
 
 class ColumnInfo(BaseModel):
@@ -67,13 +102,6 @@ class ColumnInfo(BaseModel):
     dtype: str
     null_count: int | None = None
     unique_count: int | None = None
-
-    def display(self, include_stats: bool = False) -> str:
-        """Format for display."""
-        base = f"{self.name} ({self.dtype})"
-        if include_stats and self.null_count is not None:
-            base += f" - {self.null_count} nulls"
-        return base
 
 
 class ErrorMetadata(BaseModel):
@@ -92,7 +120,7 @@ class ErrorMetadata(BaseModel):
             ErrorType.TYPE_MISMATCH: "🔢",
             ErrorType.INVALID_OPERATION: "⚠️",
             ErrorType.SCHEMA_CONFLICT: "📊",
-            ErrorType.UNKNOWN: "❌"
+            ErrorType.UNKNOWN: "❌",
         }.get(self.error_type, "❌")
 
         return f"{emoji} {self.error_type.value.replace('_', ' ').title()}"
@@ -108,16 +136,6 @@ class OperationContext(BaseModel):
     source: SourceLocation
     expected_dtype: str | None = None
 
-    def display(self, max_expr_length: int = 80) -> str:
-        """Format for console display."""
-        expr = self.expression
-        if len(expr) > max_expr_length:
-            expr = expr[:max_expr_length-3] + "..."
-
-        return f"""Operation {self.index + 1}/{self.total_operations}:
-   {self.alias} = {expr}
-   at {self.source.display_location}"""
-
 
 class DataFrameContext(BaseModel):
     """Context about the DataFrame state."""
@@ -125,26 +143,6 @@ class DataFrameContext(BaseModel):
     shape: tuple[int, int]
     columns: list[ColumnInfo]
     preview_rows: list[dict[str, Any]] = Field(default_factory=list)
-    dataframe_schema: str | None = None
-
-    def display_columns(self, max_display: int = 10) -> str:
-        """Format columns for display."""
-        if len(self.columns) <= max_display:
-            return "\n".join(f"   • {col.display()}" for col in self.columns)
-        displayed = self.columns[:max_display]
-        lines = [f"   • {col.display()}" for col in displayed]
-        lines.append(f"   ... and {len(self.columns) - max_display} more columns")
-        return "\n".join(lines)
-
-    def display_preview(self) -> str:
-        """Format preview for display."""
-        if not self.preview_rows:
-            return "   [No preview available]"
-
-        # Simple table representation
-        if len(self.preview_rows) == 1:
-            return "   [1 row preview available in JSON format]"
-        return f"   [{len(self.preview_rows)} rows preview available in JSON format]"
 
 
 class Suggestion(BaseModel):
@@ -154,12 +152,6 @@ class Suggestion(BaseModel):
     type: SuggestionType
     relevance_score: float = Field(ge=0.0, le=1.0)
     code_example: str | None = None
-
-    def display(self) -> str:
-        """Format for console display."""
-        if self.code_example:
-            return f"   • {self.text}\n     Example: {self.code_example}"
-        return f"   • {self.text}"
 
 
 class EnhancedError(BaseModel):
@@ -172,9 +164,7 @@ class EnhancedError(BaseModel):
     additional_context: dict[str, Any] = Field(default_factory=dict)
 
     def to_console(self, use_emoji: bool = True) -> str:
-        """
-        Format for console display with optional emoji.
-        """
+        """Format for console display with optional emoji."""
         lines = []
 
         # Header with separator
@@ -186,17 +176,30 @@ class EnhancedError(BaseModel):
         lines.append("─" * 80)
         lines.append("")
 
-        # Source location
-        lines.append(f"📍 Location: {self.operation.source.file_path}:{self.operation.source.line_number}")
-        lines.append(f"   Function: {self.operation.source.function_name or 'module level'}")
-        lines.append(f"   Operation: {self.operation.alias} = {self._truncate_expression(self.operation.expression)}")
+        # Source location. The enclosing scope is reported only when it is
+        # actually known: "module level" is a claim, and a calculation
+        # written inside main() reported as module level sends the reader --
+        # and any LLM reading over their shoulder -- to the wrong place. An
+        # omitted line says nothing, which is the honest answer here.
+        lines.append(
+            f"📍 Location: {self.operation.source.file_path}:"
+            f"{self.operation.source.line_number}"
+        )
+        if self.operation.source.function_name is not None:
+            lines.append(f"   Function: {self.operation.source.function_name}")
+        lines.append(
+            f"   Operation: {self.operation.alias} = "
+            f"{self._truncate_expression(self.operation.expression)}"
+        )
         lines.append("")
 
-        # Source code
-        lines.append("📝 Source Code:")
-        source_code_lines = self._format_source_code(self.operation.source.source_line)
-        lines.extend(source_code_lines)
-        lines.append("")
+        # Source code, when there is a line to show. A frame with no
+        # readable source (stdin, an exec-compiled snippet, a bare REPL)
+        # gets no block at all rather than a heading over the word "None".
+        if self.operation.source.source_line:
+            lines.append("📝 Source Code:")
+            lines.extend(source_block(self.operation.source.source_line))
+            lines.append("")
 
         # Original error (simplified)
         lines.append("🔴 Error Details:")
@@ -209,7 +212,12 @@ class EnhancedError(BaseModel):
                 lines.append("💡 Suggestions:")
             else:
                 lines.append("Suggestions:")
-            for i, suggestion in enumerate(sorted(self.suggestions, key=lambda s: s.relevance_score, reverse=True)[:3], 1):
+            for i, suggestion in enumerate(
+                sorted(self.suggestions, key=lambda s: s.relevance_score, reverse=True)[
+                    :3
+                ],
+                1,
+            ):
                 lines.append(f"   {i}. {suggestion.text}")
                 if suggestion.code_example:
                     lines.append(f"      Example: {suggestion.code_example}")
@@ -228,13 +236,14 @@ class EnhancedError(BaseModel):
         """Export as JSON string."""
         return self.model_dump_json(indent=2)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Export as dictionary."""
         return self.model_dump()
 
-    def to_llm_context(self) -> dict:
+    def to_llm_context(self) -> dict[str, Any]:
         """
         Export optimized for LLM consumption.
+
         Flattens structure and adds helpful context.
         """
         return {
@@ -247,105 +256,83 @@ class EnhancedError(BaseModel):
                 "expression": self.operation.expression,
                 "source_file": self.operation.source.file_path,
                 "source_line": self.operation.source.line_number,
-                "code": self.operation.source.source_line
+                "source_function": self.operation.source.function_name,
+                "code": self.operation.source.source_line,
             },
             "dataframe_shape": list(self.dataframe.shape),
             "available_columns": [
-                {"name": col.name, "type": col.dtype}
-                for col in self.dataframe.columns
+                {"name": col.name, "type": col.dtype} for col in self.dataframe.columns
             ],
             "suggestions": [
                 {
                     "text": s.text,
                     "type": s.type.value,
                     "score": s.relevance_score,
-                    "example": s.code_example
+                    "example": s.code_example,
                 }
-                for s in sorted(self.suggestions, key=lambda s: s.relevance_score, reverse=True)
+                for s in sorted(
+                    self.suggestions, key=lambda s: s.relevance_score, reverse=True
+                )
             ],
             "original_error": self.metadata.original_message,
-            **self.additional_context
+            **self.additional_context,
         }
-
-    def _format_source_code(self, source_line: str) -> list[str]:
-        """Format source code with syntax highlighting if available."""
-        # Check if we should use Rich syntax highlighting
-        if RICH_AVAILABLE and self._should_use_rich_formatting():
-            return self._format_source_code_rich(source_line)
-        # Fallback to markdown-style fenced code blocks
-        return [
-            "   ```python",
-            f"   {source_line}",
-            "   ```",
-        ]
-
-    def _should_use_rich_formatting(self) -> bool:
-        """Check if we should use Rich formatting (TTY and not piped)."""
-        # Check if stdout is a TTY and not being piped
-        return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
-
-    def _format_source_code_rich(self, source_line: str) -> list[str]:
-        """Format source code with Rich syntax highlighting."""
-        try:
-            # Create a console with specific width to match our indentation
-            console = Console(file=None, force_terminal=True, width=120)
-
-            # Create syntax object with Python highlighting
-            syntax = Syntax(
-                source_line.strip(),
-                "python",
-                theme="monokai",  # Dark theme that works well in terminals
-                line_numbers=False,
-                word_wrap=False,
-                indent_guides=False,
-            )
-
-            # Render to string
-            with console.capture() as capture:
-                console.print(syntax)
-
-            highlighted = capture.get()
-
-            # Split into lines and add our indentation
-            highlighted_lines = []
-            for line in highlighted.strip().split("\n"):
-                highlighted_lines.append(f"   {line}")
-
-            return highlighted_lines
-
-        except Exception:
-            # If Rich formatting fails, fall back to plain text
-            return [
-                "   ```python",
-                f"   {source_line}",
-                "   ```",
-            ]
 
     def _truncate_expression(self, expression: str, max_length: int = 60) -> str:
         """Truncate long expressions for display."""
         if len(expression) <= max_length:
             return expression
-        return expression[:max_length - 3] + "..."
+        return expression[: max_length - 3] + "..."
 
     def _format_original_error(self) -> str:
-        """Format the original error message in a cleaner way."""
-        msg = self.metadata.original_message
-        # Remove excessive newlines and whitespace
-        msg = " ".join(msg.split())
-        # Truncate if too long
-        if len(msg) > 120:
-            msg = msg[:117] + "..."
-        return msg
+        """Render polars' text as the panel's one-line ``Error Details:`` field.
+
+        The twin of ``FriendlyErrorFormatter._clean_error_message``, on the
+        other panel, and the same contract. Polars often hands over two
+        things: a diagnosis addressed to the reader, then the query plan it
+        failed resolving. They are split here on ``PLAN_DUMP_BOUNDARY`` and
+        treated as what they are.
+
+        The diagnosis is kept **whole**. It used to share a 117-character
+        budget with the dump, and on this panel's commonest error that budget
+        cut the answer out of the sentence: a ``ColumnNotFoundError`` names
+        the column it could not find and then lists the columns that do
+        exist, which is the reader's next move, and the cut landed two names
+        into that list. The dump never had to contribute -- the diagnosis
+        alone overran the budget -- so a budget is not the shape of the fix.
+        There is deliberately none now: a truncated diagnosis is the defect.
+
+        The dump is dropped, not truncated. It is a tree, and this field is
+        one line, so any slice of it survives only as a smear of node names
+        with the newlines removed -- and the panel already answers the
+        question the plan would: the failing operation, the statement that
+        defined it, its file and line, and the columns that existed before it
+        ran. The untouched polars text stays reachable on
+        ``to_llm_context()``, which the compilation handler stamps on the
+        exception alongside this panel, so nothing is destroyed by the
+        omission -- only left out of the field it could not be read in.
+
+        Returns:
+            The message on one line, with a stated omission when a plan dump
+            followed it.
+
+        """
+        message = self.metadata.original_message
+        diagnosis, boundary, _dump = message.partition(PLAN_DUMP_BOUNDARY)
+        cleaned = " ".join(diagnosis.split())
+        if not boundary:
+            return cleaned
+        return f"{cleaned} {PLAN_DUMP_OMITTED}".strip()
 
     def _format_columns_compact(self) -> str:
         """Format columns in a compact, readable way."""
         columns = self.dataframe.columns
-        if len(columns) <= 8:
+        if len(columns) <= _COLUMNS_LISTED_IN_FULL:
             # Show all columns if there are few
             col_strs = [f"{col.name} ({col.dtype})" for col in columns]
             return "   " + ", ".join(col_strs)
-        # Show first 6 and count of remaining
-        first_cols = columns[:6]
+        # Show the first few and count of remaining
+        first_cols = columns[:_COLUMNS_LISTED_BEFORE_COUNT]
         col_strs = [f"{col.name} ({col.dtype})" for col in first_cols]
-        remaining = len(columns) - 6
+        remaining = len(columns) - _COLUMNS_LISTED_BEFORE_COUNT
         return f"   {', '.join(col_strs)}, ... and {remaining} more"

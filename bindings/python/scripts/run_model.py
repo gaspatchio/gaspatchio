@@ -52,6 +52,7 @@ os.environ["GASPATCHIO_RUST_LOG"] = "debug"  # This is checked in the Rust code
 # this is important for catching logs from the Rust code using pyo3-log
 logger.remove()  # Remove the default handler
 logger.add(sys.stderr, level="TRACE")  # Add a handler that outputs all levels
+logger.enable("gaspatchio")  # The package mutes its own records when imported
 
 
 # Configure loguru as an interceptor for the standard logging module

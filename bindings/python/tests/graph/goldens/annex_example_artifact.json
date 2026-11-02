@@ -1,0 +1,374 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0"
+  },
+  "created_at": "2026-08-30T09:00:00Z",
+  "model": {
+    "label": "term-assurance",
+    "source_path": "models/term_assurance.py",
+    "source_sha": "sha256:d5b0c21c5025022b1b6acdb29a55e3a5f49e7c424448dc900657da64c35ebb69",
+    "git": {
+      "commit": "4f1c9a02d0d7c7a4a5f0f1b6c2d3e4f5a6b7c8d9",
+      "dirty": false
+    },
+    "model_points": {
+      "path": "data/term_assurance_model_points.parquet",
+      "fingerprint": "sha256:e3b45baf4cf79250dda2e5ab795cbdf6235b5380e180c8f1b8b3f27dc523f78f"
+    }
+  },
+  "graph_fingerprint": "sha256:b270925ae9c7c60e46eddcd7f5e45c67f48c1debe498bee4f247dd0ae8ce76ca",
+  "book": {
+    "columns": [
+      "attained_age",
+      "mortality_rate",
+      "sum_assured",
+      "years_elapsed"
+    ],
+    "digest": "sha256:83c13fb4a1015e0fb6f88098743f95049c973e287d5377c367bc8c2acbdf0251"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "sum_assured",
+      "column": "sum_assured",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b643510e5bc2884efbc56ffc1b90fca82f7cc07abb692dd75abb3cf7d1f60b38",
+      "fingerprint": "sha256:c7d944982f89b2858870c74491fff1c28758dbead932cdaa6ba90157ec2b3778",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "attained_age",
+      "column": "attained_age",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:87cd6e94143b046c596d1356ebcbc7e15a6a2aca3d7ef37783ee45af782e6442",
+      "fingerprint": "sha256:7e8263dd06af87538cd6ec5356a7a4d911eb63333d0d6182ca2a41cd5816b109",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "mortality_rate",
+      "column": "mortality_rate",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assumptions",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:8a153d004d6b264705229a7603c8e1ad5772348526a69867d34969d94be58237",
+      "fingerprint": "sha256:b98674da5ba4c2df38d16ec7d8d85400c5c441d1f868553b0c707a2eb8ac4311",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "years_elapsed",
+      "column": "years_elapsed",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:c9f0b64c16258df56bdcba39cab780717947df79b8c9c44c2fe84d6c087408e5",
+      "fingerprint": "sha256:b0be2b26dff791f6d0d1182aa1067f443a302a9fedeb92eaf07b05efdbb9efa4",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "death_claims@1",
+      "column": "death_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * af.mortality_rate * 0.95",
+      "reads": [
+        "sum_assured",
+        "mortality_rate"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:9d879fdc6ad2fb8c345a6355e680a38ad9fe4b12fc47af0c61b19ea5bda77015",
+      "fingerprint": "sha256:29ccd1ae216e4afc1dd7e810b38c6dc6f60080455a229089d487c602bd30c05f",
+      "in_final_schema": false,
+      "materialized_at": 0,
+      "source_location": "models/term_assurance.py:41",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "mortality_rate",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "death_claims@2",
+      "column": "death_claims",
+      "version": 2,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * mortality.lookup(attained_age=af.attained_age)",
+      "reads": [
+        "sum_assured",
+        "attained_age"
+      ],
+      "reads_assumptions": [
+        "mortality"
+      ],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:90cf1f39e229c9193da292babad17444a41669c88d7a69fe88239fda1eadfa51",
+      "fingerprint": "sha256:2c47d338c9908ea82680edc4aeebc6fa974c2f22d588dc0e5049e1d19aa568c8",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "models/term_assurance.py:53",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "attained_age",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "discount_factor@1",
+      "column": "discount_factor",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "discount_curve.discount_factor(af.years_elapsed)",
+      "reads": [
+        "years_elapsed"
+      ],
+      "reads_assumptions": [
+        "curve:0483acfa"
+      ],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:c40e8b26f19d53a7c8b0e42f6a1d95c37b0e8a24d6f01c93b5a7e28d40f6b1c9",
+      "fingerprint": "sha256:c1f27d636a4945fea612c0c92f5be3d6535aa9e9c39c0c52e2753eefb471d8a5",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "models/term_assurance.py:58",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "years_elapsed",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "reserve_override",
+      "column": "reserve_override",
+      "version": null,
+      "kind": "hole",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": null,
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:12339f1632fd446659844906c4cfbf0f9600406dee4904e8603a6cc25d855f06",
+      "fingerprint": "sha256:9e71f53fd7f6d31406ec12fa44e357d6c393d24513b5a4ace781953a8757d5e9",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    }
+  ],
+  "edges": [
+    {
+      "source": "sum_assured",
+      "target": "death_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "mortality_rate",
+      "target": "death_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "sum_assured",
+      "target": "death_claims@2",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "attained_age",
+      "target": "death_claims@2",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "years_elapsed",
+      "target": "discount_factor@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [
+    {
+      "kind": "curve",
+      "name": "curve:0483acfa",
+      "fingerprint": "sha256:0483acfa1267bdb56ce3f0e1b2ffd0b9ae9863f9459855e39fe6b0bfe4233ccc",
+      "payload": {
+        "kind": "Curve",
+        "tenors": [
+          1.0,
+          5.0,
+          10.0
+        ],
+        "rates": [
+          0.031,
+          0.034,
+          0.037
+        ],
+        "day_count": "ActualActualISDA",
+        "interpolation": "linear"
+      }
+    },
+    {
+      "kind": "table",
+      "name": "mortality",
+      "fingerprint": "sha256:dd154d1f66ee4adc8a4c6207d2947d8c73c827fcc6047d26bd85b617511a099e",
+      "payload": {
+        "dimensions": [
+          "attained_age"
+        ],
+        "value": "rate",
+        "columns": [
+          {
+            "name": "attained_age",
+            "dtype": "f64"
+          },
+          {
+            "name": "rate",
+            "dtype": "f64"
+          }
+        ],
+        "rows": [
+          [
+            45.0,
+            0.00123
+          ],
+          [
+            46.0,
+            0.00137
+          ],
+          [
+            47.0,
+            0.00152
+          ]
+        ]
+      }
+    }
+  ],
+  "holes": [
+    {
+      "column": "reserve_override",
+      "reason": "unrecorded",
+      "closes_with": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3#holes"
+    }
+  ],
+  "boundaries": [
+    {
+      "ordinal": 0,
+      "position": 3,
+      "source_location": "models/term_assurance.py:47"
+    }
+  ],
+  "enrichment": null,
+  "policies": [],
+  "facets": {},
+  "document_digest": "sha256:6ef9e14768d6c4fab86490f42e2f7383a3b1a353bef448f58d676f2d6b487ce9"
+}

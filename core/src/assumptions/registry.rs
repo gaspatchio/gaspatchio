@@ -10,11 +10,18 @@ use polars::prelude::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+#[derive(Debug, Clone)]
+struct RegisteredAssumptionTable {
+    table: Arc<AssumptionTable>,
+    processed_fingerprint: Option<String>,
+    value_column: String,
+}
+
 /// A registry that stores assumption tables for lookup operations.
 #[derive(Debug, Default, Clone)]
 pub struct AssumptionTableRegistry {
     /// Pre-built assumption tables
-    assumption_tables: HashMap<String, Arc<AssumptionTable>>,
+    assumption_tables: HashMap<String, RegisteredAssumptionTable>,
 }
 
 // --- Global Registry Definition ---
@@ -36,9 +43,47 @@ fn acquire_registration_lock() -> PolarsResult<std::sync::MutexGuard<'static, ()
         .map_err(|_| polars_err!(ComputeError: "Registration lock poisoned"))
 }
 
+/// What a registry update does, in the two tenses its log lines need: the
+/// failure reads "Failed to register", the success "Successfully registered".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RegistryUpdate {
+    Register,
+    Replace,
+    AppendTo,
+}
+
+impl RegistryUpdate {
+    /// The verb as the failure line needs it, after "Failed to".
+    fn attempted(self) -> &'static str {
+        match self {
+            Self::Register => "register",
+            Self::Replace => "replace",
+            Self::AppendTo => "append to",
+        }
+    }
+
+    /// The verb as the success line needs it, after "Successfully".
+    fn done(self) -> &'static str {
+        match self {
+            Self::Register => "registered",
+            Self::Replace => "replaced",
+            Self::AppendTo => "appended to",
+        }
+    }
+
+    fn failure_line(self, table_name: &str, error: &PolarsError) -> String {
+        format!(
+            "Failed to {} table '{}': {}",
+            self.attempted(),
+            table_name,
+            error
+        )
+    }
+}
+
 // Helper function to update the global registry atomically
 fn update_global_registry<F>(
-    operation_name: &str,
+    operation: RegistryUpdate,
     table_name: &str,
     update_fn: F,
 ) -> PolarsResult<()>
@@ -53,15 +98,36 @@ where
             GLOBAL_REGISTRY.store(Arc::new(new_registry));
             debug!(
                 "Successfully {} table '{}' in global registry",
-                operation_name, table_name
+                operation.done(),
+                table_name
             );
             Ok(())
         }
         Err(e) => {
-            log::error!("Failed to {} table '{}': {}", operation_name, table_name, e);
+            log::error!("{}", operation.failure_line(table_name, &e));
             Err(e)
         }
     }
+}
+
+/// Register a table under a name the registry does not hold yet.
+///
+/// Takes the registration lock, refuses a name that already exists -- checked
+/// inside the lock, so two registrations cannot both pass it -- and applies
+/// `register` as one atomic registry update.
+fn register_new_table<F>(name: &str, register: F) -> PolarsResult<()>
+where
+    F: FnOnce(&mut AssumptionTableRegistry) -> PolarsResult<()>,
+{
+    let _guard = acquire_registration_lock()?;
+
+    let current_registry = get_global_assumption_registry();
+    if current_registry.get_table(name).is_some() {
+        return Err(polars_err!(ComputeError: "assumption table '{}' already exists", name));
+    }
+    drop(current_registry);
+
+    update_global_registry(RegistryUpdate::Register, name, register)
 }
 
 /// Gets a thread-safe snapshot (Arc) of the current global AssumptionTableRegistry.
@@ -101,17 +167,7 @@ pub fn register_assumption_table_global(
     keys: Vec<String>,
     value_column: String,
 ) -> PolarsResult<()> {
-    let _guard = acquire_registration_lock()?;
-
-    // Check for existing table inside the lock
-    let current_registry = get_global_assumption_registry();
-    if current_registry.get_table(&name).is_some() {
-        return Err(polars_err!(ComputeError: "assumption table '{}' already exists", name));
-    }
-    drop(current_registry);
-
-    // Atomically update registry
-    update_global_registry("registered", &name, |registry| {
+    register_new_table(&name, |registry| {
         registry.register_table(name.clone(), df, keys, value_column)
     })
 }
@@ -138,35 +194,15 @@ pub fn register_or_replace_assumption_table_global(
     value_column: String,
     force_replace: bool,
 ) -> PolarsResult<()> {
-    let _guard = acquire_registration_lock()?;
-
-    // Check for existing table inside the lock
-    let current_registry = get_global_assumption_registry();
-    let table_exists = current_registry.get_table(&name).is_some();
-    drop(current_registry);
-
-    if table_exists && !force_replace {
-        debug!(
-            "Table '{}' already exists and force_replace=false, skipping registration",
-            name
-        );
-        return Ok(());
-    }
-
-    // Atomically update registry
-    let operation = if table_exists {
-        "replaced"
-    } else {
-        "registered"
-    };
-    update_global_registry(operation, &name, |registry| {
-        // Remove existing table if force_replace is true
-        if table_exists && force_replace {
-            registry.assumption_tables.remove(&name);
-            debug!("Removed existing table '{}' for replacement", name);
-        }
-        registry.register_table(name.clone(), df, keys, value_column)
-    })
+    register_or_replace_assumption_table_global_with_optional_identity(
+        name,
+        df,
+        keys,
+        value_column,
+        force_replace,
+        crate::assumptions::table::StorageMode::Hash,
+        None,
+    )
 }
 
 /// Appends data to an existing table in the global registry using immutable rebuild approach.
@@ -191,8 +227,31 @@ pub fn append_to_assumption_table_global(
     let _guard = acquire_registration_lock()?;
 
     // Atomically update registry
-    update_global_registry("appended to", &name, |registry| {
+    update_global_registry(RegistryUpdate::AppendTo, &name, |registry| {
         registry.append_to_table(name.clone(), df, keys, value_column)
+    })
+}
+
+/// Appends data only if the table still has the identity the caller extended.
+pub fn append_to_assumption_table_global_with_identity(
+    name: String,
+    df: DataFrame,
+    keys: Vec<String>,
+    value_column: String,
+    expected_fingerprint: String,
+    processed_fingerprint: String,
+) -> PolarsResult<()> {
+    let _guard = acquire_registration_lock()?;
+
+    update_global_registry(RegistryUpdate::AppendTo, &name, |registry| {
+        registry.append_to_table_with_identity(
+            name.clone(),
+            df,
+            keys,
+            value_column,
+            &expected_fingerprint,
+            processed_fingerprint,
+        )
     })
 }
 
@@ -204,17 +263,7 @@ pub fn register_assumption_table_global_with_mode(
     value: String,
     mode: crate::assumptions::table::StorageMode,
 ) -> PolarsResult<()> {
-    let _guard = acquire_registration_lock()?;
-
-    // Check for existing table inside the lock
-    let current_registry = get_global_assumption_registry();
-    if current_registry.get_table(&name).is_some() {
-        return Err(polars_err!(ComputeError: "assumption table '{}' already exists", name));
-    }
-    drop(current_registry);
-
-    // Atomically update registry
-    update_global_registry("registered", &name, |registry| {
+    register_new_table(&name, |registry| {
         registry.register_table_with_mode(name.clone(), df, keys, value, mode)
     })
 }
@@ -227,6 +276,47 @@ pub fn register_or_replace_assumption_table_global_with_mode(
     value: String,
     force_replace: bool,
     mode: crate::assumptions::table::StorageMode,
+) -> PolarsResult<()> {
+    register_or_replace_assumption_table_global_with_optional_identity(
+        name,
+        df,
+        keys,
+        value,
+        force_replace,
+        mode,
+        None,
+    )
+}
+
+/// Registers or replaces a table and binds its processed-content identity.
+pub fn register_or_replace_assumption_table_global_with_identity(
+    name: String,
+    df: DataFrame,
+    keys: Vec<String>,
+    value: String,
+    force_replace: bool,
+    mode: crate::assumptions::table::StorageMode,
+    processed_fingerprint: String,
+) -> PolarsResult<()> {
+    register_or_replace_assumption_table_global_with_optional_identity(
+        name,
+        df,
+        keys,
+        value,
+        force_replace,
+        mode,
+        Some(processed_fingerprint),
+    )
+}
+
+fn register_or_replace_assumption_table_global_with_optional_identity(
+    name: String,
+    df: DataFrame,
+    keys: Vec<String>,
+    value: String,
+    force_replace: bool,
+    mode: crate::assumptions::table::StorageMode,
+    processed_fingerprint: Option<String>,
 ) -> PolarsResult<()> {
     let _guard = acquire_registration_lock()?;
 
@@ -245,9 +335,9 @@ pub fn register_or_replace_assumption_table_global_with_mode(
 
     // Atomically update registry
     let operation = if table_exists {
-        "replaced"
+        RegistryUpdate::Replace
     } else {
-        "registered"
+        RegistryUpdate::Register
     };
     update_global_registry(operation, &name, |registry| {
         // Remove existing table if force_replace is true
@@ -255,7 +345,14 @@ pub fn register_or_replace_assumption_table_global_with_mode(
             registry.assumption_tables.remove(&name);
             debug!("Removed existing table '{}' for replacement", name);
         }
-        registry.register_table_with_mode(name.clone(), df, keys, value, mode)
+        registry.register_table_with_mode_and_identity(
+            name.clone(),
+            df,
+            keys,
+            value,
+            mode,
+            processed_fingerprint,
+        )
     })
 }
 
@@ -299,17 +396,14 @@ impl AssumptionTableRegistry {
         keys: Vec<String>,
         value: String,
     ) -> PolarsResult<()> {
-        // Use hash storage mode for registry tables since they may need append operations
-        // Array storage doesn't currently support append
-        let table = AssumptionTable::build_with_mode(
+        self.register_table_with_mode_and_identity(
+            name,
             df,
             keys,
             value,
             crate::assumptions::table::StorageMode::Hash,
-        )?;
-        debug!("assumption table registered: {:?}", name);
-        self.assumption_tables.insert(name, Arc::new(table));
-        Ok(())
+            None,
+        )
     }
 
     /// Registers an assumption table with explicit storage mode.
@@ -321,12 +415,32 @@ impl AssumptionTableRegistry {
         value: String,
         mode: crate::assumptions::table::StorageMode,
     ) -> PolarsResult<()> {
+        self.register_table_with_mode_and_identity(name, df, keys, value, mode, None)
+    }
+
+    fn register_table_with_mode_and_identity(
+        &mut self,
+        name: String,
+        df: DataFrame,
+        keys: Vec<String>,
+        value: String,
+        mode: crate::assumptions::table::StorageMode,
+        processed_fingerprint: Option<String>,
+    ) -> PolarsResult<()> {
+        let value_column = value.clone();
         let table = AssumptionTable::build_with_mode(df, keys, value, mode)?;
         debug!(
             "assumption table registered with mode {:?}: {:?}",
             mode, name
         );
-        self.assumption_tables.insert(name, Arc::new(table));
+        self.assumption_tables.insert(
+            name,
+            RegisteredAssumptionTable {
+                table: Arc::new(table),
+                processed_fingerprint,
+                value_column,
+            },
+        );
         Ok(())
     }
 
@@ -340,8 +454,37 @@ impl AssumptionTableRegistry {
         keys: Vec<String>,
         value: String,
     ) -> PolarsResult<()> {
+        self.append_to_table_inner(name, df, keys, value, None)
+    }
+
+    fn append_to_table_with_identity(
+        &mut self,
+        name: String,
+        df: DataFrame,
+        keys: Vec<String>,
+        value: String,
+        expected_fingerprint: &str,
+        processed_fingerprint: String,
+    ) -> PolarsResult<()> {
+        self.append_to_table_inner(
+            name,
+            df,
+            keys,
+            value,
+            Some((expected_fingerprint, processed_fingerprint)),
+        )
+    }
+
+    fn append_to_table_inner(
+        &mut self,
+        name: String,
+        df: DataFrame,
+        keys: Vec<String>,
+        value: String,
+        identity_update: Option<(&str, String)>,
+    ) -> PolarsResult<()> {
         // Get existing table
-        let existing_table = self.assumption_tables.get(&name).ok_or_else(|| {
+        let existing = self.assumption_tables.get(&name).ok_or_else(|| {
             let available_tables = self.list_tables();
             polars_err!(
                 ComputeError:
@@ -350,13 +493,35 @@ impl AssumptionTableRegistry {
             )
         })?;
 
+        if let Some((expected_fingerprint, _)) = &identity_update {
+            if existing.processed_fingerprint.as_deref() != Some(*expected_fingerprint)
+                || existing.table.get_key_columns() != keys.as_slice()
+                || existing.value_column != value
+            {
+                return Err(polars_err!(
+                    ComputeError:
+                    "Assumption table '{}' changed before it could be extended; call extend() on the current Table instead.",
+                    name
+                ));
+            }
+        }
+
         // Build combined table using immutable rebuild approach
         let combined_table =
-            AssumptionTable::build_combined(existing_table.as_ref(), df, keys, value)?;
+            AssumptionTable::build_combined(existing.table.as_ref(), df, keys, value.clone())?;
+        let processed_fingerprint = identity_update.map(|(_, new)| new);
 
         // Replace the Arc atomically (this is the core of the immutable approach)
-        self.assumption_tables
-            .insert(name.clone(), Arc::new(combined_table));
+        self.assumption_tables.insert(
+            name.clone(),
+            RegisteredAssumptionTable {
+                table: Arc::new(combined_table),
+                // A legacy/raw append cannot prove the new processed content,
+                // so it invalidates any fingerprint that the old entry carried.
+                processed_fingerprint,
+                value_column: value,
+            },
+        );
 
         debug!("Successfully appended data to table '{}'", name);
         Ok(())
@@ -365,7 +530,46 @@ impl AssumptionTableRegistry {
     /// Gets a reference to a registered assumption table.
     pub fn get_table(&self, name: &str) -> Option<&AssumptionTable> {
         debug!("assumption tables available: {:?}", self.list_tables());
-        self.assumption_tables.get(name).map(|arc| arc.as_ref())
+        self.assumption_tables
+            .get(name)
+            .map(|entry| entry.table.as_ref())
+    }
+
+    /// Gets the exact table a bound lookup plan was built against.
+    pub fn require_table_identity(
+        &self,
+        name: &str,
+        expected_fingerprint: &str,
+        expected_keys: &[String],
+        expected_value: &str,
+    ) -> PolarsResult<&AssumptionTable> {
+        let entry = self.assumption_tables.get(name).ok_or_else(|| {
+            polars_err!(
+                ComputeError:
+                "Assumption table '{}' is not registered; rebuild the table before collecting this lookup plan.",
+                name
+            )
+        })?;
+
+        if entry.processed_fingerprint.is_none() {
+            return Err(polars_err!(
+                ComputeError:
+                "Assumption table '{}' was changed through an unbound registry operation after this lookup plan was built; rebuild the Table and the lookup plan.",
+                name
+            ));
+        }
+        if entry.processed_fingerprint.as_deref() != Some(expected_fingerprint)
+            || entry.table.get_key_columns() != expected_keys
+            || entry.value_column != expected_value
+        {
+            return Err(polars_err!(
+                ComputeError:
+                "Assumption table '{}' no longer matches the content and key/value schema this lookup plan was built against; rebuild the lookup plan from the current Table or use a distinct table name.",
+                name
+            ));
+        }
+
+        Ok(entry.table.as_ref())
     }
 
     /// Performs a lookup on a registered table.
@@ -390,7 +594,30 @@ impl AssumptionTableRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assumptions::StorageMode;
     use std::sync::Mutex;
+
+    /// The failure line once read "Failed to registered table 't1'": one
+    /// past-tense word served both the success line and the failure line.
+    #[test]
+    fn test_registry_update_lines_read_in_their_own_tense() {
+        let error = polars_err!(ComputeError: "boom");
+        assert_eq!(
+            RegistryUpdate::Register.failure_line("t1", &error),
+            "Failed to register table 't1': boom"
+        );
+        assert_eq!(
+            RegistryUpdate::Replace.failure_line("t1", &error),
+            "Failed to replace table 't1': boom"
+        );
+        assert_eq!(
+            RegistryUpdate::AppendTo.failure_line("t1", &error),
+            "Failed to append to table 't1': boom"
+        );
+        assert_eq!(RegistryUpdate::Register.done(), "registered");
+        assert_eq!(RegistryUpdate::Replace.done(), "replaced");
+        assert_eq!(RegistryUpdate::AppendTo.done(), "appended to");
+    }
 
     // Test mutex to serialize global registry tests
     static TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -1055,6 +1282,171 @@ mod tests {
             assert!((result_f64.get(2).unwrap() - 0.03 * i as f64).abs() < 1e-10);
         }
 
+        Ok(())
+    }
+
+    fn register_local_identified(
+        registry: &mut AssumptionTableRegistry,
+        name: &str,
+        df: DataFrame,
+        keys: &[&str],
+        value: &str,
+        fingerprint: &str,
+    ) -> PolarsResult<()> {
+        registry.register_table_with_mode_and_identity(
+            name.to_string(),
+            df,
+            keys.iter().map(|key| (*key).to_string()).collect(),
+            value.to_string(),
+            StorageMode::Hash,
+            Some(fingerprint.to_string()),
+        )
+    }
+
+    #[test]
+    fn test_bound_lookup_uses_one_registry_snapshot() -> PolarsResult<()> {
+        let mut registry = AssumptionTableRegistry::new();
+        register_local_identified(
+            &mut registry,
+            "rates",
+            df! {"age" => [40], "rate" => [0.1]}?,
+            &["age"],
+            "rate",
+            "sha256:old",
+        )?;
+        let old_snapshot = registry.clone();
+
+        register_local_identified(
+            &mut registry,
+            "rates",
+            df! {"age" => [40], "rate" => [0.9]}?,
+            &["age"],
+            "rate",
+            "sha256:new",
+        )?;
+
+        assert!(old_snapshot
+            .require_table_identity("rates", "sha256:old", &["age".to_string()], "rate")
+            .is_ok());
+        assert!(registry
+            .require_table_identity("rates", "sha256:old", &["age".to_string()], "rate")
+            .is_err());
+        assert!(registry
+            .require_table_identity("rates", "sha256:new", &["age".to_string()], "rate")
+            .is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_bound_lookup_checks_ordered_keys_and_answer_role() -> PolarsResult<()> {
+        let mut registry = AssumptionTableRegistry::new();
+        register_local_identified(
+            &mut registry,
+            "rates",
+            df! {"age" => [40], "duration" => [1], "rate" => [0.1]}?,
+            &["age", "duration"],
+            "rate",
+            "sha256:same-content",
+        )?;
+
+        assert!(registry
+            .require_table_identity(
+                "rates",
+                "sha256:same-content",
+                &["duration".to_string(), "age".to_string()],
+                "rate",
+            )
+            .is_err());
+        assert!(registry
+            .require_table_identity(
+                "rates",
+                "sha256:same-content",
+                &["age".to_string(), "duration".to_string()],
+                "duration",
+            )
+            .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_raw_registration_and_append_invalidate_bound_identity() -> PolarsResult<()> {
+        let mut registry = AssumptionTableRegistry::new();
+        register_local_identified(
+            &mut registry,
+            "raw-replace",
+            df! {"age" => [40], "rate" => [0.1]}?,
+            &["age"],
+            "rate",
+            "sha256:bound",
+        )?;
+        registry.register_table(
+            "raw-replace".to_string(),
+            df! {"age" => [40], "rate" => [0.1]}?,
+            vec!["age".to_string()],
+            "rate".to_string(),
+        )?;
+        assert!(registry
+            .require_table_identity("raw-replace", "sha256:bound", &["age".to_string()], "rate",)
+            .is_err());
+
+        register_local_identified(
+            &mut registry,
+            "raw-append",
+            df! {"age" => [40], "rate" => [0.1]}?,
+            &["age"],
+            "rate",
+            "sha256:before",
+        )?;
+        registry.append_to_table(
+            "raw-append".to_string(),
+            df! {"age" => [41], "rate" => [0.2]}?,
+            vec!["age".to_string()],
+            "rate".to_string(),
+        )?;
+        assert!(registry
+            .require_table_identity("raw-append", "sha256:before", &["age".to_string()], "rate",)
+            .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_identified_append_is_compare_and_swap() -> PolarsResult<()> {
+        let mut registry = AssumptionTableRegistry::new();
+        register_local_identified(
+            &mut registry,
+            "extend",
+            df! {"age" => [40], "rate" => [0.1]}?,
+            &["age"],
+            "rate",
+            "sha256:before",
+        )?;
+        registry.append_to_table_with_identity(
+            "extend".to_string(),
+            df! {"age" => [41], "rate" => [0.2]}?,
+            vec!["age".to_string()],
+            "rate".to_string(),
+            "sha256:before",
+            "sha256:after".to_string(),
+        )?;
+
+        assert_eq!(registry.get_table("extend").unwrap().entry_count(), 2);
+        assert!(registry
+            .require_table_identity("extend", "sha256:after", &["age".to_string()], "rate",)
+            .is_ok());
+
+        let stale = registry.append_to_table_with_identity(
+            "extend".to_string(),
+            df! {"age" => [42], "rate" => [0.3]}?,
+            vec!["age".to_string()],
+            "rate".to_string(),
+            "sha256:before",
+            "sha256:competing".to_string(),
+        );
+        assert!(stale.is_err());
+        assert_eq!(registry.get_table("extend").unwrap().entry_count(), 2);
+        assert!(registry
+            .require_table_identity("extend", "sha256:after", &["age".to_string()], "rate",)
+            .is_ok());
         Ok(())
     }
 }

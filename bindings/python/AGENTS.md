@@ -4,470 +4,147 @@ Canonical contributor rules for the PyO3 Python bindings and the actuary-facing 
 natively by AI coding agents and by Claude Code via the sibling `CLAUDE.md` import shim.
 Applies to all Python under `bindings/python/`.
 
-## Project API Philosophy and guidelines 
+## API philosophy
 
+**The full account is [`docs/api-philosophy.md`](docs/api-philosophy.md)** — the tension
+between convention and control, worked through a production term-insurance model line by
+line. It moved there so this file plus the root `AGENTS.md` fit the 32 KiB window Codex
+merges them into. Read it before proposing anything that would hide a calculation. The short
+form: **simple maths uses operators**
+(`af.claims = af.sum_assured * af.pols_death` — the formula is the code, audited by reading
+the line); **complex operations use named methods under a domain namespace**
+(`.projection.cumulative_survival()`, `.finance.to_monthly()` — verbs stating the intent);
+**business logic uses `when/then/otherwise`**, which mirrors Excel's `IF()`. Which rules out
+a method that hides the formula (`af.projection.project_cashflows(periods=30)` — *what
+formula is that?*): actuaries must audit every calculation for regulatory compliance.
 
-Explore how to design an API that:
-1. **Reads like a poetic mathematical formula expressed in English**
-2. **Allows actuaries to see and verify the actual calculations** (not trust framework magic)
-3. **Is discoverable by LLMs** through clear naming, patterns, and rich documentation
-4. **Balances convenience with escape hatches** for custom logic
+## Development commands
 
-## The Critical Design Tension
-**But actuaries are mathematicians**, not software engineers. They need to:
-- **Audit every calculation** for regulatory compliance
-- **Understand the formulas** without reading framework source code
-- **Modify logic** when edge cases arise (premium holidays, surrender charges, etc.)
+**Never `uv run` pytest, mypy or pyright.** `uv run` re-syncs through the maturin backend,
+and `[tool.uv] cache-keys` covers `**/*.rs`, so it rebuilds the extension at `--profile=dev`
+before running anything — replacing the parked **release** extension with a **debug** one,
+which silently changes test outcomes and invalidates every timing figure in this repository.
+CI, [`.github/RATCHETS.md`](../../.github/RATCHETS.md) and `.github/ratchets.env` use the
+`.venv/bin/python -m ...` spelling, so four places agree on one command and one count.
 
-**The tension:** "Not code" vs "What is Polars" vs "Just show me the actual calculation"
-
-### The Insight: Worksheet + Domain Methods
-
-Combine:
-- **Worksheet metaphor** (familiar from Excel) - column-by-column definitions
-- **Domain namespacing** - `.projection`, `.mortality`, `.finance`
-- **Verb-based method names** that describe actuarial intent
-
-**Result:** Code that reads like building an Excel worksheet, but with clear domain-specific operations.
-
-## The Emerging Pattern: "Excel Columns + Domain Methods"
-
-### Example: Real Term Insurance Projection Model
-
-Below are real examples from a production term insurance model (`basic_term/model_projection.py`) demonstrating how the API enables actuaries to write calculations that read like textbook formulas:
-
-#### Pattern 1: Complex Operations Use Named Methods
-
-**Cumulative Survival Calculation** (model_projection.py:83)
-```python
-# Calculate cumulative survival probability using projection API
-# cumulative_survival() with default start_at=1.0 gives beginning-of-period values
-# This applies: [1.0, (1-qx[0]), (1-qx[0])*(1-qx[1]), ...]
-af.pols_if_before_maturity = af.combined_decrement.projection.cumulative_survival()
-```
-
-**Why This Works:**
-- `.cumulative_survival()` clearly states the actuarial intent
-- The method handles the complex cumulative product logic internally
-- Actuary sees what the calculation does without needing to read framework source
-- Comment explains the formula being applied: `tpx[t] = (1-qx[0]) × (1-qx[1]) × ... × (1-qx[t])`
-
-**Time-Shifting with Previous Period** (model_projection.py:100, 103)
-```python
-# Get previous period values for policy rollforward
-pols_if_prev = af.pols_if_before_maturity.projection.previous_period()
-pols_death_prev = pols_death_temp.projection.previous_period()
-
-# Calculate surviving policies at each time period
-af.surviving_at_t = pols_if_prev - pols_lapse_prev - pols_death_prev
-```
-
-**Why This Works:**
-- `.previous_period()` is instantly recognizable as the t-1 reference actuaries use
-- More intuitive than Polars' `.shift(1)` which requires understanding shift direction
-- Automatically handles boundary conditions (fills with 0 by default)
-- The rollforward formula is transparent and auditable
-
-**Converting Annual to Monthly Rates** (model_projection.py - finance accessor pattern)
-```python
-# Convert annual interest rate to monthly equivalent
-af.disc_rate_mth = af.disc_rate_ann.finance.to_monthly(method="compound")
-# This applies: (1 + annual_rate)^(1/12) - 1
-```
-
-**Why This Works:**
-- `.finance.to_monthly()` uses domain namespace - clearly financial operation
-- Method name describes the transformation being performed
-- Compound vs simple interest is explicit via parameter, not hidden in implementation
-- Actuary can audit the conversion methodology
-
-#### Pattern 2: Simple Math Uses Operators Directly
-
-**Death and Lapse Calculations** (model_projection.py:126-127)
-```python
-# Now calculate final pols_death and pols_lapse using the final pols_if (after maturity)
-af.pols_death = af.pols_if * af.mort_rate_mth
-af.pols_lapse = (af.pols_if - af.pols_death) * af.lapse_rate_mth
-```
-
-**Why This Works:**
-- The formula **IS** the code - no hidden framework magic
-- Actuary can verify correctness by reading the line
-- Reads exactly like the textbook formula or Excel cell
-- List columns are handled automatically (element-wise multiplication)
-
-**Claim Amount Calculation** (model_projection.py:188)
-```python
-# Calculate claim amounts: sum_assured * pols_death
-# Uses Gaspatchio's list shimming for scalar * list broadcasting
-af.claims = af.sum_assured * af.pols_death
-```
-
-**Why This Works:**
-- Multiplying scalar `sum_assured` by list `pols_death` just works
-- Framework handles the broadcasting automatically
-- Actuary writes the formula naturally without thinking about implementation
-- No method call needed - it's just multiplication
-
-**Premium Calculation** (model_projection.py:244)
-```python
-# Calculate premiums(t) = premium_pp * pols_if(t)
-# Uses Gaspatchio's list shimming for scalar * list broadcasting
-af.premiums = af.premium_pp * af.pols_if
-```
-
-**Net Cashflow Formula** (model_projection.py:299)
-```python
-# Calculate net cashflow: premiums - claims - expenses - commissions
-# Uses Gaspatchio's list shimming for element-wise arithmetic
-af.net_cf = af.premiums - af.claims - af.expenses - af.commissions
-```
-
-**Why This Works:**
-- The actuarial formula is written exactly as it appears in documentation
-- Multiple list columns combined with natural operators (+, -, *)
-- No framework ceremony - just write the math
-- Self-documenting code that actuaries can audit
-
-#### Pattern 3: Conditionals Read Like Excel IF()
-
-**Maturity Detection** (model_projection.py:112-114)
-```python
-# Calculate maturity using Gaspatchio's when() conditional broadcasting
-# Maturity occurs when month == policy_term * 12
-# Uses the new when() API that supports conditional broadcasting on list columns
-af.pols_maturity = (
-    when(af.month == af.policy_term * 12).then(af.surviving_at_t).otherwise(0.0)
-)
-```
-
-**Why This Works:**
-- `when().then().otherwise()` mirrors Excel's IF() function structure
-- Reads naturally in English: "when month equals term, then use surviving, otherwise zero"
-- Works seamlessly on list columns (applies element-wise automatically)
-- Actuary can verify the maturity logic without understanding framework internals
-
-**Zeroing After Maturity** (model_projection.py:119-123)
-```python
-# Now create the final pols_if by zeroing out AT and after maturity
-# pols_if should be zero for all months >= policy_term * 12 (at maturity month and beyond)
-# Uses when() conditional broadcasting: keep values before maturity, zero after
-af.pols_if = (
-    when(af.month < af.policy_term * 12)
-    .then(af.pols_if_before_maturity)
-    .otherwise(0.0)
-)
-```
-
-**Why This Works:**
-- The business logic is front and center: "before maturity keep values, after maturity zero"
-- List broadcasting happens automatically - actuary doesn't need to think about it
-- Works in both debug and optimize modes seamlessly
-- Clear audit trail of when policies stop being inforce
-
-**Commission Calculation** (model_projection.py:292)
-```python
-# Calculate commissions: 100% of premiums in first year (duration 0), 0 otherwise
-# Uses when() conditional broadcasting
-af.commissions = when(af.duration == 0).then(af.premiums).otherwise(0.0)
-```
-
-**Why This Works:**
-- Business rule stated clearly: "100% first year, nothing after"
-- Conditional applies element-wise to projection periods automatically
-- No loops, no map functions, no framework complexity
-- Reads like describing the commission schedule to a colleague
-
-### Why This API Design Succeeds
-
-**For Actuaries:**
-- ✅ **The math is completely visible**: Every formula in the model code exactly matches the actuarial calculation
-- ✅ **Operators for obvious operations**: Multiplication, addition, subtraction use `*`, `+`, `-` naturally
-- ✅ **Methods for complex operations**: `.cumulative_survival()`, `.previous_period()`, `.to_monthly()` handle intricate logic with clear names
-- ✅ **Conditionals that read like English**: `when().then().otherwise()` mirrors Excel IF() that actuaries already know
-- ✅ **Complete audit trail**: The calculation **IS** the code - no hidden framework magic to verify
-- ✅ **Modify with confidence**: Actuary can adjust formulas (add premium holidays, change maturity logic) without understanding framework internals
-
-**For LLMs:**
-- ✅ **Pattern-based**: Simple math = operators, complex operations = named methods, business rules = conditionals
-- ✅ **Discoverable**: `af.qx.projection.<TAB>` reveals available actuarial operations via domain namespaces
-- ✅ **Self-documenting**: Method names describe actuarial intent (`.cumulative_survival()` not `.compute_1()`)
-- ✅ **Compositional**: Mix operators, methods, and conditionals naturally in the same expression
-- ✅ **Rich documentation**: Every method has docstrings with examples matching real actuarial use cases
-
-**Key Insight:**
-- **Complex operations** (cumulative products, time-shifting, rate conversions) → **Named methods with domain namespaces**
-- **Simple operations** (multiplication, addition, subtraction) → **Operators directly**
-- **Business logic** (maturity rules, commission schedules) → **when/then/otherwise conditionals**
-- **Result:** Code reads like Excel formulas written in an actuarial textbook
-
-### The Anti-Pattern: What We Avoid
-
-**NOT this** (too much abstraction hides the calculation):
-```python
-af = af.projection.project_cashflows(periods=30)  # What formula is this?
-af.pols_if = af.projection.rollforward(initial=1, rate=af.decrement)  # What's happening?
-```
-
-**THIS** (the formula IS the code):
-```python
-# Cumulative survival: (1-qx[0]) × (1-qx[1]) × ... × (1-qx[t])
-af.pols_if = af.combined_decrement.projection.cumulative_survival()
-
-# Death claims: Sum Assured × Deaths
-af.claims = af.sum_assured * af.pols_death
-
-# Net cashflow: Premiums - Claims - Expenses - Commissions
-af.net_cf = af.premiums - af.claims - af.expenses - af.commissions
-```
-
-Each line is:
-- **A mathematical expression** - not a method call hiding the formula
-- **Auditable** - actuary can verify by reading the code
-- **Composable** - mix operators and methods naturally
-- **Excel-like** - write formulas the way you think about them
-
-This is the balance between convention (helpful methods) and control (transparent calculations).
-
-
-## Python Bindings Development Commands
-
-- How to build and install the Python bindings
-  ```bash
-  # Build Rust extensions with maturin (required after Rust changes)
-  maturin build -uv
-
-  # Install all workspace dependencies
-  uv sync
-  ```
-
-### Linter Behavior Note
-
-**IMPORTANT:** The on-save hook runs `ruff` which automatically removes unused imports. When adding a new library import, you MUST add both the import AND the code that uses it in a single edit. Otherwise the linter will strip the import before you can use it.
-
-**Bad** (import gets stripped):
-```python
-# Edit 1: Add import
-from loguru import logger  # <- Linter removes this!
-
-# Edit 2: Add usage
-logger.debug("message")  # <- Error: logger not defined
-```
-
-**Good** (import and usage together):
-```python
-# Single edit: Add import AND usage
-from loguru import logger
-
-logger.debug("message")  # <- Works!
-```
-
-### Testing
 ```bash
-# Run all Python tests
-uv run pytest
+# Build. `develop`, not `build`: a .pth puts this directory on sys.path, so the
+# extension has to land in the source tree, and `build` only writes a wheel.
+uvx maturin develop --release --uv   # or `maturin develop --release`, venv active
+uv sync                              # install all workspace dependencies
 
-# Run tests with docstring validation (important for API docs)
-uv run pytest --doctest-modules --doctest-glob="*.pyi"
+# The whole suite, single-process -- what every count and timing figure is
+# quoted against. The --deselect is standing: that test asserts a worker's
+# stdout is pure JSON and is not stable under this harness.
+.venv/bin/python -m pytest \
+  --deselect tests/probe/test_probe_emission.py::test_microbench_worker_stdout_is_pure_json
 
-# Run specific test categories
-uv run pytest -m "not benchmark"  # Skip slow benchmarks
-uv run pytest -m performance      # Only performance tests
+# The edit-run-refine loop. Cap engine threads to the worker count: Polars is
+# already multi-threaded, so four workers at the default ask a 16-core laptop
+# for 4x16 threads and spend the difference on contention. Add
+# --ignore=tests/scenarios/test_aggregator_property.py for a ~1 minute loop.
+POLARS_MAX_THREADS=4 .venv/bin/python -m pytest -n 4
 
-# Type checking (both tools should pass)
-uv run mypy gaspatchio
-uv run pyright gaspatchio
+# Docstring validation; --accept updates expectations. Serial only, because
+# pytest-accept rewrites the files it is checking.
+.venv/bin/python -m pytest --doctest-modules --doctest-glob="*.pyi"
+.venv/bin/python -m pytest gaspatchio/accessors/excel.py --doctest-modules --accept
 
-# Validate type stubs match implementation
-uv run python -m mypy.stubtest gaspatchio
+.venv/bin/python -m pytest -m "not benchmark"   # skip slow benchmarks
+.venv/bin/python -m pytest -m performance       # only performance tests
+.venv/bin/python -m mypy gaspatchio
+.venv/bin/python -m pyright gaspatchio
 
-# Update docstring test expectations
-uv run pytest gaspatchio/accessors/excel.py --doctest-modules --accept
+# Stub/runtime drift. The relaxed config is required (stubtest builds with mypy
+# first and aborts on a build error); the allowlist records the deliberate
+# differences. No --ignore-missing-stub: "exists at runtime, missing from stub"
+# is a drift class this repo checks for.
+.venv/bin/python -m mypy.stubtest gaspatchio \
+    --allowlist stubtest-allowlist.txt --mypy-config-file mypy-stubtest.ini
+
+# Model runs. LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true for the full trace.
+.venv/bin/gspio run-model model.py data.parquet --output-file results.parquet
+.venv/bin/gspio run-model model.py data.parquet --mode debug -r 50
+.venv/bin/gspio run-single-policy model.py data.parquet 1 \
+    --policy-id-column "Policy number"
 ```
 
-### Model Execution
-```bash
-# Run actuarial model
-LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true gspio run-model model.py data.parquet
+### Linter behaviour note
 
-# Debug single policy
-LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true gspio run-single-policy model.py data.parquet "PolicyID" --policy-id-column "Policy number"
+**IMPORTANT:** the on-save hook runs `ruff`, which removes unused imports, so add a new
+import AND its first use in a **single edit** — split across two, `from loguru import logger`
+is stripped before the usage lands.
 
-# Run single policy
-LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true uv run gspio run-single-policy ../../../gaspatchio-models/models/my-model/model_calculation.py ../../../gaspatchio-models/models/my-model/model-points.parquet 1 --policy-id-column "Policy number"
+### Type-checking baseline
 
-# Run model
-LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true uv run gspio run-model ../../../gaspatchio-models/models/my-model/model_calculation.py ../../../gaspatchio-models/models/my-model/model-points.parquet
+Neither checker is clean over the whole package, so passing is not the rule and never was.
+What is enforced — a per-change rule (the files in your diff gain no new errors) and a
+whole-package ceiling with a floor beside it — is in
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md); the live figures and the command reproducing each
+are in [`.github/RATCHETS.md`](../../.github/RATCHETS.md) and `.github/ratchets.env`. **Do
+not copy a count into this file**: it goes stale here and nothing notices.
 
-# Run with debug mode (more output rows)
-LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true gspio run-model model.py data.parquet --mode debug -r 50
+One fact belongs here rather than there. Both checkers skip `gaspatchio/tutorials/`, `jobs/`
+and `tests/scratch/` via identical `exclude` lists in `pyproject.toml`, so "clean" means the
+same files whichever you ask: those trees reuse basenames across sibling directories with no
+package markers, and mypy stops at the first duplicate rather than checking anything at all.
+The tutorials must **not** gain `__init__.py` to work around it — `gspio tutorial init`
+copies them verbatim into a user's own directory, where a package marker would be wrong.
 
-# Output to file
-LOGURU_LEVEL=TRACE GASPATCHIO_VERBOSE=true gspio run-model model.py data.parquet --output-file results.parquet
-```
+## Architecture
 
-## Related Repositories
-- **gaspatchio-docs**: `../../../gaspatchio-docs` — MkDocs documentation site with AI-optimized content
-- **gaspatchio-models**: `../../../gaspatchio-models` — Example actuarial models demonstrating framework usage
+**[`docs/architecture.md`](docs/architecture.md)** maps the package by ownership — for each
+layer the question it owns, its canonical source and the symbol that is the door, and where
+new work of that kind goes: the authoring surface, operation declarations and the op-tree,
+engine lowering, execution and its four routes, the calculation log, the artifact and its
+consumers, the rollforward, assumption tables, and the Rust boundary. Four rules stay
+here because missing one produces a wrong change, not a slow one:
 
-## AI Plugin Installation
+1. **`_internal.pyi` must match the Rust exports exactly.** `mypy.stubtest` is what catches
+   the drift, and "exists at runtime, missing from stub" is not accepted silently.
+2. **Docstring examples are tests**, validated by pytest; `--accept` updates them.
+3. **Performance warnings are deliberate** — the codebase warns on suboptimal patterns such
+   as iterating over policies. Vectorize rather than silence.
+4. **Error formatting is a contract**, not decoration: `errors/formatter.py` gives a message
+   its context, so preserve the pattern when you add a refusal. (Telemetry, by contrast, is
+   optional — Logfire stays dormant until `LOGFIRE_TOKEN` is set.)
 
-Gaspatchio ships as a plugin for AI coding agents. Install once to get 8 actuarial modeling skills and always-loaded framework knowledge.
+## Related repositories
 
-### Claude Code (recommended)
-```
-/plugin marketplace add gaspatchio/gaspatchio
-/plugin install gaspatchio@gaspatchio
-```
-
-### VS Code / GitHub Copilot
-Search `@agentPlugins gaspatchio` in VS Code, or add to user settings:
-```json
-{
-  "chat.plugins.marketplaces": ["gaspatchio/gaspatchio"]
-}
-```
-Requires `"chat.plugins.enabled": true` (Agent Plugins is in preview).
-
-### Cursor
-Open any gaspatchio project — the `.cursor-plugin/` directory is auto-detected.
-
-### Any Agent (universal)
-```bash
-npx skills add gaspatchio/gaspatchio
-# Windows: append --copy (symlinks need Developer Mode)
-```
-
-### Firewalled / Offline
-Clone the repo. Editors auto-detect plugin directories when the project is opened.
-
-### What You Get
-- **8 skills**: gaspatchio-quickstart, gaspatchio-model-discovery, gaspatchio-workbook-conversion, gaspatchio-model-building, gaspatchio-model-reconciliation, gaspatchio-model-review, gaspatchio-model-scenarios, gaspatchio-extending
-- **AGENTS.md**: Always-loaded framework knowledge (API patterns, CLI reference, gotchas)
-
-## High-Level Architecture
-
-### Python Package Structure
-The Python bindings wrap the Rust core library via PyO3:
-
-- **gaspatchio._internal**: PyO3 module built from Rust (see _internal.pyi for API)
-- **ActuarialFrame**: Main DataFrame-like structure for actuarial calculations
-  - Wraps Polars DataFrames with actuarial-specific operations
-  - Supports method chaining via proxy pattern
-  - Lazy evaluation for performance
-  
-- **Proxy Pattern**: ColumnProxy/ExpressionProxy enable fluent API
-  - `af["column"].excel.pv(...)` - Excel functions via accessor
-  - `af["column"].dt.year_frac(...)` - Date functions via accessor
-  - Chain operations before execution for optimization
-
-### Time-Shifting Operations
-
-The projection accessor provides actuarial-friendly methods for accessing values from other time periods:
-
-```python
-# Previous period (t-1) - most common case
-af.reserve_prev = af.reserve.projection.previous_period()
-af.pols_death_prev = af.pols_death.projection.previous_period(fill_value=0)
-
-# Next period (t+1) - for forward-looking calculations
-af.rate_next = af.interest_rate.projection.next_period()
-
-# Arbitrary period offsets using mathematical t notation
-af.reserve_t2 = af.reserve.projection.at_period(-2)  # t-2 (two periods ago)
-af.projected = af.value.projection.at_period(3)      # t+3 (three periods ahead)
-```
-
-**Design Philosophy:**
-- Use mathematical `t-1`, `t-2` notation (negative = prior, positive = future)
-- Default `fill_value=0` for missing boundary values
-- Methods make time-shifting transparent and auditable
-- Replaces confusing `.shift()` with actuarial-friendly API
-
-- **Assumption Tables**: Table/TableBuilder for rate lookups
-  - Multiple join strategies (age/duration, select/ultimate)
-  - Efficient batch lookups via Polars joins
-
-### Critical Implementation Details
-
-1. **Docstring Examples Are Tests**: Examples in docstrings are validated by pytest. When modifying examples, run with `--accept` to update expected outputs.
-
-2. **Type Stubs Required**: The `_internal.pyi` file must match Rust exports exactly. Use `mypy.stubtest` to verify.
-
-3. **Performance Warnings**: The codebase emits warnings for suboptimal patterns (e.g., iterating over policies). Always use vectorized operations.
-
-4. **Error Formatting**: Custom error formatter (`errors/formatter.py`) provides clear error messages with context. Preserve error handling patterns.
-
-5. **Telemetry Integration**: Logfire telemetry is configured but optional. Set `LOGFIRE_TOKEN` to enable.
-
-### Testing Philosophy
-
-- **Docstring-Driven**: Public API examples in docstrings serve as tests
-- **Type Safety**: Both mypy and pyright must pass in strict mode
-- **Performance**: Benchmarks track regression (see `tests/test_performance.py`)
-- **Integration**: Example models in `tests/examples/` validate end-to-end functionality
-
-### Development Workflow
-
-1. For new Excel functions: Add to `accessors/excel.py` with docstring examples
-2. For new vector operations: Add to `functions/vector.py` 
-3. Always run type checkers and tests before committing
-4. Use `gspio` CLI to validate changes with real models
-5. See the repo-root `AGENTS.md` for project-wide conventions and commit rules
-
----
+Siblings in a multi-repo checkout: `../../../gaspatchio-docs` (the MkDocs site),
+`../../../gaspatchio-models` (example models). Installing the plugin — Claude Code, Copilot,
+Cursor, `npx skills` — is in the repository [`README.md`](../../README.md).
 
 ## Python Development Standards
 
-### Code Style and Formatting
-- All generated or edited code **must already be formatted**; assume `ruff format` (Black-compatible) will run in CI
-- Ruff is configured with **`select = ["ALL"]`**, so code must lint clean except for ignores defined in `pyproject.toml`
-- Use **f-strings** for all string interpolation
-- Use **`pathlib.Path`** instead of `os.path`
-- Prefer **`with`** context managers for resource handling
-- Never use `print()` for production code – rely on the project's `loguru` logger
-- Use lowercase with underscores for directories and files (e.g., `utils/data_processor.py`)
+### Code style and formatting
 
-### Type Hints and Data Structures
-- **Every new function, method, or class must have explicit type hints** (no implicit `Any`)
-- Functions must declare a non-`Any` return type; prefer `| None` over `Optional[T]` for union with `None`
-- Wrap third-party "untyped" calls in a small typed helper instead of sprinkling `Any`
-- Use `@dataclass(slots=True)` or `pydantic.BaseModel` for structured data instead of ad-hoc dicts
+- Code arrives **already formatted**; `ruff format` runs in CI, and ruff is configured
+  `select = ["ALL"]`, so it lints clean but for the `pyproject.toml` ignores
+- **f-strings** for interpolation, **`pathlib.Path`** over `os.path`, **`with`** for resources
+- Never `print()` in production code — use the project's `loguru` logger
+- Lowercase-with-underscores for directories and files (`utils/data_processor.py`)
 
-### Programming Patterns
-- Write concise, technical responses with accurate Python examples
-- Use functional, declarative programming; prefer classes only for stateful components or when they provide clear organizational benefits
-- Prefer iteration and modularization over code duplication
-- Use descriptive variable names with auxiliary verbs (e.g., `is_valid`, `has_data`)
-- Use the Receive an Object, Return an Object (RORO) pattern:
-  - Functions should accept a single object parameter for complex inputs
-  - Return a single object for complex outputs
-  - Use Pydantic models for both input and output objects
+### Type hints and data structures
 
-### Error Handling and Validation
-- Prioritize error handling and edge cases
-- Handle errors and edge cases at the beginning of functions
-- Use early returns for error conditions to avoid deeply nested if statements
-- Place the happy path last in the function for improved readability
-- Avoid unnecessary else statements; use the if-return pattern instead
-- Use Loguru for structured logging with context
-- Use Pydantic models to validate and parse complex inputs, reducing manual validation code
+- **Every new function, method, or class carries explicit type hints** (no implicit `Any`)
+- Declare a non-`Any` return type; prefer `| None` over `Optional[T]`
+- Wrap third-party untyped calls in a small typed helper rather than sprinkling `Any`
+- `@dataclass(slots=True)` or `pydantic.BaseModel` for structured data, never an ad-hoc dict
 
-### Docstrings
-- Ensure methods have the right docstrings
-- Follow rules detailed in `gaspatchio-core/ref/12-docstring-and-examples/12-docstring-README.md`
+### Patterns, errors, docstrings
 
-### Key Dependencies
-- Pydantic v2 for data validation and serialization
-- Typer for CLI applications with type hints and rich help text
-- Polars for data reading, manipulation and aggregation
-- Loguru for structured logging
-- Pydantic.AI for LLM interactions
-- uv for packaging, building, and running Python
+- Functional and declarative; classes only for stateful components or clear organization
+- Prefer iteration and modularization over duplication; descriptive names with auxiliary
+  verbs (`is_valid`, `has_data`)
+- Receive an Object, Return an Object: one object parameter in, one object out, Pydantic both
+- Handle errors and edge cases at the **beginning** of the function, with early returns, so
+  the happy path lands last and nothing nests deeply. No unnecessary `else`
+- Loguru for structured logging with context; Pydantic to validate and parse complex inputs
+- Docstring rules are in `ref/12-docstring-and-examples/12-docstring-README.md`
 
-### Package Management with uv
-- Use `uv` exclusively for packaging, building, and running Python code
-- Add dependencies with `uv add package_name`
-- Run scripts with `uv run script.py`
-- Run tests with `uv run tests`
-- For single-command Typer applications, command name is optional: `uv run mix.py args` instead of `uv run mix.py command-name args`
+### Key dependencies
+
+Pydantic v2 (validation, serialization), Typer (CLI), Polars (data), Loguru (logging),
+Pydantic.AI (LLM interactions), uv (packaging — `uv add <package>`; for *running*, see the
+spellings above).

@@ -49,7 +49,7 @@ class TestErrorHandlingIntegration:
 
         # Create ActuarialFrame with tracing enabled
         af = ActuarialFrame(self.test_data, verbose=True)
-        af._tracing = True
+        af._traced_run = True
 
         # Add some valid operations first
         af["premium_adjusted"] = af["premium"] * 1.1
@@ -100,9 +100,9 @@ class TestErrorHandlingIntegration:
         """Test error handling when tracing is enabled."""
         # Create ActuarialFrame with tracing enabled
         af = ActuarialFrame(self.test_data)
-        af._tracing = True
+        af._traced_run = True
 
-        # Add operations to build up the computation graph
+        # Add operations to build up the calculation log
         af["calculated_field"] = (pl.col("premium") / pl.col("sum_assured")).alias(
             "calculated_field"
         )
@@ -121,7 +121,7 @@ class TestErrorHandlingIntegration:
         # Set basic error mode and no tracing/debug
         set_error_mode("basic")
         af = ActuarialFrame(self.test_data, mode="optimize")
-        af._tracing = False
+        af._traced_run = False
 
         # Add failing operation
         with pytest.raises(Exception) as exc_info:
@@ -141,7 +141,7 @@ class TestErrorHandlingIntegration:
 
         # Even with tracing enabled, should not enhance errors
         af = ActuarialFrame(self.test_data, verbose=True)
-        af._tracing = True
+        af._traced_run = True
 
         with pytest.raises(Exception) as exc_info:
             result = af.with_columns(
@@ -157,7 +157,7 @@ class TestErrorHandlingIntegration:
         """Test that column not found errors provide helpful suggestions."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data)
-        af._tracing = True
+        af._traced_run = True
 
         # Try to use a column with a typo
         with pytest.raises(Exception) as exc_info:
@@ -175,7 +175,7 @@ class TestErrorHandlingIntegration:
         """Test that binary search correctly identifies failing operation."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data, verbose=True)
-        af._tracing = True
+        af._traced_run = True
 
         # with_columns resolves the schema eagerly, so the bad operation can
         # raise at definition time; the boundary must be identified either way.

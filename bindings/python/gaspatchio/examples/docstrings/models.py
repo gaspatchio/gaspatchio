@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+from .style import StyleChecker
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -51,7 +53,8 @@ class DocstringCodeExample(BaseModel):
         Ruff has shipped syntax errors as ``invalid-syntax``, ``syntax-error``,
         and (0.11.x) a null code with a "SyntaxError: ..." message — so a
         missing or unrecognised code whose message names a SyntaxError is
-        classified by the message, not by matching code literals (GSP-153).
+        classified by the message, not by matching code literals, which each
+        new spelling would slip past.
         """
         code = problem.get("code")
         message = str(problem.get("message", "Unknown error"))
@@ -85,7 +88,9 @@ class DocstringCodeExample(BaseModel):
             return issues  # Return empty list - no linting issues
 
         try:
-            from ruff.__main__ import find_ruff_bin
+            # ruff is a dev-group dependency, absent from an installed wheel; the
+            # ImportError below is how its absence is reported.
+            from ruff.__main__ import find_ruff_bin  # noqa: PLC0415 -- optional
 
             ruff_exe = find_ruff_bin()
         except ImportError:
@@ -152,7 +157,7 @@ class DocstringCodeExample(BaseModel):
         # TimeoutExpired leaves the child running by contract; escaping without
         # kill() plus a reaping communicate() leaks one ruff process per
         # timed-out example, and a long doctest run can leak enough to exhaust
-        # the per-user process table and stop the machine forking (GSP-154).
+        # the per-user process table and stop the machine forking.
         try:
             stdout, stderr = process.communicate(input=code_to_lint, timeout=timeout_s)
         except subprocess.TimeoutExpired:
@@ -181,7 +186,7 @@ class DocstringCodeExample(BaseModel):
         Diagnostics are pinned to stdout by ``--output-format json``; parsing
         stdout first means real findings survive even when ruff also writes
         to stderr (the old stderr-first order dropped stdout diagnostics and
-        could let a failing snippet read as clean — GSP-152).
+        could let a failing snippet read as clean).
         """
         issues: list[str] = []
         if stdout:
@@ -241,8 +246,6 @@ class DocstringCodeExample(BaseModel):
             at line 3"
 
         """
-        from .style import StyleChecker
-
         # Skip style checking if example has no_lint or skip_style tags
         skip_tags = {"no_lint", "skip_style", "no_style_check"}
         if any(tag in skip_tags for tag in self.prefix_tags):
@@ -254,7 +257,9 @@ class DocstringCodeExample(BaseModel):
         # Format violations as human-readable messages
         return [checker.format_violation(v) for v in violations]
 
-    def run(self, global_vars: dict | None = None) -> tuple[str, Any, Exception | None]:
+    def run(
+        self, global_vars: dict[str, Any] | None = None
+    ) -> tuple[str, Any, Exception | None]:
         """Execute code snippet and capture stdout, last expression, exceptions."""
         raw_code_to_run = self._extract_code_from_snippet()
 

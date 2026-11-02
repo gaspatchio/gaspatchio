@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-30
 **Status:** ⚠️ **SUPERSEDED** by [`2026-05-03-rollforward-redesign-v2-design.md`](./2026-05-03-rollforward-redesign-v2-design.md). Kept for archaeology of the design journey. The v2 spec is the live design.
-**Authors:** Matt Wright, Claude
+**Author:** Matt Wright
 **Branch:** `gsp-92-rollforward-redesign`
 **Drives:** GSP-92 (cross-state arithmetic with mid-period column derivation)
 **Aligns with:** GSP-95 (semantic IR + Polars backend boundary)

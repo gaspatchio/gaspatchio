@@ -1,6 +1,6 @@
 # Principles
 
-> **Published version:** <https://gaspatchio.dev/principles/>
+> **Published version:** <https://gaspatchio.dev/latest/principles/>
 >
 > This file is the in-repo copy, kept so that contributors and AI coding agents load the
 > north star with the rest of the repository rules. The published page is canonical for

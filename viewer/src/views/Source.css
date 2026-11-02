@@ -1,0 +1,251 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Opio Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The model's text, in the drawer's fourth tab.
+ *
+ * Code, in the mono face, coloured the way gaspatchio.dev colours it.
+ *
+ * This view used to draw the file in one ink, on the argument that highlighting
+ * is an opinion about what a line means while the only claim here is that these
+ * are the file's own bytes. The argument was half right. Highlighting would be
+ * an opinion if it could be wrong about the text — and `src/views/python.ts` is
+ * held to the one invariant that settles that: the tokens it returns, put back
+ * together, are the file byte for byte, asserted in `test/python.test.ts` over
+ * the tutorial's own 40 KB model. What is left is not an opinion about meaning
+ * but a fact about grammar — a string is a string — and withholding it left a
+ * reader who had just been sent to one line searching a wall of grey for its
+ * shape. The palette is not this page's invention either: it is the
+ * documentation site's, so the model file here reads as the same code that
+ * reader has already seen there.
+ *
+ * The two marks this view makes are still the file's own: the line the reader
+ * arrived at wears the selected wash and the red edge the grid's selected
+ * column wears, and a line the export accounted for carries that column's name
+ * in the margin.
+ *
+ * No amber here. A line nothing accounts for is not an admission — it is code,
+ * and most code is not a column — so it is drawn plain, which on this page is
+ * what "nothing is being claimed about this" looks like.
+ */
+
+.source-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+}
+
+/* The file's own identity, above its own text. */
+.source-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.78rem;
+  color: var(--ink-secondary);
+  flex: 0 0 auto;
+}
+
+.source-path {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The control that takes the whole file out, beside the digest it is stamped
+ * with.
+ *
+ * It wears the head's own size and colour rather than a button's: this bar is
+ * a row of facts about one file, and a raised control among them would read as
+ * the loudest thing in a panel whose subject is the text below it. The dotted
+ * rule under it is the only thing saying it can be pressed, which is the same
+ * thing the proof footer's source location wears for the same reason.
+ */
+.copy-file {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-secondary);
+  border-bottom: 1px dotted var(--rule);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.copy-file:hover {
+  color: var(--red-dark);
+  border-bottom-color: var(--red-light);
+}
+
+/*
+ * That the source shown is the source that ran.
+ *
+ * Section 7.3's one stated guarantee, and the reason the section is worth
+ * having: the entry for the model's own path carries exactly the digest the
+ * envelope publishes beside it. Not a chip and not red — the file is not
+ * admitting anything and the page is not alarmed, it is stating that two
+ * digests in the document agree.
+ */
+.source-ran {
+  color: var(--ink-secondary);
+  font-style: italic;
+}
+
+.source-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+}
+
+/*
+ * As wide as the widest line, and never narrower than the drawer.
+ *
+ * Code is not prose and must not be reflowed or cut: a line with an ellipsis in
+ * the middle of it is a line a reviewer cannot check against the formula above
+ * it, which is the one thing this tab is for. So the lines take the width they
+ * need and the drawer scrolls sideways, the way every reader of code does it.
+ * `min-width: 100%` is what keeps a short file's rows full width, so the marked
+ * line is a band across the pane rather than a stub the length of its own text.
+ */
+.source-lines {
+  font-family: var(--face-mono);
+  font-size: 0.78rem;
+  line-height: 18px;
+  width: max-content;
+  min-width: 100%;
+}
+
+/*
+ * Line number, code, margin.
+ *
+ * The code's left edge is fixed and the margin is on the right, deliberately:
+ * Python is read by its indentation, and a column name that pushed a line
+ * sideways would make an accounted line look differently indented from the
+ * unaccounted one above it.
+ */
+.source-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  white-space: pre;
+}
+
+.source-ln {
+  flex: 0 0 46px;
+  color: #b3bbc1;
+  text-align: right;
+  padding-right: 9px;
+  user-select: none;
+}
+
+.source-code {
+  font: inherit;
+  flex: 0 0 auto;
+  padding: 0 8px;
+}
+
+/*
+ * One class per token kind, from `src/views/python.ts`.
+ *
+ * `plain` carries no colour of its own on purpose: whitespace and anything the
+ * tokeniser did not recognise stay the page's ordinary ink, so a kind nobody
+ * thought of reads as code rather than as a mistake.
+ */
+.t-keyword {
+  color: var(--code-keyword);
+}
+
+.t-string {
+  color: var(--code-string);
+}
+
+.t-number {
+  color: var(--code-number);
+}
+
+.t-name {
+  color: var(--code-blue);
+}
+
+.t-comment,
+.t-punct {
+  color: var(--ink-secondary);
+}
+
+/*
+ * A line the export accounted for is a way into the graph at that column, so it
+ * says so on hover. A line nothing accounts for stays inert and unwashed, which
+ * is this page's way of saying nothing is being claimed about it.
+ */
+.source-row.claimed {
+  cursor: pointer;
+}
+
+.source-row.claimed:hover {
+  background: var(--code-surface);
+}
+
+.source-row.claimed:hover .source-accounts {
+  background: var(--code-surface);
+}
+
+/* The line the reader arrived at, marked the way the grid marks a selection. */
+.source-row.hit {
+  background: var(--selected);
+  box-shadow: inset 2px 0 0 var(--red);
+}
+
+/*
+ * The margin, pinned to the right edge of the pane.
+ *
+ * Sticky rather than simply last, because the lines are as wide as the widest
+ * of them and the pane is a drawer: a margin that sat at the end of the longest
+ * line would be a margin nobody scrolled far enough to meet, and the whole
+ * second reading this tab offers — from a line back to the column it defines —
+ * would be invisible at the width the drawer opens at. It carries the row's own
+ * background so the code slides under it rather than through it.
+ */
+.source-accounts {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  margin-left: auto;
+  position: sticky;
+  right: 0;
+  padding-left: 18px;
+  padding-right: 8px;
+  background: var(--paper);
+}
+
+.source-row.hit .source-accounts {
+  background: var(--selected);
+}
+
+/* A column this line defines: a name, and a way into the graph at it. */
+.source-account {
+  font: inherit;
+  font-family: var(--face-mono);
+  border: 0;
+  background: none;
+  color: var(--red);
+  padding: 0 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.source-account:hover {
+  color: var(--red-dark);
+  text-decoration: underline;
+}
+
+/* A file with no text in it: one sentence, where the file would have been. */
+.source-missing {
+  padding: 12px 14px;
+  margin: 0;
+  color: var(--ink-secondary);
+  max-width: 62ch;
+}

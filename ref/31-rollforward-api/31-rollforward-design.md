@@ -3,7 +3,7 @@
 ## GSP-86: Non-Linear Accumulations via Method-Chain Builder
 
 ### Status: Design Review
-### Authors: Matt Wright, Claude
+### Author: Matt Wright
 ### Date: 2026-03-25 (revised)
 
 ---

@@ -4,6 +4,7 @@
 
 pub mod assumptions;
 pub mod excel;
+pub mod identity;
 pub mod polars_functions;
 
 pub use assumptions::{
@@ -13,4 +14,5 @@ pub use assumptions::{
 };
 pub use polars_functions::vector::FillSeriesKwargs;
 pub use polars_functions::ConditionalKwargs;
+pub use polars_functions::QuotientKwargs;
 pub use polars_functions::RollforwardKwargs;

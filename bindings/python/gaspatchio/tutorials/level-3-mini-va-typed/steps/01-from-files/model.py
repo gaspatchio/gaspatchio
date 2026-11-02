@@ -106,16 +106,15 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     curve = assumptions["curve"]
 
     # Schedule — generates the per-period year-fraction grid using
-    # OneTwelfth day-count (each month = 1/12 of a year). year_fractions()
-    # returns 240 per-period widths (each = 1/12). Prepend 0.0 and accumulate
-    # to get the 241 cumulative t_years values: [0, 1/12, 2/12, ..., 240/12].
+    # OneTwelfth day-count (each month = 1/12 of a year). Declared on the
+    # frame below; Section 11 reads its 241 cumulative t_years values
+    # [0, 1/12, 2/12, ..., 240/12] back with af.projection.t_years().
     schedule = Schedule.from_calendar_grid(
         start_date=VALUATION_DATE,
         n_periods=PROJECTION_MONTHS,
         frequency="1M",
         day_count=OneTwelfth(),
     )
-    t_years_list = schedule.cumulative_year_fractions()
 
     # =====================================================================
     # SECTION 2: TIME SETUP
@@ -123,16 +122,13 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
 
-    af.duration_mth_init = (VALUATION_DATE.year * 12 + VALUATION_DATE.month) - (
-        af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
-    )
+    af.duration_mth_init = af.entry_date_parsed.date.months_between(VALUATION_DATE)
 
     af = af.projection.set(schedule=schedule)
     af.projection_date = af.projection.period_dates()
 
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() has already stamped af.month -- elapsed whole months
+    # from the valuation date, 0, 1, 2, ... one per projection period.
 
     af.duration_mth_t = af.duration_mth_init + af.month
     af.duration = af.duration_mth_t // 12
@@ -179,9 +175,12 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # =====================================================================
 
     af.combined_decrement = 1.0 - (1.0 - af.mort_rate_mth) * (1.0 - af.lapse_rate_mth)
-    af.survival_factor = 1.0 - af.combined_decrement
-    af.cumulative_survival = af.survival_factor.cum_prod()
-    af.survival_prob = af.cumulative_survival.projection.previous_period(fill_value=1.0)
+    # Cumulative survival from the combined decrement:
+    #   tpx[t] = (1 - q[0]) * (1 - q[1]) * ... * (1 - q[t-1])
+    # rate_timing="beginning_of_period" is the default, and it is the
+    # convention wanted here: the decrement at t has not been applied yet,
+    # so the first element is 1.0 -- every policy in force at t=0.
+    af.survival_prob = af.combined_decrement.projection.cumulative_survival()
 
     af.maturity_month = af.policy_term * 12
 
@@ -256,15 +255,16 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # SECTION 11: DISCOUNT FACTORS & PRESENT VALUES
     # =====================================================================
 
-    # Curve-based discount factors.
-    # curve.discount_factor(t_years_list) accepts a Python list[float] and
-    # returns list[float]. The Schedule-derived t_years_list (length 241)
-    # gives values [0.0, 1/12, 2/12, ..., 240/12].
-    # pl.lit(Series([list])).first() broadcasts the single list to all rows.
-    disc_factors_list = curve.discount_factor(t_years_list)  # list[float], len 241
-    af.disc_factors = pl.lit(
-        pl.Series("disc_factors", [disc_factors_list], dtype=pl.List(pl.Float64))
-    ).first()
+    # Curve-based discount factors, read through the recorded door.
+    # af.projection.t_years() is the projection's own cumulative
+    # year-fraction grid as a tracked list column (length 241, values
+    # [0.0, 1/12, 2/12, ..., 240/12]). Handing it to curve.discount_factor()
+    # puts the curve read on the record: the artifact grows the curve's
+    # assumption entry, and the node's fingerprint moves when the knots move,
+    # so the discount factors trace back to the knots in curve.parquet
+    # (*Audit by default*).
+    af.t_years = af.projection.t_years()
+    af.disc_factors = curve.discount_factor(af.t_years)
 
     af.pv_claims = (af.claims * af.disc_factors).list.sum()
     af.pv_premiums = (af.premiums * af.disc_factors).list.sum()

@@ -1,0 +1,276 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "An axis of fixed steps in years, with no calendar under it",
+  "cases": [
+    {
+      "id": "door-projection_set-fixed-step",
+      "covers": [
+        "projection_set"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_set",
+        "args": [],
+        "attrs": {
+          "frequency": null,
+          "until": null,
+          "until_value": null,
+          "valuation_date": null,
+          "n_periods": 4,
+          "step_years": 0.1
+        }
+      },
+      "producer_check": true,
+      "case_kind": "recording-door-value",
+      "output_column": "step",
+      "producer_setup": {
+        "kind": "projection_set",
+        "n_periods": 4,
+        "step_years": 0.1
+      },
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "door-projection_set-fixed-step-month",
+      "covers": [
+        "projection_set"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_set",
+        "args": [],
+        "attrs": {
+          "frequency": null,
+          "until": null,
+          "until_value": null,
+          "valuation_date": null,
+          "n_periods": 4,
+          "steps_per_year": 4
+        }
+      },
+      "producer_check": true,
+      "case_kind": "recording-door-value",
+      "output_column": "month",
+      "producer_setup": {
+        "kind": "projection_set",
+        "n_periods": 4,
+        "steps_per_year": 4
+      },
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            0,
+            3,
+            6,
+            9,
+            12
+          ],
+          [
+            0,
+            3,
+            6,
+            9,
+            12
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "fixed-step-t-years-step-years",
+      "covers": [
+        "projection_frame.t_years"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.t_years",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:c79ce236705d43ac4b058a5bd4a8102863efd1c295ae0b714bb77ebfc79857db"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            0.1,
+            0.2,
+            0.30000000000000004,
+            0.4,
+            0.5,
+            0.6000000000000001,
+            0.7000000000000001,
+            0.8,
+            0.9,
+            1.0,
+            1.1,
+            1.2000000000000002
+          ],
+          [
+            0.0,
+            0.1,
+            0.2,
+            0.30000000000000004,
+            0.4,
+            0.5,
+            0.6000000000000001,
+            0.7000000000000001,
+            0.8,
+            0.9,
+            1.0,
+            1.1,
+            1.2000000000000002
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:c79ce236705d43ac4b058a5bd4a8102863efd1c295ae0b714bb77ebfc79857db",
+          "payload": {
+            "kind": "fixed_step",
+            "n_periods": 12,
+            "step_years": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "id": "fixed-step-t-years-steps-per-year",
+      "covers": [
+        "projection_frame.t_years"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.t_years",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:4b750fb3d650bda802f64590e5803f2674987d4eff3d3198e2c2fa29c824d3b0"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            0.08333333333333333,
+            0.16666666666666666,
+            0.25,
+            0.3333333333333333,
+            0.4166666666666667,
+            0.5,
+            0.5833333333333334,
+            0.6666666666666666,
+            0.75,
+            0.8333333333333334,
+            0.9166666666666666,
+            1.0
+          ],
+          [
+            0.0,
+            0.08333333333333333,
+            0.16666666666666666,
+            0.25,
+            0.3333333333333333,
+            0.4166666666666667,
+            0.5,
+            0.5833333333333334,
+            0.6666666666666666,
+            0.75,
+            0.8333333333333334,
+            0.9166666666666666,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:4b750fb3d650bda802f64590e5803f2674987d4eff3d3198e2c2fa29c824d3b0",
+          "payload": {
+            "kind": "fixed_step",
+            "n_periods": 12,
+            "steps_per_year": 12
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 
 """Leap-year regression tests.
 
-Phase 1 commitment: Date(2020, 2, 29) + 1 year = Date(2021, 2, 28).
+The rule: Date(2020, 2, 29) + 1 year = Date(2021, 2, 28).
 Tested explicitly because this is the single most common date-handling bug
 in actuarial schedules.
 """
@@ -28,7 +28,7 @@ class TestLeapDayInception:
 
     def test_feb_29_plus_one_year_is_feb_28(self) -> None:
         """Period 0 starts Feb 29 2020; period 12 boundary lands Feb 28 2021."""
-        # Per Phase 1 commitment + Schedule design pass §"leap-year handling"
+        # A leap-day anniversary falls back to the last day of February.
         sched = Schedule.from_inception(
             inception_column="inception",
             n_periods=12,

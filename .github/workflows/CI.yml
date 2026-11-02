@@ -24,6 +24,40 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The tools the jobs below install by name, each at the version a passing run
+# used on 3 October 2026, so that a run's result, and the bytes a release
+# publishes, depend on the commit and not on the day. Each digest moves with
+# its version.
+env:
+  # uv, for every setup-uv step. The digest is of the x86-64 Linux archive,
+  # which every job here that installs uv runs on. setup-uv checks it before
+  # it unpacks anything; its own table of digests ends at uv 0.10.10, so
+  # without one here it would check nothing.
+  SETUP_UV_VERSION: "0.12.22"
+  SETUP_UV_SHA256: b9980552309f09c15172b8be828555e375097f16deb459795ce7bfd200380f0b
+  # maturin, for the smoke build and for the macOS, Windows and sdist builds.
+  # The Linux release wheels are built in the image the manylinux job pins by
+  # digest, which carries this release too. The digest is of the x86-64 Linux
+  # wheel the smoke build runs; maturin-action downloads its own binary and
+  # checks no digest.
+  MATURIN_VERSION: "1.15.0"
+  MATURIN_WHEEL: maturin-1.15.0-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.musllinux_1_1_x86_64.whl
+  MATURIN_SHA256: 653020a63525bb224e5ab0adf02e17a2e08bc86dbea7fc1399c9a56d7529b99e
+  # twine, for both metadata checks. The digest is of its one wheel; what it
+  # depends on is held by version in .github/pins/twine.txt.
+  TWINE_WHEEL: twine-7.0.0-py3-none-any.whl
+  TWINE_SHA256: b854164df26db268af05f49aa5c0344b10e27a494343ff05b1e0bad3b135f5a7
+
+# What the jobs below fetch, which bindings/python/tests/test_workflow_tool_pins.py
+# holds them to, one line a tool: its name, and how many install commands
+# fetch it.
+# pins: ruff 1
+# pins: import-linter 1
+# pins: cargo-about 1
+# pins: maturin 1
+# pins: twine 2
+# pins: hatchling 2
+
 jobs:
   rust-tests:
     name: Rust Tests
@@ -31,7 +65,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable   # intentionally not SHA-pinned — no `toolchain:` version is set, so this ref *is* the mechanism that tracks current stable Rust; pinning it would freeze the toolchain instead
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87   # stable branch
+        with:
+          toolchain: stable   # rustup resolves it when the job runs: the pin freezes the action, not the compiler
       - name: Cache Cargo build
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6
         with:
@@ -65,7 +101,8 @@ jobs:
       - name: Install uv and cache dependencies
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
         with:
-          version: "latest"
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
           cache-dependency-glob: |
             uv.lock
             pyproject.toml
@@ -79,7 +116,11 @@ jobs:
       - name: Install Python dependencies and build extension
         # --locked: install exactly what bindings/python/uv.lock pins and fail if it is
         # stale, so a PR's test result depends only on its own diff (GSP issue #33).
-        run: uv sync --locked
+        # The viewer distribution as well, so the page tests run here rather
+        # than skip: the core writes pages through its refuse-by-name door.
+        run: |
+          uv sync --locked
+          uv pip install --python .venv/bin/python --no-deps ../../viewer/python
         working-directory: bindings/python
       - name: Run Python tests
         run: uv run pytest -v
@@ -88,16 +129,576 @@ jobs:
         # No --ignore-missing-stub: "exists at runtime, missing from stub" is the
         # drift class that hid the rollforward API from editors (gh#104). Known,
         # deliberate omissions live in the allowlist's missing-stub ledger.
-        run: uv run python -m mypy.stubtest gaspatchio --ignore-unused-allowlist --mypy-config-file mypy-stubtest.ini --allowlist stubtest-allowlist.txt
+        # No --ignore-unused-allowlist either: an entry that stopped matching
+        # anything fails the run, same as tests/test_stub_sync.py locally.
+        run: uv run python -m mypy.stubtest gaspatchio --allowlist stubtest-allowlist.txt --mypy-config-file mypy-stubtest.ini
         working-directory: bindings/python
 
+  ratchets:
+    name: Measurement Ratchets (ruff, types, duplication)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Baseline-then-shrink, the same shape tests/graph/census.py uses on the
+    # expression allowlists: each step counts something, compares against a
+    # measured ceiling in .github/ratchets.env, and fails only when the count
+    # goes ABOVE it. Today's state passes by construction — the point is that
+    # tomorrow's cannot be quietly worse.
+    #
+    # The two type-checking steps read a floor beside their ceiling: the
+    # number of files the count was taken over. A count that fell because the
+    # run got narrower is not an improvement, and a step that reads only the
+    # count cannot tell the two apart.
+    #
+    # A step before them checks a third thing neither a ceiling nor a floor
+    # can see: that the settings deciding whether a diagnostic is raised are
+    # still the settings both figures were measured under. A count that fell
+    # because a rule was turned off is not an improvement either, and it moves
+    # neither the count's ceiling nor its denominator.
+    #
+    # No step here builds the extension. Ruff and jscpd need nothing but their
+    # own download; mypy and pyright need the third-party packages, which is
+    # why this job installs dependencies — and installs them WITHOUT the
+    # project, because installing the project runs the maturin backend. Both
+    # type checkers still resolve `gaspatchio._internal` from the checked-in
+    # `gaspatchio/_internal.pyi`, and both read the package out of the source
+    # tree, so each runs here the same command line a contributor runs at a
+    # keyboard. That equality is the whole point: a count CI cannot reproduce
+    # is a ceiling nobody can argue with.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+        with:
+          # Only *.parquet and *.csv are LFS-tracked; nothing here reads one,
+          # so pointer files are fine and the pull is skipped.
+          lfs: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
+          cache-dependency-glob: |
+            uv.lock
+            pyproject.toml
+          working-directory: bindings/python
+      # Deliberately no setup-python step: bindings/python/.python-version pins
+      # the interpreter and uv provisions exactly that one, so the counts are
+      # taken on the interpreter they were measured on. A setup-python here
+      # would quietly substitute a different minor version, and neither
+      # type-checker count is stable across those.
+      - name: Install the dependencies the type checkers read
+        # --locked: both ceilings move when a dependency's stubs do, so the
+        # counts are only reproducible against the pinned set — and a stale
+        # lockfile should fail here as it already does in python-tests.
+        # --no-install-project: installing the project builds the Rust
+        # extension, which nothing in this job needs.
+        # The viewer distribution too: the core imports gaspatchio_viewer behind
+        # its refuse-by-name door, and the ceilings below were measured with it
+        # installed, as it is in every development environment. Without it the
+        # import resolves to Any and mypy counts one more error on Linux than
+        # the recorded 105. It has no dependencies and builds without Rust.
+        run: |
+          uv sync --locked --no-install-project
+          uv pip install --python .venv/bin/python --no-deps ../../viewer/python
+        working-directory: bindings/python
+      - name: Ruff violations are not above their baseline
+        working-directory: bindings/python
+        run: |
+          . ../../.github/ratchets.env
+          # A ceiling that went missing must fail the step, not skip it.
+          # `[ 5 -gt "" ]` exits 2, which `if` reads as false and `set -e`
+          # exempts, so an empty RUFF_MAX would wave a real regression
+          # through while printing "(ceiling )". A missing FILE already
+          # fails here; a file that has lost this variable did not.
+          #
+          # The third pattern closes the other half of the same hole, and the
+          # more dangerous half. `[ 5 -gt 999999999999999999999999 ]` exits 2
+          # for the same reason a comparison against "" does, but the value is
+          # all digits, so the second pattern lets it through and every
+          # comparison made with it reads as false — a count above its ceiling
+          # would PASS, silently, with nothing printed. Ten digits or more is
+          # refused here; nine is already far above anything measured in this
+          # repository. Every figure this step compares gets the same three
+          # patterns, whether it was read from the file or parsed out of a
+          # tool's output.
+          case "${RUFF_MAX:-}" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::RUFF_MAX is missing, is not a whole number, or has ten or more digits and cannot be compared by the shell, in .github/ratchets.env (read: '${RUFF_MAX:-}'). Refusing to compare against it."
+              exit 1
+              ;;
+          esac
+          # Read the pin rather than repeat it: pyproject.toml already fixes
+          # ruff exactly, because the docstring-example linter validates
+          # against ruff's rules. Two pins would eventually disagree, and the
+          # count would move without anyone touching the code.
+          ruff_version=$(grep -oE '"ruff==[0-9]+\.[0-9]+\.[0-9]+"' pyproject.toml | head -1 | tr -d '"' | cut -d= -f3)
+          if [ -z "$ruff_version" ]; then
+            echo "::error::Could not read the exact ruff pin from bindings/python/pyproject.toml"
+            exit 1
+          fi
+          # ruff exits non-zero when it finds anything, which is the normal
+          # case here; the count, not the exit code, is the signal. A ruff
+          # that failed to run writes no JSON array and the parse below fails
+          # loudly rather than reporting zero violations.
+          uvx "ruff@${ruff_version}" check gaspatchio --output-format json > ruff.json || true
+          if ! count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' ruff.json); then
+            echo "::error::Could not read a violation count out of ruff.json — see the parse error above. A ruff that failed to run is not a ruff that found nothing."
+            exit 1
+          fi
+          case "$count" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::The ruff count did not parse as a whole number the shell can compare (read: '${count}')."
+              exit 1
+              ;;
+          esac
+          echo "ruff ${ruff_version}: ${count} violations (ceiling ${RUFF_MAX})"
+          if [ "$count" -gt "$RUFF_MAX" ]; then
+            echo "::error::ruff violations rose to ${count}, above the ${RUFF_MAX} recorded in .github/ratchets.env. Fix the new violations, or — if the rise is a blanket '# ruff: noqa' header coming off a file — raise RUFF_MAX in this commit with that reason beside it."
+            python3 -c 'import json,collections,sys; d=json.load(open(sys.argv[1])); c=collections.Counter(v["code"] for v in d); [print(f"{n:6d}  {code}") for code, n in c.most_common(25)]' ruff.json
+            exit 1
+          fi
+          if [ "$count" -lt "$RUFF_MAX" ]; then
+            echo "::notice::ruff violations are down to ${count}; lower RUFF_MAX in .github/ratchets.env to hold the ground."
+          fi
+      - name: Type-checker settings are the ones the counts were measured under
+        working-directory: bindings/python
+        # Before either count is taken, so that no comparison below is ever
+        # made under a configuration nobody measured — and so that a narrowed
+        # configuration never reaches the ratchet-down invitation, the same
+        # ordering argument the floors make inside their own steps.
+        #
+        # A ceiling is a count and a floor is a denominator. Between them they
+        # miss the third thing that moves a count with no line of source
+        # touched: the settings that decide whether a diagnostic is raised at
+        # all. Four lines of TOML —
+        #
+        #   [[tool.mypy.overrides]]
+        #   module = "gaspatchio.*"
+        #   ignore_errors = true
+        #
+        # — take mypy to "Success: no issues found in 192 source files".
+        # Nothing found, and the denominator still exactly on its floor, so
+        # the step below would report that as ground gained and invite the
+        # next commit to lower MYPY_MAX to nothing. Pyright has the same shape
+        # of hole in `ignore`, which suppresses diagnostics while leaving
+        # filesAnalyzed untouched, so its floor cannot see it either.
+        #
+        # What is enforced is content identity rather than a number, the same
+        # as .github/jscpd-baseline.json. .github/type_suppression_fingerprint.py
+        # says what goes into each digest and, just as importantly, what does
+        # not; RATCHETS.md carries the same list in prose.
+        run: |
+          . ../../.github/ratchets.env
+          compare() {
+            tool="$1"
+            variable="$2"
+            recorded="$3"
+            # Fail closed the way the ceilings do, in the shape a digest
+            # takes. A missing value would otherwise compare equal to nothing
+            # and wave the step through.
+            case "$recorded" in
+              ''|*[!0-9a-f]*)
+                echo "::error::${variable} is missing or is not lower-case hexadecimal in .github/ratchets.env (read: '${recorded}'). Refusing to compare against it."
+                return 1
+                ;;
+            esac
+            if [ "${#recorded}" -ne 64 ]; then
+              echo "::error::${variable} is ${#recorded} characters in .github/ratchets.env, not the 64 of a SHA-256 digest. Refusing to compare against it."
+              return 1
+            fi
+            if ! computed=$(.venv/bin/python ../../.github/type_suppression_fingerprint.py "$tool"); then
+              echo "::error::Could not compute the ${tool} settings digest — see the error above. A digest that failed to compute is not a digest that matched."
+              return 1
+            fi
+            if [ "$computed" != "$recorded" ]; then
+              echo "::error::The ${tool} settings are not the ones its ceiling and floor were measured under. .github/ratchets.env records ${variable}=${recorded}; this tree computes ${computed}. The settings that went into that digest are printed below — run '.venv/bin/python ../../.github/type_suppression_fingerprint.py ${tool} --document' from bindings/python at the previous commit to see which one moved. If the change is deliberate, re-measure the ${tool} ceiling and floor under it and move ${variable} in BOTH .github/ratchets.env and its section in .github/RATCHETS.md, in this commit, with the reason beside it. A count taken under other settings is not comparable with a ceiling taken under these."
+              .venv/bin/python ../../.github/type_suppression_fingerprint.py "$tool" --document
+              return 1
+            fi
+            echo "${tool}: settings digest ${computed} matches ${variable}"
+          }
+          # Both are reported even when the first has already failed: a
+          # contributor who changed one type checker's configuration has
+          # usually changed the other's too, and one digest at a time would
+          # cost them a round trip to find that out.
+          status=0
+          compare mypy MYPY_SUPPRESSION_SHA "${MYPY_SUPPRESSION_SHA:-}" || status=1
+          compare pyright PYRIGHT_SUPPRESSION_SHA "${PYRIGHT_SUPPRESSION_SHA:-}" || status=1
+          exit "$status"
+      - name: Mypy errors are not above their baseline
+        working-directory: bindings/python
+        run: |
+          . ../../.github/ratchets.env
+          # Same three patterns, same reason as the ruff step above: an empty
+          # ceiling and a ten-digit one both make every comparison that READS
+          # it exit 2, which `if` reads as false, and the step passes while
+          # measuring nothing. Each figure is guarded where it is read, so a
+          # bad denominator disables the floor test and a bad count disables
+          # the ceiling test — not each other's.
+          case "${MYPY_MAX:-}" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::MYPY_MAX is missing, is not a whole number, or has ten or more digits and cannot be compared by the shell, in .github/ratchets.env (read: '${MYPY_MAX:-}'). Refusing to compare against it."
+              exit 1
+              ;;
+          esac
+          # The floor gets the same guard, because it does the same job from
+          # the other side. A count with no denominator is not a measurement:
+          # widen the exclude list by one directory and the count falls, and
+          # this step would report the fall as an improvement and invite
+          # someone to ratchet down to a number that measures less code.
+          # MYPY_MIN_FILES is how much of the package the count has to be
+          # over — one of the two conditions on comparing it with the ceiling,
+          # the other being the settings digest the step above checks.
+          case "${MYPY_MIN_FILES:-}" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::MYPY_MIN_FILES is missing, is not a whole number, or has ten or more digits and cannot be compared by the shell, in .github/ratchets.env (read: '${MYPY_MIN_FILES:-}'). Refusing to compare against it."
+              exit 1
+              ;;
+          esac
+          # mypy exits non-zero when it finds anything, which is the normal
+          # case here; the count, not the exit code, is the signal.
+          .venv/bin/python -m mypy gaspatchio > mypy.txt 2>&1 || true
+          # The count comes off the summary line rather than out of
+          # --output=json, and that is what makes this fail closed. The JSON
+          # carries no summary, so an empty JSON file counts cleanly to zero —
+          # which is under any ceiling, and a mypy that died would present
+          # itself as a mypy that found nothing.
+          #
+          # mypy has three summary shapes and two of them carry the file
+          # total beside the count, which is why both are matched whole
+          # rather than by their opening words. The third is what a blocking
+          # error prints — "(errors prevented further checking)" stands where
+          # the file total would be — and a run that stopped early is a run
+          # over an unknown fraction of the package, so it is named and
+          # refused here rather than counted.
+          if ! measured=$(python3 -c '
+          import re, sys
+          text = open(sys.argv[1]).read()
+          found = re.search(r"^Found (\d+) errors? in \d+ files? \(checked (\d+) source files?\)$", text, re.M)
+          clean = re.search(r"^Success: no issues found in (\d+) source files?$", text, re.M)
+          blocked = re.search(r"^Found \d+ errors? in \d+ files? \(errors prevented further checking\)$", text, re.M)
+          if found:
+              print(found.group(1), found.group(2))
+          elif clean:
+              print(0, clean.group(1))
+          elif blocked:
+              sys.exit("mypy stopped on blocking errors, so its summary carries no file total; refusing to report a count with no denominator")
+          else:
+              sys.exit("no mypy summary line in mypy.txt; refusing to report a count for a run that did not finish")
+          ' mypy.txt); then
+            echo "::error::Could not read an error count out of mypy.txt — see the parse error above and the tail of the run below. A mypy that failed to run is not a mypy that found nothing."
+            tail -30 mypy.txt
+            exit 1
+          fi
+          count=${measured%% *}
+          checked=${measured##* }
+          case "$count" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::The mypy count did not parse as a whole number the shell can compare (read: '${count}')."
+              exit 1
+              ;;
+          esac
+          case "$checked" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::The mypy file total did not parse as a whole number the shell can compare (read: '${checked}')."
+              exit 1
+              ;;
+          esac
+          echo "mypy: ${count} errors over ${checked} source files (ceiling ${MYPY_MAX}, floor ${MYPY_MIN_FILES})"
+          # Floor before ceiling, so a run over part of the package never
+          # reaches the comparison and never prints the invitation below it.
+          if [ "$checked" -lt "$MYPY_MIN_FILES" ]; then
+            echo "::error::mypy checked ${checked} source files, below the ${MYPY_MIN_FILES} recorded in .github/ratchets.env. This run measured less of the package than the ceiling was measured over, so whatever it found is not comparable with it — that is a narrower run, not better code. Check the exclude list and the path this step passes. If source files were genuinely removed, lower the floor in this commit with that reason beside it — in BOTH .github/ratchets.env (MYPY_MIN_FILES) and .github/RATCHETS.md, which spells the figure twice, in the section heading and in the expected output under it; tests/test_ratchet_documents_agree.py holds all three to each other, so moving one leaves the suite red. Work the amount out rather than copying pyright's: deleting a module with no stub beside it is one off each floor, but deleting a module together with the stub that shadows it is one off this floor and TWO off pyright's, because mypy checks the stub instead of the module and pyright analyses both. And unlike raising a ceiling, deleting a module is routine rather than rare."
+            exit 1
+          fi
+          if [ "$count" -gt "$MYPY_MAX" ]; then
+            echo "::error::mypy errors rose to ${count}, above the ${MYPY_MAX} recorded in .github/ratchets.env. The per-change rule in bindings/python/AGENTS.md is that the files you touch are clean; this is the aggregate that rule cannot see."
+            grep -oE '\[[a-z-]+\]$' mypy.txt | sort | uniq -c | sort -rn | head -25 || true
+            exit 1
+          fi
+          if [ "$count" -lt "$MYPY_MAX" ]; then
+            echo "::notice::mypy errors are down to ${count}; lower MYPY_MAX in .github/ratchets.env to hold the ground."
+          fi
+      - name: Pyright errors are not above their baseline
+        working-directory: bindings/python
+        run: |
+          . ../../.github/ratchets.env
+          case "${PYRIGHT_MAX:-}" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::PYRIGHT_MAX is missing, is not a whole number, or has ten or more digits and cannot be compared by the shell, in .github/ratchets.env (read: '${PYRIGHT_MAX:-}'). Refusing to compare against it."
+              exit 1
+              ;;
+          esac
+          # And the denominator the count is only meaningful over, guarded the
+          # same way and for the reason given in the mypy step above.
+          case "${PYRIGHT_MIN_FILES:-}" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::PYRIGHT_MIN_FILES is missing, is not a whole number, or has ten or more digits and cannot be compared by the shell, in .github/ratchets.env (read: '${PYRIGHT_MIN_FILES:-}'). Refusing to compare against it."
+              exit 1
+              ;;
+          esac
+          # pyright resolves its rule set, its language level and its import
+          # search path from [tool.pyright] in pyproject.toml. Unconfigured it
+          # takes the last two from whichever Python environment it happens to
+          # discover, so its count depends on how it was launched; pinning
+          # them is what makes this number the same at a keyboard and here.
+          # The npm package it drives is pinned by the pyright wheel that
+          # uv.lock holds, so this and a local run are the same tool.
+          .venv/bin/python -m pyright gaspatchio --outputjson > pyright.json 2>pyright.err || true
+          # --outputjson makes this one fail closed for free: pyright writes
+          # the summary into the document, and a pyright that did not run
+          # writes no parseable document at all. The document carries the
+          # count and the file total in the same object, so the floor below is
+          # read from the same run as the count it qualifies.
+          if ! measured=$(python3 -c '
+          import json, sys
+          summary = json.load(open(sys.argv[1]))["summary"]
+          print(summary["errorCount"], summary["filesAnalyzed"])
+          ' pyright.json); then
+            echo "::error::Could not read an error count out of pyright.json — see the parse error above and pyright's own stderr below. A pyright that failed to run is not a pyright that found nothing."
+            tail -30 pyright.err
+            exit 1
+          fi
+          count=${measured%% *}
+          analysed=${measured##* }
+          case "$count" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::The pyright count did not parse as a whole number the shell can compare (read: '${count}')."
+              exit 1
+              ;;
+          esac
+          case "$analysed" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::The pyright file total did not parse as a whole number the shell can compare (read: '${analysed}')."
+              exit 1
+              ;;
+          esac
+          echo "pyright: ${count} errors over ${analysed} files (ceiling ${PYRIGHT_MAX}, floor ${PYRIGHT_MIN_FILES})"
+          # Floor before ceiling, as in the mypy step. Zero files analysed is
+          # the extreme of this comparison rather than a case of its own.
+          if [ "$analysed" -lt "$PYRIGHT_MIN_FILES" ]; then
+            echo "::error::pyright analysed ${analysed} files, below the ${PYRIGHT_MIN_FILES} recorded in .github/ratchets.env. This run measured less of the package than the ceiling was measured over, so whatever it found is not comparable with it — that is a narrower run, not better code. Check the exclude list and the path this step passes. If source files were genuinely removed, lower the floor in this commit with that reason beside it — in BOTH .github/ratchets.env (PYRIGHT_MIN_FILES) and .github/RATCHETS.md, which spells the figure twice, in the section heading and in the expected output under it; tests/test_ratchet_documents_agree.py holds all three to each other, so moving one leaves the suite red. Work the amount out rather than copying mypy's: deleting a module with no stub beside it is one off each floor, but deleting a module together with the stub that shadows it is TWO off this floor and one off mypy's, because pyright analyses both files and mypy checks the stub instead of the module. And unlike raising a ceiling, deleting a module is routine rather than rare."
+            exit 1
+          fi
+          if [ "$count" -gt "$PYRIGHT_MAX" ]; then
+            echo "::error::pyright errors rose to ${count}, above the ${PYRIGHT_MAX} recorded in .github/ratchets.env."
+            python3 -c '
+          import collections, json, sys
+          diagnostics = json.load(open(sys.argv[1]))["generalDiagnostics"]
+          counted = collections.Counter(
+              d.get("rule", "<no rule>") for d in diagnostics if d["severity"] == "error"
+          )
+          for rule, n in counted.most_common(25):
+              print(f"{n:6d}  {rule}")
+          ' pyright.json
+            exit 1
+          fi
+          if [ "$count" -lt "$PYRIGHT_MAX" ]; then
+            echo "::notice::pyright errors are down to ${count}; lower PYRIGHT_MAX in .github/ratchets.env to hold the ground."
+          fi
+      - name: No duplicate clones outside the baseline
+        run: |
+          # Fingerprint-keyed, not line-keyed: moving a known clone is not an
+          # event, adding one is. --update-baseline rewrites the file when a
+          # clone is genuinely removed or deliberately accepted.
+          # Version-pinned because the fingerprints are only comparable
+          # against the detector that produced them (and because --baseline
+          # does not exist before 5.x).
+          bash scripts/check-clones.sh
+      # Every declared boundary is now enforced, including sibling-cycle checks.
+      - name: Import architecture boundaries
+        working-directory: bindings/python
+        run: >-
+          PYTHONPATH=. uvx --from import-linter==2.15 lint-imports
+          --config .importlinter
+
+  clippy:
+    name: Clippy Warning Ratchet
+    runs-on: ubuntu-latest
+    # Generous only for the first, cold run: clippy's units are fingerprinted
+    # separately from the test build's, so it compiles the dependency tree in
+    # check mode once and restores it from cache thereafter.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+        with:
+          lfs: false
+      # Pinned, not `stable`: a newer toolchain can add lints, and a count
+      # that moves when nobody changed code is not a ratchet. 1.94.0 is the
+      # toolchain CLIPPY_MAX was measured on; bumping it and re-measuring the
+      # ceiling is one deliberate commit. The rust-tests job stays on stable
+      # — compiling against the current compiler is its job, not this one's.
+      - uses: dtolnay/rust-toolchain@fef00d40025f7fd8f1ec759cbbb0f577ddfc3133   # 1.94.0 branch: installs 1.94.0
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4   # v2.9.1
+        with:
+          key: clippy-1.94.0
+          # Clippy's units are keyed separately from the test build's, so this
+          # cache is its own; main runs write it, PRs restore it.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Clippy warnings are not above their baseline
+        run: |
+          . .github/ratchets.env
+          # Same three patterns as the ruff step, for the same reason: an
+          # empty ceiling and a ten-digit one both make every comparison that
+          # reads it exit 2, which reads as false, and the step passes while
+          # measuring nothing.
+          case "${CLIPPY_MAX:-}" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::CLIPPY_MAX is missing, is not a whole number, or has ten or more digits and cannot be compared by the shell, in .github/ratchets.env (read: '${CLIPPY_MAX:-}'). Refusing to compare against it."
+              exit 1
+              ;;
+          esac
+          # Not `-D warnings`: that demands a mass fix. The count is the
+          # contract, and it only goes down. Warnings without a lint code are
+          # the "N warnings emitted" summaries — counting those would count
+          # every warning twice.
+          cargo clippy --workspace --all-targets --message-format=json > clippy.json
+          # The record count is what makes this fail closed. Skipping non-JSON
+          # lines is right for cargo's chatter but it also means an empty or
+          # plain-text clippy.json counts cleanly to zero — which is at or
+          # under any ceiling, so the step would pass and invite someone to
+          # lower the ceiling to nothing. This workspace cannot emit zero
+          # cargo records, so zero records is a broken run, not a clean one.
+          if ! count=$(python3 -c '
+          import json, sys
+          records = 0
+          n = 0
+          for line in open(sys.argv[1]):
+              line = line.strip()
+              if not line.startswith("{"):
+                  continue
+              records += 1
+              message = json.loads(line).get("message")
+              if not isinstance(message, dict) or message.get("level") != "warning":
+                  continue
+              if (message.get("code") or {}).get("code"):
+                  n += 1
+          if not records:
+              sys.exit("no cargo JSON records in clippy.json; refusing to report zero warnings")
+          print(n)
+          ' clippy.json); then
+            echo "::error::Could not read a warning count out of clippy.json — see the parse error above. A clippy that failed to run is not a clippy that found nothing."
+            exit 1
+          fi
+          case "$count" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::The clippy count did not parse as a whole number the shell can compare (read: '${count}')."
+              exit 1
+              ;;
+          esac
+          echo "clippy: ${count} warnings (ceiling ${CLIPPY_MAX})"
+          if [ "$count" -gt "$CLIPPY_MAX" ]; then
+            echo "::error::Clippy warnings rose to ${count}, above the ${CLIPPY_MAX} recorded in .github/ratchets.env."
+            cargo clippy --workspace --all-targets 2>&1 | grep -E '^(warning|error)' | sort | uniq -c | sort -rn | head -30 || true
+            exit 1
+          fi
+          if [ "$count" -lt "$CLIPPY_MAX" ]; then
+            echo "::notice::Clippy warnings are down to ${count}; lower CLIPPY_MAX in .github/ratchets.env to hold the ground."
+          fi
+
+  rust-notices:
+    name: Rust Crate Notices
+    # The core's extension links a few hundred crates, most of them MIT, which
+    # asks every copy to carry the crate's notice.
+    # bindings/python/third-party-notices.txt carries them, and license-files
+    # puts it in every wheel and the sdist. scripts/rust_notices.py says how
+    # it is made.
+    #
+    # The file is committed rather than written by the build jobs, because
+    # license-files names it and every build of the core needs it present:
+    # maturin develop at a keyboard, the manylinux image, maturin-action on
+    # macOS and Windows, and pip building from the sdist. None of them has
+    # cargo-about, and a file only CI could write would break the others. So
+    # this job holds the committed file to Cargo.lock, twice over:
+    #
+    #   check   what cargo compiles into the extension, on each platform the
+    #           notices cover, against the crates the file lists -- none
+    #           missing, none extra -- by cargo's own resolver and not
+    #           cargo-about's reading of it. Then every notice in those
+    #           crates, carried or accounted for: licence files below their
+    #           roots, licences written out in their files under copyrights
+    #           their own licence files do not name, notices at their roots
+    #           that cargo-about did not read as licences, and their own
+    #           licence texts wherever a standard text stands in for one,
+    #           which is how a licence file cargo-about can no longer read
+    #           shows. It is heuristic where it reads a copyright line, and
+    #           every exception it grants is named in the script with its
+    #           reason.
+    #   write   the file again, with cargo-about, which must come out as the
+    #           file committed: a dependency moved without rewriting the
+    #           notices fails here.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Pinned twice, here and in scripts/rust_notices.py, which refuses any
+      # other version. The digest is of the crate archive crates.io serves for
+      # this version, the same one its index records. Moving the version means
+      # moving both, and rewriting the notices with the new version.
+      CARGO_ABOUT_VERSION: "0.9.2"
+      CARGO_ABOUT_SHA256: 0cd19d99696eb83f0a2d6ab7a347b14968d2980416c8cca827ded220e6e9c4bb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+        with:
+          # Only *.parquet and *.csv are LFS-tracked, and nothing here reads one.
+          lfs: false
+      # The clippy job's toolchain, pinned for the same reason: cargo's
+      # resolver is what says what is linked, and a newer cargo is a different
+      # resolver. cargo-about needs 1.88 or later.
+      - uses: dtolnay/rust-toolchain@fef00d40025f7fd8f1ec759cbbb0f577ddfc3133   # 1.94.0 branch: installs 1.94.0
+      - name: Cache the crates Cargo.lock names
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
+      - name: Cache cargo-about
+        id: cargo-about
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6
+        with:
+          path: ~/.local/cargo-about
+          key: ${{ runner.os }}-cargo-about-${{ env.CARGO_ABOUT_VERSION }}-${{ env.CARGO_ABOUT_SHA256 }}-rust-1.94.0
+      # From the crate archive, checked against the digest above before it is
+      # unpacked, and built with the lockfile it was published with (--locked),
+      # so every dependency is the one its author tested and cargo checks each
+      # against the registry's checksum. Built from source rather than taken
+      # as a release binary, so that what runs is what the digest covers.
+      - name: Install cargo-about ${{ env.CARGO_ABOUT_VERSION }}, checked
+        if: steps.cargo-about.outputs.cache-hit != 'true'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL -o /tmp/cargo-about.crate \
+            "https://static.crates.io/crates/cargo-about/cargo-about-${CARGO_ABOUT_VERSION}.crate"
+          echo "${CARGO_ABOUT_SHA256}  /tmp/cargo-about.crate" | sha256sum --check --strict
+          mkdir /tmp/cargo-about-src
+          tar -xzf /tmp/cargo-about.crate -C /tmp/cargo-about-src --strip-components=1
+          cargo install --locked --path /tmp/cargo-about-src --features cli --root ~/.local/cargo-about
+      - name: Put cargo-about on PATH
+        run: |
+          echo "$HOME/.local/cargo-about/bin" >> "$GITHUB_PATH"
+      - name: The notices list every crate the extension is built from, and carry every notice in them
+        run: python3 scripts/rust_notices.py check
+      # `git status` rather than `git diff`, which cannot see a file the
+      # script created and nobody committed.
+      - name: The committed notices are what cargo-about writes from Cargo.lock
+        run: |
+          cargo about --version
+          python3 scripts/rust_notices.py write
+          if [ -n "$(git status --porcelain -- bindings/python/third-party-notices.txt)" ]; then
+            git diff --stat -- bindings/python/third-party-notices.txt
+            git diff -- bindings/python/third-party-notices.txt | head -80
+            echo "::error::bindings/python/third-party-notices.txt is not what scripts/rust_notices.py writes from Cargo.lock at this commit. Run it with cargo-about ${CARGO_ABOUT_VERSION} on PATH -- python3 scripts/rust_notices.py write -- and commit the result: every wheel and the sdist ship this file as it stands."
+            exit 1
+          fi
+
   wheel-import-smoke:
-    name: Wheel Import Smoke (both names)
+    name: Wheel Import Smoke
     # The editable install used by python-tests cannot prove the WHEEL ships
-    # the gaspatchio_core alias — python-packages in pyproject.toml is
-    # otherwise verified by nothing. Install one built wheel into a clean venv
-    # and import both names from a neutral cwd (sys.path[0] must not rescue a
-    # broken wheel from the source tree).
+    # what python-packages in pyproject.toml lists -- nothing else verifies
+    # it. Install one built wheel into a clean venv and import it from a
+    # neutral cwd (sys.path[0] must not rescue a broken wheel from the source
+    # tree). The gaspatchio_core import name was removed in 1.0.0, as the
+    # deprecation warning it carried from 0.9.0 said it would be, so the
+    # wheel must not ship it.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -111,40 +712,67 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
         with:
-          version: "latest"
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
       - name: Cache maturin build artifacts
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6
         with:
           path: bindings/python/target
           key: ${{ runner.os }}-maturin-dev-${{ hashFiles('**/Cargo.lock', 'bindings/python/**/*.rs', 'core/src/**/*.rs') }}
+      # From maturin's x86-64 Linux wheel, checked against the digest at the top
+      # of this file before uv runs it. On this Python it depends on nothing.
       - name: Build one wheel
-        run: uvx maturin build --profile dev --out /tmp/smoke-dist
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL -o "/tmp/${MATURIN_WHEEL}" \
+            "https://files.pythonhosted.org/packages/py3/m/maturin/${MATURIN_WHEEL}"
+          echo "${MATURIN_SHA256}  /tmp/${MATURIN_WHEEL}" | sha256sum --check --strict
+          uvx --from "/tmp/${MATURIN_WHEEL}" maturin build --profile dev --out /tmp/smoke-dist
         working-directory: bindings/python
-      - name: Install into a clean venv and assert the alias from a neutral cwd
+      - name: Install into a clean venv and import it from a neutral cwd
         run: |
           uv venv /tmp/smoke-venv --python 3.12
           uv pip install --python /tmp/smoke-venv/bin/python /tmp/smoke-dist/*.whl
           cd /tmp
           /tmp/smoke-venv/bin/python -c '
+          import importlib.util
           import gaspatchio
-          import gaspatchio_core
-          assert gaspatchio_core is gaspatchio, "alias is not the same module"
           import gaspatchio.assumptions
-          import gaspatchio_core.assumptions
-          assert gaspatchio_core.assumptions is gaspatchio.assumptions
-          import gaspatchio_core._internal
-          print("wheel ships both names; alias is identity")
+          import gaspatchio._internal
+          assert importlib.util.find_spec("gaspatchio_core") is None, "the wheel still ships gaspatchio_core"
+          print("wheel ships gaspatchio and its extension, and no gaspatchio_core")
           '
 
   manylinux:
     name: Manylinux Build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    # On a tag, and on a manual dispatch, which runs the whole release lane on
+    # a branch -- every build and every check -- and publishes nothing.
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     needs: [rust-tests, python-tests]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+        with:
+          lfs: false
+      # The wheel ships the tutorials, and most of their data files are LFS
+      # objects. A checkout without them leaves pointer files in their place,
+      # and the wheel packs the pointers: 0.9.0 on PyPI carries 81 of them,
+      # so levels 3, 4 and 5 of `gspio tutorial init` hand out files that are
+      # not parquet. A wheel ships the package and nothing else of the tree,
+      # so the package's objects are the ones it needs. The release job
+      # refuses any distribution that holds a pointer.
+      - name: Pull the LFS objects the wheel ships
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/gaspatchio/**"
+          scope: wheel-${{ runner.os }}
       - name: Build with Docker
-        run: docker run --rm -v $(pwd):/io -w /io/bindings/python ghcr.io/pyo3/maturin build --release --find-interpreter
+        env:
+          # Pinned by digest, the way every action here is pinned by commit: this
+          # image builds the Linux wheels the release publishes, and a tag can
+          # move under a run. The digest is the multi-arch index that v1.15.0 and
+          # latest both named on 2026-09-29.
+          MATURIN_IMAGE: ghcr.io/pyo3/maturin@sha256:1c897d72a79c083cdea8829662f7b28e7657cf5b0d7f44fb4231e55998cf52ed   # v1.15.0
+        run: docker run --rm -v "$(pwd)":/io -w /io/bindings/python "$MATURIN_IMAGE" build --release --find-interpreter
       - name: List build artifacts
         run: find . -name "*.whl" -o -name "*.tar.gz"
       - name: Create dist directory
@@ -172,8 +800,9 @@ jobs:
     # never hit (measured: 44 min warm vs 51 cold). Per-interpreter legs run in
     # parallel and each keeps a cache that actually hits. The matrix must cover
     # every CPython allowed by requires-python in bindings/python/pyproject.toml.
-    # These jobs also surface Windows build breakage between releases.
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    # These jobs also surface Windows build breakage between releases. A manual
+    # dispatch builds them as well, for the release lane run on a branch.
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     needs: [rust-tests, python-tests]
     strategy:
       matrix:
@@ -183,6 +812,20 @@ jobs:
         python: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+        with:
+          lfs: false
+      # The wheel ships the tutorials, and most of their data files are LFS
+      # objects. A checkout without them leaves pointer files in their place,
+      # and the wheel packs the pointers: 0.9.0 on PyPI carries 81 of them,
+      # so levels 3, 4 and 5 of `gspio tutorial init` hand out files that are
+      # not parquet. A wheel ships the package and nothing else of the tree,
+      # so the package's objects are the ones it needs. The release job
+      # refuses any distribution that holds a pointer.
+      - name: Pull the LFS objects the wheel ships
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/gaspatchio/**"
+          scope: wheel-${{ runner.os }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97   # v7
         id: python
         with:
@@ -198,6 +841,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b   # v1
         with:
+          maturin-version: v${{ env.MATURIN_VERSION }}
           target: ${{ matrix.platform.target }}
           # Pin the interpreter to the exact one setup-python installed —
           # `--find-interpreter` would build for every python on the runner
@@ -205,7 +849,7 @@ jobs:
           args: --release --out dist -i ${{ steps.python.outputs.python-path }}
           working-directory: bindings/python
       - name: Upload wheels
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
         with:
           name: wheels-windows-${{ matrix.platform.target }}-py${{ matrix.python }}
@@ -216,7 +860,7 @@ jobs:
     # Runs on main pushes for the same cache-warming reason as the windows job,
     # and one leg per (target, interpreter) for the same reason — see the
     # comment there. Keep the python matrix in sync with requires-python.
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     needs: [rust-tests, python-tests]
     strategy:
       matrix:
@@ -228,6 +872,20 @@ jobs:
         python: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+        with:
+          lfs: false
+      # The wheel ships the tutorials, and most of their data files are LFS
+      # objects. A checkout without them leaves pointer files in their place,
+      # and the wheel packs the pointers: 0.9.0 on PyPI carries 81 of them,
+      # so levels 3, 4 and 5 of `gspio tutorial init` hand out files that are
+      # not parquet. A wheel ships the package and nothing else of the tree,
+      # so the package's objects are the ones it needs. The release job
+      # refuses any distribution that holds a pointer.
+      - name: Pull the LFS objects the wheel ships
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/gaspatchio/**"
+          scope: wheel-${{ runner.os }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97   # v7
         id: python
         with:
@@ -242,11 +900,12 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b   # v1
         with:
+          maturin-version: v${{ env.MATURIN_VERSION }}
           target: ${{ matrix.platform.target }}
           args: --release --out dist -i ${{ steps.python.outputs.python-path }}
           working-directory: bindings/python
       - name: Upload wheels
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
         with:
           name: wheels-macos-${{ matrix.platform.target }}-py${{ matrix.python }}
@@ -254,13 +913,26 @@ jobs:
 
   sdist:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     needs: [rust-tests, python-tests]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+        with:
+          lfs: false
+      # The sdist ships more of the tree than a wheel does: the package with
+      # its tutorials and, from the two crates it is built from, the core's
+      # tests and job scripts and core/benches' fixtures, all holding LFS
+      # objects. So this job pulls every LFS object under both crates. The
+      # release job refuses any distribution that holds a pointer.
+      - name: Pull the LFS objects the sdist ships
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: "bindings/python/**,core/**"
+          scope: sdist
       - name: Build sdist
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b   # v1
         with:
+          maturin-version: v${{ env.MATURIN_VERSION }}
           command: sdist
           args: --out dist
           working-directory: bindings/python
@@ -269,6 +941,121 @@ jobs:
         with:
           name: wheels-sdist
           path: bindings/python/dist
+
+  engine-viewer-dists:
+    name: Engine and Viewer Distributions
+    # gaspatchio-jax and gaspatchio-viewer are pure Python: one sdist and one
+    # py3-none-any wheel each, which hatchling builds from the tree, so neither
+    # needs the platform matrix above. They are built on every run rather than
+    # only on tags, so that the first build of either is never the release's,
+    # and the strict metadata check the release job applies runs here as well.
+    # A tag or a manual dispatch uploads them, into the wheels-* namespace the
+    # release-dists job merges into dist/ beside the maturin wheels.
+    #
+    # --no-sources builds each as an installer outside this repository sees it:
+    # [tool.uv.sources] points both lockfiles at this checkout, and a
+    # published build must not lean on that.
+    #
+    # The viewer's JavaScript, styles and fonts are the committed
+    # viewer/python/gaspatchio_viewer/assets, packaged as they stand, which is
+    # how every install from the tree has always built it; no JavaScript
+    # toolchain runs when the wheel is built or installed. The first step
+    # proves those files are what viewer/build.mjs makes from viewer/src at
+    # this commit, so a wheel cannot ship a page older than its source. It runs
+    # here rather than only in viewer.yml because a path filter sees only the
+    # first 3,000 files of a diff, and a large pull request never starts that
+    # workflow.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+        with:
+          # Neither distribution ships an LFS-tracked file.
+          lfs: false
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020   # v7.0.0
+        with:
+          # Exact, not "24": the bundle's gzip ceiling in .github/ratchets.env is
+          # this Node's zlib output, which moves between Node releases. Bump the
+          # version and re-measure VIEWER_BUNDLE_GZIP_MAX in one commit.
+          node-version: 24.21.0
+          cache: npm
+          cache-dependency-path: viewer/package-lock.json
+      # The build also writes third-party-notices.txt from its metafile, so
+      # this holds the notices to the packages actually bundled. `git status`
+      # rather than `git diff`, which cannot see a file the build created and
+      # nobody committed.
+      - name: The committed viewer assets are the build of viewer/src
+        working-directory: viewer
+        run: |
+          npm ci
+          node build.mjs --copy-assets
+          if [ -n "$(git status --porcelain -- python/gaspatchio_viewer/assets)" ]; then
+            git status --short -- python/gaspatchio_viewer/assets
+            echo "::error::viewer/python/gaspatchio_viewer/assets is not what viewer/build.mjs builds from viewer/src at this commit. Run 'npm run copy-assets' in viewer/ and commit the result: the wheel ships these files as they stand."
+            exit 1
+          fi
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
+      # With hatchling, the build backend both name, and what it needs, at the
+      # versions and digests .github/pins/hatchling.txt holds: these files go
+      # to PyPI, so the backend that writes them is pinned like the tools.
+      - name: Build the sdist and wheel of each
+        run: |
+          uv build --no-sources --build-constraints .github/pins/hatchling.txt --require-hashes \
+            --out-dir dist engines/jax
+          uv build --no-sources --build-constraints .github/pins/hatchling.txt --require-hashes \
+            --out-dir dist viewer/python
+      # twine from its wheel, checked against the digest at the top of this
+      # file, on the versions .github/pins/twine.txt holds.
+      - name: Check distribution metadata
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL -o "/tmp/${TWINE_WHEEL}" \
+            "https://files.pythonhosted.org/packages/py3/t/twine/${TWINE_WHEEL}"
+          echo "${TWINE_SHA256}  /tmp/${TWINE_WHEEL}" | sha256sum --check --strict
+          uvx --from "/tmp/${TWINE_WHEEL}" --constraints .github/pins/twine.txt \
+            twine check --strict dist/*.whl dist/*.tar.gz
+      # twine reads a License-File header and does not look for the file, so a
+      # wheel that lost a text still passes the step above.
+      - name: Each wheel carries the licence texts its pyproject.toml lists
+        run: |
+          python3 - <<'PY'
+          import sys
+          import tomllib
+          import zipfile
+          from pathlib import Path
+
+          failed = False
+          for root in ("engines/jax", "viewer/python"):
+              project = tomllib.loads(Path(root, "pyproject.toml").read_text())["project"]
+              stem = project["name"].replace("-", "_")
+              wanted = sorted(project["license-files"])
+              wheels = sorted(Path("dist").glob(f"{stem}-*.whl"))
+              if len(wheels) != 1:
+                  print(f"::error::expected one {stem} wheel in dist/, found {len(wheels)}")
+                  failed = True
+                  continue
+              prefix = f"{stem}-{project['version']}.dist-info/licenses/"
+              with zipfile.ZipFile(wheels[0]) as wheel:
+                  carried = sorted(n[len(prefix):] for n in wheel.namelist() if n.startswith(prefix))
+              print(f"{wheels[0].name}: {', '.join(carried) or 'no licence text'}")
+              if carried != wanted:
+                  print(f"::error::{wheels[0].name} carries {carried}; {root}/pyproject.toml lists {wanted}")
+                  failed = True
+          sys.exit(failed)
+          PY
+      - name: Upload the engine and viewer distributions
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
+        with:
+          name: wheels-engine-viewer
+          # Named file by file: `uv build` also leaves a .gitignore in dist/.
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
 
   skill-structure-tests:
     name: Skill Structure Tests (Tier 1)
@@ -287,6 +1074,9 @@ jobs:
           include: "bindings/python/**"
           scope: python
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
       - name: Install dependencies
         run: uv sync --locked
       - name: Run skill structure tests
@@ -311,6 +1101,9 @@ jobs:
           include: "bindings/python/**"
           scope: python
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
       - name: Install dependencies
         run: uv sync --locked
       - name: Run tutorial base models
@@ -333,17 +1126,43 @@ jobs:
             uv run python "$model_file" || exit 1
           done
 
-  release:
-    name: Release
+  # One tag publishes three distributions: the core, and the engine and the
+  # viewer that its jax and viewer extras pin exactly. Four jobs, in order:
+  #
+  #   release-dists  every file the build jobs made, checked as one set and,
+  #                  on a tag, against the tag; then sorted into one artifact
+  #                  per distribution. A manual dispatch runs it too, so the
+  #                  whole lane can be tried on a branch.
+  #   publish-gaspatchio-jax, publish-gaspatchio-viewer
+  #                  one new PyPI project each, each in a GitHub environment
+  #                  of its own. PyPI's pending publisher -- the only kind a
+  #                  project that does not exist yet can have -- is unique on
+  #                  repository, workflow and environment whatever the project
+  #                  name, and one token converts one pending publisher. So two
+  #                  new projects need two environments, and uploads in one
+  #                  job would publish the core and at most one of them.
+  #   publish-gaspatchio
+  #                  the core, under the publisher it already has (CI.yml, no
+  #                  environment), after both: an extra that names a version
+  #                  the index does not hold is never published.
+  #   release        the GitHub Release, after all three are on the index.
+  #
+  # The publish jobs run only for a tag in the public repository. A tag in
+  # any other repository, a fork for instance, builds and checks everything
+  # and makes a GitHub Release there, and uploads nothing to PyPI.
+  release-dists:
+    name: Release Distributions
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: [rust-tests, python-tests, manylinux, windows, macos, sdist]
-    permissions:
-      id-token: write   # PyPI Trusted Publishing (OIDC) + PEP 740 attestation signing
-      contents: write   # create/publish the GitHub Release
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    needs: [rust-tests, python-tests, rust-notices, manylinux, windows, macos, sdist, engine-viewer-dists]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7 — so syft can read Cargo.lock / pyproject at the tag
+        with:
+          lfs: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7 — provides `uvx` for `twine check`
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
         with:
           pattern: wheels-*
@@ -351,6 +1170,75 @@ jobs:
           path: dist
       - name: List distributions
         run: ls -l dist
+      # Read from the built files' own metadata, not from the tree: each of
+      # the three is here as wheels and one sdist, at one version; the core's
+      # extras pin exactly the engine and viewer built beside it; the engine
+      # pins exactly the core built; and on a tag, the tag is "v" + the
+      # core's version.
+      - name: The three distributions agree with each other and with the tag
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          import zipfile
+          from email.parser import Parser
+          from pathlib import Path
+
+          failed = False
+
+          def fail(message):
+              global failed
+              failed = True
+              print(f"::error::{message}")
+
+          def metadata(wheel):
+              with zipfile.ZipFile(wheel) as archive:
+                  name = next(n for n in archive.namelist() if n.endswith(".dist-info/METADATA"))
+                  return Parser().parsestr(archive.read(name).decode())
+
+          def pins(requires, project, extra=None):
+              found = []
+              for line in requires:
+                  spec, _, marker = line.partition(";")
+                  exact = re.fullmatch(r"\s*([A-Za-z0-9._-]+)\s*==\s*([^\s,]+)\s*", spec)
+                  under = re.search(r"extra\s*==\s*['\"]([^'\"]+)['\"]", marker)
+                  named = exact and re.sub(r"[-_.]+", "-", exact.group(1)).lower() == project
+                  if named and (under.group(1) if under else None) == extra:
+                      found.append(exact.group(2))
+              return found
+
+          versions = {}
+          for project in ("gaspatchio", "gaspatchio-jax", "gaspatchio-viewer"):
+              stem = project.replace("-", "_")
+              wheels = sorted(Path("dist").glob(f"{stem}-*.whl"))
+              sdists = sorted(Path("dist").glob(f"{stem}-*.tar.gz"))
+              print(f"{project}: {len(wheels)} wheel(s), {len(sdists)} sdist(s)")
+              if not wheels or len(sdists) != 1:
+                  fail(f"dist/ should hold at least one {project} wheel and exactly one {project} sdist")
+                  continue
+              seen = {metadata(wheel)["Version"] for wheel in wheels}
+              if len(seen) != 1:
+                  fail(f"the {project} wheels disagree on their version: {sorted(seen)}")
+                  continue
+              (version,) = seen
+              if sdists[0].name != f"{stem}-{version}.tar.gz":
+                  fail(f"the {project} sdist is {sdists[0].name}, beside wheels of {version}")
+              versions[project] = version
+
+          if len(versions) == 3:
+              print(versions)
+              core = metadata(sorted(Path("dist").glob("gaspatchio-*.whl"))[0]).get_all("Requires-Dist") or []
+              engine = metadata(sorted(Path("dist").glob("gaspatchio_jax-*.whl"))[0]).get_all("Requires-Dist") or []
+              for extra, project in (("jax", "gaspatchio-jax"), ("viewer", "gaspatchio-viewer")):
+                  if pins(core, project, extra) != [versions[project]]:
+                      fail(f"gaspatchio[{extra}] pins {project} to {pins(core, project, extra)}; the {project} built is {versions[project]}")
+              if pins(engine, "gaspatchio") != [versions["gaspatchio"]]:
+                  fail(f"gaspatchio-jax pins gaspatchio to {pins(engine, 'gaspatchio')}; the gaspatchio built is {versions['gaspatchio']}")
+              if os.environ["GITHUB_REF_TYPE"] == "tag" and os.environ["GITHUB_REF_NAME"] != f"v{versions['gaspatchio']}":
+                  fail(f"this is tag {os.environ['GITHUB_REF_NAME']}, and it would publish gaspatchio {versions['gaspatchio']}: the tag that publishes it is v{versions['gaspatchio']}")
+          sys.exit(failed)
+          PY
 
       - name: Generate CycloneDX SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610   # v0
@@ -358,30 +1246,264 @@ jobs:
           path: .                       # captures Cargo.lock, pyproject, and the wheels now in dist/
           format: cyclonedx-json
           output-file: sbom.cdx.json
-          upload-release-assets: false  # we attach it manually in the release step
+          upload-release-assets: false  # the release job attaches it
 
+      # Every distribution is opened and any member that is a git-lfs pointer
+      # rather than the file it stands for fails the run, before anything is
+      # published. The build jobs pull the package's LFS objects; this is
+      # what proves they did.
+      - name: No distribution carries a git-lfs pointer
+        run: |
+          python3 - <<'PY'
+          import sys
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          SIGNATURE = b"version https://git-lfs.github.com/spec/v1"
+          failed = False
+          for dist in sorted(Path("dist").iterdir()):
+              pointers = []
+              if dist.suffix == ".whl":
+                  with zipfile.ZipFile(dist) as archive:
+                      for name in archive.namelist():
+                          with archive.open(name) as member:
+                              if member.read(len(SIGNATURE)) == SIGNATURE:
+                                  pointers.append(name)
+              elif dist.name.endswith(".tar.gz"):
+                  with tarfile.open(dist) as archive:
+                      for member in archive.getmembers():
+                          handle = archive.extractfile(member) if member.isfile() else None
+                          if handle is not None and handle.read(len(SIGNATURE)) == SIGNATURE:
+                              pointers.append(member.name)
+              if pointers:
+                  failed = True
+                  print(f"::error::{dist.name} carries {len(pointers)} git-lfs pointer file(s) in place of their content, among them {pointers[0]}")
+          sys.exit(failed)
+          PY
+
+      # Each wheel's .dist-info/licenses/ holds exactly what its project's
+      # pyproject.toml lists in license-files, and each sdist's PKG-INFO names
+      # the same files, beside it. Every one of them is the file this tag
+      # holds, byte for byte: the core's third-party-notices.txt, above all,
+      # which the Rust Crate Notices job holds to Cargo.lock at this commit. So
+      # a distribution built from anything else -- a stale tree, a cached
+      # build, a copy that lost its notices -- fails here rather than ships.
+      # The core's wheels come from four build paths (the manylinux image,
+      # maturin-action on Windows and macOS, and pip building the sdist), and
+      # twine reads a License-File header without looking for the file.
+      - name: Every distribution carries the licence files its project lists, as the tag holds them
+        run: |
+          python3 - <<'PY'
+          import sys
+          import tarfile
+          import tomllib
+          import zipfile
+          from email.parser import Parser
+          from pathlib import Path
+
+          failed = False
+
+          def fail(message):
+              global failed
+              failed = True
+              print(f"::error::{message}")
+
+          for root in ("bindings/python", "engines/jax", "viewer/python"):
+              project = tomllib.loads(Path(root, "pyproject.toml").read_text())["project"]
+              stem = project["name"].replace("-", "_")
+              wanted = sorted(project["license-files"])
+              tree = {name: Path(root, name).read_bytes() for name in wanted}
+              prefix = f"{stem}-{project['version']}.dist-info/licenses/"
+              for wheel in sorted(Path("dist").glob(f"{stem}-*.whl")):
+                  with zipfile.ZipFile(wheel) as archive:
+                      carried = sorted(n[len(prefix):] for n in archive.namelist() if n.startswith(prefix))
+                      if carried != wanted:
+                          fail(f"{wheel.name} carries {carried}; {root}/pyproject.toml lists {wanted}")
+                          continue
+                      for name in wanted:
+                          if archive.read(prefix + name) != tree[name]:
+                              fail(f"{wheel.name}'s {name} is not {root}/{name} as this tag holds it")
+              for sdist in sorted(Path("dist").glob(f"{stem}-*.tar.gz")):
+                  top = f"{stem}-{project['version']}/"
+                  with tarfile.open(sdist) as archive:
+                      info = Parser().parsestr(archive.extractfile(top + "PKG-INFO").read().decode())
+                      named = sorted(info.get_all("License-File") or [])
+                      if named != wanted:
+                          fail(f"{sdist.name}'s PKG-INFO names {named}; {root}/pyproject.toml lists {wanted}")
+                          continue
+                      for name in wanted:
+                          try:
+                              held = archive.extractfile(top + name).read()
+                          except KeyError:
+                              held = None
+                          if held != tree[name]:
+                              fail(f"{sdist.name} does not hold {name} as {root}/{name} is at this tag")
+          sys.exit(failed)
+          PY
+
+      # As in engine-viewer-dists: twine from its checked wheel.
       - name: Check distribution metadata
-        run: uvx twine check --strict dist/*
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL -o "/tmp/${TWINE_WHEEL}" \
+            "https://files.pythonhosted.org/packages/py3/t/twine/${TWINE_WHEEL}"
+          echo "${TWINE_SHA256}  /tmp/${TWINE_WHEEL}" | sha256sum --check --strict
+          uvx --from "/tmp/${TWINE_WHEEL}" --constraints .github/pins/twine.txt \
+            twine check --strict dist/*
 
+      # One directory, and one artifact, per distribution, so that each
+      # publish job can see only the files it publishes. Anything in dist/
+      # that belongs to none of the three fails here rather than going out.
+      - name: Sort the distributions into one set each
+        run: |
+          for stem in gaspatchio gaspatchio_jax gaspatchio_viewer; do
+            mkdir -p "pypi/$stem"
+            mv dist/"$stem"-*.whl dist/"$stem"-*.tar.gz "pypi/$stem"/
+          done
+          if [ -n "$(ls -A dist)" ]; then
+            echo "::error::dist/ holds files that belong to none of the three distributions:"
+            ls -l dist
+            exit 1
+          fi
+          ls -lR pypi
+      - name: Upload the core's files for PyPI
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
+        with:
+          name: pypi-gaspatchio
+          path: pypi/gaspatchio
+          if-no-files-found: error
+      - name: Upload the engine's files for PyPI
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
+        with:
+          name: pypi-gaspatchio-jax
+          path: pypi/gaspatchio_jax
+          if-no-files-found: error
+      - name: Upload the viewer's files for PyPI
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
+        with:
+          name: pypi-gaspatchio-viewer
+          path: pypi/gaspatchio_viewer
+          if-no-files-found: error
+      - name: Upload the SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7
+        with:
+          name: release-sbom
+          path: sbom.cdx.json
+          if-no-files-found: error
+
+  # skip-existing, in all three: an upload goes file by file, so a run that
+  # fails partway leaves some files on the index and not the rest, and PyPI
+  # never accepts a file twice. With it, re-running the failed job skips what
+  # already landed and uploads what did not. It only skips a file whose name
+  # is already there; it cannot change one.
+  publish-gaspatchio-jax:
+    name: Publish gaspatchio-jax
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') && github.repository == 'gaspatchio/gaspatchio'
+    needs: [release-dists]
+    # The environment is what gives this upload a trusted publisher of its
+    # own on PyPI; see the note above release-dists.
+    environment: pypi-gaspatchio-jax
+    permissions:
+      id-token: write   # PyPI Trusted Publishing (OIDC) + PEP 740 attestation signing
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+        with:
+          name: pypi-gaspatchio-jax
+          path: dist
       - name: Publish to PyPI (Trusted Publishing)
-        if: github.repository == 'gaspatchio/gaspatchio'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33   # v1.14.2
         with:
           packages-dir: dist
-          # OIDC Trusted Publishing — no token. PEP 740 attestations are generated automatically.
+          skip-existing: true
+
+  publish-gaspatchio-viewer:
+    name: Publish gaspatchio-viewer
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') && github.repository == 'gaspatchio/gaspatchio'
+    needs: [release-dists]
+    environment: pypi-gaspatchio-viewer
+    permissions:
+      id-token: write   # PyPI Trusted Publishing (OIDC) + PEP 740 attestation signing
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+        with:
+          name: pypi-gaspatchio-viewer
+          path: dist
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33   # v1.14.2
+        with:
+          packages-dir: dist
+          skip-existing: true
+
+  publish-gaspatchio:
+    name: Publish gaspatchio
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') && github.repository == 'gaspatchio/gaspatchio'
+    needs: [release-dists, publish-gaspatchio-jax, publish-gaspatchio-viewer]
+    # No environment: the project's publisher on PyPI names none.
+    permissions:
+      id-token: write   # PyPI Trusted Publishing (OIDC) + PEP 740 attestation signing
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+        with:
+          name: pypi-gaspatchio
+          path: dist
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33   # v1.14.2
+        with:
+          packages-dir: dist
+          skip-existing: true
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    # After the core's publish job, which itself needed the other two. In the
+    # public repository that job has to have succeeded; in any other, the
+    # publish jobs are skipped and the Release is made from the checked set.
+    if: >-
+      !cancelled() && startsWith(github.ref, 'refs/tags/') &&
+      needs.release-dists.result == 'success' &&
+      (needs.publish-gaspatchio.result == 'success' ||
+      (needs.publish-gaspatchio.result == 'skipped' && github.repository != 'gaspatchio/gaspatchio'))
+    needs: [release-dists, publish-gaspatchio]
+    permissions:
+      contents: write   # create/publish the GitHub Release
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+        with:
+          pattern: pypi-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+        with:
+          name: release-sbom
+          path: .
       # The org enforces immutable releases: a published release's assets are
       # locked at publish time, so they cannot be uploaded after the fact. Create
       # the release as a DRAFT (mutable), attach every wheel, then publish — the
       # assets lock in atomically. Creating a published release first and uploading
       # afterwards 422s ("Cannot upload assets to an immutable release") and burns
       # the tag. Artifacts were merged into `dist/`; attach those plus the SBOM.
+      #
+      # A tag whose version is a PEP 440 pre-release -- an alpha, beta or
+      # release candidate: v1.0.0a1, v1.0.0b1, v1.0.0rc1 -- makes a GitHub
+      # pre-release, which is never shown as "Latest", as pip and uv never
+      # install one unasked. The label has to be right when the release is
+      # created: an immutable release cannot be relabelled afterwards.
+      # release-dists has already held the tag to "v" + the core's version.
       - name: Create draft release with wheels + SBOM
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
-          gh release create "${{ github.ref_name }}" \
+          prerelease=()
+          if [[ "$TAG" =~ ^v[0-9]+(\.[0-9]+)*(a|b|rc)[0-9]+$ ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$TAG" \
             --repo "${{ github.repository }}" \
-            --draft --verify-tag --generate-notes \
+            --draft --verify-tag --generate-notes "${prerelease[@]}" \
             dist/* sbom.cdx.json
       - name: Publish the release
         env:

@@ -1,0 +1,1232 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "A backward recurrence and a list turned end for end",
+  "cases": [
+    {
+      "id": "list-reverse-jagged",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              20.0,
+              30.0
+            ],
+            [
+              5.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            30.0,
+            20.0,
+            10.0
+          ],
+          [
+            5.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "list-reverse-i64",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              1,
+              2,
+              3,
+              4
+            ],
+            [
+              7,
+              8
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            4,
+            3,
+            2,
+            1
+          ],
+          [
+            8,
+            7
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "list-reverse-bool",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              false
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            false,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "list-reverse-str",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[str]",
+          "values": [
+            [
+              "issue",
+              "anniversary",
+              "maturity"
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[str]",
+        "values": [
+          [
+            "maturity",
+            "anniversary",
+            "issue"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "list-reverse-date",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2025-01-31",
+              "2025-02-28"
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2025-02-28",
+            "2025-01-31"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "list-reverse-null-moves",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              null,
+              3.0
+            ],
+            [
+              null
+            ],
+            [
+              null,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            3.0,
+            null,
+            1.0
+          ],
+          [
+            null
+          ],
+          [
+            2.0,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "list-reverse-null-outer",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            null,
+            [
+              1.0,
+              2.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          null,
+          [
+            2.0,
+            1.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "empty-portfolio-list.reverse",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "list-reverse-twice",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              4.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "call",
+            "name": "list.reverse",
+            "args": [
+              {
+                "op": "col",
+                "name": "x"
+              }
+            ],
+            "attrs": {}
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            2.0,
+            3.0
+          ],
+          [
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "accumulate-reverse-jagged",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            10.0,
+            5.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              0.5,
+              0.5
+            ],
+            [
+              2.0
+            ],
+            []
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            2.75,
+            3.5,
+            3.0
+          ],
+          [
+            21.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "accumulate-reverse-zero-and-negative-multiplier",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            4.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              2.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            9.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "accumulate-reverse-literal-multiplier",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            100.0
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              20.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "lit",
+            "value": 0.5
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            45.0,
+            70.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "accumulate-reverse-literal-addend",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            1.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "lit",
+            "value": 1.0
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            9.0,
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "accumulate-reverse-workbook-rollback",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            0.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.9,
+              0.9,
+              0.9
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            5.23,
+            4.7,
+            3.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "accumulate-between-two-reversals",
+      "covers": [
+        "list.reverse",
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            10.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.9,
+              0.9,
+              0.9
+            ],
+            [
+              2.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "call",
+            "name": "projection.accumulate",
+            "args": [
+              {
+                "op": "col",
+                "name": "initial"
+              },
+              {
+                "op": "call",
+                "name": "list.reverse",
+                "args": [
+                  {
+                    "op": "col",
+                    "name": "multiplier"
+                  }
+                ],
+                "attrs": {}
+              },
+              {
+                "op": "call",
+                "name": "list.reverse",
+                "args": [
+                  {
+                    "op": "col",
+                    "name": "addend"
+                  }
+                ],
+                "attrs": {}
+              }
+            ],
+            "attrs": {
+              "reverse": false
+            }
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            5.23,
+            4.7,
+            3.0
+          ],
+          [
+            21.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "accumulate-reverse-empty-portfolio",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": []
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": []
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-accumulate-reverse-multiplier",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              null,
+              3.0,
+              4.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null,
+            124.0,
+            41.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-accumulate-reverse-addend",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              2.0,
+              2.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              null,
+              4.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null,
+            null,
+            24.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-accumulate-reverse-last-period",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              4.0,
+              null
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-accumulate-reverse-initial",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            null
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              3.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    }
+  ]
+}

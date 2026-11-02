@@ -36,8 +36,8 @@ instead of opening a public issue. When we confirm one:
 
 ## Supported versions
 
-gaspatchio is pre-1.0; security fixes are released against the **latest** version
-published on PyPI. We recommend always tracking the latest release.
+Security fixes are released against the **latest** version published on PyPI. We
+recommend always tracking the latest release.
 
 ## Software Bill of Materials (SBOM)
 

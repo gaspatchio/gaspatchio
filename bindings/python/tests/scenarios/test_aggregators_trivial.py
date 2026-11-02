@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-import math
-
 import polars as pl
 import pytest
 
@@ -92,6 +90,6 @@ def test_sum_merge() -> None:
 
 
 def test_min_max_empty_extract() -> None:
-    """Min/Max on empty state returns NaN."""
-    assert math.isnan(Min("v").extract_output(Min("v").create_accumulator()))
-    assert math.isnan(Max("v").extract_output(Max("v").create_accumulator()))
+    """Min/Max on empty state returns null: nothing seen, nothing answered."""
+    assert Min("v").extract_output(Min("v").create_accumulator()) is None
+    assert Max("v").extract_output(Max("v").create_accumulator()) is None

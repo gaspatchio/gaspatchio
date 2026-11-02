@@ -1,0 +1,352 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Opio Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The drawer, in the identity's tokens and nothing else.
+ *
+ * It is a narrow column of label-and-value rows, and the two decisions here are
+ * both about that narrowness. Values wrap and break rather than being cut off,
+ * because a fingerprint with its tail missing is a fingerprint nobody can check;
+ * and the label column is fixed so that the values line up down the page, which
+ * is what makes a column of them scannable rather than a list of sentences.
+ */
+
+.inspector {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: 0.82rem;
+}
+
+.inspector .tabs {
+  display: flex;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--rule);
+}
+
+/*
+ * Left-aligned, and each tab the width of its own name.
+ *
+ * They used to share the bar between them — `flex: 1 1 0` — which reads right
+ * in a 320 px drawer and badly in a wide one: the Source tab's model file wants the
+ * drawer dragged out towards its 960 px stop, and there the four names sat
+ * marooned in the middle of four quarter-page-wide tabs. A tab bar is a row of
+ * labels, so the labels are what it is the width of.
+ *
+ * Only the horizontal padding grows with the change, and only enough that four
+ * short words read as four tabs rather than as a sentence. The vertical
+ * padding is untouched on purpose: the bar's height is what the panel below it
+ * is laid out against, and the default layout is what the four scripted
+ * reads assert against.
+ */
+.inspector .tab {
+  flex: 0 0 auto;
+  font: inherit;
+  padding: 6px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.inspector .tab:hover {
+  color: var(--red-dark);
+}
+
+.inspector .tab.sel {
+  color: var(--ink);
+  border-bottom-color: var(--red);
+  font-weight: 700;
+}
+
+.inspector .panel {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 8px 10px;
+  min-height: 0;
+}
+
+.inspector .prompt {
+  color: var(--ink-secondary);
+  margin: 8px 0;
+}
+
+.inspector h3 {
+  margin: 14px 0 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.inspector h3:first-child {
+  margin-top: 0;
+}
+
+/* One member of the record, and one fact of the envelope: the same two columns. */
+.member,
+.fact-row,
+.hole-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--rule);
+  align-items: baseline;
+}
+
+.member-name,
+.fact-name {
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+
+.member-value,
+.fact-value {
+  /* Whole, wrapped, never elided: a value cut off is a value nobody can check. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.member .unfold {
+  font: inherit;
+  justify-self: start;
+  padding: 0 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--code-surface);
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.member .unfold:hover {
+  border-color: var(--red-light);
+  color: var(--red-dark);
+}
+
+/* The one amber thing in the drawer, and it says the same thing the chip does. */
+.hole-row {
+  grid-template-columns: 120px 1fr;
+  color: var(--amber);
+}
+
+.hole-closes {
+  grid-column: 2;
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+
+.table-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.table-head,
+.table-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding-bottom: 6px;
+  color: var(--ink-secondary);
+}
+
+.table-head .table-name {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.inspector .fingerprint-chip {
+  font-family: var(--face-mono);
+  font-size: 0.76rem;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--code-surface);
+}
+
+.table-search input {
+  font: inherit;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.table-search input:focus {
+  outline: 2px solid var(--red-light);
+  outline-offset: 1px;
+}
+
+.table-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+}
+
+table.payload {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+table.payload th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  padding: 2px 6px 2px 0;
+}
+
+table.payload td {
+  padding: 0 6px 0 0;
+  white-space: nowrap;
+}
+
+/* The row the file's own keys name — the same row the proof panel quotes. */
+table.payload tr[data-hit] {
+  background: var(--selected);
+  outline: 1px solid var(--red);
+}
+
+/*
+ * What moves if this changes — the page's reading of the edges, under the
+ * file's own record.
+ *
+ * Ruled off and headed, because the block above it is the producer's record key
+ * for key and this is not. A reviewer quoting a line out of this drawer has to
+ * be able to tell which half they are quoting.
+ */
+.impact {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+.impact-head {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  text-transform: lowercase;
+}
+
+.impact-count,
+.impact-ends,
+.impact-none {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.impact-none {
+  color: var(--ink-secondary);
+}
+
+.impact-label {
+  color: var(--ink-secondary);
+  margin-right: 6px;
+}
+
+.impact-end {
+  font: inherit;
+  font-family: var(--face-mono);
+  border: 0;
+  background: none;
+  padding: 0 3px;
+  color: var(--code-blue);
+  cursor: pointer;
+}
+
+/* A name inside a fact's own sentence, which its brackets hold without a gap. */
+.fact-value .impact-end {
+  padding: 0;
+}
+
+.impact-end:hover {
+  color: var(--red-dark);
+  text-decoration: underline;
+}
+
+/*
+ * The selected cell's every digit, above whichever tab is open.
+ *
+ * Quiet, as a caption is: the note says how the rest of the page writes a
+ * value, and the line under it is the value as the file holds it. Ruled off
+ * from the panel under it, because the panel is the file's record and this is
+ * the cell the reader is standing on.
+ */
+.held {
+  flex: 0 0 auto;
+  padding: 4px 10px 5px;
+  border-bottom: 1px solid var(--rule);
+  line-height: 1.4;
+}
+
+.held p {
+  margin: 0;
+}
+
+/* What a fingerprint above it covers, under its value: the two model figures
+   answer different questions, and a reviewer quoting one needs to know which. */
+.fact-covers {
+  margin: 0 0 4px 128px;
+  font-size: 0.72rem;
+  color: var(--ink-secondary);
+}
+
+.held-note {
+  font-size: 0.72rem;
+  color: var(--ink-secondary);
+}
+
+.held-line {
+  overflow-wrap: anywhere;
+}
+
+.held-value {
+  font-weight: 700;
+}
+
+.copy-held {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--code-surface);
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.copy-held:hover {
+  border-color: var(--red-light);
+  color: var(--red-dark);
+}
+
+/* Where the table was read from, and the one sentence its recipe earns. */
+.table-source,
+.table-shaped {
+  flex: 0 0 auto;
+  margin: 0 0 6px;
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+
+.table-shaped {
+  color: var(--amber);
+}

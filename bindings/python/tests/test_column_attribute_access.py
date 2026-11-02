@@ -105,7 +105,8 @@ def test_underscore_names_rejected(simple_af: ActuarialFrame, name: str):
 def test_method_conflict_rejected_but_bracket_works(simple_af: ActuarialFrame):
     # "count" is a method on frame; attribute should raise conflict
     with pytest.raises(
-        AttributeError, match="conflicts with existing method/attribute"
+        AttributeError,
+        match=r"conflicts with existing method/attribute; use af\['count'\] instead",
     ):
         _ = simple_af.count
     # bracket still returns column
@@ -150,7 +151,7 @@ def test_unicode_identifier_access(simple_af: ActuarialFrame):
 
 def test_attribute_reassignment_updates_calculated_column(simple_af: ActuarialFrame):
     # Reassigning a column created earlier in the session must replace it,
-    # not silently keep the first value (F7a: shadow-attribute split-brain).
+    # not silently keep the first value in a shadow attribute.
     simple_af.c = simple_af.a * 2
     simple_af.c = simple_af.a * 3
     out = simple_af.collect()

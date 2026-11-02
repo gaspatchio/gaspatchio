@@ -1,0 +1,2494 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "finance-projection",
+  "cases": [
+    {
+      "id": "monthly-simple-False",
+      "covers": [
+        "finance.to_monthly"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.12,
+            -0.12,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.to_monthly",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "method": "simple"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.01,
+          -0.01,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "monthly-compound-False",
+      "covers": [
+        "finance.to_monthly"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.12,
+            -0.12,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.to_monthly",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "method": "compound"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.009488792934583046,
+          -0.010596241035318976,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compound-False",
+      "covers": [
+        "finance.compound"
+      ],
+      "inputs": {
+        "period": {
+          "dtype": "f64",
+          "values": [
+            -12.0,
+            0.0,
+            12.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.compound",
+        "args": [
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "rate": 0.1,
+          "periods_per_year": 12
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.9090909090909091,
+          1.0,
+          1.1
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compound-negative-rate-False",
+      "covers": [
+        "finance.compound"
+      ],
+      "inputs": {
+        "period": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            12.0,
+            24.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.compound",
+        "args": [
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "rate": -0.2,
+          "periods_per_year": 12
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          0.8,
+          0.64
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "monthly-simple-True",
+      "covers": [
+        "finance.to_monthly"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.12,
+              -0.12,
+              0.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.to_monthly",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "method": "simple"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.01,
+            -0.01,
+            0.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "monthly-compound-True",
+      "covers": [
+        "finance.to_monthly"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.12,
+              -0.12,
+              0.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.to_monthly",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "method": "compound"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.009488792934583046,
+            -0.010596241035318976,
+            0.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compound-True",
+      "covers": [
+        "finance.compound"
+      ],
+      "inputs": {
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -12.0,
+              0.0,
+              12.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.compound",
+        "args": [
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "rate": 0.1,
+          "periods_per_year": 12
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.9090909090909091,
+            1.0,
+            1.1
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compound-negative-rate-True",
+      "covers": [
+        "finance.compound"
+      ],
+      "inputs": {
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              12.0,
+              24.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.compound",
+        "args": [
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "rate": -0.2,
+          "periods_per_year": 12
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.8,
+            0.64
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "finance.discount-scalar",
+      "covers": [
+        "finance.discount"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            110.0,
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            0.1,
+            -0.2,
+            0.0,
+            -1.0
+          ]
+        },
+        "period": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.0,
+            1.0,
+            3.0,
+            1.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          100.0,
+          100.0,
+          125.0,
+          100.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "finance.discount-missing",
+      "covers": [
+        "finance.discount"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "f64",
+          "values": [
+            null,
+            100.0,
+            100.0
+          ]
+        },
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            null,
+            0.1
+          ]
+        },
+        "period": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            1.0,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null,
+          null,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "finance.present_value-scalar",
+      "covers": [
+        "finance.present_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            110.0,
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            0.1,
+            -0.2,
+            0.0,
+            -1.0
+          ]
+        },
+        "period": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.0,
+            1.0,
+            3.0,
+            1.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.present_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null,
+          100.0,
+          125.0,
+          100.0,
+          {
+            "nonfinite": "+inf"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "finance.present_value-missing",
+      "covers": [
+        "finance.present_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "f64",
+          "values": [
+            null,
+            100.0,
+            100.0
+          ]
+        },
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            null,
+            0.1
+          ]
+        },
+        "period": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            1.0,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.present_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null,
+          null,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "discount-factor-spot-varying",
+      "covers": [
+        "finance.discount_factor"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2,
+              0.3
+            ],
+            [],
+            [
+              0.0
+            ]
+          ]
+        },
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              1.0,
+              2.0
+            ],
+            [],
+            [
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "method": "spot"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.8333333333333334,
+            0.5917159763313609
+          ],
+          [],
+          [
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "discount-factor-forward-varying",
+      "covers": [
+        "finance.discount_factor"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2,
+              0.3
+            ],
+            [],
+            [
+              0.0
+            ]
+          ]
+        },
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              1.0,
+              2.0
+            ],
+            [],
+            [
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "method": "forward"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.9090909090909091,
+            0.7575757575757576
+          ],
+          [],
+          [
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "discount-factor-forward-records-unused-periods",
+      "covers": [
+        "finance.discount_factor"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2,
+              0.3
+            ]
+          ]
+        },
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              99.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "method": "forward"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.9090909090909091,
+            0.7575757575757576
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "discount-factor-spot-scalar-rate",
+      "covers": [
+        "finance.discount_factor"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.1
+          ]
+        },
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              1.0,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "method": "spot"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.9090909090909091,
+            0.8264462809917354
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "with-period-0",
+      "covers": [
+        "projection.with_period"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0
+            ],
+            [],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.with_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          }
+        ],
+        "attrs": {
+          "period": 0,
+          "value": 9.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            9.0,
+            2.0,
+            3.0
+          ],
+          [
+            9.0
+          ],
+          [],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "with-period-1",
+      "covers": [
+        "projection.with_period"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0
+            ],
+            [],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.with_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          }
+        ],
+        "attrs": {
+          "period": 1,
+          "value": 9.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            9.0,
+            3.0
+          ],
+          [
+            1.0
+          ],
+          [],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "with-period--1",
+      "covers": [
+        "projection.with_period"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0
+            ],
+            [],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.with_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          }
+        ],
+        "attrs": {
+          "period": -1,
+          "value": 9.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            2.0,
+            9.0
+          ],
+          [
+            9.0
+          ],
+          [],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "with-period--2",
+      "covers": [
+        "projection.with_period"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0
+            ],
+            [],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.with_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          }
+        ],
+        "attrs": {
+          "period": -2,
+          "value": 9.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            9.0,
+            3.0
+          ],
+          [
+            1.0
+          ],
+          [],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "with-period-9",
+      "covers": [
+        "projection.with_period"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0
+            ],
+            [],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.with_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          }
+        ],
+        "attrs": {
+          "period": 9,
+          "value": 9.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            2.0,
+            3.0
+          ],
+          [
+            1.0
+          ],
+          [],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "broadcast-explicit-jagged",
+      "covers": [
+        "projection.broadcast_to_periods"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            null,
+            9.0,
+            7.0
+          ]
+        },
+        "axis": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              0,
+              1
+            ],
+            [
+              0
+            ],
+            [],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.broadcast_to_periods",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          },
+          {
+            "op": "col",
+            "name": "axis"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            2.0,
+            2.0
+          ],
+          [
+            null
+          ],
+          [],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "broadcast-bool",
+      "covers": [
+        "projection.broadcast_to_periods"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "bool",
+          "values": [
+            true,
+            null
+          ]
+        },
+        "axis": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              0,
+              1
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.broadcast_to_periods",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          },
+          {
+            "op": "col",
+            "name": "axis"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            true,
+            true
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "broadcast-str",
+      "covers": [
+        "projection.broadcast_to_periods"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "str",
+          "values": [
+            "monthly",
+            null
+          ]
+        },
+        "axis": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              0,
+              1
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.broadcast_to_periods",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          },
+          {
+            "op": "col",
+            "name": "axis"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[str]",
+        "values": [
+          [
+            "monthly",
+            "monthly"
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "broadcast-i64",
+      "covers": [
+        "projection.broadcast_to_periods"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "i64",
+          "values": [
+            7,
+            null
+          ]
+        },
+        "axis": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              0,
+              1
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.broadcast_to_periods",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          },
+          {
+            "op": "col",
+            "name": "axis"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            7,
+            7
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "monthly-null-and-zero-base",
+      "covers": [
+        "finance.to_monthly"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              null
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.to_monthly",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "method": "compound"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -1.0,
+            0.0,
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "with-period-replaces-null",
+      "covers": [
+        "projection.with_period"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.with_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          }
+        ],
+        "attrs": {
+          "period": 0,
+          "value": 9.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            9.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "discount-factor-negative-forward-rate",
+      "covers": [
+        "finance.discount_factor"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -0.5,
+              0.0
+            ]
+          ]
+        },
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "method": "forward"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            2.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "discount-factor-list-rate-scalar-time",
+      "covers": [
+        "finance.discount_factor"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2
+            ]
+          ]
+        },
+        "period": {
+          "dtype": "f64",
+          "values": [
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "method": "spot"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.8264462809917354,
+            0.6944444444444444
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "curve.spot_rate-linear-flat-False",
+      "covers": [
+        "curve.spot_rate"
+      ],
+      "inputs": {
+        "time": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            5.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "curve.spot_rate",
+        "args": [
+          {
+            "op": "col",
+            "name": "time"
+          }
+        ],
+        "attrs": {
+          "curve": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.02,
+          0.02,
+          0.04,
+          0.06,
+          0.06
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "curve",
+          "source_sha": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453",
+          "payload": {
+            "kind": "Curve",
+            "tenors": [
+              1.0,
+              3.0
+            ],
+            "rates": [
+              0.02,
+              0.06
+            ],
+            "day_count": "ActualActualISDA",
+            "interpolation": "linear"
+          }
+        }
+      ]
+    },
+    {
+      "id": "curve.discount_factor-linear-flat-False",
+      "covers": [
+        "curve.discount_factor"
+      ],
+      "inputs": {
+        "time": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            5.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "curve.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "time"
+          }
+        ],
+        "attrs": {
+          "curve": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          0.9803921568627451,
+          0.9245562130177514,
+          0.8396192830323017,
+          0.747258172866057
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "curve",
+          "source_sha": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453",
+          "payload": {
+            "kind": "Curve",
+            "tenors": [
+              1.0,
+              3.0
+            ],
+            "rates": [
+              0.02,
+              0.06
+            ],
+            "day_count": "ActualActualISDA",
+            "interpolation": "linear"
+          }
+        }
+      ]
+    },
+    {
+      "id": "curve.spot_rate-linear-flat-True",
+      "covers": [
+        "curve.spot_rate"
+      ],
+      "inputs": {
+        "time": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              1.0,
+              2.0,
+              3.0,
+              5.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "curve.spot_rate",
+        "args": [
+          {
+            "op": "col",
+            "name": "time"
+          }
+        ],
+        "attrs": {
+          "curve": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.02,
+            0.02,
+            0.04,
+            0.06,
+            0.06
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "curve",
+          "source_sha": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453",
+          "payload": {
+            "kind": "Curve",
+            "tenors": [
+              1.0,
+              3.0
+            ],
+            "rates": [
+              0.02,
+              0.06
+            ],
+            "day_count": "ActualActualISDA",
+            "interpolation": "linear"
+          }
+        }
+      ]
+    },
+    {
+      "id": "curve.discount_factor-linear-flat-True",
+      "covers": [
+        "curve.discount_factor"
+      ],
+      "inputs": {
+        "time": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              1.0,
+              2.0,
+              3.0,
+              5.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "curve.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "time"
+          }
+        ],
+        "attrs": {
+          "curve": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.9803921568627451,
+            0.9245562130177514,
+            0.8396192830323017,
+            0.747258172866057
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "curve",
+          "source_sha": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453",
+          "payload": {
+            "kind": "Curve",
+            "tenors": [
+              1.0,
+              3.0
+            ],
+            "rates": [
+              0.02,
+              0.06
+            ],
+            "day_count": "ActualActualISDA",
+            "interpolation": "linear"
+          }
+        }
+      ]
+    },
+    {
+      "id": "curve.spot_rate-linear-producer-grouping",
+      "covers": [
+        "curve.spot_rate"
+      ],
+      "inputs": {
+        "time": {
+          "dtype": "f64",
+          "values": [
+            1.09,
+            1.094,
+            1.101,
+            1.105,
+            1.143,
+            1.154,
+            1.193,
+            1.196
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "curve.spot_rate",
+        "args": [
+          {
+            "op": "col",
+            "name": "time"
+          }
+        ],
+        "attrs": {
+          "curve": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0218,
+          0.021880000000000004,
+          0.022019999999999998,
+          0.0221,
+          0.02286,
+          0.023079999999999996,
+          0.02386,
+          0.023919999999999997
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "curve",
+          "source_sha": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453",
+          "payload": {
+            "kind": "Curve",
+            "tenors": [
+              1.0,
+              3.0
+            ],
+            "rates": [
+              0.02,
+              0.06
+            ],
+            "day_count": "ActualActualISDA",
+            "interpolation": "linear"
+          }
+        }
+      ]
+    },
+    {
+      "id": "projection.with_period-over-a-value-per-policy",
+      "covers": [
+        "projection.with_period"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.with_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          }
+        ],
+        "attrs": {
+          "period": 0,
+          "value": 9.0
+        }
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per policy",
+      "refusal": "period-override-over-a-value-per-policy",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "projection.broadcast_to_periods-onto-a-per-policy-axis",
+      "covers": [
+        "projection.broadcast_to_periods"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            3.0
+          ]
+        },
+        "axis": {
+          "dtype": "i64",
+          "values": [
+            3,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.broadcast_to_periods",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          },
+          {
+            "op": "col",
+            "name": "axis"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per policy",
+      "refusal": "explicit-broadcast-axis-required",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "projection.accumulate-initial-per-period",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              100.0,
+              100.0
+            ],
+            [
+              50.0,
+              50.0
+            ]
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.01,
+              1.02
+            ],
+            [
+              1.0,
+              1.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              2.0,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "accumulate-initial-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "finance.discount-rate-per-period",
+      "covers": [
+        "finance.discount"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.06
+            ],
+            [
+              0.04,
+              0.04
+            ]
+          ]
+        },
+        "period": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "discount-scalar-domain",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "finance.discount-period-per-period",
+      "covers": [
+        "finance.discount"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        },
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.05,
+            0.04
+          ]
+        },
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "discount-scalar-domain",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "finance.present_value-rate-per-period",
+      "covers": [
+        "finance.present_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.06
+            ],
+            [
+              0.04,
+              0.04
+            ]
+          ]
+        },
+        "period": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.present_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "discount-scalar-domain",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "finance.present_value-period-per-period",
+      "covers": [
+        "finance.present_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        },
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.05,
+            0.04
+          ]
+        },
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.present_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "discount-scalar-domain",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "finance.discount-value-per-period",
+      "covers": [
+        "finance.discount"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              100.0,
+              100.0
+            ],
+            [
+              200.0,
+              200.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.05,
+            0.04
+          ]
+        },
+        "period": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "discount-scalar-domain",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "finance.present_value-value-per-period",
+      "covers": [
+        "finance.present_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              100.0,
+              100.0
+            ],
+            [
+              200.0,
+              200.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.05,
+            0.04
+          ]
+        },
+        "period": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.present_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "discount-scalar-domain",
+      "case_kind": "portable-domain-refusal"
+    }
+  ]
+}

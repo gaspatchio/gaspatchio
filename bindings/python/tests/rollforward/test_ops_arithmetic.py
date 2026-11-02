@@ -85,7 +85,7 @@ class TestVerify:
             rate=pl.lit(-0.05),  # negative literal — almost certainly a bug
             label="Bad",
         )
-        with pytest.raises(ValueError, match="negative literal rate"):
+        with pytest.raises(ValueError, match=r"has the rate -0\.05, a number below"):
             op.verify()
 
     def test_grow_with_zero_rate_literal_is_allowed(self) -> None:

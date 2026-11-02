@@ -10,18 +10,22 @@ prove which stresses were applied, by whom, against which model, and with
 which result?". Gaspatchio gives you three artefacts to do that:
 
   * ``ScenarioRun.source_sha()`` — a SHA over the plan (shocks +
-    base-table identities + aggregations). Same shocks against the same
-    tables → same SHA. Different SHA → something in the plan changed.
+    stated base-table identities + aggregations). Same shocks against the
+    same tables → same SHA. Different SHA → something in the plan changed.
+    ``base_tables`` is optional; stated, as here, it is also a check: the
+    run refuses if the model's own table of that name holds other rates.
 
   * ``ScenarioRun.to_yaml(path)`` — write the recipe (shocks +
-    aggregations + master_seed) to a YAML file. ``from_yaml(path,
-    base_tables=…)`` reconstructs it. The point: the recipe is portable,
+    aggregations + master_seed) to a YAML file, every shock kind, filters
+    and pipelines included. ``from_yaml(path, base_tables=…)`` reads back
+    the same plan, to the same SHA. The point: the recipe is portable,
     inspectable, and version-controllable — sit it alongside the
     valuation outputs in your release evidence.
 
   * ``.run(audit=True)`` — JSON sidecar capturing the plan SHA, model
-    points fingerprint, runtime, and the aggregator results. Drop it in
-    your audit folder next to the report.
+    points fingerprint, runtime, the aggregator results, and per shocked
+    table the content its shock was applied to. Drop it in your audit
+    folder next to the report.
 
 The scenarios in this step are written as named regulatory stresses —
 "adverse mortality", "economic downturn", "operational shock" — each
@@ -40,7 +44,7 @@ from pathlib import Path
 
 import polars as pl
 
-from gaspatchio import ActuarialFrame, MortalityTable
+from gaspatchio import ActuarialFrame
 from gaspatchio.scenarios import (
     FilteredShock,
     MultiplicativeShock,
@@ -54,38 +58,21 @@ sys.path.insert(0, str(L5_BASE_DIR))
 import model  # noqa: E402
 
 MODEL_POINTS_PATH = L5_BASE_DIR / "model_points.parquet"
-SELECT_PERIOD = model.SELECT_PERIOD_LEN
 
 # ---------------------------------------------------------------------------
-# 1. Base tables + adapter (same shape as steps 01-03).
+# 1. The tables this plan states it shocks, keyed by each one's own name.
+#    Stating them is optional; here it is the governance check -- the run
+#    refuses if model.main reads a table of that name holding other rates.
 # ---------------------------------------------------------------------------
 
 assumptions = model.load_assumptions()
-mortality_select_raw = assumptions["mortality"].table
 
 BASE_TABLES = {
-    "mortality_select": mortality_select_raw,
+    "mortality_select": assumptions["mortality"].table,
     "mortality_scalars": assumptions["mortality_scalars"],
     "lapse_rates": assumptions["lapse_rates"],
     "surrender_charges": assumptions["surrender_charges"],
 }
-
-
-def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
-    """Plan-agnostic adapter — override only the tables the plan supplies."""
-    del drivers
-    overrides = dict(assumptions)
-    if "mortality_select" in tables:
-        overrides["mortality"] = MortalityTable(
-            table=tables["mortality_select"],
-            age_basis="age_last_birthday",
-            structure="select_ultimate",
-            select_period=SELECT_PERIOD,
-        )
-    for name in ("mortality_scalars", "lapse_rates", "surrender_charges"):
-        if name in tables:
-            overrides[name] = tables[name]
-    return model.main(af, assumptions_override=overrides)
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +134,7 @@ mp = pl.read_parquet(MODEL_POINTS_PATH)
 af = ActuarialFrame(mp)
 
 start = time.perf_counter()
-result = plan.run(af, model_fn, audit=True)
+result = plan.run(af, model.main, audit=True)
 runtime = time.perf_counter() - start
 
 print(f"Runtime: {runtime:.2f}s")
@@ -176,12 +163,21 @@ scenario_table = scenario_table.with_columns(
 )
 
 # Reorder so CENTRAL_ESTIMATE is first
-preferred_order = ["CENTRAL_ESTIMATE", "ADVERSE_MORTALITY", "ECONOMIC_DOWNTURN", "OPERATIONAL_SHOCK"]
-scenario_table = scenario_table.with_columns(
-    pl.col("scenario_id")
-    .replace_strict(preferred_order, range(len(preferred_order)), default=99)
-    .alias("_order")
-).sort("_order").drop("_order")
+preferred_order = [
+    "CENTRAL_ESTIMATE",
+    "ADVERSE_MORTALITY",
+    "ECONOMIC_DOWNTURN",
+    "OPERATIONAL_SHOCK",
+]
+scenario_table = (
+    scenario_table.with_columns(
+        pl.col("scenario_id")
+        .replace_strict(preferred_order, range(len(preferred_order)), default=99)
+        .alias("_order")
+    )
+    .sort("_order")
+    .drop("_order")
+)
 
 print("=== Regulatory Comparison ===")
 print(scenario_table)
@@ -191,40 +187,42 @@ print()
 # 6. Key findings — the prose to drop into a stress-test memo.
 # ---------------------------------------------------------------------------
 
-worst = scenario_table.filter(pl.col("scenario_id") != "CENTRAL_ESTIMATE").sort("delta_vs_central").row(0, named=True)
-best = scenario_table.filter(pl.col("scenario_id") != "CENTRAL_ESTIMATE").sort("delta_vs_central", descending=True).row(0, named=True)
+worst = (
+    scenario_table.filter(pl.col("scenario_id") != "CENTRAL_ESTIMATE")
+    .sort("delta_vs_central")
+    .row(0, named=True)
+)
+best = (
+    scenario_table.filter(pl.col("scenario_id") != "CENTRAL_ESTIMATE")
+    .sort("delta_vs_central", descending=True)
+    .row(0, named=True)
+)
 
 print("=== Key Findings ===")
 print(f"  Plan SHA: {plan.source_sha()}")
-print(f"  Worst case:   {worst['scenario_id']:<20} Δ pv_net_cf = {worst['delta_vs_central']:>+15,.0f} ({worst['delta_pct']:+6.2f}%)")
-print(f"  Best case:    {best['scenario_id']:<20} Δ pv_net_cf = {best['delta_vs_central']:>+15,.0f} ({best['delta_pct']:+6.2f}%)")
+print(
+    f"  Worst case:   {worst['scenario_id']:<20} Δ pv_net_cf = {worst['delta_vs_central']:>+15,.0f} ({worst['delta_pct']:+6.2f}%)"
+)
+print(
+    f"  Best case:    {best['scenario_id']:<20} Δ pv_net_cf = {best['delta_vs_central']:>+15,.0f} ({best['delta_pct']:+6.2f}%)"
+)
 print()
-print(f"Reproduce: same shocks dict + same base_tables (model points {MODEL_POINTS_PATH.name}),")
+print(
+    f"Reproduce: same shocks dict + same base_tables (model points {MODEL_POINTS_PATH.name}),"
+)
 print(f"expect plan SHA {plan.source_sha()} and the audit sidecar above.")
 print()
 
 # ---------------------------------------------------------------------------
-# 7. YAML round-trip — separate small demo. Today only the flat shocks
-#    (MultiplicativeShock / AdditiveShock / OverrideShock) round-trip
-#    through YAML; FilteredShock / TimeConditionalShock / PipelineShock
-#    don't yet. For non-flat plans, governance leans on the plan SHA plus
-#    the JSON audit sidecar (both above) rather than the YAML recipe.
+# 7. YAML round-trip — the plan writes itself down, the filtered mortality
+#    stress included, and reads back to the same SHA.
 # ---------------------------------------------------------------------------
 
-print("=== YAML round-trip (flat shocks only) ===")
-flat_plan = ScenarioRun(
-    shocks={
-        "BASE": [],
-        "MORT_UP_20": [MultiplicativeShock(factor=1.20, table="mortality_select")],
-        "LAPSE_DOWN_20": [MultiplicativeShock(factor=0.80, table="lapse_rates")],
-    },
-    base_tables=BASE_TABLES,
-    aggregations=(Sum("pv_net_cf").alias("pv_net_cf").over("scenario_id"),),
-)
+print("=== YAML round-trip ===")
 yaml_path = SCRIPT_DIR / "plan.yaml"
-flat_plan.to_yaml(yaml_path)
-flat_reloaded = ScenarioRun.from_yaml(yaml_path, base_tables=BASE_TABLES)
-assert flat_reloaded.source_sha() == flat_plan.source_sha(), "YAML drift"
+plan.to_yaml(yaml_path)
+reloaded = ScenarioRun.from_yaml(yaml_path, base_tables=BASE_TABLES)
+assert reloaded.source_sha() == plan.source_sha(), "YAML drift"
 print(f"  Wrote: {yaml_path.name}")
-print(f"  Plan SHA pre-write:  {flat_plan.source_sha()}")
-print(f"  Plan SHA post-load:  {flat_reloaded.source_sha()} (matches — recipe is faithful)")
+print(f"  Plan SHA pre-write:  {plan.source_sha()}")
+print(f"  Plan SHA post-load:  {reloaded.source_sha()} (matches — recipe is faithful)")

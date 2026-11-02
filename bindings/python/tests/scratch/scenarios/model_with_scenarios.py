@@ -86,8 +86,12 @@ def run_projection(
     )
 
     # Time variables
-    af.month = (af.projection_months.dt.year() - val_date.year) * 12 + (
-        af.projection_months.dt.month() - val_date.month
+    af.month = (
+        af.projection_months.polars_native().list.eval(pl.element().dt.year())
+        - val_date.year
+    ) * 12 + (
+        af.projection_months.polars_native().list.eval(pl.element().dt.month())
+        - val_date.month
     )
     af.duration_mth_t = af.duration_mth + af.month
     af.duration = af.duration_mth_t // 12

@@ -9,15 +9,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from gaspatchio.frame import ActuarialFrame
 
-T = TypeVar("T")
 
-
-def check_non_empty(scenario_ids: list[T]) -> None:
+def check_non_empty[T](scenario_ids: list[T]) -> None:
     """Raise ValueError if the scenario list is empty."""
     if not scenario_ids:
         msg = (
@@ -27,7 +25,7 @@ def check_non_empty(scenario_ids: list[T]) -> None:
         raise ValueError(msg)
 
 
-def check_no_duplicate_ids(scenario_ids: list[T]) -> None:
+def check_no_duplicate_ids[T](scenario_ids: list[T]) -> None:
     """Raise ValueError if any scenario_id appears more than once."""
     if len(scenario_ids) == len(set(scenario_ids)):
         return

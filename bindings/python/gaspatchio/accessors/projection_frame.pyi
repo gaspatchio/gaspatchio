@@ -2,23 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Type stubs for ProjectionFrameAccessor."""
-
 import datetime as dt
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import polars as pl
 
+from gaspatchio.column import ColumnProxy, ExpressionProxy
+from gaspatchio.column.proxy_aware_expr import ProxyAwareExpr
+from gaspatchio.frame.base import ActuarialFrame
+from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.schedule import Schedule
+
 from .base import BaseFrameAccessor
 
-if TYPE_CHECKING:
-    from ..column import ColumnProxy, ExpressionProxy
-    from ..frame.base import ActuarialFrame
-    from ..rollforward._builder import RollforwardBuilder
-    from ..schedule import Schedule
-
-    type ExprLike = pl.Expr | ColumnProxy | ExpressionProxy
+type ExprLike = pl.Expr | ColumnProxy | ExpressionProxy
 
 class ProjectionFrameAccessor(BaseFrameAccessor):
     def __init__(self, frame: ActuarialFrame) -> None: ...
@@ -32,16 +30,16 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
             "term_years",
             "term_months",
             "fixed_date",
-            "next_anniversary",
         ]
         | None = ...,
         until_value: int | dt.date | str | pl.Expr | None = ...,
         issue_age_column: str = ...,
-        inception_column: str = ...,
         start_date: dt.date | None = ...,
         n_periods: int | None = ...,
         frequency: str | None = ...,
         per_policy: bool | None = ...,
+        step_years: float | None = ...,
+        steps_per_year: int | None = ...,
     ) -> ActuarialFrame: ...
     def rollforward(
         self,
@@ -54,11 +52,16 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         batch_axes: tuple[str, ...] = ...,
         schedule: None = ...,
     ) -> RollforwardBuilder: ...
-    def period_dates(self) -> pl.Expr: ...
-    def year_fractions(self) -> pl.Expr: ...
-    def t_years(self) -> pl.Expr: ...
-    def anniversary_mask(self) -> pl.Expr: ...
-    def is_in_force(self, *, end_date_column: str | None = ...) -> pl.Expr: ...
-    def contract_boundary(self, *, end_date_column: str | None = ...) -> pl.Expr: ...
+    def period_dates(self) -> ProxyAwareExpr: ...
+    def year_fractions(self) -> ProxyAwareExpr: ...
+    def t_years(self) -> ProxyAwareExpr: ...
+    def anniversary_mask(self) -> ProxyAwareExpr: ...
+    def is_in_force(self, *, end_date_column: str | None = ...) -> ProxyAwareExpr: ...
+    def contract_boundary(
+        self, *, end_date_column: str | None = ...
+    ) -> ProxyAwareExpr: ...
     def canonical_form(self) -> dict[str, Any]: ...
     def source_sha(self) -> str: ...
+
+# What the API reference documents from this module.
+__all__ = ["ProjectionFrameAccessor"]

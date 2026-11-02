@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from gaspatchio import ActuarialFrame
-from gaspatchio.scenarios import Sum, for_each_scenario
+from gaspatchio.scenarios import Sum, _batch, for_each_scenario
 
 if TYPE_CHECKING:
     from gaspatchio.scenarios._result import ScenarioResult
@@ -123,7 +123,9 @@ def test_forced_b1_raises_when_neither_engine_fits(monkeypatch):
     from gaspatchio.scenarios import _for_each
     from gaspatchio.scenarios._memory import IrreducibleCellError
 
-    monkeypatch.setattr(_for_each, "memory_budget_bytes", lambda *a, **k: 1)  # 1-byte budget
+    monkeypatch.setattr(
+        _for_each, "memory_budget_bytes", lambda *a, **k: 1
+    )  # 1-byte budget
     with pytest.raises(IrreducibleCellError):
         for_each_scenario(
             _af(),
@@ -142,7 +144,9 @@ def test_auto_search_hard_ceiling_raises_when_remainder_cannot_fit(monkeypatch):
     from gaspatchio.scenarios import _for_each
     from gaspatchio.scenarios._memory import IrreducibleCellError
 
-    monkeypatch.setattr(_for_each, "memory_budget_bytes", lambda *a, **k: 1)  # 1-byte budget
+    monkeypatch.setattr(
+        _for_each, "memory_budget_bytes", lambda *a, **k: 1
+    )  # 1-byte budget
     with pytest.raises(IrreducibleCellError):
         for_each_scenario(
             _af(),
@@ -160,15 +164,14 @@ def _patch_constant_peak(monkeypatch, peak_mb: float) -> None:
     the measured peak is synthetic, which lets a test place each ladder rung
     deterministically above or below the budget.
     """
-    from gaspatchio.scenarios import _for_each
 
-    real = _for_each._collect_with_peak  # noqa: SLF001
+    real = _batch._collect_with_peak  # noqa: SLF001
 
     def fake(lazy, *, engine=None):
         frame, _ = real(lazy, engine=engine)
         return frame, int(peak_mb * 1024**2)
 
-    monkeypatch.setattr(_for_each, "_collect_with_peak", fake)
+    monkeypatch.setattr(_batch, "_collect_with_peak", fake)
 
 
 def test_gate_skips_rung_predicted_over_budget(monkeypatch):

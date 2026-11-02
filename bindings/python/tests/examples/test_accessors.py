@@ -7,17 +7,6 @@ import pytest
 
 from gaspatchio import ActuarialFrame
 
-# @pytest.mark.parametrize(
-#    "example",
-#    find_examples(
-#        "gaspatchio/column/namespaces/dt_proxy.py",
-#    ),
-#    ids=str,
-# )
-# def test_docstrings(example: CodeExample, eval_example: EvalExample):
-#    eval_example.lint(example)
-#    eval_example.run_print_check(example)
-
 
 @pytest.mark.example(ns="excel.yearfrac")  # <── our marker
 def test_yearfrac_example():
@@ -39,15 +28,13 @@ def test_yearfrac_example():
     print(result)
 
 
-@pytest.mark.example(ns="dt.year")
+@pytest.mark.example(ns="polars_native.dt.year")
 def test_dt_year_example():
-    """Test the .dt.year accessor and method."""
+    """Test date extraction through the explicit engine namespace."""
     from gaspatchio.column.expression_proxy import (
         ExpressionProxy,  # For type checking
     )
-    from gaspatchio.column.namespaces.dt_proxy import (
-        DtNamespaceProxy,  # For type checking
-    )
+    from gaspatchio._authoring.escape import PolarsNativeDate
 
     data = {
         "policy_id": [1, 2, 3],
@@ -57,11 +44,11 @@ def test_dt_year_example():
     }
     af = ActuarialFrame(data)
 
-    # Test that accessing .dt returns a DtNamespaceProxy
-    assert isinstance(af["inception_date"].dt, DtNamespaceProxy)
+    # Test that accessing .dt returns a PolarsNativeDate
+    assert isinstance(af["inception_date"].polars_native().dt, PolarsNativeDate)
 
     # Apply the .dt.year() method
-    year_expr = af["inception_date"].dt.year()
+    year_expr = af["inception_date"].polars_native().dt.year()
     af["inception_year"] = year_expr
 
     # Check the type of the resulting expression proxy before collecting
@@ -85,7 +72,7 @@ def test_dt_year_example():
     )
 
     # Test _call_dt_method indirectly via another dt method, e.g., month
-    af["inception_month"] = af["inception_date"].dt.month()
+    af["inception_month"] = af["inception_date"].polars_native().dt.month()
     result_month_df = af.collect()
     expected_months = pl.Series("inception_month", [3, 7, 11], dtype=pl.Int32)
 
@@ -96,7 +83,7 @@ def test_dt_year_example():
     )
 
     # Test explicit dt.day()
-    af["inception_day"] = af["inception_date"].dt.day()
+    af["inception_day"] = af["inception_date"].polars_native().dt.day()
     result_day_df = af.collect()
     expected_days = pl.Series("inception_day", [15, 20, 1], dtype=pl.Int32)
     actual_days_list = result_day_df["inception_day"].to_list()
@@ -106,7 +93,9 @@ def test_dt_year_example():
     )
 
     # Test __getattr__ with dt.hour() (dates need to be cast to datetime first)
-    af["inception_hour"] = af["inception_date"].cast(pl.Datetime).dt.hour()
+    af["inception_hour"] = (
+        af["inception_date"].polars_native().cast(pl.Datetime).polars_native().dt.hour()
+    )
     result_hour_df = af.collect()
     expected_hours = pl.Series("inception_hour", [0, 0, 0], dtype=pl.Int32)
     actual_hours_list = result_hour_df["inception_hour"].to_list()

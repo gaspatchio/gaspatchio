@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-05
 **Status:** Design proposal (awaiting plan)
-**Authors:** Matt Wright, Claude
+**Author:** Matt Wright
 **Branch:** `gsp-92-rollforward-redesign` (continuation)
 **Supersedes (on landing):** `af.date.create_projection_timeline(...)` and direct user-facing use of `Schedule.from_*(...)` constructors as the day-to-day projection setup verb.
 
@@ -103,6 +103,8 @@ Internally, the kwargs path constructs a Schedule, then both paths converge on t
 | `"next_anniversary"` | Project until the Nth contract anniversary on/after `valuation_date` | `int` (default 1) or `str` or `pl.Expr` |
 
 `"next_anniversary"` is anchored on each policy's inception date, default column `"policy_inception"` (configurable via `inception_column=` kwarg). `until_value=1` projects to the next anniversary; `until_value=N` for N > 1 projects to the Nth anniversary after that. Useful for term-renewable life, anniversary-trigger riders, group renewable products.
+
+> **Superseded (decided 2026-10-31).** As built, `next_anniversary` laid `until_value` whole years from the valuation date for every policy (`term_years`'s count), never each policy's anniversary, and `inception_column=` on `projection.set` was never read. Both are removed: `until="next_anniversary"` is refused by name, pointing at `term_years` for whole years and at `Schedule.from_inception(inception_column=...)` with `anniversary_mask()` for renewals. A per-policy anniversary horizon is for after 1.0, as a design note on `Schedule.from_inception`, with its rounding question stated first (on a valuation-anchored monthly grid, an anniversary 5.42 months away ends in period 5 or 6).
 
 ### 3.3 The `frequency=` vocabulary
 

@@ -1,0 +1,2497 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0"
+  },
+  "created_at": "2026-09-19T01:17:03Z",
+  "model": {
+    "label": null,
+    "source_path": "model.py",
+    "source_sha": "sha256:3e7ffa239e6d7bcfa128db4ac1ac74eb8a859f92cc4402783ebe17f7039016c1",
+    "git": null,
+    "model_points": {
+      "path": "policy-axis-book.parquet",
+      "fingerprint": "sha256:d6a3e4b89a745b496f241e20932ee9436e86bdee79026f62eab41d9fb13206f0"
+    }
+  },
+  "graph_fingerprint": "sha256:14dd48f8046ce9b5c92c7442b8bfe4cf11a3395831d0583dce7b9a658d53dd76",
+  "book": {
+    "columns": [
+      "Policy number",
+      "band",
+      "issue_age",
+      "policy_term",
+      "sum_assured"
+    ],
+    "digest": "sha256:3a05170b831e610c54cc871fd68317207adca4e3859751ca2c474338e75034c6"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "Policy number",
+      "column": "Policy number",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:8df06bce73128d9ccec94b715a78bf42a525fb75e61d85642255d44bcec97e63",
+      "fingerprint": "sha256:731c0c19a76035bcd74a739635270c034f2bc997e62df39f5d1134fd2094620f",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": [
+        "POL-000343",
+        "GB-2019-88231",
+        "3:40",
+        "all"
+      ],
+      "trace": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "sum_assured",
+      "column": "sum_assured",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b643510e5bc2884efbc56ffc1b90fca82f7cc07abb692dd75abb3cf7d1f60b38",
+      "fingerprint": "sha256:c7d944982f89b2858870c74491fff1c28758dbead932cdaa6ba90157ec2b3778",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": [
+        250000.0,
+        75000.0,
+        1000000.0,
+        500000.0
+      ],
+      "trace": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "issue_age",
+      "column": "issue_age",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:45de65cbc4208d55c69342f203efd178a89c8febab19a5841622bbe80fc0ca7a",
+      "fingerprint": "sha256:f7e954b8774c236351097c62d7f5489257a65e1bab70b4c8d262e3179d5836eb",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": [
+        42,
+        31,
+        58,
+        49
+      ],
+      "trace": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "band",
+      "column": "band",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:40960759d1b6d91b668c6bfbedb8d8fb83a6ee155b463de854203acf7c73e09d",
+      "fingerprint": "sha256:ab9764f171b7e413cbd58f6145c58d4c2bbd30ec4784d5fb1dd3d93af017b146",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": [
+        "standard",
+        "standard",
+        "preferred",
+        "preferred"
+      ],
+      "trace": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "policy_term",
+      "column": "policy_term",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:91724fb06f98b8de5118ea5351b6773b814d1deedbb593d0f29123f247554556",
+      "fingerprint": "sha256:36f7b811c3e269e0c5ee31794abff91e9a104829d3d0fc04d643ffef1418bbbe",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": [
+        20,
+        15,
+        10,
+        20
+      ],
+      "trace": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "projection_start_date@1",
+      "column": "projection_start_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:6448dcec72f80b4c7cf5aaec1f67486f8bb1d87c602ae1169709e60369dbd140",
+      "fingerprint": "sha256:e09281c0139d21f13862e355a5e05a2046c99924a8809b1efab7436678a28cdb",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:35",
+      "facets": {},
+      "value_sample": [
+        "2025-01-31",
+        "2025-01-31",
+        "2025-01-31",
+        "2025-01-31"
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": "projection_start_date"
+          },
+          {
+            "step": 2,
+            "expr": "projection_start_date",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "2025-01-31",
+            "result": "2025-01-31"
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "projection_start_date"
+          },
+          {
+            "step": 2,
+            "expr": "projection_start_date",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "2025-01-31",
+            "result": "2025-01-31"
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "projection_start_date"
+          },
+          {
+            "step": 2,
+            "expr": "projection_start_date",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "2025-01-31",
+            "result": "2025-01-31"
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "projection_start_date"
+          },
+          {
+            "step": 2,
+            "expr": "projection_start_date",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "2025-01-31",
+            "result": "2025-01-31"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "projection_end_date@1",
+      "column": "projection_end_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:6448dcec72f80b4c7cf5aaec1f67486f8bb1d87c602ae1169709e60369dbd140",
+      "fingerprint": "sha256:e09281c0139d21f13862e355a5e05a2046c99924a8809b1efab7436678a28cdb",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:35",
+      "facets": {},
+      "value_sample": [
+        "2027-01-31",
+        "2027-01-31",
+        "2027-01-31",
+        "2027-01-31"
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": "projection_end_date"
+          },
+          {
+            "step": 2,
+            "expr": "projection_end_date",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "2027-01-31",
+            "result": "2027-01-31"
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "projection_end_date"
+          },
+          {
+            "step": 2,
+            "expr": "projection_end_date",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "2027-01-31",
+            "result": "2027-01-31"
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "projection_end_date"
+          },
+          {
+            "step": 2,
+            "expr": "projection_end_date",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "2027-01-31",
+            "result": "2027-01-31"
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "projection_end_date"
+          },
+          {
+            "step": 2,
+            "expr": "projection_end_date",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "2027-01-31",
+            "result": "2027-01-31"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "num_proj_months@1",
+      "column": "num_proj_months",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:6448dcec72f80b4c7cf5aaec1f67486f8bb1d87c602ae1169709e60369dbd140",
+      "fingerprint": "sha256:e09281c0139d21f13862e355a5e05a2046c99924a8809b1efab7436678a28cdb",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:35",
+      "facets": {},
+      "value_sample": [
+        25,
+        25,
+        25,
+        25
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": "num_proj_months"
+          },
+          {
+            "step": 2,
+            "expr": "num_proj_months",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "25",
+            "result": 25
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "num_proj_months"
+          },
+          {
+            "step": 2,
+            "expr": "num_proj_months",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "25",
+            "result": 25
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "num_proj_months"
+          },
+          {
+            "step": 2,
+            "expr": "num_proj_months",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "25",
+            "result": 25
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "num_proj_months"
+          },
+          {
+            "step": 2,
+            "expr": "num_proj_months",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "25",
+            "result": 25
+          }
+        ]
+      ]
+    },
+    {
+      "id": "month@1",
+      "column": "month",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:6448dcec72f80b4c7cf5aaec1f67486f8bb1d87c602ae1169709e60369dbd140",
+      "fingerprint": "sha256:e09281c0139d21f13862e355a5e05a2046c99924a8809b1efab7436678a28cdb",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:35",
+      "facets": {},
+      "value_sample": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ]
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": "month"
+          },
+          {
+            "step": 2,
+            "expr": "month  (25 periods)",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "[0, 1, 2, \u2025, 24]  (25 periods)",
+            "result": 0,
+            "shape": "25 periods \u00b7 first 0 \u00b7 last 24 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "month"
+          },
+          {
+            "step": 2,
+            "expr": "month  (25 periods)",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "[0, 1, 2, \u2025, 24]  (25 periods)",
+            "result": 0,
+            "shape": "25 periods \u00b7 first 0 \u00b7 last 24 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "month"
+          },
+          {
+            "step": 2,
+            "expr": "month  (25 periods)",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "[0, 1, 2, \u2025, 24]  (25 periods)",
+            "result": 0,
+            "shape": "25 periods \u00b7 first 0 \u00b7 last 24 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "month"
+          },
+          {
+            "step": 2,
+            "expr": "month  (25 periods)",
+            "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+          },
+          {
+            "step": 3,
+            "expr": "[0, 1, 2, \u2025, 24]  (25 periods)",
+            "result": 0,
+            "shape": "25 periods \u00b7 first 0 \u00b7 last 24 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ]
+      ]
+    },
+    {
+      "id": "attained_age@1",
+      "column": "attained_age",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.issue_age + af.month // 12",
+      "reads": [
+        "issue_age",
+        "month@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:b41cca561105d80bc924e99ec9e91f3de916aaef38d995ab1018300d23963aee",
+      "fingerprint": "sha256:aba5089af278ee8b8058db40b787ba9f7d9af653b1e3a4de9d9ba19c6be7f1b9",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:42",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "issue_age",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "month@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        [
+          42,
+          42,
+          42,
+          42,
+          42,
+          42,
+          42,
+          42,
+          42,
+          42,
+          42,
+          42,
+          43,
+          43,
+          43,
+          43,
+          43,
+          43,
+          43,
+          43,
+          43,
+          43,
+          43,
+          43,
+          44
+        ],
+        [
+          31,
+          31,
+          31,
+          31,
+          31,
+          31,
+          31,
+          31,
+          31,
+          31,
+          31,
+          31,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          33
+        ],
+        [
+          58,
+          58,
+          58,
+          58,
+          58,
+          58,
+          58,
+          58,
+          58,
+          58,
+          58,
+          58,
+          59,
+          59,
+          59,
+          59,
+          59,
+          59,
+          59,
+          59,
+          59,
+          59,
+          59,
+          59,
+          60
+        ],
+        [
+          49,
+          49,
+          49,
+          49,
+          49,
+          49,
+          49,
+          49,
+          49,
+          49,
+          49,
+          49,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          51
+        ]
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": "(issue_age) + (month.eval((element()) // (12)))"
+          },
+          {
+            "step": 2,
+            "expr": "((42)) + (([0, 1, 2, \u2025, 24]).eval((element()) // (12)))  (25 periods)",
+            "values": {
+              "issue_age": 42,
+              "month": "[0, 1, 2, \u2025, 24] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[42, 42, 42, \u2025, 44]  (25 periods)",
+            "result": 42,
+            "shape": "25 periods \u00b7 first 42 \u00b7 last 44 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "(issue_age) + (month.eval((element()) // (12)))"
+          },
+          {
+            "step": 2,
+            "expr": "((31)) + (([0, 1, 2, \u2025, 24]).eval((element()) // (12)))  (25 periods)",
+            "values": {
+              "issue_age": 31,
+              "month": "[0, 1, 2, \u2025, 24] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[31, 31, 31, \u2025, 33]  (25 periods)",
+            "result": 31,
+            "shape": "25 periods \u00b7 first 31 \u00b7 last 33 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "(issue_age) + (month.eval((element()) // (12)))"
+          },
+          {
+            "step": 2,
+            "expr": "((58)) + (([0, 1, 2, \u2025, 24]).eval((element()) // (12)))  (25 periods)",
+            "values": {
+              "issue_age": 58,
+              "month": "[0, 1, 2, \u2025, 24] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[58, 58, 58, \u2025, 60]  (25 periods)",
+            "result": 58,
+            "shape": "25 periods \u00b7 first 58 \u00b7 last 60 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "(issue_age) + (month.eval((element()) // (12)))"
+          },
+          {
+            "step": 2,
+            "expr": "((49)) + (([0, 1, 2, \u2025, 24]).eval((element()) // (12)))  (25 periods)",
+            "values": {
+              "issue_age": 49,
+              "month": "[0, 1, 2, \u2025, 24] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[49, 49, 49, \u2025, 51]  (25 periods)",
+            "result": 49,
+            "shape": "25 periods \u00b7 first 49 \u00b7 last 51 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ]
+      ]
+    },
+    {
+      "id": "mort_rate_mth@1",
+      "column": "mort_rate_mth",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.attained_age * 0.00002",
+      "reads": [
+        "attained_age@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:6a68bbd5e08590605e2f41aafea39f7a68c2e769d68180de291952d0bd690451",
+      "fingerprint": "sha256:f0ca33e17d73e8b5e4e4c02e11398c62b53a3858ff10358615eff5cc15612497",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:46",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "attained_age@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        [
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00084,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00086,
+          0.00088
+        ],
+        [
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00062,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00064,
+          0.00066
+        ],
+        [
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00116,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.00118,
+          0.0012
+        ],
+        [
+          0.00098,
+          0.00098,
+          0.00098,
+          0.00098,
+          0.00098,
+          0.00098,
+          0.00098,
+          0.00098,
+          0.00098,
+          0.00098,
+          0.00098,
+          0.00098,
+          0.001,
+          0.001,
+          0.001,
+          0.001,
+          0.001,
+          0.001,
+          0.001,
+          0.001,
+          0.001,
+          0.001,
+          0.001,
+          0.001,
+          0.00102
+        ]
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": "attained_age.eval((element()) * (0.00002))"
+          },
+          {
+            "step": 2,
+            "expr": "([42, 42, 42, \u2025, 44]).eval((element()) * (0.00002))  (25 periods)",
+            "values": {
+              "attained_age": "[42, 42, 42, \u2025, 44] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[0.00084, 0.00084, 0.00084, \u2025, 0.00088]  (25 periods)",
+            "result": 0.00084,
+            "shape": "25 periods \u00b7 first 0.00084 \u00b7 last 0.00088 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "pointer": "largest single-period move at t=24 (more than half of all the period-to-period movement in this run, a reading taken only over 3 moves or more)",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "attained_age.eval((element()) * (0.00002))"
+          },
+          {
+            "step": 2,
+            "expr": "([31, 31, 31, \u2025, 33]).eval((element()) * (0.00002))  (25 periods)",
+            "values": {
+              "attained_age": "[31, 31, 31, \u2025, 33] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[0.00062, 0.00062, 0.00062, \u2025, 0.00066]  (25 periods)",
+            "result": 0.00062,
+            "shape": "25 periods \u00b7 first 0.00062 \u00b7 last 0.00066 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "pointer": "largest single-period move at t=12 (more than half of all the period-to-period movement in this run, a reading taken only over 3 moves or more)",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "attained_age.eval((element()) * (0.00002))"
+          },
+          {
+            "step": 2,
+            "expr": "([58, 58, 58, \u2025, 60]).eval((element()) * (0.00002))  (25 periods)",
+            "values": {
+              "attained_age": "[58, 58, 58, \u2025, 60] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[0.00116, 0.00116, 0.00116, \u2025, 0.0012]  (25 periods)",
+            "result": 0.00116,
+            "shape": "25 periods \u00b7 first 0.00116 \u00b7 last 0.0012 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "pointer": "largest single-period move at t=12 (more than half of all the period-to-period movement in this run, a reading taken only over 3 moves or more)",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "attained_age.eval((element()) * (0.00002))"
+          },
+          {
+            "step": 2,
+            "expr": "([49, 49, 49, \u2025, 51]).eval((element()) * (0.00002))  (25 periods)",
+            "values": {
+              "attained_age": "[49, 49, 49, \u2025, 51] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[0.00098, 0.00098, 0.00098, \u2025, 0.00102]  (25 periods)",
+            "result": 0.00098,
+            "shape": "25 periods \u00b7 first 0.00098 \u00b7 last 0.00102 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ]
+      ]
+    },
+    {
+      "id": "in_force@1",
+      "column": "in_force",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "when(af.month < af.policy_term * 12).then(1.0).otherwise(0.0)",
+      "reads": [
+        "month@1",
+        "policy_term"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:52837737fa8208623db8f06b535976b614caea2835209684e139ba7d42daf99b",
+      "fingerprint": "sha256:007900f8eb90dbba23e8030a3e2639d60d7d273b23254d0a5e51ae4bc7a32762",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:48",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "month@1",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "CONDITIONAL"
+                }
+              ]
+            },
+            {
+              "source": "policy_term",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "CONDITIONAL"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": "month_conditional((policy_term) * (12), 1, 0)"
+          },
+          {
+            "step": 2,
+            "expr": "month_conditional(((20)) * (12), 1, 0)  (25 periods)",
+            "values": {
+              "policy_term": 20
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1, 1, 1, \u2025, 1]  (25 periods)",
+            "result": 1.0,
+            "shape": "25 periods \u00b7 first 1 \u00b7 last 1 \u00b7 flat \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "month_conditional((policy_term) * (12), 1, 0)"
+          },
+          {
+            "step": 2,
+            "expr": "month_conditional(((15)) * (12), 1, 0)  (25 periods)",
+            "values": {
+              "policy_term": 15
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1, 1, 1, \u2025, 1]  (25 periods)",
+            "result": 1.0,
+            "shape": "25 periods \u00b7 first 1 \u00b7 last 1 \u00b7 flat \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "month_conditional((policy_term) * (12), 1, 0)"
+          },
+          {
+            "step": 2,
+            "expr": "month_conditional(((10)) * (12), 1, 0)  (25 periods)",
+            "values": {
+              "policy_term": 10
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1, 1, 1, \u2025, 1]  (25 periods)",
+            "result": 1.0,
+            "shape": "25 periods \u00b7 first 1 \u00b7 last 1 \u00b7 flat \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "month_conditional((policy_term) * (12), 1, 0)"
+          },
+          {
+            "step": 2,
+            "expr": "month_conditional(((20)) * (12), 1, 0)  (25 periods)",
+            "values": {
+              "policy_term": 20
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1, 1, 1, \u2025, 1]  (25 periods)",
+            "result": 1.0,
+            "shape": "25 periods \u00b7 first 1 \u00b7 last 1 \u00b7 flat \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ]
+      ]
+    },
+    {
+      "id": "expected_claims@1",
+      "column": "expected_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * af.mort_rate_mth * af.in_force",
+      "reads": [
+        "sum_assured",
+        "mort_rate_mth@1",
+        "in_force@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:0e26ff8c131381160c2792712e70ef864b381fdc3071ea99dbdebe4abb104a8c",
+      "fingerprint": "sha256:e98348ab25254259c702e1b167355cb2311c6dcebb39ba87c0f9c7c0b0b5739b",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:50",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "mort_rate_mth@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "in_force@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        [
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          220.0
+        ],
+        [
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          49.5
+        ],
+        [
+          1160.0,
+          1160.0,
+          1160.0,
+          1160.0,
+          1160.0,
+          1160.0,
+          1160.0,
+          1160.0,
+          1160.0,
+          1160.0,
+          1160.0,
+          1160.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1180.0,
+          1200.0
+        ],
+        [
+          490.0,
+          490.0,
+          490.0,
+          490.0,
+          490.0,
+          490.0,
+          490.0,
+          490.0,
+          490.0,
+          490.0,
+          490.0,
+          490.0,
+          500.0,
+          500.0,
+          500.0,
+          500.0,
+          500.0,
+          500.0,
+          500.0,
+          500.0,
+          500.0,
+          500.0,
+          500.0,
+          500.0,
+          510.0
+        ]
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": "((sum_assured) * (mort_rate_mth)) * (in_force)"
+          },
+          {
+            "step": 2,
+            "expr": "(((250000)) * (([0.00084, 0.00084, 0.00084, \u2025, 0.00088]))) * (([1, 1, 1, \u2025, 1]))  (25 periods)",
+            "values": {
+              "mort_rate_mth": "[0.00084, 0.00084, 0.00084, \u2025, 0.00088] (25 periods)",
+              "sum_assured": 250000.0,
+              "in_force": "[1, 1, 1, \u2025, 1] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[210, 210, 210, \u2025, 220]  (25 periods)",
+            "result": 210.0,
+            "shape": "25 periods \u00b7 first 210 \u00b7 last 220 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "((sum_assured) * (mort_rate_mth)) * (in_force)"
+          },
+          {
+            "step": 2,
+            "expr": "(((75000)) * (([0.00062, 0.00062, 0.00062, \u2025, 0.00066]))) * (([1, 1, 1, \u2025, 1]))  (25 periods)",
+            "values": {
+              "mort_rate_mth": "[0.00062, 0.00062, 0.00062, \u2025, 0.00066] (25 periods)",
+              "sum_assured": 75000.0,
+              "in_force": "[1, 1, 1, \u2025, 1] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[46.5, 46.5, 46.5, \u2025, 49.5]  (25 periods)",
+            "result": 46.5,
+            "shape": "25 periods \u00b7 first 46.5 \u00b7 last 49.5 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "((sum_assured) * (mort_rate_mth)) * (in_force)"
+          },
+          {
+            "step": 2,
+            "expr": "(((1e+06)) * (([0.00116, 0.00116, 0.00116, \u2025, 0.0012]))) * (([1, 1, 1, \u2025, 1]))  (25 periods)",
+            "values": {
+              "mort_rate_mth": "[0.00116, 0.00116, 0.00116, \u2025, 0.0012] (25 periods)",
+              "sum_assured": 1000000.0,
+              "in_force": "[1, 1, 1, \u2025, 1] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1160, 1160, 1160, \u2025, 1200]  (25 periods)",
+            "result": 1160.0,
+            "shape": "25 periods \u00b7 first 1160 \u00b7 last 1200 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "((sum_assured) * (mort_rate_mth)) * (in_force)"
+          },
+          {
+            "step": 2,
+            "expr": "(((500000)) * (([0.00098, 0.00098, 0.00098, \u2025, 0.00102]))) * (([1, 1, 1, \u2025, 1]))  (25 periods)",
+            "values": {
+              "mort_rate_mth": "[0.00098, 0.00098, 0.00098, \u2025, 0.00102] (25 periods)",
+              "sum_assured": 500000.0,
+              "in_force": "[1, 1, 1, \u2025, 1] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[490, 490, 490, \u2025, 510]  (25 periods)",
+            "result": 490.0,
+            "shape": "25 periods \u00b7 first 490 \u00b7 last 510 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ]
+      ]
+    },
+    {
+      "id": "band_loading@1",
+      "column": "band_loading",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "when(af.band == \"preferred\").then(0.9).otherwise(1.0)",
+      "reads": [
+        "band"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:143d4364e5074de45d5c49034cd26e78e4626c9e0b931dc9f81171930fcbbae5",
+      "fingerprint": "sha256:d7dbf7a77f468985e103332b4e95ed7201d48332053348bfe73343de7647db90",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:53",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "band",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "CONDITIONAL"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        1.0,
+        1.0,
+        0.9,
+        0.9
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": ".when((band) == (\"preferred\")).then(0.9).otherwise(1)"
+          },
+          {
+            "step": 2,
+            "expr": ".when(((standard)) == (\"preferred\")).then(0.9).otherwise(1)",
+            "values": {
+              "band": "standard"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "1",
+            "result": 1.0
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": ".when((band) == (\"preferred\")).then(0.9).otherwise(1)"
+          },
+          {
+            "step": 2,
+            "expr": ".when(((standard)) == (\"preferred\")).then(0.9).otherwise(1)",
+            "values": {
+              "band": "standard"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "1",
+            "result": 1.0
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": ".when((band) == (\"preferred\")).then(0.9).otherwise(1)"
+          },
+          {
+            "step": 2,
+            "expr": ".when(((preferred)) == (\"preferred\")).then(0.9).otherwise(1)",
+            "values": {
+              "band": "preferred"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "0.9",
+            "result": 0.9
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": ".when((band) == (\"preferred\")).then(0.9).otherwise(1)"
+          },
+          {
+            "step": 2,
+            "expr": ".when(((preferred)) == (\"preferred\")).then(0.9).otherwise(1)",
+            "values": {
+              "band": "preferred"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "0.9",
+            "result": 0.9
+          }
+        ]
+      ]
+    },
+    {
+      "id": "net_claims@1",
+      "column": "net_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.expected_claims * af.band_loading",
+      "reads": [
+        "expected_claims@1",
+        "band_loading@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:2207d472842ef2109099b25664f4d0556bffe42540d59c59b77052dce175f3b2",
+      "fingerprint": "sha256:3fc2e83284dccb4d707d7c2cb4c777524e57bf94a8d83856f11289aabc259109",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:55",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "expected_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "band_loading@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        [
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          210.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          215.0,
+          220.0
+        ],
+        [
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          46.5,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          48.0,
+          49.5
+        ],
+        [
+          1044.0,
+          1044.0,
+          1044.0,
+          1044.0,
+          1044.0,
+          1044.0,
+          1044.0,
+          1044.0,
+          1044.0,
+          1044.0,
+          1044.0,
+          1044.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1062.0,
+          1080.0
+        ],
+        [
+          441.0,
+          441.0,
+          441.0,
+          441.0,
+          441.0,
+          441.0,
+          441.0,
+          441.0,
+          441.0,
+          441.0,
+          441.0,
+          441.0,
+          450.0,
+          450.0,
+          450.0,
+          450.0,
+          450.0,
+          450.0,
+          450.0,
+          450.0,
+          450.0,
+          450.0,
+          450.0,
+          450.0,
+          459.0
+        ]
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": "(expected_claims) * (band_loading)"
+          },
+          {
+            "step": 2,
+            "expr": "(([210, 210, 210, \u2025, 220])) * ((1))  (25 periods)",
+            "values": {
+              "expected_claims": "[210, 210, 210, \u2025, 220] (25 periods)",
+              "band_loading": 1.0
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[210, 210, 210, \u2025, 220]  (25 periods)",
+            "result": 210.0,
+            "shape": "25 periods \u00b7 first 210 \u00b7 last 220 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "(expected_claims) * (band_loading)"
+          },
+          {
+            "step": 2,
+            "expr": "(([46.5, 46.5, 46.5, \u2025, 49.5])) * ((1))  (25 periods)",
+            "values": {
+              "expected_claims": "[46.5, 46.5, 46.5, \u2025, 49.5] (25 periods)",
+              "band_loading": 1.0
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[46.5, 46.5, 46.5, \u2025, 49.5]  (25 periods)",
+            "result": 46.5,
+            "shape": "25 periods \u00b7 first 46.5 \u00b7 last 49.5 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "(expected_claims) * (band_loading)"
+          },
+          {
+            "step": 2,
+            "expr": "(([1160, 1160, 1160, \u2025, 1200])) * ((0.9))  (25 periods)",
+            "values": {
+              "expected_claims": "[1160, 1160, 1160, \u2025, 1200] (25 periods)",
+              "band_loading": 0.9
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1044, 1044, 1044, \u2025, 1080]  (25 periods)",
+            "result": 1044.0,
+            "shape": "25 periods \u00b7 first 1044 \u00b7 last 1080 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": "(expected_claims) * (band_loading)"
+          },
+          {
+            "step": 2,
+            "expr": "(([490, 490, 490, \u2025, 510])) * ((0.9))  (25 periods)",
+            "values": {
+              "expected_claims": "[490, 490, 490, \u2025, 510] (25 periods)",
+              "band_loading": 0.9
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[441, 441, 441, \u2025, 459]  (25 periods)",
+            "result": 441.0,
+            "shape": "25 periods \u00b7 first 441 \u00b7 last 459 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ]
+      ]
+    },
+    {
+      "id": "disc_factors@1",
+      "column": "disc_factors",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "(1.0 + DISCOUNT_RATE_MONTHLY) ** (af.month * -1.0)",
+      "reads": [
+        "month@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:318d1c7e6c083f791adee159fd101fbd97fd9602aaafda45aeaac362a225126c",
+      "fingerprint": "sha256:637d7ced6c461fa506698616a7e06c55b5f16cb06a1dc543a1c380c5c49932f1",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:57",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "month@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        [
+          1.0,
+          0.996016,
+          0.992048,
+          0.988095,
+          0.984159,
+          0.980238,
+          0.976332,
+          0.972443,
+          0.968568,
+          0.96471,
+          0.960866,
+          0.957038,
+          0.953225,
+          0.949427,
+          0.945645,
+          0.941877,
+          0.938125,
+          0.934387,
+          0.930665,
+          0.926957,
+          0.923264,
+          0.919585,
+          0.915922,
+          0.912273,
+          0.908638
+        ],
+        [
+          1.0,
+          0.996016,
+          0.992048,
+          0.988095,
+          0.984159,
+          0.980238,
+          0.976332,
+          0.972443,
+          0.968568,
+          0.96471,
+          0.960866,
+          0.957038,
+          0.953225,
+          0.949427,
+          0.945645,
+          0.941877,
+          0.938125,
+          0.934387,
+          0.930665,
+          0.926957,
+          0.923264,
+          0.919585,
+          0.915922,
+          0.912273,
+          0.908638
+        ],
+        [
+          1.0,
+          0.996016,
+          0.992048,
+          0.988095,
+          0.984159,
+          0.980238,
+          0.976332,
+          0.972443,
+          0.968568,
+          0.96471,
+          0.960866,
+          0.957038,
+          0.953225,
+          0.949427,
+          0.945645,
+          0.941877,
+          0.938125,
+          0.934387,
+          0.930665,
+          0.926957,
+          0.923264,
+          0.919585,
+          0.915922,
+          0.912273,
+          0.908638
+        ],
+        [
+          1.0,
+          0.996016,
+          0.992048,
+          0.988095,
+          0.984159,
+          0.980238,
+          0.976332,
+          0.972443,
+          0.968568,
+          0.96471,
+          0.960866,
+          0.957038,
+          0.953225,
+          0.949427,
+          0.945645,
+          0.941877,
+          0.938125,
+          0.934387,
+          0.930665,
+          0.926957,
+          0.923264,
+          0.919585,
+          0.915922,
+          0.912273,
+          0.908638
+        ]
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": ".when((1.004) > (0)).then((month.eval((element()) * (-1))) * (1.004.log(2.718281828459045)).eval(element().exp())).otherwise(.when((1.004) == (0)).then(month.eval((element()) * (-1)).eval(.when((element()) > (0)).then(0).otherwise(.when((element()) == (0)).then(1).otherwise(NaN)))).otherwise(null))"
+          },
+          {
+            "step": 2,
+            "expr": ".when((1.004) > (0)).then((([0, 1, 2, \u2025, 24]).eval((element()) * (-1))) * (1.004.log(2.718281828459045)).eval(element().exp())).otherwise(.when((1.004) == (0)).then(([0, 1, 2, \u2025, 24]).eval((element()) * (-1)).eval(.when((element()) > (0)).then(0).otherwise(.when((element()) == (0)).then(1).otherwise(NaN)))).otherwise(null))  (25 periods)",
+            "values": {
+              "month": "[0, 1, 2, \u2025, 24] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1, 0.996016, 0.992048, \u2025, 0.908638]  (25 periods)",
+            "result": 1.0,
+            "shape": "25 periods \u00b7 first 1 \u00b7 last 0.908638 \u00b7 \u2193 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": ".when((1.004) > (0)).then((month.eval((element()) * (-1))) * (1.004.log(2.718281828459045)).eval(element().exp())).otherwise(.when((1.004) == (0)).then(month.eval((element()) * (-1)).eval(.when((element()) > (0)).then(0).otherwise(.when((element()) == (0)).then(1).otherwise(NaN)))).otherwise(null))"
+          },
+          {
+            "step": 2,
+            "expr": ".when((1.004) > (0)).then((([0, 1, 2, \u2025, 24]).eval((element()) * (-1))) * (1.004.log(2.718281828459045)).eval(element().exp())).otherwise(.when((1.004) == (0)).then(([0, 1, 2, \u2025, 24]).eval((element()) * (-1)).eval(.when((element()) > (0)).then(0).otherwise(.when((element()) == (0)).then(1).otherwise(NaN)))).otherwise(null))  (25 periods)",
+            "values": {
+              "month": "[0, 1, 2, \u2025, 24] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1, 0.996016, 0.992048, \u2025, 0.908638]  (25 periods)",
+            "result": 1.0,
+            "shape": "25 periods \u00b7 first 1 \u00b7 last 0.908638 \u00b7 \u2193 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": ".when((1.004) > (0)).then((month.eval((element()) * (-1))) * (1.004.log(2.718281828459045)).eval(element().exp())).otherwise(.when((1.004) == (0)).then(month.eval((element()) * (-1)).eval(.when((element()) > (0)).then(0).otherwise(.when((element()) == (0)).then(1).otherwise(NaN)))).otherwise(null))"
+          },
+          {
+            "step": 2,
+            "expr": ".when((1.004) > (0)).then((([0, 1, 2, \u2025, 24]).eval((element()) * (-1))) * (1.004.log(2.718281828459045)).eval(element().exp())).otherwise(.when((1.004) == (0)).then(([0, 1, 2, \u2025, 24]).eval((element()) * (-1)).eval(.when((element()) > (0)).then(0).otherwise(.when((element()) == (0)).then(1).otherwise(NaN)))).otherwise(null))  (25 periods)",
+            "values": {
+              "month": "[0, 1, 2, \u2025, 24] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1, 0.996016, 0.992048, \u2025, 0.908638]  (25 periods)",
+            "result": 1.0,
+            "shape": "25 periods \u00b7 first 1 \u00b7 last 0.908638 \u00b7 \u2193 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": ".when((1.004) > (0)).then((month.eval((element()) * (-1))) * (1.004.log(2.718281828459045)).eval(element().exp())).otherwise(.when((1.004) == (0)).then(month.eval((element()) * (-1)).eval(.when((element()) > (0)).then(0).otherwise(.when((element()) == (0)).then(1).otherwise(NaN)))).otherwise(null))"
+          },
+          {
+            "step": 2,
+            "expr": ".when((1.004) > (0)).then((([0, 1, 2, \u2025, 24]).eval((element()) * (-1))) * (1.004.log(2.718281828459045)).eval(element().exp())).otherwise(.when((1.004) == (0)).then(([0, 1, 2, \u2025, 24]).eval((element()) * (-1)).eval(.when((element()) > (0)).then(0).otherwise(.when((element()) == (0)).then(1).otherwise(NaN)))).otherwise(null))  (25 periods)",
+            "values": {
+              "month": "[0, 1, 2, \u2025, 24] (25 periods)"
+            }
+          },
+          {
+            "step": 3,
+            "expr": "[1, 0.996016, 0.992048, \u2025, 0.908638]  (25 periods)",
+            "result": 1.0,
+            "shape": "25 periods \u00b7 first 1 \u00b7 last 0.908638 \u00b7 \u2193 \u00b7 0 without a number \u00b7 0 negative",
+            "comment": "``result`` is period 0 of 25."
+          }
+        ]
+      ]
+    },
+    {
+      "id": "pv_net_claims@1",
+      "column": "pv_net_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "(af.net_claims * af.disc_factors).list.sum()",
+      "reads": [
+        "net_claims@1",
+        "disc_factors@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:2bf0304101335ee2eccbc24e315766c88ccbf3c494473bf90b2fdc1d93d0ad77",
+      "fingerprint": "sha256:e93fefbe371ead9ab29554a8a70e7940fba7a8c96fec4f5c2536b7d2fb54cf96",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:59",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "net_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            },
+            {
+              "source": "disc_factors@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        5071.548445,
+        1128.096259,
+        25123.638829,
+        10630.738794
+      ],
+      "trace": [
+        [
+          {
+            "step": 1,
+            "expr": ".when((net_claims) * (disc_factors).eval(element().is_null()).agg(element().any_ignore_nulls())).then(null).otherwise((net_claims) * (disc_factors).sum())"
+          },
+          {
+            "step": 2,
+            "expr": ".when((([210, 210, 210, \u2025, 220])) * (([1, 0.996016, 0.992048, \u2025, 0.908638])).eval(element().is_null()).agg(element().any_ignore_nulls())).then(null).otherwise((([210, 210, 210, \u2025, 220])) * (([1, 0.996016, 0.992048, \u2025, 0.908638])).sum())",
+            "values": {
+              "disc_factors": "[1, 0.996016, 0.992048, \u2025, 0.908638] (25 periods)",
+              "net_claims": "[210, 210, 210, \u2025, 220] (25 periods)"
+            },
+            "comment": "the total of net_claims, disc_factors across the projection's periods"
+          },
+          {
+            "step": 3,
+            "expr": "5071.55",
+            "result": 5071.548445
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": ".when((net_claims) * (disc_factors).eval(element().is_null()).agg(element().any_ignore_nulls())).then(null).otherwise((net_claims) * (disc_factors).sum())"
+          },
+          {
+            "step": 2,
+            "expr": ".when((([46.5, 46.5, 46.5, \u2025, 49.5])) * (([1, 0.996016, 0.992048, \u2025, 0.908638])).eval(element().is_null()).agg(element().any_ignore_nulls())).then(null).otherwise((([46.5, 46.5, 46.5, \u2025, 49.5])) * (([1, 0.996016, 0.992048, \u2025, 0.908638])).sum())",
+            "values": {
+              "disc_factors": "[1, 0.996016, 0.992048, \u2025, 0.908638] (25 periods)",
+              "net_claims": "[46.5, 46.5, 46.5, \u2025, 49.5] (25 periods)"
+            },
+            "comment": "the total of net_claims, disc_factors across the projection's periods"
+          },
+          {
+            "step": 3,
+            "expr": "1128.1",
+            "result": 1128.096259
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": ".when((net_claims) * (disc_factors).eval(element().is_null()).agg(element().any_ignore_nulls())).then(null).otherwise((net_claims) * (disc_factors).sum())"
+          },
+          {
+            "step": 2,
+            "expr": ".when((([1044, 1044, 1044, \u2025, 1080])) * (([1, 0.996016, 0.992048, \u2025, 0.908638])).eval(element().is_null()).agg(element().any_ignore_nulls())).then(null).otherwise((([1044, 1044, 1044, \u2025, 1080])) * (([1, 0.996016, 0.992048, \u2025, 0.908638])).sum())",
+            "values": {
+              "disc_factors": "[1, 0.996016, 0.992048, \u2025, 0.908638] (25 periods)",
+              "net_claims": "[1044, 1044, 1044, \u2025, 1080] (25 periods)"
+            },
+            "comment": "the total of net_claims, disc_factors across the projection's periods"
+          },
+          {
+            "step": 3,
+            "expr": "25123.6",
+            "result": 25123.638829
+          }
+        ],
+        [
+          {
+            "step": 1,
+            "expr": ".when((net_claims) * (disc_factors).eval(element().is_null()).agg(element().any_ignore_nulls())).then(null).otherwise((net_claims) * (disc_factors).sum())"
+          },
+          {
+            "step": 2,
+            "expr": ".when((([441, 441, 441, \u2025, 459])) * (([1, 0.996016, 0.992048, \u2025, 0.908638])).eval(element().is_null()).agg(element().any_ignore_nulls())).then(null).otherwise((([441, 441, 441, \u2025, 459])) * (([1, 0.996016, 0.992048, \u2025, 0.908638])).sum())",
+            "values": {
+              "disc_factors": "[1, 0.996016, 0.992048, \u2025, 0.908638] (25 periods)",
+              "net_claims": "[441, 441, 441, \u2025, 459] (25 periods)"
+            },
+            "comment": "the total of net_claims, disc_factors across the projection's periods"
+          },
+          {
+            "step": 3,
+            "expr": "10630.7",
+            "result": 10630.738794
+          }
+        ]
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "issue_age",
+      "target": "attained_age@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "month@1",
+      "target": "attained_age@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "attained_age@1",
+      "target": "mort_rate_mth@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "month@1",
+      "target": "in_force@1",
+      "relationship": "INDIRECT"
+    },
+    {
+      "source": "policy_term",
+      "target": "in_force@1",
+      "relationship": "INDIRECT"
+    },
+    {
+      "source": "sum_assured",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "mort_rate_mth@1",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "in_force@1",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "band",
+      "target": "band_loading@1",
+      "relationship": "INDIRECT"
+    },
+    {
+      "source": "expected_claims@1",
+      "target": "net_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "band_loading@1",
+      "target": "net_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "month@1",
+      "target": "disc_factors@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "net_claims@1",
+      "target": "pv_net_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "disc_factors@1",
+      "target": "pv_net_claims@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [],
+  "holes": [],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "model.py",
+      "fingerprint": "sha256:3e7ffa239e6d7bcfa128db4ac1ac74eb8a859f92cc4402783ebe17f7039016c1",
+      "payload": {
+        "text": "# SPDX-FileCopyrightText: 2026 Opio Inc.\n#\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"A small term book, run so that several of its policies can be compared.\n\nThe book behind this model is the awkward one: its ids are strings, they are\nnot in any order, one policy is called `3:40` and another is called `all`, and\nthe id column is named `Policy number` with a space in it. Nothing here cares\nabout any of that -- the model is four columns of ordinary arithmetic over a\ntwo-year monthly projection -- and that is the point. The names are the\nartifact's problem and the reader's, not the model's.\n\nTwo policies differ in every per-period column, because every one of them is\na function of the sum assured or the issue age, and no two rows of this book\nshare both.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom datetime import date\n\nfrom gaspatchio import ActuarialFrame, when\n\nN_PERIODS = 24\n\n# A flat monthly discount rate. Written as a module constant rather than a\n# column because it is the same number for every policy and every period, and\n# a column of one repeated number would say otherwise.\nDISCOUNT_RATE_MONTHLY = 0.004\n\n\ndef main(af: ActuarialFrame) -> ActuarialFrame:\n    \"\"\"Project expected claims over two years and discount them.\"\"\"\n    af = af.projection.set(\n        start_date=date(2025, 1, 31),\n        n_periods=N_PERIODS,\n        frequency=\"monthly\",\n    )\n\n    # Completed years since the projection opened, which is what ages the life.\n    af.attained_age = af.issue_age + af.month // 12\n\n    # A crude monthly rate standing in for a mortality table: this model is\n    # here to be read in a page, not to be reconciled against anything.\n    af.mort_rate_mth = af.attained_age * 0.00002\n\n    af.in_force = when(af.month < af.policy_term * 12).then(1.0).otherwise(0.0)\n\n    af.expected_claims = af.sum_assured * af.mort_rate_mth * af.in_force\n\n    # The preferred band is underwritten, so its claims are loaded down.\n    af.band_loading = when(af.band == \"preferred\").then(0.9).otherwise(1.0)\n\n    af.net_claims = af.expected_claims * af.band_loading\n\n    af.disc_factors = (1.0 + DISCOUNT_RATE_MONTHLY) ** (af.month * -1.0)\n\n    af.pv_net_claims = (af.net_claims * af.disc_factors).list.sum()\n\n    return af\n"
+      }
+    }
+  ],
+  "enrichment": {
+    "policy_id": "POL-000343",
+    "aggregation": null,
+    "periods": null,
+    "filter": null
+  },
+  "policies": [
+    {
+      "policy_id": "POL-000343",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 0 of 8 in policy-axis-book.parquet, selected by ':3'"
+    },
+    {
+      "policy_id": "GB-2019-88231",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 1 of 8 in policy-axis-book.parquet, selected by ':3'"
+    },
+    {
+      "policy_id": "3:40",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 2 of 8 in policy-axis-book.parquet, selected by ':3'"
+    },
+    {
+      "policy_id": "all",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "named on the command line, row 4 of 8 in policy-axis-book.parquet"
+    }
+  ],
+  "facets": {},
+  "document_digest": "sha256:9487ccd79efb62c0b1f1cfc25866d903dfe3a239908ddea68437c12f3b9548ab"
+}

@@ -13,10 +13,12 @@ ratchets.
 ## `af.projection.anniversary_mask()`
 
 ```python
-af.is_anniversary = pl.concat_list([
-    af.projection.anniversary_mask(),
-    pl.lit([False], dtype=pl.List(pl.Boolean)),
-])
+af.is_anniversary = pl.concat_list(
+    [
+        af.projection.anniversary_mask(),
+        pl.lit([False], dtype=pl.List(pl.Boolean)),
+    ]
+)
 ```
 
 `af.projection.anniversary_mask()` returns a per-row `List<Boolean>` of
@@ -94,10 +96,12 @@ so the commission is a flat rate on each surviving policy at each anniversary.
 af.is_approx_anniversary = af.duration_mth_t % 12 == 0
 
 # Explicit: structural anniversary mask from the projection grid
-af.is_anniversary = pl.concat_list([
-    af.projection.anniversary_mask(),
-    pl.lit([False], dtype=pl.List(pl.Boolean)),
-])
+af.is_anniversary = pl.concat_list(
+    [
+        af.projection.anniversary_mask(),
+        pl.lit([False], dtype=pl.List(pl.Boolean)),
+    ]
+)
 ```
 
 Both approaches produce the same `True` indices for a monthly projection

@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Constraints for reuse 6.2.0 in licence-check.yml: the packages it depends on,
+# with charset-normalizer, which its extra of that name adds, at the versions
+# that resolve for CPython 3.12 on x86-64 Linux as PyPI stood when the licence
+# check last passed, on 3 October 2026. That run installed all of them but
+# charset-normalizer, which it did not ask for. reuse itself comes from its
+# source archive, checked against REUSE_SHA256 in licence-check.yml. uv checks
+# no hashes when it installs a tool, so these are held by version. Move them
+# in the commit that moves reuse: resolve `reuse[charset-normalizer]==X` with
+# `uv pip compile` for that Python and platform, and copy its pins here.
+attrs==26.1.0
+boolean-py==5.0
+charset-normalizer==3.5.2
+click==8.5.0
+jinja2==3.1.6
+license-expression==30.4.4
+markupsafe==3.0.4
+python-debian==1.1.1
+python-magic==0.4.27
+tomlkit==0.15.1

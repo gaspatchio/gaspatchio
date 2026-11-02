@@ -1,0 +1,3625 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "The periods each aggregation reads, held by moving one cell",
+  "cases": [
+    {
+      "id": "window-cum_sum",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            3.0,
+            7.0,
+            15.0
+          ],
+          [
+            16.0,
+            48.0,
+            112.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-cum_sum-moved",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              104.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            3.0,
+            107.0,
+            115.0
+          ],
+          [
+            16.0,
+            48.0,
+            112.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-cum_sum",
+        "operand": "x",
+        "policy": 0,
+        "period": 2,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "window-cum_sum-reverse",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            15.0,
+            14.0,
+            12.0,
+            8.0
+          ],
+          [
+            112.0,
+            96.0,
+            64.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-cum_sum-reverse-moved",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              102.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            115.0,
+            114.0,
+            12.0,
+            8.0
+          ],
+          [
+            112.0,
+            96.0,
+            64.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-cum_sum-reverse",
+        "operand": "x",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": 0,
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-cum_prod",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              2.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            2.0,
+            4.0,
+            8.0,
+            16.0
+          ],
+          [
+            0.5,
+            0.25,
+            0.125
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-cum_prod-moved",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              3.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            2.0,
+            4.0,
+            12.0,
+            24.0
+          ],
+          [
+            0.5,
+            0.25,
+            0.125
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-cum_prod",
+        "operand": "x",
+        "policy": 0,
+        "period": 2,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "window-cum_prod-reverse",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              2.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            16.0,
+            8.0,
+            4.0,
+            2.0
+          ],
+          [
+            0.125,
+            0.25,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-cum_prod-reverse-moved",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              3.0,
+              2.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            24.0,
+            12.0,
+            4.0,
+            2.0
+          ],
+          [
+            0.125,
+            0.25,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-cum_prod-reverse",
+        "operand": "x",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": 0,
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-survival",
+      "covers": [
+        "projection.cumulative_survival"
+      ],
+      "inputs": {
+        "q": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              0.5,
+              0.5,
+              0.5
+            ],
+            [
+              0.25,
+              0.5,
+              0.75
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.cumulative_survival",
+        "args": [
+          {
+            "op": "col",
+            "name": "q"
+          }
+        ],
+        "attrs": {
+          "start_at": null,
+          "from_survival": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.5,
+            0.25,
+            0.125,
+            0.0625
+          ],
+          [
+            0.75,
+            0.375,
+            0.09375
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-survival-moved",
+      "covers": [
+        "projection.cumulative_survival"
+      ],
+      "inputs": {
+        "q": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              0.5,
+              0.75,
+              0.5
+            ],
+            [
+              0.25,
+              0.5,
+              0.75
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.cumulative_survival",
+        "args": [
+          {
+            "op": "col",
+            "name": "q"
+          }
+        ],
+        "attrs": {
+          "start_at": null,
+          "from_survival": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.5,
+            0.25,
+            0.0625,
+            0.03125
+          ],
+          [
+            0.75,
+            0.375,
+            0.09375
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-survival",
+        "operand": "q",
+        "policy": 0,
+        "period": 2,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "window-survival-start_at",
+      "covers": [
+        "projection.cumulative_survival"
+      ],
+      "inputs": {
+        "q": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              0.5,
+              0.5,
+              0.5
+            ],
+            [
+              0.25,
+              0.5,
+              0.75
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.cumulative_survival",
+        "args": [
+          {
+            "op": "col",
+            "name": "q"
+          }
+        ],
+        "attrs": {
+          "start_at": 1.0,
+          "from_survival": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.5,
+            0.25,
+            0.125
+          ],
+          [
+            1.0,
+            0.75,
+            0.375
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-survival-start_at-moved",
+      "covers": [
+        "projection.cumulative_survival"
+      ],
+      "inputs": {
+        "q": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              0.75,
+              0.5,
+              0.5
+            ],
+            [
+              0.25,
+              0.5,
+              0.75
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.cumulative_survival",
+        "args": [
+          {
+            "op": "col",
+            "name": "q"
+          }
+        ],
+        "attrs": {
+          "start_at": 1.0,
+          "from_survival": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.5,
+            0.125,
+            0.0625
+          ],
+          [
+            1.0,
+            0.75,
+            0.375
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-survival-start_at",
+        "operand": "q",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "window-accumulate",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            1.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              2.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            21.0,
+            43.0,
+            87.0,
+            175.0
+          ],
+          [
+            1.5,
+            1.75,
+            1.875
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-accumulate-moved-multiplier",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            1.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              3.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            21.0,
+            43.0,
+            130.0,
+            261.0
+          ],
+          [
+            1.5,
+            1.75,
+            1.875
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-accumulate",
+        "operand": "multiplier",
+        "policy": 0,
+        "period": 2,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "window-accumulate-moved-addend",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            1.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              2.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              5.0,
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            21.0,
+            47.0,
+            95.0,
+            191.0
+          ],
+          [
+            1.5,
+            1.75,
+            1.875
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-accumulate",
+        "operand": "addend",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "window-accumulate-reverse",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            1.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              2.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            175.0,
+            87.0,
+            43.0,
+            21.0
+          ],
+          [
+            1.875,
+            1.75,
+            1.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-accumulate-reverse-moved-multiplier",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            1.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              3.0,
+              2.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            261.0,
+            130.0,
+            43.0,
+            21.0
+          ],
+          [
+            1.875,
+            1.75,
+            1.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-accumulate-reverse",
+        "operand": "multiplier",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": 0,
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-accumulate-reverse-moved-addend",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            1.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              2.0,
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              5.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            191.0,
+            95.0,
+            47.0,
+            21.0
+          ],
+          [
+            1.875,
+            1.75,
+            1.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-accumulate-reverse",
+        "operand": "addend",
+        "policy": 0,
+        "period": 2,
+        "window": {
+          "periods": {
+            "from": 0,
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-remaining_sum",
+      "covers": [
+        "projection.remaining_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.remaining_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            15.0,
+            14.0,
+            12.0,
+            8.0
+          ],
+          [
+            112.0,
+            96.0,
+            64.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-remaining_sum-moved",
+      "covers": [
+        "projection.remaining_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              102.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.remaining_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            115.0,
+            114.0,
+            12.0,
+            8.0
+          ],
+          [
+            112.0,
+            96.0,
+            64.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-remaining_sum",
+        "operand": "x",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": 0,
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-prospective_value",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              8.0,
+              8.0,
+              8.0,
+              8.0
+            ],
+            [
+              4.0,
+              4.0,
+              4.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "end_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            7.5,
+            7.0,
+            6.0,
+            4.0
+          ],
+          [
+            12.0,
+            8.0,
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-prospective_value-moved-cashflow",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              8.0,
+              8.0,
+              16.0,
+              8.0
+            ],
+            [
+              4.0,
+              4.0,
+              4.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "end_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            8.5,
+            9.0,
+            10.0,
+            4.0
+          ],
+          [
+            12.0,
+            8.0,
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-prospective_value",
+        "operand": "cf",
+        "policy": 0,
+        "period": 2,
+        "window": {
+          "periods": {
+            "from": 0,
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-prospective_value-moved-rate",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              8.0,
+              8.0,
+              8.0,
+              8.0
+            ],
+            [
+              4.0,
+              4.0,
+              4.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              3.0,
+              1.0,
+              1.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "end_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            5.75,
+            3.5,
+            6.0,
+            4.0
+          ],
+          [
+            12.0,
+            8.0,
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-prospective_value",
+        "operand": "rate",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": 0,
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-prospective_value-beginning",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              8.0,
+              8.0,
+              8.0,
+              8.0
+            ],
+            [
+              4.0,
+              4.0,
+              4.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "beginning_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            15.0,
+            14.0,
+            12.0,
+            8.0
+          ],
+          [
+            12.0,
+            8.0,
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-prospective_value-beginning-moved-rate",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              8.0,
+              8.0,
+              8.0,
+              8.0
+            ],
+            [
+              4.0,
+              4.0,
+              4.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              3.0,
+              1.0,
+              1.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "beginning_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            13.5,
+            11.0,
+            12.0,
+            8.0
+          ],
+          [
+            12.0,
+            8.0,
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-prospective_value-beginning",
+        "operand": "rate",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": 0,
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-sum",
+      "covers": [
+        "sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          15.0,
+          112.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-sum-moved",
+      "covers": [
+        "sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              104.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          115.0,
+          112.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-sum",
+        "operand": "x",
+        "policy": 0,
+        "period": 2,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-mean",
+      "covers": [
+        "mean"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0,
+              6.0
+            ],
+            [
+              2.0,
+              4.0,
+              6.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "mean",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          3.0,
+          4.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-mean-moved",
+      "covers": [
+        "mean"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0,
+              10.0
+            ],
+            [
+              2.0,
+              4.0,
+              6.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "mean",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          4.0,
+          4.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-mean",
+        "operand": "x",
+        "policy": 0,
+        "period": 3,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-min",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              4.0,
+              3.0,
+              2.0,
+              5.0
+            ],
+            [
+              7.0,
+              8.0,
+              9.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          2.0,
+          7.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-min-moved",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              4.0,
+              3.0,
+              1.0,
+              5.0
+            ],
+            [
+              7.0,
+              8.0,
+              9.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          7.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-min",
+        "operand": "x",
+        "policy": 0,
+        "period": 2,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-max",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              4.0,
+              3.0,
+              2.0,
+              5.0
+            ],
+            [
+              7.0,
+              8.0,
+              9.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          5.0,
+          9.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-max-moved",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              4.0,
+              3.0,
+              2.0,
+              6.0
+            ],
+            [
+              7.0,
+              8.0,
+              9.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          6.0,
+          9.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-max",
+        "operand": "x",
+        "policy": 0,
+        "period": 3,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-irr",
+      "covers": [
+        "excel.irr"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -100.0,
+              100.0
+            ],
+            [
+              -100.0,
+              0.0,
+              100.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.irr",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          }
+        ],
+        "attrs": {
+          "default_guess": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-07,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-irr-moved",
+      "covers": [
+        "excel.irr"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -100.0,
+              110.0
+            ],
+            [
+              -100.0,
+              0.0,
+              100.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.irr",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          }
+        ],
+        "attrs": {
+          "default_guess": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.1,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-07,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-irr",
+        "operand": "cf",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-list-reverse",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0,
+              4.0
+            ],
+            [
+              5.0,
+              6.0,
+              7.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            4.0,
+            3.0,
+            2.0,
+            1.0
+          ],
+          [
+            7.0,
+            6.0,
+            5.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-list-reverse-moved",
+      "covers": [
+        "list.reverse"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              2.0,
+              3.0,
+              4.0
+            ],
+            [
+              5.0,
+              6.0,
+              7.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.reverse",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            4.0,
+            3.0,
+            2.0,
+            10.0
+          ],
+          [
+            7.0,
+            6.0,
+            5.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-list-reverse",
+        "operand": "x",
+        "policy": 0,
+        "period": 0,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": "last"
+          }
+        }
+      }
+    },
+    {
+      "id": "window-discount_factor-forward",
+      "covers": [
+        "finance.discount_factor"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              3.0,
+              3.0,
+              3.0
+            ]
+          ]
+        },
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              0.0,
+              1.0,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "method": "forward"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.5,
+            0.25,
+            0.125
+          ],
+          [
+            1.0,
+            0.25,
+            0.0625
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-discount_factor-forward-moved",
+      "covers": [
+        "finance.discount_factor"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              3.0,
+              1.0,
+              1.0
+            ],
+            [
+              3.0,
+              3.0,
+              3.0
+            ]
+          ]
+        },
+        "period": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              0.0,
+              1.0,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "finance.discount_factor",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "period"
+          }
+        ],
+        "attrs": {
+          "method": "forward"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.5,
+            0.125,
+            0.0625
+          ],
+          [
+            1.0,
+            0.25,
+            0.0625
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-discount_factor-forward",
+        "operand": "rate",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "window-list-get",
+      "covers": [
+        "list.get"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.get",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 1
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          2.0,
+          32.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-list-get-moved-at-the-position",
+      "covers": [
+        "list.get"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              3.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.get",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 1
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          3.0,
+          32.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-list-get",
+        "operand": "x",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "position": 1
+        }
+      }
+    },
+    {
+      "id": "window-list-get-moved-elsewhere",
+      "covers": [
+        "list.get"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              4.0,
+              100.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.get",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": 1
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          2.0,
+          32.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-list-get",
+        "operand": "x",
+        "policy": 0,
+        "period": 3,
+        "window": {
+          "position": 1
+        }
+      }
+    },
+    {
+      "id": "window-list-get-last",
+      "covers": [
+        "list.get"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.get",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": -1
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          8.0,
+          64.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-list-get-last-moved",
+      "covers": [
+        "list.get"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              65.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "list.get",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "lit",
+            "value": -1
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          8.0,
+          65.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-list-get-last",
+        "operand": "x",
+        "policy": 1,
+        "period": 2,
+        "window": {
+          "position": -1
+        }
+      }
+    },
+    {
+      "id": "window-cum_sum-of-previous_period",
+      "covers": [
+        "cum_sum",
+        "projection.previous_period"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "call",
+            "name": "projection.previous_period",
+            "args": [
+              {
+                "op": "col",
+                "name": "x"
+              },
+              {
+                "op": "lit",
+                "value": 0.0
+              }
+            ],
+            "attrs": {}
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            3.0,
+            7.0
+          ],
+          [
+            0.0,
+            16.0,
+            48.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "window-cum_sum-of-previous_period-moved",
+      "covers": [
+        "cum_sum",
+        "projection.previous_period"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              102.0,
+              4.0,
+              8.0
+            ],
+            [
+              16.0,
+              32.0,
+              64.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "call",
+            "name": "projection.previous_period",
+            "args": [
+              {
+                "op": "col",
+                "name": "x"
+              },
+              {
+                "op": "lit",
+                "value": 0.0
+              }
+            ],
+            "attrs": {}
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            103.0,
+            107.0
+          ],
+          [
+            0.0,
+            16.0,
+            48.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "perturbation": {
+        "of": "window-cum_sum-of-previous_period",
+        "operand": "x",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "window-rollforward",
+      "covers": [
+        "rollforward.state"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        },
+        "credit": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              0.0
+            ],
+            [
+              0.0,
+              5.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              0.25
+            ],
+            [
+              0.5,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.state",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "credit"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "state",
+            "name": "fund@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:796f330e9ef3766fffbb2d27c88909600a02d1f8c3c3221ce85dd31de441864f",
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "state": "fund",
+          "point": "eop",
+          "shared": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            55.0,
+            41.25
+          ],
+          [
+            100.0,
+            105.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2024-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:796f330e9ef3766fffbb2d27c88909600a02d1f8c3c3221ce85dd31de441864f": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "fund",
+              "init": {
+                "op": "col",
+                "name": "initial"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "credit",
+              "operation": "Add",
+              "target": "fund@eop",
+              "reads_running_balance": false,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "credit"
+                }
+              ],
+              "settings": {}
+            },
+            {
+              "label": "fee",
+              "operation": "Charge",
+              "target": "fund@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "rate"
+                },
+                {
+                  "op": "state",
+                  "name": "fund@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            }
+          ],
+          "track_increments": false,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18"
+        }
+      },
+      "producer_build": {
+        "states": {
+          "fund": "initial"
+        },
+        "steps": [
+          {
+            "state": "fund",
+            "method": "add",
+            "operand": "credit",
+            "label": "credit"
+          },
+          {
+            "state": "fund",
+            "method": "charge",
+            "operand": "rate",
+            "label": "fee"
+          }
+        ],
+        "schedule": {
+          "kind": "from_calendar_grid",
+          "n_periods": 2,
+          "frequency": "1M",
+          "calendar": "NullCalendar",
+          "convention": "Unadjusted",
+          "day_count": "OneTwelfth",
+          "anchor": "month_end",
+          "start_date": "2024-01-31"
+        },
+        "track_increments": false
+      },
+      "structural_covers": [
+        "rollforward"
+      ]
+    },
+    {
+      "id": "window-rollforward-moved",
+      "covers": [
+        "rollforward.state"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        },
+        "credit": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              20.0
+            ],
+            [
+              0.0,
+              5.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              0.25
+            ],
+            [
+              0.5,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.state",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "credit"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "state",
+            "name": "fund@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:796f330e9ef3766fffbb2d27c88909600a02d1f8c3c3221ce85dd31de441864f",
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "state": "fund",
+          "point": "eop",
+          "shared": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            55.0,
+            56.25
+          ],
+          [
+            100.0,
+            105.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2024-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:796f330e9ef3766fffbb2d27c88909600a02d1f8c3c3221ce85dd31de441864f": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "fund",
+              "init": {
+                "op": "col",
+                "name": "initial"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "credit",
+              "operation": "Add",
+              "target": "fund@eop",
+              "reads_running_balance": false,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "credit"
+                }
+              ],
+              "settings": {}
+            },
+            {
+              "label": "fee",
+              "operation": "Charge",
+              "target": "fund@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "rate"
+                },
+                {
+                  "op": "state",
+                  "name": "fund@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            }
+          ],
+          "track_increments": false,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18"
+        }
+      },
+      "producer_build": {
+        "states": {
+          "fund": "initial"
+        },
+        "steps": [
+          {
+            "state": "fund",
+            "method": "add",
+            "operand": "credit",
+            "label": "credit"
+          },
+          {
+            "state": "fund",
+            "method": "charge",
+            "operand": "rate",
+            "label": "fee"
+          }
+        ],
+        "schedule": {
+          "kind": "from_calendar_grid",
+          "n_periods": 2,
+          "frequency": "1M",
+          "calendar": "NullCalendar",
+          "convention": "Unadjusted",
+          "day_count": "OneTwelfth",
+          "anchor": "month_end",
+          "start_date": "2024-01-31"
+        },
+        "track_increments": false
+      },
+      "structural_covers": [
+        "rollforward"
+      ],
+      "perturbation": {
+        "of": "window-rollforward",
+        "operand": "credit",
+        "policy": 0,
+        "period": 1,
+        "window": {
+          "periods": {
+            "from": "first",
+            "to": 0
+          }
+        }
+      }
+    }
+  ]
+}

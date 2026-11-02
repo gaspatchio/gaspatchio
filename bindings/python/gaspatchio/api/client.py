@@ -36,6 +36,34 @@ class APIConnectionError(Exception):
         self.status_code = status_code
 
 
+def knowledge_filters(
+    *,
+    tags: list[str] | None,
+    jurisdiction: str | None,
+    doc_type: str | None,
+) -> dict[str, str | list[str]]:
+    """Spell knowledge filters the way the index stores them: in lower case.
+
+    The index keeps every tag, jurisdiction and document type in lower case
+    and matches them exactly, so ``IFRS17`` matched nothing where ``ifrs17``
+    matched. Case carries no meaning in these values; their spelling does,
+    and that is left exactly as given.
+
+    Returns:
+        The filters given, lower-cased, keyed as the request payload names
+        them. A filter not given is left out.
+
+    """
+    filters: dict[str, str | list[str]] = {}
+    if tags is not None:
+        filters["tags"] = [tag.lower() for tag in tags]
+    if jurisdiction is not None:
+        filters["jurisdiction"] = jurisdiction.lower()
+    if doc_type is not None:
+        filters["doc_type"] = doc_type.lower()
+    return filters
+
+
 class KnowledgeAPIClient:
     """Client for the Gaspatchio knowledge API.
 
@@ -112,7 +140,7 @@ class KnowledgeAPIClient:
         self,
         endpoint: str,
         payload: dict[str, typing.Any],
-    ) -> dict[str, typing.Any]:
+    ) -> object:
         """Make a POST request to the API.
 
         Args:
@@ -120,7 +148,8 @@ class KnowledgeAPIClient:
             payload: Request payload.
 
         Returns:
-            Parsed JSON response.
+            Parsed JSON response, whatever its shape: each caller validates it
+            against the response model it expects.
 
         Raises:
             APIConnectionError: If the API is unavailable or returns an error.
@@ -228,9 +257,12 @@ class KnowledgeAPIClient:
             search_type: Search method - "hybrid", "semantic", or "keyword".
             retrieval_mode: How to retrieve results - "summaries", "chunks",
                 or "hierarchical".
-            tags: Filter by tags (e.g., ["IFRS17", "reserving"]).
-            jurisdiction: Filter by jurisdiction (e.g., "US", "EU").
-            doc_type: Filter by document type.
+            tags: Filter by tags (e.g., ["ifrs17", "reserve"]); a result
+                carrying any one of them matches. Sent in lower case.
+            jurisdiction: Filter by jurisdiction (e.g., "us", "eu"). Sent in
+                lower case.
+            doc_type: Filter by document type (e.g., "standard"). Sent in
+                lower case.
 
         Returns:
             KnowledgeSearchResponse with search results.
@@ -244,13 +276,10 @@ class KnowledgeAPIClient:
             "limit": limit,
             "search_type": search_type,
             "retrieval_mode": retrieval_mode,
+            **knowledge_filters(
+                tags=tags, jurisdiction=jurisdiction, doc_type=doc_type
+            ),
         }
-        if tags is not None:
-            payload["tags"] = tags
-        if jurisdiction is not None:
-            payload["jurisdiction"] = jurisdiction
-        if doc_type is not None:
-            payload["doc_type"] = doc_type
 
         data = self._post("/api/v1/knowledge/search", payload)
         return KnowledgeSearchResponse.model_validate(data)
@@ -274,9 +303,9 @@ class KnowledgeAPIClient:
             search_type: Search method - "hybrid", "semantic", or "keyword".
             retrieval_mode: How to retrieve results - "summaries", "chunks",
                 or "hierarchical".
-            tags: Filter by tags (e.g., ["IFRS17", "reserving"]).
-            jurisdiction: Filter by jurisdiction (e.g., "US", "EU").
-            doc_type: Filter by document type.
+            tags: Filter by tags, as for ``search_knowledge``.
+            jurisdiction: Filter by jurisdiction, as for ``search_knowledge``.
+            doc_type: Filter by document type, as for ``search_knowledge``.
 
         Returns:
             KnowledgeAnswerResponse with generated answer and sources.
@@ -290,13 +319,10 @@ class KnowledgeAPIClient:
             "limit": limit,
             "search_type": search_type,
             "retrieval_mode": retrieval_mode,
+            **knowledge_filters(
+                tags=tags, jurisdiction=jurisdiction, doc_type=doc_type
+            ),
         }
-        if tags is not None:
-            payload["tags"] = tags
-        if jurisdiction is not None:
-            payload["jurisdiction"] = jurisdiction
-        if doc_type is not None:
-            payload["doc_type"] = doc_type
 
         data = self._post("/api/v1/knowledge/answer", payload)
         return KnowledgeAnswerResponse.model_validate(data)

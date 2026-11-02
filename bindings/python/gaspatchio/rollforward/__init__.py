@@ -12,8 +12,6 @@ Public surface:
     surface (``expr_for()``, ``increment_for()`` — all extractions share ONE
     kernel call on an ``ActuarialFrame``) plus ``explain()``,
     ``fingerprint()``, and ``canonical_form()`` for inspection
-  - :class:`RollforwardCollector` — deprecated facade; use
-    ``compiled.expr_for(...)`` instead
 
 These are also re-exported at the top level (``from gaspatchio import ...``).
 """
@@ -21,13 +19,11 @@ These are also re-exported at the top level (``from gaspatchio import ...``).
 from __future__ import annotations
 
 from gaspatchio.rollforward._builder import RollforwardBuilder
-from gaspatchio.rollforward._collector import RollforwardCollector
 from gaspatchio.rollforward._compile import compile_rollforward
 from gaspatchio.rollforward._compiled import CompiledRollforward
 
 __all__ = [
     "CompiledRollforward",
     "RollforwardBuilder",
-    "RollforwardCollector",
     "compile_rollforward",
 ]

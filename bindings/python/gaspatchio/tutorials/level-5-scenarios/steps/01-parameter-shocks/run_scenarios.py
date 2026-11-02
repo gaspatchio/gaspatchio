@@ -6,10 +6,11 @@
 Level 5 Step 01: Parameter Shocks via ScenarioRun
 
 Five scenarios — a base case plus four single-driver stresses — run through
-the L5 mini-VA model. The plan is captured as a ``ScenarioRun``: shocks,
-base tables, and the aggregations to read out of each scenario. The plan
-runs via ``.run()`` which cross-joins the model points with scenarios,
-applies the shocks to the named base tables, and aggregates per scenario.
+the L5 mini-VA model. The plan is captured as a ``ScenarioRun``: the shocks
+and the aggregations to read out of each scenario. ``.run(af, model.main)``
+cross-joins the model points with the scenarios, runs the model you
+reconciled unchanged, and answers the model's own reads of each table a
+shock names with that table shocked for each scenario.
 
 What this demonstrates
 ----------------------
@@ -19,7 +20,10 @@ What this demonstrates
     changes; identical plans produce identical SHAs.
 
   * ``MultiplicativeShock`` — the workhorse stress: "mortality up 20%",
-    "lapse down 20%". Targets a base table by name.
+    "lapse down 20%". Targets a table by the name its ``Table`` was built
+    with in ``model.load_assumptions()``. A scalar the model reads off each
+    policy is shocked the same way with ``column=`` (``AdditiveShock(0.01,
+    column="valuation_rate")``).
 
   * Mergeable aggregators — ``Sum.alias("pv_net_cf")`` etc. carry their
     own output column name. Each scenario produces one row of aggregates.
@@ -51,7 +55,7 @@ from pathlib import Path
 
 import polars as pl
 
-from gaspatchio import ActuarialFrame, MortalityTable
+from gaspatchio import ActuarialFrame
 from gaspatchio.scenarios import (
     MultiplicativeShock,
     ScenarioRun,
@@ -64,27 +68,10 @@ sys.path.insert(0, str(L5_BASE_DIR))
 import model  # noqa: E402 — sys.path manipulation must precede
 
 MODEL_POINTS_PATH = L5_BASE_DIR / "model_points.parquet"
-SELECT_PERIOD = model.SELECT_PERIOD_LEN
 
 # ---------------------------------------------------------------------------
-# 1. Load assumptions once. Pull out the raw Tables we'll shock.
-# ---------------------------------------------------------------------------
-
-assumptions = model.load_assumptions()
-
-# MortalityTable wraps a raw Table. We shock the raw Table and re-wrap inside
-# the model_fn so the actuarial dispatch (select/ultimate) still works.
-mortality_select_raw = assumptions["mortality"].table
-
-BASE_TABLES = {
-    "mortality_select": mortality_select_raw,
-    "mortality_scalars": assumptions["mortality_scalars"],
-    "lapse_rates": assumptions["lapse_rates"],
-    "surrender_charges": assumptions["surrender_charges"],
-}
-
-# ---------------------------------------------------------------------------
-# 2. Define the five scenarios as shock specs.
+# 1. Define the five scenarios as shock specs. Each names a table the
+#    model builds, by the name it is built with.
 # ---------------------------------------------------------------------------
 
 SHOCKS = {
@@ -106,7 +93,7 @@ SHOCKS = {
 }
 
 # ---------------------------------------------------------------------------
-# 3. Aggregations: one row per scenario, summed PVs across the portfolio.
+# 2. Aggregations: one row per scenario, summed PVs across the portfolio.
 # ---------------------------------------------------------------------------
 
 # ``.over("scenario_id")`` partitions the aggregation per scenario so each
@@ -121,35 +108,11 @@ AGGREGATIONS = (
 )
 
 # ---------------------------------------------------------------------------
-# 4. Model wrapper. Bridges the shocked-Table dict from ScenarioRun into
-#    the model's assumptions_override shape (which expects MortalityTable
-#    around the raw mortality_select Table).
-# ---------------------------------------------------------------------------
-
-
-def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
-    """Rebuild the typed assumptions dict from shocked base tables, then run."""
-    del drivers  # not used in this step
-    overrides = dict(assumptions)  # start from base typed inputs
-    overrides["mortality"] = MortalityTable(
-        table=tables["mortality_select"],
-        age_basis="age_last_birthday",
-        structure="select_ultimate",
-        select_period=SELECT_PERIOD,
-    )
-    overrides["mortality_scalars"] = tables["mortality_scalars"]
-    overrides["lapse_rates"] = tables["lapse_rates"]
-    overrides["surrender_charges"] = tables["surrender_charges"]
-    return model.main(af, assumptions_override=overrides)
-
-
-# ---------------------------------------------------------------------------
-# 5. Build the plan and run.
+# 3. Build the plan and run the model as it is.
 # ---------------------------------------------------------------------------
 
 plan = ScenarioRun(
     shocks=SHOCKS,
-    base_tables=BASE_TABLES,
     aggregations=AGGREGATIONS,
 )
 
@@ -160,11 +123,11 @@ mp = pl.read_parquet(MODEL_POINTS_PATH)
 af = ActuarialFrame(mp)
 
 start = time.perf_counter()
-result = plan.run(af, model_fn, audit=True)
+result = plan.run(af, model.main, audit=True)
 runtime = time.perf_counter() - start
 
 # ---------------------------------------------------------------------------
-# 6. Results — table + tornado chart prep
+# 4. Results — table + tornado chart prep
 # ---------------------------------------------------------------------------
 
 print(f"Runtime: {runtime:.2f}s")
@@ -173,7 +136,13 @@ print()
 
 # Each alias is a per-scenario DataFrame keyed by scenario_id. Join them
 # on scenario_id to produce one row per scenario with all PV components.
-pv_components = ["pv_net_cf", "pv_claims", "pv_premiums", "pv_expenses", "pv_commissions"]
+pv_components = [
+    "pv_net_cf",
+    "pv_claims",
+    "pv_premiums",
+    "pv_expenses",
+    "pv_commissions",
+]
 scenario_table = result.aggregations[pv_components[0]]
 for name in pv_components[1:]:
     scenario_table = scenario_table.join(result.aggregations[name], on="scenario_id")
@@ -184,7 +153,11 @@ print(scenario_table)
 print()
 
 # Tornado data: delta vs BASE for pv_net_cf
-base_pv = scenario_table.filter(pl.col("scenario_id") == "BASE").get_column("pv_net_cf").item()
+base_pv = (
+    scenario_table.filter(pl.col("scenario_id") == "BASE")
+    .get_column("pv_net_cf")
+    .item()
+)
 
 deltas = (
     scenario_table.filter(pl.col("scenario_id") != "BASE")

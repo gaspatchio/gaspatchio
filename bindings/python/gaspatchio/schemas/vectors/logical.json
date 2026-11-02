@@ -1,0 +1,686 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "Stored indicators as logical operands",
+  "cases": [
+    {
+      "id": "logical-stored-float-and-scalar",
+      "covers": [
+        "and"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            -0.0
+          ]
+        },
+        "b": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false,
+            true,
+            false,
+            true
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          false,
+          false,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "logical-stored-float-or-scalar",
+      "covers": [
+        "or"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            0.0,
+            0.0,
+            -0.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "or",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "logical-stored-float-not-scalar",
+      "covers": [
+        "not_"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            0.0,
+            -0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "not_",
+        "args": [
+          {
+            "op": "col",
+            "name": "a"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "logical-stored-float-and-null-boolean",
+      "covers": [
+        "and"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.0
+          ]
+        },
+        "b": {
+          "dtype": "bool",
+          "values": [
+            null,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "logical-stored-float-empty-portfolio",
+      "covers": [
+        "and"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": []
+        },
+        "b": {
+          "dtype": "bool",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "logical-stored-float-and-list",
+      "covers": [
+        "and"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              0.0,
+              -0.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              true,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "logical-stored-float-or-across-shapes",
+      "covers": [
+        "or"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            0.0
+          ]
+        },
+        "b": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              false,
+              true
+            ],
+            [
+              false,
+              true,
+              false
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "or",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "logical-stored-float-not-list",
+      "covers": [
+        "not_"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "not_",
+        "args": [
+          {
+            "op": "col",
+            "name": "a"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            1.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "logical-stored-float-as-condition",
+      "covers": [
+        "and",
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            1.0,
+            0.0
+          ]
+        },
+        "b": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false,
+            true
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "and",
+          "left": {
+            "op": "col",
+            "name": "a"
+          },
+          "right": {
+            "op": "col",
+            "name": "b"
+          }
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          10.0,
+          20.0,
+          20.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "logical-stored-float-two-refuses",
+      "covers": [
+        "and"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            2.0
+          ]
+        },
+        "b": {
+          "dtype": "bool",
+          "values": [
+            true,
+            true
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "logical-stored-float-half-refuses",
+      "covers": [
+        "or"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "bool",
+          "values": [
+            true
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "or",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "logical-stored-float-nan-refuses",
+      "covers": [
+        "not_"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "not_",
+        "args": [
+          {
+            "op": "col",
+            "name": "a"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "logical-stored-float-infinity-refuses",
+      "covers": [
+        "and"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              {
+                "nonfinite": "+inf"
+              }
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              true
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "logical-stored-float-null-refuses",
+      "covers": [
+        "or"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              null
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "or",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "logical-stored-float-null-scalar-refuses",
+      "covers": [
+        "not_"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "not_",
+        "args": [
+          {
+            "op": "col",
+            "name": "a"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    }
+  ]
+}

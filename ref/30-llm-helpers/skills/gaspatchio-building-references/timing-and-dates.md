@@ -28,11 +28,48 @@ af.pv = af.cashflow.projection.prospective_value(discount_rate=0.025)
 # 2. Per-period rates (uses cumulative product internally — forward-rate semantics)
 af.pv = af.cashflow.projection.prospective_value(discount_rate=af.rate_column)
 
-# 3. Pre-computed discount factors (for spot-rate curves)
-af.pv = af.cashflow.projection.prospective_value(discount_factor=af.v_t)
+# 3. Pre-computed discount factors. Where the factors are anchored decides the
+#    timing, so option 3 is really two recipes and each carries its own timing.
+#    Read "Name the anchoring" below before picking one.
+af.v_end = ...    # end-anchored: [v(t1), v(t2), …], no leading 1.0
+af.pv = af.cashflow.projection.prospective_value(discount_factor=af.v_end)
+
+af.v_spot = ...   # valuation-date-anchored: [1.0, v(t1), v(t2), …]
+af.pv = af.cashflow.projection.prospective_value(
+    discount_factor=af.v_spot, timing="beginning_of_period"
+)
 ```
 
-**For term-structure discounting (yield curves):** Use option 3 with pre-computed `v(t) = (1+r_t)^(-t/12)` factors. Option 2 uses cumulative products (forward-rate semantics), which is NOT the same as spot rates.
+**For term-structure discounting (yield curves):** a curve read on
+`af.projection.t_years()` produces the **spot** vector, so it is the second recipe
+of option 3 — **with `timing="beginning_of_period"`**:
+
+```python
+af.v_spot = curve.discount_factor(af.projection.t_years())  # [1.0, v(t1), v(t2), …]
+af.pv = af.cashflow.projection.prospective_value(
+    discount_factor=af.v_spot, timing="beginning_of_period"
+)
+```
+
+**Name the anchoring.** `t_years()` starts at 0 and `v(0) = 1.0`, so that vector is
+**spot factors anchored at the valuation date** — the beginning-of-period
+convention, in which `CF[t]` falls at the instant `t_years[t]` names. Handing it to
+the **default** `end_of_period` shifts every period by one and returns a *hybrid*:
+on a flat 4% curve with `CF = [100, 100, 100, 100]` it gives
+`[377.51, 277.51, 188.61, 96.15]`, where `PV[0]` is the annuity-due value and
+`PV[1:]` are the ordinary-annuity ones. The total looks right and every later
+reserve is on the other convention — exactly the silent error this page is about.
+Want ordinary-annuity PVs? Keep the default and supply the **end-anchored**
+`af.v_end` (`[v(t1), v(t2), …]`, no leading 1.0) instead, which on the same
+cashflows returns `[362.99, 277.51, 188.61, 96.15]`. The two pairings never mix —
+including in the option-3 block above, where each factor vector is written beside
+the timing it belongs to.
+
+That call is a recorded operation — the artifact carries the curve's `source_sha` — and
+it lowers to the `curve_eval` + `list_pow` kernels; hand-rolling `(1+r_t)^(-t/12)`
+gives up the record for no speed. Option 2 uses cumulative products (forward-rate
+semantics), which is NOT the same as spot rates. See
+[curves-and-scheduling.md](curves-and-scheduling.md).
 
 ### `cumulative_survival()` Parameters
 
@@ -145,3 +182,22 @@ Projection start: 2025-12-31 (= valuation + 12 months)
 ```
 
 `t=0` in the projection corresponds to the rolled-forward start, not the valuation date. Don't confuse them.
+
+---
+
+## Discount factor conventions
+
+Two approaches exist:
+
+**Cumulative product** (actuarially intuitive):
+```python
+af.per_period_disc = 1.0 / (1.0 + af.disc_rate_mth)
+af.disc_factors = af.per_period_disc.cum_prod()
+```
+
+**Closed-form** (matches lifelib):
+```python
+af.disc_factors = (af.month.cast(pl.Float64) * -1.0 * (1.0 + af.disc_rate_mth).log()).exp()
+```
+
+These give different results when rates change between years. The closed-form uses the current period's rate as if it applied from t=0. When reconciling against a reference model, match its formula. See Level 3 Step 06 (Gap 4).

@@ -12,25 +12,18 @@
 from unittest.mock import Mock, patch
 
 import polars as pl
-import pytest
 from polars.testing import assert_frame_equal
 
-from gaspatchio import ActuarialFrame, set_default_mode
+from gaspatchio import ActuarialFrame
 from gaspatchio.util import set_default_verbose
 
 # Sample data for testing
 DATA = {"a": [1, 2, 3], "b": [4, 5, 6]}
 
 
-@pytest.fixture
-def base_frame():
-    """Fixture to provide a basic ActuarialFrame."""
-    return ActuarialFrame(DATA)
-
-
-def test_trace_debug_mode(base_frame):
+def test_trace_debug_mode():
     """Test that trace runs the function directly in debug mode."""
-    set_default_mode("debug")
+    base_frame = ActuarialFrame(DATA, mode="debug")
 
     mock_func = Mock(return_value=None)  # Function modifies frame implicitly
 
@@ -46,14 +39,15 @@ def test_trace_debug_mode(base_frame):
     # Check that the operation was executed immediately
     expected_df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [5, 7, 9]})
     assert_frame_equal(result_frame.collect(), expected_df)
-    # In debug mode, operations are still tracked in the computation graph
-    assert len(base_frame._computation_graph) == 1
-    assert base_frame._computation_graph[0].alias == "c"
+    # Debug mode routes the model function through the decorator, and that
+    # is what marks the run as traced.
+    assert base_frame._traced_run is True
+    assert [record.column for record in base_frame._calculations] == ["c"]
 
 
-def test_trace_optimize_mode_capture(base_frame):
+def test_trace_optimize_mode_capture():
     """Test that trace captures operations in optimize mode."""
-    set_default_mode("optimize")
+    base_frame = ActuarialFrame(DATA, mode="optimize")
 
     mock_func = Mock(return_value=None)
 
@@ -63,8 +57,8 @@ def test_trace_optimize_mode_capture(base_frame):
         f["d"] = f["b"] * 2
         mock_func(f)  # Should be called, but operations are deferred
 
-    # Before calling, graph should be empty
-    assert base_frame._computation_graph == []
+    # Before calling, nothing has been calculated
+    assert base_frame._calculations == []
 
     result_frame = model_func(base_frame)
 
@@ -78,15 +72,16 @@ def test_trace_optimize_mode_capture(base_frame):
     )
     assert_frame_equal(base_frame.collect(), expected_df)
 
-    # Operations were applied immediately; the graph holds only the bare
-    # (name, expr) attribution records (#39), never TracedOperation objects
-    # — optimize mode must not pay tracing's metadata-capture cost.
-    assert all(isinstance(op, tuple) for op in base_frame._computation_graph)
+    # Both columns are recorded — the log does not depend on the mode —
+    # but optimize mode never went through a traced run, so the verbose
+    # diagnosis tier stays off.
+    assert [record.column for record in base_frame._calculations] == ["c", "d"]
+    assert base_frame._traced_run is False
 
 
-def test_trace_optimize_mode_no_operations(base_frame):
+def test_trace_optimize_mode_no_operations():
     """Test trace in optimize mode when the function performs no frame ops."""
-    set_default_mode("optimize")
+    base_frame = ActuarialFrame(DATA, mode="optimize")
 
     @base_frame.trace
     def no_op_func(f):
@@ -97,15 +92,15 @@ def test_trace_optimize_mode_no_operations(base_frame):
 
     # The trace wrapper returns the function's return value
     assert result == 123
-    assert base_frame._computation_graph == []
+    assert base_frame._calculations == []
     # The internal df should not have changed
     assert_frame_equal(base_frame.collect(), pl.DataFrame(DATA))
 
 
 @patch("gaspatchio.frame.tracing.log_query_plan")
-def test_trace_log_query_plan_called(mock_log_plan, base_frame):
+def test_trace_log_query_plan_called(mock_log_plan):
     """Test that log_query_plan is called in debug mode with verbose=True."""
-    set_default_mode("debug")
+    base_frame = ActuarialFrame(DATA, mode="debug")
     set_default_verbose(True)
 
     @base_frame.trace
@@ -117,19 +112,15 @@ def test_trace_log_query_plan_called(mock_log_plan, base_frame):
     mock_log_plan.assert_called_once()
     # Check the arguments passed to log_query_plan
     args, kwargs = mock_log_plan.call_args
-    captured_ops = args[0]
+    recorded = args[0]
     final_df = args[1]
 
-    assert len(captured_ops) == 1
-    # Handle both old tuple format and new TracedOperation format
-    if hasattr(captured_ops[0], "alias"):
-        # New TracedOperation format
-        assert captured_ops[0].alias == "c"
-        assert isinstance(captured_ops[0].expression, pl.Expr)
-    else:
-        # Old tuple format
-        assert captured_ops[0][0] == "c"
-        assert isinstance(captured_ops[0][1], pl.Expr)
+    # One record per calculation, and it is the log's own record — there is
+    # no second account of what the run did.
+    assert len(recorded) == 1
+    assert recorded == base_frame._calculations
+    assert recorded[0].column == "c"
+    assert isinstance(recorded[0].expr, pl.Expr)
 
     # Check that the df passed is the final one after applying ops
     expected_final_df = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [2, 3, 4]})
@@ -139,9 +130,9 @@ def test_trace_log_query_plan_called(mock_log_plan, base_frame):
 
 
 @patch("gaspatchio.frame.tracing.log_query_plan")
-def test_trace_log_query_plan_not_called(mock_log_plan, base_frame):
+def test_trace_log_query_plan_not_called(mock_log_plan):
     """Test that log_query_plan is NOT called in optimize mode with verbose=False."""
-    set_default_mode("optimize")
+    base_frame = ActuarialFrame(DATA, mode="optimize")
     set_default_verbose(False)
 
     @base_frame.trace

@@ -16,6 +16,14 @@ updates:
       cargo:
         patterns:
           - "*"
+    # Polars is held until the move to Polars 2, a release of its own. This
+    # entry reads core/Cargo.toml alone, whose Polars crates sit at 0.53 beside
+    # Python Polars 1.42.1, and they move together or not at all: a bump here
+    # on its own would split the pin. The binding crate, which pins polars and
+    # pyo3-polars as well, is under no entry, so nothing proposes a bump there.
+    # Take this out when the Polars 2 work starts.
+    ignore:
+      - dependency-name: "polars*"
     labels:
       - dependencies
       - rust
@@ -31,6 +39,11 @@ updates:
       pip:
         patterns:
           - "*"
+    # Polars is held at 1.42.1 until the move to Polars 2, for the reason the
+    # cargo entry gives; its runtime packages move with it. Take this out when
+    # the Polars 2 work starts.
+    ignore:
+      - dependency-name: "polars*"
     labels:
       - dependencies
       - python

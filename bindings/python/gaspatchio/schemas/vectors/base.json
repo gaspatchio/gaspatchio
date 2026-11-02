@@ -1,0 +1,10271 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "base",
+  "cases": [
+    {
+      "id": "add-i64-policies",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            -7,
+            -1,
+            3,
+            7
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            3,
+            2,
+            -2,
+            -3
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          -4,
+          1,
+          1,
+          4
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "add-i64-periods",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              -7,
+              -1,
+              3,
+              7
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              3,
+              2,
+              -2,
+              -3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            -4,
+            1,
+            1,
+            4
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sub-i64-policies",
+      "covers": [
+        "sub"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            -7,
+            -1,
+            3,
+            7
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            3,
+            2,
+            -2,
+            -3
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "sub",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          -10,
+          -3,
+          5,
+          10
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sub-i64-periods",
+      "covers": [
+        "sub"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              -7,
+              -1,
+              3,
+              7
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              3,
+              2,
+              -2,
+              -3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "sub",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            -10,
+            -3,
+            5,
+            10
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-i64-policies",
+      "covers": [
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            -7,
+            -1,
+            3,
+            7
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            3,
+            2,
+            -2,
+            -3
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          -21,
+          -2,
+          -6,
+          -21
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-i64-periods",
+      "covers": [
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              -7,
+              -1,
+              3,
+              7
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              3,
+              2,
+              -2,
+              -3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            -21,
+            -2,
+            -6,
+            -21
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "div-i64-policies",
+      "covers": [
+        "div"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            -7,
+            -1,
+            3,
+            7
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            3,
+            2,
+            -2,
+            -3
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -2.3333333333333335,
+          -0.5,
+          -1.5,
+          -2.3333333333333335
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "div-i64-periods",
+      "covers": [
+        "div"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              -7,
+              -1,
+              3,
+              7
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              3,
+              2,
+              -2,
+              -3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -2.3333333333333335,
+            -0.5,
+            -1.5,
+            -2.3333333333333335
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-i64-policies",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            -7,
+            -1,
+            3,
+            7
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            3,
+            2,
+            -2,
+            -3
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          -3,
+          -1,
+          -2,
+          -3
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-i64-periods",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              -7,
+              -1,
+              3,
+              7
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              3,
+              2,
+              -2,
+              -3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            -3,
+            -1,
+            -2,
+            -3
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-i64-policies",
+      "covers": [
+        "mod"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            -7,
+            -1,
+            3,
+            7
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            3,
+            2,
+            -2,
+            -3
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          2,
+          1,
+          -1,
+          -2
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-i64-periods",
+      "covers": [
+        "mod"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              -7,
+              -1,
+              3,
+              7
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              3,
+              2,
+              -2,
+              -3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            2,
+            1,
+            -1,
+            -2
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "add-f64-policies",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -7.0,
+            -1.0,
+            3.0,
+            7.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            3.0,
+            2.0,
+            -2.0,
+            -3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -4.0,
+          1.0,
+          1.0,
+          4.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "add-f64-periods",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -7.0,
+              -1.0,
+              3.0,
+              7.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              2.0,
+              -2.0,
+              -3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -4.0,
+            1.0,
+            1.0,
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sub-f64-policies",
+      "covers": [
+        "sub"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -7.0,
+            -1.0,
+            3.0,
+            7.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            3.0,
+            2.0,
+            -2.0,
+            -3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "sub",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -10.0,
+          -3.0,
+          5.0,
+          10.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sub-f64-periods",
+      "covers": [
+        "sub"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -7.0,
+              -1.0,
+              3.0,
+              7.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              2.0,
+              -2.0,
+              -3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "sub",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -10.0,
+            -3.0,
+            5.0,
+            10.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-f64-policies",
+      "covers": [
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -7.0,
+            -1.0,
+            3.0,
+            7.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            3.0,
+            2.0,
+            -2.0,
+            -3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -21.0,
+          -2.0,
+          -6.0,
+          -21.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-f64-periods",
+      "covers": [
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -7.0,
+              -1.0,
+              3.0,
+              7.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              2.0,
+              -2.0,
+              -3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -21.0,
+            -2.0,
+            -6.0,
+            -21.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "div-f64-policies",
+      "covers": [
+        "div"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -7.0,
+            -1.0,
+            3.0,
+            7.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            3.0,
+            2.0,
+            -2.0,
+            -3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -2.3333333333333335,
+          -0.5,
+          -1.5,
+          -2.3333333333333335
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "div-f64-periods",
+      "covers": [
+        "div"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -7.0,
+              -1.0,
+              3.0,
+              7.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              2.0,
+              -2.0,
+              -3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -2.3333333333333335,
+            -0.5,
+            -1.5,
+            -2.3333333333333335
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-f64-policies",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -7.0,
+            -1.0,
+            3.0,
+            7.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            3.0,
+            2.0,
+            -2.0,
+            -3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          -3.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-f64-periods",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -7.0,
+              -1.0,
+              3.0,
+              7.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              2.0,
+              -2.0,
+              -3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -3.0,
+            -1.0,
+            -2.0,
+            -3.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-f64-policies",
+      "covers": [
+        "mod"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -7.0,
+            -1.0,
+            3.0,
+            7.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            3.0,
+            2.0,
+            -2.0,
+            -3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          2.0,
+          1.0,
+          -1.0,
+          -2.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-f64-periods",
+      "covers": [
+        "mod"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -7.0,
+              -1.0,
+              3.0,
+              7.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              2.0,
+              -2.0,
+              -3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            2.0,
+            1.0,
+            -1.0,
+            -2.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "add-list-scalar",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              5.0
+            ],
+            []
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            99.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            5.0,
+            7.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sub-list-scalar",
+      "covers": [
+        "sub"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              5.0
+            ],
+            []
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            99.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "sub",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            3.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-list-scalar",
+      "covers": [
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              5.0
+            ],
+            []
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            99.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            6.0,
+            10.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "div-list-scalar",
+      "covers": [
+        "div"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              5.0
+            ],
+            []
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            99.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.5,
+            2.5
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-list-scalar",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              5.0
+            ],
+            []
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            99.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            2.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-list-scalar",
+      "covers": [
+        "mod"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              5.0
+            ],
+            []
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            99.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            1.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "scalar-minus-list",
+      "covers": [
+        "sub"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            100.0
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "sub",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            9.0,
+            8.0
+          ],
+          [
+            97.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compound-scalar-plus-list",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            3.0
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              20.0
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "binop",
+          "kind": "mul",
+          "left": {
+            "op": "col",
+            "name": "a"
+          },
+          "right": {
+            "op": "col",
+            "name": "a"
+          }
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            14.0,
+            24.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mixed-integer-float",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            9007199254740992,
+            -9007199254740992
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          9007199254740992.0,
+          -9007199254740992.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "integer-endpoints-exact",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              9223372036854775807,
+              -9223372036854775808
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            9223372036854775807,
+            -9223372036854775808
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "integer-overflow",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            9223372036854775807
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            1
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": false,
+      "refusal": "integer-overflow",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "add-missing",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              1.0
+            ],
+            null
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              null
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "add-zero-policies",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": []
+        },
+        "b": {
+          "dtype": "f64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sub-missing",
+      "covers": [
+        "sub"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              1.0
+            ],
+            null
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              null
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "sub",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sub-zero-policies",
+      "covers": [
+        "sub"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": []
+        },
+        "b": {
+          "dtype": "f64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "sub",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-missing",
+      "covers": [
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              1.0
+            ],
+            null
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              null
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-zero-policies",
+      "covers": [
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": []
+        },
+        "b": {
+          "dtype": "f64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "div-missing",
+      "covers": [
+        "div"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              1.0
+            ],
+            null
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              null
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "div-zero-policies",
+      "covers": [
+        "div"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": []
+        },
+        "b": {
+          "dtype": "f64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-missing",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              1.0
+            ],
+            null
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              null
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-zero-policies",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": []
+        },
+        "b": {
+          "dtype": "f64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-missing",
+      "covers": [
+        "mod"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              1.0
+            ],
+            null
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              null
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-zero-policies",
+      "covers": [
+        "mod"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": []
+        },
+        "b": {
+          "dtype": "f64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "div-float-zero-divisor",
+      "covers": [
+        "div"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            -1.0,
+            0.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "+inf"
+          },
+          {
+            "nonfinite": "-inf"
+          },
+          {
+            "nonfinite": "nan"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-float-zero-divisor",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            -1.0,
+            0.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "+inf"
+          },
+          {
+            "nonfinite": "-inf"
+          },
+          {
+            "nonfinite": "nan"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-float-zero-divisor",
+      "covers": [
+        "mod"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            -1.0,
+            0.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "nan"
+          },
+          {
+            "nonfinite": "nan"
+          },
+          {
+            "nonfinite": "nan"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-integer-zero-divisor",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            1,
+            0
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            0,
+            0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          null,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-integer-zero-divisor",
+      "covers": [
+        "mod"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            1,
+            0
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            0,
+            0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          null,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "float-floor-uses-rounded-quotient",
+      "covers": [
+        "floordiv"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            0.3
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            0.1
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          10.0,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "power-policies",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            -2.0,
+            0.0,
+            4.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            3.0,
+            3.0,
+            0.0,
+            -1.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          8.0,
+          -8.0,
+          1.0,
+          0.25
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "power-periods",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              -2.0,
+              0.0,
+              4.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0,
+              3.0,
+              0.0,
+              -1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            8.0,
+            -8.0,
+            1.0,
+            0.25
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "power-scalar-list",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            2.0
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.5,
+            1.0,
+            8.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "power-integer",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            2,
+            -2,
+            0
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            3,
+            3,
+            0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          8,
+          -8,
+          1
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "negative-scalar-list-power",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -2.0
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": false,
+      "refusal": "negative-scalar-base-list-power",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "compare-lt-policies",
+      "covers": [
+        "lt"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -1.0,
+            0.0,
+            1.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "lt",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-lt-periods",
+      "covers": [
+        "lt"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "lt",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-le-policies",
+      "covers": [
+        "le"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -1.0,
+            0.0,
+            1.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "le",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          1.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-le-periods",
+      "covers": [
+        "le"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "le",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-gt-policies",
+      "covers": [
+        "gt"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -1.0,
+            0.0,
+            1.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "gt",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-gt-periods",
+      "covers": [
+        "gt"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "gt",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-ge-policies",
+      "covers": [
+        "ge"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -1.0,
+            0.0,
+            1.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "ge",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-ge-periods",
+      "covers": [
+        "ge"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "ge",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-eq-policies",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -1.0,
+            0.0,
+            1.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-eq-periods",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-ne-policies",
+      "covers": [
+        "ne"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            -1.0,
+            0.0,
+            1.0
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "ne",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "compare-ne-periods",
+      "covers": [
+        "ne"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "ne",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-large-integer-scalar",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "i64",
+          "values": [
+            9007199254740993
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            9007199254740992
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-large-integer-list",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              9007199254740993
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "i64",
+          "values": [
+            9007199254740992
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-nan",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            }
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "nan"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "and-nullable-scalar",
+      "covers": [
+        "and"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "bool",
+          "values": [
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            null,
+            null,
+            null
+          ]
+        },
+        "b": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            null,
+            false,
+            true,
+            null,
+            false,
+            true,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          false,
+          false,
+          false,
+          true,
+          null,
+          false,
+          null,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "and-nullable-list",
+      "covers": [
+        "and"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              false,
+              false,
+              false,
+              true,
+              true,
+              true,
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              false,
+              true,
+              null,
+              false,
+              true,
+              null,
+              false,
+              true,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            0.0,
+            null,
+            0.0,
+            1.0,
+            null,
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "or-nullable-scalar",
+      "covers": [
+        "or"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "bool",
+          "values": [
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            null,
+            null,
+            null
+          ]
+        },
+        "b": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            null,
+            false,
+            true,
+            null,
+            false,
+            true,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "or",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          null,
+          true,
+          true,
+          true,
+          null,
+          true,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "or-nullable-list",
+      "covers": [
+        "or"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              false,
+              false,
+              false,
+              true,
+              true,
+              true,
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              false,
+              true,
+              null,
+              false,
+              true,
+              null,
+              false,
+              true,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "or",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            null,
+            1.0,
+            1.0,
+            null,
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "not-scalar",
+      "covers": [
+        "not_"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "not_",
+        "args": [
+          {
+            "op": "col",
+            "name": "a"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conditional-boolean-scalar",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "a"
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          10.0,
+          20.0,
+          20.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conditional-stored-float-scalar",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "a"
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          10.0,
+          20.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conditional-invalid-float-scalar",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "a"
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "not-list",
+      "covers": [
+        "not_"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "not_",
+        "args": [
+          {
+            "op": "col",
+            "name": "a"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conditional-boolean-list",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "a"
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            10.0,
+            20.0,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conditional-stored-float-list",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "a"
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            10.0,
+            20.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conditional-invalid-float-list",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "a"
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "conditional-inline-comparison",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -2.0,
+              4.0
+            ],
+            []
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "gt",
+          "left": {
+            "op": "col",
+            "name": "a"
+          },
+          "right": {
+            "op": "col",
+            "name": "b"
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "a"
+        },
+        "otherwise": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            4.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conditional-inline-nullable-logical",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              null
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              null,
+              true
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "and",
+          "left": {
+            "op": "col",
+            "name": "a"
+          },
+          "right": {
+            "op": "col",
+            "name": "b"
+          }
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            10.0,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-in-arithmetic",
+      "covers": [
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -2.0,
+              4.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "binop",
+          "kind": "gt",
+          "left": {
+            "op": "col",
+            "name": "a"
+          },
+          "right": {
+            "op": "col",
+            "name": "b"
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": 10.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            10.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-scalar-str",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            null
+          ]
+        },
+        "b": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "A",
+            "A"
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          0.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-scalar-bool",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false,
+            null
+          ]
+        },
+        "b": {
+          "dtype": "bool",
+          "values": [
+            true,
+            true,
+            true
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          0.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-scalar-date",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-03-01",
+            null
+          ]
+        },
+        "b": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-02-29",
+            "2024-02-29"
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          0.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-null-list",
+      "covers": [
+        "lt"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "f64",
+          "values": [
+            0.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "lt",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "power-integer-lists",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              2,
+              -2
+            ],
+            []
+          ]
+        },
+        "b": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              3,
+              3
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            8.0,
+            -8.0
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "arithmetic-length-mismatch",
+      "covers": [
+        "add"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "refusal": "period-count-mismatch",
+      "case_kind": "portable-domain-refusal",
+      "producer_message": "length"
+    },
+    {
+      "id": "conditional-null-float-False",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "a"
+        },
+        "then": {
+          "op": "lit",
+          "value": 1.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.0
+        }
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "conditional-null-float-True",
+      "covers": [
+        "when_then"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "a"
+        },
+        "then": {
+          "op": "lit",
+          "value": 1.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.0
+        }
+      },
+      "producer_check": true,
+      "refusal": "stored-numeric-predicate",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "mod-product-dividend-policies",
+      "covers": [
+        "mod",
+        "mul"
+      ],
+      "inputs": {
+        "t": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.08333333333333333,
+            0.16666666666666666,
+            0.25,
+            0.3333333333333333,
+            0.4166666666666667,
+            0.5,
+            0.5833333333333334,
+            0.6666666666666666,
+            0.75,
+            0.8333333333333334,
+            0.9166666666666666,
+            1.0,
+            1.0833333333333333,
+            1.1666666666666667,
+            1.25,
+            1.3333333333333333,
+            1.4166666666666667,
+            1.5,
+            1.5833333333333333,
+            1.6666666666666667,
+            1.75,
+            1.8333333333333333,
+            1.9166666666666667,
+            2.0,
+            2.0833333333333335,
+            2.1666666666666665,
+            2.25,
+            2.3333333333333335,
+            2.4166666666666665,
+            2.5,
+            2.5833333333333335,
+            2.6666666666666665,
+            2.75,
+            2.8333333333333335,
+            2.9166666666666665,
+            3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "binop",
+          "kind": "mul",
+          "left": {
+            "op": "col",
+            "name": "t"
+          },
+          "right": {
+            "op": "lit",
+            "value": 12.0
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": 12.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0,
+          7.0,
+          8.0,
+          9.0,
+          10.0,
+          11.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0,
+          7.0,
+          8.0,
+          9.0,
+          10.0,
+          11.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0,
+          7.0,
+          8.0,
+          9.0,
+          10.0,
+          11.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mod-product-dividend-periods",
+      "covers": [
+        "mod",
+        "mul"
+      ],
+      "inputs": {
+        "t": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              0.08333333333333333,
+              0.16666666666666666,
+              0.25,
+              0.3333333333333333,
+              0.4166666666666667,
+              0.5,
+              0.5833333333333334,
+              0.6666666666666666,
+              0.75,
+              0.8333333333333334,
+              0.9166666666666666,
+              1.0,
+              1.0833333333333333,
+              1.1666666666666667,
+              1.25,
+              1.3333333333333333,
+              1.4166666666666667,
+              1.5,
+              1.5833333333333333,
+              1.6666666666666667,
+              1.75,
+              1.8333333333333333,
+              1.9166666666666667,
+              2.0,
+              2.0833333333333335,
+              2.1666666666666665,
+              2.25,
+              2.3333333333333335,
+              2.4166666666666665,
+              2.5,
+              2.5833333333333335,
+              2.6666666666666665,
+              2.75,
+              2.8333333333333335,
+              2.9166666666666665,
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mod",
+        "left": {
+          "op": "binop",
+          "kind": "mul",
+          "left": {
+            "op": "col",
+            "name": "t"
+          },
+          "right": {
+            "op": "lit",
+            "value": 12.0
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": 12.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0,
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0,
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "power-integer-negative-literal",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            10,
+            20,
+            3
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "col",
+          "name": "term"
+        },
+        "right": {
+          "op": "lit",
+          "value": -1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.1,
+          0.05,
+          0.3333333333333333
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "power-integer-negative-literal-periods",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              10,
+              20
+            ],
+            [
+              2,
+              4
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "col",
+          "name": "term"
+        },
+        "right": {
+          "op": "lit",
+          "value": -2
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.01,
+            0.0025
+          ],
+          [
+            0.25,
+            0.0625
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-negative-zero-quotient-divides",
+      "covers": [
+        "floordiv",
+        "div"
+      ],
+      "inputs": {
+        "i": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            1.0
+          ]
+        },
+        "m": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0
+          ]
+        },
+        "f": {
+          "dtype": "f64",
+          "values": [
+            -2.0,
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "i"
+        },
+        "right": {
+          "op": "binop",
+          "kind": "floordiv",
+          "left": {
+            "op": "col",
+            "name": "m"
+          },
+          "right": {
+            "op": "col",
+            "name": "f"
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "-inf"
+          },
+          {
+            "nonfinite": "+inf"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-flag-negative-zero-divides-policies",
+      "covers": [
+        "mul",
+        "div"
+      ],
+      "inputs": {
+        "F": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "nz": {
+          "dtype": "f64",
+          "values": [
+            -0.0,
+            -0.0
+          ]
+        },
+        "i": {
+          "dtype": "f64",
+          "values": [
+            -3.0,
+            -3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "i"
+        },
+        "right": {
+          "op": "binop",
+          "kind": "mul",
+          "left": {
+            "op": "col",
+            "name": "F"
+          },
+          "right": {
+            "op": "col",
+            "name": "nz"
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "+inf"
+          },
+          {
+            "nonfinite": "+inf"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-flag-negative-zero-divides-periods",
+      "covers": [
+        "mul",
+        "div"
+      ],
+      "inputs": {
+        "F": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              true
+            ]
+          ]
+        },
+        "nz": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -0.0,
+              -0.0,
+              -0.0
+            ]
+          ]
+        },
+        "i": {
+          "dtype": "f64",
+          "values": [
+            -3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "i"
+        },
+        "right": {
+          "op": "binop",
+          "kind": "mul",
+          "left": {
+            "op": "col",
+            "name": "F"
+          },
+          "right": {
+            "op": "col",
+            "name": "nz"
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "+inf"
+            },
+            {
+              "nonfinite": "+inf"
+            },
+            {
+              "nonfinite": "+inf"
+            }
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sum-of-an-empty-run-is-positive-zero",
+      "covers": [
+        "sum",
+        "div"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [],
+            [
+              1.0,
+              -1.0
+            ],
+            [
+              -0.0
+            ],
+            [
+              2.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "lit",
+          "value": 4.0
+        },
+        "right": {
+          "op": "call",
+          "name": "sum",
+          "args": [
+            {
+              "op": "col",
+              "name": "r"
+            }
+          ],
+          "attrs": {}
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "+inf"
+          },
+          {
+            "nonfinite": "+inf"
+          },
+          {
+            "nonfinite": "-inf"
+          },
+          1.6
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "floordiv-by-a-sum-in-period-order",
+      "covers": [
+        "sum",
+        "floordiv"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.2,
+              -2.0,
+              0.2,
+              1.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "floordiv",
+        "left": {
+          "op": "lit",
+          "value": 70000.0
+        },
+        "right": {
+          "op": "call",
+          "name": "sum",
+          "args": [
+            {
+              "op": "col",
+              "name": "r"
+            }
+          ],
+          "attrs": {}
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -700000.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sum-in-period-order",
+      "covers": [
+        "sum"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.2,
+              -2.0,
+              0.2,
+              1.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "r"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -0.10000000000000009
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "power-zero-base-null-period",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "L": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.5,
+              null,
+              0.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "lit",
+          "value": 0.0
+        },
+        "right": {
+          "op": "col",
+          "name": "L"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            null,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "min-of-a-run-holding-a-nan",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              1.0,
+              2.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "+inf"
+              },
+              {
+                "nonfinite": "-inf"
+              }
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "r"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "nan"
+          },
+          {
+            "nonfinite": "nan"
+          },
+          {
+            "nonfinite": "nan"
+          },
+          {
+            "nonfinite": "nan"
+          },
+          1.0,
+          {
+            "nonfinite": "-inf"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "max-of-a-run-holding-a-nan",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              1.0,
+              2.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "+inf"
+              },
+              {
+                "nonfinite": "-inf"
+              }
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "r"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "nan"
+          },
+          {
+            "nonfinite": "nan"
+          },
+          {
+            "nonfinite": "nan"
+          },
+          {
+            "nonfinite": "nan"
+          },
+          3.0,
+          {
+            "nonfinite": "+inf"
+          }
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sign-of-a-nan-policies",
+      "covers": [
+        "sign"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            {
+              "nonfinite": "+inf"
+            },
+            {
+              "nonfinite": "-inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sign",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "nan"
+          },
+          1.0,
+          1.0,
+          1.0,
+          -1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sign-of-a-nan-periods",
+      "covers": [
+        "sign"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              1.0,
+              2.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "+inf"
+              },
+              {
+                "nonfinite": "-inf"
+              }
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sign",
+        "args": [
+          {
+            "op": "col",
+            "name": "r"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            1.0,
+            1.0
+          ],
+          [
+            1.0,
+            {
+              "nonfinite": "nan"
+            },
+            1.0
+          ],
+          [
+            1.0,
+            1.0,
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            1.0,
+            1.0,
+            1.0
+          ],
+          [
+            1.0,
+            1.0,
+            -1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "gt-a-nan-policies",
+      "covers": [
+        "gt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            {
+              "nonfinite": "+inf"
+            },
+            {
+              "nonfinite": "-inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "gt",
+        "left": {
+          "op": "col",
+          "name": "x"
+        },
+        "right": {
+          "op": "lit",
+          "value": 1.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "nan"
+          },
+          1.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "gt-a-nan-periods",
+      "covers": [
+        "gt"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              1.0,
+              2.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "+inf"
+              },
+              {
+                "nonfinite": "-inf"
+              }
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "gt",
+        "left": {
+          "op": "col",
+          "name": "r"
+        },
+        "right": {
+          "op": "lit",
+          "value": 1.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            {
+              "nonfinite": "nan"
+            },
+            1.0
+          ],
+          [
+            0.0,
+            1.0,
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            0.0,
+            1.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "eq-a-nan-with-itself-policies",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            {
+              "nonfinite": "+inf"
+            },
+            {
+              "nonfinite": "-inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "x"
+        },
+        "right": {
+          "op": "col",
+          "name": "x"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "nan"
+          },
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "ne-a-nan-periods",
+      "covers": [
+        "ne"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              1.0,
+              2.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "+inf"
+              },
+              {
+                "nonfinite": "-inf"
+              }
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "ne",
+        "left": {
+          "op": "col",
+          "name": "r"
+        },
+        "right": {
+          "op": "lit",
+          "value": 2.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            {
+              "nonfinite": "nan"
+            },
+            0.0
+          ],
+          [
+            1.0,
+            0.0,
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            1.0,
+            0.0,
+            1.0
+          ],
+          [
+            1.0,
+            1.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-nan-comparison-policies",
+      "covers": [
+        "when_then",
+        "gt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            {
+              "nonfinite": "+inf"
+            },
+            {
+              "nonfinite": "-inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "gt",
+          "left": {
+            "op": "col",
+            "name": "x"
+          },
+          "right": {
+            "op": "lit",
+            "value": 1.0
+          }
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "nan"
+          },
+          10.0,
+          20.0,
+          10.0,
+          20.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-nan-comparison-periods",
+      "covers": [
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              1.0,
+              2.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "+inf"
+              },
+              {
+                "nonfinite": "-inf"
+              }
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "lt",
+          "left": {
+            "op": "col",
+            "name": "r"
+          },
+          "right": {
+            "op": "lit",
+            "value": 1.5
+          }
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            10.0,
+            20.0
+          ],
+          [
+            10.0,
+            {
+              "nonfinite": "nan"
+            },
+            20.0
+          ],
+          [
+            10.0,
+            20.0,
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            10.0,
+            20.0,
+            20.0
+          ],
+          [
+            10.0,
+            20.0,
+            10.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "and-over-a-nan-comparison-periods",
+      "covers": [
+        "and",
+        "gt",
+        "lt"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              1.0,
+              2.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "+inf"
+              },
+              {
+                "nonfinite": "-inf"
+              }
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "binop",
+          "kind": "gt",
+          "left": {
+            "op": "col",
+            "name": "r"
+          },
+          "right": {
+            "op": "lit",
+            "value": 0.5
+          }
+        },
+        "right": {
+          "op": "binop",
+          "kind": "lt",
+          "left": {
+            "op": "col",
+            "name": "r"
+          },
+          "right": {
+            "op": "lit",
+            "value": 2.5
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            1.0,
+            1.0
+          ],
+          [
+            1.0,
+            {
+              "nonfinite": "nan"
+            },
+            1.0
+          ],
+          [
+            1.0,
+            1.0,
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            1.0,
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "or-beside-a-nan-comparison-policies",
+      "covers": [
+        "or",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            null,
+            null
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "or",
+        "left": {
+          "op": "col",
+          "name": "flag"
+        },
+        "right": {
+          "op": "binop",
+          "kind": "gt",
+          "left": {
+            "op": "col",
+            "name": "x"
+          },
+          "right": {
+            "op": "lit",
+            "value": 1.0
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          null,
+          null,
+          true,
+          true,
+          null,
+          null,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "nan-comparison-or-beside-policies",
+      "covers": [
+        "or",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            null,
+            null
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "or",
+        "left": {
+          "op": "binop",
+          "kind": "gt",
+          "left": {
+            "op": "col",
+            "name": "x"
+          },
+          "right": {
+            "op": "lit",
+            "value": 1.0
+          }
+        },
+        "right": {
+          "op": "col",
+          "name": "flag"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          null,
+          null,
+          true,
+          true,
+          null,
+          null,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "and-beside-a-nan-comparison-policies",
+      "covers": [
+        "and",
+        "lt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            null,
+            null
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "flag"
+        },
+        "right": {
+          "op": "binop",
+          "kind": "lt",
+          "left": {
+            "op": "col",
+            "name": "x"
+          },
+          "right": {
+            "op": "lit",
+            "value": 1.0
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          null,
+          null,
+          false,
+          true,
+          false,
+          null,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "nan-comparison-and-beside-policies",
+      "covers": [
+        "and",
+        "lt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            null,
+            null
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "binop",
+          "kind": "lt",
+          "left": {
+            "op": "col",
+            "name": "x"
+          },
+          "right": {
+            "op": "lit",
+            "value": 1.0
+          }
+        },
+        "right": {
+          "op": "col",
+          "name": "flag"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          null,
+          null,
+          false,
+          true,
+          false,
+          null,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-null-beside-a-nan-comparison-policies",
+      "covers": [
+        "when_then",
+        "or",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            null,
+            null
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            null,
+            {
+              "nonfinite": "nan"
+            },
+            2.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "or",
+          "left": {
+            "op": "col",
+            "name": "flag"
+          },
+          "right": {
+            "op": "binop",
+            "kind": "gt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          20.0,
+          20.0,
+          10.0,
+          10.0,
+          20.0,
+          20.0,
+          10.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is-in-of-a-logical-unknown-policies",
+      "covers": [
+        "is_in",
+        "and",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_in",
+        "args": [
+          {
+            "op": "binop",
+            "kind": "and",
+            "left": {
+              "op": "col",
+              "name": "flag"
+            },
+            "right": {
+              "op": "binop",
+              "kind": "gt",
+              "left": {
+                "op": "col",
+                "name": "x"
+              },
+              "right": {
+                "op": "lit",
+                "value": 1.0
+              }
+            }
+          },
+          {
+            "op": "lit",
+            "values": [
+              true
+            ]
+          }
+        ],
+        "attrs": {
+          "nulls_equal": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          null,
+          null,
+          false,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is-null-of-a-logical-unknown-policies",
+      "covers": [
+        "is_null",
+        "and",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_null",
+        "args": [
+          {
+            "op": "binop",
+            "kind": "and",
+            "left": {
+              "op": "col",
+              "name": "flag"
+            },
+            "right": {
+              "op": "binop",
+              "kind": "gt",
+              "left": {
+                "op": "col",
+                "name": "x"
+              },
+              "right": {
+                "op": "lit",
+                "value": 1.0
+              }
+            }
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          true,
+          false,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "fill-null-of-a-logical-unknown-policies",
+      "covers": [
+        "fill_null",
+        "and",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "fill_null",
+        "args": [
+          {
+            "op": "binop",
+            "kind": "and",
+            "left": {
+              "op": "col",
+              "name": "flag"
+            },
+            "right": {
+              "op": "binop",
+              "kind": "gt",
+              "left": {
+                "op": "col",
+                "name": "x"
+              },
+              "right": {
+                "op": "lit",
+                "value": 1.0
+              }
+            }
+          },
+          {
+            "op": "lit",
+            "value": false
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          false,
+          false,
+          false
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "eq-of-a-logical-unknown-policies",
+      "covers": [
+        "eq",
+        "and",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "binop",
+          "kind": "and",
+          "left": {
+            "op": "col",
+            "name": "flag"
+          },
+          "right": {
+            "op": "binop",
+            "kind": "gt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null,
+          null,
+          0.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-of-a-logical-unknown-policies",
+      "covers": [
+        "mul",
+        "and",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "binop",
+          "kind": "and",
+          "left": {
+            "op": "col",
+            "name": "flag"
+          },
+          "right": {
+            "op": "binop",
+            "kind": "gt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": 1.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null,
+          null,
+          0.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-logical-unknown-policies",
+      "covers": [
+        "when_then",
+        "or",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "or",
+          "left": {
+            "op": "col",
+            "name": "flag"
+          },
+          "right": {
+            "op": "binop",
+            "kind": "gt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          20.0,
+          20.0,
+          10.0,
+          10.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-negated-unknown-policies",
+      "covers": [
+        "when_then",
+        "not_",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "call",
+          "name": "not_",
+          "args": [
+            {
+              "op": "binop",
+              "kind": "gt",
+              "left": {
+                "op": "col",
+                "name": "x"
+              },
+              "right": {
+                "op": "lit",
+                "value": 1.0
+              }
+            }
+          ],
+          "attrs": {}
+        },
+        "then": {
+          "op": "lit",
+          "value": 10.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 20.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          20.0,
+          20.0,
+          20.0,
+          10.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "and-over-a-logical-unknown-policies",
+      "covers": [
+        "and",
+        "or",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5
+          ]
+        },
+        "off": {
+          "dtype": "bool",
+          "values": [
+            false,
+            false,
+            true,
+            true
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "col",
+          "name": "off"
+        },
+        "right": {
+          "op": "binop",
+          "kind": "or",
+          "left": {
+            "op": "col",
+            "name": "flag"
+          },
+          "right": {
+            "op": "binop",
+            "kind": "gt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          false,
+          true,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "or-over-a-logical-unknown-policies",
+      "covers": [
+        "or",
+        "and",
+        "gt"
+      ],
+      "inputs": {
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5
+          ]
+        },
+        "off": {
+          "dtype": "bool",
+          "values": [
+            false,
+            false,
+            true,
+            true
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "or",
+        "left": {
+          "op": "col",
+          "name": "off"
+        },
+        "right": {
+          "op": "binop",
+          "kind": "and",
+          "left": {
+            "op": "col",
+            "name": "flag"
+          },
+          "right": {
+            "op": "binop",
+            "kind": "gt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          null,
+          null,
+          true,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "cut-of-a-nan-policies",
+      "covers": [
+        "cut",
+        "eq"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            2.0,
+            0.5,
+            {
+              "nonfinite": "+inf"
+            },
+            {
+              "nonfinite": "-inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "call",
+          "name": "cut",
+          "args": [
+            {
+              "op": "col",
+              "name": "x"
+            },
+            {
+              "op": "lit",
+              "values": [
+                1.0
+              ]
+            },
+            {
+              "op": "lit",
+              "values": [
+                "low",
+                "high"
+              ]
+            }
+          ],
+          "attrs": {
+            "left_closed": false,
+            "include_breaks": false
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": "low"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null,
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "cut-of-a-nan-periods",
+      "covers": [
+        "cut",
+        "eq"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              {
+                "nonfinite": "nan"
+              },
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              1.0,
+              2.0,
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              {
+                "nonfinite": "nan"
+              }
+            ],
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              1.0,
+              {
+                "nonfinite": "+inf"
+              },
+              {
+                "nonfinite": "-inf"
+              }
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "call",
+          "name": "cut",
+          "args": [
+            {
+              "op": "col",
+              "name": "r"
+            },
+            {
+              "op": "lit",
+              "values": [
+                1.5
+              ]
+            },
+            {
+              "op": "lit",
+              "values": [
+                "low",
+                "high"
+              ]
+            }
+          ],
+          "attrs": {
+            "left_closed": true,
+            "include_breaks": false
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": "low"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            null,
+            0.0
+          ],
+          [
+            1.0,
+            0.0,
+            null
+          ],
+          [
+            null
+          ],
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "band-ordered-against-text-policies",
+      "covers": [
+        "lt",
+        "cut"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "i64",
+          "values": [
+            25,
+            45,
+            70
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "lt",
+        "left": {
+          "op": "call",
+          "name": "cut",
+          "args": [
+            {
+              "op": "col",
+              "name": "age"
+            },
+            {
+              "op": "lit",
+              "values": [
+                29,
+                59
+              ]
+            },
+            {
+              "op": "lit",
+              "values": [
+                "under 30",
+                "30 to 59",
+                "60 plus"
+              ]
+            }
+          ],
+          "attrs": {
+            "left_closed": false,
+            "include_breaks": false
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": "30 to 59"
+        }
+      },
+      "producer_check": false,
+      "refusal": "ordered-category-comparison",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "band-equal-to-a-label-outside-its-categories",
+      "covers": [
+        "eq",
+        "cut"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "i64",
+          "values": [
+            25,
+            45,
+            70
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "call",
+          "name": "cut",
+          "args": [
+            {
+              "op": "col",
+              "name": "age"
+            },
+            {
+              "op": "lit",
+              "values": [
+                29,
+                59
+              ]
+            },
+            {
+              "op": "lit",
+              "values": [
+                "under 30",
+                "30 to 59",
+                "60 plus"
+              ]
+            }
+          ],
+          "attrs": {
+            "left_closed": false,
+            "include_breaks": false
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": "Zeta"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "pow-null-base-over-a-run",
+      "covers": [
+        "pow"
+      ],
+      "inputs": {
+        "b": {
+          "dtype": "f64",
+          "values": [
+            null,
+            2.0
+          ]
+        },
+        "e": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "pow",
+        "left": {
+          "op": "col",
+          "name": "b"
+        },
+        "right": {
+          "op": "col",
+          "name": "e"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          [
+            2.0,
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "add-product-rounded-first-policies",
+      "covers": [
+        "add",
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            0.65,
+            0.85,
+            0.94,
+            0.99,
+            0.61,
+            0.35
+          ]
+        },
+        "n": {
+          "dtype": "f64",
+          "values": [
+            9.0,
+            15.0,
+            11.0,
+            5.0,
+            10.0,
+            7.0
+          ]
+        },
+        "c": {
+          "dtype": "f64",
+          "values": [
+            0.021,
+            0.051,
+            0.089,
+            0.076,
+            0.078,
+            0.026
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "binop",
+          "kind": "mul",
+          "left": {
+            "op": "col",
+            "name": "n"
+          },
+          "right": {
+            "op": "col",
+            "name": "c"
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.839,
+          1.6149999999999998,
+          1.919,
+          1.37,
+          1.3900000000000001,
+          0.532
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "add-product-rounded-first-periods",
+      "covers": [
+        "add",
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.65,
+              0.85,
+              0.94,
+              0.99,
+              0.61,
+              0.35
+            ]
+          ]
+        },
+        "n": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              9.0,
+              15.0,
+              11.0,
+              5.0,
+              10.0,
+              7.0
+            ]
+          ]
+        },
+        "c": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.021,
+              0.051,
+              0.089,
+              0.076,
+              0.078,
+              0.026
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "add",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "binop",
+          "kind": "mul",
+          "left": {
+            "op": "col",
+            "name": "n"
+          },
+          "right": {
+            "op": "col",
+            "name": "c"
+          }
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.839,
+            1.6149999999999998,
+            1.919,
+            1.37,
+            1.3900000000000001,
+            0.532
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "ge-threshold-after-product-and-sum",
+      "covers": [
+        "ge",
+        "add",
+        "mul"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "f64",
+          "values": [
+            0.65,
+            0.85,
+            0.94,
+            0.99,
+            0.61,
+            0.35
+          ]
+        },
+        "n": {
+          "dtype": "f64",
+          "values": [
+            9.0,
+            15.0,
+            11.0,
+            5.0,
+            10.0,
+            7.0
+          ]
+        },
+        "c": {
+          "dtype": "f64",
+          "values": [
+            0.021,
+            0.051,
+            0.089,
+            0.076,
+            0.078,
+            0.026
+          ]
+        },
+        "t": {
+          "dtype": "f64",
+          "values": [
+            0.839,
+            1.615,
+            1.919,
+            1.37,
+            1.39,
+            0.532
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "ge",
+        "left": {
+          "op": "binop",
+          "kind": "add",
+          "left": {
+            "op": "col",
+            "name": "a"
+          },
+          "right": {
+            "op": "binop",
+            "kind": "mul",
+            "left": {
+              "op": "col",
+              "name": "n"
+            },
+            "right": {
+              "op": "col",
+              "name": "c"
+            }
+          }
+        },
+        "right": {
+          "op": "col",
+          "name": "t"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          0.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "sum-over-a-value-per-policy",
+      "covers": [
+        "sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per policy",
+      "refusal": "fold-over-a-value-per-policy",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "mean-over-a-value-per-policy",
+      "covers": [
+        "mean"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "mean",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per policy",
+      "refusal": "fold-over-a-value-per-policy",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "min-over-a-value-per-policy",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per policy",
+      "refusal": "fold-over-a-value-per-policy",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "max-over-a-value-per-policy",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per policy",
+      "refusal": "fold-over-a-value-per-policy",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "cum_sum-over-a-value-per-policy",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per policy",
+      "refusal": "fold-over-a-value-per-policy",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "cum_prod-over-a-value-per-policy",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            3.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per policy",
+      "refusal": "fold-over-a-value-per-policy",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "when-over-a-whole-number-run-or-a-nan-test-periods",
+      "covers": [
+        "when_then",
+        "or",
+        "gt",
+        "lt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            0.5,
+            2.0
+          ]
+        },
+        "Li": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              1,
+              5,
+              9
+            ]
+          ]
+        },
+        "q": {
+          "dtype": "f64",
+          "values": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "or",
+          "left": {
+            "op": "binop",
+            "kind": "gt",
+            "left": {
+              "op": "col",
+              "name": "Li"
+            },
+            "right": {
+              "op": "lit",
+              "value": 4
+            }
+          },
+          "right": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "q"
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.001
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            0.5,
+            0.5,
+            0.5
+          ],
+          [
+            0.001,
+            0.5,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-text-run-and-a-nan-test-periods",
+      "covers": [
+        "when_then",
+        "and",
+        "le",
+        "lt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            0.5,
+            2.0
+          ]
+        },
+        "Lt": {
+          "dtype": "list[str]",
+          "values": [
+            [
+              "a",
+              "m",
+              "z"
+            ],
+            [
+              "a",
+              "m",
+              "z"
+            ],
+            [
+              "a",
+              "m",
+              "z"
+            ]
+          ]
+        },
+        "q": {
+          "dtype": "f64",
+          "values": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "and",
+          "left": {
+            "op": "binop",
+            "kind": "le",
+            "left": {
+              "op": "col",
+              "name": "Lt"
+            },
+            "right": {
+              "op": "lit",
+              "value": "m"
+            }
+          },
+          "right": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "q"
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.001
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            0.5,
+            0.5,
+            0.001
+          ],
+          [
+            0.001,
+            0.001,
+            0.001
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-date-run-below-a-nan-test-periods",
+      "covers": [
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            0.5,
+            2.0
+          ]
+        },
+        "Ld": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2020-01-01",
+              "2021-01-01",
+              "2022-01-01"
+            ],
+            [
+              "2020-01-01",
+              "2021-01-01",
+              "2022-01-01"
+            ],
+            [
+              "2020-01-01",
+              "2021-01-01",
+              "2022-01-01"
+            ]
+          ]
+        },
+        "d": {
+          "dtype": "date",
+          "values": [
+            "2020-06-01",
+            "2020-06-01",
+            "2020-06-01"
+          ]
+        },
+        "q": {
+          "dtype": "f64",
+          "values": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "lt",
+          "left": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "Ld"
+            },
+            "right": {
+              "op": "col",
+              "name": "d"
+            }
+          },
+          "right": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "q"
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.001
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            0.001,
+            0.5,
+            0.5
+          ],
+          [
+            0.001,
+            0.001,
+            0.001
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-flag-run-unequal-to-a-nan-test-periods",
+      "covers": [
+        "when_then",
+        "ne",
+        "lt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            0.5,
+            2.0
+          ]
+        },
+        "Lb": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              true
+            ],
+            [
+              true,
+              false,
+              true
+            ],
+            [
+              true,
+              false,
+              true
+            ]
+          ]
+        },
+        "q": {
+          "dtype": "f64",
+          "values": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "ne",
+          "left": {
+            "op": "col",
+            "name": "Lb"
+          },
+          "right": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "q"
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.001
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            0.001,
+            0.5,
+            0.001
+          ],
+          [
+            0.5,
+            0.001,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-nan-test-or-a-flag-run-compared-periods",
+      "covers": [
+        "when_then",
+        "or",
+        "lt",
+        "eq"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            0.5,
+            2.0
+          ]
+        },
+        "Lb": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              true
+            ],
+            [
+              true,
+              false,
+              true
+            ],
+            [
+              true,
+              false,
+              true
+            ]
+          ]
+        },
+        "q": {
+          "dtype": "f64",
+          "values": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "or",
+          "left": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          },
+          "right": {
+            "op": "binop",
+            "kind": "eq",
+            "left": {
+              "op": "col",
+              "name": "Lb"
+            },
+            "right": {
+              "op": "lit",
+              "value": true
+            }
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "q"
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.001
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            0.5,
+            0.5,
+            0.5
+          ],
+          [
+            0.5,
+            0.001,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-scalar-date-against-a-run-and-a-nan-test-periods",
+      "covers": [
+        "when_then",
+        "and",
+        "gt",
+        "lt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            0.5,
+            2.0
+          ]
+        },
+        "Ld": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2020-01-01",
+              "2021-01-01",
+              "2022-01-01"
+            ],
+            [
+              "2020-01-01",
+              "2021-01-01",
+              "2022-01-01"
+            ],
+            [
+              "2020-01-01",
+              "2021-01-01",
+              "2022-01-01"
+            ]
+          ]
+        },
+        "d": {
+          "dtype": "date",
+          "values": [
+            "2020-06-01",
+            "2020-06-01",
+            "2020-06-01"
+          ]
+        },
+        "q": {
+          "dtype": "f64",
+          "values": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "and",
+          "left": {
+            "op": "binop",
+            "kind": "gt",
+            "left": {
+              "op": "col",
+              "name": "d"
+            },
+            "right": {
+              "op": "col",
+              "name": "Ld"
+            }
+          },
+          "right": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "x"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "q"
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.001
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            0.5,
+            0.001,
+            0.001
+          ],
+          [
+            0.001,
+            0.001,
+            0.001
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "mul-of-a-flag-chosen-over-a-nan-periods",
+      "covers": [
+        "mul",
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "L": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            true,
+            true
+          ]
+        },
+        "g": {
+          "dtype": "bool",
+          "values": [
+            false,
+            false
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "when_then",
+          "cond": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "L"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          },
+          "then": {
+            "op": "col",
+            "name": "flag"
+          },
+          "otherwise": {
+            "op": "col",
+            "name": "g"
+          }
+        },
+        "right": {
+          "op": "lit",
+          "value": 1.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            null,
+            0.0
+          ],
+          [
+            1.0,
+            1.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "not-of-a-flag-chosen-over-a-nan-periods",
+      "covers": [
+        "not_",
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "L": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            true,
+            true
+          ]
+        },
+        "g": {
+          "dtype": "bool",
+          "values": [
+            false,
+            false
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "not_",
+        "args": [
+          {
+            "op": "when_then",
+            "cond": {
+              "op": "binop",
+              "kind": "lt",
+              "left": {
+                "op": "col",
+                "name": "L"
+              },
+              "right": {
+                "op": "lit",
+                "value": 1.0
+              }
+            },
+            "then": {
+              "op": "col",
+              "name": "flag"
+            },
+            "otherwise": {
+              "op": "col",
+              "name": "g"
+            }
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            null,
+            1.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "and-of-a-flag-chosen-over-a-nan-periods",
+      "covers": [
+        "and",
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "L": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            true,
+            true
+          ]
+        },
+        "g": {
+          "dtype": "bool",
+          "values": [
+            false,
+            false
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "and",
+        "left": {
+          "op": "when_then",
+          "cond": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "L"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          },
+          "then": {
+            "op": "col",
+            "name": "flag"
+          },
+          "otherwise": {
+            "op": "col",
+            "name": "g"
+          }
+        },
+        "right": {
+          "op": "col",
+          "name": "flag"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            null,
+            0.0
+          ],
+          [
+            1.0,
+            1.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "is-null-of-a-flag-chosen-over-a-nan-periods",
+      "covers": [
+        "is_null",
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "L": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            true,
+            true
+          ]
+        },
+        "g": {
+          "dtype": "bool",
+          "values": [
+            false,
+            false
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "is_null",
+        "args": [
+          {
+            "op": "when_then",
+            "cond": {
+              "op": "binop",
+              "kind": "lt",
+              "left": {
+                "op": "col",
+                "name": "L"
+              },
+              "right": {
+                "op": "lit",
+                "value": 1.0
+              }
+            },
+            "then": {
+              "op": "col",
+              "name": "flag"
+            },
+            "otherwise": {
+              "op": "col",
+              "name": "g"
+            }
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            true,
+            false
+          ],
+          [
+            false,
+            false,
+            false
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-flag-chosen-over-a-nan-periods",
+      "covers": [
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "L": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ]
+        },
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            true,
+            true
+          ]
+        },
+        "g": {
+          "dtype": "bool",
+          "values": [
+            false,
+            false
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "when_then",
+          "cond": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "L"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          },
+          "then": {
+            "op": "col",
+            "name": "flag"
+          },
+          "otherwise": {
+            "op": "col",
+            "name": "g"
+          }
+        },
+        "then": {
+          "op": "lit",
+          "value": 1.0
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            null,
+            0.0
+          ],
+          [
+            1.0,
+            1.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-nan-with-a-null-otherwise-periods",
+      "covers": [
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "L": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              0.5,
+              3.0,
+              2.0
+            ]
+          ]
+        },
+        "f": {
+          "dtype": "f64",
+          "values": [
+            1.5,
+            1.5
+          ]
+        },
+        "Lfn": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              7.5,
+              null,
+              9.5
+            ],
+            [
+              7.5,
+              null,
+              9.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "lt",
+          "left": {
+            "op": "col",
+            "name": "L"
+          },
+          "right": {
+            "op": "lit",
+            "value": 1.0
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "f"
+        },
+        "otherwise": {
+          "op": "col",
+          "name": "Lfn"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.5,
+            {
+              "nonfinite": "nan"
+            },
+            9.5
+          ],
+          [
+            1.5,
+            null,
+            9.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-nan-flag-beside-a-null-whole-number-periods",
+      "covers": [
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "L": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              0.5,
+              3.0,
+              2.0
+            ]
+          ]
+        },
+        "flag": {
+          "dtype": "bool",
+          "values": [
+            true,
+            true
+          ]
+        },
+        "Lin": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              7,
+              null,
+              9
+            ],
+            [
+              7,
+              null,
+              9
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "lt",
+          "left": {
+            "op": "col",
+            "name": "L"
+          },
+          "right": {
+            "op": "lit",
+            "value": 1.0
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "flag"
+        },
+        "otherwise": {
+          "op": "col",
+          "name": "Lin"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            {
+              "nonfinite": "nan"
+            },
+            9.0
+          ],
+          [
+            1.0,
+            null,
+            9.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-nan-mask-with-a-null-otherwise-periods",
+      "covers": [
+        "when_then",
+        "or",
+        "lt",
+        "gt"
+      ],
+      "inputs": {
+        "L": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.5,
+              {
+                "nonfinite": "nan"
+              },
+              2.0
+            ],
+            [
+              0.5,
+              3.0,
+              2.0
+            ]
+          ]
+        },
+        "M": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              9.0,
+              9.0,
+              9.0
+            ],
+            [
+              9.0,
+              9.0,
+              9.0
+            ]
+          ]
+        },
+        "f": {
+          "dtype": "f64",
+          "values": [
+            1.5,
+            1.5
+          ]
+        },
+        "Lfn": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              7.5,
+              null,
+              9.5
+            ],
+            [
+              7.5,
+              null,
+              9.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "or",
+          "left": {
+            "op": "binop",
+            "kind": "lt",
+            "left": {
+              "op": "col",
+              "name": "L"
+            },
+            "right": {
+              "op": "lit",
+              "value": 1.0
+            }
+          },
+          "right": {
+            "op": "binop",
+            "kind": "gt",
+            "left": {
+              "op": "col",
+              "name": "M"
+            },
+            "right": {
+              "op": "lit",
+              "value": 10.0
+            }
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "f"
+        },
+        "otherwise": {
+          "op": "col",
+          "name": "Lfn"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.5,
+            {
+              "nonfinite": "nan"
+            },
+            9.5
+          ],
+          [
+            1.5,
+            null,
+            9.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "when-over-a-per-policy-nan-with-a-null-in-the-run-periods",
+      "covers": [
+        "when_then",
+        "lt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            2.0
+          ]
+        },
+        "f": {
+          "dtype": "f64",
+          "values": [
+            1.5,
+            1.5
+          ]
+        },
+        "Lfn": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              7.5,
+              null,
+              9.5
+            ],
+            [
+              7.5,
+              null,
+              9.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "binop",
+          "kind": "lt",
+          "left": {
+            "op": "col",
+            "name": "x"
+          },
+          "right": {
+            "op": "lit",
+            "value": 1.0
+          }
+        },
+        "then": {
+          "op": "col",
+          "name": "f"
+        },
+        "otherwise": {
+          "op": "col",
+          "name": "Lfn"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            7.5,
+            null,
+            9.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    }
+  ]
+}

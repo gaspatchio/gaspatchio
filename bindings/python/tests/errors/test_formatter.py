@@ -4,37 +4,66 @@
 
 """Tests for the FriendlyErrorFormatter class and related functionality."""
 
-import time
-from dataclasses import dataclass
-
 import polars as pl
 import pytest
 
+from gaspatchio._semantic.ir import Col
+
 # Import the new FriendlyErrorFormatter
-from gaspatchio.errors.formatter import FriendlyErrorFormatter
+from gaspatchio.errors.formatter import (
+    AttributeErrorFormatter,
+    FriendlyErrorFormatter,
+    ValidationErrorFormatter,
+)
 
 # For backward compatibility, also test the existing functions
 from gaspatchio.errors.formatting_errors import (
     _extract_missing_column_robust,
     _find_similar_columns,
 )
+from gaspatchio.errors.models import SourceLocation
+from gaspatchio.errors.validation import ValidationError
+from gaspatchio.frame.calculations import CalculationRecord, SourceSpan
 
 
-# Mock TracedOperation and OperationMetadata for testing
-@dataclass
-class MockOperationMetadata:
-    file_name: str
-    line_number: int
-    source_line: str
-    function_name: str | None = None
-    timestamp: float | None = None
+def _calculation(
+    column: str,
+    expression: object,
+    source: SourceSpan | None,
+) -> CalculationRecord:
+    """Build one recorded calculation, as the frame's log would hold it."""
+    return CalculationRecord(
+        column=column,
+        ordinal=1,
+        operation_id=0,
+        node=Col(column),
+        expr=expression,
+        dtype=None,
+        source=source,
+        origin="assignment",
+    )
 
 
-@dataclass
-class MockTracedOperation:
-    alias: str
-    expression: str  # Simplified for testing
-    metadata: MockOperationMetadata
+def _span(
+    file: str,
+    line: int,
+    statement: str,
+    function: str | None = None,
+) -> SourceSpan:
+    """Build the source span capture would have resolved for a statement.
+
+    ``function`` defaults to ``None`` -- the module-level case, where capture
+    has no enclosing scope to report.
+    """
+    return SourceSpan(
+        file=file,
+        line=line,
+        end_line=line,
+        function=function,
+        statement=statement,
+        rhs=None,
+        target_literal=True,
+    )
 
 
 # --- Test FriendlyErrorFormatter ---
@@ -45,17 +74,14 @@ class TestFriendlyErrorFormatter:
 
     def test_format_error_basic(self):
         """Test basic error formatting without suggestions."""
-        # Create mock operation
-        metadata = MockOperationMetadata(
-            file_name="model_calculation.py",
-            line_number=27,
-            source_line='af["premium_total"] = af["premium"] * 12',
-            function_name="calculate_premiums",
-        )
-        operation = MockTracedOperation(
-            alias="premium_total",
-            expression="col('premium') * 12",
-            metadata=metadata,
+        record = _calculation(
+            "premium_total",
+            "col('premium') * 12",
+            _span(
+                "model_calculation.py",
+                27,
+                'af["premium_total"] = af["premium"] * 12',
+            ),
         )
 
         # Create test exception
@@ -71,7 +97,7 @@ class TestFriendlyErrorFormatter:
 
         # Create formatter
         formatter = FriendlyErrorFormatter(
-            operation=operation,
+            record=record,
             exception=exception,
             last_good_df=test_df,
         )
@@ -88,17 +114,66 @@ class TestFriendlyErrorFormatter:
         assert "policy_id" in error_msg
         assert "premium" in error_msg
 
+    def test_format_error_names_the_function_the_calculation_was_written_in(self):
+        """A span that knows its enclosing scope reports it under the location."""
+        record = _calculation(
+            "premium_total",
+            "col('premium') * 12",
+            _span(
+                "model_calculation.py",
+                27,
+                'af["premium_total"] = af["premium"] * 12',
+                function="build_cashflows",
+            ),
+        )
+
+        error_msg = FriendlyErrorFormatter(
+            record=record,
+            exception=ValueError("Test error message"),
+            last_good_df=pl.DataFrame({"premium": [100.0]}),
+        ).format_error()
+
+        assert "   Function: build_cashflows" in error_msg
+
+    def test_format_error_omits_the_function_line_at_module_level(self):
+        """No enclosing scope means no line, not a "module level" claim."""
+        record = _calculation(
+            "premium_total",
+            "col('premium') * 12",
+            _span(
+                "model_calculation.py",
+                27,
+                'af["premium_total"] = af["premium"] * 12',
+            ),
+        )
+
+        error_msg = FriendlyErrorFormatter(
+            record=record,
+            exception=ValueError("Test error message"),
+            last_good_df=pl.DataFrame({"premium": [100.0]}),
+        ).format_error()
+
+        assert "Function:" not in error_msg
+        assert "module level" not in error_msg
+
+    def test_format_error_omits_the_function_line_when_no_span_resolved(self):
+        """A calculation with no span at all reports no scope either."""
+        record = _calculation("premium_total", "col('premium') * 12", None)
+
+        error_msg = FriendlyErrorFormatter(
+            record=record,
+            exception=ValueError("Test error message"),
+            last_good_df=pl.DataFrame({"premium": [100.0]}),
+        ).format_error()
+
+        assert "Function:" not in error_msg
+
     def test_format_error_with_suggestions(self):
         """Test error formatting with suggestions."""
-        metadata = MockOperationMetadata(
-            file_name="test.py",
-            line_number=1,
-            source_line="test_line",
-        )
-        operation = MockTracedOperation(
-            alias="test_col",
-            expression="col('test')",
-            metadata=metadata,
+        record = _calculation(
+            "annual_premium",
+            "col('test')",
+            _span("test.py", 1, "af.annual_premium = af.premium * 12"),
         )
 
         exception = pl.exceptions.ColumnNotFoundError("Column not found")
@@ -106,7 +181,7 @@ class TestFriendlyErrorFormatter:
         suggestions = ["Check column name", "Use .columns to see available columns"]
 
         formatter = FriendlyErrorFormatter(
-            operation=operation,
+            record=record,
             exception=exception,
             last_good_df=test_df,
             suggestions=suggestions,
@@ -120,17 +195,10 @@ class TestFriendlyErrorFormatter:
 
     def test_format_for_llm(self):
         """Test LLM-friendly JSON format."""
-        metadata = MockOperationMetadata(
-            file_name="model.py",
-            line_number=42,
-            source_line="af['result'] = af['input'] * 2",
-            function_name="process_data",
-            timestamp=time.time(),
-        )
-        operation = MockTracedOperation(
-            alias="result",
-            expression="col('input') * 2",
-            metadata=metadata,
+        record = _calculation(
+            "result",
+            "col('input') * 2",
+            _span("model.py", 42, "af['result'] = af['input'] * 2"),
         )
 
         exception = RuntimeError("Division by zero")
@@ -138,7 +206,7 @@ class TestFriendlyErrorFormatter:
         suggestions = ["Handle zero values", "Add null checks"]
 
         formatter = FriendlyErrorFormatter(
-            operation=operation,
+            record=record,
             exception=exception,
             last_good_df=test_df,
             suggestions=suggestions,
@@ -155,8 +223,8 @@ class TestFriendlyErrorFormatter:
         # Check error_location
         assert llm_format["error_location"]["file"] == "model.py"
         assert llm_format["error_location"]["line"] == 42
+        assert llm_format["error_location"]["function"] is None
         assert llm_format["error_location"]["code"] == "af['result'] = af['input'] * 2"
-        assert llm_format["error_location"]["function"] == "process_data"
 
         # Check error_details
         assert llm_format["error_details"]["type"] == "RuntimeError"
@@ -171,10 +239,30 @@ class TestFriendlyErrorFormatter:
         assert llm_format["context"]["available_columns"] == ["input"]
         assert llm_format["context"]["dataframe_shape"] == [3, 1]
 
+    def test_format_for_llm_carries_the_function_scope(self):
+        """The LLM payload names the enclosing scope whenever capture knew it."""
+        record = _calculation(
+            "result",
+            "col('input') * 2",
+            _span(
+                "model.py",
+                42,
+                "af['result'] = af['input'] * 2",
+                function="project_reserves",
+            ),
+        )
+
+        llm_format = FriendlyErrorFormatter(
+            record=record,
+            exception=RuntimeError("Division by zero"),
+            last_good_df=pl.DataFrame({"input": [1]}),
+        ).format_for_llm()
+
+        assert llm_format["error_location"]["function"] == "project_reserves"
+
     def test_format_dataframe_preview(self):
         """Test DataFrame preview formatting."""
-        metadata = MockOperationMetadata("test.py", 1, "test")
-        operation = MockTracedOperation("test", "test", metadata)
+        record = _calculation("reserves", "test", _span("test.py", 1, "test"))
 
         # Create test DataFrame with multiple rows
         test_df = pl.DataFrame(
@@ -185,7 +273,7 @@ class TestFriendlyErrorFormatter:
         )
 
         formatter = FriendlyErrorFormatter(
-            operation=operation,
+            record=record,
             exception=Exception("test"),
             last_good_df=test_df,
         )
@@ -201,14 +289,13 @@ class TestFriendlyErrorFormatter:
 
     def test_truncate_wide_tables(self):
         """Test wide table truncation."""
-        metadata = MockOperationMetadata("test.py", 1, "test")
-        operation = MockTracedOperation("test", "test", metadata)
+        record = _calculation("reserves", "test", _span("test.py", 1, "test"))
 
         # Create wide DataFrame
         wide_df = pl.DataFrame({f"col_{i}": [1, 2, 3] for i in range(15)})
 
         formatter = FriendlyErrorFormatter(
-            operation=operation,
+            record=record,
             exception=Exception("test"),
             last_good_df=wide_df,
         )
@@ -228,8 +315,7 @@ class TestFriendlyErrorFormatter:
 
     def test_with_lazy_dataframe(self):
         """Test formatter works with LazyFrame."""
-        metadata = MockOperationMetadata("test.py", 1, "test")
-        operation = MockTracedOperation("test", "test", metadata)
+        record = _calculation("reserves", "test", _span("test.py", 1, "test"))
 
         # Create LazyFrame
         lazy_df = pl.LazyFrame(
@@ -240,7 +326,7 @@ class TestFriendlyErrorFormatter:
         )
 
         formatter = FriendlyErrorFormatter(
-            operation=operation,
+            record=record,
             exception=Exception("test"),
             last_good_df=lazy_df,
         )
@@ -257,6 +343,70 @@ class TestFriendlyErrorFormatter:
         # For LazyFrame, shape should be ["unknown", num_columns]
         assert llm_format["context"]["dataframe_shape"] == ["unknown", 2]
         assert llm_format["context"]["available_columns"] == ["a", "b"]
+
+
+# --- Test ValidationErrorFormatter ---
+
+
+class TestValidationErrorFormatter:
+    """Test the ValidationErrorFormatter class."""
+
+    def _rendered(self, function_name: str | None) -> str:
+        """Render a validation error whose location names ``function_name``."""
+        error = ValidationError("Invalid option: 'bogus'")
+        error.source_location = SourceLocation(
+            file_path="model_calculation.py",
+            line_number=42,
+            function_name=function_name,
+            source_line="af.foo = bar.lookup(option='bogus')",
+        )
+        return ValidationErrorFormatter(error).format_error()
+
+    def test_omits_the_function_line_at_module_level(self):
+        """No enclosing scope means no line, not a "module level" claim."""
+        message = self._rendered(None)
+
+        assert "Function:" not in message
+        assert "<module>" not in message
+        assert "module level" not in message
+
+    def test_names_the_function_the_error_was_raised_in(self):
+        """A location that knows its enclosing scope reports it."""
+        message = self._rendered("validate_lookup_key")
+
+        assert "Function: validate_lookup_key" in message
+
+
+# --- Test AttributeErrorFormatter ---
+
+
+class TestAttributeErrorFormatter:
+    """Test the AttributeErrorFormatter class."""
+
+    def _rendered(self, function_name: str | None) -> str:
+        """Render an attribute error whose location names ``function_name``."""
+        location = SourceLocation(
+            file_path="model_calculation.py",
+            line_number=17,
+            function_name=function_name,
+            source_line="af.foo = bar.split(',')",
+        )
+        error = AttributeError("'NoneType' object has no attribute 'split'")
+        return AttributeErrorFormatter(error, source_location=location).format_error()
+
+    def test_omits_the_function_line_at_module_level(self):
+        """No enclosing scope means no line, not a "module level" claim."""
+        message = self._rendered(None)
+
+        assert "Function:" not in message
+        assert "<module>" not in message
+        assert "module level" not in message
+
+    def test_names_the_function_the_error_was_raised_in(self):
+        """A location that knows its enclosing scope reports it."""
+        message = self._rendered("compute_reserve")
+
+        assert "Function: compute_reserve" in message
 
 
 # --- Test legacy helper functions for backward compatibility ---

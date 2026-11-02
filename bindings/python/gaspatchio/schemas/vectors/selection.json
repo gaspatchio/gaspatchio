@@ -1,0 +1,755 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "Recorded selection applied to the book",
+  "cases": [
+    {
+      "id": "selection-filter-in-force",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "status": {
+          "dtype": "str",
+          "values": [
+            "IF",
+            "IF",
+            "IF",
+            "LAPSED"
+          ]
+        },
+        "issue_age": {
+          "dtype": "i64",
+          "values": [
+            30,
+            45,
+            60,
+            52
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            "C",
+            "A"
+          ]
+        },
+        "sum_assured": {
+          "dtype": "f64",
+          "values": [
+            100000.0,
+            250000.0,
+            50000.0,
+            80000.0
+          ]
+        }
+      },
+      "selection": [
+        {
+          "kind": "filter",
+          "expr": {
+            "op": "binop",
+            "kind": "eq",
+            "left": {
+              "op": "col",
+              "name": "status"
+            },
+            "right": {
+              "op": "lit",
+              "value": "IF"
+            }
+          }
+        }
+      ],
+      "expr": {
+        "op": "col",
+        "name": "policy_id"
+      },
+      "producer_check": true,
+      "case_kind": "selection-value",
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          1,
+          2,
+          3
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "selection-filter-in-force-sum-assured",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "status": {
+          "dtype": "str",
+          "values": [
+            "IF",
+            "IF",
+            "IF",
+            "LAPSED"
+          ]
+        },
+        "issue_age": {
+          "dtype": "i64",
+          "values": [
+            30,
+            45,
+            60,
+            52
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            "C",
+            "A"
+          ]
+        },
+        "sum_assured": {
+          "dtype": "f64",
+          "values": [
+            100000.0,
+            250000.0,
+            50000.0,
+            80000.0
+          ]
+        }
+      },
+      "selection": [
+        {
+          "kind": "filter",
+          "expr": {
+            "op": "binop",
+            "kind": "eq",
+            "left": {
+              "op": "col",
+              "name": "status"
+            },
+            "right": {
+              "op": "lit",
+              "value": "IF"
+            }
+          }
+        }
+      ],
+      "expr": {
+        "op": "col",
+        "name": "sum_assured"
+      },
+      "producer_check": true,
+      "case_kind": "selection-value",
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          100000.0,
+          250000.0,
+          50000.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "selection-filter-null-is-not-kept",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "status": {
+          "dtype": "str",
+          "values": [
+            "IF",
+            null,
+            "IF",
+            "LAPSED"
+          ]
+        },
+        "issue_age": {
+          "dtype": "i64",
+          "values": [
+            30,
+            45,
+            60,
+            52
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            "C",
+            "A"
+          ]
+        },
+        "sum_assured": {
+          "dtype": "f64",
+          "values": [
+            100000.0,
+            250000.0,
+            50000.0,
+            80000.0
+          ]
+        }
+      },
+      "selection": [
+        {
+          "kind": "filter",
+          "expr": {
+            "op": "binop",
+            "kind": "eq",
+            "left": {
+              "op": "col",
+              "name": "status"
+            },
+            "right": {
+              "op": "lit",
+              "value": "IF"
+            }
+          }
+        }
+      ],
+      "expr": {
+        "op": "col",
+        "name": "policy_id"
+      },
+      "producer_check": true,
+      "case_kind": "selection-value",
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          1,
+          3
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "selection-filter-compound",
+      "covers": [
+        "lt",
+        "and",
+        "is_in"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "status": {
+          "dtype": "str",
+          "values": [
+            "IF",
+            "IF",
+            "IF",
+            "LAPSED"
+          ]
+        },
+        "issue_age": {
+          "dtype": "i64",
+          "values": [
+            30,
+            45,
+            60,
+            52
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            "C",
+            "A"
+          ]
+        },
+        "sum_assured": {
+          "dtype": "f64",
+          "values": [
+            100000.0,
+            250000.0,
+            50000.0,
+            80000.0
+          ]
+        }
+      },
+      "selection": [
+        {
+          "kind": "filter",
+          "expr": {
+            "op": "binop",
+            "kind": "and",
+            "left": {
+              "op": "binop",
+              "kind": "lt",
+              "left": {
+                "op": "col",
+                "name": "issue_age"
+              },
+              "right": {
+                "op": "lit",
+                "value": 50
+              }
+            },
+            "right": {
+              "op": "call",
+              "name": "is_in",
+              "args": [
+                {
+                  "op": "col",
+                  "name": "status"
+                },
+                {
+                  "op": "lit",
+                  "values": [
+                    "IF"
+                  ]
+                }
+              ],
+              "attrs": {
+                "nulls_equal": false
+              }
+            }
+          }
+        }
+      ],
+      "expr": {
+        "op": "col",
+        "name": "policy_id"
+      },
+      "producer_check": true,
+      "case_kind": "selection-value",
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          1,
+          2
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "selection-semi-join",
+      "covers": [
+        "join"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "status": {
+          "dtype": "str",
+          "values": [
+            "IF",
+            "IF",
+            "IF",
+            "LAPSED"
+          ]
+        },
+        "issue_age": {
+          "dtype": "i64",
+          "values": [
+            30,
+            45,
+            60,
+            52
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            "C",
+            "A"
+          ]
+        },
+        "sum_assured": {
+          "dtype": "f64",
+          "values": [
+            100000.0,
+            250000.0,
+            50000.0,
+            80000.0
+          ]
+        }
+      },
+      "selection": [
+        {
+          "kind": "semi",
+          "expr": {
+            "op": "call",
+            "name": "join",
+            "args": [],
+            "attrs": {
+              "on": "product",
+              "how": "semi",
+              "right_fingerprint": "sha256:1c6fb6fbefabc32dd0361dc4c0c700989a3eaa238b1299b41f4292f9a825c8c0"
+            }
+          },
+          "right": {
+            "product": [
+              "A",
+              "C"
+            ]
+          }
+        }
+      ],
+      "expr": {
+        "op": "col",
+        "name": "policy_id"
+      },
+      "producer_check": true,
+      "case_kind": "selection-value",
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          1,
+          3,
+          4
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "selection-anti-join",
+      "covers": [
+        "join"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "status": {
+          "dtype": "str",
+          "values": [
+            "IF",
+            "IF",
+            "IF",
+            "LAPSED"
+          ]
+        },
+        "issue_age": {
+          "dtype": "i64",
+          "values": [
+            30,
+            45,
+            60,
+            52
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            "C",
+            "A"
+          ]
+        },
+        "sum_assured": {
+          "dtype": "f64",
+          "values": [
+            100000.0,
+            250000.0,
+            50000.0,
+            80000.0
+          ]
+        }
+      },
+      "selection": [
+        {
+          "kind": "anti",
+          "expr": {
+            "op": "call",
+            "name": "join",
+            "args": [],
+            "attrs": {
+              "on": "product",
+              "how": "anti",
+              "right_fingerprint": "sha256:1c6fb6fbefabc32dd0361dc4c0c700989a3eaa238b1299b41f4292f9a825c8c0"
+            }
+          },
+          "right": {
+            "product": [
+              "A",
+              "C"
+            ]
+          }
+        }
+      ],
+      "expr": {
+        "op": "col",
+        "name": "policy_id"
+      },
+      "producer_check": true,
+      "case_kind": "selection-value",
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          2
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "selection-two-steps-in-order",
+      "covers": [
+        "eq",
+        "join"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "status": {
+          "dtype": "str",
+          "values": [
+            "IF",
+            "IF",
+            "IF",
+            "LAPSED"
+          ]
+        },
+        "issue_age": {
+          "dtype": "i64",
+          "values": [
+            30,
+            45,
+            60,
+            52
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            "C",
+            "A"
+          ]
+        },
+        "sum_assured": {
+          "dtype": "f64",
+          "values": [
+            100000.0,
+            250000.0,
+            50000.0,
+            80000.0
+          ]
+        }
+      },
+      "selection": [
+        {
+          "kind": "filter",
+          "expr": {
+            "op": "binop",
+            "kind": "eq",
+            "left": {
+              "op": "col",
+              "name": "status"
+            },
+            "right": {
+              "op": "lit",
+              "value": "IF"
+            }
+          }
+        },
+        {
+          "kind": "anti",
+          "expr": {
+            "op": "call",
+            "name": "join",
+            "args": [],
+            "attrs": {
+              "on": "product",
+              "how": "anti",
+              "right_fingerprint": "sha256:22a18773d21d67da3989d15eed43f41406fd796a63ed0337da7918cca5671f18"
+            }
+          },
+          "right": {
+            "product": [
+              "C"
+            ]
+          }
+        }
+      ],
+      "expr": {
+        "op": "col",
+        "name": "policy_id"
+      },
+      "producer_check": true,
+      "case_kind": "selection-value",
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          1,
+          2
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "selection-keeps-no-policy",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "status": {
+          "dtype": "str",
+          "values": [
+            "IF",
+            "IF",
+            "IF",
+            "LAPSED"
+          ]
+        },
+        "issue_age": {
+          "dtype": "i64",
+          "values": [
+            30,
+            45,
+            60,
+            52
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B",
+            "C",
+            "A"
+          ]
+        },
+        "sum_assured": {
+          "dtype": "f64",
+          "values": [
+            100000.0,
+            250000.0,
+            50000.0,
+            80000.0
+          ]
+        }
+      },
+      "selection": [
+        {
+          "kind": "filter",
+          "expr": {
+            "op": "binop",
+            "kind": "eq",
+            "left": {
+              "op": "col",
+              "name": "status"
+            },
+            "right": {
+              "op": "lit",
+              "value": "PAID_UP"
+            }
+          }
+        }
+      ],
+      "expr": {
+        "op": "col",
+        "name": "policy_id"
+      },
+      "producer_check": true,
+      "case_kind": "selection-value",
+      "expected": {
+        "dtype": "i64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    }
+  ]
+}

@@ -10,6 +10,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from gaspatchio.scenarios import _batch
 from gaspatchio.scenarios._spill import (
     check_spill_target,
     fstype_for_path,
@@ -141,7 +142,7 @@ def test_preflight_disk_uses_frame_size_not_peak_rss(tmp_path, monkeypatch):
     import gaspatchio.scenarios._spill as spill
 
     captured: dict[str, int] = {}
-    real_collect = spill._collect_with_peak  # noqa: SLF001
+    real_collect = _batch._collect_with_peak  # noqa: SLF001
 
     def _huge_peak(lazy: object, *, engine: str | None = None) -> object:
         frame, _peak = real_collect(lazy, engine=engine)
@@ -150,7 +151,7 @@ def test_preflight_disk_uses_frame_size_not_peak_rss(tmp_path, monkeypatch):
     def _spy_preflight(_directory: object, *, estimated_bytes: int) -> None:
         captured["estimated_bytes"] = estimated_bytes  # capture, don't raise
 
-    monkeypatch.setattr(spill, "_collect_with_peak", _huge_peak)
+    monkeypatch.setattr(_batch, "_collect_with_peak", _huge_peak)
     monkeypatch.setattr(spill, "preflight_disk", _spy_preflight)
     monkeypatch.setattr(spill, "size_to_budget", lambda *a, **k: 10)  # noqa: ARG005
     mp = pl.DataFrame({"value": [float(i) for i in range(1, 5)]})  # 4 policies

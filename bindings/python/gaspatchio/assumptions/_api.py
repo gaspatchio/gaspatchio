@@ -3,9 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ruff: noqa: TID252, TRY003, EM101, EM102, E501, PLR0913, ANN204, FBT001, FBT002
-# ruff: noqa: C901, SIM102, PLR0912, F821, SLF001, B007, PERF102
-# ruff: noqa: ANN003, BLE001
-# mypy: disable-error-code="import-untyped,arg-type,name-defined"
+# ruff: noqa: SLF001, B007, PERF102
+# ruff: noqa: BLE001
 """
 Main assumption table API (v2) - Table class with dimension-based structure.
 
@@ -15,151 +14,68 @@ modular system that separates concerns and improves composability.
 
 from __future__ import annotations
 
-import hashlib
-import io
-from dataclasses import replace
-from difflib import get_close_matches
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
 import polars as pl
 
+from gaspatchio._dtypes import with_signed_zeros_as_zero
+from gaspatchio._identity import source_sha_of
+from gaspatchio._scenario_reads import rebound_read
+from gaspatchio._table_lifecycle import registering_framework_owned
+from gaspatchio._warning import warn
+from gaspatchio.assumptions._data import (
+    _REGISTERED_TABLE_SHAS,
+    TableData,
+    TableSupersededError,
+    _declared_output_columns,
+    _declared_text_columns,
+    _normalise_on_missing,
+)
+from gaspatchio.frame.lowering.lookup import lookup_node
+from gaspatchio.scenarios.shocks import Shock
+
 if TYPE_CHECKING:
-    from gaspatchio.scenarios.shocks import Shock
+    from collections.abc import Mapping
+
+    from gaspatchio.assumptions._dimensions import Dimension
+    from gaspatchio.column.column_proxy import ColumnProxy
+
+    # A dimension key is as often a line the model has not named yet --
+    # ``mort.lookup(age=af.issue_age + af.month // 12)`` -- as it is a column
+    # the frame already holds. Both arrive here and both have always worked;
+    # only the annotation said otherwise.
+    from gaspatchio.column.expression_proxy import ExpressionProxy
 from loguru import logger
-from polars.plugins import register_plugin_function
 
 from .._internal import PyAssumptionTableRegistry
 from ..column.proxy_aware_expr import ProxyAwareExpr
+from ..frame.lowering.context import context_for_operands
+from ..frame.lowering.polars import lower_polars
 from ._analysis import TableSchema, analyze_table
-from ._dimensions import DataDimension, Dimension
-from ._utils import _convert_keys_to_f64, _materialise
-
-
-def _suggest_dimension(invalid_name: str, valid_names: list[str]) -> str | None:
-    """Suggest a valid dimension name based on fuzzy matching.
-
-    Uses difflib.get_close_matches for fuzzy matching, with fallback to
-    prefix and suffix matching for cases like 'age' -> 'age_last'.
-
-    Args:
-        invalid_name: The invalid dimension name provided by the user
-        valid_names: List of valid dimension names
-
-    Returns:
-        The suggested dimension name, or None if no close match found
-
-    """
-    # Try fuzzy match first (cutoff=0.6 catches most typos)
-    matches = get_close_matches(invalid_name, valid_names, n=1, cutoff=0.6)
-    if matches:
-        return matches[0]
-
-    # Try prefix matching (e.g., 'age' matches 'age_last')
-    prefix_matches = [v for v in valid_names if v.startswith(invalid_name)]
-    if len(prefix_matches) == 1:
-        return prefix_matches[0]
-
-    # Try suffix matching (e.g., 'last' matches 'age_last')
-    suffix_matches = [v for v in valid_names if v.endswith(invalid_name)]
-    if len(suffix_matches) == 1:
-        return suffix_matches[0]
-
-    return None
-
-
-# Import for type hints without circular dependency
-
-
-class TableSupersededError(RuntimeError):
-    """A lookup was built from a Table whose name now resolves to different data.
-
-    Tables resolve by name at execution time (last-writer-wins), so a lookup
-    from a superseded object would silently read the newer table's values —
-    the shape where a scenario override resolves to base data and a
-    sensitivity sweep reports zero sensitivity. Raised at ``lookup()`` so the
-    wrong number is never produced.
-    """
-
+from ._processing import (
+    _answer_read_as_f64,
+    _canonical_frame,
+    _canonical_key_columns,
+    _hash_processed_df,
+    _held_as_counts,
+    _in_its_kinds,
+    _judged_frame,
+    _normalised_dimensions,
+    _refuse_a_duration_or_time_key,
+    _shaped_frame,
+)
+from ._utils import _materialise, _normalise_key_dtypes
 
 # Global metadata storage for assumption tables
 _TABLE_METADATA: dict[str, dict[str, Any]] = {}
 
-# Content hash (``sha256:<hex>``) of the last data registered under each table
-# name in this process. Tables in the Rust registry resolve by name at execution
-# time (last-writer-wins), so re-registering a name with DIFFERENT content
-# silently swaps the values under any lazy lookup expression already built
-# against the prior same-named table. We track the last-seen content hash to warn
-# on that specific footgun while staying silent for the common issue-#39
-# reentrancy case (re-running the same model re-registers byte-identical data).
-_REGISTERED_TABLE_SHAS: dict[str, str] = {}
+# A scenario id is a name or a number, and one table's ids are all one or the
+# other: they fill a single column.
+_ScenarioId = TypeVar("_ScenarioId", str, int)
 
 
-def _hash_processed_df(processed_df: pl.DataFrame) -> str:
-    """Return ``sha256:<hex>`` over the parquet bytes of a processed table frame.
-
-    Hashes the fully processed DataFrame that is registered with the Rust
-    registry. The frame is already sorted by its key columns before this call,
-    so identical source data produces an identical hash regardless of input row
-    order. Used only to detect same-name / different-content re-registration.
-    """
-    buf = io.BytesIO()
-    processed_df.write_parquet(buf)
-    return f"sha256:{hashlib.sha256(buf.getvalue()).hexdigest()}"
-
-
-def _normalise_on_missing(value: str | float) -> tuple[str, float | None]:
-    """Validate an ``on_missing`` policy and split it into (mode, fill).
-
-    ``"raise"`` and ``"nan"`` pass through as modes; any real number becomes
-    the ``"fill"`` mode with that constant. Anything else is a ValueError.
-    """
-    if isinstance(value, str):
-        if value in {"raise", "nan"}:
-            return value, None
-        msg = (
-            f"on_missing must be 'raise', 'nan', or a numeric fill value; got {value!r}"
-        )
-        raise ValueError(msg)
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return "fill", float(value)
-    msg = (
-        "on_missing must be 'raise', 'nan', or a numeric fill value; "
-        f"got {type(value).__name__}"
-    )
-    raise ValueError(msg)
-
-
-def _declared_output_columns(dimensions: dict[str, Dimension]) -> dict[str, str]:
-    """Map each dimension name to the column its processing step produces.
-
-    A ``DataDimension`` surfaces ``rename_to`` (or its source column); melt,
-    categorical, and computed dimensions surface their ``name`` attribute,
-    falling back to the dict key. These are the only columns the caller
-    declared as keys — everything else in the processed frame is auxiliary.
-    """
-    spec: dict[str, str] = {}
-    for dim_name, dim in dimensions.items():
-        if isinstance(dim, DataDimension):
-            spec[dim_name] = dim.rename_to or dim.column
-        else:
-            spec[dim_name] = getattr(dim, "name", None) or dim_name
-    return spec
-
-
-# Import LIB path for plugin calls
-try:
-    from .. import _internal
-
-    LIB = Path(_internal.__file__)
-except ImportError as e:
-    raise ImportError(
-        "Failed to import the gaspatchio native extension (_internal). "
-        "Ensure the project is built and installed correctly (e.g., using 'maturin develop -uv').",
-    ) from e
-
-
-class Table:
+class Table(TableData):
     """
     Main assumption table class with dimension-based structure.
 
@@ -172,11 +88,11 @@ class Table:
         self,
         name: str,
         source: str | Path | pl.DataFrame,
-        dimensions: dict[str, str | Dimension],
+        dimensions: Mapping[str, str | Dimension],
         value: str = "rate",
         validate: bool = True,
         metadata: dict[str, Any] | None = None,
-        storage_mode: str = "auto",
+        storage_mode: Literal["auto", "hash", "array"] = "auto",
         on_missing: str | float = "raise",
     ):
         """Create a new assumption table.
@@ -312,22 +228,7 @@ class Table:
         # then match the processed table's key columns (issue #30 — the
         # shorthand previously discarded the dict key and the rename never
         # happened).
-        self._dimensions = {}
-        for dim_name, dim_config in dimensions.items():
-            if isinstance(dim_config, str):
-                self._dimensions[dim_name] = DataDimension(
-                    dim_config, rename_to=dim_name
-                )
-            elif (
-                isinstance(dim_config, DataDimension)
-                and dim_config.rename_to is None
-                and dim_config.column != dim_name
-            ):
-                # An explicit DataDimension under a differing dict key gets the
-                # same rename; a user-set rename_to always wins.
-                self._dimensions[dim_name] = replace(dim_config, rename_to=dim_name)
-            else:
-                self._dimensions[dim_name] = dim_config
+        self._dimensions = _normalised_dimensions(dimensions)
 
         self._value = value
         self._validate = validate
@@ -338,21 +239,44 @@ class Table:
         # Store Enum types for string key columns to enable auto-categorical conversion.
         # Maps column name -> pl.Enum with sorted categories for deterministic index mapping.
         self._key_categories: dict[str, pl.Enum] = {}
+        # The kind of each key column held as a date, a timestamp, a duration
+        # or a time of day before it was held as a whole number.
+        self._key_kinds: Mapping[str, pl.DataType] = {}
+        # A shocked copy answers to the table it was shocked from, so a
+        # chain of with_shock() calls may keep naming the original target.
+        self._shock_origin: str | None = None
 
-        # Store metadata if provided
-        if metadata is not None:
-            _TABLE_METADATA[name] = metadata.copy()
-            logger.debug(f"Stored metadata for table '{name}': {metadata}")
+        # The metadata this table was given, held by the table itself: a later
+        # table built under the same name describes itself, not this one.
+        self._metadata = None if metadata is None else metadata.copy()
+
+        # Where the table was handed a file, the run record names that file:
+        # a reviewer holding it re-reads it as this table. A frame names no
+        # file, and the record says so rather than guessing which one it was.
+        self._source_file = (
+            Path(source).resolve() if isinstance(source, str | Path) else None
+        )
 
         # Process the data during initialization
         self._process_data(source)
 
+        # The name now answers to this table for lookups, so it answers to this
+        # table's metadata too -- and to none where this table was given none,
+        # rather than to whatever an earlier table of the same name was given.
+        # Written once the table is built, so a build that fails leaves the
+        # earlier table's entry where it was.
+        if self._metadata is None:
+            _TABLE_METADATA.pop(name, None)
+        else:
+            _TABLE_METADATA[name] = self._metadata.copy()
+            logger.debug(f"Stored metadata for table '{name}': {metadata}")
+
     @classmethod
     def from_scenario_files(
         cls,
-        scenario_files: dict[str, str | Path],
+        scenario_files: Mapping[_ScenarioId, str | Path],
         scenario_column: str,
-        dimensions: dict[str, str | Dimension],
+        dimensions: Mapping[str, str | Dimension],
         value: str,
         name: str | None = None,
         validate: bool = True,
@@ -377,7 +301,8 @@ class Table:
                 (e.g., IFRS17, Solvency II) from separate assumption files.
 
         Args:
-            scenario_files: Mapping of scenario_id -> file path
+            scenario_files: Mapping of scenario_id -> file path. The ids are
+                all strings or all integers: they fill one column.
             scenario_column: Name for the scenario ID column
             dimensions: Dimension mapping (excluding scenario, which is added automatically)
             value: Value column name
@@ -441,13 +366,42 @@ class Table:
             metadata=metadata,
         )
 
+    # String ids or integer ids, one or the other in a call. Declared as two
+    # signatures so that a caller holding list[str] | list[int] type-checks,
+    # and implemented once over the id type that from_scenario_files takes.
+    @overload
     @classmethod
     def from_scenario_template(
         cls,
         path_template: str,
-        scenario_ids: list[str] | list[int],
+        scenario_ids: list[str],
         scenario_column: str,
-        dimensions: dict[str, str | Dimension],
+        dimensions: Mapping[str, str | Dimension],
+        value: str,
+        name: str | None = None,
+        validate: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> Table: ...
+    @overload
+    @classmethod
+    def from_scenario_template(
+        cls,
+        path_template: str,
+        scenario_ids: list[int],
+        scenario_column: str,
+        dimensions: Mapping[str, str | Dimension],
+        value: str,
+        name: str | None = None,
+        validate: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> Table: ...
+    @classmethod
+    def from_scenario_template(
+        cls,
+        path_template: str,
+        scenario_ids: list[_ScenarioId],
+        scenario_column: str,
+        dimensions: Mapping[str, str | Dimension],
         value: str,
         name: str | None = None,
         validate: bool = True,
@@ -601,12 +555,13 @@ class Table:
                 # Create a new table with same data
                 result[scenario_id] = Table(
                     name=f"{base_table._name}_{scenario_id}",
-                    source=base_df.clone(),
-                    dimensions=base_table._reconstruction_dimensions(),
+                    source=_in_its_kinds(base_df, base_table._key_kinds),
+                    dimensions=base_table._rebuild_dimensions(),
                     value=base_table._value,
                     validate=False,
-                    metadata=base_table.metadata,
+                    **base_table._rebuild_arguments(),
                 )
+                result[scenario_id]._carry_the_source_of(base_table)
             else:
                 # Apply shocks sequentially
                 table = base_table
@@ -619,25 +574,15 @@ class Table:
                 # the dimension name.
                 result[scenario_id] = Table(
                     name=f"{base_table._name}_{scenario_id}",
-                    source=table.to_dataframe(),
-                    dimensions=table._reconstruction_dimensions(),
+                    source=_in_its_kinds(table.to_dataframe(), table._key_kinds),
+                    dimensions=table._rebuild_dimensions(),
                     value=base_table._value,
                     validate=False,
-                    metadata=base_table.metadata,
+                    **base_table._rebuild_arguments(),
                 )
+                result[scenario_id]._carry_the_source_of(table)
 
         return result
-
-    def _reconstruction_dimensions(self) -> dict[str, str]:
-        """Dimensions spec that rebuilds this table from its PROCESSED frame.
-
-        Reconstruction (with_shock/from_shocks) feeds the processed DataFrame
-        back through the Table constructor, so each dimension key must point
-        at its PROCESSED column name — which differs from the key only when
-        an explicit ``DataDimension(rename_to=...)`` was used. The dict keys
-        (the lookup vocabulary) are preserved either way.
-        """
-        return _declared_output_columns(self._dimensions)
 
     def _process_data(self, source: str | Path | pl.DataFrame) -> None:
         """Process the data through dimension transformations and register with Rust.
@@ -667,89 +612,19 @@ class Table:
         # Materialize the source data
         df = _materialise(source)
 
-        if self._validate:
-            # Check if we have MeltDimension - if so, value column will be created
-            has_melt_dimension = any(
-                dim.__class__.__name__ == "MeltDimension"
-                for dim in self._dimensions.values()
-            )
+        current_df = _shaped_frame(
+            df,
+            self._dimensions,
+            self._value,
+            validate=self._validate,
+            name=self._name,
+        )
 
-            # Only validate value column exists if we don't have melt dimension
-            if not has_melt_dimension and self._value not in df.columns:
-                available_cols = ", ".join(df.columns)
-                raise ValueError(
-                    f"Value column '{self._value}' not found in DataFrame.\n"
-                    f"Available columns: {available_cols}",
-                )
-
-        # Process dimensions in order
-        # Note: Order matters for dependencies (e.g., ComputedDimension depends on others)
-        current_df = df
-
-        # Process dimensions in a specific order:
-        # 1. DataDimension (base columns, renames)
-        # 2. CategoricalDimension (add constant columns)
-        # 3. MeltDimension (pivot operations)
-        # 4. ComputedDimension (depends on other columns)
-
-        dimension_order = [
-            "DataDimension",
-            "CategoricalDimension",
-            "MeltDimension",
-            "ComputedDimension",
-        ]
-
-        for dimension_type in dimension_order:
-            for dim_name, dimension in self._dimensions.items():
-                if dimension.__class__.__name__ == dimension_type:
-                    if self._validate:
-                        dimension.validate(current_df)
-                    current_df = dimension.process(current_df)
-                    logger.debug(f"Processed dimension '{dim_name}' ({dimension_type})")
-
-                    # Handle MeltDimension value column naming
-                    if (
-                        dimension_type == "MeltDimension"
-                        and "value" in current_df.columns
-                    ):
-                        if self._value != "value":
-                            current_df = current_df.rename({"value": self._value})
-                            logger.debug(
-                                f"Renamed melt value column from 'value' to '{self._value}'",
-                            )
-
-        # Believe the declaration. Published assumption tables essentially
-        # always carry extra columns — an earned rate next to a credited
-        # rate, a count next to a rate, a source note — and requiring the
-        # caller to pre-trim the frame is an ETL step. Promoting an
-        # undeclared column to a dimension key is a guess about its meaning,
-        # and the guess used to fail several steps later with a key-dtype
-        # error that never named the column (gh#66). The user stated the key
-        # set in `dimensions=`; keep exactly those columns (each dimension's
-        # processed output name) plus the value, and set the rest aside.
-        # This also drops a ComputedDimension's consumed inputs, which
-        # previously leaked into the key set the same way.
-        declared_outputs = set(self._reconstruction_dimensions().values())
-        undeclared = [
-            c
-            for c in current_df.columns
-            if c not in declared_outputs and c != self._value
-        ]
-        if undeclared:
-            current_df = current_df.drop(undeclared)
-            logger.debug(
-                f"Table '{self._name}': ignoring undeclared columns "
-                f"{undeclared} (neither in dimensions= nor the value column)",
-            )
-
-        # Collect key columns (all columns except the value column)
-        key_columns = [col for col in current_df.columns if col != self._value]
-
-        if not key_columns:
-            raise ValueError(
-                f"No key columns found after dimension processing. "
-                f"All columns cannot be the value column '{self._value}'",
-            )
+        # Collect key columns (all columns except the value column), in the
+        # canonical order: ascending by name. The order a source happened to
+        # list its columns in is how it was published, not what it says, so
+        # it must not reach the table's identity (spec section 12.3).
+        key_columns = _canonical_key_columns(current_df.columns, self._value)
 
         # Capture sorted categories for string columns to enable auto-categorical conversion.
         # The sorted order matches Rust's KeyEncoder dictionary ordering for deterministic lookups.
@@ -764,39 +639,56 @@ class Table:
                     f"{'...' if len(categories) > max_categories_to_show else ''}"
                 )
 
-        # Convert keys to f64 for Rust compatibility
-        processed_df = _convert_keys_to_f64(current_df, key_columns)
+        # A date or a timestamp is a key of its own kind: a lookup reads it
+        # only with a key of that kind, converted to the table's unit. It is
+        # held as the whole number of its unit -- exact for a nanosecond
+        # timestamp, where a double would merge two instants into one key --
+        # and its kind is kept beside the table, which is the kind its
+        # fingerprint is taken in. A duration or a time of day has no kind
+        # the fingerprint can be taken in, and is refused by name.
+        _refuse_a_key_column_of_no_scalar_kind(self._name, current_df, key_columns)
+        _refuse_a_duration_or_time_key(self._name, current_df, key_columns)
+        current_df, self._key_kinds = _held_as_counts(current_df, key_columns)
 
-        # Sort by key columns to ensure array storage indices match categorical order.
-        # This is critical for array storage where position == index.
-        processed_df = processed_df.sort(key_columns)
+        processed_df = _judged_frame(
+            current_df, self._dimensions, self._value, name=self._name
+        )
 
         # Store the processed DataFrame
         self._df = processed_df
 
         # Warn if this name was already registered in this process with DIFFERENT
-        # content. Tables resolve by name at execution time (last-writer-wins), so
-        # a differing re-registration silently swaps the values under any lazy
-        # lookup expression already built against the prior same-named table.
+        # content. The native kernel refuses previously built lazy lookups once
+        # the registered content changes; warn here so callers can rebuild them.
         # Byte-identical re-registration (the common issue-#39 reentrancy case)
         # stays silent. Never raise here — that would reintroduce the #39 bug.
         # Hash the processed frame itself (exactly the bytes handed to Rust); it
-        # is already sorted by key columns above, so identical source data yields
-        # an identical hash regardless of input row order.
-        content_sha = _hash_processed_df(processed_df)
+        # is in canonical form above, so identical source data yields an
+        # identical hash whatever order its rows or columns arrived in.
+        content_sha = _hash_processed_df(processed_df, self._key_kinds)
         self._registered_sha = content_sha
         previous_sha = _REGISTERED_TABLE_SHAS.get(self._name)
-        if previous_sha is not None and previous_sha != content_sha:
-            logger.warning(
+        # A table on the framework's own lifecycle (a scenario batch's stacked
+        # table, collected before its name is registered again) leaves no
+        # lookup behind to go stale, so it replaces itself without a word.
+        if (
+            previous_sha is not None
+            and previous_sha != content_sha
+            and not registering_framework_owned()
+        ):
+            warn(
                 f"Assumption table '{self._name}' was re-registered with "
                 f"different data. Lazy expressions already built against the "
-                f"previous version will now resolve to the NEW values (tables "
-                f"are resolved by name at execution time). If intentional (e.g. "
-                f"a scenario shock), ignore; otherwise give the tables distinct "
-                f"names, or rebuild expressions after re-registering.",
+                f"previous version will refuse to collect. Give the tables "
+                f"distinct names, or rebuild expressions from the current Table "
+                f"after re-registering.",
             )
 
-        # Register with Rust registry using idempotent method
+        # Register with Rust registry using idempotent method. The frame is
+        # freshly sorted, so no fixed-width array crosses as a slice of a
+        # larger one: Polars 1.42.1's Arrow export double-counts such a
+        # slice's offset and the import panics (pola-rs/polars#28583, fixed
+        # upstream in 1.43.2; the pin stays at 1.42.1 until the move to Polars 2).
         try:
             registry = PyAssumptionTableRegistry()
             # Use register_or_replace_table for idempotent behavior
@@ -807,6 +699,7 @@ class Table:
                 value_column=self._value,
                 force_replace=True,  # Always replace for reentrancy support
                 storage_mode=self._storage_mode,
+                fingerprint=content_sha,
             )
             # Record the hash only once the registry actually holds this data;
             # recording before a failed replacement would poison the guard and
@@ -826,14 +719,16 @@ class Table:
                 ),
             )
         except Exception as e:
-            logger.error(f"Failed to register table '{self._name}' with Rust: {e}")
+            # The error is raised as it stands; this only says which table.
+            logger.debug(f"Failed to register table '{self._name}' with Rust: {e}")
             raise
 
-    def lookup(  # noqa: PLR0915
+    def lookup(
         self,
-        _dimensions: dict[str, str | pl.Expr | ColumnProxy] | None = None,
+        _dimensions: Mapping[str, str | pl.Expr | ColumnProxy | ExpressionProxy]
+        | None = None,
         on_missing: str | float | None = None,
-        **kwargs: str | pl.Expr | ColumnProxy,
+        **kwargs: str | pl.Expr | ColumnProxy | ExpressionProxy,
     ) -> pl.Expr:
         """Create a lookup expression using dimension names.
 
@@ -986,148 +881,24 @@ class Table:
         └───────────┴──────────────┴─────────────┴────────────┘
         ```
         """
-        # Refuse a lookup that is guaranteed to read the wrong table. Lookups
-        # resolve by NAME at execution time, so if this name was re-registered
-        # with different data after this object was built, the expression
-        # would silently serve the newer values (#116 — a scenario override
-        # resolving to base data, the sweep reporting zero sensitivity).
-        registered_sha = _REGISTERED_TABLE_SHAS.get(self._name)
-        if registered_sha is not None and registered_sha != self._registered_sha:
-            msg = (
-                f"Assumption table '{self._name}' has been superseded: another "
-                f"Table was registered under this name with different data "
-                f"after this object was built. Lookups resolve by name at "
-                f"execution time, so this lookup would silently read the "
-                f"newer table's values (a scenario override lost this way "
-                f"reports zero sensitivity). Look up from the most recently "
-                f"built '{self._name}' Table, or give the tables distinct "
-                f"names."
-            )
-            raise TableSupersededError(msg)
-
-        # Merge both sources of dimensions
-        all_dimensions = {}
+        all_dimensions: dict[str, str | pl.Expr | ColumnProxy | ExpressionProxy] = {}
         if _dimensions:
             all_dimensions.update(_dimensions)
         all_dimensions.update(kwargs)
-
-        if self._validate:
-            self.validate_lookup(**all_dimensions)
-
-        # Convert all_dimensions to a list of expressions in the order of key columns
-        if self._df is None:
-            raise RuntimeError("Table data not processed. This should not happen.")
-
-        key_columns = [col for col in self._df.columns if col != self._value]
-
-        # Validate that all required dimensions are provided
-        if set(all_dimensions.keys()) != set(self._dimensions.keys()):
-            provided = set(all_dimensions.keys())
-            required = set(self._dimensions.keys())
-            missing = required - provided
-            extra = provided - required
-
-            error_parts = []
-            if missing:
-                error_parts.append(f"Missing dimensions: {sorted(missing)}")
-            if extra:
-                # Add suggestions for extra (invalid) dimensions
-                extra_with_suggestions = []
-                for dim in sorted(extra):
-                    suggestion = _suggest_dimension(dim, list(required))
-                    if suggestion:
-                        extra_with_suggestions.append(
-                            f"'{dim}' (did you mean '{suggestion}'?)"
-                        )
-                    else:
-                        extra_with_suggestions.append(f"'{dim}'")
-                error_parts.append(f"Extra dimensions: {extra_with_suggestions}")
-
-            raise ValueError(
-                f"Dimension mismatch for table '{self._name}'. "
-                + "; ".join(error_parts)
-                + f"\nRequired dimensions: {sorted(required)}",
-            )
-
-        # Lookups always speak the user's dimension names (the dict keys).
-        # Processed key columns normally carry those names already (the
-        # shorthand rename), but an explicit DataDimension(rename_to=...) or
-        # a Melt/Categorical/Computed dimension whose `name` differs from its
-        # dict key gives the processed column another name — translate back.
-        col_to_dim = {}
-        for dim_name, dim in self._dimensions.items():
-            if isinstance(dim, DataDimension):
-                col_to_dim[dim.rename_to or dim.column] = dim_name
-            else:
-                col_to_dim[getattr(dim, "name", None) or dim_name] = dim_name
-
-        # Build list of expressions in key column order
-        key_exprs = []
-        for col in key_columns:
-            dim_key = col if col in all_dimensions else col_to_dim.get(col)
-            if dim_key is not None and dim_key in all_dimensions:
-                value = all_dimensions[dim_key]
-                if isinstance(value, str):
-                    # A bare string is a dimension VALUE, not a column name
-                    # (#37). `lookup(product="annuity")` is what an actuary
-                    # means by VLOOKUP, and reading it as a column forced
-                    # `pl.lit("annuity")` on them — Polars leaking into an
-                    # ordinary lookup. Reference a column with `af.product`,
-                    # `af["product"]` or `pl.col("product")`.
-                    expr = pl.lit(value)
-                elif isinstance(value, pl.Expr):
-                    expr = value
-                elif hasattr(value, "_to_expr"):
-                    # Handle ColumnProxy objects from ActuarialFrame
-                    expr = value._to_expr()
-                else:
-                    # Convert literal values to expressions
-                    expr = pl.lit(value)
-
-                # Note: String columns are handled by the Rust
-                # CategoricalWithStringFallback encoder which maps
-                # strings to the table's internal categorical indices.
-                # No pre-cast needed — the encoder handles raw strings.
-
-                key_exprs.append(expr)
-            else:
-                # Reachable when a dimension produces a processed column whose
-                # name differs from its lookup key (e.g. a custom Dimension
-                # with its own naming); tell the user both vocabularies.
-                msg = (
-                    f"No value provided for key column '{col}'. The processed "
-                    f"table's key columns are {key_columns}; the lookup "
-                    f"received {sorted(all_dimensions)}."
-                )
-                raise ValueError(msg)
-
-        # Resolve the miss policy: per-lookup override beats the table default
-        if on_missing is None:
-            miss_mode, miss_fill = self._on_missing_mode, self._on_missing_fill
-        else:
-            miss_mode, miss_fill = _normalise_on_missing(on_missing)
-
-        # Create the actual plugin call to Rust lookup implementation
-        # is_elementwise=True: each row's lookup depends only on that row's keys,
-        # not on other rows. This enables the Polars streaming engine to process
-        # the query in chunks without falling back to in-memory execution.
-        #
-        # Wrapped so `lookup(...) * af.col` works in either operand order —
-        # a bare pl.Expr raises on a proxy operand before the proxy's
-        # reflected method can run (gh#67).
-        return ProxyAwareExpr.wrap(
-            register_plugin_function(
-                plugin_path=LIB,
-                function_name="lookup_by_table_and_hash",  # Must match #[polars_expr] function name
-                args=key_exprs,
-                kwargs={
-                    "table_name": self._name,
-                    "on_missing": miss_mode,
-                    "fill_value": miss_fill,
-                },
-                is_elementwise=True,
-            )
-        )
+        # Inside a scenario run that shocks this table, the read lowers against
+        # the table shocked for the run's scenarios, keyed by the scenario
+        # axis; every other read is left exactly as the model wrote it.
+        table: TableData = self
+        keys: Mapping[str, object] = all_dimensions
+        rebound = rebound_read(self, all_dimensions)
+        if rebound is not None:
+            table, keys = rebound
+        ctx = context_for_operands(keys.values())
+        node = lookup_node(table, keys, on_missing, ctx=ctx)
+        # Bound to the frame the keys came from, so a method chained on the
+        # lookup means what it means on the column it would be assigned to.
+        parent = None if ctx is None else ctx.frame
+        return ProxyAwareExpr.wrap(lower_polars(node, ctx), node=node, parent=parent)
 
     def extend(
         self,
@@ -1159,6 +930,18 @@ class Table:
 
         Returns:
             Self for chaining
+
+        Raises:
+            ValueError: If the slice repeats a key tuple the table already
+                holds, or repeats one within itself: extend adds rows the
+                table does not have yet.
+            RuntimeError: If another Table has been registered under this
+                name since this one was built.
+
+        A table held in either storage extends: one held as a hash map takes
+        the new rows in place, and one held as a dense array -- what
+        ``storage_mode="auto"`` picks for an ordinary table -- is built again
+        whole from the extended rows, under the storage it was asked for.
 
         Examples:
         --------
@@ -1247,6 +1030,8 @@ class Table:
         ```
         """
         logger.debug(f"Extending table '{self._name}' with additional data")
+        base_df = self.to_dataframe()
+        expected_fingerprint = self._registered_sha
 
         # Use original dimensions by default, with optional overrides
         extend_dimensions = self._dimensions.copy()
@@ -1291,11 +1076,32 @@ class Table:
                 f"nor the value column)",
             )
 
-        # Get key columns
-        key_columns = [col for col in current_df.columns if col != self._value]
+        # Get key columns, in the canonical order the base table holds them.
+        key_columns = _canonical_key_columns(current_df.columns, self._value)
 
-        # Convert keys to f64
-        processed_df = _convert_keys_to_f64(current_df, key_columns)
+        # A date-like key is appended as the count the table holds it by, in
+        # the table's own unit and zone: a microsecond count appended to a
+        # millisecond table as it stands would be another instant. A duration
+        # or a time of day is refused by name, as at construction.
+        _refuse_a_duration_or_time_key(self._name, current_df, key_columns)
+        current_df = _in_the_kinds_of(
+            self._name, current_df, key_columns, self._key_kinds
+        )
+        current_df, _ = _held_as_counts(current_df, key_columns)
+
+        # Normalize ordinary keys without rounding wide integer identities,
+        # leaving a key declared text as text, as the base table did.
+        declared_text = _declared_text_columns(extend_dimensions)
+        processed_df = _answer_read_as_f64(
+            _normalise_key_dtypes(
+                current_df
+                if registering_framework_owned()
+                else with_signed_zeros_as_zero(current_df),
+                [col for col in key_columns if col not in declared_text],
+            ),
+            self._value,
+            name=self._name,
+        )
 
         # Build the post-extension frame and its content identity BEFORE the
         # native append, re-sorted by keys to keep the _process_data
@@ -1303,27 +1109,50 @@ class Table:
         # here (e.g. a schema mismatch polars rejects that the native layer
         # would accept) aborts the extend with the registry untouched — the
         # two sides must commit together or not at all.
-        extended_df: pl.DataFrame | None = None
-        content_sha: str | None = None
-        if self._df is not None:
-            all_key_columns = [c for c in self._df.columns if c != self._value]
-            extended_df = pl.concat([self._df, processed_df]).sort(all_key_columns)
-            content_sha = _hash_processed_df(extended_df)
+        all_key_columns = [c for c in base_df.columns if c != self._value]
+        if set(processed_df.columns) == set(base_df.columns):
+            # The slice in the base's canonical column order, so a slice whose
+            # source lists its columns differently appends rather than failing.
+            processed_df = processed_df.select(base_df.columns)
+        extended_df = _canonical_frame(
+            pl.concat([base_df, processed_df]), all_key_columns, self._value
+        )
+        _refuse_a_key_the_table_holds(self._name, extended_df, all_key_columns)
+        content_sha = _hash_processed_df(extended_df, self._key_kinds)
 
         # Append to existing table using Rust registry
         try:
             registry = PyAssumptionTableRegistry()
-            registry.append_to_table(
-                name=self._name,
-                df=processed_df,
-                keys=key_columns,
-                value_column=self._value,
-            )
+            if registry.get_table_storage_mode(self._name) == "array":
+                # The native append adds rows to a hash map; a table held as a
+                # dense array -- what "auto" picks for an ordinary table -- is
+                # built again whole from the extended frame instead, under the
+                # same storage request, after the same moved-table check.
+                self._refuse_if_moved(expected_fingerprint)
+                registry.register_or_replace_table(
+                    name=self._name,
+                    df=extended_df,
+                    keys=all_key_columns,
+                    value_column=self._value,
+                    force_replace=True,
+                    storage_mode=self._storage_mode,
+                    fingerprint=content_sha,
+                )
+            else:
+                registry.append_to_table(
+                    name=self._name,
+                    df=processed_df,
+                    keys=key_columns,
+                    value_column=self._value,
+                    expected_fingerprint=expected_fingerprint,
+                    fingerprint=content_sha,
+                )
             logger.debug(
                 f"Successfully extended table '{self._name}' with {len(processed_df)} additional rows",
             )
         except Exception as e:
-            logger.error(f"Failed to extend table '{self._name}': {e}")
+            # The error is raised as it stands; this only says which table.
+            logger.debug(f"Failed to extend table '{self._name}': {e}")
             raise
 
         # Commit the Python-side state; plain assignments cannot fail, so the
@@ -1332,49 +1161,32 @@ class Table:
         # later registration of the ORIGINAL data read as idempotent
         # reentrancy, and a lookup from this object then passes the
         # superseded guard while the appended rows are silently gone.
-        if extended_df is not None and content_sha is not None:
-            self._df = extended_df
-            self._registered_sha = content_sha
-            _REGISTERED_TABLE_SHAS[self._name] = content_sha
+        self._df = extended_df
+        self._registered_sha = content_sha
+        _REGISTERED_TABLE_SHAS[self._name] = content_sha
+        # The table now holds rows its file does not, so it is no longer the
+        # file's to vouch for: a record names no file for it.
+        self._source_file = None
 
         return self
 
-    @property
-    def name(self) -> str:
-        """Get the table name supplied at construction.
+    def _refuse_if_moved(self, expected_fingerprint: str) -> None:
+        """Refuse an extend of this object once its table has been replaced.
 
-        Returns the stable identifier used by the registry, the typed-input
-        audit trail (e.g. :class:`gaspatchio.MortalityTable.source_sha`),
-        and any external consumer that needs a consistent reference for this
-        table.
-
-        !!! note "When to use"
-            *   **Audit trail**: Record the table's name alongside model
-                results so reviewers can identify which assumption set
-                produced each valuation.
-            *   **Registry lookups**: Pass the name to other gaspatchio
-                components (typed inputs, scenario configs) that need a
-                consistent reference for this table across the model.
-            *   **Reproducibility**: Pin the name into release manifests
-                so a future rerun can confirm the same table was used.
-
-        Returns:
-            str: The name string passed to the constructor
-
-        Examples:
-        --------
-        ```python
-        from gaspatchio.assumptions import Table
-        import polars as pl
-
-        data = pl.DataFrame({"age": [30, 35], "rate": [0.001, 0.002]})
-        table = Table("mortality_standard", data, {"age": "age"}, "rate")
-
-        print(table.name)
-        ```
-
+        The native append refuses when the registry no longer holds the
+        version this object stamps; a whole rebuild does the same check
+        against the version this process last registered under the name.
         """
-        return self._name
+        if _REGISTERED_TABLE_SHAS.get(self._name) == expected_fingerprint:
+            return
+        msg = (
+            f"Assumption table '{self._name}' changed before it could be "
+            f"extended: another Table registered under this name since this "
+            f"one was built. Call extend() on the current Table instead."
+        )
+        # The type the native append's refusal arrives as, so one refusal is
+        # one exception whichever storage the table is held in.
+        raise RuntimeError(msg)
 
     @property
     def schema(self) -> TableSchema:
@@ -1514,42 +1326,6 @@ class Table:
 
         return []
 
-    def to_dataframe(self) -> pl.DataFrame:
-        """Export the complete table as a DataFrame.
-
-        Returns the complete processed assumption table as a Polars DataFrame,
-        including all key columns and the value column after dimension processing.
-        Useful for data inspection, validation, and integration with external systems.
-
-        !!! note "When to use"
-            * **Data Inspection:** Export table data for validation, quality
-                checks, and manual review of assumption values.
-            * **Integration:** Export assumption data for use in external
-                systems, reporting tools, or alternative calculation engines.
-            * **Debugging:** Examine processed table structure and data
-                after dimension transformations and validation.
-
-        Returns:
-            pl.DataFrame: Complete table with all processed data
-
-        Examples:
-        --------
-        ```python
-        from gaspatchio.assumptions import Table
-        import polars as pl
-
-        data = pl.DataFrame({"age": [30, 35], "rate": [0.001, 0.002]})
-        table = Table("test", data, {"age": "age"}, "rate")
-
-        df = table.to_dataframe()
-        print(f"Exported {len(df)} rows")
-        ```
-
-        """
-        if self._df is None:
-            raise RuntimeError("Table data not processed")
-        return self._df.clone()
-
     def describe(self) -> str:
         """Get a human-readable description of the table.
 
@@ -1608,7 +1384,8 @@ class Table:
 
         Returns stored metadata for this assumption table including descriptions,
         data sources, validation status, and business context that was provided
-        during table creation.
+        when this table was created. It is this table's own: a later table built
+        under the same name, with other metadata or none, does not change it.
 
         !!! note "When to use"
             * **Documentation:** Access table metadata for automated
@@ -1637,10 +1414,7 @@ class Table:
         ```
 
         """
-        metadata = _TABLE_METADATA.get(self._name)
-        if metadata is not None:
-            return metadata.copy()
-        return None
+        return None if self._metadata is None else self._metadata.copy()
 
     @property
     def storage_mode(self) -> str:
@@ -1699,11 +1473,11 @@ class Table:
         """Deterministic JSON-encodable identity recipe for the audit chain.
 
         Returns a dictionary that uniquely identifies this table's content
-        and shape: name, sorted dimension keys, value column, and a
-        row-order-independent SHA-256 of the underlying data. Two tables
-        with the same content but loaded in different row orders produce
-        the same canonical_form; two tables differing in any cell value
-        produce different ones.
+        and shape: name, sorted dimension keys, value column, and the
+        table's content fingerprint (:meth:`fingerprint`). Two tables with
+        the same content but loaded with their rows or columns in different
+        orders produce the same canonical_form; two tables differing in any
+        cell value produce different ones.
 
         !!! note "When to use"
             * **Audit chains:** Feed into `source_sha()` so a regulator
@@ -1715,8 +1489,8 @@ class Table:
 
         Returns:
             Dictionary with `kind`, `name`, sorted `dimensions`,
-            `value_column`, and a content `content_sha` over the
-            row-sorted parquet bytes of the data.
+            `value_column`, and `content_sha`, which is exactly
+            :meth:`fingerprint`.
 
         Examples:
         --------
@@ -1733,10 +1507,12 @@ class Table:
 
         recipe = mortality.canonical_form()
         print(sorted(recipe.keys()))
+        print(recipe["content_sha"] == mortality.fingerprint())
         ```
 
         ```text
         ['content_sha', 'dimensions', 'kind', 'name', 'value_column']
+        True
         ```
         """
         return {
@@ -1744,25 +1520,95 @@ class Table:
             "name": self._name,
             "dimensions": sorted(self._dimensions.keys()),
             "value_column": self._value,
-            "content_sha": self._content_sha(),
+            "content_sha": self.fingerprint(),
         }
 
-    def source_sha(self) -> str:
-        """SHA-256 over `canonical_form` bytes; stable for the same content + name.
+    def fingerprint(self) -> str:
+        """Return the table's content identity: the hash the run record carries.
 
-        The single content hash an auditor can reproduce from the same input
-        data. Identical Tables produce identical SHAs; any change to name,
-        dimensions, value column, or row content changes the SHA. Combine
-        with `ScenarioRun.source_sha()` to attest that an SCR run used a
-        specific input table.
+        A SHA-256 over the table's processed values in canonical form --
+        key columns ascending by name, the value column last, rows ascending
+        by the keys -- under the content grammar of the graph artifact
+        specification (section 12.3). It is the `fingerprint` of this
+        table's entry in a calculation graph's `assumptions` section and the
+        `table_fingerprint` every lookup node reading it carries, so it is
+        the hash `gspio diff` and the viewer compare, and it feeds the graph
+        fingerprint `gspio verify` checks.
+
+        **It depends on the values and nothing else.** Reordering the
+        source's rows or columns, re-encoding the file (parquet to CSV, a
+        different compression), or renaming the table leaves it unchanged;
+        a changed cell changes it.
+
+        **Which hash is which.** A table carries two stamps and they answer
+        different questions:
+
+        | Stamp | Identifies | Moves when |
+        |-------|-----------|------------|
+        | `fingerprint()` | the **content** -- the values a lookup answers from | any value changes |
+        | `source_sha()` | the **table object** -- its recipe: name, dimensions, value column and this fingerprint | the values change, or the table is renamed or re-keyed |
+
+        Use `fingerprint()` to ask "is this the same basis the record was
+        run on?" -- it is the one the record carries. Use `source_sha()` to
+        pin the whole configured table, name included.
+
+        !!! note "When to use"
+            * **Audit:** Match a live table against the `fingerprint` a
+              run record's `assumptions` entry carries.
+            * **Quarter-over-quarter drift:** Two loads of the same rates
+              agree however the file was laid out; a moved rate does not.
+            * **Pre-run checks:** Compare against a known-good fingerprint
+              before a production batch.
+
+        Returns:
+            `sha256:` followed by 64 lowercase hexadecimal digits.
+
+        Examples:
+        --------
+        ```python
+        import polars as pl
+        from gaspatchio.assumptions import Table
+
+        rates = pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.0012]})
+        published = Table("mortality", rates, {"age": "age"}, "rate")
+        reordered = Table(
+            "mortality_copy",
+            rates.select("rate", "age").reverse(),
+            {"age": "age"},
+            "rate",
+        )
+
+        print(published.fingerprint() == reordered.fingerprint())
+        print(published.source_sha() == reordered.source_sha())
+        print(published.fingerprint() == published.source_sha())
+        ```
+
+        ```text
+        True
+        False
+        False
+        ```
+        """
+        return self._registered_sha
+
+    def source_sha(self) -> str:
+        """SHA-256 over `canonical_form` bytes: the table object's identity.
+
+        Hashes the table's recipe -- name, dimensions, value column and its
+        content :meth:`fingerprint` -- so it changes when the values do and
+        also when the table is renamed or re-keyed. It is **not** the hash a
+        run record carries for the table: that is :meth:`fingerprint`, the
+        content identity, which ignores the name. Combine with
+        `ScenarioRun.source_sha()` to attest that an SCR run used a
+        specific, named input table.
 
         !!! note "When to use"
             * **Audit sidecar:** Embedded under the plan's
-              `canonical_form`/`source_sha` chain so the input data is
+              `canonical_form`/`source_sha` chain so the configured table is
               identifiable from the run record alone.
             * **Pre-run validation:** Compare against a known-good SHA
               before running production batches to catch silent drift in
-              assumption files.
+              assumption files or in how they are configured.
             * **Cross-team reproducibility:** Two analysts loading the
               same parquet file produce the same SHA regardless of their
               load order.
@@ -1777,61 +1623,22 @@ class Table:
         import polars as pl
         from gaspatchio.assumptions import Table
 
-        mortality = Table(
-            name="mortality",
-            source=pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.0012]}),
-            dimensions={"age": "age"},
-            value="rate",
-        )
+        rates = pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.0012]})
+        q2 = Table("mortality_2026q2", rates, {"age": "age"}, "rate")
+        q3 = Table("mortality_2026q3", rates, {"age": "age"}, "rate")
 
-        sha = mortality.source_sha()
-        print(sha.startswith("sha256:"))
+        print(q2.source_sha().startswith("sha256:"))
+        print(q2.source_sha() == q3.source_sha())  # renamed: the recipe moved
+        print(q2.fingerprint() == q3.fingerprint())  # same rates: content did not
         ```
 
         ```text
         True
+        False
+        True
         ```
         """
-        from gaspatchio._identity import source_sha_of
-
         return source_sha_of(self.canonical_form())
-
-    def _content_sha(self) -> str:
-        """Row-order-independent content hash via parquet bytes of sorted frame.
-
-        Algorithm:
-            1. Materialise frame as DataFrame.
-            2. Select [sorted(dim_names) + [value_column]].
-            3. Sort by all dimension columns.
-            4. Hash the parquet-serialised bytes (sha256).
-        """
-        import hashlib
-        import io
-
-        df = self._materialised_df()
-        dim_cols = sorted(self._dimensions.keys())
-        sorted_df = df.select([*dim_cols, self._value]).sort(dim_cols)
-        buf = io.BytesIO()
-        sorted_df.write_parquet(buf)
-        return f"sha256:{hashlib.sha256(buf.getvalue()).hexdigest()}"
-
-    def _materialised_df(self) -> pl.DataFrame:
-        """Return a materialised polars DataFrame view of the table's data.
-
-        ``Table._df`` is set to a materialised ``pl.DataFrame`` by
-        ``_process_data`` before any user code sees it; the ``LazyFrame``
-        branch is defensive (handles a hypothetical future where a lazy
-        frame is stored directly).
-
-        Raises:
-            RuntimeError: If ``_df`` is None (table has no materialised source).
-        """
-        if self._df is not None:
-            if isinstance(self._df, pl.LazyFrame):
-                return self._df.collect()
-            return self._df
-        msg = "Table has no materialisable source"
-        raise RuntimeError(msg)
 
     def with_shock(
         self,
@@ -1857,7 +1664,14 @@ class Table:
             name: Optional name for the shocked table (defaults to original_shocked)
 
         Returns:
-            New Table with shocked values
+            New Table with shocked values, built with this table's
+            ``storage_mode``, ``on_missing`` policy and metadata.
+
+        Raises:
+            ValueError: The shock's ``table=`` names a different table than
+                this one (or than the table this shocked copy came from), or
+                its ``column=`` is not this table's value column. A shock
+                with no ``table=`` takes this table as its target.
 
         Examples:
         --------
@@ -1893,12 +1707,21 @@ class Table:
         if self._df is None:
             raise RuntimeError("Table data not processed")
 
-        # Import Shock type here to avoid circular imports
-        from gaspatchio.scenarios.shocks import Shock as ShockType
-
-        if not isinstance(shock, ShockType):
+        if not isinstance(shock, Shock):
             msg = f"Expected Shock instance, got {type(shock).__name__}"
             raise TypeError(msg)
+        # The scenarios package imports this module while it initialises.
+        from gaspatchio.scenarios._targets import (  # noqa: PLC0415 -- cycle, above
+            check_conditions_select,
+            check_shock_applies_to,
+        )
+
+        # A shock written for another table, or with a column it would not
+        # move, is refused rather than applied to this table's value column;
+        # so is a condition this table cannot read or that selects none of it.
+        origin = self._shock_origin
+        check_shock_applies_to(shock, self, origin)
+        check_conditions_select("Table.with_shock()", shock, self._name, self._df)
 
         # Apply shock expression to value column
         shocked_df = self._df.with_columns(
@@ -1911,101 +1734,162 @@ class Table:
         # Create new Table with shocked data
         # Recreate dimensions dict against the PROCESSED column names,
         # preserving the lookup vocabulary (issue #30 review follow-up).
-        new_dimensions = self._reconstruction_dimensions()
+        new_dimensions = self._rebuild_dimensions()
 
-        return Table(
+        shocked = Table(
             name=shocked_name,
-            source=shocked_df,
+            source=_in_its_kinds(shocked_df, self._key_kinds),
             dimensions=new_dimensions,
             value=self._value,
             validate=False,  # Already validated
-            metadata=self.metadata,
+            **self._rebuild_arguments(),
+        )
+        shocked._shock_origin = origin or self._name
+        shocked._carry_the_source_of(
+            self,
+            {"step": "shocked", "column": self._value, "by": shock.describe()},
+        )
+        return shocked
+
+    def _carry_the_source_of(self, base: TableData, *steps: dict[str, Any]) -> None:
+        """Name the file ``base`` was read from, with the steps that made this table.
+
+        A shocked or scenario-stacked table is built from ``base``'s
+        processed frame, and that frame came from the file ``base`` was
+        handed: so the record names that file, and lists every step between
+        the file and this table -- ``base``'s own recipe, what it carried
+        over, and the shock or stacking that made this one -- so a reviewer
+        holding the file reads it as the source and never as a plain read of
+        this table.
+        """
+        from ._processing import shaping_steps  # noqa: PLC0415 -- beside _api
+
+        self._source_file = base._source_file
+        self._key_kinds = {**base._key_kinds, **self._key_kinds}
+        self._inherited_steps = (
+            *base._inherited_steps,
+            *shaping_steps(base._dimensions),
+            *steps,
         )
 
-    def validate_lookup(
-        self,
-        _dimensions: dict[str, str | pl.Expr | ColumnProxy] | None = None,
-        **kwargs,
-    ) -> None:
-        """Validate a lookup configuration without executing.
+    def _rebuild_arguments(self) -> dict[str, Any]:
+        """Return the construction arguments a rebuilt copy of this table keeps.
 
-        Checks that a lookup configuration provides all required dimensions
-        and that dimension names match the table's configuration. Useful
-        for validating lookup calls before execution and catching errors early.
-
-        !!! note "When to use"
-            * **Error Prevention:** Validate lookup configurations before
-                execution to catch missing or invalid dimensions early.
-            * **Dynamic Validation:** Check programmatically generated
-                lookup calls for correctness in complex model workflows.
-            * **Testing:** Validate lookup configurations in unit tests
-                without executing expensive lookup operations.
-
-        Args:
-            _dimensions: Optional dictionary mapping dimension names to columns/expressions
-            **kwargs: Dimension name to column/expression mapping
-
-        Raises:
-            ValueError: If dimension configuration is invalid
-
-        Examples:
-        --------
-        ```python
-        from gaspatchio.assumptions import Table
-        import polars as pl
-
-        data = pl.DataFrame({"age": [30, 35], "rate": [0.001, 0.002]})
-
-        table = Table("test", data, {"age": "age"}, "rate")
-
-        # Valid lookup - no error
-        table.validate_lookup(age="current_age")
-
-        # Invalid lookup - raises ValueError
-        try:
-            table.validate_lookup(invalid_dim="some_col")
-        except ValueError as e:
-            print(f"Validation error: {e}")
-        ```
-
+        A shocked, per-scenario or scenario-stacked copy is built from this
+        table's processed data, and must be built the way the user built this
+        one: under the same ``storage_mode`` (a layout ``auto`` cannot encode
+        is why a user names one), the same ``on_missing`` policy, and the same
+        metadata. ``name``, ``source``, ``dimensions``, ``value`` and
+        ``validate`` are the rebuilding caller's to give.
         """
-        # Merge both sources of dimensions
-        all_dimensions = {}
-        if _dimensions:
-            all_dimensions.update(_dimensions)
-        all_dimensions.update(kwargs)
+        on_missing: str | float = (
+            self._on_missing_fill
+            if self._on_missing_mode == "fill" and self._on_missing_fill is not None
+            else self._on_missing_mode
+        )
+        return {
+            "storage_mode": self._storage_mode,
+            "on_missing": on_missing,
+            "metadata": self.metadata,
+        }
 
-        # Check that all provided dimensions exist
-        for dim_name in all_dimensions:
-            if dim_name not in self._dimensions:
-                available = list(self._dimensions.keys())
-                suggestion = _suggest_dimension(dim_name, available)
 
-                msg = f"Invalid dimension '{dim_name}' for table '{self._name}'."
-                if suggestion:
-                    msg += f"\n\nDid you mean '{suggestion}'?"
-                msg += f"\n\nAvailable dimensions: {', '.join(available)}"
+def _in_the_kinds_of(
+    name: str,
+    frame: pl.DataFrame,
+    key_columns: list[str],
+    kinds: Mapping[str, pl.DataType],
+) -> pl.DataFrame:
+    """Return an extension slice with each date-like key in the table's own kind.
 
-                raise ValueError(msg)
-
-        # Check that all required dimensions are provided
-        required_dims = set(self._dimensions.keys())
-        provided_dims = set(all_dimensions.keys())
-
-        if required_dims != provided_dims:
-            missing = required_dims - provided_dims
-            extra = provided_dims - required_dims
-
-            error_parts = []
-            if missing:
-                error_parts.append(f"Missing: {sorted(missing)}")
-            if extra:
-                error_parts.append(f"Extra: {sorted(extra)}")
-
-            raise ValueError(
-                f"Dimension mismatch for table '{self._name}': "
-                + "; ".join(error_parts),
+    A slice keyed in another unit is converted to the table's; a slice key of
+    another kind than the table's -- a date against timestamps, a number
+    against dates, a zone-naive timestamp against zoned ones -- is refused by
+    kind, as a lookup key of another kind is: no conversion between them is
+    the slice's to guess.
+    """
+    converted: list[pl.Expr] = []
+    for column in key_columns:
+        held = frame.schema[column]
+        kind = kinds.get(column)
+        if kind is None and not held.is_temporal():
+            continue
+        if kind is None or not _of_one_kind(held, kind):
+            table_holds = "numbers or text" if kind is None else str(kind)
+            msg = (
+                f"Table {name!r} cannot be extended with key column {column!r} "
+                f"of {held}: the table holds {column!r} as {table_holds}, and a "
+                "key of another kind never equals one of these. Convert the "
+                f"slice's column first: pl.col({column!r}).cast(<the table's "
+                "kind>)."
             )
+            raise TypeError(msg)
+        if held != kind:
+            converted.append(pl.col(column).cast(kind))
+    return frame.with_columns(converted) if converted else frame
+
+
+def _of_one_kind(held: pl.DataType, kind: pl.DataType) -> bool:
+    """Return whether a slice's key type is the table's kind, whatever its unit.
+
+    One kind is one base type -- a date or a timestamp -- and, for a timestamp, zoned or zone-naive on both sides; the unit
+    and the zone's name are conversions, not kinds.
+    """
+    if held.base_type() != kind.base_type():
+        return False
+    if isinstance(kind, pl.Datetime):
+        return (getattr(held, "time_zone", None) is None) == (kind.time_zone is None)
+    return True
+
+
+def _refuse_a_key_column_of_no_scalar_kind(
+    name: str, frame: pl.DataFrame, key_columns: list[str]
+) -> None:
+    """Refuse a key column whose cells are not one value each, by its kind.
+
+    A key is one value per row -- a number, text, a flag, a date -- and a
+    lookup matches it exactly. A column of lists, fixed-width arrays,
+    structs or Python objects holds no such value, so it is refused here,
+    naming the column and its type, before the registry is asked to encode
+    it and answers about a row instead of the column's kind.
+    """
+    for column in key_columns:
+        dtype = frame.schema[column]
+        if dtype.is_nested() or dtype.base_type() in (pl.Object, pl.Binary):
+            msg = (
+                f"Table {name!r} key column {column!r} holds {dtype}, and a key "
+                "is one value per row -- a number, text, a flag or a date -- that "
+                "a lookup matches exactly. Key the table by a column of one of "
+                f"those kinds, or keep {column!r} out of the dimensions: unnest "
+                "or explode it into scalar columns before building the table."
+            )
+            raise ValueError(msg)
+
+
+def _refuse_a_key_the_table_holds(
+    name: str, extended: pl.DataFrame, key_columns: list[str]
+) -> None:
+    """Refuse an extend whose slice repeats a key tuple, naming the first one.
+
+    ``Table.extend`` adds rows the table does not have yet: a key tuple that
+    is there twice would answer two rates for one cell, which construction
+    refuses too. Judged over the extended frame, so a tuple the slice repeats
+    within itself is caught as well as one the table already holds.
+    """
+    repeated = extended.filter(extended.select(key_columns).is_duplicated())
+    if repeated.is_empty():
+        return
+    first = repeated.row(0, named=True)
+    where = ", ".join(f"{column}={first[column]!r}" for column in key_columns)
+    tuples = repeated.select(key_columns).n_unique()
+    more = f" (and {tuples - 1} more)" if tuples > 1 else ""
+    msg = (
+        f"Table '{name}' would hold two rates at {where}{more} once extended: "
+        f"extend() adds rows the table does not have yet. Drop those rows "
+        f"from the slice, or build the table again from the combined source "
+        f"if the slice is meant to replace them."
+    )
+    raise ValueError(msg)
 
 
 def get_table_metadata(table_name: str) -> dict[str, Any] | None:
@@ -2246,10 +2130,15 @@ def list_tables() -> list[str]:
     """
     try:
         registry = PyAssumptionTableRegistry()
-        return registry.list_tables()
+        names: list[str] = registry.list_tables()
     except Exception as e:
-        logger.warning(f"Failed to get table list from registry: {e}")
+        warn(
+            f"list_tables() could not read the table registry, so it lists none: "
+            f"{e}. The registry lives in gaspatchio's compiled extension; if this "
+            f"repeats, reinstall gaspatchio."
+        )
         return []
+    return names
 
 
 def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
@@ -2355,3 +2244,12 @@ def list_tables_with_metadata() -> dict[str, dict[str, Any]]:
     ```
     """
     return _TABLE_METADATA.copy()
+
+
+__all__ = [
+    "Table",
+    "TableSupersededError",
+    "get_table_metadata",
+    "list_tables",
+    "list_tables_with_metadata",
+]

@@ -1,0 +1,703 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0",
+    "versions": {
+      "omitted": "withheld"
+    }
+  },
+  "created_at": "2026-11-02T01:25:18Z",
+  "model": {
+    "label": null,
+    "source_path": "model.py",
+    "source_sha": "sha256:ef348078def96d3b7595b47f4c185fc7b3892d65572bf9fee518c194bd256efc",
+    "modules": [],
+    "git": null,
+    "model_points": {
+      "path": "model_points.csv",
+      "fingerprint": "sha256:d22b4818dfc03fc29205a8cec023ca0e2b80815fa63451365795b046636c0a92"
+    },
+    "results": {
+      "path": "results.parquet",
+      "fingerprint": "sha256:f142fa176c94227bc88489c3182a9734c3d7f893c828779f20e6bc8424a43679"
+    }
+  },
+  "graph_fingerprint": "sha256:de67e86905bd39c18ec35a6521ab72ed4b555ab55947c14f4e8fffbeca237b69",
+  "formulas_fingerprint": "sha256:d094e835518c5ae2081736ecc0a75dcc9ad39215e4016e59d66692883f110718",
+  "book": {
+    "columns": [
+      "base_fee",
+      "policy_id",
+      "premium",
+      "waiver"
+    ],
+    "digest": "sha256:435cc5adcfed0a7967430d6bca7f58d7de59deab0142c3ed068d3c2b37bbc2f4"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "policy_id",
+      "column": "policy_id",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b398b35427f0f53c4e58d7cef7eec6c65b1f946cfc1d9785381196ef10541a59",
+      "fingerprint": "sha256:78b37d7dd3523f7be5e475317b76036afa247a5657685f9f33267fd531412ef2",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "P1",
+      "trace": null
+    },
+    {
+      "id": "premium",
+      "column": "premium",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:3e3f2de5f96431375b74d56a0e1cebafd4c14c8a1508deaa9167da0f00a35473",
+      "fingerprint": "sha256:2d0112c6fe3da13877cdae7c9c568ec0b299e3c0386a74ef7c3fb383e2dd9718",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 1200.0,
+      "trace": null
+    },
+    {
+      "id": "base_fee",
+      "column": "base_fee",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:bba8975a96077b5ab949c6f0fb8a9fde1176bf3a19dc9e1c6aa0b1a718eb3d10",
+      "fingerprint": "sha256:f9142e0cea65daf6c58eece5f602ffbc4cc9539dc9364dcf0a618f04582a2a0e",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 24.0,
+      "trace": null
+    },
+    {
+      "id": "waiver",
+      "column": "waiver",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:88d41d1dbcbc0a7a30f7c225c9a2dd196babdcc21195d3b9b2f907ce580f8fc8",
+      "fingerprint": "sha256:098d5f927b76c63bc2916201512c806294dcb1315f1297b3b23bf32cfdeacd1d",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 0.0,
+      "trace": null
+    },
+    {
+      "id": "projection_start_date@1",
+      "column": "projection_start_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:a2d78c34978c54022f7e43553848356b2e9afd150448b423059b0698d23a9b2f",
+      "fingerprint": "sha256:64cd0df21a633625d6204ce33e597b79c0351c821251424c6a9b7058b1d7a1f1",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:24",
+      "facets": {},
+      "value_sample": "2025-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_start_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_start_date",
+          "comment": "a column the model's own projection axis mints: annual boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2025-01-31",
+          "result": "2025-01-31"
+        }
+      ]
+    },
+    {
+      "id": "projection_end_date@1",
+      "column": "projection_end_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:a2d78c34978c54022f7e43553848356b2e9afd150448b423059b0698d23a9b2f",
+      "fingerprint": "sha256:64cd0df21a633625d6204ce33e597b79c0351c821251424c6a9b7058b1d7a1f1",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:24",
+      "facets": {},
+      "value_sample": "2028-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_end_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_end_date",
+          "comment": "a column the model's own projection axis mints: annual boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2028-01-31",
+          "result": "2028-01-31"
+        }
+      ]
+    },
+    {
+      "id": "num_proj_months@1",
+      "column": "num_proj_months",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:a2d78c34978c54022f7e43553848356b2e9afd150448b423059b0698d23a9b2f",
+      "fingerprint": "sha256:64cd0df21a633625d6204ce33e597b79c0351c821251424c6a9b7058b1d7a1f1",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:24",
+      "facets": {},
+      "value_sample": 4,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "num_proj_months"
+        },
+        {
+          "step": 2,
+          "expr": "num_proj_months",
+          "comment": "a column the model's own projection axis mints: annual boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "4",
+          "result": 4
+        }
+      ]
+    },
+    {
+      "id": "month@1",
+      "column": "month",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:a2d78c34978c54022f7e43553848356b2e9afd150448b423059b0698d23a9b2f",
+      "fingerprint": "sha256:64cd0df21a633625d6204ce33e597b79c0351c821251424c6a9b7058b1d7a1f1",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:24",
+      "facets": {},
+      "value_sample": [
+        0,
+        12,
+        24,
+        36
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "month"
+        },
+        {
+          "step": 2,
+          "expr": "month  (4 periods)",
+          "comment": "a column the model's own projection axis mints: annual boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "[0, 12, 24, 36]  (4 periods)",
+          "result": 0,
+          "shape": "4 periods \u00b7 first 0 \u00b7 last 36 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 4."
+        }
+      ]
+    },
+    {
+      "id": "fee@1",
+      "column": "fee",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.premium * FEE_RATE",
+      "reads": [
+        "premium"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:ad024da1d732b6dadfc38788f7d4f49b67d6d68387f7b53286734d85acdd9252",
+      "fingerprint": "sha256:83aa078f1057612c8ecc6e772294f0dc106f6f00b4204a7c8310b6fb531bbe14",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:30",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "premium",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 24.0,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(premium) * (0.02)"
+        },
+        {
+          "step": 2,
+          "expr": "((1200)) * (0.02)",
+          "values": {
+            "premium": 1200.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "24",
+          "result": 24.0
+        }
+      ]
+    },
+    {
+      "id": "charge@1",
+      "column": "charge",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.fee * af.month",
+      "reads": [
+        "fee@1",
+        "month@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:a38a8933d61b4aed2de1e38e7b3e8b77eb952582edcbd458350a937327dc7f7c",
+      "fingerprint": "sha256:fa8245e9fc55480ec96a5a053c688a32e4c6f517bf5f10c31da3e959c3d7ffdd",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:31",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "fee@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "month@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        0.0,
+        288.0,
+        576.0,
+        864.0
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(fee) * (month)"
+        },
+        {
+          "step": 2,
+          "expr": "((24)) * (([0, 12, 24, 36]))  (4 periods)",
+          "values": {
+            "month": "[0, 12, 24, 36] (4 periods)",
+            "fee": 24.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[0, 288, 576, 864]  (4 periods)",
+          "result": 0.0,
+          "shape": "4 periods \u00b7 first 0 \u00b7 last 864 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 4."
+        }
+      ]
+    },
+    {
+      "id": "fee_over_base@1",
+      "column": "fee_over_base",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.fee - af.base_fee",
+      "reads": [
+        "fee@1",
+        "base_fee"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:42bd489306b91cef5d8f7601f9421b18d0e850cff812329746c2fb05a4558f1d",
+      "fingerprint": "sha256:f3460c56ff19e27b9a7058ec8ca013a0008f45bc47661a7d9e8dcc00807de3af",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:32",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "fee@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "base_fee",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 0.0,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(fee) - (base_fee)"
+        },
+        {
+          "step": 2,
+          "expr": "((24)) - ((24))",
+          "values": {
+            "base_fee": 24.0,
+            "fee": 24.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "0",
+          "result": 0.0
+        }
+      ]
+    },
+    {
+      "id": "waived@1",
+      "column": "waived",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.fee * af.waiver",
+      "reads": [
+        "fee@1",
+        "waiver"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5eb0f2e5a3c6cf1ec6dbc4e589e3a89f3f166ac46c7c495174d1fcbb46a39afc",
+      "fingerprint": "sha256:81f81fc8603fae0274c75939320d4798e94bb8130bcb28204082cf70eb394f55",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:33",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "fee@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "waiver",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 0.0,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(fee) * (waiver)"
+        },
+        {
+          "step": 2,
+          "expr": "((24)) * ((0))",
+          "values": {
+            "waiver": 0.0,
+            "fee": 24.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "0",
+          "result": 0.0
+        }
+      ]
+    },
+    {
+      "id": "reserve@1",
+      "column": "reserve",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.premium * af.month",
+      "reads": [
+        "premium",
+        "month@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:3907b882711b39a27e751f2f65dfbb887ffcca627a1aa92c4c2542b4352e8f93",
+      "fingerprint": "sha256:11c75b210d3beaea87e50ba3adee635ce7c4369c0bff2bcd1bf373794c366d5f",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:34",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "premium",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "month@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        0.0,
+        14400.0,
+        28800.0,
+        43200.0
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(premium) * (month)"
+        },
+        {
+          "step": 2,
+          "expr": "((1200)) * (([0, 12, 24, 36]))  (4 periods)",
+          "values": {
+            "premium": 1200.0,
+            "month": "[0, 12, 24, 36] (4 periods)"
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[0, 14400, 28800, 43200]  (4 periods)",
+          "result": 0.0,
+          "shape": "4 periods \u00b7 first 0 \u00b7 last 43200 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 4."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "premium",
+      "target": "fee@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "fee@1",
+      "target": "charge@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "month@1",
+      "target": "charge@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "fee@1",
+      "target": "fee_over_base@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "base_fee",
+      "target": "fee_over_base@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "fee@1",
+      "target": "waived@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "waiver",
+      "target": "waived@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "premium",
+      "target": "reserve@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "month@1",
+      "target": "reserve@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [],
+  "holes": [],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "model.py",
+      "fingerprint": "sha256:ef348078def96d3b7595b47f4c185fc7b3892d65572bf9fee518c194bd256efc",
+      "payload": {
+        "text": "# SPDX-FileCopyrightText: 2026 Opio Inc.\n#\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"A fee, what it is charged over three years, and a reserve: the earlier version.\n\nThe later version, ``after.py``, raises the fee rate and nothing else, so the\ntwo runs part in every way a change report has to tell apart: a line edited, a\nline whose numbers moved because what it reads did, a line flagged by its\nidentity that moved no number, a line moved out of zero, and -- because the\nlater run is over a revised book with one policy gone and one arrived -- a line\nwhose definition held while the book under it moved.\n\"\"\"\n\nimport datetime\n\nfrom gaspatchio import ActuarialFrame\n\nFEE_RATE = 0.02\n\n\ndef main(af: ActuarialFrame) -> ActuarialFrame:\n    \"\"\"Project the fee and the reserve over three annual periods.\"\"\"\n    af = af.projection.set(\n        valuation_date=datetime.date(2025, 1, 1),\n        until=\"term_years\",\n        until_value=3,\n        frequency=\"annual\",\n    )\n    af.fee = af.premium * FEE_RATE\n    af.charge = af.fee * af.month\n    af.fee_over_base = af.fee - af.base_fee\n    af.waived = af.fee * af.waiver\n    af.reserve = af.premium * af.month\n    return af\n"
+      }
+    }
+  ],
+  "enrichment": {
+    "policy_id": "P1",
+    "aggregation": null,
+    "periods": null,
+    "filter": null
+  },
+  "policies": [
+    {
+      "policy_id": "P1",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 0 of 3 in model_points.csv, selected by ':1'"
+    }
+  ],
+  "facets": {},
+  "document_digest": "sha256:9c8d7846432f350bd292e1b40c20df2d2cd114edd4458a5cf56902fa261f8aa5"
+}

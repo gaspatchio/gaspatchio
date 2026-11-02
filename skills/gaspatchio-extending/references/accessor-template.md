@@ -2,7 +2,51 @@
 
 This is the most common extension type. A column accessor adds methods to individual columns or expressions, accessed as `af.column_name.namespace.method()`.
 
-### Minimal Example
+### Two ways to write the body — and what each records
+
+**Compose the proxy's own operations first.** `self._proxy` is a gaspatchio column or
+expression, so the operators and declared methods you use in model code work on it directly —
+on a scalar column and a list column alike, with no shape test — and the line records as
+core operations, portable to every engine:
+
+```python
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from gaspatchio.accessors.base import BaseColumnAccessor
+from gaspatchio.frame.registry import register_accessor
+
+if TYPE_CHECKING:
+    from gaspatchio.column.expression_proxy import ExpressionProxy
+
+
+@register_accessor("gompertz", kind="column")
+class GompertzColumnAccessor(BaseColumnAccessor):
+    """Gompertz hazard on an age column: ``af.age.gompertz.hazard(a=0.0001, b=0.08)``."""
+
+    def hazard(self, a: float, b: float) -> ExpressionProxy:
+        """Gompertz hazard rate ``a * exp(b * age)``, for a scalar or a per-period age."""
+        return a * (b * self._proxy).exp()
+```
+
+```text
+af.h = af.age.gompertz.hazard(a=0.0001, b=0.08)
+af.graph.tiers()  ->  TierCensus(core=('h@1', …), engine_native=(), opaque=())
+```
+
+It works on a table read too (`mort.lookup(age=af.age).gompertz.hazard(...)`), because every
+step is a declared operation.
+
+**Build a Polars expression only where no declared operation exists.** The template below
+builds `pl.Expr` and wraps it in `ExpressionProxy`. The same numbers come out, but a line
+written that way records as `engine_native`: it runs only on Polars, and so does every
+calculation that reads it — `af.graph.tiers()` names the line, and `gspio validate --engine jax`
+names it and every calculation that reads it. On a table read it is refused outright: the read would sit inside an expression
+the framework cannot see into, so the model's fingerprint would not move when the table did.
+Say so in the method's docstring when you take this route.
+
+### Minimal Example (a Polars-expression body)
 
 ```python
 from __future__ import annotations
@@ -32,9 +76,6 @@ class RiskColumnAccessor(BaseColumnAccessor):
         Compute Gompertz hazard rate.
 
     """
-
-    def __init__(self, proxy: ColumnProxy | ExpressionProxy) -> None:
-        super().__init__(proxy)
 
     def _get_polars_expr(self) -> pl.Expr:
         """Extract the underlying Polars expression from the proxy.
@@ -107,17 +148,34 @@ class RiskColumnAccessor(BaseColumnAccessor):
 ### Key Points
 
 1. **Inherit from `BaseColumnAccessor`** — enforced at registration time.
-2. **Define `_get_polars_expr()`** — handles both `ColumnProxy` (uses `pl.col(name)`) and `ExpressionProxy` (accesses `._expr`). The existing `finance.py` accessor uses this pattern. Copy it.
+2. **Define `_get_polars_expr()`** — handles both `ColumnProxy` (uses `pl.col(name)`) and `ExpressionProxy` (accesses `._expr`). The helper is yours, not the framework's: the shipped accessors no longer carry one, because they record the call with `emit.call(...)` and leave the computation to a rule under `gaspatchio/frame/lowering/rules/`. That path is internal — a BYO accessor builds the Polars expression itself, as above.
 3. **`self._proxy._parent`** gives you the parent ActuarialFrame — needed to construct the return `ExpressionProxy`. Requires `# noqa: SLF001`.
 4. **Guard against `parent_frame is None`** — raise `RuntimeError` with a clear message.
 5. **Return `ExpressionProxy(expr, parent_frame)`** — never return a raw Polars expression, Series, or Python value.
 6. **Docstrings use NumPy style** — `Parameters`, `Returns`, `Examples` with `--------` underlines. Include `!!! note "When to use"` admonitions for MkDocs rendering.
 
+### Comparisons on a Proxy Are Not `pl.Expr`
+
+A comparison on a `ColumnProxy` or `ExpressionProxy` (`proxy <= 5`) returns gaspatchio's
+own `ConditionExpression`, not a bare `pl.Expr`. `pl.when()` cannot consume one — it
+raises `TypeError: cannot create expression literal for value of type
+ConditionExpression`. Inside an accessor, compare the *Polars expression* instead:
+
+```python
+duration_expr = self._get_polars_expr()          # a pl.Expr
+bonus_expr = pl.when(duration_expr <= 5).then(0.0).otherwise(100.0)
+```
+
+The framework's own `when(...)` from `gaspatchio` consumes a `ConditionExpression`, and it
+takes a bare `pl.Expr` quite happily too. `pl.when(...)` is the strict one: hand it a
+`ConditionExpression` and it raises the `TypeError` above. The refusal runs in that one
+direction only, so `pl.when()` is the call you have to build the condition for.
+
 ### Handling List Columns
 
 Most Gaspatchio columns are list columns (each policy has a vector of monthly values). Your accessor must handle both scalar and list columns.
 
-**The standard pattern** (from `finance.py:522-524`):
+**The standard pattern** (the same one the template above uses):
 
 ```python
 from gaspatchio.column.column_proxy import ColumnProxy
@@ -231,9 +289,6 @@ class ReportingFrameAccessor(BaseFrameAccessor):
 
     """
 
-    def __init__(self, frame: ActuarialFrame) -> None:
-        super().__init__(frame)
-
     def add_net_cashflow(
         self,
         premiums_col: str = "premiums",
@@ -278,7 +333,7 @@ class ReportingFrameAccessor(BaseFrameAccessor):
 
 If you want to add methods to an existing namespace (e.g., adding `duration_macaulay` to `finance`), add the method directly to the existing accessor class file. Do NOT create a second accessor with the same name — this will raise a `ValueError`.
 
-**Read the existing file first.** Match its patterns exactly: `_get_polars_expr()`, the `proxy.shape == "list"` check for list/scalar branching, `_parent is None` guard, NumPy-style docstrings.
+**Read the existing file first.** The shipped accessors record the call rather than compute it, with the arithmetic living in a rule under `gaspatchio/frame/lowering/rules/`. How each one records it differs, which is why the file you are editing is the thing to copy: `finance.py` and `excel.py` route through a private `_emit()` that checks the proxy type and guards `_parent is None`, while `projection.py` and `date.py` carry no such helper and call `emit.call(...)` from each method directly. The remaining file, `projection_frame.py`, is a third shape again: it is the only one of the five whose accessor is a frame accessor and nothing else, and its `_emit()` guards a missing projection rather than a missing parent. It builds the node through `emit.call_node(...)`, which `date.py` and `finance.py` also reach in places — so it is the guard, not the builder, that marks this file out. Match *that* file's guard — and take the docstring style from `projection.py` or `finance.py`, not from this file, which has no NumPy-style sections at all — then add the lowering rule beside the method.
 
 Location of existing accessors:
 
@@ -335,7 +390,8 @@ def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
 
 **Important notes for local accessors:**
 - The `# noqa: F401` comment prevents ruff from stripping the "unused" import. The import IS used — it triggers registration as a side effect.
-- The accessor file must be importable from the model file's location. If running with `uv run gspio run-model model.py ...`, the model's directory is on `sys.path`.
+- gspio puts the model's directory on `sys.path` while it imports the model file, so a helper beside the model, imported at the top of the model file, is found from any working directory; an import made first inside `main()` runs later and finds it only when you happen to run from the model's own directory — import helpers at the top.
+- Each local module the model imports is recorded in the audit file's `model.modules` with its sha256, and `gspio verify --model` checks it: an edited `my_accessors.py` reads `✗ modules differs`.
 - If two local accessor files register the same namespace name, the second import will raise `ValueError`. Use unique namespace names.
 - Test with `uv run python3 -c "import my_accessors; print('OK')"` to verify importability.
 

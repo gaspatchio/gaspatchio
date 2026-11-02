@@ -1,7 +1,5 @@
 # Finance Accessor Enhancement Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Add `to_monthly()` and `discount_factor()` methods to `.finance` accessor, remove `cumulative_discount()` from `.projection` accessor.
 
 **Architecture:** TDD approach - tests first, then minimal implementation. Column-level accessor methods using native Polars expressions for 6-8x performance improvement over map_elements.
@@ -51,11 +49,7 @@ git add gaspatchio_core/accessors/projection.py tests/accessors/test_projection.
 git commit -m "refactor: remove cumulative_discount from projection accessor
 
 Move all discounting operations to .finance for clear namespace separation.
-.projection now focuses solely on time-shifting operations.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+.projection now focuses solely on time-shifting operations."
 ```
 
 ---
@@ -167,11 +161,7 @@ git add gaspatchio_core/accessors/finance.py tests/accessors/test_finance.py
 git commit -m "feat: add to_monthly() compound conversion for scalar columns
 
 Implements (1 + annual)^(1/12) - 1 formula for compound conversion.
-Provides foundation for rate frequency conversion.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Provides foundation for rate frequency conversion."
 ```
 
 ---
@@ -215,11 +205,7 @@ Expected: PASS (implementation already supports this via method parameter)
 git add tests/accessors/test_finance.py
 git commit -m "test: add simple conversion test for to_monthly()
 
-Validates annual / 12 formula for simple interest conversion.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Validates annual / 12 formula for simple interest conversion."
 ```
 
 ---
@@ -264,11 +250,7 @@ Expected: PASS (Polars automatically broadcasts element-wise for list columns)
 git add tests/accessors/test_finance.py
 git commit -m "test: add list column test for to_monthly()
 
-Validates element-wise conversion within list columns.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Validates element-wise conversion within list columns."
 ```
 
 ---
@@ -382,11 +364,7 @@ git add gaspatchio_core/accessors/finance.py tests/accessors/test_finance.py
 git commit -m "feat: add discount_factor() spot method for scalar columns
 
 Implements (1 + rate)^(-periods) formula for spot discounting.
-Foundation for discount factor calculations.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Foundation for discount factor calculations."
 ```
 
 ---
@@ -441,11 +419,7 @@ Expected: PASS (Polars handles list columns automatically)
 git add tests/accessors/test_finance.py
 git commit -m "test: add list column test for discount_factor() spot method
 
-Validates element-wise spot discounting within list columns.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Validates element-wise spot discounting within list columns."
 ```
 
 ---
@@ -560,11 +534,7 @@ git add gaspatchio_core/accessors/finance.py tests/accessors/test_finance.py
 git commit -m "feat: add discount_factor() forward method for list columns
 
 Implements cumulative product formula for period-varying rates.
-Uses Polars list.eval for efficient element-wise calculation.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Uses Polars list.eval for efficient element-wise calculation."
 ```
 
 ---
@@ -608,11 +578,7 @@ Expected: PASS (formula naturally handles this: anything^0 = 1)
 git add tests/accessors/test_finance.py
 git commit -m "test: add edge case for period 0 in discount_factor()
 
-Validates that v^0 = 1.0 regardless of rate.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Validates that v^0 = 1.0 regardless of rate."
 ```
 
 ---
@@ -659,11 +625,7 @@ git add gaspatchio_core/accessors/finance.py
 git commit -m "docs: add comprehensive docstrings to finance accessor
 
 Include actuarial examples, formulas, and use cases.
-All examples validated with actual output.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+All examples validated with actual output."
 ```
 
 ---
@@ -705,11 +667,7 @@ class FinanceColumnAccessor(BaseColumnAccessor):
 git add gaspatchio_core/accessors/finance.py
 git commit -m "docs: update finance accessor class docstring
 
-Document new methods and financial mathematics focus.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Document new methods and financial mathematics focus."
 ```
 
 ---

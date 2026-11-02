@@ -48,12 +48,17 @@ Before using actuarial terminology you're unsure about:
 uv run gspio knowledge "<concept>" -T <tag>
 ```
 
+Tags name a framework or line of business, not a topic: `ifrs17`, `ifrs`, `gaap`,
+`solvency`, `capital`, `naic`, `reserve`, `life`, `health`, `property`, `general`.
+Put the topic (CSM, mortality, lapse) in the query. A tag the index does not use
+matches nothing, and the command says so and lists the tags that exist.
+
 | Situation | Command |
 |-----------|---------|
 | About to use a method | `uv run gspio docs "prospective_value"` |
 | Need an accessor's methods | `uv run gspio docs "projection accessor" -n 20` |
 | Want code examples | `uv run gspio docs "cumulative_survival" -t code_example` |
-| Need actuarial concept | `uv run gspio knowledge "CSM calculation" -T IFRS17` |
+| Need actuarial concept | `uv run gspio knowledge "CSM calculation" -T ifrs17` |
 | Analyzing an assumption file | `uv run gspio describe assumptions/mortality.parquet` |
 
 **Query tips:** Use descriptive phrases, not just method names. Short single-word queries return noise.
@@ -82,8 +87,9 @@ After examining the source data or specification but BEFORE writing any model co
 | Model Class | Key Signal | Gaspatchio Approach | Key Methods to Look Up |
 |---|---|---|---|
 | **Standard projection** | Per-policy, uniform timeline, decrement-driven (life, annuity, mortgage) | Three-phase pattern (Phase 1 setup → Phase 2 timeline → Phase 3 calculations). This is the default. | `af.projection.set`, `cumulative_survival`, `Table.lookup` |
-| **Linear recurrence (closed-form)** | Values at time *t* depend on state at *t-1* via a *single* multiply-and-add — fund balances under deterministic returns, cumulative gains, term-life reserve accumulation. Charges DO NOT depend on the running balance. | Use `accumulate()` — pre-compute the multiply and add components as list columns, then walk the recurrence in one closed-form pass. Faster + reads as a closed-form. | `accumulate`, `previous_period`, `cum_prod` |
-| **State-machine rollforward** | Within-period charges depend on the running balance (COI on net amount at risk, IUL floor/cap, GMDB ratchet, multi-state products). The recurrence ISN'T expressible as a single multiply-and-add. | Use `af.projection.rollforward(states={…})` — a typed state-machine builder. Each `.add` / `.charge` / `.grow` / `.deduct_nar` / `.ratchet` declares a within-period step; `compile_rollforward` produces an inspectable, fingerprinted model. | `rollforward`, `RollforwardBuilder`, `compile_rollforward`, `CompiledRollforward.expr_for` |
+| **Linear recurrence (closed-form)** | Values at time *t* depend on state at *t-1* via a *single* multiply-and-add — fund balances under deterministic returns, cumulative gains, term-life reserve accumulation — or on *t+1*, a reserve rolled back from the last period (`V[t] = v[t]·V[t+1] + cf[t]`). Charges DO NOT depend on the running balance. | Use `accumulate()` — pre-compute the multiply and add components as list columns, then walk the recurrence in one closed-form pass; `reverse=True` rolls it back from each policy's own last period. Faster + reads as a closed-form. | `accumulate`, `previous_period`, `cum_prod` |
+| **Multi-state occupancy** | Probability moving between states — disability with recovery, levels of care; often a Thiele or Kolmogorov grid with no dates. | **Not the rollforward.** One `accumulate()` per state on the fixed-step axis, each state's inflow reading only states already computed; with recovery, sweeps until a sweep changes nothing. See [references/recursive-patterns.md](references/recursive-patterns.md) Pattern 6. | `projection.set(n_periods=, step_years=)`, `accumulate`, `previous_period` |
+| **State-machine rollforward** | Within-period charges depend on the running balance (COI on net amount at risk, IUL floor/cap, GMDB ratchet). The recurrence ISN'T expressible as a single multiply-and-add. | Use `af.projection.rollforward(states={…})` — a typed state-machine builder. Each `.add` / `.charge` / `.grow` / `.deduct_nar` / `.ratchet` declares a within-period step; `compile_rollforward` produces an inspectable, fingerprinted model. Several balances are fine (a GMDB ratchet reads the fund); probability moving between states is the row above. | `rollforward`, `RollforwardBuilder`, `compile_rollforward`, `CompiledRollforward.expr_for` |
 | **Fund / portfolio aggregate** | Per-entity calculations → aggregate → fund-level outputs (NAV, P&L, balance sheet) | Phase 1-3 per-entity using AF, then `group_by` aggregation. Fund-level financials may use sequential operations IF there are cross-line dependencies. | `accumulate`, `group_by`, see [references/aggregate-patterns.md](references/aggregate-patterns.md) |
 | **Cash flow waterfall** | Sequential allocation with priority rules (debt service, distributions) | `when/then/otherwise` chains for priority logic + `accumulate` for running balances | `when/then/otherwise`, `accumulate` |
 
@@ -102,6 +108,8 @@ silently three conversions in a row when skipped:
 **Choosing between linear-recurrence and state-machine:**
 
 > "Does the within-period charge depend on the running balance?" — Yes → rollforward. No → accumulate.
+>
+> "Is it probability moving between states, rather than a balance?" — per-state `accumulate`, never the rollforward.
 
 A UL fund grown by an interest rate + reduced by an admin fee on the running balance is a state-machine. The same fund grown by an interest rate + reduced by a flat dollar fee is a linear recurrence. The dollar fee can be pre-computed as a list column; the AV-proportional fee can't.
 
@@ -136,11 +144,12 @@ uv run python3 -c "import polars as pl; ..."                                    
 |---|---|---|
 | Small / interactive | `gspio run-model` / `af.collect()` | Full DataFrame in memory |
 | Portfolio aggregates (BEL, CTE, term structure) | `run_aggregated(model_fn, mp, aggregations)` | `AggregatedResult` |
+| The same, for a book too big to hold or on a GPU | `run_aggregated(..., engine="jax")` (`gaspatchio[jax]`) | `AggregatedResult` |
 | Full per-policy output (audit, downstream join) | `run_to_parquet(model_fn, mp, output_dir)` | Parquet shards |
 
 See [references/running-at-scale.md](references/running-at-scale.md) for the full API, gotchas, and examples.
 
-Model directories (e.g., `my-model/`) are NOT Python packages. To import a model file programmatically, use `importlib.util.spec_from_file_location()`.
+Model directories (e.g., `my-model/`) are NOT Python packages. To import a model file programmatically from a driver script, use `importlib.util.spec_from_file_location()`. Inside the model, import your own helper modules by name — `import my_helpers` or `from my_helpers import load_tables`, at the top of the model file — never by path: the audit record's `model.modules` lists only what import statements name, so a helper loaded through `importlib`, `runpy` or `exec` is not on the record, and `gspio verify --model` reports the modules as "could not be checked".
 
 ---
 
@@ -154,8 +163,9 @@ import datetime
 
 # Phase 1: Assumption loading (module-level or helper functions)
 def load_assumptions():
-    mort_df = pl.read_parquet("assumptions/mortality.parquet")
-    mort = Table(name="mortality", source=mort_df,
+    # Hand Table the file path: the audit file then records where the table was
+    # read from, and `gspio verify --assumptions` can decide it against that file.
+    mort = Table(name="mortality", source="assumptions/mortality.parquet",
                  dimensions={"age": "age"}, value="rate")
     return {"mortality": mort}
 
@@ -163,10 +173,9 @@ def load_assumptions():
 def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
     tables = load_assumptions()
 
-    # --- PHASE 1: Setup (scalar operations, .collect() OK here) ---
-    mp = af.collect()
-    mp = mp.with_columns(pl.col("Issue Age").alias("issue_age"))
-    af = ActuarialFrame(mp)
+    # --- PHASE 1: Setup (rename, join, derive per-policy attributes) ---
+    af = af.rename({"Issue Age": "issue_age"})
+    af = af.materialize()   # freeze the finished setup, keep the frame
 
     # --- PHASE 2: Projection timeline ---
     af = af.projection.set(
@@ -177,9 +186,23 @@ def main(af: ActuarialFrame, params=None) -> ActuarialFrame:
     )
 
     # --- PHASE 3: Calculations (lazy — NO .collect() from here) ---
-    af.mort_rate = tables["mortality"].lookup(age=af.age)
+    # Attained age varies by period, so the lookup returns one rate per period.
+    af.attained_age = af.issue_age + af.month // 12
+    # The table's rates are annual and the timeline is monthly: convert first.
+    af.mort_rate_annual = tables["mortality"].lookup(age=af.attained_age)
+    af.mort_rate = 1 - (1 - af.mort_rate_annual) ** (1 / 12)
     af.survival = af.mort_rate.projection.cumulative_survival()
-    af.pv_claims = af.claims.projection.prospective_value(discount_rate=0.03)
+    # `month` runs 0..n: n months of cover, then the maturity boundary. No
+    # month of cover starts at maturity, so no claim is paid there.
+    af.claims = (
+        when(af.month < af.remaining_term_months)
+        .then(af.sum_assured * af.mort_rate * af.survival)
+        .otherwise(0.0)
+    )
+    # prospective_value discounts at a rate PER PERIOD: 3% a year, monthly.
+    af.pv_claims = af.claims.projection.prospective_value(
+        discount_rate=1.03 ** (1 / 12) - 1
+    )
 
     return af
 
@@ -190,6 +213,8 @@ if __name__ == "__main__":
     result = main(af).collect()
     print(result.select(["point_id", "pv_claims"]))
 ```
+
+`af.materialize()` closes Phase 1 without losing the frame. Where the values genuinely have to leave it — a numpy generator, an enrichment routine that only speaks Polars — come back with `af = ActuarialFrame(values, continue_from=af)` rather than a bare `ActuarialFrame(values)`, and every column the trip did not touch keeps the calculation that made it.
 
 Details: [references/model-phases.md](references/model-phases.md)
 
@@ -218,8 +243,13 @@ mp = mp.join(product_params.select([...]), on=["product_id", "plan_id"], how="le
 **Space parameter cross-join:**
 ```python
 gmxb = space_params.filter(pl.col("space") == "GMXB").select(["expense_acq", "expense_maint"])
-mp = mp.with_columns([pl.lit(gmxb["expense_acq"].item()).alias("expense_acq")])
+mp = mp.join(gmxb, how="cross")     # each parameter arrives as a model-point column
 ```
+
+Keep a parameter a model-point column (or a one-row `Table` read). A number pulled out with
+`.item()` and written into a formula is a bare literal on the record: nothing says which file
+or row it came from, and a scenario shock cannot name it — a `column=` shock names a
+model-point column.
 
 **Wide-to-long unpivot:**
 ```python
@@ -267,7 +297,7 @@ These are the top mistakes from real model-building sessions. Each links to the 
 | 1 | Arithmetic-masking blends in conditional code | Old workaround for a fixed limitation — `when/then/otherwise` now handles mixed scalar/list branches | [conditionals-and-lists.md](references/conditionals-and-lists.md) |
 | 2 | `until_value=99` | Truncates final year; ~3% BEL gap | [model-phases.md](references/model-phases.md) |
 | 3 | `proj_year` vs `year` confusion | Stress scenarios silently wrong — mass lapse never fires | [timing-and-dates.md](references/timing-and-dates.md) |
-| 4 | Rebuilding `af.month` by hand | `projection.set()` already materialises `month` (elapsed whole months, `n_periods + 1` point-indexed values). Don't derive it from `period_dates()` — but do slice `.list.head(n_periods)` (= `num_proj_months - 1`) when feeding a rollforward | [model-phases.md](references/model-phases.md) |
+| 4 | Rebuilding `af.month` by hand | `projection.set()` already materialises `month` (elapsed whole months, `n_periods + 1` point-indexed values). Don't derive it from `period_dates()`. A rollforward input needs one value per *period*: pass a per-policy value as it stands, or build the input from `af.projection.year_fractions()` — not from `month` | [model-phases.md](references/model-phases.md) |
 | 5 | `python3` instead of `uv run python3` | `ModuleNotFoundError: No module named 'polars'` | (this file, Environment section) |
 | 6 | `--policy-id` flag | It's a positional arg, not a flag. `--policy-id-column` is a different thing | (this file, Environment section) |
 | 7 | `prospective_value` timing | `end_of_period` = ordinary annuity (Excel type 0), `beginning_of_period` = annuity-due (type 1); BoP is worth more | [timing-and-dates.md](references/timing-and-dates.md) |
@@ -281,6 +311,11 @@ These are the top mistakes from real model-building sessions. Each links to the 
 | 15 | Writing `months_between` inline | `date.months_between()` already exists — use it | (this file) |
 | 16 | Scalar `until_value` with mixed terms | All policies get max-length lists; wasted memory and compute — use a per-policy column (`until_value="<col>"`) instead |
 | 17 | Hand-rolling `(1+r)**(-t/12)` for yield-curve discounting | For a term-structure / EIOPA risk-free rate, use `Curve.discount_factor(af.projection.t_years())` — correct interpolation, flat extrapolation, stress-ready | [curves-and-scheduling.md](references/curves-and-scheduling.md) |
+| 18 | Reaching for `.polars_native()` | The line records as `engine_native`: it runs only on Polars, and so does every calculation that reads it — `af.graph.tiers()` names the line, and `gspio validate --engine jax` names it and every calculation that reads it. Prefer the declared form where one exists: `list.reverse()`, `fill_nan(0.0)`, `norm_cdf()`, `accumulate(reverse=True)`, `(af.x >= lo) & (af.x <= hi)` for `is_between` | [common-mistakes.md](references/common-mistakes.md) |
+| 19 | A line refused at assignment | Kind refusals (a number filled with text, branches of two kinds, a date compared with a number), row guards (a period method on a per-policy column, an unnamed `with_columns`), and a table read inside an engine expression each name the line to write instead | [common-mistakes.md](references/common-mistakes.md) |
+| 20 | `previous_period()` feeding a running product | Its default fill is `0.0`, which zeroes every later period of a `cum_prod()` — pass `fill_value=1.0` | [common-mistakes.md](references/common-mistakes.md) |
+| 21 | Reading `accumulate` one step out | Position `t` is the state *after* step `t`; the opening value is not in the list — shift with `.projection.previous_period(fill_value=initial)` to compare with a column that starts at its opening value | [recursive-patterns.md](references/recursive-patterns.md) |
+| 22 | Building Φ from `erf` or a polynomial | `af.z.norm_cdf()` is the standard normal distribution function, recorded as a core operation; Excel's `NORM.S.DIST(z, TRUE)` is `af.z.excel.norm_s_dist()` | [common-mistakes.md](references/common-mistakes.md) |
 
 Full list with code examples: [references/common-mistakes.md](references/common-mistakes.md)
 
@@ -322,7 +357,7 @@ If you believe the model genuinely requires Python loops (this should be extreme
 **Red flags that you're about to write anti-pattern code:**
 - `for inv in df.iter_rows()` — use AF column operations instead
 - `for t in range(n_months)` — use list columns + `accumulate` instead
-- `running_total += value` — use `accumulate` or `.list.cumsum()` instead
+- `running_total += value` — use `accumulate` or `.cum_sum()` instead
 - `results.append({...})` building a list of dicts — use AF column assignments instead
 - `dict(zip(col_a, col_b))` for lookups — use `Table.lookup()` or `.join()` instead
 

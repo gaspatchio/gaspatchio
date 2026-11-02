@@ -43,10 +43,11 @@ A failure means the typed-input layer introduced a numerical difference that exc
 1e-9 relative. Candidates to investigate:
 
 - **`MortalityTable.at()` clamp behaviour**: verify `select_period` clamping in
-  step 02 matches the untyped `.clip(upper_bound=SELECT_PERIOD_LEN - 1)` call.
+  step 02 matches the untyped model's `when(af.duration > SELECT_PERIOD_LEN - 1)`
+  capping.
 - **`Curve.discount_factor()` precision**: verify the `(1 + r)^(-t)` path in `Curve`
-  agrees with the `exp(t * log(1 + r_mth))` path in the untyped model to within
-  floating-point rounding.
+  agrees with the `(1.0 + af.disc_rate_mth) ** (af.month * -1.0)` power in the
+  untyped model to within floating-point rounding.
 - **`Schedule.year_fractions()` accumulation**: verify the cumulative year-fraction
   grid matches `month / 12` at every period.
 

@@ -9,13 +9,14 @@
 use polars::prelude::*;
 use serde::Deserialize;
 
+use crate::polars_functions::list_pow::as_float_lists;
+use crate::polars_functions::slices::{own_rows, rows_per_policy, same_periods};
+
 #[derive(Deserialize, Clone)]
 pub struct PvKwargs {
     pub fv: Option<f64>,
     pub typ: Option<i32>,
 }
-
-const EPS: f64 = 1e-12;
 
 /// Fetch a per-row scalar value, broadcasting a genuine length-1 (literal) input
 /// to every row. Polars passes literal args as a length-1 series while column
@@ -31,7 +32,11 @@ fn scalar_at(ca: &Float64Chunked, i: usize) -> Option<f64> {
 
 /// Helper function to cast numeric types to Float64 if needed
 /// Handles both scalar and list types (e.g., Int64 -> Float64, List[Int64] -> List[Float64])
-fn cast_to_float_if_needed(series: &Series) -> PolarsResult<Series> {
+///
+/// A list column comes back cut to its own rows: a streamed slice keeps the
+/// whole column's inner values, and the cast must not convert them all.
+pub(crate) fn cast_to_float_if_needed(series: &Series) -> PolarsResult<Series> {
+    let series = &own_rows(series);
     match series.dtype() {
         DataType::Float64 => Ok(series.clone()),
         DataType::List(inner) => {
@@ -68,9 +73,14 @@ pub fn pv_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
 
 /// Excel-compatible PV. Inputs are rate, nper, pmt. `fv` and `typ` provided via kwargs.
 pub fn pv(inputs: &[Series], kwargs: &PvKwargs) -> PolarsResult<Series> {
-    let rate_s = &inputs[0];
-    let nper_s = &inputs[1];
-    let pmt_s = &inputs[2];
+    // A one-row list (a literal the in-memory engine hands over unbroadcast)
+    // is repeated for every policy, as the streaming engine reads it.
+    let operands = rows_per_policy(inputs, false)?;
+    let [rate_s, nper_s, pmt_s] = operands.as_slice() else {
+        return Err(PolarsError::ComputeError(
+            format!("pv takes three operands, got {}", operands.len()).into(),
+        ));
+    };
 
     let fv = kwargs.fv.unwrap_or(0.0);
     let mut typ = kwargs.typ.unwrap_or(0);
@@ -192,9 +202,46 @@ fn pv_list_scalar(
         })
         .collect();
 
-    Ok(result.into_series())
+    // A streamed chunk whose every policy answers a null list gives the
+    // collector no inner type to infer: List(Null) beside the List(Float64)
+    // of the next chunk was a panic, not an answer.
+    as_float_lists(result)
 }
 
+/// Refuse a policy whose per-period operands do not share its number of
+/// periods.
+///
+/// Two or three of rate, nper and pmt may be per-period; each policy's
+/// lists are paired period by period, so they must have equal lengths
+/// within the policy (graph-artifact spec 11.1.18). Zipping them instead
+/// answered the policy with a run cut to the shortest list: three periods
+/// of rate against two of pmt gave two present values, and nothing said.
+/// A null list has no periods to pair and is not measured.
+fn same_periods_in_each_policy(named: &[(&str, &ListChunked)]) -> PolarsResult<()> {
+    let [(first_name, first), rest @ ..] = named else {
+        return Ok(());
+    };
+    for (other_name, other) in rest {
+        for (one, another) in first.amortized_iter().zip(other.amortized_iter()) {
+            if let (Some(one), Some(another)) = (one, another) {
+                same_periods(
+                    first_name,
+                    one.as_ref().len(),
+                    other_name,
+                    another.as_ref().len(),
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Two of rate, nper and pmt per period and the third per policy.
+///
+/// The per-policy operand is repeated to the policy's periods, a null one a
+/// null in each period (graph-artifact spec 11.1.18): the policy keeps its
+/// run, every cell of it null. A null run on either per-period side is a
+/// policy with no periods and answers a null run.
 fn pv_two_lists(
     rate_s: &Series,
     nper_s: &Series,
@@ -209,6 +256,7 @@ fn pv_two_lists(
     match (rate_l, nper_l, pmt_l) {
         (Ok(r_l), Ok(n_l), Err(_)) => {
             // rate and nper are lists, pmt scalar (broadcast per row via scalar_at)
+            same_periods_in_each_policy(&[("rate", r_l), ("nper", n_l)])?;
             let pmt_ca = pmt_s.f64()?;
             let result: ListChunked = r_l
                 .into_iter()
@@ -216,14 +264,16 @@ fn pv_two_lists(
                 .enumerate()
                 .map(
                     |(i, (r_opt, n_opt))| match (r_opt, n_opt, scalar_at(pmt_ca, i)) {
-                        (Some(r_s), Some(n_s), Some(p)) => {
+                        (Some(r_s), Some(n_s), p_opt) => {
                             let r_ca = r_s.f64().ok()?;
                             let n_ca = n_s.f64().ok()?;
                             let out = r_ca
                                 .into_iter()
                                 .zip(n_ca)
-                                .map(|(r, n)| match (r, n) {
-                                    (Some(rv), Some(nv)) => Some(calculate_pv(rv, nv, p, fv, typ)),
+                                .map(|(r, n)| match (r, n, p_opt) {
+                                    (Some(rv), Some(nv), Some(p)) => {
+                                        Some(calculate_pv(rv, nv, p, fv, typ))
+                                    }
                                     _ => None,
                                 })
                                 .collect::<Float64Chunked>();
@@ -233,10 +283,11 @@ fn pv_two_lists(
                     },
                 )
                 .collect();
-            Ok(result.into_series())
+            as_float_lists(result)
         }
         (Ok(r_l), Err(_), Ok(p_l)) => {
             // rate and pmt lists, nper scalar (broadcast per row via scalar_at)
+            same_periods_in_each_policy(&[("rate", r_l), ("pmt", p_l)])?;
             let nper_ca = nper_s.f64()?;
             let result: ListChunked = r_l
                 .into_iter()
@@ -244,14 +295,16 @@ fn pv_two_lists(
                 .enumerate()
                 .map(
                     |(i, (r_opt, p_opt))| match (r_opt, p_opt, scalar_at(nper_ca, i)) {
-                        (Some(r_s), Some(p_s), Some(n)) => {
+                        (Some(r_s), Some(p_s), n_opt) => {
                             let r_ca = r_s.f64().ok()?;
                             let p_ca = p_s.f64().ok()?;
                             let out = r_ca
                                 .into_iter()
                                 .zip(p_ca)
-                                .map(|(r, p)| match (r, p) {
-                                    (Some(rv), Some(pv)) => Some(calculate_pv(rv, n, pv, fv, typ)),
+                                .map(|(r, p)| match (r, p, n_opt) {
+                                    (Some(rv), Some(pv), Some(n)) => {
+                                        Some(calculate_pv(rv, n, pv, fv, typ))
+                                    }
                                     _ => None,
                                 })
                                 .collect::<Float64Chunked>();
@@ -261,10 +314,11 @@ fn pv_two_lists(
                     },
                 )
                 .collect();
-            Ok(result.into_series())
+            as_float_lists(result)
         }
         (Err(_), Ok(n_l), Ok(p_l)) => {
             // nper and pmt lists, rate scalar (broadcast per row via scalar_at)
+            same_periods_in_each_policy(&[("nper", n_l), ("pmt", p_l)])?;
             let rate_ca = rate_s.f64()?;
             let result: ListChunked = n_l
                 .into_iter()
@@ -272,14 +326,14 @@ fn pv_two_lists(
                 .enumerate()
                 .map(
                     |(i, (n_opt, p_opt))| match (n_opt, p_opt, scalar_at(rate_ca, i)) {
-                        (Some(n_s), Some(p_s), Some(r)) => {
+                        (Some(n_s), Some(p_s), r_opt) => {
                             let n_ca = n_s.f64().ok()?;
                             let p_ca = p_s.f64().ok()?;
                             let out = n_ca
                                 .into_iter()
                                 .zip(p_ca)
-                                .map(|(n, p)| match (n, p) {
-                                    (Some(nv), Some(pv2)) => {
+                                .map(|(n, p)| match (n, p, r_opt) {
+                                    (Some(nv), Some(pv2), Some(r)) => {
                                         Some(calculate_pv(r, nv, pv2, fv, typ))
                                     }
                                     _ => None,
@@ -291,7 +345,7 @@ fn pv_two_lists(
                     },
                 )
                 .collect();
-            Ok(result.into_series())
+            as_float_lists(result)
         }
         _ => unreachable!(),
     }
@@ -307,6 +361,7 @@ fn pv_three_lists(
     let rate_l = rate_s.list()?;
     let nper_l = nper_s.list()?;
     let pmt_l = pmt_s.list()?;
+    same_periods_in_each_policy(&[("rate", rate_l), ("nper", nper_l), ("pmt", pmt_l)])?;
 
     let result: ListChunked = rate_l
         .into_iter()
@@ -332,18 +387,29 @@ fn pv_three_lists(
         })
         .collect();
 
-    Ok(result.into_series())
+    as_float_lists(result)
 }
 
+/// Return the present value of `nper` payments of `pmt` and a future value
+/// `fv` at `rate` per period (spec 11.1.35).
+///
+/// The discount factor `(1 + r)^-n` is taken as `exp(-n * ln_1p(r))` and the
+/// paid-off fraction `1 - (1 + r)^-n` as `-exp_m1(-n * ln_1p(r))`, so neither
+/// rounds `1 + r` first: near nought `1 + r` loses the rate's last digits, and
+/// the old `powf` form was 8.9e-5 relative wrong at `r = 1e-12` and jumped by
+/// 0.044 at the `1e-12` threshold it switched to the flat form at. Both
+/// functions keep their accuracy as their argument goes to nought, so the
+/// 1e-12 relative bound holds at every nonzero rate, and the flat form
+/// `-(pmt * nper + fv)` is the answer only at a rate of exactly nought.
 #[inline]
 fn calculate_pv(rate: f64, nper: f64, pmt: f64, fv: f64, typ: i32) -> f64 {
-    if rate.abs() < EPS {
+    if rate == 0.0 {
         return -(pmt * nper + fv);
     }
     let typf = if typ != 0 { 1.0 } else { 0.0 };
-    let one_plus_r = 1.0 + rate;
-    let pow = one_plus_r.powf(-nper);
-    // Use fused multiply-add where possible
-    let ann = (1.0 + rate * typf) * (1.0 - pow) / rate;
-    -(pmt * ann + fv * pow)
+    let grown = nper * rate.ln_1p();
+    let discount = (-grown).exp();
+    let paid_off = -(-grown).exp_m1();
+    let ann = (1.0 + rate * typf) * paid_off / rate;
+    -(pmt * ann + fv * discount)
 }

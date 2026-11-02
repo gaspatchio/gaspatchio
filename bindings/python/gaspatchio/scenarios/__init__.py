@@ -3,14 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ABOUTME: Public scenarios module - typed plans, loop primitive, aggregators, shocks.
-# ABOUTME: GSP-101 (v0.2) - Beam-style Aggregator Protocol + .over() partitioning.
+# ABOUTME: Aggregators follow a Beam-style Protocol, partitioned with .over().
 
 """Scenario support module for multi-scenario actuarial model execution.
 
-v0.2 surface (GSP-101):
+The public surface:
 
 * ``ScenarioRun`` - immutable plan dataclass
 * ``for_each_scenario`` - the loop primitive
+* ``as_scenario_model`` - explicit adaptation of a frame-only model
 * ``ScenarioResult`` - run output (scalar metrics + DataFrames for partitioned)
 * Aggregators: ``Sum``, ``Count``, ``Min``, ``Max``, ``ArgMin``, ``ArgMax``,
   ``Mean``, ``Variance``, ``Std``, ``Quantile``, ``Median``, ``CTE``, ``QuantileRank``
@@ -51,6 +52,7 @@ from gaspatchio.scenarios._config import (
 )
 from gaspatchio.scenarios._for_each import BatchSnapshot, for_each_scenario
 from gaspatchio.scenarios._metric import Aggregator
+from gaspatchio.scenarios._model import as_scenario_model
 from gaspatchio.scenarios._period_aggregators import (
     PeriodCount,
     PeriodMax,
@@ -82,9 +84,7 @@ from gaspatchio.scenarios.shocks import (
     MinShock,
     MultiplicativeShock,
     OverrideShock,
-    ParameterShock,
     PipelineShock,
-    RelativeFloorShock,
     Shock,
     TimeConditionalShock,
 )
@@ -109,7 +109,6 @@ __all__ = [
     "MinShock",
     "MultiplicativeShock",
     "OverrideShock",
-    "ParameterShock",
     "PeriodCTE",
     "PeriodCount",
     "PeriodMax",
@@ -124,7 +123,6 @@ __all__ = [
     "ProbeResult",
     "Quantile",
     "QuantileRank",
-    "RelativeFloorShock",
     "ScenarioResult",
     "ScenarioRun",
     "SelectionDecision",
@@ -135,6 +133,7 @@ __all__ = [
     "TimeConditionalShock",
     "Variance",
     "VectorAggregator",
+    "as_scenario_model",
     "for_each_scenario",
     "parse_aggregations",
     "parse_scenario_config",

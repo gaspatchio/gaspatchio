@@ -16,10 +16,13 @@ Gaspatchio already provides:
 
 | Namespace | Key Methods |
 |-----------|-------------|
-| `finance` | `discount_factor`, `present_value`, `to_monthly`, `compound`, `discount` |
-| `projection` | `cumulative_survival`, `previous_period`, `next_period`, `at_period`, `accumulate`, `prospective_value`, `rollforward`, `remaining_sum` |
-| `projection` (frame) | `set`, `period_dates`, `year_fractions`, `t_years`, `anniversary_mask`, `is_in_force` |
-| `excel` | `pv`, `irr`, `yearfrac`, `edate` |
+| `finance` | `to_monthly`, `compound`, `discount` |
+| `finance` (frame) | `discount_factor`, `present_value` |
+| `projection` | `cumulative_survival`, `previous_period`, `next_period`, `at_period`, `accumulate`, `prospective_value`, `remaining_sum` |
+| `projection` (frame) | `set`, `period_dates`, `year_fractions`, `t_years`, `anniversary_mask`, `is_in_force`, `rollforward` |
+| `excel` | `pv`, `irr`, `yearfrac`, `edate`, `norm_s_dist` |
+| `date` | `months_between`, `to_period` |
+| (any column) | `norm_cdf` (Φ, recorded as a core operation — never build it from `erf` in an accessor), `fill_nan(0.0)`, `list.reverse`, `exp`, `log`, `round`, `clip`, `is_in` |
 
 **Frame-level methods** (on `ActuarialFrame` directly, not via accessors):
 
@@ -38,12 +41,15 @@ Gaspatchio already provides:
 
 | Composable | What It Does |
 |-----------|-------------|
-| `MultiplicativeShock(factor)` | Multiply assumption by factor |
-| `AdditiveShock(amount)` | Add constant to assumption |
-| `OverrideShock(value)` | Replace assumption with constant |
-| `ClipShock(max_value)` | Cap assumption at maximum |
-| `PipelineShock([shock1, shock2])` | Chain shocks sequentially |
-| `FilteredShock(shock, when)` | Apply shock conditionally |
+| `MultiplicativeShock(factor=…)` | Multiply assumption by factor |
+| `AdditiveShock(delta=…)` | Add constant to assumption |
+| `OverrideShock(value=…)` | Replace assumption with constant |
+| `ClipShock(min_value=…, max_value=…)` | Floor and/or cap — name the bound: a bare number is `min_value`, a floor |
+| `PipelineShock(shocks=(s1, s2))` | Chain shocks sequentially |
+| `FilteredShock(shock=…, where={…})` | Apply shock to the rows `where` selects |
+
+Each is aimed with `table=` (an assumption table by the name its `Table` was built with) or
+`column=` (a model-point column) — exactly one.
 
 If it exists, use it. Do not reimplement.
 
@@ -118,7 +124,7 @@ Calculations that cannot be efficiently expressed as Polars expressions:
 Calculations that:
 - Are element-wise arithmetic on column values
 - Will be used across multiple models
-- Can be expressed entirely as vectorized Polars expressions
+- Can be expressed entirely in vectorized operations — gaspatchio's declared ones first (portable, recorded as core), Polars expressions where none exists (recorded `engine_native`)
 
 These are column accessors. Examples:
 
@@ -169,8 +175,8 @@ These are less common than column accessors. Most reusable calculations operate 
 
 ### "Add backward reserve recursion V(t) = v * (q * benefit + p * V(t+1))"
 - Level 1: Check `uv run gspio docs "prospective_value"` and `uv run gspio docs "accumulate"`.
-- `projection.prospective_value()` is purpose-built for this.
-- `projection.accumulate()` handles the general linear recurrence `state[t] = state[t-1] * M[t] + A[t]` (reverse inputs for backward recursion).
+- It is linear in `V(t+1)`: `projection.accumulate(initial=0.0, multiplier=v * p, addend=v * q * benefit, reverse=True)` is purpose-built for it — `state[t] = state[t+1] * M[t] + A[t]`, run back from each policy's own last period.
+- `projection.prospective_value()` is the special case of pure discounting a cashflow; `projection.remaining_sum()` is a plain suffix sum.
 - Both run in Rust, parallelized across policies. Do NOT write a Python for-loop.
 
 ### "Add forward rates from discount factors"
@@ -178,7 +184,7 @@ These are less common than column accessors. Most reusable calculations operate 
 - Level 5: If not, it uses `list.eval(pl.element().shift(1))` for adjacent elements — reusable column accessor.
 
 ### "Apply Solvency II mass lapse stress"
-- Level 1: The `scenarios/shocks` system already handles this: `PipelineShock([MultiplicativeShock(1.4), ClipShock(1.0)])`. NOT an accessor.
+- Level 1: The `scenarios/shocks` system already handles this: `PipelineShock(shocks=(MultiplicativeShock(factor=1.5), ClipShock(max_value=1.0)), column="lapse_rate")`. NOT an accessor.
 
 ### "Add perpetuity PV calculation"
 - Level 2: `af.pv = af.payment / af.rate` — single operator, too simple for an accessor. Use inline.
@@ -200,7 +206,9 @@ If your calculation has the form `state[t] = f(state[t-1])` or `state[t] = f(sta
 | Pattern | Existing Kernel | Method |
 |---------|----------------|--------|
 | Forward accumulation: `state[t] = state[t-1] * M + A` | Yes | `projection.accumulate()` |
-| Backward recursion: `V(t) = f(V(t+1))` | Yes | `projection.prospective_value()` |
+| Backward linear recursion: `V(t) = M[t] * V(t+1) + A[t]` | Yes | `projection.accumulate(..., reverse=True)` (`prospective_value()` for pure discounting) |
+| Backward recursion that is not linear (a floor, a max) | No named form in 1.0 | A doubling scan in core operations (model-building's `recursive-patterns.md`, Pattern 7); a reverse running max, `cum_max(reverse=True)`, is reachable only through the escape (`engine_native`) |
+| Probability moving between states (multi-state occupancy) | No named form in 1.0 — and not the rollforward | One `projection.accumulate()` per state on the fixed-step axis, sweeps where states feed back (Pattern 6) |
 | Cumulative product: `tpx[t] = prod(1-qx[0..t])` | Yes | `projection.cumulative_survival()` |
 | Multi-step rollforward: AV with charges, credits, premiums | Yes | `projection.rollforward()` |
 | Custom recurrence not matching above | No | Flag for Rust (Level 4) |

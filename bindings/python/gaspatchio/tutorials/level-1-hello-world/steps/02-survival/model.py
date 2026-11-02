@@ -111,9 +111,8 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
     af.projection_date = af.projection.period_dates()
 
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() has already stamped af.month -- elapsed whole months
+    # from the valuation date, 0, 1, 2, ... one per projection period.
 
     # =====================================================================
     # SECTION 3: MONTHLY RATES (ACTUARIALLY CORRECT)

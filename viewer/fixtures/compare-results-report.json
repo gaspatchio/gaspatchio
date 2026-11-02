@@ -1,0 +1,33 @@
+{
+  "report_version": "gaspatchio-graph-diff/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "compared": {
+    "before": {
+      "graph_fingerprint": "sha256:223e69ecd3868e32b867a16af5fabd29f817b4216c87b4508456c878413179aa",
+      "document_digest": "sha256:37bed8134a670e3aae087af4f62c44b18050f58593410d9c149bd3d718486186",
+      "created_at": "2026-09-19T06:27:54Z",
+      "producer": "gaspatchio 1.0.0",
+      "formulas_fingerprint": null
+    },
+    "after": {
+      "graph_fingerprint": "sha256:223e69ecd3868e32b867a16af5fabd29f817b4216c87b4508456c878413179aa",
+      "document_digest": "sha256:37bed8134a670e3aae087af4f62c44b18050f58593410d9c149bd3d718486186",
+      "created_at": "2026-09-19T06:27:54Z",
+      "producer": "gaspatchio 1.0.0",
+      "formulas_fingerprint": null
+    }
+  },
+  "drift": true,
+  "calculations": [],
+  "data": [
+    {
+      "kind": "results",
+      "name": "results_q2.parquet",
+      "before": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "after": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "reason": null
+    }
+  ],
+  "values": null,
+  "source": null
+}

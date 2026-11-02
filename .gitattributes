@@ -4,10 +4,55 @@
 # Directories where every fixture is <10KB — kept as regular blobs so
 # clones without git-lfs (e.g. fresh CI/dev agents) can still load them.
 # See bindings/python/conftest.py for the runtime guard.
-bindings/python/gaspatchio/tutorials/level-2-assumptions/steps/02-from-files/data/* -filter -diff -merge text
-bindings/python/gaspatchio/tutorials/level-2-assumptions/steps/03-lapse/data/* -filter -diff -merge text
-bindings/python/gaspatchio/tutorials/level-2-assumptions/steps/04-conditionals/data/* -filter -diff -merge text
-bindings/python/gaspatchio/tutorials/level-3-mini-va/steps/01-from-files/data/* -filter -diff -merge text
-bindings/python/jobs/example/assumptions/* -filter -diff -merge text
-bindings/python/tests/scratch/scenarios/assumptions/disc_rates/* -filter -diff -merge text
-ref/04-assumption-lookup/* -filter -diff -merge text
+bindings/python/gaspatchio/tutorials/level-2-assumptions/steps/02-from-files/data/* -filter -diff -merge -text
+bindings/python/gaspatchio/tutorials/level-2-assumptions/steps/03-lapse/data/* -filter -diff -merge -text
+bindings/python/gaspatchio/tutorials/level-2-assumptions/steps/04-conditionals/data/* -filter -diff -merge -text
+bindings/python/gaspatchio/tutorials/level-3-mini-va/steps/01-from-files/data/* -filter -diff -merge -text
+bindings/python/jobs/example/assumptions/* -filter -diff -merge -text
+bindings/python/tests/scratch/scenarios/assumptions/disc_rates/* -filter -diff -merge -text
+bindings/python/tests/graph/goldens/* -filter -diff -merge -text
+ref/04-assumption-lookup/* -filter -diff -merge -text
+
+# The rule above was written for the parquet fixtures in that directory and
+# reaches the published artifacts sitting beside them, which are plain text
+# and whose changes are exactly what a reader has to be able to see: a
+# digest that moved, a field that appeared. Rendered as binary they show as
+# "Bin 7967 -> 8139 bytes" and review has nothing to read.
+bindings/python/tests/graph/goldens/*.json text diff merge
+
+# The viewer's tiers fixture is exported from the model and the book in this
+# directory, and a test exports it again and holds the committed document to
+# the result. So the files are kept byte for byte on every checkout: out of
+# Git LFS, where the *.csv rule above would put the book, and with no line
+# endings rewritten, which Git on Windows would do to the model and so move
+# the digest of its source that the document records. Diffed as text, so a
+# change to either reads as one.
+viewer/fixtures/tiers/* -filter -text diff merge
+
+# The viewer's record fixture, for the same reason: exported from the model,
+# its helper and its tables in this directory, and exported again by a test
+# that holds every value the committed document samples to the results file
+# that export writes. Out of Git LFS, where the *.csv rule would put the two
+# tables and the book, and byte for byte, so the digests the document records
+# of the model, its helper and its tables stay the digests of these files.
+viewer/fixtures/record/* -filter -text diff merge
+
+# The viewer's values vector, for the same reason: two versions of one model
+# exported from the files here, with the two runs' results files committed so a
+# test can take the change report over them again and hold the committed
+# report to it. Out of Git LFS, where the *.parquet and *.csv rules would put
+# the results and the books, so a clone without git-lfs reads the vector whole.
+viewer/fixtures/values/* -filter -text diff merge
+
+# The licence texts and notices every distribution carries, which the release
+# job compares byte for byte with this repository as a Linux checkout holds it.
+# Git on Windows checks text files out with CRLF (core.autocrlf), and maturin
+# packs the working tree as it finds it, so without these lines each Windows
+# wheel would carry CRLF copies and the release would refuse it. LF on every
+# platform, for these files only.
+LICENSES/* text eol=lf
+bindings/python/LICENSES/* text eol=lf
+engines/jax/LICENSES/* text eol=lf
+viewer/python/LICENSES/* text eol=lf
+NOTICE text eol=lf
+third-party-notices.txt text eol=lf

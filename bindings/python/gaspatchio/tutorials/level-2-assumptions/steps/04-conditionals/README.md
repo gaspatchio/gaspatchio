@@ -16,9 +16,7 @@
 af.maturity_month = af.policy_term * 12
 
 af.pols_if = (
-    when(af.duration_mth_t < af.maturity_month)
-    .then(af.survival_bop)
-    .otherwise(0.0)
+    when(af.duration_mth_t < af.maturity_month).then(af.survival_bop).otherwise(0.0)
 )
 ```
 
@@ -34,11 +32,7 @@ each month. Months before maturity get `survival_bop`; months at or after get
 ### Conditional commissions
 
 ```python
-af.commissions = (
-    when(af.month < 12)
-    .then(af.premium_income * 0.50)
-    .otherwise(0.0)
-)
+af.commissions = when(af.month < 12).then(af.premium_income * 0.50).otherwise(0.0)
 ```
 
 `af.month` is the projection month index `[0, 1, ..., 23]`. The comparison

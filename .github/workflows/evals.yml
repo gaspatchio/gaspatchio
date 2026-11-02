@@ -45,6 +45,13 @@ env:
   # crashing with UnicodeEncodeError before any benchmark runs. UTF-8 mode
   # (PEP 540) forces UTF-8 for all I/O, matching Linux behaviour. No-op on Linux.
   PYTHONUTF8: "1"
+  # uv, for every setup-uv step: the release CI.yml pins, since this workflow
+  # has no passing run to take one from. One digest for each platform its jobs
+  # run on, x86-64 Linux and x86-64 Windows, and each setup-uv step names the
+  # digest for the platform it runs on.
+  SETUP_UV_VERSION: "0.12.22"
+  SETUP_UV_SHA256: b9980552309f09c15172b8be828555e375097f16deb459795ce7bfd200380f0b
+  SETUP_UV_SHA256_WINDOWS: ea1397797a0ca15f63516dd0f49c2dde9776db9be5861cab152ebe8ad199894d
 
 # Cancel a superseded in-progress run of the same workflow on the same ref +
 # event (so rapid pushes don't stack full benchmark runs). Keyed by event_name
@@ -95,7 +102,9 @@ jobs:
         with:
           include: "core/benches/**"
           scope: rust
-      - uses: dtolnay/rust-toolchain@stable   # intentionally not SHA-pinned — no `toolchain:` version is set, so this ref *is* the mechanism that tracks current stable Rust; pinning it would freeze the toolchain instead
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87   # stable branch
+        with:
+          toolchain: stable   # rustup resolves it when the job runs: the pin freezes the action, not the compiler
       # Cache compiled dependencies (polars, criterion, …) to keep the cold
       # Windows build inside the timeout. Only deps are cached — the bench crate
       # is recompiled and run fresh each time, so measured numbers stay accurate.
@@ -110,7 +119,7 @@ jobs:
       - name: Clean working tree for gh-pages push
         run: git checkout -- .
       - name: Store benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1.22.1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: cargo
@@ -165,7 +174,18 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
+      # One step for each platform the matrix runs on, each with that
+      # platform's digest of the same uv.
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        if: runner.os == 'Windows' && runner.arch == 'X64'
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256_WINDOWS }}
       - name: Install dependencies
         run: uv sync --locked --no-dev
       - name: Generate 100K model points
@@ -178,7 +198,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store model benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1.22.1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: customSmallerIsBetter
@@ -216,6 +236,9 @@ jobs:
           include: "bindings/python/**,evals/**"
           scope: evals
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
       - name: Install dependencies
         run: uv sync --locked
       - name: Run aggregation-surface benchmarks (baseline vs run_aggregated vs spill)
@@ -224,7 +247,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store aggregation benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1.22.1
         with:
           name: Aggregation Surface Benchmarks
           tool: customSmallerIsBetter
@@ -291,7 +314,18 @@ jobs:
       - name: Clone gaspatchio-benchmarks (lifelib reference data)
         run: git clone --depth 1 git@github.com:opioinc/gaspatchio-benchmarks.git "$GASPATCHIO_BENCHMARKS_DIR"
         working-directory: .
+      # One step for each platform the matrix runs on, each with that
+      # platform's digest of the same uv.
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        if: runner.os == 'Windows' && runner.arch == 'X64'
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256_WINDOWS }}
       - name: Install dependencies (with lifelib)
         run: uv sync --locked --no-dev --group benchmark
       - name: Generate model points (all scales)
@@ -305,7 +339,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store comparison results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1.22.1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: customSmallerIsBetter
@@ -361,7 +395,18 @@ jobs:
         with:
           include: "bindings/python/**,evals/**"
           scope: evals
+      # One step for each platform the matrix runs on, each with that
+      # platform's digest of the same uv.
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        if: runner.os == 'Windows' && runner.arch == 'X64'
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256_WINDOWS }}
       - name: Install dependencies
         run: uv sync --locked --no-dev
       - name: Generate model points (incl. 100K L5)
@@ -374,7 +419,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store scenario benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1.22.1
         with:
           name: ${{ matrix.benchmark_name }}
           tool: customSmallerIsBetter
@@ -411,6 +456,9 @@ jobs:
           include: "bindings/python/**,evals/**"
           scope: evals
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
       - name: Install dependencies
         run: uv sync --locked
       - name: Generate model points (incl. 100K L5)
@@ -421,7 +469,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store batch-search benchmark results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1.22.1
         with:
           name: Scenario Batch Search
           tool: customSmallerIsBetter
@@ -459,6 +507,9 @@ jobs:
           include: "bindings/python/**,evals/**"
           scope: evals
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
       - name: Install dependencies
         run: uv sync --locked
       - name: Run stochastic showcase (1000 scenarios)
@@ -496,6 +547,9 @@ jobs:
           include: "bindings/python/**,evals/**"
           scope: evals
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
       - name: Install dependencies
         run: uv sync --locked
       - name: Sweep run_aggregated batch size (1K..1M ladder + 10M auto — bounded seed)
@@ -535,6 +589,9 @@ jobs:
           include: "bindings/python/**,evals/**"
           scope: evals
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
       - name: Install dependencies
         run: uv sync --locked --group evals
       - name: Run evals
@@ -553,7 +610,7 @@ jobs:
         run: git checkout -- .
         working-directory: .
       - name: Store eval results
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1.22.1
         with:
           name: Skill Evals
           tool: customBiggerIsBetter

@@ -23,9 +23,14 @@ See CONTRIBUTING.md for the full guide.
 <!-- Say what you ran, and on which commit. "CI is green" is not evidence for a
      behaviour claim — name the test. -->
 
-- [ ] `cd bindings/python && uv run pytest -v` passes
-- [ ] `uv run pytest --doctest-modules --doctest-glob="*.pyi"` passes
-- [ ] `uv run mypy gaspatchio` and `uv run pyright gaspatchio` pass
+- [ ] `cd bindings/python && .venv/bin/python -m pytest -v` passes
+- [ ] `.venv/bin/python -m pytest --doctest-modules --doctest-glob="*.pyi"` passes
+- [ ] From `bindings/python`, `.venv/bin/python -m mypy <your files>` and
+      `.venv/bin/python -m pyright <your files>` add no new errors. Neither tool is
+      clean over the whole package and passing is not the rule: CI holds each
+      whole-package count to a ceiling recorded in `.github/ratchets.env`, and the
+      per-change rule is the one above. The `uv run` spelling re-syncs the project
+      and rebuilds the Rust extension, which neither type checker reads.
 - [ ] `cd core && cargo test` passes (if Rust changed)
 
 **If this changes a projected number:**
@@ -37,7 +42,9 @@ See CONTRIBUTING.md for the full guide.
 
 **If this changes the public API:**
 
-- [ ] Type stubs updated and `uv run python -m mypy.stubtest gaspatchio` passes.
+- [ ] Type stubs updated and `.venv/bin/python -m pytest tests/test_stub_sync.py` passes — it runs
+      stubtest with the config and allowlist the repo ships. The bare
+      `mypy.stubtest gaspatchio` reads no config and stops before it compares anything.
 - [ ] Docstring examples added or updated (they are executed as tests).
 
 ## Changelog

@@ -12,7 +12,7 @@ import polars as pl
 import pytest
 
 from gaspatchio import ActuarialFrame
-from gaspatchio.accessors.excel_functions.yearfrac import yearfrac
+from gaspatchio.frame.lowering._excel.yearfrac import yearfrac
 
 
 class TestYearfracInterface:
@@ -29,7 +29,10 @@ class TestYearfracInterface:
 
         # Test that the function executes and returns a float
         res_af = af.with_columns(
-            af["start"].excel.yearfrac(af["end"], basis="act/act").alias("year_frac")
+            af["start"]
+            .excel.yearfrac(af["end"], basis="act/act")
+            .polars_native()
+            .alias("year_frac")
         )
         result = res_af.collect()["year_frac"][0]
         assert isinstance(result, float)
@@ -51,7 +54,10 @@ class TestYearfracInterface:
 
         # Test that vector operations work
         res_af = af.with_columns(
-            af["start"].excel.yearfrac(af["end"], basis="act/act").alias("year_frac")
+            af["start"]
+            .excel.yearfrac(af["end"], basis="act/act")
+            .polars_native()
+            .alias("year_frac")
         )
         results = res_af.collect()["year_frac"]
 
@@ -78,7 +84,10 @@ class TestYearfracInterface:
         )
 
         res_af = af.with_columns(
-            af["start"].excel.yearfrac(af["end"], basis="act/act").alias("year_frac")
+            af["start"]
+            .excel.yearfrac(af["end"], basis="act/act")
+            .polars_native()
+            .alias("year_frac")
         )
         results = res_af.collect()["year_frac"]
 
@@ -98,7 +107,7 @@ class TestYearfracInterface:
 
         # Test chaining operations
         res_af = af.with_columns(
-            af["start"].excel.yearfrac(af["end"]).alias("year_frac")
+            af["start"].excel.yearfrac(af["end"]).polars_native().alias("year_frac")
         ).with_columns(
             (pl.col("year_frac") * 12).alias("months")  # Should be able to use result in further ops
         )
@@ -122,7 +131,10 @@ class TestYearfracInterface:
         af = ActuarialFrame(df)
 
         res_af = af.with_columns(
-            af["start_date"].excel.yearfrac(af["end_date"]).alias("year_frac")
+            af["start_date"]
+            .excel.yearfrac(af["end_date"])
+            .polars_native()
+            .alias("year_frac")
         )
         result = res_af.collect()["year_frac"][0]
         assert isinstance(result, float)
@@ -137,7 +149,7 @@ class TestYearfracInterface:
 
         # Should work - datetime should be cast to date
         res_af = af.with_columns(
-            af["start"].excel.yearfrac(af["end"]).alias("year_frac")
+            af["start"].excel.yearfrac(af["end"]).polars_native().alias("year_frac")
         )
         result = res_af.collect()["year_frac"][0]
         assert isinstance(result, float)
@@ -151,7 +163,10 @@ class TestYearfracInterface:
         })
 
         res_af = af.with_columns(
-            af["start_dates"].excel.yearfrac(af["end_dates"], basis="act/act").alias("year_fracs")
+            af["start_dates"]
+            .excel.yearfrac(af["end_dates"], basis="act/act")
+            .polars_native()
+            .alias("year_fracs")
         )
         result = res_af.collect()["year_fracs"]
 
@@ -191,7 +206,10 @@ class TestBasisParameterValidation:
         # Test that all string formats work
         for basis_str in basis_mappings:
             res_af = af.with_columns(
-                af["start"].excel.yearfrac(af["end"], basis=basis_str).alias("year_frac")
+                af["start"]
+                .excel.yearfrac(af["end"], basis=basis_str)
+                .polars_native()
+                .alias("year_frac")
             )
             result = res_af.collect()["year_frac"][0]
             assert isinstance(result, float)
@@ -208,7 +226,10 @@ class TestBasisParameterValidation:
         # Test mixed case
         for basis in ["ACT/ACT", "Act/Act", "ACTUAL/ACTUAL"]:
             res_af = af.with_columns(
-                af["start"].excel.yearfrac(af["end"], basis=basis).alias("year_frac")
+                af["start"]
+                .excel.yearfrac(af["end"], basis=basis)
+                .polars_native()
+                .alias("year_frac")
             )
             result = res_af.collect()["year_frac"][0]
             assert isinstance(result, float)
@@ -225,7 +246,10 @@ class TestBasisParameterValidation:
         # Test all valid integer basis values
         for basis_int in range(5):
             res_af = af.with_columns(
-                af["start"].excel.yearfrac(af["end"], basis=basis_int).alias("year_frac")
+                af["start"]
+                .excel.yearfrac(af["end"], basis=basis_int)
+                .polars_native()
+                .alias("year_frac")
             )
             result = res_af.collect()["year_frac"][0]
             assert isinstance(result, float)
@@ -241,7 +265,10 @@ class TestBasisParameterValidation:
 
         with pytest.raises(ValueError, match="Invalid basis"):
             res_af = af.with_columns(
-                af["start"].excel.yearfrac(af["end"], basis="invalid_basis").alias("year_frac")
+                af["start"]
+                .excel.yearfrac(af["end"], basis="invalid_basis")
+                .polars_native()
+                .alias("year_frac")
             )
             res_af.collect()
 
@@ -257,14 +284,20 @@ class TestBasisParameterValidation:
         # Test out of range integer
         with pytest.raises(ValueError, match="Invalid basis"):
             res_af = af.with_columns(
-                af["start"].excel.yearfrac(af["end"], basis=99).alias("year_frac")
+                af["start"]
+                .excel.yearfrac(af["end"], basis=99)
+                .polars_native()
+                .alias("year_frac")
             )
             res_af.collect()
 
         # Test negative integer
         with pytest.raises(ValueError, match="Invalid basis"):
             res_af = af.with_columns(
-                af["start"].excel.yearfrac(af["end"], basis=-1).alias("year_frac")
+                af["start"]
+                .excel.yearfrac(af["end"], basis=-1)
+                .polars_native()
+                .alias("year_frac")
             )
             res_af.collect()
 
@@ -293,13 +326,17 @@ class TestBasisParameterValidation:
         for basis_int, basis_str in basis_pairs:
             # Test basis specified as number
             result_num = af.with_columns(
-                af["start"].excel.yearfrac(af["end"], basis=basis_int).alias("year_frac_num")
+                af["start"]
+                .excel.yearfrac(af["end"], basis=basis_int)
+                .polars_native()
+                .alias("year_frac_num")
             ).collect()["year_frac_num"][0]
 
             # Test basis specified as string
             result_str = af.with_columns(
                 af["start"]
                 .excel.yearfrac(af["end"], basis=basis_str)
+                .polars_native()
                 .alias("year_frac_str")
             ).collect()["year_frac_str"][0]
 
@@ -321,7 +358,10 @@ class TestEdgeCasesAndErrorHandling:
 
         # This should now work with broadcasting
         res_af = af.with_columns(
-            af["start_list"].excel.yearfrac(datetime.date(2021, 1, 1)).alias("year_frac")
+            af["start_list"]
+            .excel.yearfrac(datetime.date(2021, 1, 1))
+            .polars_native()
+            .alias("year_frac")
         )
         result = res_af.collect()["year_frac"]
 
@@ -342,24 +382,26 @@ class TestEdgeCasesAndErrorHandling:
         # String column should fail
         with pytest.raises(Exception):  # Rust will handle the actual error
             res_af = af.with_columns(
-                af["not_a_date"].excel.yearfrac(datetime.date(2020, 7, 1)).alias("year_frac")
+                af["not_a_date"]
+                .excel.yearfrac(datetime.date(2020, 7, 1))
+                .polars_native()
+                .alias("year_frac")
             )
             res_af.collect()
 
-    def test_yearfrac_negative_duration(self):
-        """Test yearfrac with end date before start date (negative duration)."""
+    def test_yearfrac_end_before_start_is_the_forward_value(self):
+        """An end date before the start answers as Excel does: the forward value."""
         af = ActuarialFrame({
             "start": [datetime.date(2020, 7, 1)],
             "end": [datetime.date(2020, 1, 1)]
         })
 
-        # Should work and return negative value
         res_af = af.with_columns(
-            af["start"].excel.yearfrac(af["end"]).alias("year_frac")
+            af["start"].excel.yearfrac(af["end"]).polars_native().alias("year_frac")
         )
         result = res_af.collect()["year_frac"][0]
-        assert isinstance(result, float)
-        assert result < 0  # Should be negative
+        # 1 January to 1 July 2020 is 182 days of a 366-day year, either way round.
+        assert result == pytest.approx(182 / 366, abs=1e-12)
 
     def test_yearfrac_same_dates(self):
         """Test yearfrac when start and end dates are the same."""
@@ -369,7 +411,7 @@ class TestEdgeCasesAndErrorHandling:
         })
 
         res_af = af.with_columns(
-            af["start"].excel.yearfrac(af["end"]).alias("year_frac")
+            af["start"].excel.yearfrac(af["end"]).polars_native().alias("year_frac")
         )
         result = res_af.collect()["year_frac"][0]
         assert isinstance(result, float)

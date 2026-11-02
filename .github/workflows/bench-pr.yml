@@ -11,6 +11,11 @@ permissions:
 jobs:
   benchmark:
     name: Criterion Benchmarks (PR comparison, ${{ matrix.platform.display }})
+    # The comparison reads the benchmark history on the public repository's
+    # gh-pages branch. A repository without that branch, a fork for instance,
+    # could only fail fetching it ('couldn't find remote ref gh-pages') after
+    # running every benchmark, so the job runs where the history is.
+    if: github.repository == 'gaspatchio/gaspatchio'
     runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 30
     defaults:
@@ -33,7 +38,9 @@ jobs:
         with:
           include: "core/benches/**"
           scope: rust
-      - uses: dtolnay/rust-toolchain@stable   # intentionally not SHA-pinned — no `toolchain:` version is set, so this ref *is* the mechanism that tracks current stable Rust; pinning it would freeze the toolchain instead
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87   # stable branch
+        with:
+          toolchain: stable   # rustup resolves it when the job runs: the pin freezes the action, not the compiler
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6
         with:
           path: |
@@ -42,19 +49,34 @@ jobs:
             core/target
           key: bench-${{ runner.os }}-${{ hashFiles('core/Cargo.lock') }}
       - name: Run benchmarks
-        run: cargo bench --bench assumption_table_lookup_benchmark -- --output-format bencher '(assumption_table_.*1k|hash_vs_array_1k|vector_hash_vs_array_1k|lookup_scaling/.*/1000$)' | tee bench-output.txt
+        # Both targets into one output file, using the invocations evals.yml
+        # already runs on its schedule, so the PR compares like against like:
+        # the point names here are the point names on gh-pages.
+        # realistic_vector_lookup is the target core/AGENTS.md calls
+        # authoritative for lookup performance; until now it never ran on a PR.
+        run: |
+          cargo bench --bench assumption_table_lookup_benchmark -- --output-format bencher '(assumption_table_.*1k|hash_vs_array_1k|vector_hash_vs_array_1k|lookup_scaling/.*/1000$)' | tee bench-output.txt
+          cargo bench --bench realistic_vector_lookup -- --output-format bencher '.*1000.*' | tee -a bench-output.txt
         working-directory: core
       - name: Clean working tree for gh-pages switch
         run: git checkout -- .
       - name: Compare to baseline
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba   # v1.22.1
         with:
           tool: cargo
           name: ${{ matrix.platform.benchmark_name }}
           output-file-path: core/bench-output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           benchmark-data-dir-path: ${{ matrix.platform.benchmark_path }}
+          # Two thresholds, one step: alert-threshold decides what is commented
+          # on, fail-threshold decides what is fatal. A case 1.3x slower than
+          # the last gh-pages point earns a comment; only 1.5x fails the PR.
           alert-threshold: '130%'
           comment-on-alert: true
-          fail-on-alert: false  # Don't fail PR if no baseline exists yet
+          fail-on-alert: true
+          fail-threshold: '150%'
+          # No guard is needed for a benchmark with no history: the action
+          # skips any case it cannot find by name in the previous entry, and
+          # skips the alert check entirely when the series itself is new. A
+          # newly added benchmark therefore cannot red its first PR.
           auto-push: false  # Don't push — just compare and comment

@@ -45,8 +45,8 @@ def _mortality_table() -> Table:
         source=pl.DataFrame(
             {
                 # Wide enough for every attained age the projection reaches.
-                # `until="maximum_age"` sizes one grid from the youngest life,
-                # so the 55-year-old runs to attained age 115.
+                # `until="maximum_age"` runs each life to its own horizon, so
+                # every policy stops at attained age 100.
                 "age": list(range(18, 131)),
                 "rate": [min(0.001 + 0.0005 * (a - 18), 1.0) for a in range(18, 131)],
             }

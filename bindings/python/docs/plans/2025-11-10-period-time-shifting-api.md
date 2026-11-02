@@ -1,7 +1,5 @@
 # Period Time-Shifting API Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Add actuarial-friendly methods for accessing previous/next period values using `t-1` notation instead of confusing `.shift()` calls.
 
 **Architecture:** Extend `ProjectionColumnAccessor` with three new methods:
@@ -230,11 +228,7 @@ git commit -m "feat: add previous_period() method for t-1 time-shifting
 
 Add actuarial-friendly method for accessing previous period values using
 t-1 notation. Wraps Polars shift() with default fill_value=0 for common
-actuarial patterns like inforce rollforward and reserve calculations.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+actuarial patterns like inforce rollforward and reserve calculations."
 ```
 
 ---
@@ -400,11 +394,7 @@ git commit -m "feat: add next_period() method for t+1 time-shifting
 
 Add method for accessing next period values using t+1 notation. Less common
 than previous_period() but useful for forward-looking calculations and
-period-over-period comparisons.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+period-over-period comparisons."
 ```
 
 ---
@@ -685,11 +675,7 @@ Add flexible time-shifting method using mathematical t notation. Supports
 arbitrary period offsets where negative values mean prior periods (t-1, t-2)
 and positive values mean future periods (t+1, t+2).
 
-Complements previous_period() and next_period() for multi-period shifts.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Complements previous_period() and next_period() for multi-period shifts."
 ```
 
 ---
@@ -740,11 +726,7 @@ If Step 3 was needed:
 git add gaspatchio_core/accessors/projection.py
 git commit -m "docs: update docstring test expectations for time-shifting methods
 
-Update expected outputs from docstring examples to match actual formatting.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Update expected outputs from docstring examples to match actual formatting."
 ```
 
 ---
@@ -783,11 +765,7 @@ git add gaspatchio_core/column/proxy.pyi
 git commit -m "types: add type stubs for time-shifting methods
 
 Add type hints for previous_period(), next_period(), and at_period() methods
-in projection accessor.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+in projection accessor."
 ```
 
 ---
@@ -915,11 +893,7 @@ git commit -m "test: add integration tests for time-shifting API
 Add comprehensive integration tests showing real actuarial patterns:
 - Inforce rollforward using previous_period()
 - Reserve rollforward formula using at_period(-1)
-- Period-over-period comparisons
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- Period-over-period comparisons"
 ```
 
 ---
@@ -973,11 +947,7 @@ git add project.md
 git commit -m "docs: document time-shifting API in project.md
 
 Add documentation for previous_period(), next_period(), and at_period()
-methods with examples and design philosophy.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+methods with examples and design philosophy."
 ```
 
 ---

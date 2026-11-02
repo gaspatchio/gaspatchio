@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 from gaspatchio import ActuarialFrame
-from gaspatchio.accessors.excel_functions.pv import pv as pv_expr
+from gaspatchio.frame.lowering._excel.pv import pv as pv_expr
 
 
 def test_pv_scalar_inputs():
@@ -20,7 +20,10 @@ def test_pv_scalar_inputs():
         }
     )
     out = af.with_columns(
-        af["rate"].excel.pv(af["nper"], af["pmt"], fv=0.0, typ=0).alias("pv")
+        af["rate"]
+        .excel.pv(af["nper"], af["pmt"], fv=0.0, typ=0)
+        .polars_native()
+        .alias("pv")
     )
     res = out.collect()["pv"][0]
     assert isinstance(res, float)
@@ -35,7 +38,10 @@ def test_pv_list_inputs_pairwise():
         }
     )
     out = af.with_columns(
-        af["rate"].excel.pv(af["nper"], af["pmt"], fv=0.0, typ=0).alias("pv")
+        af["rate"]
+        .excel.pv(af["nper"], af["pmt"], fv=0.0, typ=0)
+        .polars_native()
+        .alias("pv")
     )
     s = out.collect()["pv"]
     assert s.dtype == pl.List(pl.Float64) or s.dtype == pl.Float64
@@ -61,7 +67,7 @@ def _hand_pv(r: float, n: float, p: float, fv: float = 0.0, typ: int = 0) -> flo
 
 
 def test_pv_list_rate_uses_per_policy_scalars() -> None:
-    """F2: with a list rate column, per-policy nper/pmt must be used per row.
+    """With a list rate column, per-policy nper/pmt must be used per row.
 
     Regression for the row-0 broadcast bug: every policy was computed with
     policy-0's nper/pmt. Uses the in-memory engine because the streaming
@@ -83,7 +89,7 @@ def test_pv_list_rate_uses_per_policy_scalars() -> None:
 
 
 def test_pv_scalar_unit_length_literal_broadcasts() -> None:
-    """F2: a length-1 literal rate must broadcast to all rows, not truncate."""
+    """A length-1 literal rate must broadcast to all rows, not truncate."""
     df = pl.DataFrame({"nper": [10.0, 20.0], "pmt": [1000.0, 2000.0]})
     expr = pv_expr(pl.lit(0.05), pl.col("nper"), pl.col("pmt")).alias("pv")
     out = df.lazy().with_columns(expr).collect(engine="in-memory")

@@ -45,8 +45,12 @@ def build_model_uniform(mp: pl.DataFrame, projection_months: int = 240) -> pl.Da
     af.proj_dates = af.projection.period_dates()
 
     # Month index
-    af.month = (af.proj_dates.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.proj_dates.dt.month() - VALUATION_DATE.month
+    af.month = (
+        af.proj_dates.polars_native().list.eval(pl.element().dt.year())
+        - VALUATION_DATE.year
+    ) * 12 + (
+        af.proj_dates.polars_native().list.eval(pl.element().dt.month())
+        - VALUATION_DATE.month
     )
 
     # Mortality and survival (simplified: flat 0.001/month)
@@ -92,8 +96,12 @@ def build_model_variable(mp: pl.DataFrame) -> pl.DataFrame:
     af.proj_dates = af.projection.period_dates()
 
     # Month index
-    af.month = (af.proj_dates.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.proj_dates.dt.month() - VALUATION_DATE.month
+    af.month = (
+        af.proj_dates.polars_native().list.eval(pl.element().dt.year())
+        - VALUATION_DATE.year
+    ) * 12 + (
+        af.proj_dates.polars_native().list.eval(pl.element().dt.month())
+        - VALUATION_DATE.month
     )
 
     # Mortality and survival (same as uniform)

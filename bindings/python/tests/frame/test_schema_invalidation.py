@@ -54,3 +54,25 @@ class TestSchemaInvalidation:
 
         assert af._schema_generation == gen0 + 1
         assert af._schema == af._df.collect_schema()
+
+
+def test_a_plan_that_does_not_resolve_keeps_the_last_schema_and_says_why(
+    af: ActuarialFrame,
+) -> None:
+    """An unresolvable plan is an error at collect; until then, the log says so."""
+    from loguru import logger
+
+    resolved = af._schema
+    said: list[str] = []
+    sink = logger.add(lambda m: said.append(m.record["message"]), level="DEBUG")
+    try:
+        af._df = af._df.select(pl.col("not_a_column"))
+        kept = af._schema
+    finally:
+        logger.remove(sink)
+
+    assert kept == resolved
+    (line,) = [m for m in said if "does not resolve yet" in m]
+    assert "not_a_column" in line
+    with pytest.raises(pl.exceptions.ColumnNotFoundError):
+        af.collect()

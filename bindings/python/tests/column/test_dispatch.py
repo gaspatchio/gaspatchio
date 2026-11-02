@@ -6,10 +6,48 @@ import datetime  # Added import
 
 import polars as pl
 import pytest
-from polars.testing import assert_frame_equal  # Added import
+from polars.testing import assert_frame_equal, assert_series_equal
 
+from gaspatchio._semantic.operations import PLAIN_MATH_OPERATIONS, ROUNDING_OPERATIONS
 from gaspatchio.column import ExpressionProxy
-from gaspatchio.column.dispatch import _NUMERIC_UNARY
+
+# norm_cdf is not among them: its native kernel takes a per-period column
+# whole, with no list.eval shim to observe and no Polars method to compare
+# with (tests/graph/test_normal_cdf.py holds it on both shapes).
+_NUMERIC_UNARY = tuple(
+    operation.identifier
+    for operation in (*PLAIN_MATH_OPERATIONS, *ROUNDING_OPERATIONS)
+    if operation.identifier != "norm_cdf"
+)
+
+# The input the shimmed unary operations are measured on. One populated row
+# holding a half below one, a half above one, a negative half and a value with
+# a fourth significant figure; one empty row, which every operation must leave
+# empty rather than drop or fill.
+_A_LIST_COLUMN = [[0.5, 1.5, -2.5, 12.345], []]
+
+# The operations whose answer on that row can be written down, written down.
+# These are independent of both the shim and the engine: an operation lowered
+# to the wrong Polars kernel fails here.
+_HAND_DERIVED = {
+    # |x|.
+    "abs": [0.5, 1.5, 2.5, 12.345],
+    # The sign of x, carried as a float rather than an integer.
+    "sign": [1.0, 1.0, -1.0, 1.0],
+    # The smallest whole number at or above x, so -2.5 rises to -2.
+    "ceil": [1.0, 2.0, -2.0, 13.0],
+    # The largest whole number at or below x, so -2.5 falls to -3.
+    "floor": [0.0, 1.0, -3.0, 12.0],
+    # To the nearest whole number, halves to even: 0.5 answers 0, 1.5 answers
+    # 2, -2.5 answers -2. Half away from zero would answer 1, 2 and -3, so
+    # this row is what pins which of the two rules is in force.
+    "round": [0.0, 2.0, -2.0, 12.0],
+    # To three significant figures; only the last value carries a fourth.
+    "round_sig_figs": [0.5, 1.5, -2.5, 12.3],
+}
+
+# The two operations that take one.
+_UNARY_ARGUMENTS = {"round": (0,), "round_sig_figs": (3,)}
 
 # Assuming ActuarialFrame is importable and can be instantiated with a LazyFrame
 # Adjust the import path if necessary
@@ -56,14 +94,14 @@ def sample_af() -> ActuarialFrame:
 def test_standard_method_delegation(sample_af: ActuarialFrame):
     """Verify standard Polars methods work via proxy."""
     # ColumnProxy
-    proxy_sum = sample_af["scalar_int"].sum()
+    proxy_sum = sample_af["scalar_int"].polars_native().sum()
     assert isinstance(proxy_sum, ExpressionProxy)
     assert str(proxy_sum._expr) == 'col("scalar_int").sum()'
 
     # ExpressionProxy
-    proxy_mean = (sample_af["scalar_float"] * 2).mean()
+    proxy_mean = (sample_af["scalar_float"] * 2).polars_native().mean()
     assert isinstance(proxy_mean, ExpressionProxy)
-    assert str(proxy_mean._expr) == '[(col("scalar_float")) * (dyn int: 2)].mean()'
+    assert str(proxy_mean._expr) == '[(col("scalar_float")) * (2)].mean()'
 
 
 # --- Namespace Delegation Tests ---
@@ -72,11 +110,13 @@ def test_standard_method_delegation(sample_af: ActuarialFrame):
 def test_dt_namespace_delegation(sample_af: ActuarialFrame):
     """Verify datetime namespace methods work."""
     # Using 'dates' column now
-    proxy_year = sample_af["dates"].dt.year()
+    proxy_year = sample_af["dates"].polars_native().dt.year()
     assert isinstance(proxy_year, ExpressionProxy)
     assert str(proxy_year._expr) == 'col("dates").dt.year()'
 
-    proxy_weekday = (sample_af["dates"] + pl.duration(days=1)).dt.weekday()
+    proxy_weekday = (
+        (sample_af["dates"] + pl.duration(days=1)).polars_native().dt.weekday()
+    )
     assert isinstance(proxy_weekday, ExpressionProxy)
     assert (
         str(proxy_weekday._expr)
@@ -87,7 +127,7 @@ def test_dt_namespace_delegation(sample_af: ActuarialFrame):
 def test_str_namespace_delegation(sample_af: ActuarialFrame):
     """Verify string namespace methods work."""
     # Using 'text' column now
-    proxy_contains = sample_af["text"].str.contains("a")
+    proxy_contains = sample_af["text"].polars_native().str.contains("a")
     assert isinstance(proxy_contains, ExpressionProxy)
     expected_expr_str_v1 = 'col("text").str.contains([String(a)])'
     expected_expr_str_v2 = 'col("text").str.contains(["a"])'
@@ -101,73 +141,76 @@ def test_str_namespace_delegation(sample_af: ActuarialFrame):
 def test_list_namespace_delegation(sample_af: ActuarialFrame):
     """Verify list namespace methods work."""
     # Using 'lists' column now
-    proxy_len = sample_af["lists"].list.len()
+    proxy_len = sample_af["lists"].polars_native().list.len()
     assert isinstance(proxy_len, ExpressionProxy)
     assert str(proxy_len._expr) == 'col("lists").list.length()'
 
     proxy_sum = sample_af["list_int"].list.sum()  # Using original list_int for this
     assert isinstance(proxy_sum, ExpressionProxy)
-    assert str(proxy_sum._expr) == 'col("list_int").list.sum()'
+    # The fold is wrapped in the rule that a period carrying no value nulls
+    # the total, so the expression is a conditional over the operand's own
+    # null indicator rather than the bare fold it used to render as.
+    rendered = str(proxy_sum._expr)
+    assert 'col("list_int").list.eval(element().is_null())' in rendered
+    assert 'otherwise(col("list_int").list.sum())' in rendered
 
 
 # --- List Shimming (Unary Op) Tests ---
 
 
-@pytest.mark.parametrize("op_name", sorted(list(_NUMERIC_UNARY)))
-def test_list_shimming_unary_on_list_col(sample_af: ActuarialFrame, op_name: str):
-    """Test that unary numeric ops on List columns use list.eval shim."""
-    if op_name == "round_sig_figs":  # SKIP for now
-        pytest.skip(
-            "round_sig_figs requires arguments, cannot test with simple unary setup."
-        )
-    if not hasattr(pl.element(), op_name):
-        pytest.skip(f"Unary op '{op_name}' not implemented on pl.element()")
+@pytest.mark.parametrize("op_name", sorted(_NUMERIC_UNARY))
+def test_list_shimming_unary_on_list_col(op_name: str):
+    """A unary numeric operation on a List column shims through list.eval, and computes.
 
-    # Special handling for round() which requires a parameter and float type
-    if op_name == "round":
-        # Use list.eval directly with cast to float and round
-        proxy_op = sample_af["list_int"].list.eval(
-            pl.element().cast(pl.Float64).round(0)
-        )
-    else:
-        proxy_op = getattr(sample_af["list_int"], op_name)()
+    Two claims, and the values carry the second. Six of the twelve operations
+    answer something that can be written down, and _HAND_DERIVED writes it
+    down; the other six answer irrationals, so the expectation is computed
+    here in Polars instead.
+
+    That second route is independent of the shim, which is what this test is
+    about: it fails if the lowering applies the wrong operation, drops or
+    reorders elements, fills the empty row, or loses precision through a cast.
+    It is not independent of Polars' arithmetic, because it reaches the same
+    kernels -- the six hand-derived rows are what stand behind those. One of
+    the six is not even the same kernel: log10 lowers to log(10), while the
+    expectation below reaches Polars' own log10.
+
+    round no longer builds its expression by hand. It takes its digit count
+    like any other argument-bearing operation, so this reaches the shim for
+    all twelve rather than eleven.
+    """
+    frame = ActuarialFrame(pl.LazyFrame({"rate": _A_LIST_COLUMN}))
+    proxy_op = getattr(frame["rate"], op_name)(*_UNARY_ARGUMENTS.get(op_name, ()))
 
     assert isinstance(proxy_op, ExpressionProxy)
-
-    # Check expression string, with special case for round
     expr_str = str(proxy_op._expr).replace(" ", "")  # Remove spaces for robust check
-    if op_name == "round":
-        # When using list.eval directly, the string representation is different
-        assert ".eval(" in expr_str
-    else:
-        assert ".eval(" in expr_str
+    assert ".eval(" in expr_str
+    assert 'col("rate")' in expr_str
 
-    assert 'col("list_int")' in expr_str
+    computed = frame._df.with_columns(proxy_op._expr.alias("result")).collect()
+    assert computed.schema["result"] == pl.List(pl.Float64)
 
-    # Verify execution
-    try:
-        result_df = sample_af._df.with_columns(proxy_op._expr.alias("result")).collect()
-        assert "result" in result_df.columns
-    except Exception as e:
-        pytest.fail(f"List shimming execution failed for {op_name}: {e}")
+    if op_name in _HAND_DERIVED:
+        assert computed["result"].to_list() == [_HAND_DERIVED[op_name], []]
+        return
+
+    expected = pl.Series("result", _A_LIST_COLUMN).list.eval(
+        getattr(pl.element(), op_name)()
+    )
+    assert_series_equal(computed["result"], expected)
 
 
 @pytest.mark.parametrize("op_name", sorted(list(_NUMERIC_UNARY)))
 def test_list_shimming_unary_on_scalar_col(sample_af: ActuarialFrame, op_name: str):
     """Test that unary numeric ops on scalar columns DO NOT use list.eval shim."""
-    if op_name == "round_sig_figs":  # SKIP for now
-        pytest.skip(
-            "round_sig_figs requires arguments, cannot test with simple unary setup."
-        )
-    if not hasattr(pl.col("scalar_int"), op_name):
-        pytest.skip(f"Unary op '{op_name}' not implemented on pl.Expr directly")
-
     # Special handling for round() which requires a parameter and float type
     if op_name == "round":
         # Cast to float64 first, then round
-        proxy_op = sample_af["scalar_int"].cast(pl.Float64).round(0)
+        proxy_op = sample_af["scalar_int"].polars_native().cast(pl.Float64).round(0)
     else:
-        proxy_op = getattr(sample_af["scalar_int"], op_name)()
+        proxy_op = getattr(sample_af["scalar_int"], op_name)(
+            *((3,) if op_name == "round_sig_figs" else ())
+        )
 
     assert isinstance(proxy_op, ExpressionProxy)
     # Check that the expression string is the standard Polars op
@@ -180,7 +223,13 @@ def test_list_shimming_unary_on_scalar_col(sample_af: ActuarialFrame, op_name: s
     elif op_name == "log":
         assert ".log(" in expr_str  # log() now shows base parameter
     elif op_name == "round":
-        assert ".round(" in expr_str  # Check for round with parameters
+        assert ".round(" in expr_str
+    elif op_name == "round_sig_figs":
+        # A whole number keeps its figures in Int64 arithmetic (11.1.12), not
+        # through Polars' double-based round_sig_figs; the range check that
+        # refuses an answer past i64 marks the exact path.
+        assert ".round_sig_figs(" not in expr_str
+        assert "wholenumberroundedpasttheInt64range" in expr_str
     else:
         assert f".{op_name}()" in expr_str
     assert 'col("scalar_int")' in expr_str
@@ -195,7 +244,9 @@ def test_list_shimming_unary_on_scalar_col(sample_af: ActuarialFrame, op_name: s
 
 def test_list_shimming_non_unary_on_list_col(sample_af: ActuarialFrame):
     """Test that non-unary ops (like sum) on list columns DON'T use shim."""
-    proxy_sum = sample_af["list_int"].sum()  # This is Expr.sum(), not list.sum()
+    proxy_sum = (
+        sample_af["list_int"].polars_native().sum()
+    )  # This is Expr.sum(), not list.sum()
     assert isinstance(proxy_sum, ExpressionProxy)
     expr_str = str(proxy_sum._expr).replace(" ", "")
     assert ".list.eval" not in expr_str
@@ -206,7 +257,7 @@ def test_list_shimming_non_unary_on_list_col(sample_af: ActuarialFrame):
 
 
 def test_operators_work(sample_af: ActuarialFrame):
-    """Briefly verify standard operators still work after autopatching."""
+    """Briefly verify standard operators still work on the generated surface."""
     from gaspatchio.column.condition_expression import ConditionExpression
 
     proxy_add = sample_af["scalar_int"] + sample_af["scalar_float"]
@@ -233,7 +284,7 @@ def test_nonexistent_attribute_raises_error(sample_af: ActuarialFrame):
     # Check the proxy itself first (more user-facing)
     with pytest.raises(
         AttributeError,
-        match="No 'nonexistent_method' column accessor registered or attribute found.",
+        match="No 'nonexistent_method' column accessor registered or declared operation found.",
     ):
         _ = sample_af["scalar_int"].nonexistent_method()  # type: ignore
 
@@ -246,6 +297,69 @@ def test_nonexistent_attribute_raises_error(sample_af: ActuarialFrame):
         _ = base_expr.nonexistent_method
 
 
+def test_an_undeclared_name_names_the_route_as_well_as_the_refusal(
+    sample_af: ActuarialFrame,
+):
+    """The refusal carries the name asked for and the route that answers it.
+
+    The four tests that already read this message read its first sentence
+    only. The second one is the half that tells an author what to write
+    instead, and nothing was reading it.
+    """
+    with pytest.raises(AttributeError) as refusal:
+        _ = sample_af["scalar_int"].kurtosis
+
+    message = str(refusal.value)
+    assert "kurtosis" in message
+    assert "declared operation found" in message
+    assert ".polars_native().kurtosis" in message
+
+
+def test_an_undeclared_list_operation_is_answered_about_lists(
+    sample_af: ActuarialFrame,
+):
+    """A question about sorting a timeline gets an answer about timelines.
+
+    This message used to close on "For strings inside lists, use
+    .polars_native().list.eval(...)" -- a sentence about strings, to a
+    question about a list. It now names what the namespace does hold, the
+    engine spelling of what was asked for, and what that spelling does to the
+    axis: through the list namespace the calculation stays inside one
+    policy's periods, and the same name without it does not. (It asked about
+    ``reverse`` until that became a declared operation, section 11.1.41.)
+    """
+    with pytest.raises(AttributeError) as refusal:
+        _ = sample_af["list_float"].list.sort()
+
+    message = str(refusal.value)
+    assert "sort" in message
+    assert (
+        "The declared list operations are get, max, mean, min, reverse, sum." in message
+    )
+    assert ".polars_native().list.sort(...)" in message
+    assert "runs down the model points" in message
+    assert "strings" not in message
+
+
+def test_an_undeclared_string_operation_is_answered_about_strings(
+    sample_af: ActuarialFrame,
+):
+    """Where the advice about strings inside lists belongs, it is concrete.
+
+    The same closing sentence is the right answer on this namespace, because
+    a per-period column holds its strings inside each policy's own list and
+    the plain str method does not reach them. It now spells the operation to
+    put inside the evaluation rather than trailing off into an ellipsis.
+    """
+    with pytest.raises(AttributeError) as refusal:
+        _ = sample_af["str_col"].str.zfill()
+
+    message = str(refusal.value)
+    assert "zfill" in message
+    assert "The declared str operations are to_date." in message
+    assert ".polars_native().list.eval(pl.element().str.zfill(...))" in message
+
+
 # --- __dir__ Tests ---
 
 
@@ -254,25 +368,14 @@ def test_dir_includes_proxied_methods(sample_af: ActuarialFrame):
     col_dir = dir(sample_af["scalar_int"])
     expr_dir = dir(sample_af["scalar_int"] + 1)
 
-    # Check for common methods
-    assert "sum" in col_dir
-    assert "mean" in col_dir
-    assert "alias" in col_dir
-    assert "cast" in col_dir
-
-    assert "sum" in expr_dir
-    assert "mean" in expr_dir
-    assert "alias" in expr_dir
-    assert "cast" in expr_dir
-
-    # Check for namespaces
-    assert "dt" in col_dir
-    assert "str" in col_dir
-    assert "list" in col_dir
-
-    assert "dt" in expr_dir
-    assert "str" in expr_dir
-    assert "list" in expr_dir
+    for surface in (col_dir, expr_dir):
+        assert {"abs", "clip", "str", "list", "polars_native"} <= set(surface)
+    native = sample_af["scalar_int"].polars_native()
+    assert {"mean", "alias", "cast"} <= set(dir(native))
+    assert all(
+        callable(getattr(native, name)) for name in ("sum", "mean", "alias", "cast")
+    )
+    assert hasattr(native, "dt")
 
     # Check a specific unary op from the list shim logic
     assert "abs" in col_dir
@@ -295,9 +398,9 @@ def test_basic_delegation_arithmetic_moved(sample_af: ActuarialFrame):
     """Moved from test_core_delegation. Test basic arithmetic and chaining."""
     # NEW: Call with_columns correctly using alias
     af_step1 = sample_af.with_columns(
-        (sample_af["a"] + sample_af["b"]).alias("c"),
-        (sample_af["a"] * 2).alias("d"),
-        (sample_af["a"] * -1).alias("a_neg"),
+        (sample_af["a"] + sample_af["b"]).polars_native().alias("c"),
+        (sample_af["a"] * 2).polars_native().alias("d"),
+        (sample_af["a"] * -1).polars_native().alias("a_neg"),
     )
     af_step2 = af_step1.with_columns(
         pl.col("a_neg").abs().alias("a_neg_abs")
@@ -344,9 +447,13 @@ def test_delegation_agg_moved(sample_af: ActuarialFrame):
         sample_af._df.group_by("group")
         .agg(
             mean_val=sample_af["value"]
+            .polars_native()
             .mean()
             ._expr,  # Use proxy within agg, then unwrap
-            sum_val=sample_af["value"].sum()._expr,  # Use proxy within agg, then unwrap
+            sum_val=sample_af["value"]
+            .polars_native()
+            .sum()
+            ._expr,  # Use proxy within agg, then unwrap
         )
         .sort("group")
     )
@@ -365,23 +472,35 @@ def test_vector_shim_unary_ops_moved(sample_af: ActuarialFrame):
     # Simplify the test to avoid type casting issues
     af1 = sample_af.with_columns(
         sample_af["list_float"]
+        .polars_native()
         .list.eval(pl.element().floor())
+        .polars_native()
         .alias("list_float_floor")
     )
     af2 = af1.with_columns(
-        sample_af["list_int"].list.eval(pl.element().abs()).alias("list_int_abs")
+        sample_af["list_int"]
+        .polars_native()
+        .list.eval(pl.element().abs())
+        .polars_native()
+        .alias("list_int_abs")
     )
     af3 = af2.with_columns(
         sample_af["list_float"]
+        .polars_native()
         .list.eval(pl.element().filter(pl.element() >= 0))
+        .polars_native()
         .alias("list_float_pos")
     )
     # Remove the problematic sqrt operation
     af4 = af3.with_columns(
-        sample_af["scalar_float"].floor().alias("scalar_float_floor")
+        sample_af["scalar_float"].floor().polars_native().alias("scalar_float_floor")
     )
     res_af = af4.with_columns(
-        sample_af["list_float"].list.eval(pl.element() + 1).alias("list_float_plus_1")
+        sample_af["list_float"]
+        .polars_native()
+        .list.eval(pl.element() + 1)
+        .polars_native()
+        .alias("list_float_plus_1")
     )
 
     # Get the final LazyFrame from the result of proxy operations
@@ -428,6 +547,7 @@ def test_vector_shim_unary_ops_moved(sample_af: ActuarialFrame):
 
 # --- Additional Delegation Nuance Tests --- START ---
 
+
 def test_delegation_non_expression_return(sample_af: ActuarialFrame):
     """Test delegated methods that return non-Expr types (e.g., bool, list)."""
     # Polars methods like is_unique(), is_duplicated() return Series.
@@ -460,21 +580,21 @@ def test_delegation_non_expression_return(sample_af: ActuarialFrame):
     # .unique() returns a Series/Expr, .to_list() returns a list
     # Accessing .unique().to_list() might require careful handling if intermediate is Series
     # Let's test a simple case that resolves to an expression first
-    unique_expr = sample_af["group"].unique()
+    unique_expr = sample_af["group"].polars_native().unique()
     assert isinstance(unique_expr, ExpressionProxy)
 
     # If we were to add .to_list() delegation (which returns list, not Expr),
     # it should bypass the _wrap function.
-    # unique_list = sample_af["group"].unique().to_list() # Hypothetical
+    # unique_list = sample_af["group"].polars_native().unique().to_list() # Hypothetical
     # assert isinstance(unique_list, list)
 
 
 def test_delegation_with_proxy_args(sample_af: ActuarialFrame):
     """Test methods taking other proxies/expressions as arguments."""
     # Filter example
-    filtered_proxy = sample_af["scalar_int"].filter(sample_af["a"] > 1)
+    filtered_proxy = sample_af["scalar_int"].polars_native().filter(sample_af["a"] > 1)
     assert isinstance(filtered_proxy, ExpressionProxy)
-    expected_filter_expr = 'col("scalar_int").filter([(col("a")) > (dyn int: 1)])'
+    expected_filter_expr = 'col("scalar_int").filter([(col("a")) > (1)])'
     assert str(filtered_proxy._expr) == expected_filter_expr
 
     # Clip example
@@ -500,10 +620,10 @@ def test_delegation_with_proxy_args(sample_af: ActuarialFrame):
 
     # Execute and check results - Collect expressions individually
     res_filtered = sample_af._df.select(
-        filtered_proxy.alias("filtered")._expr
+        filtered_proxy.polars_native().alias("filtered")._expr
     ).collect()  # Unwrap proxy
     res_clipped = sample_af._df.select(
-        clipped_proxy.alias("clipped")._expr
+        clipped_proxy.polars_native().alias("clipped")._expr
     ).collect()  # Unwrap proxy
 
     assert res_filtered["filtered"].to_list() == [-20, 30]
@@ -538,7 +658,7 @@ def test_list_shimming_empty_and_fallback(sample_af: ActuarialFrame):
     # We already test this for scalar columns in `test_list_shimming_unary_on_scalar_col`.
     # We can also test a unary method NOT in _NUMERIC_UNARY on a list column.
     if hasattr(pl.Expr, "is_first_distinct"):  # Example: boolean unary method
-        proxy_op = sample_af["list_int"].is_first_distinct()
+        proxy_op = sample_af["list_int"].polars_native().is_first_distinct()
         assert isinstance(proxy_op, ExpressionProxy)
         # Check that the expression string is the standard Polars op, NOT list.eval
         expr_str = str(proxy_op._expr).replace(" ", "")
@@ -549,7 +669,9 @@ def test_list_shimming_empty_and_fallback(sample_af: ActuarialFrame):
 def test_namespace_chaining(sample_af: ActuarialFrame):
     """Test chaining methods within a delegated namespace."""
     # Example: square list elements, then sum the list
-    proxy_chained = sample_af["list_int"].list.eval(pl.element().pow(2)).list.sum()
+    proxy_chained = (
+        sample_af["list_int"].polars_native().list.eval(pl.element().pow(2)).list.sum()
+    )
     assert isinstance(proxy_chained, ExpressionProxy)
 
     # Check expression structure (expecting .eval() for list.eval part)
@@ -561,7 +683,7 @@ def test_namespace_chaining(sample_af: ActuarialFrame):
 
     # Check execution
     result_df = sample_af._df.select(
-        proxy_chained.alias("result")._expr
+        proxy_chained.polars_native().alias("result")._expr
     ).collect()  # New: Unwrap proxy
     # [[1, 2], [-3, -4, 5], []] -> [[1, 4], [9, 16, 25], []] -> [5, 50, 0]
     assert result_df["result"].to_list() == [5, 50, 0]

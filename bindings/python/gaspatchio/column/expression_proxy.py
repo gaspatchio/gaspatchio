@@ -2,30 +2,43 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# ruff: noqa: ANN204, TID252, E501, ERA001, TRY003, EM102, PLR2004, TRY300, BLE001, N806, EM101
 """Defines the ExpressionProxy class."""
-# ruff: noqa: ANN204, ANN401, TID252, E501, ERA001, TRY003, EM102, PLR2004, TRY300, BLE001, D401, N806, EM101, C414
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import polars as pl
 
 # Use TYPE_CHECKING for imports that would cause circular dependencies at runtime
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from gaspatchio._authoring.escape import PolarsNative, ProxyType
+    from gaspatchio._semantic.ir import OpNode
+
     from ..accessors.date import DateColumnAccessor
     from ..accessors.finance import FinanceColumnAccessor
     from ..frame.base import ActuarialFrame
-    from .condition_expression import ConditionExpression
     # No forward reference needed for ColumnProxy as it's not directly used in signatures here
     # from .column_proxy import ColumnProxy
 
 # Import the registry for accessor lookup
+from gaspatchio._shape import (
+    _UNSET,
+    Kind,
+    Shape,
+    _kind_from_dtype,
+    _shape_from_expr_dtype,
+)
+
 from ..frame.registry import _ACCESSOR_REGISTRY
-from .shape import _UNSET, Kind, Shape, _kind_from_dtype, _shape_from_expr_dtype
+from ._declared import _accessor_attribute, _names_with_accessors
+from ._generated_proxy import _GeneratedProxySurface
 
 
-class ExpressionProxy:
+class ExpressionProxy(_GeneratedProxySurface):
     """Represents a Polars expression derived from ActuarialFrame operations or ColumnProxy methods."""
 
     # Cache for accessor instances specific to ExpressionProxy
@@ -38,9 +51,9 @@ class ExpressionProxy:
         expr: pl.Expr,
         parent: ActuarialFrame | None,
         *,
-        kind: str | None = None,
+        kind: Kind | None = None,
     ):
-        """Initialize an ExpressionProxy.
+        """Initialize an ExpressionProxy around an already-built expression.
 
         Args:
             expr: The underlying Polars expression.
@@ -56,12 +69,82 @@ class ExpressionProxy:
             raise TypeError(
                 f"ExpressionProxy must be initialized with a Polars expression, got {type(expr).__name__}"
             )
-        self._expr = expr
+        self._init_fields(node=None, lowered=expr, parent=parent, kind=kind)
+
+    @classmethod
+    def _from_node(
+        cls,
+        node: OpNode,
+        parent: ActuarialFrame | None,
+        *,
+        kind: Kind | None = None,
+    ) -> ExpressionProxy:
+        """Build a proxy that carries a semantic node, not a finished expression.
+
+        This is what every operator dunder and the ``when`` chain return now.
+        The Polars expression is derived on first contact (see ``_expr``) and
+        cached, so a chain of ten operators lowers once, at the end, rather
+        than ten times on the way through.
+        """
+        proxy = object.__new__(cls)
+        proxy._init_fields(node=node, lowered=None, parent=parent, kind=kind)  # noqa: SLF001
+        return proxy
+
+    def _init_fields(
+        self,
+        *,
+        node: OpNode | None,
+        lowered: pl.Expr | None,
+        parent: ActuarialFrame | None,
+        kind: Kind | None,
+    ) -> None:
+        """Set the instance state shared by both construction paths."""
+        self._node_cached = node
+        self._lowered = lowered
         self._parent = parent
         self._dynamic_accessor_cache = {}  # Initialize cache per instance
-        self._kind_explicit: str | None = kind
-        self._shape_cached: tuple[int, str] | object = _UNSET
-        self._kind_cached: tuple[int, str] | object = _UNSET
+        self._kind_explicit: Kind | None = kind
+        self._shape_cached: tuple[int, Shape] | object = _UNSET
+        self._kind_cached: tuple[int, Kind] | object = _UNSET
+
+    @property
+    def _node(self) -> OpNode:
+        """The semantic node this expression stands for.
+
+        A proxy built from a raw Polars expression has no semantic tree to
+        offer, so it reports an ``EngineNative`` node -- an honest "something
+        else built this" rather than a guess at what it means. Built lazily:
+        only an expression that becomes an operand ever needs one.
+        """
+        node = self._node_cached
+        if node is None:
+            from gaspatchio.frame.lowering.ingress import native_node  # noqa: PLC0415
+
+            lowered = self._lowered
+            if lowered is None:  # pragma: no cover - one of the two is always set
+                msg = "ExpressionProxy carries neither a node nor an expression"
+                raise RuntimeError(msg)
+            node = native_node(lowered)
+            self._node_cached = node
+        return node
+
+    @property
+    def _expr(self) -> pl.Expr:
+        """The Polars expression, derived from the node on first contact.
+
+        Lowering happens once per proxy and is cached: the chain
+        ``af.premiums - af.claims - af.expenses`` builds three nodes and
+        lowers exactly one tree, at the moment something asks for the
+        expression.
+        """
+        lowered = self._lowered
+        if lowered is None:
+            from gaspatchio.frame.lowering.context import context_for  # noqa: PLC0415
+            from gaspatchio.frame.lowering.polars import lower_polars  # noqa: PLC0415
+
+            lowered = lower_polars(self._node, context_for(self._parent))
+            self._lowered = lowered
+        return lowered
 
     def _to_expr(self) -> pl.Expr:
         """Return the underlying Polars expression."""
@@ -101,246 +184,71 @@ class ExpressionProxy:
             return "ExpressionProxy(expr=[unknown])"
 
     # --- Operator Overloads ---
-    # Operators combine with other proxies or compatible types, returning a new ExpressionProxy
-
-    def __add__(self, other: Any) -> ExpressionProxy:
-        """Addition operator."""
-        # Use the dispatch system to handle list column shimming
-        return self.add(other)
-
-    def __sub__(self, other: Any) -> ExpressionProxy:
-        """Subtraction operator."""
-        # Use the dispatch system to handle list column shimming
-        return self.sub(other)
-
-    def __mul__(self, other: Any) -> ExpressionProxy:
-        """Multiplication operator."""
-        # Use the dispatch system to handle list column shimming
-        return self.mul(other)
-
-    def __truediv__(self, other: Any) -> ExpressionProxy:
-        """True division operator."""
-        # Use the dispatch system to handle list column shimming
-        return self.truediv(other)
-
-    def __floordiv__(self, other: Any) -> ExpressionProxy:
-        """Floor division operator."""
-        # Use the dispatch system to handle list column shimming
-        return self.floordiv(other)
-
-    def __mod__(self, other: Any) -> ExpressionProxy:
-        """Modulo operator."""
-        # Use the dispatch system to handle list column shimming
-        return self.mod(other)
-
-    def __pow__(self, other: Any) -> ExpressionProxy:
-        """Power operator."""
-        # Use the dispatch system to handle list column shimming
-        return self.pow(other)
-
-    def __neg__(self) -> ExpressionProxy:
-        """Unary negation operator."""
-        # Multiply by -1 rather than deferring to Polars' `neg`, which has no
-        # list kernel; `mul` goes through the dispatch system that handles list
-        # column shimming. The literal must stay an int: -1.0 would widen every
-        # integer column to Float64, so a negated duration could no longer key
-        # an integer assumption table.
-        return self.mul(-1)
+    # Every operator emits a semantic BinOp node; the Polars expression that
+    # computes it is derived later, by lowering (see _authoring/emit.py).
 
     # Comparison operators
-    def __eq__(self, other: object) -> ConditionExpression:  # type: ignore[override]
-        """Equality comparison.
-
-        Returns ConditionExpression with metadata for list_conditional plugin.
-        """
-        from gaspatchio.column.condition_expression import ConditionExpression
-
-        left_expr = self._expr
-        right_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        comparison_expr = left_expr == right_expr
-
-        return ConditionExpression(
-            expr=comparison_expr,
-            parent=self._parent,
-            operator="eq",
-            left=left_expr,
-            right=right_expr,
-        )
-
-    def __ne__(self, other: object) -> ConditionExpression:  # type: ignore[override]
-        """Inequality comparison.
-
-        Returns ConditionExpression with metadata for list_conditional plugin.
-        """
-        from gaspatchio.column.condition_expression import ConditionExpression
-
-        left_expr = self._expr
-        right_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        comparison_expr = left_expr != right_expr
-
-        return ConditionExpression(
-            expr=comparison_expr,
-            parent=self._parent,
-            operator="ne",
-            left=left_expr,
-            right=right_expr,
-        )
-
-    def __lt__(self, other: Any) -> ConditionExpression:
-        """Less than comparison.
-
-        Returns ConditionExpression with metadata for list_conditional plugin.
-        """
-        from gaspatchio.column.condition_expression import ConditionExpression
-
-        left_expr = self._expr
-        right_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        comparison_expr = left_expr < right_expr
-
-        return ConditionExpression(
-            expr=comparison_expr,
-            parent=self._parent,
-            operator="lt",
-            left=left_expr,
-            right=right_expr,
-        )
-
-    def __le__(self, other: Any) -> ConditionExpression:
-        """Less than or equal comparison.
-
-        Returns ConditionExpression with metadata for list_conditional plugin.
-        """
-        from gaspatchio.column.condition_expression import ConditionExpression
-
-        left_expr = self._expr
-        right_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        comparison_expr = left_expr <= right_expr
-
-        return ConditionExpression(
-            expr=comparison_expr,
-            parent=self._parent,
-            operator="lte",
-            left=left_expr,
-            right=right_expr,
-        )
-
-    def __gt__(self, other: Any) -> ConditionExpression:
-        """Greater than comparison.
-
-        Returns ConditionExpression with metadata for list_conditional plugin.
-        """
-        from gaspatchio.column.condition_expression import ConditionExpression
-
-        left_expr = self._expr
-        right_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        comparison_expr = left_expr > right_expr
-
-        return ConditionExpression(
-            expr=comparison_expr,
-            parent=self._parent,
-            operator="gt",
-            left=left_expr,
-            right=right_expr,
-        )
-
-    def __ge__(self, other: Any) -> ConditionExpression:
-        """Greater than or equal comparison.
-
-        Returns ConditionExpression with metadata for list_conditional plugin.
-        """
-        from gaspatchio.column.condition_expression import ConditionExpression
-
-        left_expr = self._expr
-        right_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        comparison_expr = left_expr >= right_expr
-
-        return ConditionExpression(
-            expr=comparison_expr,
-            parent=self._parent,
-            operator="gte",
-            left=left_expr,
-            right=right_expr,
-        )
 
     # --- Reverse Operators ---
-    def __radd__(self, other: Any) -> ExpressionProxy:
-        """Reverse addition operator."""
-        # Convert other to a proxy and use dispatch system
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        other_proxy = ExpressionProxy(other_expr, self._parent)
-        return other_proxy.add(self)
+    # The other operand is the receiver the author wrote first, so it becomes
+    # the node's left child: `1 - af.pols_if` emits BinOp("sub", Lit(1), ...).
 
-    def __rsub__(self, other: Any) -> ExpressionProxy:
-        """Reverse subtraction operator."""
-        # Convert other to a proxy and use dispatch system
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        other_proxy = ExpressionProxy(other_expr, self._parent)
-        return other_proxy.sub(self)
+    def polars_native(self, *, deps: Sequence[str] | None = None) -> PolarsNative:
+        """Continue this expression with a Polars method no operation names.
 
-    def __rmul__(self, other: Any) -> ExpressionProxy:
-        """Reverse multiplication operator."""
-        # Convert other to a proxy and use dispatch system
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        other_proxy = ExpressionProxy(other_expr, self._parent)
-        return other_proxy.mul(self)
+        The counterpart of ``ColumnProxy.polars_native`` on a formula that is
+        already under way: everything written so far keeps the record it
+        earned, and the escape applies from this point on. See that method
+        for what the escape is for, what it costs, and what it refuses.
 
-    def __rtruediv__(self, other: Any) -> ExpressionProxy:
-        """Reverse true division operator."""
-        # Convert other to a proxy and use dispatch system
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        other_proxy = ExpressionProxy(other_expr, self._parent)
-        return other_proxy.truediv(self)
+        Parameters
+        ----------
+        deps : Sequence[str], optional
+            The columns the resulting expression reads -- every column the
+            expression so far reads, plus any the method adds. Needed only
+            where the expression will not report them itself, and checked
+            against what it does report where it will.
 
-    def __rfloordiv__(self, other: Any) -> ExpressionProxy:
-        """Reverse floor division operator."""
-        # Convert other to a proxy and use dispatch system
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        other_proxy = ExpressionProxy(other_expr, self._parent)
-        return other_proxy.floordiv(self)
+        Returns
+        -------
+        PolarsNative
+            The open escape, on which one Polars expression method is called.
 
-    def __rmod__(self, other: Any) -> ExpressionProxy:
-        """Reverse modulo operator."""
-        # Convert other to a proxy and use dispatch system
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        other_proxy = ExpressionProxy(other_expr, self._parent)
-        return other_proxy.mod(self)
+        Examples
+        --------
+        A high-water mark over the account values of a book, taken after the
+        charges have already been netted off in the framework's own
+        operations:
 
-    def __rpow__(self, other: Any) -> ExpressionProxy:
-        """Reverse power operator."""
-        # Convert other to a proxy and use dispatch system
-        other_expr = (
-            self._parent._convert_to_expr(other) if self._parent else pl.lit(other)
-        )
-        other_proxy = ExpressionProxy(other_expr, self._parent)
-        return other_proxy.pow(self)
+        >>> import polars as pl
+        >>> from gaspatchio import ActuarialFrame
+        >>> af = ActuarialFrame(
+        ...     pl.DataFrame(
+        ...         {"account_value": [100.0, 120.0, 90.0], "charge": [1.0, 2.0, 3.0]}
+        ...     )
+        ... )
+        >>> net = af.account_value - af.charge
+        >>> af.high_water = net.polars_native().cum_max()
+        >>> af.collect()["high_water"].to_list()
+        [99.0, 118.0, 118.0]
+
+        Both columns the line reads stay declared, the one the escape was
+        opened on and the one the expression before it brought:
+
+        >>> af.graph.precedents("high_water")
+        ('account_value', 'charge')
+
+        """
+        from gaspatchio._authoring.escape import PolarsNative  # noqa: PLC0415
+
+        # The escape's receiver type names ExpressionProxy as this module's
+        # stub declares it, and pyright, checking this file, holds the class
+        # defined here to be another one. They are one class at run time.
+        return PolarsNative(cast("ProxyType", self), deps)
 
     # --- Explicitly Defined Accessor Properties ---
     # Accessors that are commonly used or have specific logic can be defined explicitly.
-    # Others will be handled by the autopatcher.
+    # Other registered accessors are resolved by __getattr__.
 
     @property
     def date(self) -> DateColumnAccessor:
@@ -368,58 +276,14 @@ class ExpressionProxy:
         return self._dynamic_accessor_cache["finance"]
 
     # --- Dynamic Accessor Handling --- ADDED
-    def __getattr__(self, name: str) -> Any:
-        """Dynamically instantiate and return registered column accessors."""
-        # Check cache first
-        # Use object.__getattribute__ to avoid recursion if cache doesn't exist yet
-        _cache = object.__getattribute__(self, "_dynamic_accessor_cache")
-        if name in _cache:
-            return _cache[name]
-
-        # Check registry for column accessors
-        AccessorClass = _ACCESSOR_REGISTRY.get(name, {}).get("column")
-        if AccessorClass:
-            try:
-                # Instantiate, passing this ExpressionProxy instance
-                accessor_instance = AccessorClass(self)
-                # Cache the instance
-                # self._dynamic_accessor_cache[name] = accessor_instance # Avoid direct access
-                _cache[name] = accessor_instance
-                return accessor_instance
-            except Exception as e:
-                raise AttributeError(
-                    f"Error instantiating accessor '{name}': {e}"
-                ) from e
-        else:
-            # If not an accessor, assume it might be a method/property on the
-            # underlying Polars expression - this should be handled by autopatch,
-            # but raise a specific error if autopatch isn't set up or fails.
-            # The autopatch mechanism *should* prevent __getattr__ from being called
-            # for proxied methods. If we reach here, something is wrong.
-            raise AttributeError(
-                f"No '{name}' column accessor registered, and attribute not found on proxied Expr."
-            )
+    # The registered column accessors, reached as attributes: one definition
+    # for a column and an expression alike.
+    __getattr__ = _accessor_attribute
 
     def __dir__(self) -> list[str]:
-        """Enhance dir() to include registered column accessors and proxied methods."""
-        # Start with standard attributes
-        attrs = set(object.__dir__(self))
+        """Include registered accessors beside the declared method surface."""
+        return _names_with_accessors(self)
 
-        # Add registered column accessors
-        column_accessor_names = [
-            name for name, kinds in _ACCESSOR_REGISTRY.items() if "column" in kinds
-        ]
-        attrs.update(column_accessor_names)
 
-        # Add methods/properties proxied from pl.Expr
-        # Similar to ColumnProxy, rely on autopatch or introspection
-        # try:
-        #     expr_attrs = {m for m in dir(self._expr) if not m.startswith('_')}
-        #     attrs.update(expr_attrs)
-        # except Exception:
-        #     pass
-
-        return sorted(list(attrs))
-
-    # NOTE: Delegation for Polars methods is handled by DelegatorDescriptor via _autopatch.
-    #       __getattr__ here is *only* for accessors.
+# What the API reference documents from this module.
+__all__ = ["ExpressionProxy"]

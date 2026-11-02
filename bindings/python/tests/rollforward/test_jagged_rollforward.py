@@ -20,9 +20,9 @@ import pytest
 
 from gaspatchio import ActuarialFrame
 from gaspatchio.rollforward._builder import RollforwardBuilder
-from gaspatchio.rollforward._collector import RollforwardCollector
 from gaspatchio.rollforward._compile import compile_rollforward
 from gaspatchio.schedule import Schedule
+from tests.rollforward.conftest import _standalone_state_expr
 
 
 class TestJaggedRollforward:
@@ -33,7 +33,6 @@ class TestJaggedRollforward:
         # lists of DIFFERENT lengths (2 and 3), each declared by its own term.
         sched = Schedule.from_per_policy_grid(
             start_date=date(2025, 1, 31),
-            n_periods=3,
             frequency="1M",
             until_kind="term_months",
             until_value_column="term",
@@ -50,7 +49,7 @@ class TestJaggedRollforward:
             }
         )
         av = (
-            df.with_columns(av=RollforwardCollector(compiled).expr_for("av"))
+            df.with_columns(av=_standalone_state_expr(compiled, "av"))
             .get_column("av")
             .to_list()
         )
@@ -74,7 +73,7 @@ class TestJaggedRollforward:
             {"init": [100.0, 100.0], "premium": [[10.0, 20.0, 30.0], [10.0, 20.0, 30.0]]}
         )
         av = (
-            df.with_columns(av=RollforwardCollector(compiled).expr_for("av"))
+            df.with_columns(av=_standalone_state_expr(compiled, "av"))
             .get_column("av")
             .to_list()
         )
@@ -106,7 +105,7 @@ class TestPerPolicyProjectionRollforward:
         b = af.projection.rollforward(states={"av": af["init"]})
         b["av"].add(af["premium"])
         compiled = compile_rollforward(b)
-        af.av = RollforwardCollector(compiled).expr_for("av")
+        af.av = compiled.expr_for("av")
         av = af.collect().get_column("av").to_list()
 
         # Policy A (term 2): 100 -> 110 -> 120, two periods only.
@@ -141,7 +140,7 @@ class TestPerPolicyProjectionRollforward:
         )
         b = af.projection.rollforward(states={"av": af["init"]})
         b["av"].add(af["premium"])
-        af.av = RollforwardCollector(compile_rollforward(b)).expr_for("av")
+        af.av = compile_rollforward(b).expr_for("av")
         av = af.collect().get_column("av").to_list()
         assert av[0] == []  # zero-term policy: empty projection
         assert av[1] == pytest.approx([110.0, 120.0, 130.0])
@@ -160,7 +159,7 @@ class TestPerPolicyProjectionRollforward:
         )
         b = af.projection.rollforward(states={"av": af["init"]})
         b["av"].floor(value=50.0)  # no input list column referenced
-        af.av = RollforwardCollector(compile_rollforward(b)).expr_for("av")
+        af.av = compile_rollforward(b).expr_for("av")
         lengths = [len(x) for x in af.collect().get_column("av").to_list()]
         assert lengths == [2, 4]  # per-policy, not the portfolio-max 4
 
@@ -181,7 +180,7 @@ class TestPerPolicyProjectionRollforward:
         )
         b = af.projection.rollforward(states={"av": af["init"]})
         b["av"].add(af["premium"])
-        af.av = RollforwardCollector(compile_rollforward(b)).expr_for("av")
+        af.av = compile_rollforward(b).expr_for("av")
         av = af.collect().get_column("av").to_list()
         assert av[0] == []  # null term -> empty projection, no crash
         assert av[1] == pytest.approx([110.0, 120.0, 130.0])
@@ -208,9 +207,9 @@ class TestPerPolicyProjectionRollforward:
         b = af.projection.rollforward(states={"av": af["av0"], "res": af["res0"]})
         b["av"].add(af["prem"])
         b["res"].subtract(af["draw"])
-        coll = RollforwardCollector(compile_rollforward(b))
-        af.av = coll.expr_for("av")
-        af.res = coll.expr_for("res")
+        compiled = compile_rollforward(b)
+        af.av = compiled.expr_for("av")
+        af.res = compiled.expr_for("res")
         d = af.collect()
         av, res = d["av"].to_list(), d["res"].to_list()
         assert av[0] == pytest.approx([110.0, 120.0])  # +10/period

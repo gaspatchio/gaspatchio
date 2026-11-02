@@ -58,6 +58,31 @@ class ScenarioResult:
     truthy; otherwise it is ``None``. The path points to the JSON sidecar
     written by :mod:`gaspatchio.scenarios._audit`.
 
+    ``graph_fingerprint`` names the calculation the run folded -- the stamp
+    the executed frame's own ``af.graph.fingerprint()`` carries -- so the run
+    record and the calculation graph read as one chain from either end. It is
+    populated only where the run was asked for an audit record, and it is
+    ``None`` where the *scenarios* folded more than one graph, which is what
+    a run that shocks an assumption table its model reads does by design: an
+    assumption table's content hash is a section of that stamp. Asking the
+    question of the scenarios rather than of the batches is what keeps the
+    answer off the batch size the memory search settled on. See
+    :func:`gaspatchio.scenarios._for_each.agreed_graph`.
+
+    ``graph_fingerprint_by_scenario`` is that same question answered one
+    scenario at a time -- each scenario identifier against the calculation
+    that scenario folded -- which is a shocked run's real shape: one graph
+    per basis, rather than one graph the run does not have. Each entry is
+    what that scenario folds when it runs alone, so it reads the same
+    however the run was batched, and an entry is ``None`` only where the
+    stamp could not be taken. Populated only where the run was asked for an
+    audit record.
+
+    ``bases`` names, on a shocks plan, every assumption table a shock moved:
+    the content fingerprint of the table the model read, which is the one
+    the shock was applied to, and the file it was read from. ``None`` on the
+    ids and drivers shapes, which shock nothing.
+
     ``selection`` is populated when ``batch_size='auto'`` was used; it
     carries the chosen engine/batch point and the full probe ladder for
     post-run inspection. ``None`` when ``batch_size`` was resolved manually.
@@ -85,6 +110,37 @@ class ScenarioResult:
     sink_dir: Path | None
     selection: SelectionDecision | None = None
     audit_path: Path | None = None
+    graph_fingerprint: str | None = None
+    graph_fingerprint_by_scenario: dict[str | int, str | None] | None = None
+    bases: dict[str, dict[str, Any]] | None = None
+
+    def fingerprint(self, scenario_id: str | int) -> str | None:
+        """Return the calculation ``scenario_id`` folded, as it folds alone.
+
+        On a shocks plan this is the scenario composed on its own -- the
+        reconciled model over the book, reading only that scenario's shocked
+        tables and columns -- so BASE's is the standalone model's own
+        ``af.graph.fingerprint()``: a reviewer checks that BASE is the
+        reconciled model rather than measuring it.
+
+        Raises:
+            ValueError: The run was not asked for an audit record, so no
+                per-scenario fingerprint was taken.
+            KeyError: ``scenario_id`` is not a scenario of this run.
+
+        """
+        if self.graph_fingerprint_by_scenario is None:
+            msg = (
+                "This run took no per-scenario fingerprints: they are taken "
+                "where the run writes its audit record. Run with audit=True "
+                "(or audit=<path>)."
+            )
+            raise ValueError(msg)
+        if scenario_id not in self.graph_fingerprint_by_scenario:
+            held = ", ".join(repr(s) for s in self.graph_fingerprint_by_scenario)
+            msg = f"{scenario_id!r} is not a scenario of this run; it ran {held}."
+            raise KeyError(msg)
+        return self.graph_fingerprint_by_scenario[scenario_id]
 
 
 __all__ = ["ProbeResult", "ScenarioResult", "SelectionDecision"]

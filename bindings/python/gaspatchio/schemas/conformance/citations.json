@@ -1,0 +1,314 @@
+{
+  "schema": "gaspatchio-citation-vectors/v0-preview.1",
+  "cites": "corpus.json",
+  "cases": [
+    {
+      "id": "compare-report-cites-the-corpus-by-its-seal",
+      "record_kind": "compare-report",
+      "record": {
+        "report_version": "gaspatchio-graph-compare/v0-preview.2",
+        "artifact_fingerprint": "sha256:20882cdb67b31e9dd707eaa518b99cde4c5a51499bcc18dbd049dcf9e3e675ed",
+        "document_digest": "sha256:dfffd7a7969ba4cd7c703b47234a21d3c083280058a488bb35099038d0b64a50",
+        "scope": "final-schema",
+        "before": {
+          "producer": "polars",
+          "inputs_digest": "sha256:98383cfc454af25556dffd8182c4e5e543d74036c35b0c389a944463e5f1c0c7",
+          "versions": {}
+        },
+        "after": {
+          "producer": "polars",
+          "inputs_digest": "sha256:98383cfc454af25556dffd8182c4e5e543d74036c35b0c389a944463e5f1c0c7",
+          "versions": {}
+        },
+        "same_inputs": true,
+        "rows_matched_by": "identity",
+        "rows_matched_on": [
+          "policy_id"
+        ],
+        "missing": [],
+        "lines": [
+          {
+            "node_id": "ceded_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "death_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "entry_date",
+            "max_abs": null,
+            "max_ratio": null,
+            "scale": 0.0,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": "date"
+          },
+          {
+            "node_id": "net_cashflow@2",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [
+              "net_cashflow@1"
+            ],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "post_reform@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "prior_period_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 2.0,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "select_loaded_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 2.0,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "simulated_shock@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "sum_assured",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "total_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 2.0,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "unceded_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          }
+        ],
+        "verdict": "agree"
+      },
+      "findings": []
+    },
+    {
+      "id": "compare-report-cites-another-export-of-one-model",
+      "record_kind": "compare-report",
+      "record": {
+        "report_version": "gaspatchio-graph-compare/v0-preview.2",
+        "artifact_fingerprint": "sha256:20882cdb67b31e9dd707eaa518b99cde4c5a51499bcc18dbd049dcf9e3e675ed",
+        "document_digest": "sha256:9ba887db9d9ef066d8d8ed3c00860fdfe0b6c419712f989aef10a6d4ed7a5cd2",
+        "scope": "final-schema",
+        "before": {
+          "producer": "polars",
+          "inputs_digest": "sha256:98383cfc454af25556dffd8182c4e5e543d74036c35b0c389a944463e5f1c0c7",
+          "versions": {}
+        },
+        "after": {
+          "producer": "polars",
+          "inputs_digest": "sha256:98383cfc454af25556dffd8182c4e5e543d74036c35b0c389a944463e5f1c0c7",
+          "versions": {}
+        },
+        "same_inputs": true,
+        "rows_matched_by": "identity",
+        "rows_matched_on": [
+          "policy_id"
+        ],
+        "missing": [],
+        "lines": [
+          {
+            "node_id": "ceded_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "death_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "entry_date",
+            "max_abs": null,
+            "max_ratio": null,
+            "scale": 0.0,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": "date"
+          },
+          {
+            "node_id": "net_cashflow@2",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [
+              "net_cashflow@1"
+            ],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "post_reform@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "prior_period_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 2.0,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "select_loaded_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 2.0,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "simulated_shock@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "sum_assured",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "total_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 2.0,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          },
+          {
+            "node_id": "unceded_claims@1",
+            "max_abs": 0.0,
+            "max_ratio": 0.0,
+            "scale": 1.5,
+            "reads_absent": [],
+            "verdict": "agree",
+            "lower_bound": null,
+            "strict_floor": true,
+            "exact_class": null
+          }
+        ],
+        "verdict": "agree"
+      },
+      "findings": [
+        "document_digest"
+      ]
+    }
+  ]
+}

@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import pytest
+from _pytest._code.code import TerminalRepr
 
 from .formatting import format_suggestion_for_report, get_linting_suggestion
 from .parse import GaspatchioDocstringParser
@@ -24,6 +25,9 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
+    from _pytest._code.code import TracebackStyle
+    from _pytest._io import TerminalWriter
+
     from .models import DocstringCodeExample, GaspatchioDocstring
 
 __all__ = [
@@ -32,31 +36,36 @@ __all__ = [
     "pytest_configure",
 ]
 
+# One line of a failure report: plain text, or text with the terminal markup
+# (colour, bold) to print it in.
+type _ReportLine = str | tuple[str, dict[str, bool]]
 
-def pytest_generate_tests(metafunc) -> None:  # type: ignore[no-untyped-def]
+
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """Generate tests for docstring examples."""
     if "docstring_example_fixture" in metafunc.fixturenames:
         # Find all examples in the project by collecting from files
-        examples = []
+        examples: list[DocstringCodeExample] = []
         # Simplified approach - real implementation would collect
         # from project files. Empty list avoids test failures.
         metafunc.parametrize(
             "docstring_example_fixture",
             examples,
-            ids=lambda ex: f"{ex.object_context}-ex{ex.example_index}"
-            if examples
-            else [],
+            ids=lambda ex: (
+                f"{ex.object_context}-ex{ex.example_index}" if examples else []
+            ),
         )
 
 
 @pytest.fixture
-def eval_example_fixture(request) -> GaspatchioEvalExample:  # type: ignore[no-untyped-def]
+def eval_example_fixture(request: pytest.FixtureRequest) -> GaspatchioEvalExample:
     """Fixture providing a GaspatchioEvalExample for validating examples."""
-    update_mode = request.config.getoption("gp_update_examples", default=False)
+    # A store_true flag, so a bool whenever this plugin declared it.
+    update_mode = bool(request.config.getoption("gp_update_examples", default=False))
     return GaspatchioEvalExample(update_examples_mode=update_mode)
 
 
-def pytest_addoption(parser) -> None:  # type: ignore[no-untyped-def]
+def pytest_addoption(parser: pytest.Parser) -> None:
     """Add custom pytest command line options for docstring validation."""
     group = parser.getgroup("gaspatchio_docstring_examples")
     group.addoption(
@@ -94,7 +103,7 @@ def pytest_addoption(parser) -> None:  # type: ignore[no-untyped-def]
     )
 
 
-def pytest_configure(config) -> None:  # type: ignore[no-untyped-def]
+def pytest_configure(config: pytest.Config) -> None:
     """Configure pytest with custom markers for docstring validation."""
     config.addinivalue_line(
         "markers",
@@ -107,7 +116,7 @@ def pytest_configure(config) -> None:  # type: ignore[no-untyped-def]
 
 
 def pytest_collect_file(
-    parent,  # type: ignore[no-untyped-def]
+    parent: pytest.Collector,
     file_path: Path,
 ) -> DocstringExampleFile | None:
     """Collect docstring examples from Python files matching patterns."""
@@ -151,7 +160,7 @@ def pytest_collect_file(
 class DocstringExampleFile(pytest.File):
     """Pytest file collector for docstring examples."""
 
-    def collect(  # type: ignore[no-untyped-def]
+    def collect(
         self,
     ) -> Generator[pytest.Item, None, None]:
         """Collect test items from docstrings in this file."""
@@ -180,8 +189,8 @@ class DocstringExampleItem(pytest.Item):
     def __init__(
         self,
         *,
-        name,  # type: ignore[no-untyped-def]
-        parent,  # type: ignore[no-untyped-def]
+        name: str,
+        parent: pytest.Collector,
         example: DocstringCodeExample,
         **kwargs: Any,  # noqa: ANN401
     ) -> None:
@@ -247,13 +256,12 @@ class DocstringExampleItem(pytest.Item):
 
     def repr_failure(  # noqa: C901, PLR0912, PLR0915
         self,
-        excinfo,  # type: ignore[no-untyped-def]
-        style=None,  # type: ignore[no-untyped-def]
-    ) -> DocstringFailureTerminalRepr | None:
+        excinfo: pytest.ExceptionInfo[BaseException],
+        style: TracebackStyle | None = None,
+    ) -> str | TerminalRepr:
         """Format failure output when runtest() raises an exception."""
-        if isinstance(excinfo.value, DocstringLintError):
-            exc = cast("DocstringLintError", excinfo.value)
-
+        exc = excinfo.value
+        if isinstance(exc, DocstringLintError):
             item_name = exc.item_name
             extracted_ruff_issues = exc.all_ruff_issues
             snippet_text = exc.snippet
@@ -261,6 +269,9 @@ class DocstringExampleItem(pytest.Item):
             # Determine primary error code and line number
             primary_error_code = ""
             error_line_number_in_snippet = -1
+            # The report below has a line for an error that carries no issue,
+            # so the suggestion lookup must not depend on there being one.
+            first_issue_detail = ""
 
             if extracted_ruff_issues:
                 first_issue_detail = extracted_ruff_issues[0]
@@ -282,7 +293,7 @@ class DocstringExampleItem(pytest.Item):
 
             file_path = str(self.path)
 
-            report = [
+            report: list[_ReportLine] = [
                 "LINTING ERROR in Docstring Example",
                 f"  File:       {file_path}",
                 f"  Example ID:   {item_name}",
@@ -346,9 +357,7 @@ class DocstringExampleItem(pytest.Item):
 
             return DocstringFailureTerminalRepr(report)
 
-        if isinstance(excinfo.value, DocstringStyleError):
-            exc = cast("DocstringStyleError", excinfo.value)
-
+        if isinstance(exc, DocstringStyleError):
             item_name = exc.item_name
             style_violations = exc.all_violations
             snippet_text = exc.snippet
@@ -387,9 +396,7 @@ class DocstringExampleItem(pytest.Item):
 
             return DocstringFailureTerminalRepr(report)
 
-        if isinstance(excinfo.value, DocstringRuntimeError):
-            exc = cast("DocstringRuntimeError", excinfo.value)
-
+        if isinstance(exc, DocstringRuntimeError):
             item_name = exc.item_name
             runtime_errors = exc.all_errors
             snippet_text = exc.snippet
@@ -430,7 +437,7 @@ class DocstringExampleItem(pytest.Item):
 
         return super().repr_failure(excinfo, style)
 
-    def reportinfo(  # type: ignore[no-untyped-def]
+    def reportinfo(
         self,
     ) -> tuple[Any, None, str]:
         """Return tuple (fspath, lineno, message) for test reports."""
@@ -447,8 +454,8 @@ class DocstringStructureItem(pytest.Item):
     def __init__(
         self,
         *,
-        name,  # type: ignore[no-untyped-def]
-        parent,  # type: ignore[no-untyped-def]
+        name: str,
+        parent: pytest.Collector,
         docstring_obj: GaspatchioDocstring,
         **kwargs: Any,  # noqa: ANN401
     ) -> None:
@@ -469,15 +476,15 @@ class DocstringStructureItem(pytest.Item):
                 raw_docstring=self.docstring_obj.raw_docstring,
             )
 
-    def repr_failure(  # type: ignore[no-untyped-def]
+    def repr_failure(
         self,
-        excinfo,  # type: ignore[no-untyped-def]
-        style=None,  # type: ignore[no-untyped-def]
-    ) -> DocstringFailureTerminalRepr | None:
+        excinfo: pytest.ExceptionInfo[BaseException],
+        style: TracebackStyle | None = None,
+    ) -> str | TerminalRepr:
         """Format failure output when runtest() raises an exception."""
-        if isinstance(excinfo.value, DocstringStructureError):
-            exc = cast("DocstringStructureError", excinfo.value)
-            report = [
+        exc = excinfo.value
+        if isinstance(exc, DocstringStructureError):
+            report: list[_ReportLine] = [
                 "DOCSTRING STRUCTURE ERROR",
                 f"  File:        {exc.file_path}",
                 f"  Object:      {exc.object_path}",
@@ -497,7 +504,7 @@ class DocstringStructureItem(pytest.Item):
             return DocstringFailureTerminalRepr(report)
         return super().repr_failure(excinfo, style)
 
-    def reportinfo(  # type: ignore[no-untyped-def]
+    def reportinfo(
         self,
     ) -> tuple[Any, int, str]:
         """Return tuple (fspath, lineno, message) for test reports."""
@@ -559,14 +566,14 @@ class DocstringRuntimeError(Exception):
         super().__init__(primary_error)
 
 
-class DocstringFailureTerminalRepr:
+class DocstringFailureTerminalRepr(TerminalRepr):
     """Terminal representation for docstring test failures."""
 
-    def __init__(self, lines: list[Any]) -> None:
+    def __init__(self, lines: list[_ReportLine]) -> None:
         """Initialize with list of lines (str or tuple[str, dict])."""
         self.lines = lines
 
-    def toterminal(self, tw) -> None:  # type: ignore[no-untyped-def]
+    def toterminal(self, tw: TerminalWriter) -> None:
         """Output formatted lines to terminal writer."""
         tuple_length = 2
         for item in self.lines:

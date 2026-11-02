@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-03
 **Status:** Design proposal (v2)
-**Authors:** Matt Wright, Claude
+**Author:** Matt Wright
 **Branch:** `gsp-92-rollforward-redesign`
 **Drives:** GSP-92 (cross-state arithmetic with mid-period column derivation)
 **Aligns with:** GSP-95 (semantic IR + Polars backend boundary; Phases 1–3 shipped on `develop`)

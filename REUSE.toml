@@ -11,7 +11,7 @@ SPDX-PackageDownloadLocation = "https://github.com/gaspatchio/gaspatchio"
 [[annotations]]
 path = [
   "LICENSE",
-  "NOTICE",
+  "**NOTICE",
   "**py.typed",
   "**.python-version",
   "**.md",
@@ -60,3 +60,71 @@ path = [
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (c) 2022 lifelib Developers"
 SPDX-License-Identifier = "MIT"
+
+# The artifact specification's prose is licensed as a specification, not as
+# code: CC-BY-4.0, stated in the document's own §2. This override keeps the
+# machine-readable metadata saying the same thing the prose says. The schema
+# files the specification refers to stay Apache-2.0 under the blanket above.
+[[annotations]]
+path = ["spec/graph-artifact/**.md"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Opio Inc."
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# JSON has no comment syntax, so the published schema document states its
+# licence in a "$comment" member. That is what §2 of the artifact specification
+# says every schema file carries, and it is readable, but it is not a form the
+# REUSE parser can lift an SPDX expression out of: the JSON string's closing
+# quote and comma come along with the identifier. This override says the same
+# thing in machine-readable form, and tells the parser to take it from here
+# rather than from the file — the same shape as the block above.
+[[annotations]]
+path = ["bindings/python/gaspatchio/schemas/**.json"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Opio Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+# The viewer carries three font faces, copied from the documentation site so
+# the exported HTML page can inline them and ask the network for nothing. They
+# are the site's identity, which the viewer shares, not this repository's
+# work: iA Writer Quattro S is iA Inc.'s, Zed Plex Mono is Zed Industries'
+# build of IBM's Plex Mono.
+# Both are SIL Open Font License 1.1, whose text is carried in LICENSES/ beside
+# the Apache and MIT ones. A .woff2 is a binary with nowhere to put a header,
+# so the annotation says here what the file cannot say itself.
+[[annotations]]
+path = ["viewer/fonts/iAWriterQuattroS-*.woff2"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 2018 iA Inc., with Reserved Font Name iA Writer"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["viewer/fonts/ZedPlexMono-*.woff2"]
+precedence = "override"
+SPDX-FileCopyrightText = [
+  "Copyright (c) 2017 IBM Corp., with Reserved Font Name Plex",
+  "Copyright (c) 2022 Zed Industries, Inc.",
+]
+SPDX-License-Identifier = "OFL-1.1"
+
+# The conformance reader is shipped as a zipapp: a binary archive, built from
+# sources that carry their own headers, with no comment syntax of its own.
+[[annotations]]
+path = ["bindings/python/gaspatchio/schemas/conformance/reader.pyz"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Opio Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+# The notices of the Rust crates compiled into the core's extension, which
+# scripts/rust_notices.py writes from Cargo.lock and the core's wheels and
+# sdist carry. The file is those crates' licence texts and copyright notices,
+# with an index, so it is said to hold material under each licence they are
+# taken under: the core's own expression, in bindings/python/pyproject.toml,
+# which tests/test_distributions.py holds to what the file names. Override,
+# because the texts it carries are other people's files and some carry SPDX
+# tags of their own, which are not claims about this one.
+[[annotations]]
+path = ["bindings/python/third-party-notices.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Opio Inc."
+SPDX-License-Identifier = "Apache-2.0 AND BSD-2-Clause AND BSD-2-Clause-Views AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib"

@@ -4,10 +4,9 @@
 
 """Smoke test: a model with mixed scalar/list dispatch produces identical output in debug and optimize modes.
 
-After Phase 2's shape SOT, mode parity is invariant by construction — the
-single schema-based source of shape truth means debug and optimize cannot
-disagree. This test pins that property end-to-end against a representative
-mixed model.
+Mode parity is invariant by construction: the single schema-based source of
+shape truth means debug and optimize cannot disagree. This test pins that
+property end-to-end against a representative mixed model.
 """
 
 from __future__ import annotations

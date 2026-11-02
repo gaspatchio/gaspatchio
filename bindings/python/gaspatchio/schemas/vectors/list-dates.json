@@ -1,0 +1,169 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "List-shaped date comparisons",
+  "cases": [
+    {
+      "id": "comparison-list-date-scalar",
+      "covers": [
+        "lt"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2020-01-01",
+              "2021-06-01",
+              "2021-07-01"
+            ],
+            [
+              "2024-02-29"
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "date",
+          "values": [
+            "2021-06-01",
+            "2024-02-29"
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "lt",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-list-date-literal",
+      "covers": [
+        "lt"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2020-12-31",
+              "2021-01-01",
+              "2021-01-02"
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "lt",
+        "left": {
+          "op": "lit",
+          "date": "2021-01-01"
+        },
+        "right": {
+          "op": "col",
+          "name": "a"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-list-date-runs",
+      "covers": [
+        "eq"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2020-01-01",
+              null,
+              "2021-01-01"
+            ]
+          ]
+        },
+        "b": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2020-01-01",
+              "2020-01-01",
+              "2021-01-02"
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "eq",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            null,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    }
+  ]
+}

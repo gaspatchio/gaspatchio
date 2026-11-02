@@ -1,0 +1,130 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Import layering contracts — all nine boundaries enforced.
+#
+# CI runs the complete configuration, and no type-only or indirect import
+# exemption is used.
+#
+# Run it by hand at any time (ephemeral, installs nothing into the project):
+#
+#     cd bindings/python
+#     PYTHONPATH=. uvx --from import-linter==2.15 lint-imports \
+#         --config .importlinter
+#
+# All nine are kept today; .github/RATCHETS.md prints the expected output.
+#
+# A broken contract doubles as the worklist for the change that makes it true,
+# but read the output before sizing that work: what it lists under a contract
+# are illegal ROUTES, not edges. Only a route printed as a single line is one
+# import you can delete; a multi-line route is a chain that survives until
+# some link in it goes, and deleting the direct edge a comment happens to name
+# leaves the rest of them standing.
+
+[importlinter]
+root_package = gaspatchio
+
+# Shared engine types must remain independent of the authoring/runtime stack,
+# including indirect imports. Neutral recipe/hash helpers live in _canonical;
+# the values/content encoder in _identity may depend on Polars and graph dtypes.
+[importlinter:contract:engine-contracts-independent]
+name = Engine protocol and reports do not depend on model execution
+type = forbidden
+source_modules =
+    gaspatchio.engines.protocol
+    gaspatchio.engines.report
+forbidden_modules =
+    gaspatchio.frame
+    gaspatchio.column
+    gaspatchio.accessors
+    gaspatchio.scenarios
+
+[importlinter:contract:shared-metadata-independent]
+name = Source and schema metadata do not depend on their consumers
+type = forbidden
+source_modules =
+    gaspatchio._source
+    gaspatchio._shape
+forbidden_modules =
+    gaspatchio.frame
+    gaspatchio.column
+    gaspatchio.accessors
+    gaspatchio.errors
+    gaspatchio.scenarios
+
+[importlinter:contract:graph-siblings-acyclic]
+name = Graph modules have no sibling import cycles
+type = acyclic_siblings
+ancestors =
+    gaspatchio.frame.graph
+
+# Graph inspection consumes a structural view of frame state. Model execution
+# belongs to scenarios; graph code never imports diagnostic authoring.
+[importlinter:contract:graph-does-not-read-errors]
+name = The calc graph does not import the error surface
+type = forbidden
+source_modules =
+    gaspatchio.frame.graph
+forbidden_modules =
+    gaspatchio.errors
+
+# Lowering turns a described operation into an engine expression. It is the
+# floor of that stack: the accessors and the column proxies call down into it
+# and it calls nothing back up. This is the destination the expression census
+# in tests/graph/census.py is burning down towards, so it turns on with the
+# lowering consolidation, not before.
+[importlinter:contract:lowering-is-the-floor]
+name = Lowering sits below the accessors and proxies that call it
+type = forbidden
+source_modules =
+    gaspatchio.frame.lowering
+forbidden_modules =
+    gaspatchio.accessors
+    gaspatchio.column
+
+# A former contract named the retired polars_backend package and kept the full
+# configuration from running; it was removed on 2026-09-23. The explicit engine
+# contract replaces it, and does not claim that the entire frame/column graph
+# is layered.
+
+# The narrower half of the same claim, aimed at the split itself: once the
+# calculation log, the attribution windows and the accessor seam are separate
+# modules beside frame/base.py, they must not grow import cycles between each
+# other. Written now so the split lands against a stated shape rather than
+# inventing one afterwards.
+[importlinter:contract:frame-siblings-acyclic]
+name = frame's own modules do not import each other in cycles
+type = acyclic_siblings
+ancestors =
+    gaspatchio.frame
+
+[importlinter:contract:polars-primitives-independent]
+name = Polars primitives do not depend on model authoring
+type = forbidden
+source_modules =
+    gaspatchio.frame.lowering._polars
+    gaspatchio.frame.lowering._excel
+forbidden_modules =
+    gaspatchio._authoring
+    gaspatchio.column
+    gaspatchio.accessors
+    gaspatchio.errors
+
+[importlinter:contract:lowering-siblings-acyclic]
+name = Lowering modules have no sibling import cycles
+type = acyclic_siblings
+ancestors =
+    gaspatchio.frame.lowering
+
+[importlinter:contract:call-recognition-independent]
+name = Call recognition does not depend on an engine or authoring
+type = forbidden
+source_modules =
+    gaspatchio._semantic.calls
+forbidden_modules =
+    gaspatchio.frame.lowering
+    gaspatchio._authoring
+    gaspatchio.accessors
+    gaspatchio.column
+    gaspatchio.errors

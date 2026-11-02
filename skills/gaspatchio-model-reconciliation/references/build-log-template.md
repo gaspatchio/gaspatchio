@@ -42,6 +42,7 @@ Include any Tier 2/3 diagnostic results (regression stats, PCA loadings, heatmap
 **Fix**: The exact code change (small snippet) + where it lives (file/function).
 
 **Result**: What moved numerically (old → new), and whether it now matches (include delta).
+Paste the `gspio diff before.audit.json after.audit.json` lines: the edited line `(self)`, what it moved `(inherited)`.
 
 Add `---` separators between fixes.
 
@@ -58,6 +59,8 @@ Use a small before/after table if useful.
 - Projection length and frequency
 - Output columns (rough)
 - Match-to-target summary (delta, tolerance)
+- The reconciled run's identity: `graph_fingerprint`, `formulas_fingerprint` and `book.digest` from its audit file, and the results file's `model.results.fingerprint`
+- `gspio verify <audit file> --model … --model-points … --assumptions … --results …`: exit status (0 is the only pass) and any line that was not `agrees`
 
 ---
 

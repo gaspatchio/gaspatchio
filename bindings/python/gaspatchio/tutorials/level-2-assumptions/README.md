@@ -20,9 +20,9 @@ from gaspatchio.assumptions import Table
 
 mort_table = Table(
     name="mortality",
-    source=mort_data,            # polars DataFrame or Path to parquet
-    dimensions={"age": "age"},   # {dimension_name: column_name_in_source}
-    value="qx",                  # column to return on lookup
+    source=mort_data,  # polars DataFrame or Path to parquet
+    dimensions={"age": "age"},  # {dimension_name: column_name_in_source}
+    value="qx",  # column to return on lookup
 )
 
 af.qx_annual = mort_table.lookup(age=af.attained_age)

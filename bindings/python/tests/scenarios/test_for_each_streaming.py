@@ -20,7 +20,9 @@ from gaspatchio.scenarios import (
     BatchSnapshot,
     PeriodQuantile,
     PeriodSum,
+    Quantile,
     Sum,
+    _batch,
     for_each_scenario,
 )
 
@@ -67,16 +69,15 @@ def test_in_memory_request_reaches_collect(
     af: ActuarialFrame, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A resolved 'in-memory' batch must collect in-memory, not degrade to auto (#4)."""
-    from gaspatchio.scenarios import _for_each
 
     seen: list[str | None] = []
-    orig = _for_each._collect_with_peak  # noqa: SLF001
+    orig = _batch._collect_with_peak  # noqa: SLF001
 
     def _spy(lazy: object, *, engine: str | None = None) -> object:
         seen.append(engine)
         return orig(lazy, engine=engine)
 
-    monkeypatch.setattr(_for_each, "_collect_with_peak", _spy)
+    monkeypatch.setattr(_batch, "_collect_with_peak", _spy)
     # A single scenario takes the single_scenario path -> winner_engine="in-memory".
     for_each_scenario(
         af,
@@ -141,6 +142,30 @@ def test_for_each_period_quantile_over_not_supported() -> None:
             model_fn=_product_model,
             aggregations=(PeriodQuantile("cf").alias("q").over("product"),),
         )
+
+
+def test_for_each_quantile_over_names_the_kind_and_a_kind_that_runs() -> None:
+    """A per-policy quantile under .over() is named as itself, with kinds that run.
+
+    It used to be reported as ``PeriodQuantile.over()`` and pointed at two
+    per-period kinds, which is a different aggregator and a different axis.
+    """
+    af = ActuarialFrame(
+        {"policy_id": [1, 2], "product": ["A", "B"], "value": [1.0, 2.0]}
+    )
+    with pytest.raises(NotImplementedError) as refused:
+        for_each_scenario(
+            af,
+            scenarios=["S0"],
+            model_fn=_product_model,
+            aggregations=(
+                Quantile("cf", levels=(0.5, 0.9)).alias("q").over("product"),
+            ),
+        )
+    message = str(refused.value)
+    assert message.startswith("Quantile.over() ('q')")
+    assert "Median, CTE or QuantileRank with .over()" in message
+    assert "PeriodQuantile" not in message
 
 
 def test_auto_search_probes_fold_and_count_honestly(af: ActuarialFrame) -> None:

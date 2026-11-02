@@ -78,9 +78,7 @@ def main() -> None:
 
     # --- OneTwelfth: EVERY period is exactly 1/12 -----------------------
     for t, yf in enumerate(otf_yf):
-        assert abs(yf - ONE_TWELFTH) < 1e-15, (
-            f"OneTwelfth period {t} = {yf} != 1/12"
-        )
+        assert abs(yf - ONE_TWELFTH) < 1e-15, f"OneTwelfth period {t} = {yf} != 1/12"
 
     # --- ActualActualISDA: matches the source-grounded hand calc --------
     # Period 0 spans Jan 31 -> Feb 29 2024 (29 actual days). Same calendar

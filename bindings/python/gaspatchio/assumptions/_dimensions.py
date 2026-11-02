@@ -2,9 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Dimension implementations for the new assumption table API.
-"""
+"""Dimension implementations for the new assumption table API."""
 
 from __future__ import annotations
 
@@ -15,38 +13,41 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 from loguru import logger
 
+from gaspatchio._warning import warn
+
 if TYPE_CHECKING:
     from ._strategies import FillStrategy, OverflowStrategy
 
 
 class Dimension(ABC):
-    """Base class for all dimension types"""
+    """Base class for all dimension types."""
 
     @abstractmethod
     def process(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Process the dimension on the given DataFrame"""
+        """Process the dimension on the given DataFrame."""
 
     @abstractmethod
     def validate(self, df: pl.DataFrame) -> None:
-        """Validate this dimension can be applied to the DataFrame"""
+        """Validate this dimension can be applied to the DataFrame."""
 
 
 @dataclass
 class DataDimension(Dimension):
-    """Map a data column directly to a dimension"""
+    """Map a data column directly to a dimension."""
 
     column: str
     rename_to: str | None = None
     dtype: pl.DataType | None = None  # Force specific dtype
 
     def validate(self, df: pl.DataFrame) -> None:
-        """Validate this dimension can be applied to the DataFrame"""
+        """Validate this dimension can be applied to the DataFrame."""
         if self.column not in df.columns:
             available_cols = ", ".join(df.columns)
-            raise ValueError(
+            msg = (
                 f"Column '{self.column}' not found in DataFrame.\n"
-                f"Available columns: {available_cols}",
+                f"Available columns: {available_cols}"
             )
+            raise ValueError(msg)
 
         if self.dtype is not None:
             current_dtype = df[self.column].dtype
@@ -56,11 +57,53 @@ class DataDimension(Dimension):
                     f"but {self.dtype} was specified. Will attempt conversion.",
                 )
 
+    def _refuse_a_key_that_is_not_whole(self, df: pl.DataFrame) -> None:
+        """Refuse a key an integer ``dtype`` would truncate, or a flag read as 0/1.
+
+        Raises:
+            ValueError: The column holds a value that is not a whole number,
+                or flags, under a declared integer ``dtype``.
+
+        """
+        source = df[self.column]
+        if source.dtype == pl.Boolean:
+            msg = (
+                f"DataDimension('{self.column}', dtype={self.dtype}) declares "
+                f"whole-number keys, and '{self.column}' holds flags (True/False), "
+                "which are not numbers. Key the table by the flag as it is, or "
+                "map it to the numbers you mean before building the table."
+            )
+            raise ValueError(msg)
+        if source.dtype == pl.String:
+            source = source.str.strip_chars().cast(pl.Float64, strict=False)
+        if not (source.dtype.is_float() or source.dtype.is_decimal()):
+            return
+        values = source.cast(pl.Float64)
+        not_whole = values.is_not_null() & (values != values.floor())
+        if not not_whole.any():
+            return
+        row = int(not_whole.arg_max() or 0)
+        held = df[self.column][row]
+        msg = (
+            f"DataDimension('{self.column}', dtype={self.dtype}) declares "
+            f"whole-number keys, and '{self.column}' holds {held!r} at source row "
+            f"{row}, which is not one; the cast would cut it to {int(values[row])} "
+            "and a lookup there would answer this row's value. Keep the key as "
+            "it is (leave dtype out), or round it in the source the way you mean."
+        )
+        raise ValueError(msg)
+
     def process(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Process the dimension on the given DataFrame"""
+        """Process the dimension on the given DataFrame."""
         self.validate(df)
 
         result = df
+
+        # An integer key is read only from whole numbers: a cast would cut
+        # 40.9 to 40 and answer a lookup at 40 with the 40.9 row's rate.
+        declares_integer = getattr(self.dtype, "is_integer", None)
+        if callable(declares_integer) and declares_integer():
+            self._refuse_a_key_that_is_not_whole(result)
 
         # Apply dtype conversion if specified
         if self.dtype is not None:
@@ -75,10 +118,11 @@ class DataDimension(Dimension):
                 else:
                     result = result.with_columns(pl.col(self.column).cast(self.dtype))
                 logger.debug(f"Converted column '{self.column}' to {self.dtype}")
-            except Exception as e:
-                raise ValueError(
-                    f"Failed to convert column '{self.column}' to {self.dtype}: {e}",
-                )
+            # Polars refuses a value it cannot cast with a PolarsError, and a
+            # dtype that is not one (the string "Int64", say) with a TypeError.
+            except (pl.exceptions.PolarsError, TypeError) as e:
+                msg = f"Failed to convert column '{self.column}' to {self.dtype}: {e}"
+                raise ValueError(msg) from e
 
         # Apply rename if specified
         if self.rename_to is not None and self.rename_to != self.column:
@@ -90,7 +134,7 @@ class DataDimension(Dimension):
 
 @dataclass
 class MeltDimension(Dimension):
-    """Melt wide columns into a long format dimension"""
+    """Melt wide columns into a long format dimension."""
 
     columns: list[str]
     name: str = "variable"
@@ -98,24 +142,26 @@ class MeltDimension(Dimension):
     fill: FillStrategy | None = None
 
     def validate(self, df: pl.DataFrame) -> None:
-        """Validate this dimension can be applied to the DataFrame"""
+        """Validate this dimension can be applied to the DataFrame."""
         missing_columns = [col for col in self.columns if col not in df.columns]
         if missing_columns:
             available_cols = ", ".join(df.columns)
-            raise ValueError(
+            msg = (
                 f"Columns {missing_columns} not found in DataFrame.\n"
-                f"Available columns: {available_cols}",
+                f"Available columns: {available_cols}"
             )
+            raise ValueError(msg)
 
         # Check for naming conflicts
         if self.name in df.columns and self.name not in self.columns:
-            raise ValueError(
+            msg = (
                 f"Dimension name '{self.name}' conflicts with existing column. "
-                f"Choose a different name or include it in columns to melt.",
+                f"Choose a different name or include it in columns to melt."
             )
+            raise ValueError(msg)
 
     def process(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Process the dimension on the given DataFrame"""
+        """Process the dimension on the given DataFrame."""
         self.validate(df)
 
         # Get other columns (not being melted)
@@ -145,9 +191,7 @@ class MeltDimension(Dimension):
             # null in one group is never filled from a neighbouring group's
             # value. The strategy applies a window (`.over(group_columns)`)
             # expression; passing no group columns fills globally.
-            valid_group_columns = [
-                col for col in other_columns if isinstance(col, str)
-            ]
+            valid_group_columns = [col for col in other_columns if isinstance(col, str)]
             result = self.fill.apply(result, group_columns=valid_group_columns)
             logger.debug(f"Applied fill strategy to dimension '{self.name}'")
 
@@ -156,13 +200,13 @@ class MeltDimension(Dimension):
 
 @dataclass
 class CategoricalDimension(Dimension):
-    """Add a constant categorical value as a dimension"""
+    """Add a constant categorical value as a dimension."""
 
     value: Any
     name: str | None = None  # Auto-generated if not provided
 
-    def __post_init__(self):
-        """Auto-generate name if not provided"""
+    def __post_init__(self) -> None:
+        """Auto-generate name if not provided."""
         if self.name is None:
             # Generate a name based on the value
             if isinstance(self.value, str):
@@ -176,16 +220,23 @@ class CategoricalDimension(Dimension):
                 self.name = f"category_{self.value}"
 
     def validate(self, df: pl.DataFrame) -> None:
-        """Validate this dimension can be applied to the DataFrame"""
+        """Validate this dimension can be applied to the DataFrame."""
         if self.name in df.columns:
-            raise ValueError(
+            msg = (
                 f"Column '{self.name}' already exists in DataFrame. "
-                f"Choose a different name for the categorical dimension.",
+                f"Choose a different name for the categorical dimension."
             )
+            raise ValueError(msg)
 
     def process(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Process the dimension on the given DataFrame"""
+        """Process the dimension on the given DataFrame."""
         self.validate(df)
+
+        # Construction always names the dimension; only setting the name back
+        # to None afterwards leaves it without one.
+        if self.name is None:
+            msg = "CategoricalDimension has no name: give it the column name to add"
+            raise TypeError(msg)
 
         # Add the categorical column
         result = df.with_columns(pl.lit(self.value).alias(self.name))
@@ -199,17 +250,18 @@ class CategoricalDimension(Dimension):
 
 @dataclass
 class ComputedDimension(Dimension):
-    """Compute a dimension from existing columns"""
+    """Compute a dimension from existing columns."""
 
     expression: pl.Expr
     name: str
 
     def validate(self, df: pl.DataFrame) -> None:
-        """Validate this dimension can be applied to the DataFrame"""
+        """Validate this dimension can be applied to the DataFrame."""
         if self.name in df.columns:
-            logger.warning(
+            warn(
                 f"Column '{self.name}' already exists and will be overwritten "
-                f"by computed dimension.",
+                f"by the computed dimension of that name. Give the dimension "
+                f"another name to keep the column.",
             )
 
         # Try to validate the expression by running it on a sample
@@ -218,12 +270,11 @@ class ComputedDimension(Dimension):
             sample = df.head(1)
             sample.with_columns(self.expression.alias("__test__"))
         except Exception as e:
-            raise ValueError(
-                f"Invalid expression for computed dimension '{self.name}': {e}",
-            )
+            msg = f"Invalid expression for computed dimension '{self.name}': {e}"
+            raise ValueError(msg) from e
 
     def process(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Process the dimension on the given DataFrame"""
+        """Process the dimension on the given DataFrame."""
         self.validate(df)
 
         # Apply the computed expression

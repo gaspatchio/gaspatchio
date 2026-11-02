@@ -33,6 +33,10 @@ pub fn irr_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
 /// - A row has all non-null values that do not contain both signs
 /// - Non-convergence within iteration limits
 pub fn irr(inputs: &[Series], kwargs: &IrrKwargs) -> PolarsResult<Series> {
+    // The values and the guess are walked in step, so a one-row operand (a
+    // literal the in-memory engine hands over unbroadcast) is repeated for
+    // every policy first, as the streaming engine reads it.
+    let inputs = crate::polars_functions::slices::rows_per_policy(inputs, true)?;
     let values_series = &inputs[0];
     let maybe_guess_series = if inputs.len() > 1 {
         Some(&inputs[1])

@@ -1,0 +1,184 @@
+[project]
+name = "gaspatchio-jax"
+version = "0.1.0rc1"
+description = "A JAX engine over the gaspatchio graph artifact's executable profile"
+readme = "README.md"
+authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
+requires-python = ">=3.12"
+license = "Apache-2.0"
+# Beta, not Alpha: CPU agreement with the Polars engine is a contract the
+# release notes make, held on the published vectors and both shipped tutorial
+# models, and the engine is qualified on a T4. Not Production/Stable either: it
+# is a 0.1.0 preview outside 1.0's promise, over an engine protocol and an
+# artifact schema that may still move. The Python versions are the ones its
+# suite runs on; the operating systems, the two its lock resolves for. No
+# licence classifier, for the reason bindings/python/pyproject.toml gives.
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Topic :: Office/Business :: Financial",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+# PEP 639 takes these from inside this directory, so the text is a copy of the
+# repository's LICENSES/Apache-2.0.txt; bindings/python/tests/test_distributions.py
+# holds the two to each other byte for byte.
+license-files = ["LICENSES/Apache-2.0.txt"]
+# The core first, pinned exactly: the engine is qualified against one core
+# release and reads that release's format module, so `gaspatchio[jax]` and a
+# bare `pip install gaspatchio-jax` both land a matched pair. The core's own
+# runtime dependencies arrive through its metadata, not as a copy kept here;
+# the rest are what the engine imports itself. The pin moves with the core's
+# version, and bindings/python/tests/test_distributions.py fails if they part.
+dependencies = [
+    "gaspatchio==1.0.0rc1",
+    "jax>=0.4.38",
+    "jaxlib>=0.4.38",
+    "numpy>=1.24.0,<2.6",
+    "polars==1.42.1",
+    # The 64-bit index runtime, and not a duplicate of the line above: polars
+    # ships its engine as a separate wheel and the bare requirement resolves
+    # the 32-bit one. The core's own environment runs rt64, so an engine that
+    # took rt32 would be agreeing with a Polars that is not the Polars the
+    # reference side runs -- a difference in index width, under the frames
+    # both doors hand back.
+    "polars[rt64]==1.42.1",
+    "pyarrow>=16.0.0",
+    "jsonschema>=4.26.0",
+    "platformdirs>=4.0",
+]
+
+[project.urls]
+Homepage = "https://gaspatchio.dev/"
+Documentation = "https://gaspatchio.dev/"
+Repository = "https://github.com/gaspatchio/gaspatchio"
+Issues = "https://github.com/gaspatchio/gaspatchio/issues"
+
+[dependency-groups]
+dev = ["pytest>=8.3.4", "ruff==0.16.3", "mypy>=1.15.0", "pyright>=1.1.400", "psutil>=6"]
+
+[build-system]
+# 1.27 is the first hatchling to write PEP 639 metadata: License-Expression and
+# a License-File for each text (1.26 writes a free-text License: and neither).
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gaspatchio_jax"]
+
+# The package, its README and its licence text. The suite, the benchmarks and
+# the measured ledgers stay in the repository: they assert this checkout's
+# layout (the venv, the core wheel beside it, the LFS-held books under tests/)
+# and cannot run from an unpacked sdist, and an sdist taken from a checkout
+# without LFS would carry pointer files where the books should be.
+[tool.hatch.build.targets.sdist]
+include = ["src/gaspatchio_jax", "README.md", "LICENSES/Apache-2.0.txt"]
+
+# The core pin above names a version that is on the index only from its own
+# release tag, and the lock has to resolve it before then. So the lock resolves
+# `gaspatchio` from the core in this repository, the way the core's lock
+# resolves this engine (bindings/python/pyproject.toml). uv alone reads this
+# table: the built wheel still says gaspatchio==<version> to every installer.
+#
+# Editable, because the core's lock reaches this directory through its jax
+# extra and meets its own root project again at the far end; uv refuses two
+# references to one directory that disagree about being editable. The flag
+# changes nothing in practice: the supported route, bootstrap.sh, never
+# installs the core from this source (see [tool.uv] below).
+[tool.uv.sources]
+gaspatchio = { path = "../../bindings/python", editable = true }
+
+[tool.uv]
+# The core arrives here as a prebuilt wheel. bootstrap.sh runs
+# `uv sync --locked --no-install-package gaspatchio` and then installs the
+# wheel with --no-deps: a measurement taken against a swapped build is a
+# measurement of something else, and CI builds the core once rather than once
+# per engine job. bootstrap.sh is the supported route, and this setting is a
+# guard beside it, not a replacement. Measured with uv 0.12.1 and 0.12.19, it
+# makes `uv sync` and `uv run` here refuse by name rather than build the core.
+# It does not reach uv's pip interface, which builds a first-party or editable
+# source it is asked for directly: `uv pip install -e ../../bindings/python`
+# still compiles it. Locking needs no build: uv reads the core's static
+# metadata.
+no-build-package = ["gaspatchio"]
+# Two rows, deliberately: this laptop is darwin x86_64, where 0.4.38 is the
+# last jax with a wheel, and the lane is linux, where the current release is
+# what a reader would install. A lock that resolved only one of the two would
+# be a lock for one of the two machines this engine is measured on. The darwin
+# row stops below Python 3.14 because jaxlib 0.4.38's darwin x86_64 wheels are
+# cp310 to cp313 and there is no later one: requiring that platform on 3.14+
+# asks for a wheel that does not exist, and uv refuses the lock.
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.14'",
+    "sys_platform == 'linux'",
+]
+
+# The three tables below are bindings/python/pyproject.toml's, copied rather
+# than referenced: the engine's zero is only comparable with the core's
+# ceilings if both are measured under one rule set, and there is no way to
+# share a table across two projects with two lockfiles.
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
+extend-ignore = [
+    "D203",
+    "D212",   # allow either one-line or two-line docstring summaries
+    "D213",   # allow either one-line or two-line docstring summaries
+    "ANN001", # sometimes self/cls isn't annotated
+    "COM812", # conflicts with formatter
+    "D413",   # conflicts with docstring-code-format: the fix adds a blank line
+              # after a final docstring section that the formatter then strips —
+              # an infinite fix/format oscillation. The formatter wins.
+]
+
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = 'SPDX-FileCopyrightText: \d{4} Opio Inc\.'
+
+[tool.ruff.lint.per-file-ignores]
+# The benchmark module is a test module that happens to live beside the
+# suite rather than in it, and it is measured under the same rules.
+"{tests,bench}/**/*.py" = [
+    "S101",    # asserts are ok in tests
+    "ANN201",  # test functions don't need return type annotations
+    "PLR2004", # magic values are ok in tests
+    "D101",    # test classes are descriptive by name
+    "D102",    # test methods are descriptive by name
+    "D103",    # test helper functions are descriptive by name
+    "PLC0415", # per-test local imports are deliberate (fixture isolation, optional deps)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gaspatchio_jax", "gaspatchio"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+plugins = []
+
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+exclude = ["**/node_modules", "**/__pycache__", "**/.*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",
+]
+# The benchmark is behind its marker *by default*, not only when somebody
+# remembers to say so. It takes minutes, it writes a file, and a suite that
+# ran it would be a suite nobody runs. `-m benchmark` on the command line
+# wins over this, which is how the scaling report is taken.
+addopts = ["-m", "not benchmark"]

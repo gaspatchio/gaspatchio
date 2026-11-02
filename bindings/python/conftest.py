@@ -15,6 +15,8 @@ This guard scans the project at collection time. If pointer files are present:
   - skips tests whose containing directory tree includes pointer files
 
 Resolution: `git lfs install && git lfs pull`.
+
+Also registers the `thorough` hypothesis profile -- see below.
 """
 
 from __future__ import annotations
@@ -22,6 +24,27 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from hypothesis import settings
+
+# The deep search `tests/scenarios/test_aggregator_property.py` runs before a
+# release, asked for as `--hypothesis-profile=thorough`. That file reads the
+# name back with `settings.get_current_profile_name()` and maps it onto the
+# budgets it cares about; all hypothesis itself needs is for the name to exist.
+#
+# It is registered *here*, rather than beside the tests that read it, because
+# hypothesis resolves `--hypothesis-profile` in `pytest_configure`. Only the
+# conftest files on the path to the invocation's own arguments are imported
+# that early, so a registration in `tests/scenarios/conftest.py` is reached in
+# time for `pytest tests/scenarios/...` and NOT for a whole-tree `pytest` --
+# which aborts with `InvalidArgument: Profile 'thorough' is not registered`.
+# Verified both ways before moving it here.
+#
+# The profile deliberately carries no settings of its own. Hypothesis profiles
+# are process-global, so a `max_examples` here would raise or lower the search
+# for every other property test in the tree -- `tests/curves/test_curve_shifts.py`
+# takes hypothesis's own default and has no business moving because the
+# aggregator suite wanted a longer look.
+settings.register_profile("thorough")
 
 _LFS_POINTER_PREFIX = b"version https://git-lfs.github.com/spec/v1"
 _TRACKED_SUFFIXES = (".parquet", ".csv")

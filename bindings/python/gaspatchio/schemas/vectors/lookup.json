@@ -1,0 +1,1326 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "lookup",
+  "cases": [
+    {
+      "id": "lookup-keyword-order",
+      "covers": [
+        "lookup"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              45.0,
+              55.0
+            ],
+            [
+              55.0
+            ]
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "lookup",
+        "args": [
+          {
+            "op": "col",
+            "name": "age"
+          },
+          {
+            "op": "col",
+            "name": "duration"
+          }
+        ],
+        "attrs": {
+          "table": "conformance_select_rates",
+          "table_fingerprint": "sha256:a5eff77f310b3a6017f40934bc709f3e7fcf43e163b811938163c6309c182673",
+          "on_missing": "raise",
+          "fill_value": null
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.01,
+            0.04
+          ],
+          [
+            0.04
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_select_rates",
+          "fingerprint": "sha256:a5eff77f310b3a6017f40934bc709f3e7fcf43e163b811938163c6309c182673",
+          "payload": {
+            "dimensions": [
+              "age",
+              "duration"
+            ],
+            "value": "rate",
+            "columns": [
+              {
+                "name": "age",
+                "dtype": "f64"
+              },
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                45.0,
+                1.0,
+                0.01
+              ],
+              [
+                45.0,
+                2.0,
+                0.02
+              ],
+              [
+                55.0,
+                1.0,
+                0.03
+              ],
+              [
+                55.0,
+                2.0,
+                0.04
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "select-ultimate-clamp",
+      "covers": [
+        "mortality.at"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              45.0,
+              55.0
+            ],
+            [
+              55.0
+            ]
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              7.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "mortality.at",
+        "args": [
+          {
+            "op": "col",
+            "name": "age"
+          },
+          {
+            "op": "col",
+            "name": "duration"
+          }
+        ],
+        "attrs": {
+          "mortality": "sha256:30b15f353f6bc12a699bf8f46d7cef21a080a2e2e9918c462b781535cc2e138e",
+          "structure": "select_ultimate",
+          "select_period": 2,
+          "age_basis": "age_last_birthday",
+          "dimensions": "age,duration",
+          "table": "conformance_select_rates",
+          "table_fingerprint": "sha256:a5eff77f310b3a6017f40934bc709f3e7fcf43e163b811938163c6309c182673"
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.01,
+            0.04
+          ],
+          [
+            0.04
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_select_rates",
+          "fingerprint": "sha256:a5eff77f310b3a6017f40934bc709f3e7fcf43e163b811938163c6309c182673",
+          "payload": {
+            "dimensions": [
+              "age",
+              "duration"
+            ],
+            "value": "rate",
+            "columns": [
+              {
+                "name": "age",
+                "dtype": "f64"
+              },
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                45.0,
+                1.0,
+                0.01
+              ],
+              [
+                45.0,
+                2.0,
+                0.02
+              ],
+              [
+                55.0,
+                1.0,
+                0.03
+              ],
+              [
+                55.0,
+                2.0,
+                0.04
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lookup-reaches-a-blank-answer-cell-raise",
+      "covers": [
+        "lookup"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              45.0,
+              45.0
+            ],
+            [
+              55.0
+            ]
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "lookup",
+        "args": [
+          {
+            "op": "col",
+            "name": "age"
+          },
+          {
+            "op": "col",
+            "name": "duration"
+          }
+        ],
+        "attrs": {
+          "table": "conformance_blank_rates",
+          "table_fingerprint": "sha256:66feda2e215030fd53211ab0c1927773c8febd8b2a1ec2b70485781bb0925560",
+          "on_missing": "raise",
+          "fill_value": null
+        }
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "lookup-missing-key",
+      "producer_message": "has missing keys",
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_blank_rates",
+          "fingerprint": "sha256:66feda2e215030fd53211ab0c1927773c8febd8b2a1ec2b70485781bb0925560",
+          "payload": {
+            "dimensions": [
+              "age",
+              "duration"
+            ],
+            "value": "rate",
+            "columns": [
+              {
+                "name": "age",
+                "dtype": "f64"
+              },
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                45.0,
+                1.0,
+                0.01
+              ],
+              [
+                45.0,
+                2.0,
+                null
+              ],
+              [
+                55.0,
+                1.0,
+                0.03
+              ],
+              [
+                55.0,
+                2.0,
+                0.04
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lookup-reaches-a-blank-answer-cell-nan",
+      "covers": [
+        "lookup"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              45.0,
+              45.0
+            ],
+            [
+              55.0
+            ]
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "lookup",
+        "args": [
+          {
+            "op": "col",
+            "name": "age"
+          },
+          {
+            "op": "col",
+            "name": "duration"
+          }
+        ],
+        "attrs": {
+          "table": "conformance_blank_rates",
+          "table_fingerprint": "sha256:66feda2e215030fd53211ab0c1927773c8febd8b2a1ec2b70485781bb0925560",
+          "on_missing": "nan",
+          "fill_value": null
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.01,
+            {
+              "nonfinite": "nan"
+            }
+          ],
+          [
+            0.04
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_blank_rates",
+          "fingerprint": "sha256:66feda2e215030fd53211ab0c1927773c8febd8b2a1ec2b70485781bb0925560",
+          "payload": {
+            "dimensions": [
+              "age",
+              "duration"
+            ],
+            "value": "rate",
+            "columns": [
+              {
+                "name": "age",
+                "dtype": "f64"
+              },
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                45.0,
+                1.0,
+                0.01
+              ],
+              [
+                45.0,
+                2.0,
+                null
+              ],
+              [
+                55.0,
+                1.0,
+                0.03
+              ],
+              [
+                55.0,
+                2.0,
+                0.04
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lookup-reaches-a-blank-answer-cell-fill",
+      "covers": [
+        "lookup"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              45.0,
+              45.0
+            ],
+            [
+              55.0
+            ]
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "lookup",
+        "args": [
+          {
+            "op": "col",
+            "name": "age"
+          },
+          {
+            "op": "col",
+            "name": "duration"
+          }
+        ],
+        "attrs": {
+          "table": "conformance_blank_rates",
+          "table_fingerprint": "sha256:66feda2e215030fd53211ab0c1927773c8febd8b2a1ec2b70485781bb0925560",
+          "on_missing": "fill",
+          "fill_value": -0.25
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.01,
+            -0.25
+          ],
+          [
+            0.04
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_blank_rates",
+          "fingerprint": "sha256:66feda2e215030fd53211ab0c1927773c8febd8b2a1ec2b70485781bb0925560",
+          "payload": {
+            "dimensions": [
+              "age",
+              "duration"
+            ],
+            "value": "rate",
+            "columns": [
+              {
+                "name": "age",
+                "dtype": "f64"
+              },
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                45.0,
+                1.0,
+                0.01
+              ],
+              [
+                45.0,
+                2.0,
+                null
+              ],
+              [
+                55.0,
+                1.0,
+                0.03
+              ],
+              [
+                55.0,
+                2.0,
+                0.04
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lookup-unreached-blank-answer-cell",
+      "covers": [
+        "lookup"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              45.0,
+              55.0
+            ],
+            [
+              55.0
+            ]
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "lookup",
+        "args": [
+          {
+            "op": "col",
+            "name": "age"
+          },
+          {
+            "op": "col",
+            "name": "duration"
+          }
+        ],
+        "attrs": {
+          "table": "conformance_blank_rates",
+          "table_fingerprint": "sha256:66feda2e215030fd53211ab0c1927773c8febd8b2a1ec2b70485781bb0925560",
+          "on_missing": "raise",
+          "fill_value": null
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.01,
+            0.03
+          ],
+          [
+            0.04
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_blank_rates",
+          "fingerprint": "sha256:66feda2e215030fd53211ab0c1927773c8febd8b2a1ec2b70485781bb0925560",
+          "payload": {
+            "dimensions": [
+              "age",
+              "duration"
+            ],
+            "value": "rate",
+            "columns": [
+              {
+                "name": "age",
+                "dtype": "f64"
+              },
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                45.0,
+                1.0,
+                0.01
+              ],
+              [
+                45.0,
+                2.0,
+                null
+              ],
+              [
+                55.0,
+                1.0,
+                0.03
+              ],
+              [
+                55.0,
+                2.0,
+                0.04
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lookup-guarded-null-key-raise",
+      "covers": [
+        "lookup",
+        "when_then"
+      ],
+      "inputs": {
+        "has_surr_charge": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "surr_charge_id": {
+          "dtype": "str",
+          "values": [
+            "S1",
+            null
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "has_surr_charge"
+        },
+        "then": {
+          "op": "call",
+          "name": "lookup",
+          "args": [
+            {
+              "op": "col",
+              "name": "duration"
+            },
+            {
+              "op": "col",
+              "name": "surr_charge_id"
+            }
+          ],
+          "attrs": {
+            "table": "conformance_surrender_rates",
+            "table_fingerprint": "sha256:edc4153031628934754d6e01d3346c63dd129dc6879ba2cf90837eabbd97ab12",
+            "on_missing": "raise",
+            "fill_value": null
+          }
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.0
+        }
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "lookup-missing-key",
+      "producer_message": "has missing keys",
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_surrender_rates",
+          "fingerprint": "sha256:edc4153031628934754d6e01d3346c63dd129dc6879ba2cf90837eabbd97ab12",
+          "payload": {
+            "dimensions": [
+              "duration",
+              "surr_charge_id"
+            ],
+            "value": "surr_charge_rate",
+            "columns": [
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "surr_charge_id",
+                "dtype": "str"
+              },
+              {
+                "name": "surr_charge_rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                1.0,
+                "S1",
+                0.05
+              ],
+              [
+                1.0,
+                "S2",
+                0.07
+              ],
+              [
+                2.0,
+                "S1",
+                0.03
+              ],
+              [
+                2.0,
+                "S2",
+                0.04
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lookup-guarded-null-key-nan",
+      "covers": [
+        "lookup",
+        "when_then",
+        "mul"
+      ],
+      "inputs": {
+        "has_surr_charge": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "surr_charge_id": {
+          "dtype": "str",
+          "values": [
+            "S1",
+            null
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ]
+        },
+        "sum_assured": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "mul",
+        "left": {
+          "op": "when_then",
+          "cond": {
+            "op": "col",
+            "name": "has_surr_charge"
+          },
+          "then": {
+            "op": "call",
+            "name": "lookup",
+            "args": [
+              {
+                "op": "col",
+                "name": "duration"
+              },
+              {
+                "op": "col",
+                "name": "surr_charge_id"
+              }
+            ],
+            "attrs": {
+              "table": "conformance_surrender_rates",
+              "table_fingerprint": "sha256:edc4153031628934754d6e01d3346c63dd129dc6879ba2cf90837eabbd97ab12",
+              "on_missing": "nan",
+              "fill_value": null
+            }
+          },
+          "otherwise": {
+            "op": "lit",
+            "value": 0.0
+          }
+        },
+        "right": {
+          "op": "col",
+          "name": "sum_assured"
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            5.0,
+            3.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_surrender_rates",
+          "fingerprint": "sha256:edc4153031628934754d6e01d3346c63dd129dc6879ba2cf90837eabbd97ab12",
+          "payload": {
+            "dimensions": [
+              "duration",
+              "surr_charge_id"
+            ],
+            "value": "surr_charge_rate",
+            "columns": [
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "surr_charge_id",
+                "dtype": "str"
+              },
+              {
+                "name": "surr_charge_rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                1.0,
+                "S1",
+                0.05
+              ],
+              [
+                1.0,
+                "S2",
+                0.07
+              ],
+              [
+                2.0,
+                "S1",
+                0.03
+              ],
+              [
+                2.0,
+                "S2",
+                0.04
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lookup-guarded-null-key-fill",
+      "covers": [
+        "lookup",
+        "when_then"
+      ],
+      "inputs": {
+        "has_surr_charge": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "surr_charge_id": {
+          "dtype": "str",
+          "values": [
+            "S1",
+            null
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "when_then",
+        "cond": {
+          "op": "col",
+          "name": "has_surr_charge"
+        },
+        "then": {
+          "op": "call",
+          "name": "lookup",
+          "args": [
+            {
+              "op": "col",
+              "name": "duration"
+            },
+            {
+              "op": "col",
+              "name": "surr_charge_id"
+            }
+          ],
+          "attrs": {
+            "table": "conformance_surrender_rates",
+            "table_fingerprint": "sha256:edc4153031628934754d6e01d3346c63dd129dc6879ba2cf90837eabbd97ab12",
+            "on_missing": "fill",
+            "fill_value": -0.25
+          }
+        },
+        "otherwise": {
+          "op": "lit",
+          "value": 0.0
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.05,
+            0.03
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_surrender_rates",
+          "fingerprint": "sha256:edc4153031628934754d6e01d3346c63dd129dc6879ba2cf90837eabbd97ab12",
+          "payload": {
+            "dimensions": [
+              "duration",
+              "surr_charge_id"
+            ],
+            "value": "surr_charge_rate",
+            "columns": [
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "surr_charge_id",
+                "dtype": "str"
+              },
+              {
+                "name": "surr_charge_rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                1.0,
+                "S1",
+                0.05
+              ],
+              [
+                1.0,
+                "S2",
+                0.07
+              ],
+              [
+                2.0,
+                "S1",
+                0.03
+              ],
+              [
+                2.0,
+                "S2",
+                0.04
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lookup-negative-zero-answer-reads-as-zero",
+      "covers": [
+        "lookup",
+        "div"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "f64",
+          "values": [
+            40.0,
+            41.0
+          ]
+        },
+        "one": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "one"
+        },
+        "right": {
+          "op": "call",
+          "name": "lookup",
+          "args": [
+            {
+              "op": "col",
+              "name": "age"
+            }
+          ],
+          "attrs": {
+            "table": "conformance_signed_zero_rates",
+            "table_fingerprint": "sha256:bf7110a4851604783cb9e5d213e336a42e621d93415829357994513bc9461c7c",
+            "on_missing": "raise",
+            "fill_value": null
+          }
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "+inf"
+          },
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_signed_zero_rates",
+          "fingerprint": "sha256:bf7110a4851604783cb9e5d213e336a42e621d93415829357994513bc9461c7c",
+          "payload": {
+            "dimensions": [
+              "age"
+            ],
+            "value": "rate",
+            "columns": [
+              {
+                "name": "age",
+                "dtype": "f64"
+              },
+              {
+                "name": "rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                40.0,
+                -0.0
+              ],
+              [
+                41.0,
+                0.5
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "lookup-negative-zero-answer-sign-is-zero",
+      "covers": [
+        "lookup",
+        "sign",
+        "div"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "f64",
+          "values": [
+            40.0,
+            41.0
+          ]
+        },
+        "one": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "div",
+        "left": {
+          "op": "col",
+          "name": "one"
+        },
+        "right": {
+          "op": "call",
+          "name": "sign",
+          "args": [
+            {
+              "op": "call",
+              "name": "lookup",
+              "args": [
+                {
+                  "op": "col",
+                  "name": "age"
+                }
+              ],
+              "attrs": {
+                "table": "conformance_signed_zero_rates",
+                "table_fingerprint": "sha256:bf7110a4851604783cb9e5d213e336a42e621d93415829357994513bc9461c7c",
+                "on_missing": "raise",
+                "fill_value": null
+              }
+            }
+          ],
+          "attrs": {}
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "+inf"
+          },
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_signed_zero_rates",
+          "fingerprint": "sha256:bf7110a4851604783cb9e5d213e336a42e621d93415829357994513bc9461c7c",
+          "payload": {
+            "dimensions": [
+              "age"
+            ],
+            "value": "rate",
+            "columns": [
+              {
+                "name": "age",
+                "dtype": "f64"
+              },
+              {
+                "name": "rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                40.0,
+                -0.0
+              ],
+              [
+                41.0,
+                0.5
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -21,13 +21,18 @@ for t in range(n_periods - 1, -1, -1):
 
 **Correct approach**:
 ```python
-# Use Gaspatchio's accumulate kernel (runs in Rust, parallelized across policies)
-af.reserve = af.discount_factor.projection.accumulate(
-    initial="maturity_benefit",
-    multiply="survival_factor",
-    add="benefit_cashflow",
+# The recursion reads the period AFTER it, so roll it back: reverse=True runs
+# state[t] = state[t+1] * multiplier[t] + addend[t] from each policy's own last period,
+# with `initial` the value after the last period (here the maturity benefit).
+af.reserve = af.qx.projection.accumulate(
+    initial=af.maturity_benefit,
+    multiplier=af.v * (1 - af.qx),
+    addend=af.v * af.qx * af.benefit,
+    reverse=True,
 )
 ```
+
+A forward `accumulate` here would run the recursion the wrong way in time.
 
 ---
 
@@ -112,9 +117,9 @@ af.tpx = af.qx.projection.cumulative_survival()
 
 # For linear recurrence (AV with interest + cashflows):
 af.av = af.growth_factor.projection.accumulate(
-    initial="initial_av",
-    multiply="growth_factor",
-    add="net_cashflow",
+    initial=af.initial_av,
+    multiplier=af.growth_factor,
+    addend=af.net_cashflow,
 )
 ```
 
@@ -169,7 +174,7 @@ af.expense_loading = (
 
 # For many values: join against a lookup table
 rules_df = pl.DataFrame({"product_code": ["TERM20", "WL", "UL"], "expense_loading": [0.05, 0.08, 0.10]})
-af._df = af._df.join(rules_df.lazy(), on="product_code", how="left")
+af = af.join(rules_df, on="product_code", how="left")
 
 # Or use a Gaspatchio Table:
 expense_table = Table(name="expenses", source=rules_df, dimensions={"product_code": "product_code"}, value="expense_loading")
@@ -197,15 +202,64 @@ df.with_columns(
 
 **Correct approach**:
 ```python
-# Use Polars temporal expressions (SIMD on Arrow date representation)
-af.duration_months = (
-    (af.valuation_date.dt.year() - af.issue_date.dt.year()) * 12
-    + (af.valuation_date.dt.month() - af.issue_date.dt.month())
-)
+# Whole months between two dates: a declared operation (positive when the argument is later)
+af.duration_months = af.issue_date.date.months_between(af.valuation_date)
 
-# Or use Gaspatchio's date accessor:
-af.year_fraction = af.issue_date.date.year_frac(af.valuation_date)
+# Or use Gaspatchio's Excel accessor (YEARFRAC):
+af.year_fraction = af.issue_date.excel.yearfrac(af.valuation_date)
 ```
+
+A date *part* — year, month, day — has no declared form in 1.0; it is read through the
+escape, `af.issue_date.polars_native().dt.year()`, which records the line `engine_native`: it
+runs only on Polars, and so does every calculation that reads it. Reach for it only where no
+declared operation says the same thing: `months_between` is exactly the year-and-month
+arithmetic, `(year2 - year1) * 12 + (month2 - month1)`, written as one declared operation.
+
+---
+
+### 8. Raw Polars Row Operations on a Timeline Frame
+
+**Actuarial example**: a running total or a shift written as a Polars window inside an accessor.
+
+**Naive approach** (wrong numbers, not just slow — and refused):
+```python
+# WRONG: on a frame with a projection timeline the rows are policies
+af.cum = af.rate * pl.col("reserve").cum_sum()        # reserve holds one value per period
+af.sa_prev = af.sum_assured.projection.previous_period()  # one value per policy
+```
+
+**Why it's wrong**: on a frame with a projection timeline the rows are policies, so anything
+that would read down the rows — a period method on a per-policy column, a raw Polars row
+operation over a per-period column, a statistic taken off a table read — is refused, and so is
+an unnamed `with_columns`/`select` expression that would silently overwrite the column it
+reads. Taken down the rows, each policy would get the previous policy's value.
+
+**Correct approach**: work inside each policy's own list — the declared operation where one
+exists (`af.reserve.cum_sum()`, `.projection.previous_period()`), or
+`.list.eval(pl.element().cum_sum())` inside a Polars-expression accessor body — and make a
+per-policy value per-period first (`.projection.broadcast_to_periods()`).
+
+---
+
+### 9. A Table Read Inside a Polars Expression
+
+**Actuarial example**: an accessor that takes a mortality lookup and post-processes it in
+`pl.Expr`.
+
+**Naive approach** (refused):
+```python
+# WRONG: the read ends up inside an expression the framework cannot see into
+af.q = mort.lookup(age=af.age).risk.hazard_rate(a=1.0, b=1.0)   # a pl.Expr body
+af.q = mort.lookup(age=af.age).polars_native().arctan()
+```
+
+**Why it's wrong**: a read of a table, mortality table, curve or schedule must be its own
+step. Inside an expression the framework cannot see into it is refused, because the model's
+fingerprint would not move when the table did.
+
+**Correct approach**: continue with a declared operation (an accessor body composed from the
+proxy's own operations is one), or store the read as its own column and continue from that:
+`af.q_read = mort.lookup(age=af.age)`, then `af.q = af.q_read.polars_native().arctan()`.
 
 ---
 
@@ -220,4 +274,4 @@ If you find yourself writing any of these, stop:
 - Python `dict` used as a lookup table per row
 - `datetime` or `relativedelta` per row
 
-The correct approach is always: compose Polars expressions, use Gaspatchio accessors, or use `Table.lookup()`.
+The correct approach is always: use Gaspatchio's declared operations and accessors, use `Table.lookup()`, or — where nothing is declared — compose Polars expressions inside each policy's list, knowing the line records `engine_native`.

@@ -1,0 +1,372 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Opio Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The cone, drawn on the identity's tokens and on nothing else.
+ *
+ * React Flow's `base.css` is imported for the canvas itself — the transform,
+ * the node positioning, the edge layer — and none of its theme. Everything a
+ * reader actually sees here is a rule in this file over `theme/tokens.css`:
+ * the page uses no component library, and a second set of greys
+ * arriving with a dependency is a second identity.
+ *
+ * The amber appears twice and both are the same admission: the dashed box of a
+ * column the model does not account for, and the loop of a read that looked at
+ * another period — the one place on this page where a line is not a line from
+ * one column to another.
+ */
+
+.cone {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-top: 1px solid var(--rule);
+}
+
+/* The controls, and the size of what they are moving. */
+.cone-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.82rem;
+  color: var(--ink-secondary);
+  flex: 0 0 auto;
+}
+
+.cone-bar .reach {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cone-bar b {
+  color: var(--ink);
+}
+
+.cone-bar button {
+  font: inherit;
+  font-family: var(--face-mono);
+  line-height: 1;
+  min-width: 22px;
+  padding: 3px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.cone-bar button:hover {
+  border-color: var(--red-light);
+  color: var(--red-dark);
+}
+
+.cone-bar .count {
+  margin-left: auto;
+}
+
+.cone-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.cone-canvas .react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.cone-nothing {
+  margin: 0;
+  padding: 16px;
+  color: var(--ink-secondary);
+  font-size: 0.85rem;
+}
+
+/* ---- one box ---- */
+
+.cone-body {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.cone-body.center {
+  border-color: var(--red);
+  background: var(--selected);
+}
+
+.cone-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cone-column {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cone-formula {
+  flex: 1 1 auto;
+  font-size: 0.74rem;
+  color: var(--ink-secondary);
+  background: var(--code-surface);
+  border-radius: 3px;
+  padding: 1px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cone-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cone-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.cone-body .chip {
+  font-size: 0.66rem;
+  line-height: 1.6;
+  padding: 0 6px;
+  border-radius: 9px;
+  border: 1px solid var(--rule);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.cone-body .chip.versions {
+  font-family: inherit;
+  margin-left: auto;
+  border-color: var(--red-light);
+  color: var(--red-dark);
+  background: var(--paper);
+  cursor: pointer;
+}
+
+/* A compiled rollforward is its states and the steps it folds into them. */
+.machine {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.machine .chip.steps {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.states {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.72rem;
+  overflow: hidden;
+}
+
+.states li {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0 5px;
+  background: var(--code-surface);
+}
+
+/* The column the file cannot account for. */
+.react-flow__node.hole .cone-body {
+  border: 1px dashed var(--amber);
+  color: var(--amber);
+}
+
+.react-flow__node.hole .cone-column {
+  color: var(--amber);
+}
+
+/* A definition the model wrote over, opened from its badge. */
+.react-flow__node.retained .cone-body {
+  border-style: dashed;
+  background: var(--code-surface);
+}
+
+/* ---- the lines between them ---- */
+
+.react-flow__edge-path {
+  stroke: var(--ink-secondary);
+  stroke-width: 1;
+}
+
+.react-flow__edge.edge-indirect .react-flow__edge-path {
+  stroke-dasharray: 2 4;
+}
+
+.react-flow__edge.edge-retained .react-flow__edge-path {
+  stroke-dasharray: 4 4;
+  opacity: 0.7;
+}
+
+/* The one read that did not look at this period. */
+.edge-offset {
+  stroke: var(--amber);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+
+.edge-offset-label {
+  fill: var(--amber);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* The handles are anchors for the lines, not things to take hold of. */
+.react-flow__handle {
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+/* ---- the overview ---- */
+
+/*
+ * The overview sits over the canvas, and the canvas is clickable underneath it.
+ *
+ * Its own marks take pointer events and the rest of it does not: a box that
+ * happens to be drawn in the top-right corner was unreachable — the pointer met
+ * the overview's empty space and the click went nowhere — which is a box the
+ * reader can see and cannot open. The marks themselves are still controls, and
+ * one of them is still the way to jump somewhere else in the model.
+ */
+.minimap {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  pointer-events: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+}
+
+.minimap-node {
+  fill: var(--rule);
+  cursor: pointer;
+}
+
+.minimap-node:hover {
+  fill: var(--red-light);
+}
+
+.minimap-window {
+  fill: var(--selected);
+  fill-opacity: 0.45;
+  stroke: var(--red);
+  pointer-events: none;
+}
+
+/*
+ * Where the overview would have been, when the layout was skipped.
+ *
+ * Same corner, same border, wider — it is a sentence rather than a picture, and
+ * a sentence squeezed into 180 px is a sentence nobody finishes reading. It is
+ * the one place on this page where a refusal replaces a view without replacing
+ * the pane the view was in, because the rest of the cone is still drawn and
+ * still true.
+ */
+.minimap-instead {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  max-width: 360px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+}
+
+.minimap-instead .refusal {
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+/*
+ * A box that moves, moves visibly.
+ *
+ * Opening the graph a step inserts boxes into the packing and nudges the ones
+ * around them; without this the whole drawing is simply somewhere else on the
+ * next frame, which reads as a redraw rather than as the thing the reader just
+ * asked for. Short, because this is feedback and not an effect. A reader who
+ * has asked for less motion gets none: the boxes still arrive, they just arrive
+ * where they belong.
+ */
+.react-flow__node {
+  transition: transform 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node {
+    transition: none;
+  }
+}
+
+.minimap-node {
+  pointer-events: auto;
+}
+
+/*
+ * A box's foot on a fold the book was not totalled by: words rather than the
+ * mark a missing value wears, and set as prose so a reader scanning the canvas
+ * sees at a glance that it is not a figure. Dimmed, never amber: a fold that
+ * declines to total a mortality rate admits nothing.
+ */
+.cone-value.unfolded {
+  color: var(--ink-secondary);
+  font-family: inherit;
+  font-style: italic;
+}
+
+/*
+ * The comparison's mark on a box.
+ *
+ * The chip's own rules are the cone's — 9 px radius, the box's own type — and
+ * what `Changes.css` gives it is the pair that carries the meaning: the word,
+ * and solid against dashed. So the mark reads as one of this box's chips and
+ * still says the same thing it says in the list and on the heading, which is
+ * what a reader following a column across three views needs it to do.
+ */
+.cone-body .chip.mark {
+  border-radius: 9px;
+  font-size: 0.66rem;
+  line-height: 1.6;
+  padding: 0 6px;
+}

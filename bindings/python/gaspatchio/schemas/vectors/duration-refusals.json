@@ -1,0 +1,915 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "Calls that would read a number out of a duration (10)",
+  "cases": [
+    {
+      "id": "duration-sign-per-policy-refused",
+      "covers": [
+        "sign"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sign",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-sign-per-period-refused",
+      "covers": [
+        "sign"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sign",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-round-per-policy-refused",
+      "covers": [
+        "round"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "round",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "decimals": 2,
+          "mode": "half_to_even"
+        }
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-round-per-period-refused",
+      "covers": [
+        "round"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "round",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "decimals": 2,
+          "mode": "half_to_even"
+        }
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-floor-per-policy-refused",
+      "covers": [
+        "floor"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "floor",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-floor-per-period-refused",
+      "covers": [
+        "floor"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "floor",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-ceil-per-policy-refused",
+      "covers": [
+        "ceil"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "ceil",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-ceil-per-period-refused",
+      "covers": [
+        "ceil"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "ceil",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-sqrt-per-policy-refused",
+      "covers": [
+        "sqrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sqrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-sqrt-per-period-refused",
+      "covers": [
+        "sqrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sqrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-cbrt-per-policy-refused",
+      "covers": [
+        "cbrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cbrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-cbrt-per-period-refused",
+      "covers": [
+        "cbrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cbrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-exp-per-policy-refused",
+      "covers": [
+        "exp"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "exp",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-exp-per-period-refused",
+      "covers": [
+        "exp"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "exp",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-log-per-policy-refused",
+      "covers": [
+        "log"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-log-per-period-refused",
+      "covers": [
+        "log"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-log10-per-policy-refused",
+      "covers": [
+        "log10"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log10",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-log10-per-period-refused",
+      "covers": [
+        "log10"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log10",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-log1p-per-policy-refused",
+      "covers": [
+        "log1p"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log1p",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-log1p-per-period-refused",
+      "covers": [
+        "log1p"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log1p",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-round-sig-figs-per-policy-refused",
+      "covers": [
+        "round_sig_figs"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "round_sig_figs",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "digits": 2
+        }
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-round-sig-figs-per-period-refused",
+      "covers": [
+        "round_sig_figs"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "round_sig_figs",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "digits": 2
+        }
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-norm-cdf-per-policy-refused",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "duration",
+          "values": [
+            157852800000000,
+            31622400000000
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-norm-cdf-per-period-refused",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-cum-prod-per-period-refused",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    },
+    {
+      "id": "duration-projection-cumulative-survival-per-period-refused",
+      "covers": [
+        "projection.cumulative_survival"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[duration]",
+          "values": [
+            [
+              157852800000000,
+              31622400000000,
+              2678400000000
+            ],
+            [
+              113184000000000,
+              31622400000000,
+              2678400000000
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.cumulative_survival",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "start_at": null,
+          "from_survival": false
+        }
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "duration-read-as-a-number",
+      "producer_message": "is a duration"
+    }
+  ]
+}

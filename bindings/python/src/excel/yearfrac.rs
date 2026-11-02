@@ -4,9 +4,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use gaspatchio_core_lib::excel::yearfrac::yearfrac_output_type as core_yearfrac_output_type;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
-use gaspatchio_core_lib::excel::yearfrac::yearfrac_output_type as core_yearfrac_output_type;
 
 fn yearfrac_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
     // Use the same sophisticated type checking as the core implementation

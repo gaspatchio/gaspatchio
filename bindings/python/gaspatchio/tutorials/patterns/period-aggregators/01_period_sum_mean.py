@@ -77,9 +77,7 @@ def model_fn(af: ActuarialFrame) -> ActuarialFrame:
         frequency="monthly",
     )
     af.projection_date = af.projection.period_dates()
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() supplies month: 0 through PROJECTION_MONTHS, inclusive.
     af.premium_t = af.premium_pp + af.month * 0.0  # broadcast scalar across periods
     af.claim_t = af.claim_pp * af.month  # ramps with month -> non-flat
     af.net_cf = af.premium_t - af.claim_t  # list column (per period)

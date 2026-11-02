@@ -76,7 +76,7 @@ def test_when_otherwise_with_scalar_key_lookup() -> None:
 
 
 def test_scalar_last_arithmetic_after_scalar_key_lookup(age_table: Table) -> None:
-    # F13: `(af.col * lookup) * 0.97` raised SchemaError naming an innocent
+    # `(af.col * lookup) * 0.97` raised SchemaError naming an innocent
     # column; only the scalar-first ordering worked.
     af = ActuarialFrame(
         pl.DataFrame({"sum_assured": [100.0, 200.0, 300.0], "age": [30, 40, 50]})

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gaspatchio.dev/schemas/facets/gaspatchio_lowered-v0-preview.1.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "title": "gaspatchio_lowered facet",
+  "description": "The engine's own rendering of a node's calculation. A debugging convenience with no normative force (section 8.2 of the specification): a consumer holding both this and the node's formula reads the formula as authoritative, which is why the facet is announced in facets_used and never in facets_required. An export writes it only when asked to, and only on a node that has a rendering.",
+  "allOf": [
+    {
+      "$ref": "https://gaspatchio.dev/schemas/gaspatchio-graph-v0.schema.json#/$defs/facet"
+    },
+    {
+      "type": "object",
+      "required": [
+        "engine",
+        "text"
+      ],
+      "properties": {
+        "engine": {
+          "description": "The engine the rendering is written in. The reference implementation renders in Polars, and writes polars.",
+          "type": "string"
+        },
+        "text": {
+          "description": "The rendering itself, as the engine prints the expression. It moves whenever the engine changes how it prints one, which is why it rides here rather than in the base record. A walk-through's first line is this text after the producer's own cleaning, and a validator reads the two against each other.",
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

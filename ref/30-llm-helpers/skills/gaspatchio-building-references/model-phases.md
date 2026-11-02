@@ -1,6 +1,6 @@
 # Model Phases
 
-Every gaspatchio model has three phases. The boundary between Phase 1 and Phase 2 is `create_projection_timeline()`. The boundary between Phase 2 and Phase 3 is implicit — once the timeline exists, you're in the calculation phase.
+Every gaspatchio model has three phases. The boundary between Phase 1 and Phase 2 is `af.projection.set(...)`. The boundary between Phase 2 and Phase 3 is implicit — once the timeline exists, you're in the calculation phase.
 
 ## Phase 1: Setup (Scalar Operations)
 
@@ -11,102 +11,182 @@ Before the projection timeline, columns are **scalar** (one value per policy). T
 - Join external data (product params, surrender values)
 - Compute derived scalar attributes (age bands, flags, durations)
 
-### `.collect()` Is OK Here
+### Stay on the Frame, Then `materialize()`
 
-Use `.collect()` freely in Phase 1 to drop into Polars DataFrame operations:
+Do the setup on the ActuarialFrame — `rename`, `join`, `with_columns` all work there — and close Phase 1 with `af.materialize()`:
 
 ```python
-mp = af.collect()
-mp = mp.with_columns([
-    pl.col("Policyholder sex").alias("sex"),
-    pl.col("Policyholder issue age").alias("issue_age"),
-    pl.col("Face amount").cast(pl.Float64).alias("face_amount"),
-])
-# Join product parameters
-mp = mp.join(product_params, on="Product code", how="left")
-af = ActuarialFrame(mp)
+af = af.rename({
+    "Policyholder sex": "sex",
+    "Policyholder issue age": "issue_age",
+    "Face amount": "face_amount",
+})
+af.face_amount = af.face_amount * 1.0          # cast/derive on the frame
+af = af.join(product_params, left_on="Product code", right_on="product_code")
+af = af.materialize()                          # freeze the finished setup
 ```
+
+`materialize()` freezes everything calculated so far into values, so Phase 3 plans on top of settled model points instead of re-deriving the setup on every collect. It replaces the old `mp = af.collect()` / edit in raw Polars / `af = ActuarialFrame(mp)` round-trip, which froze the values and threw away everything else the frame knew — how each column was calculated, which projection axis it was on, which columns were inputs. `materialize()` keeps all of it and hands back the same frame.
+
+Reach for `.collect()` when you want the eager Polars DataFrame *itself* — handing column arrays to a numpy RNG, writing output. Reach for `.materialize()` when you want to carry on modelling.
+
+### When the Values Really Do Leave: `continue_from=`
+
+Sometimes the DataFrame has to go outside — a numpy generator, an enrichment routine that only speaks Polars. Coming back with a bare `ActuarialFrame(df)` makes every column look like a model-point field the data arrived with, and the whole setup becomes unanswerable. Name the frame it came out of instead:
+
+```python
+values = af.collect()                                   # the values have to leave
+values = values.with_columns(pl.Series("died", rng.binomial(1, p)))
+af = ActuarialFrame(values, continue_from=af)           # and this is the way back
+af.claims = af.sum_assured * af.died                    # the model carries on
+```
+
+A column still holding the values the model's calculations produced keeps saying what made it. A column the trip changed, and a column the trip added, is recorded as data arriving at that point, with the line it came back on. What decides which is a comparison of the values, never a match on the name — and the keyword is never implied, so `ActuarialFrame(df)` still means exactly what it always meant. Write `continue_from=` where the frame really left; write `materialize()` everywhere else.
 
 **Do NOT call `.collect()` after Phase 2.** Breaking lazy execution during projection destroys performance and can produce incorrect results.
 
 ### Helper Function Pattern
 
-Every real model breaks Phase 1 into helper functions:
+Every real model breaks Phase 1 into helper functions. They take a frame and return a frame:
 
 ```python
 def setup_ages(af, valuation_date, roll_forward_months=12):
-    mp = af.collect()
-    mp = mp.with_columns([
-        pl.col("Policyholder issue age").alias("issue_age"),
-        # ... more scalar setup ...
-    ])
-    return ActuarialFrame(mp)
+    af = af.rename({"Policyholder issue age": "issue_age"})
+    af.attained_age = af.issue_age + roll_forward_months // 12
+    # ... more scalar setup ...
+    return af
 
 def main(af):
     tables = load_assumptions()
     af = setup_ages(af, valuation_date)
-    af = af.date.create_projection_timeline(...)
+    af = af.materialize()
+    af = af.projection.set(...)
     # ... Phase 3 ...
     return af
 ```
 
-### Dataclass for Parameters
+### Dataclass for Model-Level Parameters
 
-For models that run multiple scenarios, use a dataclass:
+For per-run *model-level* parameters that don't vary across scenarios — valuation date, projection length, regulatory regime flags, paths to assumption files — a dataclass is a clean way to wire them through `main`:
 
 ```python
 from dataclasses import dataclass
+import datetime
 
-@dataclass
-class ScenarioParams:
-    mortality_factor: float = 1.0
-    discount_rate: float = 0.025
-    inflation_rates: tuple = (0.02, 0.02, 0.02, 0.02, 0.02)
+@dataclass(frozen=True)
+class ModelParams:
+    valuation_date: datetime.date
+    projection_months: int = 240
+    regime: str = "IFRS17"
 
 def main(af, params=None):
     if params is None:
-        params = ScenarioParams()
-    # Use params.mortality_factor, params.discount_rate, etc.
+        params = ModelParams(valuation_date=datetime.date(2025, 1, 1))
+    # Use params.valuation_date etc.
 ```
+
+For **scenario-level** parameters (shocked assumption tables, stress factors, sweep grids), don't reach for `@dataclass` — declare a `ScenarioRun(shocks=…, base_tables=…, aggregations=…)` and use `assumptions_override` on `main` so each scenario gets fresh tables. See the `gaspatchio-model-scenarios` skill for the canonical pattern.
 
 ---
 
 ## Phase 2: Projection Timeline
 
-`create_projection_timeline()` transforms the ActuarialFrame. Scalar columns remain scalar; date-based projection columns become **list columns** (one list per policy, with one element per projection period).
+`af.projection.set(...)` transforms the ActuarialFrame. Scalar columns remain scalar; the call stamps three eager scalar columns per policy (`projection_start_date`, `projection_end_date`, `num_proj_months`) and records the schedule so that lazy accessors (list columns) can be built in Phase 3.
 
 ```python
-af = af.date.create_projection_timeline(
+af = af.projection.set(
     valuation_date=datetime.date(2025, 1, 1),
-    projection_end_type="maximum_age",
-    projection_end_value=100,
-    projection_frequency="monthly",
+    until="maximum_age",   # "maximum_age" | "term_years" | "term_months" | "fixed_date"
+    until_value=100,       # int, date, or column-name str for per-policy timelines
+    frequency="monthly",
 )
 ```
 
-### Critical: `projection_end_value=100`, NOT 99
+### Critical: `until_value=100`, NOT 99
 
-If your mortality table goes to age 100, use `projection_end_value=100`. Using 99 truncates the final year where high-mortality cashflows spike. This single off-by-one caused a 3% BEL gap in production.
+If your mortality table goes to age 100, use `until_value=100`. Using 99 truncates the final year where high-mortality cashflows spike. This single off-by-one caused a 3% BEL gap in production.
 
-### No Built-In `af.t`
+### Per-policy (jagged) timelines
 
-There is **no automatic period counter column**. `create_projection_timeline()` produces only a `date` list column. You must derive `t` yourself:
+When `until_value` is a column name and `until` is `"term_months"` or `"term_years"`, each policy projects only its own horizon — list columns have variable length. This is the default (auto-selected). Pass `per_policy=False` to force a uniform rectangular grid instead:
 
 ```python
-# Common pattern: derive from dates
-af.t = (af["date"].dt.year() - valuation_date.year) * 12 + (af["date"].dt.month() - valuation_date.month)
+# Jagged (default): each policy projects its own remaining term
+af = af.projection.set(
+    valuation_date=datetime.date(2025, 1, 1),
+    until="term_months",
+    until_value="remaining_term_months",
+    frequency="monthly",
+)
+
+# Uniform: all policies get max-length lists (wastes compute for short policies)
+af = af.projection.set(
+    valuation_date=datetime.date(2025, 1, 1),
+    until="term_months",
+    until_value="remaining_term_months",
+    frequency="monthly",
+    per_policy=False,
+)
 ```
 
-Or look up the framework approach: `uv run gspio docs "period index" -n 10`
+### Eager stamps vs lazy list columns
 
-### `.date` vs `.dt` — They Are Different
+`af.projection.set()` stamps three **scalar** columns immediately (usable in Phase 1 guards or joins):
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `projection_start_date` | `Date` | Valuation date |
+| `projection_end_date` | `Date` | Per-policy end date |
+| `num_proj_months` | `Int32` | Period count (including start boundary) |
+
+For `until="maximum_age", until_value=100, issue_age=30`: `num_proj_months == 70 * 12 + 1` (the +1 is the start boundary at t=0).
+
+**List columns** are built lazily in Phase 3 via the projection accessor:
+
+```python
+af.projection_date = af.projection.period_dates()    # List<Date> — one date per period
+af.t_years = af.projection.t_years()                 # List<Float64> — cumulative year fracs
+af.dt = af.projection.year_fractions()               # List<Float64> — per-period dt
+```
+
+`af.projection.t_years()` is the direct input to `Curve.discount_factor()` for
+term-structure discounting — see [curves-and-scheduling.md](curves-and-scheduling.md).
+
+### The period-index column (`month`)
+
+`af.projection.set()` **materialises `af.month`** — elapsed whole months from the
+projection start: `0,1,2,…` monthly, `0,3,6,…` quarterly, `0,12,24,…` annual. Do not
+rebuild it from `period_dates()`; it is already there, and calendar-date arithmetic
+gets the elapsed-months semantics wrong at month boundaries.
+
+Three things about its shape that do bite:
+
+- It is **point-indexed**: `n_periods + 1` values, one per period boundary, aligned
+  with `t_years()`. Rollforward inputs are period-indexed (`n_periods` values) —
+  slice with `.list.head(n_periods)` before driving one. The period count comes
+  from the frame: `num_proj_months` counts the boundaries, so
+  `n_periods = num_proj_months - 1` (on a uniform schedule, one integer for the
+  whole portfolio). On a **jagged** schedule there is no single count — slice with
+  each policy's own `num_proj_months - 1`, never a portfolio-wide constant.
+- It is **not stamped** at weekly/daily frequency (calendar months cannot honestly
+  label those periods) nor on `from_inception` schedules (that axis is policy
+  *duration*, not projection time). On those, use `t_years()` as your axis.
+- If the input frame already carries a `month` column, `set()` **raises** rather than
+  silently overwriting: rename it if it is yours, `drop("month")` if it came from a
+  previous run's output.
+
+There is deliberately no `proj_year` column — a projection-year label depends on your
+timing convention. Derive the one you mean (`af.month // 12` for completed years);
+see [timing-and-dates.md](timing-and-dates.md).
+
+### `.projection` (frame) vs `.dt` (column) — They Are Different
 
 | Accessor | Level | Methods |
 |----------|-------|---------|
-| `af.date` | Frame-level | `create_projection_timeline()`, `create_timeline()`, `add_duration()` |
+| `af.projection` | Frame-level | `set(...)`, `period_dates()`, `t_years()`, `year_fractions()`, `anniversary_mask()`, `is_in_force()` |
 | `af.column.dt` | Column-level (Polars) | `.year()`, `.month()`, `.day()` |
 
-These are NOT interchangeable. `create_projection_timeline()` is on `af.date`. Date component extraction is on `af.column.dt`.
+These are NOT interchangeable. `af.projection.set()` is the frame-level timeline setup. Date component extraction on a column uses `af.column.dt`.
 
 ---
 
@@ -121,7 +201,7 @@ Production models have 10+ logical sections, not just 3 phases. Here is the real
 | Section | What it computes | Key patterns |
 |---------|-----------------|--------------|
 | 1. Assumptions | Load tables, join product params | `Table()`, `.collect()` + `.join()` OK here |
-| 2. Time setup | `month`, `duration`, `age`, projection timeline | `create_projection_timeline()`, date arithmetic |
+| 2. Time setup | `month`, `duration`, `age`, projection timeline | `af.projection.set()`, `af.projection.period_dates()`, date arithmetic |
 | 3. Mortality | Table lookup, scalars, annual→monthly | `Table.lookup()`, `.clip()`, `1-(1-q)^(1/12)` |
 | 4. Lapse | Base rate lookup, dynamic adjustment | ITM ratio, `.clip()` for caps/floors |
 | 5. Investment | Fund returns, account value, fees | `cum_prod()`, `previous_period(fill_value=1.0)` |
@@ -130,7 +210,7 @@ Production models have 10+ logical sections, not just 3 phases. Here is the real
 | 8. Premiums | Single/regular, timing | `when(duration_mth_t == 0)` for single premium |
 | 9. Expenses | Acquisition + maintenance, inflation | exp/log identity for `constant^list` |
 | 10. Net cashflow | Investment income, AV change | `next_period(fill_value=0.0)` |
-| 11. Discounting | Rate lookup or constant, PVs | `cum_prod(1/(1+r))` for varying rates, `.list.sum()` |
+| 11. Discounting | Rate lookup or constant, PVs | `cum_prod(1/(1+r))` for varying rates, `.list.sum()`; for a yield curve / EIOPA term structure: `Curve.discount_factor(af.projection.t_years())` — see [curves-and-scheduling.md](curves-and-scheduling.md) |
 
 **Important**: Section ordering may change based on dependencies. For example, if dynamic lapse depends on account value (ITM ratio), move the AV section before lapse. The tutorial Level 3 Steps 04-05 demonstrate this reordering.
 
@@ -140,10 +220,11 @@ Always look these up with `gspio docs` before using. Here's the landscape:
 
 | Accessor | Key Methods |
 |----------|------------|
-| `.projection` | `cumulative_survival()`, `prospective_value()`, `previous_period()`, `next_period()`, `at_period()`, `with_period()` |
+| `.projection` | `cumulative_survival()`, `prospective_value()`, `previous_period()`, `next_period()`, `at_period()`, `with_period()`, `accumulate()`, `remaining_sum()` |
 | `.finance` | `to_monthly()`, `compound()`, `discount_factor()`, `present_value()` |
 | `.excel` | `pv()`, `yearfrac()`, `from_excel_serial()` |
 | `.list` | `.sum()`, `.mean()`, `.cumsum()`, `.head()` |
+| (expression) | `.cum_prod()`, `.sum()`, `.round()`, `.clip()` |
 
 **Do not memorize signatures.** Look them up:
 
@@ -166,3 +247,19 @@ uv run gspio describe data.parquet
 ```
 
 Use `run-single-policy` heavily. Verify each section produces correct output for one policy before proceeding.
+
+---
+
+## Decrement ordering: BEF_DECR pattern
+
+For production models with multiple decrements and new business:
+
+1. `pols_if_bef_mat` = survival × policy_count × (duration ≤ maturity) × (duration > 0)
+2. `pols_maturity` = pols_if_bef_mat × (duration == maturity_month)
+3. `pols_if_bef_nb` = pols_if_bef_mat − pols_maturity
+4. `pols_new_biz` = policy_count × (duration == 0)
+5. `pols_if_bef_decr` = pols_if_bef_nb + pols_new_biz
+6. `pols_death` = pols_if_bef_decr × mort_rate_mth
+7. `pols_lapse` = (pols_if_bef_decr − pols_death) × lapse_rate_mth
+
+The `duration > 0` guard prevents double-counting NB policies that enter via `pols_new_biz`. For IF-only business, the simple ordering gives identical results. See Level 4 model.py SECTION 8.

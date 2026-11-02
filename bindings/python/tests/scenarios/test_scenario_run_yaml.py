@@ -116,5 +116,5 @@ def test_v0_1_format_raises(tmp_path: Path, mortality_table: Table) -> None:
             },
         ),
     )
-    with pytest.raises(ValueError, match="v0.1 plan format"):
+    with pytest.raises(ValueError, match="aggregations are a list"):
         ScenarioRun.from_yaml(v01_yaml, base_tables={"mortality": mortality_table})

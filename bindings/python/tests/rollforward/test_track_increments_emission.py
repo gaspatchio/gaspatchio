@@ -7,12 +7,18 @@
 
 """``track_increments=True`` emits signed per-op deltas (gh#69).
 
-Each labelled op contributes an ``increment_{label}`` struct field holding
-the delta it actually applied to its target — negative for charges, positive
-for credits, zero after a stop or lapse. Zero-after-lapse is the honest
-representation: reconstructing flows from state differences conflates "no
-charge" with "nothing left to charge against", which was silently wrong for
-55 of 111 projection years in the clean-room UL conversion.
+Every op contributes an ``increment_{key}`` struct field holding the delta it
+actually applied to its target — negative for charges, positive for credits,
+zero after a stop or lapse. Zero-after-lapse is the honest representation:
+reconstructing flows from state differences conflates "no charge" with
+"nothing left to charge against", which was silently wrong for 55 of 111
+projection years in a universal-life model conversion.
+
+A step the model's author named takes that name as its key. ``Floor`` and
+``Round`` carry no label field and take the synthetic ``{kind}@{ordinal}``
+the kernel builds from their position in the chain, so that no step of a
+tracked rollforward goes unreported and ``closing = opening + Σ movements``
+closes on quoted rows rather than on a derived residual.
 """
 
 from __future__ import annotations
@@ -25,6 +31,7 @@ import pytest
 
 from gaspatchio import ActuarialFrame, compile_rollforward
 from gaspatchio.rollforward._builder import RollforwardBuilder
+from gaspatchio.rollforward._ops import increment_keys
 from gaspatchio.schedule import Schedule
 
 
@@ -112,7 +119,159 @@ class TestEmission:
         assert out["inc"][0].to_list() == pytest.approx([-50.0, -60.0, 0.0])
 
 
+class TestStructuralSteps:
+    """Every step emits, and the two with no label emit under `kind@ordinal`.
+
+    A chain whose last step is a floor used to yield one movement fewer
+    than it has steps, and the amount the floor absorbed -- the one number an
+    account value that would have gone negative is audited by -- was on no
+    file at all. The key is the kernel's, so that the row is quoted rather
+    than derived from what the other rows do not explain.
+    """
+
+    def test_a_floor_that_bites_reports_what_it_absorbed(self) -> None:
+        """100 - 60 = 40; 40 - 60 = -20, floored back to 0 by +20."""
+        af = _frame(av_init=[100.0], draw=[[60.0, 60.0]])
+        b = af.projection.rollforward(
+            states={"av": af["av_init"]}, track_increments=True
+        )
+        b["av"].subtract(af["draw"], label="drawdown").floor(value=0.0)
+
+        compiled = compile_rollforward(b)
+        af.eop = compiled.expr_for("av")
+        af.inc_draw = compiled.increment_for("drawdown")
+        af.inc_floor = compiled.increment_for("floor@2")
+        out = af.collect()
+
+        assert out["eop"][0].to_list() == pytest.approx([40.0, 0.0])
+        assert out["inc_draw"][0].to_list() == pytest.approx([-60.0, -60.0])
+        assert out["inc_floor"][0].to_list() == pytest.approx([0.0, 20.0])
+
+    def test_a_floor_that_never_bites_reports_zero_in_every_period(self) -> None:
+        """The field is there either way: absent and all-zero say different things."""
+        af = _frame(av_init=[100.0], draw=[[10.0, 10.0]])
+        b = af.projection.rollforward(
+            states={"av": af["av_init"]}, track_increments=True
+        )
+        b["av"].subtract(af["draw"], label="drawdown").floor(value=0.0)
+
+        compiled = compile_rollforward(b)
+        af.inc_floor = compiled.increment_for("floor@2")
+        out = af.collect()
+        assert out["inc_floor"][0].to_list() == pytest.approx([0.0, 0.0])
+
+    def test_a_round_reports_the_rounding_delta(self) -> None:
+        """100 - 33.333 = 66.667 -> 66.67, so the round put back +0.003."""
+        af = _frame(av_init=[100.0], draw=[[33.333, 33.333]])
+        b = af.projection.rollforward(
+            states={"av": af["av_init"]}, track_increments=True
+        )
+        b["av"].subtract(af["draw"], label="drawdown").round(decimals=2)
+
+        compiled = compile_rollforward(b)
+        af.eop = compiled.expr_for("av")
+        af.inc_round = compiled.increment_for("round@2")
+        out = af.collect()
+
+        assert out["eop"][0].to_list() == pytest.approx([66.67, 33.34])
+        assert out["inc_round"][0].to_list() == pytest.approx([0.003, 0.003])
+
+    def test_a_chain_carrying_both_names_each_by_its_own_ordinal(self) -> None:
+        """The ordinal is the step's 1-based position in the declared chain.
+
+        The same number the artifact's ``increments`` array lists against the
+        step, so a waterfall row and a summary entry name one step.
+        """
+        af = _frame(av_init=[100.0], draw=[[33.333]])
+        b = af.projection.rollforward(
+            states={"av": af["av_init"]}, track_increments=True
+        )
+        b["av"].subtract(af["draw"], label="drawdown").floor(value=0.0).round(
+            decimals=2
+        )
+
+        compiled = compile_rollforward(b)
+        assert increment_keys(compiled.ir.transitions) == (
+            "drawdown",
+            "floor@2",
+            "round@3",
+        )
+        af.inc_floor = compiled.increment_for("floor@2")
+        af.inc_round = compiled.increment_for("round@3")
+        out = af.collect()
+        assert out["inc_floor"][0].to_list() == pytest.approx([0.0])
+        assert out["inc_round"][0].to_list() == pytest.approx([0.003])
+
+    def test_a_chain_with_no_structural_step_keeps_the_shape_it_had(self) -> None:
+        """A fully labelled chain emits what it emitted before, in that order."""
+        af = _frame(av_init=[0.0], premium=[[100.0, 100.0]])
+        b = af.projection.rollforward(
+            states={"av": af["av_init"]}, track_increments=True
+        )
+        b["av"].add(af["premium"], label="Premium")
+        b["av"].subtract(af["premium"], label="Withdrawal")
+
+        compiled = compile_rollforward(b)
+        assert increment_keys(compiled.ir.transitions) == ("Premium", "Withdrawal")
+        af.inc_p = compiled.increment_for("Premium")
+        af.inc_w = compiled.increment_for("Withdrawal")
+        out = af.collect()
+        assert out["inc_p"][0].to_list() == pytest.approx([100.0, 100.0])
+        assert out["inc_w"][0].to_list() == pytest.approx([-100.0, -100.0])
+
+    def test_the_increments_sum_to_the_period_change_in_the_balance(self) -> None:
+        """The rollforward's check line, on the kernel's own rows, with no residual.
+
+        Opening at t is closing at t-1, with the initial state in front. The
+        floor bites in the second period, so a chain tracking only its
+        labelled step would miss the balance by the amount it absorbed.
+        """
+        af = _frame(av_init=[100.0], draw=[[60.0, 60.0, 10.0]])
+        b = af.projection.rollforward(
+            states={"av": af["av_init"]}, track_increments=True
+        )
+        b["av"].subtract(af["draw"], label="drawdown").floor(value=0.0)
+
+        compiled = compile_rollforward(b)
+        af.eop = compiled.expr_for("av")
+        af.inc_draw = compiled.increment_for("drawdown")
+        af.inc_floor = compiled.increment_for("floor@2")
+        out = af.collect()
+
+        closing = out["eop"][0].to_list()
+        movements = zip(out["inc_draw"][0].to_list(), out["inc_floor"][0].to_list())
+        opening = 100.0
+        for period, (close, (drawn, floored)) in enumerate(zip(closing, movements)):
+            assert close - opening == pytest.approx(drawn + floored, abs=1e-12), (
+                f"period {period}"
+            )
+            opening = close
+
+
 class TestGates:
+    def test_a_label_carrying_the_reserved_character_is_refused(self) -> None:
+        """`@` is the kernel's own, and a label free to spell it collides."""
+        af = _frame(av_init=[0.0], premium=[[100.0]])
+        b = af.projection.rollforward(
+            states={"av": af["av_init"]}, track_increments=True
+        )
+        b["av"].add(af["premium"], label="fund@1")
+        with pytest.raises(ValueError, match="is reserved"):
+            compile_rollforward(b)
+
+    def test_the_reserved_character_is_refused_without_tracking_too(self) -> None:
+        """The reservation is about the vocabulary, not about the flag.
+
+        A label accepted while tracking is off and refused the moment it is
+        switched on would make that flag a breaking change to a model that
+        already ran.
+        """
+        af = _frame(av_init=[0.0], premium=[[100.0]])
+        b = af.projection.rollforward(states={"av": af["av_init"]})
+        b["av"].add(af["premium"], label="fund@1")
+        with pytest.raises(ValueError, match="is reserved"):
+            compile_rollforward(b)
+
     def test_unknown_label_names_the_available_ones(self) -> None:
         af = _frame(av_init=[0.0], premium=[[100.0]])
         b = af.projection.rollforward(
@@ -122,24 +281,6 @@ class TestGates:
         compiled = compile_rollforward(b)
         with pytest.raises(KeyError, match="Premium"):
             compiled.increment_for("premium")  # case matters; message helps
-
-    def test_collector_unknown_label_refused_immediately(self) -> None:
-        """The deprecated facade validates like the compiled path.
-
-        Without this, an unknown label sails through to Polars collect and
-        dies as a missing struct field, far from the call that asked (the
-        gh#93 rule: refuse at the call, naming the valid labels).
-        """
-        from gaspatchio.rollforward._collector import RollforwardCollector
-
-        af = _frame(av_init=[0.0], premium=[[100.0]])
-        b = af.projection.rollforward(
-            states={"av": af["av_init"]}, track_increments=True
-        )
-        b["av"].add(af["premium"], label="Premium")
-        collector = RollforwardCollector(compile_rollforward(b))
-        with pytest.raises(KeyError, match="Premium"):
-            collector.increment_for("premium")
 
     def test_increment_for_without_flag_points_at_the_flag(self) -> None:
         af = _frame(av_init=[0.0], premium=[[100.0]])
@@ -183,3 +324,40 @@ class TestGates:
             schedule=_sched(),
         )
         assert b._track_increments is False
+
+
+class TestTheIncrementIsTheMovement:
+    """``increment_for`` reports ``after - before``, not the operand (spec 16.2).
+
+    ul-r7 read ``151.6199999999999`` for an interest credit rounded to 151.62
+    and took it for a defect against the docstring's "what the op actually
+    applied". The specification rules the movement, so the docstring now says
+    so; this pins the contract both ways round.
+    """
+
+    def test_a_rounded_credit_reports_the_balance_movement(self) -> None:
+        opening = 2238.2200000000003
+        premium = 2500.0
+        af = ActuarialFrame(
+            {"av0": [opening], "prem": [[premium] * 2], "rate": [[0.032] * 2]}
+        )
+        af = af.projection.set(
+            start_date=datetime.date(2026, 1, 31), n_periods=2, frequency="annual"
+        )
+        rf = af.projection.rollforward(states={"av": af["av0"]}, track_increments=True)
+        rf["av"].add(af["prem"], label="premium").grow(
+            af["rate"], round_charge=2, label="interest"
+        )
+        compiled = compile_rollforward(rf)
+        af.av = compiled.expr_for("av")
+        af.interest = compiled.increment_for("interest")
+        af.premium = compiled.increment_for("premium")
+        row = af.collect().row(0, named=True)
+
+        before = opening + premium
+        credited = round(before * 0.032, 2)
+        assert credited == 151.62
+        assert row["interest"][0] == (before + credited) - before
+        assert row["interest"][0] != credited
+        # ...which is what lets the period's increments close the balance.
+        assert row["av"][0] == opening + row["premium"][0] + row["interest"][0]

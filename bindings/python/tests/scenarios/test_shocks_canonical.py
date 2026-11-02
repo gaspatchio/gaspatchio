@@ -18,7 +18,6 @@ from gaspatchio.scenarios.shocks import (
     MultiplicativeShock,
     OverrideShock,
     PipelineShock,
-    RelativeFloorShock,
     TimeConditionalShock,
 )
 
@@ -76,19 +75,30 @@ def test_filtered_canonical_form_dict_sorted():
 
 
 def test_time_conditional_canonical_form():
-    """TimeConditionalShock encodes when-clause plus time_column."""
+    """TimeConditionalShock encodes its when-clause; time_column is retired."""
     inner = AdditiveShock(delta=0.001, table="rates", column=None)
     shock = TimeConditionalShock(
         shock=inner,
         when={"t": {"eq": 0}},
         table="rates",
         column=None,
-        time_column="t",
     )
     cf = shock.canonical_form()
     assert cf["kind"] == "TimeConditionalShock"
-    assert cf["time_column"] == "t"
+    assert "time_column" not in cf
     assert cf["when"] == {"t": {"eq": 0}}
+
+
+def test_a_nested_target_is_its_outer_shocks_in_the_identity():
+    """Repeating the outer target on an inner shock says nothing more, and hashes so."""
+    repeated = TimeConditionalShock(
+        shock=AdditiveShock(delta=0.001, table="rates"), when={"t": 0}, table="rates"
+    )
+    bare = TimeConditionalShock(
+        shock=AdditiveShock(delta=0.001), when={"t": 0}, table="rates"
+    )
+    assert repeated.canonical_form() == bare.canonical_form()
+    assert bare.canonical_form()["shock"]["table"] is None
 
 
 def test_max_min_canonical_form():
@@ -118,22 +128,11 @@ def test_override_canonical_form_rejects_non_scalar():
         shock.canonical_form()
 
 
-def test_relative_floor_canonical_form():
-    """RelativeFloorShock encodes its delta field."""
-    shock = RelativeFloorShock(delta=0.001, table="rates", column=None)
-    assert shock.canonical_form()["kind"] == "RelativeFloorShock"
+def test_relative_floor_shock_is_retired():
+    """RelativeFloorShock refused at run and is gone; MaxShock is the move."""
+    import gaspatchio.scenarios as scenarios
 
-
-def test_relative_floor_to_expression_raises_not_implemented():
-    """RelativeFloorShock.to_expression must fail loud, not silently no-op (F9c).
-
-    The old placeholder floored at ``col - delta`` on the already-shocked value,
-    so the condition was never true and the shock did nothing. It now raises and
-    points to MaxShock as the correct way to express max(shocked, original-delta).
-    """
-    shock = RelativeFloorShock(delta=0.2, table="lapse", column=None)
-    with pytest.raises(NotImplementedError, match="MaxShock"):
-        shock.to_expression(pl.col("lapse"))
+    assert not hasattr(scenarios, "RelativeFloorShock")
 
 
 def test_canonical_form_keys_sorted():

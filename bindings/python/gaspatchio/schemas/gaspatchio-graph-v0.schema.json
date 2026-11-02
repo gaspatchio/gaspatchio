@@ -1,0 +1,2357 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gaspatchio.dev/schemas/gaspatchio-graph-v0.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "title": "gaspatchio calculation-graph artifact",
+  "description": "A record of how every column of an actuarial model was computed: for each column, the columns it was derived from, the operation that derived it, and the identity of the assumption data the operation read. It is not a model file, it is not a results format, and it is not an execution protocol; a consumer that only reads is a conforming consumer. A consumer must accept an artifact carrying fields this document does not define and must preserve them on a round-trip, which is why nothing here is closed with additionalProperties.",
+  "type": "object",
+  "required": [
+    "schema",
+    "profile",
+    "fingerprint_algorithm",
+    "producer",
+    "created_at",
+    "model",
+    "graph_fingerprint",
+    "book",
+    "facets_used",
+    "facets_required",
+    "nodes",
+    "edges",
+    "assumptions",
+    "holes",
+    "boundaries",
+    "enrichment",
+    "policies",
+    "facets",
+    "document_digest"
+  ],
+  "properties": {
+    "schema": {
+      "description": "The identifier a consumer resolves through its own table of known identifiers. It is a key, not a locator: it must not be parsed to derive a version, a name or an ordering, and must not be fetched as a URL.",
+      "const": "gaspatchio-graph/v0-preview.3"
+    },
+    "profile": {
+      "description": "Which conformance profile this artifact claims. The audit profile carries the envelope, the node record, the edges and the identity fields. The executable profile is audit plus the per-node operation tree and the compiled-rollforward payload, and it is unstable in this preview. An executable artifact is also a conforming audit artifact.",
+      "enum": [
+        "audit",
+        "executable"
+      ]
+    },
+    "fingerprint_algorithm": {
+      "description": "An opaque token naming the byte grammar every node digest in this artifact was taken under. Equality is the only operation defined on it: it is not parsed, not ordered, not resolved over a network, and carries no version arithmetic. The token changes whenever the byte grammar changes, for any reason, and two artifacts carrying different tokens must not be compared. This edition of the preview emits exactly one token, so the schema pins it: a field whose whole contract is equality is not a free string. The pin is why moving the grammar reissues this document, which section 12.2 records as a preview coupling that relaxes to a pattern at /v0 final.",
+      "const": "gspv0-preview-3"
+    },
+    "producer": {
+      "description": "What wrote the file.",
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "description": "The name of the software that produced the artifact.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version of that software.",
+          "type": "string"
+        },
+        "versions": {
+          "description": "What produced the values this document carries, or section 6.1's withheld form where the exporter was asked not to carry it. The six keys a results file's result manifest states, spelled as it spells them, so a document and a results file of one run can be held against each other without translation: core_version, the core package's version as installed; extension_version, the version compiled into the extension that process loaded, one number with core_version in a release wheel and not necessarily in any other install; extension_sha256, that extension's digest, or a sentence beginning 'unavailable:' where the file on disk was no longer the one loaded; polars_version; python_version; and platform. A run on a second engine states what that engine's own manifest says produced it, which may name keys of its own. Beside them, imports names each installed distribution the model imports. Optional, and absent on documents written before the member, so a document that was valid stays valid. Outside every fingerprint: a model with one graph_fingerprint on a new library is one model, and this says which library ran it. Withheld is for a document committed as a golden, whose strings must not move with the machine that exported it; it is never the default.",
+          "oneOf": [
+            {
+              "type": "object",
+              "not": {
+                "required": [
+                  "omitted"
+                ]
+              },
+              "properties": {
+                "imports": {
+                  "description": "Each installed distribution the model imports, as {name: version} under the distribution's own name, ordered by name: read off the import statements of the model and of every local module it imports, the standard library and this producer never listed. Empty where the model imports nothing from outside its directory but the standard library; absent where the model block names no model source.",
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/omitted"
+                }
+              ],
+              "properties": {
+                "omitted": {
+                  "const": "withheld"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "created_at": {
+      "description": "When the artifact was written, as an RFC 3339 timestamp in UTC. The Z designator, never a numeric offset: format is annotation-only in most validators, so the pattern is what actually holds two artifacts' timestamps to one form a reader can compare as written.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    },
+    "model": {
+      "$ref": "#/$defs/model",
+      "description": "The version block: what was run, and from what."
+    },
+    "graph_fingerprint": {
+      "$ref": "#/$defs/sha256",
+      "description": "One string standing for the whole model: SHA-256 over three counted sections, in order and each sorted \u2014 every (node id, node fingerprint) pair, every assumption content hash the model reads, and every unaccounted column name. Pairs rather than a bag of fingerprints, because two columns computed the same way share a fingerprint by design and swapping which formula binds to which name is a model change."
+    },
+    "formulas_fingerprint": {
+      "$ref": "#/$defs/sha256",
+      "description": "The model's formulas with its data left out (\u00a712.6): \u00a712.4's fold taken again over every node's operation tree with each attribute naming a value object's content \u2014 a table's, a join's right side's, a mortality basis's, a curve's, a schedule's, and both attributes of a column of values handed over at a line \u2014 replaced by the text masked, and over two sections, the (node id, fingerprint) pairs and the unaccounted column names; the tables section is left out. A re-sourced table, curve or schedule moves graph_fingerprint and leaves this where it was; an edited formula, a literal, a table name or a key moves both. Recomputable from an executable document; read as written from an audit one, as local_fingerprint is. Outside every canonical byte and inside document_digest. Optional: absent on documents written before the member."
+    },
+    "book": {
+      "$ref": "#/$defs/book",
+      "description": "The book this document was built over: the policy data the model was run over, identified by its content. A content digest under the grammar of section 12.3 over the input columns the model's answers rest on, in name order, with the rows as the book holds them \u2014 the digest a result manifest records as inputs_digest when the engine was handed the book itself, so a document and such a result can be matched by content; an engine handed the book crossed with a scenario axis, or filtered, records a digest of what it was handed instead. It is taken over the data and never over a file's bytes: two writes of one table are one book, and one changed premium is another. Required from the book line of section 14.1, and written by default: a comparison of two documents reports a changed book as data drift without being told which file each was run over. Section 7.5 states the member."
+    },
+    "facets_used": {
+      "description": "Every facet name present anywhere in the artifact, in the envelope and on every node, so that a consumer can see what it is about to meet without walking the whole document first. May be empty.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "facets_required": {
+      "description": "The subset of the facets a consumer must understand for the artifact to mean what it says. A consumer that meets a name here it does not know must refuse the artifact: the producer has said the artifact does not mean what it appears to mean without that facet. May be empty.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nodes": {
+      "description": "One entry per account of one column, rather than one per column. A column the model defined three times is three nodes, and the definition the frame ended up holding is the one whose in_final_schema is true; the rest are history, and that history is what makes a change report possible at all.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/node"
+      }
+    },
+    "edges": {
+      "description": "One entry per entry of a target node's reads.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/edge"
+      }
+    },
+    "assumptions": {
+      "description": "The assumption data the model read, each entry carrying its own content hash. May be empty.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assumption"
+      }
+    },
+    "holes": {
+      "description": "One entry per column the model holds that nothing in the model accounts for. May be empty, and the empty array is the claim worth making.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/hole"
+      }
+    },
+    "boundaries": {
+      "description": "One entry per point at which the model froze its plan and kept its formulas. May be empty.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/boundary"
+      }
+    },
+    "selection": {
+      "description": "Every step that chose which rows the model values -- a filter, a semi join or an anti join -- in the order the model took them (section 7.6). Each enters both graph_fingerprint and formulas_fingerprint, its reads join the book's columns, and a consumer replaying the document applies it to the book before projecting. Absent where the model chose no rows, and on every document written before the member: a model that selects nothing keeps the digests it had.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/selection_step"
+      }
+    },
+    "sources": {
+      "description": "The model's own text, one entry per file any node's source_location names, ordered by path. Optional, and every artifact written before v0-preview.2's sources line carries none: the member is additive, so a document without it is valid and says less about where its calculations were written than a producer would say today. Section 7.3 states the entry.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "enrichment": {
+      "description": "The one evaluation context the values in this artifact are interpreted under, or null when the artifact carries no values.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/enrichment"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "policies": {
+      "description": "The axis the values in this artifact are read along: one entry per policy the export carries, in the order the selector produced. Empty exactly where enrichment is null, because an artifact carrying no values states no context to read them under. The first entry is enrichment with why added to it, so a consumer written against gaspatchio-graph/v0-preview.2 reads a multi-policy document as its first policy and is not wrong about anything it reads there. A node's enrichment is read along this axis: one policy and each field is the value itself, more than one and each field is an array positionally aligned to this one.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/policy_context"
+      }
+    },
+    "facets": {
+      "$ref": "#/$defs/facets",
+      "description": "Facets carried by the artifact as a whole. May be empty."
+    },
+    "document_digest": {
+      "$ref": "#/$defs/sha256",
+      "description": "The seal over this document: SHA-256 over its own canonical serialization with this member itself lifted out and nothing else lifted out, taken under the recipe grammar of section 12.3. It answers a question the fingerprint chain deliberately does not — not is this the same calculation, which the identity fields answer, but is this the file the producer wrote. So created_at is inside it and formula is inside it, and an edited quotation, which moves no fingerprint, moves this. Required from v0-preview.2, where the producer writes one by default; the member was defined and optional under v0-preview.1, and a document written there without one no longer validates. Section 13.1 states the limits: this is tamper-evidence and not tamper-proofing, a determined re-sealer beats the standalone file and is caught only by the web of citations that carry a cited document's digest beside its identity, and producer signing is future work and is not built. A holder that must transform a document — deriving an audit view from an executable one, rewriting a source location for publication — carries no seal, re-seals as the producer of what it wrote, or asks the producer for the transformed document in the first place."
+    }
+  },
+  "allOf": [
+    {
+      "description": "In the executable profile the operation tree is in the file, so a computed node's engines field is a walk of a document the producer already holds rather than a fact it has to discover: a core node holds no engine fragment by the definition of its tier and an engine_native node holds at least one, and section 12.1 requires the engine to be named on the fragment itself. So on those two tiers the claim is required, and the third bullet of section 8.3 then makes it non-empty on engine_native. It is required of computed nodes and of no others. A compiled rollforward states a tier over a tree that is the compilation's identity rather than its recipe (section 11.2), so a walk of that tree reaches nothing the state machine's own expressions reach and the only claim this rule could force out of it is the empty array section 8.3 declines to require. An opaque node is left out for the reason section 8.3 gives in its own words: the leaf that made it opaque is the one nothing could read, so the walk's silence there is not evidence.",
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "executable"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "computed"
+                  },
+                  "tier": {
+                    "enum": [
+                      "core",
+                      "engine_native"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "tier"
+                ]
+              },
+              "then": {
+                "required": [
+                  "engines"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "book": {
+      "description": "Which columns of the book were digested, and the digest. columns names the input columns the model's answers rest on that the book held, in name order: every column the data arrived with that the finished frame holds, or that some line reads on the way to a column the finished frame holds \u2014 the required inputs an engine is handed when it runs the document. A column the model neither reads nor hands back cannot move a number and is not part of the book's identity. digest is the content hash of those columns, or the unavailable form of section 6.1 where the producer held no book or could not read the one it held.",
+      "type": "object",
+      "required": [
+        "columns",
+        "digest"
+      ],
+      "properties": {
+        "columns": {
+          "description": "The input columns the digest was taken over, in name order, each once. A reader holding the book takes the digest again over exactly these.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "digest": {
+          "description": "The content hash of the columns above under the grammar of section 12.3, rows as the book holds them; or {\"omitted\": \"unavailable\"} where the producer could not vouch for its book, with detail saying why. No other reason applies: the book is never inlined, so there is no size to weigh, and its identity is not a thing a producer withholds.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/omitted"
+                },
+                {
+                  "properties": {
+                    "omitted": {
+                      "const": "unavailable"
+                    },
+                    "detail": {
+                      "description": "Why the producer could not vouch for its book, as one sentence: that no book was handed to the export, the opening sentence of the refusal the content grammar or the reader gave, or that the digest was left to the engine a document built only to be handed to one digests its inputs into its own result manifest. A comparison that cannot read the two books reports this rather than only that it could not. Optional, so a document written before it was carried still conforms.",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "sha256": {
+      "description": "A content hash in the form every identity field in this artifact stamps: sha256: followed by sixty-four lowercase hex digits. The digest that folds into a dependent node's fingerprint is the raw thirty-two bytes, not the stamped string; the prefix is the stamped field's form only.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "dtype": {
+      "description": "A type from the closed vocabulary: bool, i64, f64, str, date, datetime, or list[T] where T is itself one of these. On the wire a date is an ISO-8601 calendar date string and a datetime an ISO-8601 timestamp string. Integer widths collapse to i64 and float widths to f64, so neither a producer nor a consumer may rely on this field to recover storage width. A producer that meets a type it cannot map refuses to produce the artifact, naming the column and the type, rather than guessing. The vocabulary nests and a regular expression cannot, so the pattern below expresses list nesting to three levels.",
+      "type": "string",
+      "pattern": "^(bool|i64|f64|str|date|datetime|list\\[(bool|i64|f64|str|date|datetime|list\\[(bool|i64|f64|str|date|datetime|list\\[(bool|i64|f64|str|date|datetime)\\])\\])\\])$"
+    },
+    "node": {
+      "description": "One account of one column. Every field required here is required in the audit profile, and an executable artifact is a conforming audit artifact, so every one of them is required in both. Several are nullable, and a null is a claim rather than a gap: it says the producer looked and there was nothing to find.",
+      "type": "object",
+      "required": [
+        "id",
+        "column",
+        "version",
+        "kind",
+        "dtype",
+        "shape",
+        "provenance",
+        "formula",
+        "reads",
+        "reads_assumptions",
+        "tier",
+        "local_fingerprint",
+        "fingerprint",
+        "in_final_schema",
+        "materialized_at",
+        "source_location",
+        "facets"
+      ],
+      "properties": {
+        "id": {
+          "description": "Either a bare column name \u2014 the node for a column nothing on the model defines, which is an arriving column or an unrecorded or rebuilt hole \u2014 or column@k, where k is a definition ordinal counting from 1. An overwritten hole is a definition the producer saw written and could not read, and its id is column@k like any other definition's. A consumer must never split an id to recover the column name: a column name may itself contain @, and column is the authoritative field. Ids are positional within one artifact and carry no meaning across artifacts, in the way a line number is a position in one document; matching a node across two artifacts is done on (column, fingerprint), never on id.",
+          "type": "string",
+          "minLength": 1
+        },
+        "column": {
+          "description": "The column this node defines or supplies. Null on a node that is not a column of the model at all. In what this preview emits that is exactly the two namespaces section 8.1 reserves — state: names a running rollforward state, rollforward: names one compiled rollforward — and a consumer of an emitted artifact may read a null column as one of those two. The reserved payload sections of section 17 are also not columns and also carry a null, and their id namespaces are not reserved yet, so a null column is not by itself a reserved prefix.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "description": "Which definition of the column this is, counting from 1. Null on a node nothing defined \u2014 an arriving column, an unrecorded or rebuilt hole, a running state, or a node that is not a column of the model at all. An overwritten hole carries the ordinal of the definition it stands for.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "kind": {
+          "description": "What account this node gives of its column. input: the column arrived rather than being derived, and source says where from. computed: one definition the model wrote, with an as-written formula behind it. hole: the column is on the frame and nothing in the model accounts for it, or, where the hole is versioned, nothing accounts for that one definition of it. rollforward: one compiled rollforward. state: one running state of a rollforward, which is not a column of the model. state_graph: the states of one rollforward taken together, as the entry a reader follows to reach them. nested_valuation: a valuation evaluated inside the projection, carried as one node rather than inlined into the graph around it.",
+          "enum": [
+            "input",
+            "computed",
+            "hole",
+            "rollforward",
+            "state",
+            "state_graph",
+            "nested_valuation"
+          ]
+        },
+        "dtype": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/dtype"
+            },
+            {
+              "const": "unknown"
+            }
+          ],
+          "description": "The column's type in the closed vocabulary of section 10, or \"unknown\" where the producer never determined one. \"unknown\" is not a type and must never stand in for a type the producer met and could not map -- that is a refusal. It is also what says whether the column holds a selection: a bool or list[bool] column holds one, and section 10 carries the caveat that a selection may also arrive as a numeric 0/1 mask this vocabulary cannot tell from a quantity. No second field restates that, because a second field could disagree with this one."
+        },
+        "shape": {
+          "description": "One value per policy (scalar), or one per projection period (list).",
+          "enum": [
+            "scalar",
+            "list",
+            "unknown"
+          ]
+        },
+        "provenance": {
+          "description": "Where this node's values came from, or which recording door defined them \u2014 one question, and a node has one answer to it. model_points: the policy data the model was run over. assumptions: an assumption table. injected: a whole column of values handed to the model at a known line, data rather than a formula but located data. continuation: a column that came back through an explicit re-entry holding values the frame's own calculations do not account for, data from outside located at the statement that brought it back. assignment: one column assigned on its own. batch: a column a single call produced as a batch, whatever the number of columns that call defined. rename: a column's identity carried forward under a new name. join: a column arriving from the right side of a join. projection: the projection timeline's own configuration. date: a column a date operation derived onto a new frame. rollforward: a compiled rollforward's own within-period bookkeeping. Null on a node with neither an arrival nor a door behind it: a column nothing accounts for, a running state, and the two reserved payload kinds. Which of these a node may state is bound to its kind below, in both directions, so that the states the two fields could once contradict each other in are refused rather than described.",
+          "enum": [
+            "model_points",
+            "assumptions",
+            "injected",
+            "continuation",
+            "assignment",
+            "batch",
+            "rename",
+            "join",
+            "projection",
+            "date",
+            "rollforward",
+            null
+          ]
+        },
+        "formula": {
+          "description": "The as-written right-hand side of the statement that defined the column, as the model author typed it. This field is normative, and it is the audit surface: it is what a reviewer reads to see the calculation, and what a comparison between two quarters is a comparison of. Null where no single as-written expression defines the column. The recording door is the test, not the number of columns behind it: a batch call is null whatever the number of columns it defined, including one, and a rename, a join, a timeline configuration and a date derivation are null because none of them writes an expression against the column at all. Null again where the source could not be resolved. An engine's own rendering of the same calculation is not this field; where a facet carries one and the two disagree, this field is authoritative.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reads": {
+          "description": "What this node read, as node ids, in the order its formula names them. The order is part of the calculation rather than an incidental ordering: it is the order in which the node's fingerprint folds its dependencies.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reads_assumptions": {
+          "description": "The names of the entries in the envelope's assumptions section this node's own formula reads. Required and usually empty, because most formulas read columns and nothing else: the empty array is the node's own answer rather than a field left unfilled. Every name here resolves to the name of an entry in that section, which is the join from one figure to the bases it rests on, whatever kind of base it is: an entry that states no name of its own is named after its contents rather than left null, so a node reading a curve names it as a node reading a table does.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "extracts": {
+          "description": "What this column materialises out of a compiled rollforward: the compilation it reads and the running balance it holds, as the state reference (fund@eop) and not the reserved state: id built around it. Written on a column whose formula extracts a state and absent on every other node, which is every column of a model that never escalated to a state machine. One extraction is the object it is; a formula materialising two balances — and they may come from two compilations — carries the array, in the order the formula names them. The compilation named here is also one of this node's reads, and the state named here is one that compilation declares in its states; the validator's semantic layer holds the records to each other, and a consumer may too. Section 16 states the query rule that rests on this: the forward audit questions asked of such a column are asked of its running state as well, because an edge walk from the column alone stops at the column — what the state machine reads is the state.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/extraction"
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#/$defs/extraction"
+              }
+            }
+          ]
+        },
+        "settings": {
+          "description": "The timing convention the operation this node's whole calculation is ran under, as that operation's own section 11 attributes, with the names and the values the operation tree carries. Two identifiers state one: projection.cumulative_survival, whose start_at is null where the survival is recorded end-of-period and 1.0 where it opens the run at the boundary (§11.1.19), and projection.prospective_value, whose timing says whether the current period's cashflow is discounted and whose discount_kind is the only thing saying which of the two the second operand is (§11.1.21). The root operation only: an accumulation nested inside a larger formula carries its convention in the executable profile's tree, and the node states none. Absent on every other node — never an empty object, never null. Quoted from the attribute rather than recovered from the formula text or from a lowered expression, and never renamed: the recorded convention is start_at. A later revision may add an identifier here, which widens what this document accepts and moves the schema identifier by §14's own rule.",
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "start_at",
+                "from_survival"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "start_at": {
+                  "description": "The value the cumulative survival opens the run at, or null where the fold is recorded end-of-period (§11.1.19). Beginning-of-period timing records 1.0.",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "from_survival": {
+                  "description": "Whether the operand handed to the fold is already a survival rate rather than a decrement.",
+                  "type": "boolean"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "timing",
+                "discount_kind"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "timing": {
+                  "description": "Whether a period's cashflow lands at the beginning of that period, undiscounted in its own period, or at the end of it (§11.1.21).",
+                  "enum": [
+                    "beginning_of_period",
+                    "end_of_period"
+                  ]
+                },
+                "discount_kind": {
+                  "description": "Whether the second operand is a rate or a factor — the only thing in the record that says which, and a factor read as a rate is a valuation error rather than a parse error.",
+                  "enum": [
+                    "rate",
+                    "factor"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "engines": {
+          "description": "The engines this node's escape-hatch text needs, first mention first. A formula the framework built for itself reaches into none of them. An absent field is no claim at all; a field present and empty is a positive claim that this node is engine-free and can be executed by anything holding the operations it names. A validator must not conflate the two. The field is optional precisely so that a producer that cannot see which engines a fragment needs can leave it out and say nothing, rather than emit an empty array and say something false.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tier": {
+          "description": "How much of this node the specification can account for. core: every operation in the node's tree is in the specification's own vocabulary at tier core. engine_native: somewhere in the tree is a fragment written in one engine's own expression language, declared rather than hidden. opaque: somewhere in the tree is an identifier the producer carries but cannot classify. A node's tier is the weakest tier reached anywhere in its tree \u2014 one unclassifiable leaf makes the whole node opaque. Null on a leaf, which has nothing to execute.",
+          "enum": [
+            "core",
+            "engine_native",
+            "opaque",
+            null
+          ]
+        },
+        "local_fingerprint": {
+          "$ref": "#/$defs/sha256",
+          "description": "SHA-256 over the canonical bytes of this node's operation tree: what the node computes, and nothing else. The canonical bytes deliberately exclude the source location, any rendered expression text, and the node's own column name, so reformatting a model, moving a definition to another file, or renaming a column is not a model change. Two columns computed the same way share one by design; it is not a collision, and a consumer must not treat it as one."
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/sha256",
+          "description": "SHA-256 over this node's local_fingerprint followed by the fingerprints of everything the node reads, in the order reads states. A node whose local_fingerprint moved between two artifacts was edited; a node whose local_fingerprint held and whose fingerprint moved was not edited \u2014 its formula is what it was, and its answer still cannot be, because something upstream of it changed."
+        },
+        "in_final_schema": {
+          "description": "Whether this node is what the frame's column actually holds at the end. Every other node is history rather than an answer.",
+          "type": "boolean"
+        },
+        "retained": {
+          "description": "Present and true only on a node whose in_final_schema is false, and stating that the producer held that definition's own output to the export and read value_sample and trace off it. Without the declaration, enrichment on a superseded definition is refused: a value read off the finished frame for a definition the frame no longer holds is the number that replaced it, which is the wrong number against the right formula. A producer that did not retain omits the field rather than writing false, and a node whose in_final_schema is true may not carry it — the definition the column holds is read like any other live column and has nothing to retain.",
+          "type": "boolean"
+        },
+        "materialized_at": {
+          "description": "The boundary ordinal at which this node's value was frozen, or null. The audit reading is taken together with kind: a computed column frozen at a boundary is wearing an input's clothes, which is the case this field exists for, while on a leaf it records the freeze that settled the arriving value. Always null on a hole, which has no recorded history for a freeze to have settled.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "source_location": {
+          "description": "file:line in the model author's own source, relative to the model's root and never absolute, or null where it could not be resolved, as in source read from stdin, an exec-compiled snippet, a compile('<string>') fragment or a bare REPL. A notebook cell is not one of those: the notebook registers each cell's source where the resolver reads it, so a cell reports a location like any file. It is outside the canonical bytes by design.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "anchors_to": {
+          "description": "The core operation whose meaning is closest and at least as wide, which an operation outside the core domain and a node whose tier is engine_native may each name. At least as wide is the direction that matters: the anchor may cover more than the operation it anchors, never less, so a reader who knows only the core domain is never told something narrower than the truth. A producer that cannot anchor omits the field rather than guessing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "states": {
+          "description": "The running states of this rollforward. Carried by rollforward nodes, which is a statement about what this producer writes rather than one this document refuses a node for breaking: unlike the two reserved payloads below, the field is not bound to the kind here.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "increments": {
+          "description": "The movements this rollforward applies to its running balances, in the order they apply \u2014 what moved, under what name, onto which balance, and whether the amount depended on the balance it changed. Carried by rollforward nodes, which is a statement about what this producer writes rather than one this document refuses a node for breaking: like states above it, and unlike the two reserved payloads below, the field is not bound to the kind here. Present where a producer can write a citable summary and absent otherwise \u2014 the compiled artefact out of reach, an operation the vocabulary does not name, two movements under one label, or a movement whose label is the empty string, which the label member refuses \u2014 omitted rather than written empty, which would claim a compilation that moves nothing.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/increment"
+          }
+        },
+        "movements": {
+          "description": "Enrichment: what each step of this rollforward actually moved, under the envelope's evaluation context. Keyed by the kernel's own name for the step \u2014 the author's label where the step carries one, '{kind}@{ordinal}' where it is structural and carries none \u2014 and every step of the chain is a key, which is what lets a reader close 'closing = opening + sum of movements' without a residual term for the steps nobody named. Each key holds the signed per-period amount in the shape 'value_sample' takes: the timeline itself on an axis of one policy, an array of those on an axis of several, null at an entry the amount has no meaning under. Unconstrained beyond that in this preview, as 'value_sample' is; that the keys are exactly the steps this node's 'increments' declares is checked in the semantic layer, which is where a claim one member makes about another belongs.",
+          "type": "object"
+        },
+        "state_graph": {
+          "$ref": "#/$defs/state_graph_payload",
+          "description": "The states of one product and the intensities of the transitions between them (§17). Carried by state_graph nodes only, in both directions: this document refuses a state_graph node without the payload and any other node with it. Nothing in this preview emits one."
+        },
+        "nested_valuation": {
+          "$ref": "#/$defs/nested_valuation_payload",
+          "description": "One valuation evaluated inside the projection by an inner model (§17). Carried by nested_valuation nodes only, in both directions: this document refuses a nested_valuation node without the payload and any other node with it. Nothing in this preview emits one."
+        },
+        "expr": {
+          "$ref": "#/$defs/expr",
+          "description": "UNSTABLE. Present only in the executable profile. The shape of this subtree is not frozen in this preview and a consumer must not depend on it."
+        },
+        "value_sample": {
+          "description": "Enrichment: what this column held under the envelope's enrichment context, which it means nothing without and is interpreted only under. A column holding one value per policy carries that value; a per-period column carries the declared policy's every period, in order, unless the context narrowed the values to one period, in which case it carries that period's own value. Unconstrained in this preview, and listed here so that the schema's field list is the one section 8 states."
+        },
+        "trace": {
+          "description": "Enrichment: a per-period trace of this column, which means nothing without the envelope's enrichment context and is interpreted only under it. Unconstrained in this preview, and listed here so that the schema's field list is the one section 8 states."
+        },
+        "branches": {
+          "description": "Enrichment, opt-in: what each branch of this node's conditional would have held under the envelope's enrichment context, and which branch the condition chose. Carried only where the producer was asked to evaluate the branches, and only on a computed node whose whole calculation is a conditional — the outer one, a conditional nested inside a branch being part of that branch's own value. then and otherwise are each shaped as this node's value_sample is: one value for a column holding one per policy, the declared policy's every period for a per-period column. fired names the branch the condition chose, in the two words the formula itself uses, as one word where the sample is one value and one word per period — the sample's own length — where it is a run of them. Absent on every other node and on a node whose branches the producer could not evaluate; never null, and never an empty object. Where the document carries more than one policy the member is an array of these objects, positionally aligned to the envelope's policies, carrying a null at the position of a policy whose branches could not be evaluated — the axis is one length throughout, and a shorter array would be a node disagreeing with the envelope about how many policies the file holds.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/branches"
+            },
+            {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/branches"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "facets": {
+          "$ref": "#/$defs/facets",
+          "description": "Facets carried by this node. May be empty."
+        }
+      },
+      "allOf": [
+        {
+          "description": "An arriving column says which of the four ways it arrived. A node that is not computed and not a payload has one of these and no other, so the state where the record said both where the values came from and which door defined them is not writable any more.",
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "input"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "provenance": {
+                "enum": [
+                  "model_points",
+                  "assumptions",
+                  "injected",
+                  "continuation"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "description": "A computed column says which recording door defined it, and never where values arrived from: a computed column's answer to where its values came from is its formula. Null is not among them either, because a definition this producer recorded came through the door it was recorded at.",
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "computed"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "provenance": {
+                "enum": [
+                  "assignment",
+                  "batch",
+                  "rename",
+                  "join",
+                  "projection",
+                  "date"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "description": "A compiled rollforward came through the door section 8 reserves for one, and through no other. No statement in the model's source defines it, so none of the other doors can be the one it came through, and it is not a column that arrived either.",
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "rollforward"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "provenance": {
+                "const": "rollforward"
+              }
+            }
+          }
+        },
+        {
+          "description": "Four kinds have neither an arrival nor a door and say so with a null. A hole's whole account of itself is that it has none; a running state is not a column, so nothing supplied it and no statement defined it; and the two reserved payload kinds are things the model computes rather than things it was handed. A producer that later needs a value for one of these widens this list, which moves the schema identifier by the same rule that moved it for the collapse.",
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "hole",
+                  "state",
+                  "state_graph",
+                  "nested_valuation"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "provenance": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "description": "Naming an engine is a positive claim that something in the tree reaches into one, which contradicts the core claim and contradicts a leaf's null tier. It stops there: it does not imply engine_native, because a tier is the weakest thing reached anywhere in the tree (section 11.2), and a tree holding both an engine fragment and an unclassifiable identifier is opaque and still has a true engine to name.",
+          "if": {
+            "properties": {
+              "engines": {
+                "minItems": 1
+              }
+            },
+            "required": [
+              "engines"
+            ]
+          },
+          "then": {
+            "properties": {
+              "tier": {
+                "enum": [
+                  "engine_native",
+                  "opaque"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "description": "An engines field present and empty is a positive claim of engine-freedom, and engine_native is its contradictory. A record must not make both. Stated as the refusal of one tier rather than a list of the permitted ones, so that it does not quietly refuse the null tier the next rule permits.",
+          "if": {
+            "properties": {
+              "engines": {
+                "maxItems": 0
+              }
+            },
+            "required": [
+              "engines"
+            ]
+          },
+          "then": {
+            "properties": {
+              "tier": {
+                "not": {
+                  "const": "engine_native"
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "A leaf has nothing to execute, so a leaf naming the engines its non-existent text needs is a statement about nothing. The empty array stays legal there: it is true, if useless, and refusing it would refuse a true record.",
+          "if": {
+            "properties": {
+              "tier": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "tier"
+            ]
+          },
+          "then": {
+            "properties": {
+              "engines": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "description": "A node giving the account state_graph carries the payload that account is made of, and a node giving any other account carries no such payload. Both directions, because a payload on a node whose kind does not claim it is a product declared where nothing says a product was declared, and a reader who trusts kind would never look.",
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "state_graph"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "state_graph"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "state_graph"
+              ]
+            }
+          }
+        },
+        {
+          "description": "A node giving the account nested_valuation carries the payload that account is made of, and a node giving any other account carries no such payload. Both directions, for the same reason: an inner model recorded on a node that does not say it holds one is a boundary a dependency would be drawn straight through.",
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "nested_valuation"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "nested_valuation"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "nested_valuation"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "edge": {
+      "description": "One entry per entry of the target's reads. source is the node whose value was read; target is the node that read it, and relationship says which of two questions the read answers. What a reserve depends on and what selected the row are different questions, and an impact cone drawn through a key edge is a wrong answer to the first. How the read was narrowed is not on the edge: it travels on the reading node, in the gaspatchio_column_transformation facet, which is announced and never required.",
+      "type": "object",
+      "required": [
+        "source",
+        "target",
+        "relationship"
+      ],
+      "properties": {
+        "source": {
+          "description": "The id of the node whose value was read.",
+          "type": "string"
+        },
+        "target": {
+          "description": "The id of the node that read it.",
+          "type": "string"
+        },
+        "relationship": {
+          "description": "Whether the value read flows into the result (DIRECT) or only decided which values did (INDIRECT). Named for what an edge states rather than for the vocabulary the value is drawn from: this document already spends type on the type vocabulary of section 10, and an edge states a relationship rather than has a type.",
+          "enum": [
+            "DIRECT",
+            "INDIRECT"
+          ]
+        }
+      }
+    },
+    "hole": {
+      "description": "One column the model holds that nothing in the model accounts for. The section deliberately restates what the hole nodes already say: whether a model can account for every column it holds is answered by reading one array, rather than by walking every node and classifying it.",
+      "type": "object",
+      "required": [
+        "column",
+        "reason",
+        "closes_with"
+      ],
+      "properties": {
+        "column": {
+          "description": "The column nothing accounts for.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "The evidence the producer met, which is an observation and never an inference. unrecorded: nothing accounts for the column and the producer cannot see why \u2014 a query plan written directly, past the interfaces the producer logs at, and a gap in the producer's own logging leave the same evidence behind \u2014 or a calculation reads a name no frame ever held. overwritten: a column the producer accounted for, a calculation it logged or a column the data arrived with, that a write past those interfaces then replaced; the producer saw the write and read off the plan which names it defined, so the hole is a definition it can place and cannot read. rebuilt: a column the frame arrived with whose memory was, when the frame was built, a calculated column of values another frame's collect in the same process produced, still held by that frame or by the caller it handed them to. Section 7.1 says what each of the three cannot see.",
+          "enum": [
+            "unrecorded",
+            "overwritten",
+            "rebuilt"
+          ]
+        },
+        "content": {
+          "description": "Present only on a hole the frame arrived holding: a rebuilt column, and an unrecorded name the policy data never had. The content hash of that one column as it arrived, under the grammar of section 12.3 and read as a book is read (a category as its text). It says what the column held, never what made it; section 12.4 folds it beside the name, so an edit to a file the setup read moves graph_fingerprint. Absent where the producer held no values for the hole.",
+          "$ref": "#/$defs/sha256"
+        },
+        "closes_with": {
+          "description": "A URI naming documentation describing what closes the hole, so that a reader who meets one is pointed at what to do about it rather than only told that it exists.",
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "selection_step": {
+      "description": "One row-selecting step (section 7.6). The predicate's op-tree travels in both profiles: a step defines no column, so the tree is the whole account of it.",
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "expr",
+        "tier",
+        "reads",
+        "local_fingerprint",
+        "fingerprint",
+        "source_location"
+      ],
+      "properties": {
+        "id": {
+          "description": "selection: followed by the step's position in the list, counting from 1. A reserved namespace: no column is produced into it.",
+          "type": "string",
+          "pattern": "^selection:[1-9][0-9]*$"
+        },
+        "kind": {
+          "description": "filter keeps the rows the predicate holds for; semi keeps the rows whose key the right side matches; anti keeps those it does not.",
+          "enum": [
+            "filter",
+            "semi",
+            "anti"
+          ]
+        },
+        "expr": {
+          "$ref": "#/$defs/expr"
+        },
+        "tier": {
+          "description": "The tier of the predicate's tree (section 11.2). A replay applies a core predicate; an executable document carries no step below core.",
+          "enum": [
+            "core",
+            "engine_native",
+            "opaque"
+          ]
+        },
+        "reads": {
+          "description": "The nodes the predicate's column references bound to when the step was taken, in the order the tree names them.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "local_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_location": {
+          "description": "The line the step was written on, relative to the model's root, or null where the producer could not determine one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "right_fingerprint": {
+          "description": "On a semi or anti join, the right side's content identity, as its join call states it; null for a right side handed over lazily.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "boundary": {
+      "description": "One point at which the model froze its plan and kept its formulas.",
+      "type": "object",
+      "required": [
+        "ordinal",
+        "position",
+        "source_location"
+      ],
+      "properties": {
+        "ordinal": {
+          "description": "Counts from 0 in the order the boundaries occurred, and is what a node's materialized_at names.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "position": {
+          "description": "Locates the boundary in the producer's ordered record of the model's steps, so a reader can see which definitions fell before it and which after.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_location": {
+          "description": "The place in the model's source at which the freeze happened, relative to the model's root and never absolute, or null where the producer could not determine one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "assumption": {
+      "description": "One assumption input the model read, carrying its own content identity. Which grammar that identity was computed under depends on the kind, and section 12.3 of the specification names both. A table's fingerprint and a join right side's are taken under the content grammar \u2014 a hash over the values themselves, column by column, deliberately not an engine's serialisation. A schedule's and a curve's is taken under the recipe grammar \u2014 a canonical JSON encoding of the object's own recipe, keys sorted at every level, an unknown type refused rather than coerced. Neither is the node byte grammar the envelope's fingerprint_algorithm names, though that one token covers all four.",
+      "type": "object",
+      "required": [
+        "kind",
+        "name",
+        "fingerprint",
+        "payload"
+      ],
+      "properties": {
+        "kind": {
+          "description": "Which assumption primitive this entry records. A join is the right-hand side of a relational join, carried so that a consumer holding the file can execute a joined model; section 11.1.2 of the specification states the operation and section 15 the entry.",
+          "enum": [
+            "table",
+            "join",
+            "schedule",
+            "curve"
+          ]
+        },
+        "name": {
+          "description": "What this entry is called. The name the model gave the base where it states one — a table's name is the string a lookup resolves by. A schedule and a curve state none, and a producer names such an entry after its own contents: the kind and the first eight digits of the fingerprint beside it, as in curve:5c1f0a3d. That is a label a reader follows a join by and not an identity — the fingerprint is the identity, and two entries of one kind whose digests agreed that far would share a label. Null is valid and a consumer must read one: it says this producer had no name to give, which is the shape documents written before entries were named carry.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/sha256",
+          "description": "The entry's content hash. Where the payload is inlined a consumer can re-hash the values and check this against them; where it is not, it is a claim about data held somewhere else. For a table this is the hash of the table's own contents and is not its Table.source_sha(): that second digest is the recipe one, taken over the table's name, its dimension set and this content hash together, and it is a different string answering a different question \u2014 this one says whether the values moved, the recipe one says whether anything about the table did. Both are published identities of the same table; the artifact publishes this one, and a reader comparing against a source stamp is comparing two different things."
+        },
+        "payload": {
+          "description": "The assumption's values, inlined, or an object saying a value exists and was left out, and why. The member named omitted is what tells the two apart, so an inlined payload does not carry one at its top level: a payload where the two forms could not be told apart would give up the distinction the omitted object exists to keep.",
+          "oneOf": [
+            {
+              "type": "object",
+              "not": {
+                "required": [
+                  "omitted"
+                ]
+              }
+            },
+            {
+              "$ref": "#/$defs/omitted"
+            }
+          ]
+        },
+        "source_file": {
+          "description": "A table entry's member: the file the table was read from, relative to the model's root with .. segments where it is outside it and shares a directory with it below the filesystem's root, and as its name under `<outside the model's root>` where it does not, or its name alone where the document has no root; null where the model built the table from a frame in its own code, so no file was named. Absent where the producer could not say which, on every other kind, and on documents written before the member: it is optional, so a document that was valid stays valid. It is where a reviewer holding the file re-reads it as the table and compares the fingerprint; a verifier never opens it as it stands, since it names where the file sat when the record was written.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shaped_by": {
+          "description": "A table entry's member, written beside source_file: each step of the table's own recipe that reshaped what it read, empty where the processed frame is a plain read of its source. A step names the step (renamed, cast, melted, set or computed), the column it produced, and from, the column or columns it was made from, or to, the type a cast produced. A table with any step is not a plain read of any file, so a verifier never reads one back from a file. Absent where source_file is absent.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "step",
+              "column"
+            ],
+            "properties": {
+              "step": {
+                "type": "string"
+              },
+              "column": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "description": "An inlined join payload is a frame and nothing else: the columns of the right side in its own order and the rows in the sorted order the fingerprint was taken over. It carries no dimensions and no value, because a join declares no key and answer roles — equality of key values is the whole matching rule and the key is named on the node. An entry of this kind carrying either member is stating a role a join does not have, so it is refused here rather than read as a table that lost its own.",
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "join"
+              },
+              "payload": {
+                "not": {
+                  "required": [
+                    "omitted"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "payload"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "required": [
+                  "columns",
+                  "rows"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "dimensions"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "value"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "omitted": {
+      "description": "A value this document defines, present but not carried, with the reason standing in place of the value. Four claims have to stay apart here and a consumer that collapses any two of them loses what the form exists to keep. There was nothing here: the field is absent, or present and null. There was something here and the producer chose not to carry it for its size: omitted size, and it was weighed, so bytes says what fetching it would cost. Something was read here that the producer cannot vouch for now: omitted unavailable, and it was never weighed, so no weight is claimed. And something was here that the producer was asked not to disclose: omitted withheld, which is a decision rather than a limit, and carries no weight because the weight is not what decided it. Only size is a cost a reader can budget against; unavailable says the producer's own account of this value is short; withheld says the account is complete and was not given.",
+      "type": "object",
+      "required": [
+        "omitted"
+      ],
+      "properties": {
+        "omitted": {
+          "description": "Why the value is not here. size is a value the producer holds, weighed, and declined to carry. unavailable is a value the producer named the identity of and cannot now vouch for \u2014 a base built in another process, one that has moved off the identity the formula read it under, a file that can no longer be read \u2014 so there was nothing in front of the producer to inline or to measure. withheld is a value the producer held and was asked not to disclose: size would state a reason that is false, since the value was not weighed and found wanting but simply not offered, and a silence would leave a reader unable to tell a decision from an oversight.",
+          "enum": [
+            "size",
+            "unavailable",
+            "withheld"
+          ]
+        },
+        "roles": {
+          "description": "Carried only by an assumption table entry's payload omitted for its size: the dimensions, the value column and the typed columns the payload would have carried, everything but the rows, so a reviewer holding the table's file can still read it as the table and compare the fingerprint. It goes with the stand-in, so putting the values back in place of it leaves the entry exactly as the inline export writes it. Absent at every other position this form is accepted.",
+          "type": "object",
+          "required": [
+            "dimensions",
+            "value",
+            "columns"
+          ],
+          "properties": {
+            "dimensions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "value": {
+              "type": "string"
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "dtype"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "dtype": {
+                    "$ref": "#/$defs/dtype"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "bytes": {
+          "description": "The size of the value the producer declined to inline, so that a reader can tell what it would cost to obtain the value elsewhere. Measured in the serialisation the enclosing document is written in, so the number is the cost in a file rather than in the tightest encoding available. It is the value written as its own document, not the span it would occupy inside this one: nesting indents every line again, so the same value takes more of this file than the figure says — a quarter more for a small canonical form, half as much again for a table of rows. Present only where the reason is size: an unavailable value was never in front of the producer to be weighed, and a nought there would be a measurement nobody made.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "description": "A value omitted for its size was weighed, so bytes states the weight.",
+          "if": {
+            "properties": {
+              "omitted": {
+                "const": "size"
+              }
+            },
+            "required": [
+              "omitted"
+            ]
+          },
+          "then": {
+            "required": [
+              "bytes"
+            ],
+            "properties": {
+              "bytes": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        {
+          "description": "A value the producer cannot vouch for was never weighed, so bytes is absent or null rather than nought.",
+          "if": {
+            "properties": {
+              "omitted": {
+                "const": "unavailable"
+              }
+            },
+            "required": [
+              "omitted"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bytes": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "description": "A value withheld was not weighed either, because its weight is not what decided it, so bytes is absent or null rather than nought.",
+          "if": {
+            "properties": {
+              "omitted": {
+                "const": "withheld"
+              }
+            },
+            "required": [
+              "omitted"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bytes": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "source": {
+      "description": "One file the model's calculations were written in, carrying its own text. The directory of assumption entries beside it is an account of the bases the model read, and a model's own source is not one of those — so it travels here, where a consumer looking for the code does not have to filter a directory of rate tables to find it. One entry per distinct path any node's source_location names, ordered by path so two artifacts of one model compare as written. Section 7.3 of the specification states the entry and section 8 the location it is reached from.",
+      "type": "object",
+      "required": [
+        "path",
+        "fingerprint",
+        "payload"
+      ],
+      "properties": {
+        "path": {
+          "description": "Where the file sits, relative to the model's root, with .. segments where it is outside it and shares a directory with it below the filesystem's root, and as its name under `<outside the model's root>` where it does not. It is the same string the source_location of every node written in this file carries, up to the colon and the line number, so a reader who has followed a node here finds this entry and not a second spelling of it.",
+          "type": "string"
+        },
+        "fingerprint": {
+          "description": "SHA-256 over the file's own bytes, which is neither of section 12.3's grammars: a model file is text somebody wrote rather than a frame of values or a canonical recipe. It is the same stamp model.source_sha carries, so the entry for model.source_path re-hashes to exactly the digest the version block publishes beside it and a page showing the source can say the source it shows is the source that ran. Null where the producer took no digest at all — a file outside the root, or one it could not read — because an identity nobody took is not an identity to publish.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "payload": {
+          "description": "The file's text, inlined, or an object saying the text exists and was left out, and why. The member named omitted is what tells the two apart, as it does for an assumption entry.",
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "text"
+              ],
+              "properties": {
+                "text": {
+                  "description": "The file's bytes decoded as UTF-8, which re-encode to those same bytes exactly — so a consumer re-encoding what it reads reaches the fingerprint beside it, with no rule about line endings and no normalisation on the way through.",
+                  "type": "string"
+                }
+              },
+              "not": {
+                "required": [
+                  "omitted"
+                ]
+              }
+            },
+            {
+              "$ref": "#/$defs/omitted"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "description": "A producer that took no digest carried no text either: the two absences are one event, a file the producer could not or would not read, and an entry claiming text under a null fingerprint would be publishing bytes nothing in the file identifies.",
+          "if": {
+            "properties": {
+              "fingerprint": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "fingerprint"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "required": [
+                  "omitted"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "model": {
+      "description": "The version block: what was run, and from what. Every member may be null.",
+      "type": "object",
+      "required": [
+        "label",
+        "source_path",
+        "source_sha",
+        "git",
+        "model_points"
+      ],
+      "properties": {
+        "label": {
+          "description": "The name the run gave the model, or null.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_path": {
+          "description": "Where the model file sits, relative to the model's root \u2014 the directory the model file is in, or the root of the repository it is in where git is present \u2014 or null. The root is not carried: a reader holding this artifact holds the model file, and git says which of the two bases applied. No path in this artifact is absolute.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_sha": {
+          "description": "The content hash of the model source, or null.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modules": {
+          "description": "Every local module the model imports: each file beside the model, or in a package beside it, that its import statements resolve to, and those files' own in turn, as path and fingerprint, ordered by path. An installed package and the standard library are never listed: a name is resolved against the model's own directory, as running the model resolves it. Empty where the model imports nothing from beside itself. Optional, and absent where the block names no model source and on documents written before the member, so a document that was valid stays valid.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "fingerprint"
+            ],
+            "properties": {
+              "path": {
+                "description": "Where the module sits, relative to the model's root, as source_path is written.",
+                "type": "string"
+              },
+              "fingerprint": {
+                "description": "SHA-256 over the module file's own bytes, taken as source_sha is, or null where the producer could not read it.",
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/sha256"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "git": {
+          "description": "The revision the model source was at, as commit and dirty; null where git ran beside the model and found no working tree, which is the one thing null means here; or section 6.1's unavailable form where git could not answer \u2014 no git executable on PATH, git refusing the directory, a repository with no commit yet, no answer in time \u2014 with detail saying which, in git's own first line where git ran. Every absolute path git names in that line, quoted or bare, is written relative to the model's directory, as every path in this document is, or as <a path outside the model's directory> where it shares no directory with the model's but the filesystem's root or sits on another drive.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "commit": {
+              "description": "The commit the model source was at.",
+              "type": "string"
+            },
+            "dirty": {
+              "description": "Whether the working tree carried uncommitted changes at that commit.",
+              "type": "boolean"
+            },
+            "omitted": {
+              "description": "Present only where the revision could not be stated: unavailable, the one reason that applies. git was there to ask and gave no answer, so the producer's account of the revision is short.",
+              "const": "unavailable"
+            },
+            "detail": {
+              "description": "Why git could not state the revision, as one sentence: git's own first line where it ran and refused, or what happened where it did not run or did not finish. Present with omitted.",
+              "type": "string"
+            }
+          }
+        },
+        "model_points": {
+          "description": "The policy data the model was run over, or null.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "path": {
+              "description": "Where the policy data sits, relative to the model's root, with .. segments where it is outside it and shares a directory with it below the filesystem's root, and as its name under `<outside the model's root>` where it does not.",
+              "type": "string"
+            },
+            "fingerprint": {
+              "$ref": "#/$defs/sha256",
+              "description": "The content hash of the policy data."
+            }
+          }
+        },
+        "results": {
+          "description": "The output file this run wrote, on the shape model_points carries. Optional, and absent rather than null where the run wrote none: every other member of this block answers a question the run asked and could fail to answer, and this one answers a question the run may never have asked. Its presence is what lets a reader holding a results file beside this document check that the two came out of one run.",
+          "type": "object",
+          "properties": {
+            "path": {
+              "description": "Where the run wrote its finished frame, relative to the model's root, with .. segments where it is outside it and shares a directory with it below the filesystem's root, and as its name under `<outside the model's root>` where it does not.",
+              "type": "string"
+            },
+            "fingerprint": {
+              "$ref": "#/$defs/sha256",
+              "description": "The content hash of that file, taken the same way the policy data's is."
+            }
+          }
+        }
+      }
+    },
+    "enrichment": {
+      "description": "The one evaluation context the values in this artifact are interpreted under. A node's value sample and trace mean nothing without it.",
+      "type": "object",
+      "required": [
+        "policy_id",
+        "aggregation",
+        "periods",
+        "filter"
+      ],
+      "properties": {
+        "policy_id": {
+          "description": "The policy the samples were taken from, or null where the producer could not identify one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "aggregation": {
+          "description": "The fold this entry is an account of, named as the framework that performed it spells the aggregator \u2014 sum, period_sum, mean, count, min, max, variance, std \u2014 or null where the values are one policy's rather than a fold of several. It is a name rather than a closed list: the two words this member carried before there was an aggregator set to name would refuse a document stating a fold that exists, and the set grows by a framework adding one rather than by this specification listing it.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "periods": {
+          "description": "The projection periods the values were taken at, or null where every period was taken.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer"
+          }
+        },
+        "filter": {
+          "description": "The filter the rows the samples were read from had been cut down by, written as the producer received it, or null where the samples were read from the whole frame. A filtered sample is a different number from an unfiltered one, and a reader given the number without the cut cannot reproduce it from the model the artifact names.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "branches": {
+      "description": "What each branch of one conditional would have held under one evaluation context, and which of the two the condition chose. Three members, all three always: a node states both branches or neither, because one branch and no comparison is not half an answer but a different one.",
+      "type": "object",
+      "required": [
+        "then",
+        "otherwise",
+        "fired"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "then": {
+          "description": "What the then branch's whole subtree came to for the declared policy, in the shape and the formatting this node's value_sample is written in."
+        },
+        "otherwise": {
+          "description": "What the otherwise branch's whole subtree came to for the declared policy, in the shape and the formatting this node's value_sample is written in."
+        },
+        "fired": {
+          "description": "The branch the condition chose: one word for a column holding one value per policy, and one word per period — aligned with value_sample — for a per-period column.",
+          "oneOf": [
+            {
+              "enum": [
+                "then",
+                "otherwise"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "then",
+                  "otherwise"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "policy_context": {
+      "description": "One evaluation context on the artifact's policy axis: the four members enrichment carries, and the sentence saying how this policy came to be in the file.",
+      "type": "object",
+      "required": [
+        "policy_id",
+        "aggregation",
+        "periods",
+        "filter",
+        "why"
+      ],
+      "properties": {
+        "policy_id": {
+          "description": "The policy the samples at this position of the axis were taken from, or null where the producer could not identify one \u2014 a book that names no policy column can still be walked by row position.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "aggregation": {
+          "description": "The fold this entry is an account of, named as the framework that performed it spells the aggregator \u2014 sum, period_sum, mean, count, min, max, variance, std \u2014 or null where the values are one policy's rather than a fold of several. It is a name rather than a closed list: the two words this member carried before there was an aggregator set to name would refuse a document stating a fold that exists, and the set grows by a framework adding one rather than by this specification listing it.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "periods": {
+          "description": "The projection periods the values were taken at, or null where every period was taken.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer"
+          }
+        },
+        "filter": {
+          "description": "The filter the rows the samples were read from had been cut down by, written as the producer received it, or null where the samples were read from the whole frame.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "why": {
+          "description": "How this policy came to be in the file, as a plain sentence recording the row it sits at and the id it carries. On every entry, including the one an export nobody narrowed produces: \"row 0 of 1,000\" is the fact a reader most needs about a selection, and a document silent about it lets a reader assume a policy was chosen when it was only first.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "facets": {
+      "description": "A named, independently versioned, optional block of extra information: a place to carry something this document does not define, without changing anything it does. Facets appear in exactly two places \u2014 the envelope's facets object and a node's facets object \u2014 and nowhere else. A facet never changes the meaning of a field this document defines; a facet that would has to be named in facets_required.",
+      "type": "object",
+      "properties": {
+        "gaspatchio_column_transformation": {
+          "$ref": "#/$defs/column_transformation_facet"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/facet"
+      }
+    },
+    "facet": {
+      "description": "One facet. A consumer that meets a facet it does not know and which is not named in facets_required must ignore it, and must preserve it unchanged on any round-trip: a facet that passes through a tool which does not understand it is still there, and still itself, when it comes out. Facet names produced by this specification's reference implementation begin gaspatchio_; a third party defining a facet uses its own prefix, and a name with no prefix is reserved.",
+      "type": "object",
+      "required": [
+        "_producer",
+        "_schemaURL"
+      ],
+      "properties": {
+        "_producer": {
+          "description": "A URI identifying who produced the facet. It is an opaque identifier and a validator must not fetch it.",
+          "type": "string",
+          "format": "uri"
+        },
+        "_schemaURL": {
+          "description": "A URI identifying the facet's own schema. It is an opaque identifier, a validator must not fetch it, and it is not required to resolve over a network for an artifact to be valid.",
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "column_transformation_facet": {
+      "description": "How each of a node's reads was narrowed. The core edge carries the relationship — whether the value flowed into the answer or only decided which values did — because that is the distinction an impact cone is drawn through; this carries the narrowing beside it, which changes no answer and so is announced in facets_used and never in facets_required. It hangs on the node that did the reading because section 6 puts facets on the envelope and on a node and an edge is neither, and the reading node's own reads list is the index: section 9 writes one edge per entry of it, in its order. The inner objects are OpenLineage's own — transformations is its array name, type and subtype are its key names, and the enum spellings and the pairing rule are its own. What is not verbatim is the outer indexing: OpenLineage keys by dataset and field, and this keys by node id. OpenLineage's two further members, description and masking, are available and this producer writes neither; a consumer must not read their absence as a claim.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/facet"
+        },
+        {
+          "type": "object",
+          "required": [
+            "reads"
+          ],
+          "properties": {
+            "reads": {
+              "description": "One entry per entry of the node's reads, in that order.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "source",
+                  "transformations"
+                ],
+                "properties": {
+                  "source": {
+                    "description": "The id of the node whose value was read — the same id the matching edge names as its source.",
+                    "type": "string"
+                  },
+                  "transformations": {
+                    "description": "How the read was narrowed, one entry per way the read was made. The reference implementation writes one entry for a read made one way, and for a name read more than once in one formula the single strongest claim its reads support, except that a direct read made through two windows (periods or position) writes one entry per window, the strongest narrowing first; a consumer must not read the count as a promise, since the array is OpenLineage's and a producer classifying each read separately would write one per read.",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/column_transformation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "column_transformation": {
+      "description": "One narrowing, in OpenLineage's own spelling. FILTER is the position operand of list.get, and WINDOW the axis a per-policy value is broadcast along, whose length alone reaches the answer. GROUP_BY and SORT are in the vocabulary and no emission rule produces one: they are there for a producer whose model shapes rows in those ways, so that a consumer meets a name that has been defined rather than one it has to guess at.",
+      "type": "object",
+      "required": [
+        "type",
+        "subtype"
+      ],
+      "properties": {
+        "type": {
+          "description": "The relationship the narrowing narrows, repeated here because OpenLineage's object carries it. It states what the matching edge's relationship states.",
+          "enum": [
+            "DIRECT",
+            "INDIRECT"
+          ]
+        },
+        "subtype": {
+          "description": "The narrowing of type. IDENTITY, TRANSFORMATION and AGGREGATION go with DIRECT; JOIN, GROUP_BY, FILTER, SORT, WINDOW and CONDITIONAL go with INDIRECT.",
+          "enum": [
+            "IDENTITY",
+            "TRANSFORMATION",
+            "AGGREGATION",
+            "JOIN",
+            "GROUP_BY",
+            "FILTER",
+            "SORT",
+            "WINDOW",
+            "CONDITIONAL"
+          ]
+        },
+        "offset": {
+          "description": "Which period the value was read at, as a distance in periods from the row being computed: negative a prior period, positive a later one, the sign the projection accessor already uses. Present only on a read whose operation reads its source at another period \u2014 \u22121 for projection.previous_period, +1 for projection.next_period, the stated relative_period for projection.at_period \u2014 and quoted from that attribute rather than recovered from an expression's text. Absent on every read of the period being computed, which is nearly every read: never 0, and never null. An offset goes with a TRANSFORMATION narrowing and with no other, because it says which period a value came from and a lookup key, a conditional's test or an operand folded across the whole run is not a value narrowed by a distance.",
+          "type": "integer",
+          "not": {
+            "const": 0
+          }
+        },
+        "periods": {
+          "description": "Which periods of the operand one period of the answer reads, on an AGGREGATION read: from and to, each a whole number of periods from the period being computed (negative before it, positive after it, the sign offset uses) or first / last, the ends of that policy's own run. A cumulative sum reads {from: first, to: 0}, a remaining sum {from: 0, to: last}, a total {from: first, to: last}. Quoted from the operation identifier and its own attributes (section 9's table), never recovered from an expression's text. A bound, not a promise that every period inside it moves the answer: an operand moved outside it moves no period of the answer. Absent on every read of the period being computed, on every read of a column holding one value per policy, and wherever the members cannot write the window exactly; never null.",
+          "type": "object",
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/period_bound"
+            },
+            "to": {
+              "$ref": "#/$defs/period_bound"
+            }
+          }
+        },
+        "position": {
+          "description": "The stored position a literal list.get read, quoted as the call wrote it: 0 the first period, -1 the last (section 11.1.22). A position in the policy's own list rather than a distance from the period being computed. Absent where the position is held in a column, which differs by policy.",
+          "type": "integer"
+        }
+      },
+      "allOf": [
+        {
+          "description": "periods goes with an AGGREGATION read, and with neither offset nor position.",
+          "if": {
+            "required": [
+              "periods"
+            ]
+          },
+          "then": {
+            "properties": {
+              "type": {
+                "const": "DIRECT"
+              },
+              "subtype": {
+                "const": "AGGREGATION"
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "offset"
+                  ]
+                },
+                {
+                  "required": [
+                    "position"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "description": "position goes with a DIRECT read that takes a value, TRANSFORMATION or AGGREGATION, and not with offset.",
+          "if": {
+            "required": [
+              "position"
+            ]
+          },
+          "then": {
+            "properties": {
+              "type": {
+                "const": "DIRECT"
+              },
+              "subtype": {
+                "enum": [
+                  "TRANSFORMATION",
+                  "AGGREGATION"
+                ]
+              }
+            },
+            "not": {
+              "required": [
+                "offset"
+              ]
+            }
+          }
+        },
+        {
+          "description": "A DIRECT read is narrowed by IDENTITY, TRANSFORMATION or AGGREGATION.",
+          "if": {
+            "properties": {
+              "type": {
+                "const": "DIRECT"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "subtype": {
+                "enum": [
+                  "IDENTITY",
+                  "TRANSFORMATION",
+                  "AGGREGATION"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "description": "An INDIRECT read is narrowed by JOIN, GROUP_BY, FILTER, SORT, WINDOW or CONDITIONAL.",
+          "if": {
+            "properties": {
+              "type": {
+                "const": "INDIRECT"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "subtype": {
+                "enum": [
+                  "JOIN",
+                  "GROUP_BY",
+                  "FILTER",
+                  "SORT",
+                  "WINDOW",
+                  "CONDITIONAL"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "period_bound": {
+      "description": "One end of a read's window: a whole number of periods from the period being computed, or first / last, an end of the policy's own run.",
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "enum": [
+            "first",
+            "last"
+          ]
+        }
+      ]
+    },
+    "expr": {
+      "description": "UNSTABLE. The operation trees are what another engine runs the model from, and they are not yet a stable interface. The JAX engine runs the operations its coverage table lists and refuses the rest by name, and no engine yet covers every operation the format names. Its shape will change, without a compatibility path, while the preview is open, and a consumer that depends on it today accepts that. One node of an operation tree, present only in the executable profile: the node types below are the ones the canonical byte grammar of section 12.1 tags, and hashing a tree read back from here under that grammar reaches the local_fingerprint the same node already carries.",
+      "type": "object",
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "description": "Which kind of node this is. The seven below are the whole vocabulary; a document naming an eighth was written against a different one.",
+          "enum": [
+            "col",
+            "lit",
+            "binop",
+            "call",
+            "when_then",
+            "state",
+            "engine_native"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "title": "column reference",
+          "unevaluatedProperties": false,
+          "description": "A read of one column on the frame, by name.",
+          "required": [
+            "op",
+            "name"
+          ],
+          "properties": {
+            "op": {
+              "const": "col"
+            },
+            "name": {
+              "description": "The column read.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "title": "literal",
+          "unevaluatedProperties": false,
+          "description": "A value written into the formula itself, a sequence of them, or a calendar day. The forms are named apart because they are different things: a band of age boundaries and one boundary of it are different documents, and a date is neither a number nor the text that spells it. Exactly one of value, values and date is present. A date arrives under its own key because JSON has a number token and no date token \u2014 written under value it would be the text \"2024-01-01\", which encodes as the string tag and its eleven bytes and reaches a well-formed digest matching nothing.",
+          "required": [
+            "op"
+          ],
+          "properties": {
+            "op": {
+              "const": "lit"
+            },
+            "value": {
+              "description": "One value on its own.",
+              "type": [
+                "boolean",
+                "number",
+                "string"
+              ]
+            },
+            "date": {
+              "description": "One calendar day, in ISO 8601 extended form and nothing else \u2014 four digits, a hyphen, two digits, a hyphen, two digits, for a year in 0000-9999, with no time, no offset, no Z and no compact form. Wider forms are refused rather than accommodated: the value hashed is the day count, so two spellings of one day would be one digest under two documents and a consumer checking one against the other could not say which the producer wrote. A date is a literal's whole payload and never a member of values; a membership test against a set of dates stays an engine fragment and the node says so.",
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "values": {
+              "description": "A sequence of values, held in full rather than abbreviated: two bands differing only in the middle are two formulas. Flags, whole numbers, decimals and text, as it always has; a date under it is refused.",
+              "type": "array",
+              "items": {
+                "type": [
+                  "boolean",
+                  "number",
+                  "string"
+                ]
+              }
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "value"
+              ]
+            },
+            {
+              "required": [
+                "values"
+              ]
+            },
+            {
+              "required": [
+                "date"
+              ]
+            }
+          ]
+        },
+        {
+          "title": "binary operation",
+          "unevaluatedProperties": false,
+          "description": "One operator over two operands. The vocabulary is closed: seven arithmetic, six comparison, two logical.",
+          "required": [
+            "op",
+            "kind",
+            "left",
+            "right"
+          ],
+          "properties": {
+            "op": {
+              "const": "binop"
+            },
+            "kind": {
+              "description": "The operator applied.",
+              "enum": [
+                "add",
+                "sub",
+                "mul",
+                "div",
+                "floordiv",
+                "mod",
+                "pow",
+                "lt",
+                "le",
+                "gt",
+                "ge",
+                "eq",
+                "ne",
+                "and",
+                "or"
+              ]
+            },
+            "left": {
+              "$ref": "#/$defs/expr"
+            },
+            "right": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        },
+        {
+          "title": "call",
+          "unevaluatedProperties": false,
+          "description": "One named operation over positional arguments, with its typed configuration beside them. Section 11 is where the identifier is looked up and section 11.2 is what it costs to execute. An absent args or attrs is read as the empty run rather than refused: \"no arguments\" is not an ambiguous sentence.",
+          "required": [
+            "op",
+            "name"
+          ],
+          "properties": {
+            "op": {
+              "const": "call"
+            },
+            "name": {
+              "description": "The operation identifier (§11).",
+              "type": "string"
+            },
+            "args": {
+              "description": "The positional arguments, in the order the call takes them.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expr"
+              }
+            },
+            "attrs": {
+              "description": "The call's configuration, one typed value per key. Written in the order the call was configured in; the byte grammar sorts them, and this document is read rather than compared.",
+              "type": "object",
+              "additionalProperties": {
+                "type": [
+                  "boolean",
+                  "number",
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "conditional",
+          "unevaluatedProperties": false,
+          "description": "A test, the branch taken where it holds, and the branch taken where it does not. Both branches are always present: a conditional with nothing to do on one side still says what that side is.",
+          "required": [
+            "op",
+            "cond",
+            "then",
+            "otherwise"
+          ],
+          "properties": {
+            "op": {
+              "const": "when_then"
+            },
+            "cond": {
+              "$ref": "#/$defs/expr"
+            },
+            "then": {
+              "$ref": "#/$defs/expr"
+            },
+            "otherwise": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        },
+        {
+          "title": "state reference",
+          "unevaluatedProperties": false,
+          "description": "A read of one running state of a compiled rollforward (§16).",
+          "required": [
+            "op",
+            "name"
+          ],
+          "properties": {
+            "op": {
+              "const": "state"
+            },
+            "name": {
+              "description": "The state read, by the name its compilation calls it — account_value@eop — and not the state: id one artifact keeps its own nodes apart with (§8.1).",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "title": "engine-native fragment",
+          "unevaluatedProperties": false,
+          "description": "A fragment written in one engine's own expression language, declared rather than hidden. It is what makes a node's tier engine_native (§11.2). An absent deps is read as the empty run.",
+          "required": [
+            "op",
+            "engine",
+            "text"
+          ],
+          "properties": {
+            "op": {
+              "const": "engine_native"
+            },
+            "engine": {
+              "description": "The engine the fragment is written for. The text is opaque outside it, so the engine is the one thing about the fragment that has to be a name a reader knows.",
+              "enum": [
+                "polars",
+                "jax",
+                "python"
+              ]
+            },
+            "text": {
+              "description": "The fragment, as that engine spells it.",
+              "type": "string"
+            },
+            "deps": {
+              "description": "The columns the fragment declares it reads. The text being opaque, this is the only account of them.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "increment": {
+      "description": "One movement of a compiled rollforward's running balance (\u00a716). A summary and not the machine: the amount of a movement, the expression behind it, its rounding, its stopping conditions and the opening value of any state are the compiled state machine, they travel in the gaspatchio_rollforward_ir facet the executable profile carries and this one does not, that facet is unstable and will change without a compatibility path while this preview is open, and a consumer must not read this summary as a stable projection of it.",
+      "type": "object",
+      "required": [
+        "ordinal",
+        "label",
+        "operation",
+        "target",
+        "reads_running_balance"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ordinal": {
+          "description": "Which movement this is, counting from 1 in the order the increments apply, which is the order the array holds them in. The array order is what is normative and this restates it, so that a reader can cite one movement; that the restatement agrees with the position is checked in the validator's semantic layer, the same discipline already applied to a column's definition ordinals. An increment's identity is its position in its compilation \u2014 the pair (the compilation's fingerprint, this ordinal) \u2014 and no per-increment digest is minted, because the compiler already hashes the whole machine once and a second digest under this document's grammar would be free to disagree with it.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "label": {
+          "description": "The name the model's author gave this movement, or null where the operation carries no field for one. Non-empty where present: a label is a name a model reads an increment back by rather than a caption, so the empty string is not one. Null is a claim like every other null in section 8 \u2014 the producer looked, and the operation has no name. Within one increments array no label appears twice; JSON Schema 2020-12 has no cross-item uniqueness on a member, so that requirement is checked in the validator's semantic layer rather than stated here in a voice that would state it nowhere.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "operation": {
+          "description": "What kind of movement this is, in the compiler's own operation vocabulary, closed at ten. Publishing the compiler's own names couples the format to them, and that is accepted: a second vocabulary would be a translation table between two names for one operation, free to drift from the thing it translates. A producer meeting an operation this list does not name omits the whole summary rather than inventing an entry, which is the choice section 16 already makes for states when the compiled artefact is out of reach.",
+          "type": "string",
+          "enum": [
+            "Add",
+            "Subtract",
+            "Charge",
+            "Grow",
+            "GrowCapped",
+            "DeductNAR",
+            "Ratchet",
+            "Floor",
+            "Round",
+            "Apply"
+          ]
+        },
+        "target": {
+          "description": "Which running balance the movement lands on, as the state reference (av@eop) and not the reserved state: id built around it \u2014 section 12.1's rule for a running state's name, applied to the same string for the same reason.",
+          "type": "string",
+          "minLength": 1
+        },
+        "reads_running_balance": {
+          "description": "Whether this movement's amount depends on the balance it is changing. This is the framework's own escalation criterion, shown per movement rather than claimed of the whole: section 16 says the escalation is the whole justification for the machinery, and this is where the artifact shows it. Null where the producer cannot classify the expression, carrying the meaning null carries everywhere else in section 8 \u2014 the producer looked and cannot say, rather than a guess telling a reviewer a state machine was justified when nothing checked.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "extraction": {
+      "description": "One running balance of a compiled rollforward, as the column that materialises it (§16). A line assigning compiled.expr_for(\"fund\") writes the state machine's own fund balance onto the frame: the two are one quantity asked about twice, and this is where the column says so. It is the column that carries this and never the state, which is not a column of the model and which may be materialised by no column at all or by two.",
+      "type": "object",
+      "required": [
+        "compilation",
+        "state"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "compilation": {
+          "description": "The id of the compiled rollforward this column extracts from, in the reserved rollforward: namespace. It is also one of the extracting node's reads, and the two records are one claim said twice — the reads entry is what an edge walk follows, this field is what says which balance came back along it — so the validator's semantic layer refuses a column naming a compilation its own edges do not reach.",
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "description": "Which running balance this column materialises, as the state reference (fund@eop) and not the reserved state: id built around it — section 12.1's rule for a running state's name, the same one an increment's target follows. The state before the '@' is one the named compilation declares in its states, which the validator's semantic layer checks wherever that compilation states them; where it omits them, because the compiled artefact was out of reach, there is nothing to check against and nothing is claimed.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "state_graph_payload": {
+      "description": "One product declared as states and the intensities of the transitions between them. Reserved (§17): the section is designed and nothing in this preview emits it, so what stands behind it is one example artifact the published schema accepts rather than a producer's output. A state with no transition leaving it is absorbing, and the absorbing set is derived here rather than carried: a declared set and a set of transitions can disagree, and only one of them is the graph.",
+      "type": "object",
+      "required": [
+        "name",
+        "states",
+        "transitions",
+        "time_axis",
+        "basis"
+      ],
+      "properties": {
+        "name": {
+          "description": "The name the model gave the product. An id is positional within one artifact and must never be split (§8.1), so the name a reader quotes is this field and not the node's id.",
+          "type": "string",
+          "minLength": 1
+        },
+        "states": {
+          "description": "Every state the product declares, in declaration order, which is the order a compilation indexes them in. Each name appears once: two states of one name would be one state wearing two accounts.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "uniqueItems": true
+        },
+        "transitions": {
+          "description": "One entry per declared transition, each naming the state left, the state entered and the intensity that governs the move. At least one: a set of states nothing moves between is a list, not a product. A state's chance of staying put is not among them: it is what is left after the exits the product declares, and carrying it as well would carry a number that can disagree with the rest. That every state named here is a state the payload declares is a requirement on the producer, not something this document checks — reference within one document is outside what a schema of this kind reaches, and a consumer that needs the guarantee checks it itself.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "description": "One transition, from one state to another, with the intensity that governs it.",
+            "type": "object",
+            "required": [
+              "from",
+              "to",
+              "intensity"
+            ],
+            "properties": {
+              "from": {
+                "description": "The state left, which must be one of the states this payload declares. Checked by the producer rather than here.",
+                "type": "string"
+              },
+              "to": {
+                "description": "The state entered, which must be one of the states this payload declares and must never be the state left: a transition into itself is the diagonal the payload deliberately does not carry. Both are requirements on the producer rather than checks this document makes.",
+                "type": "string"
+              },
+              "intensity": {
+                "$ref": "#/$defs/expr",
+                "description": "UNSTABLE. The rate governing the transition, as an operation tree and not as a rendering of one: a transition rate is a calculation like any other, and a reader given text is holding a sentence rather than something it can evaluate. It is quoted on the period the time axis names, and it reaches its assumption bases through the node's reads_assumptions, which is where a payload's own reading is reported."
+              }
+            }
+          }
+        },
+        "time_axis": {
+          "description": "What one period of the product's own axis is, and what a rate quoted against it means. With a constant intensity an annual rate and a per-period rate reach the same answer, so an axis left unsaid is a valuation error that survives testing and appears the first time the rates vary.",
+          "type": "object",
+          "required": [
+            "periods",
+            "frequency",
+            "intensity_basis"
+          ],
+          "properties": {
+            "periods": {
+              "description": "The column whose value is the number of periods each policy is carried over, or null where every policy is carried over the same number. A column rather than a count, because the policies of one book do not run to one term.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "frequency": {
+              "description": "The length of one period, in the vocabulary the projection timeline uses; null on a fixed-step axis (§11.1.1), which has no calendar cadence and states its period as step_years or steps_per_year instead.",
+              "enum": [
+                "monthly",
+                "quarterly",
+                "semi-annual",
+                "annual",
+                "weekly",
+                "daily",
+                null
+              ]
+            },
+            "step_years": {
+              "description": "On a fixed-step axis written this way, the length of one period in years, as the model wrote it. Exactly one of this and steps_per_year is present where frequency is null, and neither where it is not.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "steps_per_year": {
+              "description": "On a fixed-step axis written this way, the whole number of periods one year makes. Exactly one of this and step_years is present where frequency is null, and neither where it is not.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "intensity_basis": {
+              "description": "The period a transition intensity is quoted per. annual: the intensities are annual rates, and the per-period probabilities the product is solved on are built from them. per_period: they are already quoted on the period frequency or step names, and nothing converts them.",
+              "enum": [
+                "annual",
+                "per_period"
+              ]
+            }
+          },
+          "oneOf": [
+            {
+              "description": "A calendar axis: a frequency, and no step.",
+              "properties": {
+                "frequency": {
+                  "type": "string"
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "step_years"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "steps_per_year"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "description": "A fixed-step axis written in years: no frequency, and step_years alone.",
+              "properties": {
+                "frequency": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "step_years"
+              ],
+              "not": {
+                "required": [
+                  "steps_per_year"
+                ]
+              }
+            },
+            {
+              "description": "A fixed-step axis written in steps a year: no frequency, and steps_per_year alone.",
+              "properties": {
+                "frequency": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "steps_per_year"
+              ],
+              "not": {
+                "required": [
+                  "step_years"
+                ]
+              }
+            }
+          ]
+        },
+        "basis": {
+          "description": "The columns the transition intensities were fitted on: two policies agreeing on every one of them carry the same set of intensities, which is what lets a product be solved once for many policies. It is stated rather than inferred, because a basis narrower than the intensities actually vary over is a wrong number rather than a slow one.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "nested_valuation_payload": {
+      "description": "One valuation evaluated inside the projection — a reserve struck period by period by an inner model — carried as one node rather than inlined into the graph around it. Reserved (§17): the section is designed and nothing in this preview emits it, so what stands behind it is one example artifact the published schema accepts rather than a producer's output.",
+      "type": "object",
+      "required": [
+        "graph_fingerprint",
+        "interface",
+        "context"
+      ],
+      "properties": {
+        "graph_fingerprint": {
+          "$ref": "#/$defs/sha256",
+          "description": "The inner model's own graph fingerprint (§12.4): one string standing for the whole of what was evaluated inside. It is the identity of a model recorded elsewhere rather than a digest of anything in this document, so a reader who wants the calculation behind the figure fetches that artifact — and the inner model's own assumption bases are reached there rather than from this section."
+        },
+        "interface": {
+          "description": "What crosses the boundary: state in, value out. It is worth naming because it is the point at which the outer model stops being able to account for a figure on its own — a dependency drawn through this node reaches the interface and no further.",
+          "type": "object",
+          "required": [
+            "inputs",
+            "outputs"
+          ],
+          "properties": {
+            "inputs": {
+              "description": "The columns of the outer model the inner valuation is launched from, named as the outer model names them. That each of them is a column this document carries a node for is a requirement on the producer rather than a check this document makes.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "outputs": {
+              "description": "What the inner valuation returns, by name.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "context": {
+          "description": "What the inner values mean, one typed value per key: the measure they were taken under, the number of paths they were reduced over, and whatever else the producer holds — a seed, a generator, the reduction itself. Key and value rather than a fixed field list, so a producer that later holds what generated its paths carries it without a schema change; an inner valuation is a Monte Carlo answer, and one that does not say what generated its paths cannot be reproduced.",
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "boolean",
+              "number",
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

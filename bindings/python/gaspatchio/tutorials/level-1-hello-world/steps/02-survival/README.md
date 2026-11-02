@@ -55,7 +55,7 @@ Level 2 introduces `.projection.cumulative_survival()` — the general API for t
 Once you have `pols_if`, weight any per-policy quantity by it to get the portfolio total for that period:
 
 ```python
-af.premium_income = af.monthly_premium * af.pols_if   # only active policies pay
+af.premium_income = af.monthly_premium * af.pols_if  # only active policies pay
 af.expected_claims = af.sum_assured * af.mort_rate_mth * af.pols_if
 ```
 

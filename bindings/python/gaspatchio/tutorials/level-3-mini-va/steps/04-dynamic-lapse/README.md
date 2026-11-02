@@ -32,16 +32,30 @@ af.lapse_rate = LAPSE_RATE_ANNUAL  # scalar, broadcasts automatically
 af.lapse_rate_mth = 1 - (1 - af.lapse_rate) ** (1 / 12)
 
 # AFTER (step 04): table lookup + dynamic adjustment
-af.base_lapse_rate = lapse_rates.lookup(lapse_id=af.lapse_id, duration=af.lapse_duration_capped)
+af.base_lapse_rate = lapse_rates.lookup(
+    lapse_id=af.lapse_id, duration=af.lapse_duration_capped
+)
 
 # ITM ratio: how valuable is the guarantee?
-af.itm = af.av_pp_mid_mth / af.sum_assured.cast(pl.Float64)
+af.itm = af.av_pp_mid_mth / af.sum_assured
 
-# Dynamic factor: clip(1 - M * (1/ITM - D), L, U)
-af.dyn_lapse_factor = (1.0 - af.M_param * (1.0 / af.itm - af.D_param)).clip(af.L, af.U)
+# Dynamic factor: clip(1 - M * (1/ITM - D), L, U), written as nested when/then
+af.dyn_lapse_unbounded = 1.0 - af.M_param * (1.0 / af.itm - af.D_param)
+af.dyn_lapse_factor = (
+    when(af.dyn_lapse_unbounded < af.L)
+    .then(af.L)
+    .otherwise(
+        when(af.dyn_lapse_unbounded > af.U).then(af.U).otherwise(af.dyn_lapse_unbounded)
+    )
+)
 
 # Final lapse: apply factor, enforce floor
-af.lapse_rate = (af.dyn_lapse_factor * af.base_lapse_rate).clip(af.dyn_lapse_floor, None)
+af.lapse_rate_unfloored = af.dyn_lapse_factor * af.base_lapse_rate
+af.lapse_rate = (
+    when(af.lapse_rate_unfloored < af.dyn_lapse_floor)
+    .then(af.dyn_lapse_floor)
+    .otherwise(af.lapse_rate_unfloored)
+)
 ```
 
 Key concepts:

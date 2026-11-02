@@ -16,9 +16,9 @@ import polars as pl
 import pytest
 
 from gaspatchio.rollforward._builder import RollforwardBuilder
-from gaspatchio.rollforward._collector import RollforwardCollector
 from gaspatchio.rollforward._compile import compile_rollforward
 from gaspatchio.schedule import Schedule
+from tests.rollforward.conftest import _standalone_state_expr
 
 
 class TestContractBoundary:
@@ -45,9 +45,8 @@ class TestContractBoundary:
                 "breach": [[False, False, True, True]],
             }
         )
-        collector = RollforwardCollector(compiled)
         rsv = (
-            df.with_columns(reserve=collector.expr_for("reserve"))
+            df.with_columns(reserve=_standalone_state_expr(compiled, "reserve"))
             .get_column("reserve")
             .to_list()[0]
         )
@@ -77,9 +76,8 @@ class TestContractBoundary:
                 "breach": [[False, False, False]],
             }
         )
-        collector = RollforwardCollector(compiled)
         rsv = (
-            df.with_columns(reserve=collector.expr_for("reserve"))
+            df.with_columns(reserve=_standalone_state_expr(compiled, "reserve"))
             .get_column("reserve")
             .to_list()[0]
         )

@@ -70,8 +70,9 @@ graph instead, and read [references/spreadsheet-conversion.md](references/spread
 before asking any questions. It covers how to partition the workbook into rollforward
 states and closed-form columns mechanically, and the structural features that convert to a
 model which **runs and is wrong** rather than one that fails: lapse gates hidden inside
-schedule lookups, COI timing conventions that agree until rates vary, rounding inside a
-recursion, and approximate-match `VLOOKUP` running past the end of a table.
+schedule lookups, a wrong conversion between timing conventions that passes every
+flat-rate test, rounding inside a recursion, and approximate-match `VLOOKUP` running past
+the end of a table.
 
 ### 1. Check project context first
 
@@ -121,17 +122,23 @@ When the specification mentions actuarial concepts, regulatory frameworks, or do
 **Quick reference:**
 ```bash
 # Regulatory requirements
-uv run gspio knowledge "CSM calculation" -T IFRS17 -d standard
+uv run gspio knowledge "CSM calculation" -T ifrs17 -d standard
 
 # Implementation guidance
-uv run gspio knowledge "risk adjustment" -T IFRS17 -d guidance
+uv run gspio knowledge "technical provisions" -j eu -d guidance
 
 # Jurisdiction-specific
-uv run gspio knowledge "technical provisions" -j EU -T SolvencyII
+uv run gspio knowledge "technical provisions" -j eu -T solvency
 
-# Mortality/assumptions
-uv run gspio knowledge "mortality improvement" -T mortality
+# Mortality/assumptions: the topic goes in the query, the line of business in the tag
+uv run gspio knowledge "mortality improvement" -T life
 ```
+
+Filter values are lower case. Tags: `ifrs17`, `ifrs`, `gaap`, `solvency`, `capital`,
+`naic`, `reserve`, `life`, `health`, `property`, `general`. Jurisdictions: `international`,
+`eu`, `us`, `uk`, `au`. Document types: `standard`, `regulation`, `guidance`,
+`practice-note`, `comment`. A value the index does not use matches nothing, and the
+command says so.
 
 For full command reference, see: `bindings/python/docs/cli-knowledge-command.md` in the gaspatchio repo.
 
@@ -160,10 +167,10 @@ Work through these five areas explicitly:
 | **Specification** | Is there an Excel, lifelib, other system, or written spec? Which file, which sheet/model, which tab holds "truth"? What are the core formulas? |
 | **Data (model points)** | Where are model points stored (Parquet/CSV)? Policy ID column name? Which columns define policy, coverage, riders, and dates? |
 | **Assumptions** | Which assumption tables exist? Where are they located? What are their dimensions (age, duration, calendar year, policy year, scenario)? How are they keyed? |
-| **Projection** | Projection frequency (monthly, annual, other)? Projection length driver (term, attained age, maturity date, contract boundary)? Valuation date and alignment rules? |
-| **Within-period mechanics** | **Do any within-period charges or credits depend on the running balance?** (COI on net amount at risk, IUL floor/cap on the in-period index credit, AV-banded fees, GMDB ratchet to the post-growth AV, multi-state with cross-account reads.) This is the load-bearing question for linear-recurrence vs state-machine classification — answer it explicitly before handing off to model-building. |
+| **Projection** | Projection frequency (monthly, annual, other)? Projection length driver (term, attained age, maturity date, contract boundary)? Valuation date and alignment rules? **Is the time axis a calendar at all?** A teaching sheet, a multi-state (Thiele/Kolmogorov) solution, or a continuous-time product discretised for valuation steps *k × h years* with no dates anywhere — a step column `0..T` and a time column written `x + A*h` or `x + A/12`. That is a fixed-step axis, not a cadence: ask for `h` and the number of steps, and which way the sheet writes its time column. |
+| **Within-period mechanics** | **Do any within-period charges or credits depend on the running balance?** (COI on net amount at risk, IUL floor/cap on the in-period index credit, AV-banded fees, GMDB ratchet to the post-growth AV — several balances where one reads another.) This is the load-bearing question for linear-recurrence vs state-machine classification — answer it explicitly before handing off to model-building. **Multi-state occupancy is a different question:** probability moving between states (healthy, sick, dead — disability with recovery, levels of care) has no named form in 1.0, and the rollforward is not it. It is one `accumulate()` per state on the fixed-step axis, ordered so each state reads only states already computed, with sweeps when there is recovery (model-building's `references/recursive-patterns.md`, Pattern 6). Ask which states exist, which transitions, and whether any state can be left and re-entered. |
 | **Outputs** | Required cashflows, reserves, PV metrics, roll-forwards, and aggregations (per-policy, portfolio, cohort)? Any regulatory or accounting views that must match existing reports? |
-| **Scenarios** | Will the model run under stress scenarios, sensitivity sweeps, or stochastic Monte Carlo? If yes, the model entry point should accept `assumptions_override` so a `ScenarioRun.run()` wrapper can hand shocked tables back in. Hand off to `gaspatchio-model-scenarios` after building. |
+| **Scenarios** | Will the model run under stress scenarios, sensitivity sweeps, or stochastic Monte Carlo? If yes, the model needs **no scenario hook**: build `main(af)` as it will be reconciled, give each assumption table a stable name (a shock names it, `table="mortality_select"`), and keep single-number inputs (valuation rate, expense, premium) as model-point columns (a shock names them, `column="valuation_rate"`). `plan.run(af, model.main)` runs it unchanged. Hand off to `gaspatchio-model-scenarios` after building. |
 
 ### 5. Explore alternative model structures
 
@@ -199,6 +206,8 @@ Summarize in your own words:
   - Table list, their dimensions, and file paths
 - Projection:
   - Frequency, horizon driver, valuation date, any special timing rules
+  - Or, for an off-calendar workbook, the fixed step: `n_periods` and `step_years=h`
+    (time column `x + A*h`) or `steps_per_year=n` (time column `x + A/n`) — no dates
 - Outputs:
   - Variables to produce, views to aggregate, and reconciliation targets
 

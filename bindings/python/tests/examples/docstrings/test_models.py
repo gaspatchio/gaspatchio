@@ -5,6 +5,7 @@
 import importlib.util
 import inspect
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -396,27 +397,55 @@ def test_lint_timeout_kills_the_ruff_child(
     the timeout with the timed-out issue and leave no child process behind —
     a leaked child per timeout is how a long doctest run exhausts the
     machine's process table.
+
+    The clock is the second half of "leaves no child behind", and it is what
+    observing the child alone could not see. ``exec`` is load-bearing:
+    a stand-in that forks its sleep hands ``lint()`` a shell to kill and a
+    grandchild holding the pipes open, so the reaping ``communicate()`` waits
+    out the full sleep and reports no leak, because by then the grandchild
+    has exited of its own accord. Real ruff is a binary ``Popen`` launches
+    directly, so ``kill()`` there reaches the process holding the pipes;
+    ``exec`` is what makes the stand-in stand in for that, and the elapsed
+    assertion is what holds it to it.
     """
+    import subprocess
     import sys
+    from unittest.mock import patch
 
     if sys.platform == "win32":
         pytest.skip("POSIX shell stand-in")
-    psutil = pytest.importorskip("psutil")
 
     import ruff.__main__ as ruff_main
 
     slow_ruff = tmp_path / "slow_ruff.sh"
-    slow_ruff.write_text("#!/bin/sh\nsleep 30\n")
+    slow_ruff.write_text("#!/bin/sh\nexec sleep 30\n")
     slow_ruff.chmod(0o755)
     monkeypatch.setattr(ruff_main, "find_ruff_bin", lambda: str(slow_ruff))
 
-    children_before = {p.pid for p in psutil.Process().children(recursive=True)}
-    issues = clean_code_example.lint(timeout_s=0.5)
-    children_after = {p.pid for p in psutil.Process().children(recursive=True)}
+    # Observe the real child we kill. Where the process table can also be
+    # read, compare this process's own descendants before and after: that
+    # is what catches a grandchild left holding the pipes. Some workspace
+    # sandboxes refuse the read; there only the kill/reap half runs.
+    children = _own_descendants()
+    with patch.object(
+        subprocess.Popen,
+        "kill",
+        autospec=True,
+        side_effect=subprocess.Popen.kill,
+    ) as killed:
+        started = time.perf_counter()
+        issues = clean_code_example.lint(timeout_s=0.5)
+        elapsed = time.perf_counter() - started
 
     assert any("timed out" in issue for issue in issues), issues
-    leaked = children_after - children_before
-    assert not leaked, f"lint() leaked child processes: {leaked}"
+    killed.assert_called_once()
+    child = killed.call_args.args[0]
+    assert child.returncode is not None, "lint() did not reap its killed child"
+    assert elapsed < 2.0, f"lint() took {elapsed:.1f}s to come back from a 0.5s timeout"
+    after = _own_descendants()
+    if children is not None and after is not None:
+        leaked = after - children
+        assert not leaked, f"lint() leaked child processes: {leaked}"
 
 
 def test_lint_stdout_diagnostics_survive_stderr_noise(
@@ -651,3 +680,13 @@ def test_syntax_errors_surface_with_the_e999_prefix():
         "Syntax diagnostics lost the E999 prefix — ruff's syntax-error "
         f"code shape changed and the harness rewrite missed it: {issues}"
     )
+
+
+def _own_descendants() -> set[int] | None:
+    """Return this process's descendant PIDs, or None where they cannot be read."""
+    try:
+        import psutil  # optional; absent or refused means unread
+
+        return {child.pid for child in psutil.Process().children(recursive=True)}
+    except Exception:  # noqa: BLE001 -- ImportError or a sandbox's AccessDenied
+        return None

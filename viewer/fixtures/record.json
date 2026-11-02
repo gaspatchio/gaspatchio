@@ -1,0 +1,824 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0",
+    "versions": {
+      "omitted": "withheld"
+    }
+  },
+  "created_at": "2026-10-10T21:53:46Z",
+  "model": {
+    "label": null,
+    "source_path": "model.py",
+    "source_sha": "sha256:12e65b11185a32b3c18d46f0362992297c029c31e761954d08af7e1af9727f66",
+    "modules": [
+      {
+        "path": "loadings.py",
+        "fingerprint": "sha256:745d016465aaed92c6a9b55563aad981261f98e28fdd55f4364999358994bd02"
+      }
+    ],
+    "git": null,
+    "model_points": {
+      "path": "model_points.csv",
+      "fingerprint": "sha256:ed9a3ef1b2cfddcd0006cd93ef819884010fc915ef364f18e4ed8de666d56114"
+    },
+    "results": {
+      "path": "results.parquet",
+      "fingerprint": "sha256:aad0d5e1ddb83579a9d177b04af9d6538d90db9481ebba4d82f87ab1ea58854f"
+    }
+  },
+  "graph_fingerprint": "sha256:def38a8a5e9350de45493076c36c085c502c2aa1c3028df0068357e4020f1d1a",
+  "book": {
+    "columns": [
+      "age",
+      "policy_id",
+      "sum_assured"
+    ],
+    "digest": "sha256:0d781b4f9e0123af3a513c1472bc013b8326fd4267551765eed66baf6ac0364f"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "policy_id",
+      "column": "policy_id",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:019c6e04d2520cf6463c26a6c7a2e0289ffcd7837b7d60f0bfd0b78a16d441e3",
+      "fingerprint": "sha256:27eb5e9b3af7ec4b2c7bce2e82fdf29aecea1e17e68ca32b3a5f390825ac45b9",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 1,
+      "trace": null
+    },
+    {
+      "id": "age",
+      "column": "age",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:6d069d845d916caef77bea838a2a2e88c5ac50290a259af9fbf0001307bd3dc7",
+      "fingerprint": "sha256:45fdcc51b013181d3cc67b681bb53e5943632d7b05001fd07a970bb30fcdef3b",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 30,
+      "trace": null
+    },
+    {
+      "id": "sum_assured",
+      "column": "sum_assured",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b643510e5bc2884efbc56ffc1b90fca82f7cc07abb692dd75abb3cf7d1f60b38",
+      "fingerprint": "sha256:c7d944982f89b2858870c74491fff1c28758dbead932cdaa6ba90157ec2b3778",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 100000.0,
+      "trace": null
+    },
+    {
+      "id": "projection_start_date@1",
+      "column": "projection_start_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5132dfa219dbd49892e2f0997d405108a02ca35ed1950fa6f41fb97d2a73d61d",
+      "fingerprint": "sha256:3ccb78426bc36628d0853ee78a9103d32d4495c4129fc703583da64e376d0685",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:47",
+      "facets": {},
+      "value_sample": "2026-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_start_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_start_date",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2026-01-31",
+          "result": "2026-01-31"
+        }
+      ]
+    },
+    {
+      "id": "projection_end_date@1",
+      "column": "projection_end_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5132dfa219dbd49892e2f0997d405108a02ca35ed1950fa6f41fb97d2a73d61d",
+      "fingerprint": "sha256:3ccb78426bc36628d0853ee78a9103d32d4495c4129fc703583da64e376d0685",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:47",
+      "facets": {},
+      "value_sample": "2027-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_end_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_end_date",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2027-01-31",
+          "result": "2027-01-31"
+        }
+      ]
+    },
+    {
+      "id": "num_proj_months@1",
+      "column": "num_proj_months",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5132dfa219dbd49892e2f0997d405108a02ca35ed1950fa6f41fb97d2a73d61d",
+      "fingerprint": "sha256:3ccb78426bc36628d0853ee78a9103d32d4495c4129fc703583da64e376d0685",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:47",
+      "facets": {},
+      "value_sample": 13,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "num_proj_months"
+        },
+        {
+          "step": 2,
+          "expr": "num_proj_months",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "13",
+          "result": 13
+        }
+      ]
+    },
+    {
+      "id": "month@1",
+      "column": "month",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5132dfa219dbd49892e2f0997d405108a02ca35ed1950fa6f41fb97d2a73d61d",
+      "fingerprint": "sha256:3ccb78426bc36628d0853ee78a9103d32d4495c4129fc703583da64e376d0685",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:47",
+      "facets": {},
+      "value_sample": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "month"
+        },
+        {
+          "step": 2,
+          "expr": "month  (13 periods)",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "[0, 1, 2, \u2025, 12]  (13 periods)",
+          "result": 0,
+          "shape": "13 periods \u00b7 first 0 \u00b7 last 12 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "qx_monthly@1",
+      "column": "qx_monthly",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "mortality.lookup(age=af.age) / 12",
+      "reads": [
+        "age"
+      ],
+      "reads_assumptions": [
+        "record_mortality"
+      ],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:4998e7c1e99ac0099cb9c51133ee5eaa29e969e83707eddc31414c40dd004d33",
+      "fingerprint": "sha256:eb403ddfe7f1719a552f7c1dfa29736db85a013128f61040dbade53bde99ea7e",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:50",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "age",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "JOIN"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 0.00010833333333333333,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(age [lookup]"
+        },
+        {
+          "step": 2,
+          "expr": "((30) [lookup]",
+          "values": {
+            "age": 30
+          }
+        },
+        {
+          "step": 3,
+          "expr": "0.000108",
+          "result": 0.00010833333333333333
+        }
+      ]
+    },
+    {
+      "id": "lapse_monthly@1",
+      "column": "lapse_monthly",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "lapse.lookup(age=af.age) / 12",
+      "reads": [
+        "age"
+      ],
+      "reads_assumptions": [
+        "record_lapse"
+      ],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:9b6c0a9c5e3a356a4066c96d892b74206ed38f58f98f8def53fe523a2af99a23",
+      "fingerprint": "sha256:667195da38a73db6cbd6ab063f4feb1c7e299bea725f09f3f1ccb53062100d8f",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:51",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "age",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "JOIN"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 0.005833333333333334,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(age [lookup]"
+        },
+        {
+          "step": 2,
+          "expr": "((30) [lookup]",
+          "values": {
+            "age": 30
+          }
+        },
+        {
+          "step": 3,
+          "expr": "0.005833",
+          "result": 0.005833333333333334
+        }
+      ]
+    },
+    {
+      "id": "expense@1",
+      "column": "expense",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "expense.lookup(age=af.age) * loadings.inflation()",
+      "reads": [
+        "age"
+      ],
+      "reads_assumptions": [
+        "record_expense"
+      ],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:7cb0eb1434dff38a07ffadc14a71275906bac531629220ff857b488f789cd078",
+      "fingerprint": "sha256:e92ddbcc6de1ec7386c69a9de16988c7a11048d8120374346df60f38c9f24151",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:52",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "age",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "JOIN"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 10.3,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(age [lookup]"
+        },
+        {
+          "step": 2,
+          "expr": "((30) [lookup]",
+          "values": {
+            "age": 30
+          }
+        },
+        {
+          "step": 3,
+          "expr": "10.3",
+          "result": 10.3
+        }
+      ]
+    },
+    {
+      "id": "in_force@1",
+      "column": "in_force",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "1 - (af.qx_monthly + af.lapse_monthly) * af.month",
+      "reads": [
+        "qx_monthly@1",
+        "lapse_monthly@1",
+        "month@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5e358edc4988f2d8f7e72c7e7649ec62e56185da0f08f6da758066652541f113",
+      "fingerprint": "sha256:5d18f5fd4590406d76542e1253acec38844123a5ad8d02032402188b97cbc42e",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:53",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "qx_monthly@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "lapse_monthly@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "month@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        1.0,
+        0.9940583333333334,
+        0.9881166666666666,
+        0.982175,
+        0.9762333333333333,
+        0.9702916666666667,
+        0.96435,
+        0.9584083333333333,
+        0.9524666666666667,
+        0.946525,
+        0.9405833333333333,
+        0.9346416666666667,
+        0.9287
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(1.repeat_by(((qx_monthly) + (lapse_monthly)) * (month).length())) - (((qx_monthly) + (lapse_monthly)) * (month))"
+        },
+        {
+          "step": 2,
+          "expr": "(1.repeat_by((((0.000108)) + ((0.005833))) * (([0, 1, 2, \u2025, 12])).length())) - ((((0.000108)) + ((0.005833))) * (([0, 1, 2, \u2025, 12])))  (13 periods)",
+          "values": {
+            "lapse_monthly": 0.005833333333333334,
+            "qx_monthly": 0.00010833333333333333,
+            "month": "[0, 1, 2, \u2025, 12] (13 periods)"
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[1, 0.994058, 0.988117, \u2025, 0.9287]  (13 periods)",
+          "result": 1.0,
+          "shape": "13 periods \u00b7 first 1 \u00b7 last 0.9287 \u00b7 \u2193 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "expected_claims@1",
+      "column": "expected_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * af.qx_monthly * af.in_force * loadings.margin()",
+      "reads": [
+        "sum_assured",
+        "qx_monthly@1",
+        "in_force@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:817e99eb2c6132c530642901ca0bef41d30db3a11f33901c11a1c3e1fd0d45f7",
+      "fingerprint": "sha256:ee02288f1ce08afbc5bf4236a3ae97b3ceb547958fde353a923b76a33dcb851e",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:54",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "qx_monthly@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "in_force@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        11.916666666666666,
+        11.845861805555556,
+        11.775056944444444,
+        11.704252083333333,
+        11.633447222222221,
+        11.562642361111111,
+        11.4918375,
+        11.421032638888889,
+        11.350227777777778,
+        11.279422916666666,
+        11.208618055555556,
+        11.137813194444446,
+        11.067008333333334
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "((sum_assured) * (qx_monthly)) * (in_force).eval((element()) * (1.1))"
+        },
+        {
+          "step": 2,
+          "expr": "(((100000)) * ((0.000108))) * (([1, 0.994058, 0.988117, \u2025, 0.9287])).eval((element()) * (1.1))  (13 periods)",
+          "values": {
+            "sum_assured": 100000.0,
+            "qx_monthly": 0.00010833333333333333,
+            "in_force": "[1, 0.994058, 0.988117, \u2025, 0.9287] (13 periods)"
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[11.9167, 11.8459, 11.7751, \u2025, 11.067]  (13 periods)",
+          "result": 11.916666666666666,
+          "shape": "13 periods \u00b7 first 11.9167 \u00b7 last 11.067 \u00b7 \u2193 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "age",
+      "target": "qx_monthly@1",
+      "relationship": "INDIRECT"
+    },
+    {
+      "source": "age",
+      "target": "lapse_monthly@1",
+      "relationship": "INDIRECT"
+    },
+    {
+      "source": "age",
+      "target": "expense@1",
+      "relationship": "INDIRECT"
+    },
+    {
+      "source": "qx_monthly@1",
+      "target": "in_force@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "lapse_monthly@1",
+      "target": "in_force@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "month@1",
+      "target": "in_force@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "sum_assured",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "qx_monthly@1",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "in_force@1",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [
+    {
+      "kind": "table",
+      "name": "record_expense",
+      "fingerprint": "sha256:8e91fb04fc0ea59574becc3ea0e9c0bb678591d4932afa6d7599b8b62fe214a2",
+      "payload": {
+        "dimensions": [
+          "age"
+        ],
+        "value": "cost",
+        "columns": [
+          {
+            "name": "age",
+            "dtype": "f64"
+          },
+          {
+            "name": "cost",
+            "dtype": "f64"
+          }
+        ],
+        "rows": [
+          [
+            30.0,
+            10.0
+          ],
+          [
+            40.0,
+            12.5
+          ]
+        ]
+      },
+      "source_file": null,
+      "shaped_by": []
+    },
+    {
+      "kind": "table",
+      "name": "record_lapse",
+      "fingerprint": "sha256:adfad751ebc609d4d275572fae93133f5d4de4bd3f7018788bee9330bbc95257",
+      "payload": {
+        "dimensions": [
+          "age"
+        ],
+        "value": "rate",
+        "columns": [
+          {
+            "name": "age",
+            "dtype": "f64"
+          },
+          {
+            "name": "rate",
+            "dtype": "f64"
+          }
+        ],
+        "rows": [
+          [
+            30.0,
+            0.07
+          ],
+          [
+            40.0,
+            0.05
+          ]
+        ]
+      },
+      "source_file": "lapse.csv",
+      "shaped_by": []
+    },
+    {
+      "kind": "table",
+      "name": "record_mortality",
+      "fingerprint": "sha256:4ff08599aaeff3bde841b2a0a9fce12bf5f187aea7f1d51fbda6434ea9387e4e",
+      "payload": {
+        "dimensions": [
+          "age"
+        ],
+        "value": "qx",
+        "columns": [
+          {
+            "name": "age",
+            "dtype": "f64"
+          },
+          {
+            "name": "qx",
+            "dtype": "f64"
+          }
+        ],
+        "rows": [
+          [
+            30.0,
+            0.0013
+          ],
+          [
+            40.0,
+            0.0029
+          ]
+        ]
+      },
+      "source_file": "mortality.csv",
+      "shaped_by": [
+        {
+          "step": "renamed",
+          "column": "age",
+          "from": "Age"
+        }
+      ]
+    }
+  ],
+  "holes": [],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "model.py",
+      "fingerprint": "sha256:12e65b11185a32b3c18d46f0362992297c029c31e761954d08af7e1af9727f66",
+      "payload": {
+        "text": "# SPDX-FileCopyrightText: 2026 Opio Inc.\n#\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"Expected claims over a year, resting on a helper and three tables.\n\nWhat the record says the model rests on beside its own file is the point of\nthis model, so it rests on one of each: a helper module beside it, a table\nread from a file whose column the recipe renames, a table read from a file as\nit stands, and a table built from a frame written in the code. The rates are\ndivided by twelve so the values the record carries run to every digit a\ndouble holds, which is what the page is held to quote.\n\"\"\"\n\nimport datetime\nfrom pathlib import Path\n\nimport loadings\nimport polars as pl\n\nfrom gaspatchio import ActuarialFrame\nfrom gaspatchio.assumptions import Table\n\nHERE = Path(__file__).resolve().parent\n\n\ndef main(af: ActuarialFrame) -> ActuarialFrame:\n    \"\"\"Project each policy's expected claims and expenses over a year.\"\"\"\n    mortality = Table(\n        name=\"record_mortality\",\n        source=HERE / \"mortality.csv\",\n        dimensions={\"age\": \"Age\"},\n        value=\"qx\",\n    )\n    lapse = Table(\n        name=\"record_lapse\",\n        source=HERE / \"lapse.csv\",\n        dimensions={\"age\": \"age\"},\n        value=\"rate\",\n    )\n    expense = Table(\n        name=\"record_expense\",\n        source=pl.DataFrame({\"age\": [30, 40], \"cost\": [10.0, 12.5]}),\n        dimensions={\"age\": \"age\"},\n        value=\"cost\",\n    )\n    af = af.projection.set(\n        start_date=datetime.date(2026, 1, 1), n_periods=12, frequency=\"monthly\"\n    )\n    af.qx_monthly = mortality.lookup(age=af.age) / 12\n    af.lapse_monthly = lapse.lookup(age=af.age) / 12\n    af.expense = expense.lookup(age=af.age) * loadings.inflation()\n    af.in_force = 1 - (af.qx_monthly + af.lapse_monthly) * af.month\n    af.expected_claims = (\n        af.sum_assured * af.qx_monthly * af.in_force * loadings.margin()\n    )\n    return af\n"
+      }
+    }
+  ],
+  "enrichment": {
+    "policy_id": "1",
+    "aggregation": null,
+    "periods": null,
+    "filter": null
+  },
+  "policies": [
+    {
+      "policy_id": "1",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 0 of 2 in model_points.csv, selected by ':1'"
+    }
+  ],
+  "facets": {},
+  "document_digest": "sha256:86257f9e2ca2f0a922c543b45ce3278eb18385946e9ad1a7bd7c122165ccf247"
+}

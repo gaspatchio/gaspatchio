@@ -23,7 +23,6 @@ from gaspatchio.column.proxy_aware_expr import ProxyAwareExpr
 def _jagged() -> Schedule:
     return Schedule.from_per_policy_grid(
         start_date=date(2025, 1, 31),
-        n_periods=12,
         frequency="1M",
         until_kind="term_months",
         until_value_column="tm",

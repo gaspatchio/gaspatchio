@@ -41,8 +41,8 @@ Key concepts introduced here:
 
 Projection structure:
   - 12 months (t=0..11)
-  - cumulative_survival using .cum_prod() on survival factors
-  - .projection.previous_period() shifts survival to beginning-of-period
+  - .projection.cumulative_survival() turns the combined decrement into
+    beginning-of-period survival probabilities in one step
   - net_cf = premium_income - claims - expenses
 
 Sections:
@@ -123,9 +123,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # Parse entry date and compute initial duration
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
-    af.duration_mth_init = (VALUATION_DATE.year * 12 + VALUATION_DATE.month) - (
-        af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
-    )
+    af.duration_mth_init = af.entry_date_parsed.date.months_between(VALUATION_DATE)
 
     # Expand each policy to one row per projection month
     af = af.projection.set(
@@ -136,10 +134,8 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
     af.projection_date = af.projection.period_dates()
 
-    # Month index (0 = valuation date, 1 = one month later, ...)
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() has already stamped af.month -- elapsed whole months
+    # from the valuation date, 0, 1, 2, ... one per projection period.
 
     # Duration in years at each projection month — used to compute attained age
     af.duration_mth_t = af.duration_mth_init + af.month
@@ -170,16 +166,12 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # Combined decrement: policies exit via death OR lapse
     af.combined_decrement = 1.0 - (1.0 - af.qx_monthly) * (1.0 - af.lapse_rate_monthly)
-    af.survival_factor = 1.0 - af.combined_decrement
-
-    # Cumulative survival: running product of monthly survival factors.
-    # [0.995, 0.994, 0.993, ...] → [0.995, 0.989, 0.982, ...]
-    af.cumulative_survival = af.survival_factor.cum_prod()
-
-    # Shift to beginning-of-period so that at t=0 no policies have yet
-    # decremented (survival = 1.0), and at t=1 the first month's decrement
-    # has been applied. This is the .projection.previous_period() pattern.
-    af.survival_bop = af.cumulative_survival.projection.previous_period(fill_value=1.0)
+    # Cumulative survival from the combined decrement:
+    #   tpx[t] = (1 - q[0]) * (1 - q[1]) * ... * (1 - q[t-1])
+    # rate_timing="beginning_of_period" is the default, and it is the
+    # convention wanted here: the decrement at t has not been applied yet,
+    # so the first element is 1.0 -- every policy in force at t=0.
+    af.survival_bop = af.combined_decrement.projection.cumulative_survival()
 
     # Policies in force at beginning of each month (starting from 1 policy each)
     af.pols_if = af.survival_bop

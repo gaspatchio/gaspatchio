@@ -1,0 +1,618 @@
+{
+  "schema": "gaspatchio-engine-coverage/v0-preview.1",
+  "engine": "jax",
+  "engine_version": "0.1.0rc1",
+  "operations": [
+    {
+      "identifier": "add",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; a Boolean reads as its 0.0 or 1.0, and a per-policy Boolean on both sides of one operation is refused",
+      "clause": "11.1.25"
+    },
+    {
+      "identifier": "sub",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; a Boolean reads as its 0.0 or 1.0, and a per-policy Boolean on both sides of one operation is refused",
+      "clause": "11.1.25"
+    },
+    {
+      "identifier": "mul",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; a Boolean reads as its 0.0 or 1.0, and a per-policy Boolean on both sides of one operation is refused",
+      "clause": "11.1.25"
+    },
+    {
+      "identifier": "div",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; a Boolean reads as its 0.0 or 1.0, and a per-policy Boolean on both sides of one operation is refused",
+      "clause": "11.1.25"
+    },
+    {
+      "identifier": "floordiv",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; a Boolean reads as its 0.0 or 1.0, and a per-policy Boolean on both sides of one operation is refused",
+      "clause": "11.1.25"
+    },
+    {
+      "identifier": "mod",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; a Boolean reads as its 0.0 or 1.0, and a per-policy Boolean on both sides of one operation is refused",
+      "clause": "11.1.25"
+    },
+    {
+      "identifier": "pow",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; a Boolean reads as its 0.0 or 1.0, and a per-policy Boolean on both sides of one operation is refused",
+      "clause": "11.1.25"
+    },
+    {
+      "identifier": "lt",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; both operands in one of number, date, text",
+      "clause": "11.1.26"
+    },
+    {
+      "identifier": "le",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; both operands in one of number, date, text",
+      "clause": "11.1.26"
+    },
+    {
+      "identifier": "gt",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; both operands in one of number, date, text",
+      "clause": "11.1.26"
+    },
+    {
+      "identifier": "ge",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; both operands in one of number, date, text",
+      "clause": "11.1.26"
+    },
+    {
+      "identifier": "eq",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; both operands in one of number, date, text",
+      "clause": "11.1.26"
+    },
+    {
+      "identifier": "ne",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; both operands in one of number, date, text",
+      "clause": "11.1.26"
+    },
+    {
+      "identifier": "and",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value; a floating-point operand is a direct reference to a stored 0/1 indicator column, checked under 11.1.18",
+      "clause": "11.1.27"
+    },
+    {
+      "identifier": "or",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value; a floating-point operand is a direct reference to a stored 0/1 indicator column, checked under 11.1.18",
+      "clause": "11.1.27"
+    },
+    {
+      "identifier": "abs",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "cbrt",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; answering a floating-point value",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "ceil",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number",
+      "clause": "11.1.8"
+    },
+    {
+      "identifier": "clip",
+      "status": "lowered",
+      "condition": "2 or 3 operands; operands carried as a floating-point value, a whole number; no bound in a wider carrier than the value; bounds=both or lower or upper",
+      "clause": "11.1.3"
+    },
+    {
+      "identifier": "cum_prod",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period; reverse=True or False; the direction is the record's, and both directions are masked",
+      "clause": "11.1.9"
+    },
+    {
+      "identifier": "cum_sum",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period; reverse=True or False; the direction is the record's, and both directions are masked",
+      "clause": "11.1.9"
+    },
+    {
+      "identifier": "curve.discount_factor",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; curve stated; a knot curve, linear between the knots and flat outside them, resolved by the recipe's whole digest",
+      "clause": "11.1.31"
+    },
+    {
+      "identifier": "curve.spot_rate",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; curve stated; a knot curve, linear between the knots and flat outside them, resolved by the recipe's whole digest",
+      "clause": "11.1.31"
+    },
+    {
+      "identifier": "cut",
+      "status": "lowered",
+      "condition": "3 operands; operands carried as a Boolean, a floating-point value, a whole number; operand 1, 2 written out as a sequence literal; include_breaks=False",
+      "clause": "11.1.4"
+    },
+    {
+      "identifier": "date.date_ranges",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a calendar date; operands carrying one value per policy; answering one value per period; answering a calendar date; the width of its answer is read from its operands, on the host, before the program that reads it is built; closed=both or left or right or none; interval stated; every candidate is offset from the original start, never from the previously clamped date; the row width is the longest span in the book divided by the interval, with no grid bounding it",
+      "clause": "11.1.33"
+    },
+    {
+      "identifier": "date.months_between",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a calendar date; operands carrying one value per policy; answering a whole number; days are ignored: 31 January to 1 February is one month",
+      "clause": "11.1.33"
+    },
+    {
+      "identifier": "date.offset_by",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a calendar date; operands carrying one value per policy; answering a calendar date; duration stated; months and years clamp the day; weeks and days add calendar days",
+      "clause": "11.1.33"
+    },
+    {
+      "identifier": "date.to_period",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a calendar date; operands carrying one value per policy; answering a calendar date; freq=Y or M or W or D or y or m or w or d; freq stated; a Monday-starting week, which can open in the preceding year",
+      "clause": "11.1.33"
+    },
+    {
+      "identifier": "excel.days",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a calendar date; operands carrying one value per policy; answering a whole number; the end date is written first, as the spreadsheet function takes it",
+      "clause": "11.1.33"
+    },
+    {
+      "identifier": "excel.edate",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a calendar date then a floating-point value, a whole number; operands carrying one value per policy; answering a calendar date; the same month clamp every month move in this family takes",
+      "clause": "11.1.33"
+    },
+    {
+      "identifier": "excel.eomonth",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a calendar date then a floating-point value, a whole number; operands carrying one value per policy; answering a calendar date; the month is moved first and the last day of it taken after",
+      "clause": "11.1.33"
+    },
+    {
+      "identifier": "excel.from_excel_serial",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a floating-point value, a whole number; operands carrying one value per policy; answering a calendar date; epoch=1900 or 1904; the 1900 system's phantom 29 February is read as 28 February, as the spreadsheet does",
+      "clause": "11.1.33"
+    },
+    {
+      "identifier": "excel.irr",
+      "status": "lowered",
+      "condition": "1 or 2 operands; operands carried as a floating-point value, a whole number; operands carrying one value per period then one value per policy; answering one value per policy; answering a floating-point value; bisection over the clause's own bracket, which is the published reader's method and not a producer's iteration",
+      "clause": "11.1.36"
+    },
+    {
+      "identifier": "excel.pv",
+      "status": "lowered",
+      "condition": "3 operands; operands carried as a floating-point value, a whole number; operands carrying one value per period, one value per policy; answering a floating-point value; cash paid and value received have opposite signs",
+      "clause": "11.1.35"
+    },
+    {
+      "identifier": "excel.round",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a floating-point value, a whole number; answering a floating-point value; -10 <= num_digits <= 10; num_digits stated; the value's fifteen significant digits are rounded, as a spreadsheet holds them, and a half goes away from zero, which is not the host language's rule",
+      "clause": "11.1.35"
+    },
+    {
+      "identifier": "excel.yearfrac",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a calendar date; operands carrying one value per period, one value per policy; answering a floating-point value; basis matched without case; basis=0 or 1 or 2 or 3 or 4 or 30/360 or 30e/360 or act/360 or act/365 or act/act or actual/360 or actual/365 or actual/actual or actual_360 or actual_365 or european_30_360 or us_nasd_30_360; basis stated; basis 1 is the spreadsheet's own actual/actual and not a schedule's ISDA year splitting",
+      "clause": "11.1.34"
+    },
+    {
+      "identifier": "exp",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; answering a floating-point value",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "fill_nan",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a floating-point value, a whole number",
+      "clause": "11.1.13"
+    },
+    {
+      "identifier": "fill_null",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; both operands in one of number, date, text; no value in a run is null: a null-bearing input refuses at the door and a null an integer division would mint refuses at completion",
+      "clause": "11.1.13"
+    },
+    {
+      "identifier": "finance.compound",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; periods_per_year >= 1; rate stated; periods_per_year stated; rate a number; the receiver is time, not an opening account value",
+      "clause": "11.1.29"
+    },
+    {
+      "identifier": "finance.discount",
+      "status": "lowered",
+      "condition": "3 operands; operands carried as a floating-point value, a whole number; operands carrying one value per policy; answering a floating-point value; one value per policy: a per-period cashflow valuation is projection.prospective_value (11.1.21); an operand that is itself a calculation declares no shape, so a nested per-period operand is refused when the run reaches this lowering rather than by the tree reading, which reads a shape one level deep",
+      "clause": "11.1.29"
+    },
+    {
+      "identifier": "finance.discount_factor",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period, one value per policy; answering one value per period; method=spot or forward; method stated; both operands are recorded under either method, and under forward the period operand supplies no exponent or length",
+      "clause": "11.1.30"
+    },
+    {
+      "identifier": "finance.present_value",
+      "status": "lowered",
+      "condition": "3 operands; operands carried as a floating-point value, a whole number; operands carrying one value per policy; answering a floating-point value; a per-row contribution, never a sum over periods: a per-period valuation is projection.prospective_value (11.1.21); an operand that is itself a calculation declares no shape, so a nested per-period operand is refused when the run reaches this lowering rather than by the tree reading, which reads a shape one level deep",
+      "clause": "11.1.29"
+    },
+    {
+      "identifier": "finance.to_monthly",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; method=simple or compound; method stated; a method token outside the two is not an alias for simple interest",
+      "clause": "11.1.29"
+    },
+    {
+      "identifier": "floor",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number",
+      "clause": "11.1.8"
+    },
+    {
+      "identifier": "is_finite",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number",
+      "clause": "11.1.13"
+    },
+    {
+      "identifier": "is_in",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number, text; operand 1 written out as a sequence literal",
+      "clause": "11.1.5"
+    },
+    {
+      "identifier": "is_infinite",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number",
+      "clause": "11.1.13"
+    },
+    {
+      "identifier": "is_nan",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number",
+      "clause": "11.1.13"
+    },
+    {
+      "identifier": "is_not_nan",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number",
+      "clause": "11.1.13"
+    },
+    {
+      "identifier": "is_not_null",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; no value in a run is null: a null-bearing input refuses at the door and a null an integer division would mint refuses at completion",
+      "clause": "11.1.13"
+    },
+    {
+      "identifier": "is_null",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; no value in a run is null: a null-bearing input refuses at the door and a null an integer division would mint refuses at completion",
+      "clause": "11.1.13"
+    },
+    {
+      "identifier": "join",
+      "status": "lowered",
+      "condition": "0 operands; how=left; on_missing=raise or null; on stated; right_fingerprint stated; a right side whose key tuples are unique",
+      "clause": "11.1.2"
+    },
+    {
+      "identifier": "list.get",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number then a whole number; operands carrying one value per period then one value per policy; answering one value per policy; a negative position counts back from that policy's own length",
+      "clause": "11.1.22"
+    },
+    {
+      "identifier": "list.reverse",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; operands carrying one value per period; each policy is reversed within its own length, never across the padding",
+      "clause": "11.1.41"
+    },
+    {
+      "identifier": "log",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; answering a floating-point value",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "log10",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; answering a floating-point value",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "log1p",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; answering a floating-point value",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "lookup",
+      "status": "lowered",
+      "condition": "operands carried as a floating-point value, a whole number, text; on_missing=raise or nan or fill; table stated; table_fingerprint stated; on_missing stated; one operand per key column of the basis, bound in the basis's own column order; a scalar text key column whose every read is a key may carry a value that is not there, which is a miss under this read's own policy and not a refusal at the door",
+      "clause": "11.1.24"
+    },
+    {
+      "identifier": "max",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period; answering one value per policy; the fold is one policy's own periods, and the denominator of a mean is that policy's own count",
+      "clause": "11.1.17"
+    },
+    {
+      "identifier": "mean",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period; answering one value per policy; answering a floating-point value; the fold is one policy's own periods, and the denominator of a mean is that policy's own count",
+      "clause": "11.1.15"
+    },
+    {
+      "identifier": "min",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period; answering one value per policy; the fold is one policy's own periods, and the denominator of a mean is that policy's own count",
+      "clause": "11.1.16"
+    },
+    {
+      "identifier": "mortality.at",
+      "status": "lowered",
+      "condition": "operands carried as a floating-point value, a whole number, text; structure=aggregate or select_ultimate or joint; on_missing=raise or nan or fill; select_period a whole number; structure stated; dimensions stated; table stated; table_fingerprint stated; select_period stated where structure=select_ultimate; one operand per dimension the read names, bound to the basis by name; a miss policy the node does not state is raise (11.1.10); a scalar text key column whose every read is a key may carry a value that is not there, which is a miss under this read's own policy and not a refusal at the door",
+      "clause": "11.1.10"
+    },
+    {
+      "identifier": "norm_cdf",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; answering a floating-point value",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "not_",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value; a floating-point operand is a direct reference to a stored 0/1 indicator column, checked under 11.1.18",
+      "clause": "11.1.27"
+    },
+    {
+      "identifier": "projection.accumulate",
+      "status": "lowered",
+      "condition": "3 operands; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per policy then one value per period, one value per policy then one value per period, one value per policy; reverse=True or False; the linear recurrence itself, stepped period by period in the record's direction, a reverse run starting at each policy's own last period: 11.1.20 excludes replacing it with a division by a cumulative product",
+      "clause": "11.1.20"
+    },
+    {
+      "identifier": "projection.at_period",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period then one value per policy; relative_period a whole number; the boundary is that policy's own last period, not the grid's",
+      "clause": "11.1.19"
+    },
+    {
+      "identifier": "projection.broadcast_to_periods",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number, text then a Boolean, a calendar date, a floating-point value, a whole number, text; operands carrying one value per policy then one value per period; only the axis operand's length matters, never its values (11.1.32), and a calendar day is outside the bounded scalars",
+      "clause": "11.1.32"
+    },
+    {
+      "identifier": "projection.cumulative_survival",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period; from_survival=False; the decrement form: a running product of one minus the decrement, with start_at as the opening boundary",
+      "clause": "11.1.19"
+    },
+    {
+      "identifier": "projection.next_period",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period then one value per policy; the boundary is that policy's own last period, not the grid's",
+      "clause": "11.1.19"
+    },
+    {
+      "identifier": "projection.previous_period",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period then one value per policy; the boundary is that policy's own last period, not the grid's",
+      "clause": "11.1.19"
+    },
+    {
+      "identifier": "projection.prospective_value",
+      "status": "lowered",
+      "condition": "2 operands; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period then one value per period, one value per policy; timing=beginning_of_period or end_of_period; discount_kind=rate; the rate form: a factor convention is not inferred from a rate one, and the rate is masked before the suffix sums are taken",
+      "clause": "11.1.21"
+    },
+    {
+      "identifier": "projection.remaining_sum",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period; the inclusive suffix sum, masked to nought beyond the horizon",
+      "clause": "11.1.20"
+    },
+    {
+      "identifier": "projection.with_period",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period; period a whole number; period stated; value stated; value a number; an override never extends a shorter policy or fills an empty list",
+      "clause": "11.1.32"
+    },
+    {
+      "identifier": "projection_frame.anniversary_mask",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "projection_frame.period_dates",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "projection_frame.t_years",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "projection_frame.year_fractions",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "projection_set",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per policy; frequency matched without case; the width of its answer is read from its operands, on the host, before the program that reads it is built; frequency=monthly or quarterly or semi-annual or annual or 1M or 3M or 6M or 1Y; steps_per_year >= 1; step_years a number; the boundary count follows from the attributes where the horizon is a whole term, a fixed date or a number of years, or the axis is a fixed step of step_years or steps_per_year, which mints step, num_proj_months and, where a step is whole months, month; a horizon the attributes do not fix, and a declaration stating neither a frequency nor a step, are refused by name",
+      "clause": "11.1.1"
+    },
+    {
+      "identifier": "replace",
+      "status": "lowered",
+      "condition": "3 operands; operands carried as a Boolean, a floating-point value, a whole number, text; operand 1 written out as a sequence literal",
+      "clause": "11.1.6"
+    },
+    {
+      "identifier": "rollforward",
+      "status": "lowered",
+      "condition": "0 operands; fingerprint stated; the bounded portable machine this subsection states, run as one scan down the periods with the declared states as its carry; tracking, a lapse condition, a contract boundary, a non-portable binding, a rounded charge or an ungated ratchet are refused by name",
+      "clause": "16.1"
+    },
+    {
+      "identifier": "rollforward.increment",
+      "status": "refused",
+      "condition": "reading back what one step of a compiled rollforward moved needs a machine that tracks its increments, which section 16.1's executable subset excludes; this engine runs that subset and no more",
+      "clause": "16.2"
+    },
+    {
+      "identifier": "rollforward.state",
+      "status": "lowered",
+      "condition": "answering one value per period; answering a floating-point value; point=eop; fingerprint stated; state stated; one declared balance of the bounded portable machine, at the end of the period: the operand run of this call is the compilation's own and its operands are checked against the machine rather than against the argument list",
+      "clause": "16.1"
+    },
+    {
+      "identifier": "rollforward.struct",
+      "status": "refused",
+      "condition": "a compiled rollforward run whole answers a Struct of named list fields, and section 10 has no Struct type: this clause states no portable output for it in this preview",
+      "clause": "16.3"
+    },
+    {
+      "identifier": "round",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; mode=half_to_even or half_away_from_zero; decimals a whole number",
+      "clause": "11.1.8"
+    },
+    {
+      "identifier": "round_sig_figs",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; digits >= 1",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "schedule.anniversary_mask",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "schedule.contract_boundary",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "schedule.is_in_force",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "schedule.per_policy_period_count",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per policy; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "schedule.per_policy_period_dates",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "schedule.period_dates",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "schedule.year_fractions",
+      "status": "lowered",
+      "condition": "operands carried as a Boolean, a calendar date, a floating-point value, a whole number; operands carrying one value per policy; answering one value per period; the width of its answer is read from its operands, on the host, before the program that reads it is built; schedule stated; boundary sequences carry T+1 cells and period values T; the recipe is resolved by its whole digest",
+      "clause": "11.1.37"
+    },
+    {
+      "identifier": "sign",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "sqrt",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; answering a floating-point value",
+      "clause": "11.1.12"
+    },
+    {
+      "identifier": "str.to_date",
+      "status": "lowered-off-trace",
+      "condition": "operands are inputs or literals; 1 operand; operands carried as text; operands carrying one value per policy; strict=True; exact=True; format stated",
+      "clause": "11.1.7"
+    },
+    {
+      "identifier": "sum",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a Boolean, a floating-point value, a whole number; operands carrying one value per period; answering one value per policy; the fold is one policy's own periods, and the denominator of a mean is that policy's own count",
+      "clause": "11.1.14"
+    },
+    {
+      "identifier": "to_float",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a floating-point value, a whole number",
+      "clause": "11.1.38"
+    },
+    {
+      "identifier": "to_integer",
+      "status": "lowered",
+      "condition": "1 operand; operands carried as a floating-point value, a whole number",
+      "clause": "11.1.23"
+    },
+    {
+      "identifier": "to_list",
+      "status": "refused",
+      "condition": "the operand is a column of a fixed-width array, and section 10 names no array type: no document this engine can be handed carries one",
+      "clause": "11.1.40"
+    },
+    {
+      "identifier": "to_text",
+      "status": "lowered-off-trace",
+      "condition": "operands are inputs or literals; 1 operand; operands carried as a Boolean, a calendar date, a floating-point value, a whole number, text; operands carrying one value per policy",
+      "clause": "11.1.39"
+    }
+  ],
+  "counts": {
+    "lowered": 96,
+    "refused": 3,
+    "lowered-off-trace": 2
+  }
+}

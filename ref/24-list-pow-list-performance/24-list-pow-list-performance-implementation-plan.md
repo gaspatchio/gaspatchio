@@ -1,7 +1,5 @@
 # List Power Operations Rust Plugin Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Eliminate 69.9% of EXPLODE/GROUP_BY performance bottleneck by implementing Rust plugins for `list ** list` power operations and `when/then/otherwise` conditionals on list columns.
 
 **Architecture:** Two specialized pyo3-polars plugins following the existing fill_series pattern. Pure Rust implementations in `core/src/polars_functions/`, PyO3 wrappers in `bindings/python/src/vector.rs`. Plugins operate on Arrow child arrays directly via `zip_and_apply_amortized_same_type()`, eliminating row expansion.
@@ -349,11 +347,7 @@ Uses zip_and_apply_amortized_same_type pattern from Polars.
 Promotes all values to Float64 for power operations.
 Handles null values correctly.
 
-Solves 22.6% of GSP-8 performance bottleneck.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Solves 22.6% of GSP-8 performance bottleneck."
 ```
 
 ---
@@ -481,11 +475,7 @@ Benchmarks for list**list and list**scalar operations at scale:
 - 100, 1K, 10K rows
 - 240 elements per list (typical projection length)
 
-Baseline for measuring optimization improvements.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Baseline for measuring optimization improvements."
 ```
 
 ---
@@ -561,11 +551,7 @@ git commit -m "feat(python): add PyO3 wrapper for list_pow plugin
 
 Exposes Rust list_pow function as Polars expression plugin.
 Uses polars_expr macro for integration.
-Always returns List<Float64> output type.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Always returns List<Float64> output type."
 ```
 
 ---
@@ -675,11 +661,7 @@ git commit -m "feat(python): add list_pow plugin function
 
 Registers list_pow as Polars expression plugin.
 Supports list**list and list**scalar operations.
-Includes comprehensive docstring with examples.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Includes comprehensive docstring with examples."
 ```
 
 ---
@@ -864,11 +846,7 @@ Changes:
 - discount_factor spot method uses list_pow for (1+rate)**(-period)
 - discount_factor forward method uses list_pow for reciprocal
 - No EXPLODE operations in query plan
-- All existing tests pass
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- All existing tests pass"
 ```
 
 ---
@@ -964,11 +942,7 @@ git commit -m "docs: Phase 1 performance results for list_pow plugin
 
 Measured 23% overall speedup at 1K points.
 Eliminated 1 of 7 EXPLODE operations.
-Memory reduced by 19%.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Memory reduced by 19%."
 ```
 
 ---
@@ -1512,11 +1486,7 @@ Implements element-wise conditionals with built-in comparison.
 Supports all 6 comparison operators: eq, ne, lt, lte, gt, gte.
 Handles list/scalar combinations for right, then, otherwise values.
 
-Solves 47.3% of GSP-8 performance bottleneck.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Solves 47.3% of GSP-8 performance bottleneck."
 ```
 
 ---
@@ -1685,11 +1655,7 @@ git add benches/list_conditional.rs Cargo.toml
 git commit -m "test(core): add Criterion benchmarks for list_conditional
 
 Benchmarks for eq and lt operators with list and scalar patterns.
-Tests at 100, 1K, 10K rows with 240 elements per list.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Tests at 100, 1K, 10K rows with 240 elements per list."
 ```
 
 ---
@@ -1776,11 +1742,7 @@ git commit -m "feat(python): add PyO3 wrapper for list_conditional plugin
 
 Exposes Rust list_conditional function as Polars expression plugin.
 Uses polars_expr macro with kwargs for operator parameter.
-Always returns List<Float64> output type.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Always returns List<Float64> output type."
 ```
 
 ---
@@ -1920,11 +1882,7 @@ git commit -m "feat(python): add list_conditional plugin function
 
 Registers list_conditional as Polars expression plugin.
 Supports all 6 comparison operators with list/scalar combinations.
-Includes comprehensive docstring with examples.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Includes comprehensive docstring with examples."
 ```
 
 ---
@@ -2169,11 +2127,7 @@ Changes:
 - Use list_conditional plugin for list dtype columns
 - Fallback to standard Polars when() for scalar columns
 - No EXPLODE operations for list conditionals
-- All existing tests pass
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- All existing tests pass"
 ```
 
 ---
@@ -2301,11 +2255,7 @@ git commit -m "docs: Phase 2 performance results for list_conditional plugin
 Measured 69% overall speedup at 1K points.
 Eliminated 5 of 7 EXPLODE operations.
 Memory reduced by 69%.
-All numerical results validated.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+All numerical results validated."
 ```
 
 ---
@@ -2575,11 +2525,7 @@ git commit -m "docs: comprehensive benchmark results and final summary
 
 Documents 69% speedup achieved at all scales.
 Includes detailed benchmarks, scaling characteristics, and validation.
-Ready for production deployment.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Ready for production deployment."
 ```
 
 ---

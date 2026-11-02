@@ -45,7 +45,7 @@ These apply when reviewing changes to an existing model, not initial builds.
 | # | Check | What to verify | Common failure modes |
 |---|---|---|---|
 | 1 | **Propagation completeness** | The change has been propagated to all dependent variables. If a rate changed, every downstream calculation that uses it has been re-validated. | Changing mortality rate formula but not re-checking death claims, reserves, and PVs |
-| 2 | **Side effect analysis** | Run the model before and after the change. Compare key outputs. Check that unchanged variables are actually unchanged. | A "small" lapse rate change that moves BEL by 15% because of interaction with dynamic policyholder behavior |
+| 2 | **Side effect analysis** | Export the model before and after the change and run `gspio diff` on the two audit files: it lists every line whose numbers moved, in how many policies and from which period. Check that unchanged variables are actually unchanged. | A "small" lapse rate change that moves BEL by 15% because of interaction with dynamic policyholder behavior |
 | 3 | **Direction and magnitude** | The direction and magnitude of output changes should make actuarial sense. Increasing mortality should increase death claims and decrease survival-contingent benefits. | Increasing mortality causes reserves to decrease (possible sign of a timing or ordering bug) |
 | 4 | **Boundary preservation** | Edge cases still behave correctly after the change. Check duration 0, maturity month, zero account value, maximum age, and policy start/end around valuation date. | Change works for mid-duration policies but crashes or gives wrong results for new business or at maturity |
 
@@ -74,7 +74,8 @@ Work through the checklist in order: Correctness first, then Assumption Integrit
 Every check that passes should be verifiable. "I looked at it and it seems fine" is not evidence. Acceptable evidence includes:
 
 - A single-policy model run showing expected intermediate values
-- A before/after diff of key outputs when reviewing a change
+- A before/after `gspio diff` of the two audit files when reviewing a change
+- A `gspio verify` of the audit file against the results, model, policy data and assumption files reviewed
 - A spot-check comparing assumption table values to a named source document
 - A screenshot or code snippet showing the formula matches the specification
 

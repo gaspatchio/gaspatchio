@@ -19,11 +19,20 @@ from __future__ import annotations
 
 import re
 from difflib import SequenceMatcher
-from typing import TypeVar
+from typing import Final
 
-from gaspatchio.api.models import DocResult, KnowledgeResult
+from gaspatchio.api.client import knowledge_filters
+from gaspatchio.api.models import (
+    DocResult,
+    DocsSearchResponse,
+    KnowledgeResult,
+    KnowledgeSearchResponse,
+)
 
-_ResultT = TypeVar("_ResultT", DocResult, KnowledgeResult)
+# What a docs search and a knowledge search answer with: printed alike. A plain
+# union rather than a ``type`` statement, so that it is the union at run time as
+# well, which is what the stub check compares it with.
+SearchResponse = DocsSearchResponse | KnowledgeSearchResponse
 
 # Near-duplicate detection compares the FULL normalised texts; 0.9 collapses
 # re-ingested copies of the same source (which differ in whitespace or a
@@ -85,16 +94,16 @@ def _is_near_duplicate(a: str, b: str, threshold: float) -> bool:
     return SequenceMatcher(None, rest_a, rest_b).ratio() >= threshold
 
 
-def dedupe_results(
-    results: list[_ResultT],
+def dedupe_results[R: (DocResult, KnowledgeResult)](
+    results: list[R],
     threshold: float = _DEDUPE_THRESHOLD,
-) -> tuple[list[_ResultT], int]:
+) -> tuple[list[R], int]:
     """Collapse near-identical hits, keeping the first (highest-ranked) copy.
 
     Returns the surviving results in their original order and the number of
     hits dropped as near-duplicates.
     """
-    kept: list[_ResultT] = []
+    kept: list[R] = []
     kept_norms: list[str] = []
     dropped = 0
     for result in results:
@@ -145,7 +154,9 @@ def _first_match_position(text: str, query: str) -> int | None:
     return None
 
 
-def truncate_result(result: _ResultT, query: str, max_chars: int) -> _ResultT:
+def truncate_result[R: (DocResult, KnowledgeResult)](
+    result: R, query: str, max_chars: int
+) -> R:
     """Window a long result text around the first query match.
 
     Texts within ``max_chars`` (or with ``max_chars=0``, meaning unlimited)
@@ -176,4 +187,149 @@ def truncate_result(result: _ResultT, query: str, max_chars: int) -> _ResultT:
             "truncated": True,
             "full_chars": len(text),
         },
+    )
+
+
+def trimmed(search: SearchResponse, query: str, max_chars: int) -> SearchResponse:
+    """Return a search with near-duplicate results dropped and long texts windowed.
+
+    What ``gspio docs`` and ``gspio knowledge`` print unless asked for
+    ``--full``: :func:`dedupe_results` over the results, then
+    :func:`truncate_result` over each one kept, with the count of those
+    dropped carried on the response so that nothing is hidden.
+
+    Args:
+        search: The response the API client returned, of either search.
+        query: The query the search was for, which each window centres on.
+        max_chars: How long a result's text may run before it is windowed.
+
+    Returns:
+        The same kind of response, with the results trimmed.
+
+    """
+    if isinstance(search, DocsSearchResponse):
+        docs, dropped = _trimmed(search.results, query, max_chars)
+        return search.model_copy(update={"results": docs, "deduplicated": dropped})
+    found, dropped = _trimmed(search.results, query, max_chars)
+    return search.model_copy(update={"results": found, "deduplicated": dropped})
+
+
+def _trimmed[R: (DocResult, KnowledgeResult)](
+    results: list[R], query: str, max_chars: int
+) -> tuple[list[R], int]:
+    """Return the results kept, each windowed, and how many were dropped."""
+    kept, dropped = dedupe_results(results)
+    return [truncate_result(result, query, max_chars) for result in kept], dropped
+
+
+# The values the hosted knowledge index filters on. Measured on 2026-10-08
+# against the service the client queries by default (KnowledgeAPIClient's
+# DEFAULT_BASE_URL): 160 searches (80 varied actuarial queries, each in chunk
+# and in summary retrieval, 50 results apiece, 1,897
+# distinct documents between them) gave every value below; each was then
+# tried as a filter on its own, as were some 70 plausible others (mortality,
+# lapse, csm, ldti, usgaap, solvencyii, risk_adjustment, ca, educational,
+# regulatory and more), which matched nothing. The index stores every value in
+# lower case. It can gain values without a release of this package, so these
+# serve only to tell a reader what exists once a filter has matched nothing: a
+# value missing here is still sent, and never refused before the index has
+# been asked.
+KNOWLEDGE_TAGS: Final[tuple[str, ...]] = (
+    "capital",
+    "gaap",
+    "general",
+    "health",
+    "ifrs",
+    "ifrs17",
+    "life",
+    "naic",
+    "property",
+    "reserve",
+    "solvency",
+)
+KNOWLEDGE_JURISDICTIONS: Final[tuple[str, ...]] = (
+    "au",
+    "eu",
+    "international",
+    "uk",
+    "us",
+)
+KNOWLEDGE_DOC_TYPES: Final[tuple[str, ...]] = (
+    "comment",
+    "guidance",
+    "practice-note",
+    "regulation",
+    "standard",
+)
+
+
+def unmatched_filters_note(
+    *,
+    tags: list[str] | None,
+    jurisdiction: str | None,
+    doc_type: str | None,
+) -> str | None:
+    """Say why a filtered knowledge search came back empty, and what to try.
+
+    A filter value the index does not use matches nothing, and an empty
+    result alone cannot tell a reader whether the knowledge is missing or the
+    filter is misspelt. This names the filters, picks out any value the index
+    is not known to use, lists the values it does use, and points at the
+    search without filters, whose every result shows its own tags. It never
+    drops a filter or retries without one: which value was meant is the
+    reader's call.
+
+    Args:
+        tags: The ``--tag`` values asked for, if any.
+        jurisdiction: The ``--jurisdiction`` asked for, if any.
+        doc_type: The ``--doc-type`` asked for, if any.
+
+    Returns:
+        The note, or ``None`` where no filter was asked for, since an
+        unfiltered search that finds nothing has no filter to blame.
+
+    Examples:
+        >>> note = unmatched_filters_note(
+        ...     tags=["Mortality"], jurisdiction=None, doc_type=None
+        ... )
+        >>> note.startswith("No knowledge results matched --tag mortality.")
+        True
+        >>> "The index is not known to use --tag mortality." in note
+        True
+        >>> unmatched_filters_note(tags=None, jurisdiction=None, doc_type=None)
+
+    """
+    sent = knowledge_filters(tags=tags, jurisdiction=jurisdiction, doc_type=doc_type)
+    asked: list[tuple[str, str, tuple[str, ...]]] = [
+        ("--tag", tag, KNOWLEDGE_TAGS) for tag in sent.get("tags", [])
+    ]
+    for option, key, known in (
+        ("--jurisdiction", "jurisdiction", KNOWLEDGE_JURISDICTIONS),
+        ("--doc-type", "doc_type", KNOWLEDGE_DOC_TYPES),
+    ):
+        value = sent.get(key)
+        if isinstance(value, str):
+            asked.append((option, value, known))
+    if not asked:
+        return None
+
+    filters = " ".join(f"{option} {value}" for option, value, _ in asked)
+    unknown = [
+        f"{option} {value}" for option, value, known in asked if value not in known
+    ]
+    if unknown:
+        why = (
+            f"The index is not known to use {', '.join(unknown)}. Its tags are "
+            f"{', '.join(KNOWLEDGE_TAGS)}; its jurisdictions "
+            f"{', '.join(KNOWLEDGE_JURISDICTIONS)}; its document types "
+            f"{', '.join(KNOWLEDGE_DOC_TYPES)}."
+        )
+    else:
+        why = (
+            "Each of those values is one the index uses, so it is the query "
+            "and the filters together that match nothing."
+        )
+    return (
+        f"No knowledge results matched {filters}. {why} Re-run without the "
+        "filters: every result shows its tags, jurisdiction and doc_type."
     )

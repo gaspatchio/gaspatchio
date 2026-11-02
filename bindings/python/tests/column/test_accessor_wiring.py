@@ -110,7 +110,7 @@ def test_colproxy_accessor_kind_filtering(sample_proxies_wiring):
     with pytest.raises(
         AttributeError,
         # Updated match for the actual error from ColumnProxy.__getattr__
-        match=r"No 'dummy_frame_wiring' column accessor registered or attribute found.",
+        match=r"No 'dummy_frame_wiring' column accessor registered or declared operation found.",
     ):
         _ = col_proxy.dummy_frame_wiring
 
@@ -121,7 +121,7 @@ def test_colproxy_accessor_attribute_error(sample_proxies_wiring):
     with pytest.raises(
         AttributeError,
         # Updated match for the error raised by ColumnProxy.__getattr__
-        match=r"No 'non_existent' column accessor registered or attribute found.",
+        match=r"No 'non_existent' column accessor registered or declared operation found.",
     ):
         _ = col_proxy.non_existent
 
@@ -133,10 +133,9 @@ def test_colproxy_dir_includes_accessors(sample_proxies_wiring):
     assert "dummy_col_wiring" in proxy_dir
     assert "another_col_wiring" in proxy_dir
     assert "dummy_frame_wiring" not in proxy_dir  # Frame accessor should not be listed
-    # Check a standard method still exists
-    # Check a Polars method still exists (via autopatch)
-    assert "alias" in proxy_dir
-    assert "sum" in proxy_dir
+    # Check declared operations still reach the generated surface
+    assert "abs" in proxy_dir
+    assert "clip" in proxy_dir
 
 
 # --- Tests for ExpressionProxy --- (Similar structure)
@@ -172,7 +171,7 @@ def test_exprproxy_accessor_kind_filtering(sample_proxies_wiring):
     with pytest.raises(
         AttributeError,
         # Updated match for the actual error from ExpressionProxy.__getattr__
-        match=r"No 'dummy_frame_wiring' column accessor registered, and attribute not found on proxied Expr.",
+        match=r"No 'dummy_frame_wiring' column accessor registered or declared operation found.",
     ):
         _ = expr_proxy.dummy_frame_wiring
 
@@ -183,7 +182,7 @@ def test_exprproxy_accessor_attribute_error(sample_proxies_wiring):
     with pytest.raises(
         AttributeError,
         # Updated match for the actual error from ExpressionProxy.__getattr__
-        match=r"No 'non_existent' column accessor registered, and attribute not found on proxied Expr.",
+        match=r"No 'non_existent' column accessor registered or declared operation found.",
     ):
         _ = expr_proxy.non_existent
 
@@ -195,5 +194,5 @@ def test_exprproxy_dir_includes_accessors(sample_proxies_wiring):
     assert "dummy_col_wiring" in proxy_dir
     assert "another_col_wiring" in proxy_dir
     assert "dummy_frame_wiring" not in proxy_dir
-    assert "alias" in proxy_dir  # Standard method
-    assert "sum" in proxy_dir  # Polars method
+    assert "abs" in proxy_dir  # Standard method
+    assert "clip" in proxy_dir  # Polars method

@@ -11,6 +11,8 @@ import math
 import numpy as np
 from loguru import logger
 
+from gaspatchio._warning import warn
+
 
 def sw_heart(u: np.ndarray, v: np.ndarray, alpha: float) -> np.ndarray:
     """Wilson 'heart' H(u,v) (min/max-free vectorised form, matches lifelib).
@@ -26,15 +28,23 @@ def sw_heart(u: np.ndarray, v: np.ndarray, alpha: float) -> np.ndarray:
     """
     u = u[:, None]
     v = v[None, :]
-    return 0.5 * (
+    heart: np.ndarray = 0.5 * (
         alpha * (u + v)
         + np.exp(-alpha * (u + v))
         - alpha * np.abs(u - v)
         - np.exp(-alpha * np.abs(u - v))
     )
+    return heart
 
 
-def solve_zeta(u: np.ndarray, r: np.ndarray, ufr: float, alpha: float) -> np.ndarray:
+def solve_zeta(
+    u: np.ndarray,
+    r: np.ndarray,
+    ufr: float,
+    alpha: float,
+    *,
+    warn_if_ill_conditioned: bool = False,
+) -> np.ndarray:
     """Solve W @ zeta = m - mu for the Wilson weights (zero-coupon inputs).
 
     The linear system is:
@@ -47,6 +57,10 @@ def solve_zeta(u: np.ndarray, r: np.ndarray, ufr: float, alpha: float) -> np.nda
         r: Annually-compounded zero rates at each knot (shape ``(n,)``).
         ufr: Ultimate forward rate (annual, e.g. ``0.04`` for 4 %). Must be > -1.
         alpha: Mean-reversion speed. Must be > 0.
+        warn_if_ill_conditioned: Whether an ill-conditioned system is the
+            user's to hear about, as a ``GaspatchioWarning``: true for the
+            system a curve is built from, false for each candidate alpha a
+            calibration tries, which is only logged.
 
     Returns:
         Weight vector ``zeta`` of shape ``(n,)`` to pass to :func:`sw_price` /
@@ -59,9 +73,18 @@ def solve_zeta(u: np.ndarray, r: np.ndarray, ufr: float, alpha: float) -> np.nda
     h = sw_heart(u, u, alpha)
     w = mu[:, None] * h * mu[None, :]
     cond = float(np.linalg.cond(w))
-    if cond > 1e10:  # noqa: PLR2004
-        logger.warning(
-            "smith_wilson: W is ill-conditioned (cond={:.2e}); knots too close?", cond
+    if cond > 1e10 and warn_if_ill_conditioned:  # noqa: PLR2004
+        warn(
+            f"The Smith-Wilson system the curve is fitted from is "
+            f"ill-conditioned (cond={cond:.2e}), so its weights may be "
+            "inaccurate. Knots too close together are the usual cause."
+        )
+    elif cond > 1e10:  # noqa: PLR2004
+        logger.debug(
+            "smith_wilson: W is ill-conditioned (cond={:.2e}) at alpha={}; "
+            "knots too close?",
+            cond,
+            alpha,
         )
     return np.linalg.solve(w, m - mu)
 
@@ -85,7 +108,8 @@ def sw_price(
     t = np.atleast_1d(np.asarray(t, dtype=float))
     h = sw_heart(t, u, alpha)
     w = np.exp(-omega * (t[:, None] + u[None, :])) * h
-    return np.exp(-omega * t) + w @ zeta
+    prices: np.ndarray = np.exp(-omega * t) + w @ zeta
+    return prices
 
 
 def _gap(
@@ -113,7 +137,8 @@ def _gap(
     eps = 1e-4
     p2 = float(sw_price(np.array([cp + eps]), u, zeta, omega, alpha)[0])
     fwd = -(np.log(p2) - np.log(p_cp)) / eps  # instantaneous forward intensity at CP
-    return fwd - omega
+    gap: float = fwd - omega
+    return gap
 
 
 def calibrate_alpha(  # noqa: PLR0913
@@ -170,14 +195,18 @@ def calibrate_alpha(  # noqa: PLR0913
     return min(cand)[1]
 
 
-def sw_spot(t: float, u: np.ndarray, zeta: np.ndarray, omega: float, alpha: float) -> float:
+def sw_spot(
+    t: float, u: np.ndarray, zeta: np.ndarray, omega: float, alpha: float
+) -> float:
     """Annually-compounded spot rate r(t) = P(t)^{-1/t} - 1 (requires t > 0).
 
     The spot rate ``P(t)^(-1/t) - 1`` is undefined at ``t = 0`` and meaningless
     for ``t < 0``; any non-finite ``t`` (NaN or +-inf) or ``t <= 0`` is out of
     domain and yields ``nan`` (the uniform cross-path sentinel). The guard runs
     BEFORE pricing, so ``t = +inf`` does not silently propagate through the
-    Wilson heart.
+    Wilson heart. A ``t`` where the fitted discount factor is zero or negative
+    (a small alpha against uneven rates can produce one) yields ``nan`` as
+    well: no rate discounts to a price that is not positive.
 
     Args:
         t: Evaluation tenor in years. Must be strictly positive.
@@ -188,10 +217,19 @@ def sw_spot(t: float, u: np.ndarray, zeta: np.ndarray, omega: float, alpha: floa
 
     Returns:
         Annually-compounded spot rate at ``t``, or ``nan`` when ``t`` is
-        non-finite or ``t <= 0``.
+        non-finite or ``t <= 0``, or the discount factor at ``t`` is not
+        positive.
 
     """
     if not math.isfinite(t) or t <= 0.0:
         return math.nan
     p = float(sw_price(np.array([t]), u, zeta, omega, alpha)[0])
-    return p ** (-1.0 / t) - 1.0
+    if p <= 0.0:
+        # No rate discounts to a price at or below zero. In Python a negative
+        # price to a fractional power is a complex number and zero to a
+        # negative one divides by zero, and a whole power (t = 1, 1/2, ...) is
+        # a real number that is still no rate. The Rust kernel the column path
+        # runs refuses the same points.
+        return math.nan
+    spot: float = p ** (-1.0 / t) - 1.0
+    return spot

@@ -140,9 +140,13 @@ class TestTableFromScenarioFiles:
         """Should load per-scenario CSV files, not just Parquet."""
         # Arrange: write the scenario rate files as CSV
         base_path = tmp_path / "base_rates.csv"
-        pl.DataFrame({"year": [1, 2, 3], "rate": [0.03, 0.035, 0.04]}).write_csv(base_path)
+        pl.DataFrame({"year": [1, 2, 3], "rate": [0.03, 0.035, 0.04]}).write_csv(
+            base_path
+        )
         up_path = tmp_path / "up_rates.csv"
-        pl.DataFrame({"year": [1, 2, 3], "rate": [0.035, 0.04, 0.045]}).write_csv(up_path)
+        pl.DataFrame({"year": [1, 2, 3], "rate": [0.035, 0.04, 0.045]}).write_csv(
+            up_path
+        )
 
         # Act
         table = Table.from_scenario_files(
@@ -252,3 +256,46 @@ class TestTableFromScenarioTemplate:
         # Assert
         result_df = table.to_dataframe()
         assert len(result_df) == 6  # 3 scenarios x 2 periods
+
+    def test_template_goes_through_from_scenario_files(self, templated_scenario_files):
+        """A subclass that overrides from_scenario_files has it honoured.
+
+        The template is documented as delegating to from_scenario_files, and a
+        subclass that adds to that step (a check, a log line) relies on it.
+        """
+        template, scenarios = templated_scenario_files
+        seen: list[dict[str, str]] = []
+
+        class RecordingTable(Table):
+            @classmethod
+            def from_scenario_files(
+                cls, scenario_files: dict[str, str], *args: object, **kwargs: object
+            ) -> Table:
+                seen.append(dict(scenario_files))
+                return super().from_scenario_files(scenario_files, *args, **kwargs)
+
+        RecordingTable.from_scenario_template(
+            path_template=template,
+            scenario_ids=scenarios,
+            scenario_column="scenario_id",
+            dimensions={"year": "year"},
+            value="rate",
+            name="recorded_rates",
+        )
+
+        assert [sorted(files) for files in seen] == [["BASE", "DOWN", "UP"]]
+
+
+class TestTableFromScenarioFilesRefusals:
+    """What from_scenario_files refuses before it reads a file."""
+
+    @pytest.mark.parametrize("scenario_files", [None, [], {}])
+    def test_no_scenario_files_is_refused_as_empty(self, scenario_files):
+        """No mapping, or an empty one, is refused as empty, by name."""
+        with pytest.raises(ValueError, match="scenario_files cannot be empty"):
+            Table.from_scenario_files(
+                scenario_files=scenario_files,
+                scenario_column="scenario_id",
+                dimensions={"year": "year"},
+                value="rate",
+            )

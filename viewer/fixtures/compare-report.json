@@ -1,0 +1,489 @@
+{
+  "report_version": "gaspatchio-graph-diff/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "compared": {
+    "before": {
+      "graph_fingerprint": "sha256:223e69ecd3868e32b867a16af5fabd29f817b4216c87b4508456c878413179aa",
+      "document_digest": "sha256:37bed8134a670e3aae087af4f62c44b18050f58593410d9c149bd3d718486186",
+      "created_at": "2026-09-19T06:27:54Z",
+      "producer": "gaspatchio 1.0.0",
+      "formulas_fingerprint": null
+    },
+    "after": {
+      "graph_fingerprint": "sha256:e17b8a7c2b0cefa46cfa325ce68208cfbae5d3d56919a2157a50efd3fef4117b",
+      "document_digest": "sha256:9da0dd01622e8a63ae75e5b521775f3d8c6ff42e841071515b9c5ba003545610",
+      "created_at": "2026-09-19T06:28:03Z",
+      "producer": "gaspatchio 1.0.0",
+      "formulas_fingerprint": null
+    }
+  },
+  "drift": true,
+  "calculations": [
+    {
+      "node": "base_lapse_rate@1",
+      "column": "base_lapse_rate",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "maint_fee_pp@1",
+      "column": "maint_fee_pp",
+      "kind": "changed",
+      "change_origin": "self",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "av_pp_bef_inv@1",
+      "column": "av_pp_bef_inv",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "inv_income_pp@1",
+      "column": "inv_income_pp",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "av_pp_mid_mth@1",
+      "column": "av_pp_mid_mth",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "itm@1",
+      "column": "itm",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "dl001_unbounded@1",
+      "column": "dl001_unbounded",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "dl001_factor@1",
+      "column": "dl001_factor",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "dl002_unbounded@1",
+      "column": "dl002_unbounded",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "dl002_factor@1",
+      "column": "dl002_factor",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "dyn_lapse_factor@1",
+      "column": "dyn_lapse_factor",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "lapse_rate_unfloored@1",
+      "column": "lapse_rate_unfloored",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "lapse_rate@1",
+      "column": "lapse_rate",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "lapse_rate_mth@1",
+      "column": "lapse_rate_mth",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "combined_decrement@1",
+      "column": "combined_decrement",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "survival_prob@1",
+      "column": "survival_prob",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pols_if_bef_mat@1",
+      "column": "pols_if_bef_mat",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pols_if@1",
+      "column": "pols_if",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pols_maturity@1",
+      "column": "pols_maturity",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pols_if_bef_nb@1",
+      "column": "pols_if_bef_nb",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pols_if_bef_decr@1",
+      "column": "pols_if_bef_decr",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pols_death@1",
+      "column": "pols_death",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pols_lapse@1",
+      "column": "pols_lapse",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "claim_pp_death@1",
+      "column": "claim_pp_death",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "claims_death@1",
+      "column": "claims_death",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "claim_pp_lapse@1",
+      "column": "claim_pp_lapse",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "surr_charge@1",
+      "column": "surr_charge",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "claims_lapse@1",
+      "column": "claims_lapse",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "claims_maturity@1",
+      "column": "claims_maturity",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "premiums@1",
+      "column": "premiums",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "expense_maint_total@1",
+      "column": "expense_maint_total",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "expenses@1",
+      "column": "expenses",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "commissions@1",
+      "column": "commissions",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "av_at_bef_mat@1",
+      "column": "av_at_bef_mat",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "av_at_bef_mat_next@1",
+      "column": "av_at_bef_mat_next",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "av_change@1",
+      "column": "av_change",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pols_if_bef_mat_next@1",
+      "column": "pols_if_bef_mat_next",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "inv_income@1",
+      "column": "inv_income",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "claims@1",
+      "column": "claims",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "net_cf@1",
+      "column": "net_cf",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_claims@1",
+      "column": "pv_claims",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_claims_death@1",
+      "column": "pv_claims_death",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_claims_lapse@1",
+      "column": "pv_claims_lapse",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_claims_maturity@1",
+      "column": "pv_claims_maturity",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_expenses@1",
+      "column": "pv_expenses",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_commissions@1",
+      "column": "pv_commissions",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_premiums@1",
+      "column": "pv_premiums",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_inv_income@1",
+      "column": "pv_inv_income",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_av_change@1",
+      "column": "pv_av_change",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "pv_net_cf@1",
+      "column": "pv_net_cf",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    }
+  ],
+  "data": [
+    {
+      "kind": "table",
+      "name": "lapse_rates",
+      "before": "sha256:202c1a7a51d90ad3f4129614025e0cef53dcb0a727d0d4dfd29a90673ad7b317",
+      "after": "sha256:00b832eedc6bbe04d9ca4d18087ab53181cf5297d21add116648b970bb069ac9",
+      "reason": null
+    }
+  ],
+  "values": null,
+  "source": {
+    "path": "model.py",
+    "before": "sha256:9446b982bacd2f0b2f6da92c98c7c945e6511d226fed50e8a4a97b9831e84dc0",
+    "after": "sha256:0566d2dd593a095074fbaf5d75f8a7401a25326daeb8dadfacd2644460f6eaa0",
+    "modules": []
+  }
+}

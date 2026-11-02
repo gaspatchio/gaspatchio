@@ -35,11 +35,7 @@ class TestChainedWhenVector:
         set_default_mode(mode)
         af = af_with_lists
         af.rate = (
-            when(af.month < 3)
-            .then(0.05)
-            .when(af.month < 6)
-            .then(0.04)
-            .otherwise(0.03)
+            when(af.month < 3).then(0.05).when(af.month < 6).then(0.04).otherwise(0.03)
         )
         result = af.collect()["rate"][0].to_list()
         # months 0,1,2 -> 0.05; 3,4,5 -> 0.04; 6,7 -> 0.03 (first-match-wins)
@@ -72,11 +68,16 @@ class TestChainedWhenVector:
         set_default_mode(mode)
         af = af_with_lists
         af.rate = (
-            when(af.month == 0).then(0.10)
-            .when(af.month == 1).then(0.09)
-            .when(af.month == 2).then(0.08)
-            .when(af.month == 3).then(0.07)
-            .when(af.month == 4).then(0.06)
+            when(af.month == 0)
+            .then(0.10)
+            .when(af.month == 1)
+            .then(0.09)
+            .when(af.month == 2)
+            .then(0.08)
+            .when(af.month == 3)
+            .then(0.07)
+            .when(af.month == 4)
+            .then(0.06)
             .otherwise(0.05)
         )
         result = af.collect()["rate"][0].to_list()
@@ -106,9 +107,7 @@ class TestChainedWhenVector:
         )
         result = af.collect()["maturity_value"][0].to_list()
         # m=0,1,2 -> pols_if; m=3 -> 0.0; m=4,5 -> pols_if * 0.5
-        assert result == pytest.approx(
-            [100.0, 99.0, 98.0, 0.0, 96.0 * 0.5, 95.0 * 0.5]
-        )
+        assert result == pytest.approx([100.0, 99.0, 98.0, 0.0, 96.0 * 0.5, 95.0 * 0.5])
 
     def test_chain_with_and_mask_predicate(
         self, af_with_lists: ActuarialFrame, mode: str
@@ -154,11 +153,7 @@ class TestChainedWhenVector:
 
         set_default_mode(mode)
         af = af_with_lists
-        af.flag = (
-            when(~(af.month < 4))
-            .then(1.0)
-            .otherwise(0.0)
-        )
+        af.flag = when(~(af.month < 4)).then(1.0).otherwise(0.0)
         # ~(m<4) means m>=4
         result = af.collect()["flag"][0].to_list()
         assert result == [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
@@ -233,17 +228,17 @@ class TestChainedWhenVector:
         set_default_mode(mode)
         af = af_with_lists
         af.rate = (
-            when(af.month < 5).then(0.10)
-            .when(af.month < 10).then(0.20)  # would also match m=0..4 if no first-match-wins
+            when(af.month < 5)
+            .then(0.10)
+            .when(af.month < 10)
+            .then(0.20)  # would also match m=0..4 if no first-match-wins
             .otherwise(0.30)
         )
         result = af.collect()["rate"][0].to_list()
         # m=0..4 -> 0.10 (first match), m=5..7 -> 0.20
         assert result == [0.10, 0.10, 0.10, 0.10, 0.10, 0.20, 0.20, 0.20]
 
-    def test_scalar_predicate_with_list_then_then_scalar_chain(
-        self, mode: str
-    ) -> None:
+    def test_scalar_predicate_with_list_then_then_scalar_chain(self, mode: str) -> None:
         """Scalar predicate with a LIST then-branch, before later scalar cases.
 
         Reverse-fold must consider the then-branch shape: when a scalar
@@ -301,18 +296,24 @@ class TestScalarChainParity:
         builder = when(af.age > 70).then(0.10)
         thresholds = [60, 50, 40, 30]
         rates = [0.08, 0.06, 0.05, 0.04]
-        for thresh, rate in zip(thresholds[: chain_size - 1], rates[: chain_size - 1], strict=False):
+        for thresh, rate in zip(
+            thresholds[: chain_size - 1], rates[: chain_size - 1], strict=False
+        ):
             builder = builder.when(af.age > thresh).then(rate)
         af.rate_dsl = builder.otherwise(0.02)
 
         # Build the same chain natively in Polars (today's reference behavior)
         ref_expr = pl.when(pl.col("age") > 70).then(0.10)
-        for thresh, rate in zip(thresholds[: chain_size - 1], rates[: chain_size - 1], strict=False):
+        for thresh, rate in zip(
+            thresholds[: chain_size - 1], rates[: chain_size - 1], strict=False
+        ):
             ref_expr = ref_expr.when(pl.col("age") > thresh).then(rate)
         ref_expr = ref_expr.otherwise(0.02)
 
         result_dsl = af.collect()
-        result_ref = pl.LazyFrame({"age": ages}).select(ref_expr.alias("rate_ref")).collect()
+        result_ref = (
+            pl.LazyFrame({"age": ages}).select(ref_expr.alias("rate_ref")).collect()
+        )
 
         # Numerical equality
         assert result_dsl["rate_dsl"].to_list() == result_ref["rate_ref"].to_list()
@@ -331,8 +332,10 @@ class TestChainedWhenNulls:
         set_default_mode(mode)
         af = ActuarialFrame({"age": [25, None, 65]})
         af.bracket = (
-            when(af.age < 35).then("young")
-            .when(af.age >= 60).then("senior")
+            when(af.age < 35)
+            .then("young")
+            .when(af.age >= 60)
+            .then("senior")
             .otherwise("middle")
         )
         result = af.collect()["bracket"].to_list()
@@ -354,8 +357,10 @@ class TestChainedWhenNulls:
             }
         )
         af.value = (
-            when(af.month < af.term).then(1.0)
-            .when(af.month == af.term).then(2.0)
+            when(af.month < af.term)
+            .then(1.0)
+            .when(af.month == af.term)
+            .then(2.0)
             .otherwise(0.0)
         )
         result = af.collect()["value"][0].to_list()
@@ -463,9 +468,15 @@ class TestCommutedListPredicates:
     routing through the plugin. Without normalization, the kernel raises
     ``ComputeError: left must be List dtype for list_conditional``.
 
-    The normalization happens in ``ConditionExpression.normalize_for_list_path``
-    and is applied in ``polars_backend.masks.to_boolean_expr`` and at every
-    ``list_conditional`` call site that takes ``condition.left/right/operator``.
+    The normalization happens in two places, one per path: for a predicate
+    still carried by a ``ConditionExpression``, in
+    ``ConditionExpression.normalize_for_list_path`` (used by
+    ``column/condition_expression.py``'s ``_to_boolean_expr``); for a
+    comparison reached as an op-tree node, in ``frame/lowering/polars.py``'s
+    ``_list_conditional_for``, which swaps the lowered operands and inverts
+    the operator before calling the kernel. ``ConditionExpression`` no
+    longer exposes ``left``/``right`` attributes -- both operands are
+    children of the node it carries.
     """
 
     @pytest.mark.parametrize("mode", ["debug", "optimize"])
@@ -474,9 +485,7 @@ class TestCommutedListPredicates:
         from gaspatchio.util import set_default_mode
 
         set_default_mode(mode)
-        af = ActuarialFrame(
-            {"month": [[0, 1, 2, 3, 4, 5]], "policy_term": [3]}
-        )
+        af = ActuarialFrame({"month": [[0, 1, 2, 3, 4, 5]], "policy_term": [3]})
         af.r = when((af.policy_term * 12) == af.month).then(1.0).otherwise(0.0)
         # policy_term * 12 = 36; month never equals 36 in [0..5] → all zeros
         assert af.collect()["r"][0].to_list() == [0.0] * 6

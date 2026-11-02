@@ -2,7 +2,7 @@
 
 **Status**: Approved
 **Date**: 2025-11-11
-**Authors:** Matt Wright, Claude
+**Author:** Matt Wright
 **Issue**: GSP-8 - Performance bottleneck in discount_factor() and conditionals at scale
 
 ## Table of Contents

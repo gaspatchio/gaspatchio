@@ -2,12 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Type stubs for gaspatchio.column submodule."""
+from gaspatchio._authoring.escape import PolarsNative as PolarsNative
+from gaspatchio._authoring.escape import PolarsNativeDate as PolarsNativeDate
+from gaspatchio._authoring.escape import PolarsNativeString as PolarsNativeString
 
-# Re-export the proxy classes from their specific modules
+from ._generated_proxy import ListNamespace as ListNamespace
+from ._generated_proxy import StringNamespace as StringNamespace
 from .column_proxy import ColumnProxy as ColumnProxy
+from .condition_expression import ConditionExpression as ConditionExpression
 from .expression_proxy import ExpressionProxy as ExpressionProxy
 
-# The _autopatch function is internal and typically not part of the public stub
-
-__all__ = ["ColumnProxy", "ExpressionProxy"]
+__all__ = [
+    "ColumnProxy",
+    "ConditionExpression",
+    "ExpressionProxy",
+    "ListNamespace",
+    "PolarsNative",
+    "PolarsNativeDate",
+    "PolarsNativeString",
+    "StringNamespace",
+]

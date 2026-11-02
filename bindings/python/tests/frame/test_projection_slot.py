@@ -4,7 +4,7 @@
 
 """Tests for ActuarialFrame._projection slot — preservation through frame operations."""
 
-# ruff: noqa: SLF001, E501
+# ruff: noqa: SLF001
 
 from __future__ import annotations
 
@@ -31,19 +31,10 @@ class TestProjectionSlot:
         af = ActuarialFrame({"id": ["P1"]})
         assert af._projection is None
 
-    def test_set_via_helper(self) -> None:
-        """The internal _set_projection helper updates the slot and returns a new frame."""
-        af = ActuarialFrame({"id": ["P1"]})
-        sched = _make_sched()
-        new_af = af._set_projection(sched)
-        # New frame has the slot; original unchanged
-        assert new_af._projection is sched
-        assert af._projection is None
-
     def test_preserved_through_with_columns(self) -> None:
-        """with_columns returns a new frame that preserves the projection slot."""
+        """with_columns preserves the projection slot on the frame it returns."""
         af = ActuarialFrame({"id": ["P1"], "x": [1.0]})
         sched = _make_sched()
-        af = af._set_projection(sched)
+        af._projection = sched
         af2 = af.with_columns(pl.col("x").alias("y"))
         assert af2._projection is sched

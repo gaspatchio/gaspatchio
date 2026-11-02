@@ -44,8 +44,9 @@ fn test_basis_0_feb_end_handling() {
     let kwargs = YearFracKwargs { basis: Some(0) };
     let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
     let values = result.f64().unwrap();
-    // Feb 28 -> 30, Mar 31 -> 30, so it's exactly 1 month
-    assert_relative_eq!(values.get(0).unwrap(), 30.0 / 360.0, epsilon = 1e-10);
+    // Feb 28 (February's last day) -> 30; Excel leaves Mar 31 as 31, because
+    // the end-day rule applies only to a start day of 30: 30 + 1 = 31 days
+    assert_relative_eq!(values.get(0).unwrap(), 31.0 / 360.0, epsilon = 1e-10);
 }
 
 #[test]
@@ -58,8 +59,8 @@ fn test_basis_0_leap_year_feb() {
     let kwargs = YearFracKwargs { basis: Some(0) };
     let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
     let values = result.f64().unwrap();
-    // Feb 29 (last of Feb) -> 30, Mar 31 -> 30, so it's exactly 1 month
-    assert_relative_eq!(values.get(0).unwrap(), 30.0 / 360.0, epsilon = 1e-10);
+    // Feb 29 (last of Feb) -> 30; Excel leaves Mar 31 as 31: 31 days
+    assert_relative_eq!(values.get(0).unwrap(), 31.0 / 360.0, epsilon = 1e-10);
 }
 
 #[test]
@@ -158,9 +159,9 @@ fn test_february_end_of_month_handling() {
     let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
     let year_frac = result.f64().unwrap().get(0).unwrap();
 
-    // With US 30/360: Feb 28 (last day) becomes 30, Mar 31 becomes 30
-    // Days = 0 + 1*30 + (30-30) = 30 days
-    let expected = 30.0 / 360.0;
+    // Excel's US 30/360: Feb 28 (last day) becomes 30 and, that adjustment
+    // having been made, Mar 31 stays 31. Days = 0 + 1*30 + (31-30) = 31 days
+    let expected = 31.0 / 360.0;
     assert_relative_eq!(year_frac, expected, epsilon = 1e-9);
 }
 
@@ -196,8 +197,9 @@ fn test_leap_year_actual_actual() {
 }
 
 #[test]
-fn test_negative_yearfrac() {
-    // Test when start date is after end date
+fn test_reversed_yearfrac_is_the_forward_value() {
+    // Excel's YEARFRAC does not depend on argument order: the earlier date is
+    // the start, and the answer is never negative.
     let start = vec![NaiveDate::from_ymd_opt(2023, 7, 1).unwrap()];
     let end = vec![NaiveDate::from_ymd_opt(2023, 1, 1).unwrap()];
     let start_series = create_date_series(start);
@@ -207,13 +209,13 @@ fn test_negative_yearfrac() {
     let kwargs = YearFracKwargs { basis: Some(0) };
     let result = yearfrac(&[start_series.clone(), end_series.clone()], &kwargs).unwrap();
     let year_frac = result.f64().unwrap().get(0).unwrap();
-    assert_relative_eq!(year_frac, -0.5, epsilon = 1e-9);
+    assert_relative_eq!(year_frac, 0.5, epsilon = 1e-9);
 
     // Test with basis 1
     let kwargs = YearFracKwargs { basis: Some(1) };
     let result = yearfrac(&[start_series, end_series], &kwargs).unwrap();
     let year_frac = result.f64().unwrap().get(0).unwrap();
-    let expected = -181.0 / 365.0;
+    let expected = 181.0 / 365.0;
     assert_relative_eq!(year_frac, expected, epsilon = 1e-9);
 }
 
@@ -303,7 +305,7 @@ fn test_same_date() {
 
 #[test]
 fn test_reversed_dates() {
-    // Test that reversed dates give opposite results (negative when start > end)
+    // Reversed dates give the same answer: Excel takes the earlier as the start
     let date1 = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
     let date2 = NaiveDate::from_ymd_opt(2023, 12, 31).unwrap();
 
@@ -321,16 +323,9 @@ fn test_reversed_dates() {
     let values1 = result1.f64().unwrap();
     let values2 = result2.f64().unwrap();
 
-    // Second should be negative of the first
-    assert_relative_eq!(
-        values1.get(0).unwrap(),
-        -values2.get(0).unwrap(),
-        epsilon = 1e-10
-    );
-
-    // First should be positive, second should be negative
+    // The two orders agree, and neither is negative
+    assert_eq!(values1.get(0).unwrap(), values2.get(0).unwrap());
     assert!(values1.get(0).unwrap() > 0.0);
-    assert!(values2.get(0).unwrap() < 0.0);
 }
 
 #[test]
@@ -385,7 +380,8 @@ fn test_default_basis() {
 // Known Excel Quirks We Test:
 // - Non-additivity of Actual/Actual (basis 1) calculations
 // - Special February end-of-month handling in 30/360 methods
-// - Asymmetric results for reversed date ranges
+// - Order independence: reversed dates answer the forward value, never a negative
+// - Basis 1's one-year test: the end on or before the start's anniversary
 // - Different interpretations of "year length" across bases
 //
 // The tests below verify our implementation against known Excel outputs
@@ -425,14 +421,14 @@ mod excel_verification {
 
         // February end handling
         // When starting from Feb 28 (last day of Feb in non-leap year),
-        // it's treated as day 30 for calculation purposes
+        // it's treated as day 30, and Excel then leaves an end day of 31 as 31
         assert_relative_eq!(
             test_yearfrac(
                 NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(),
                 0
             ),
-            0.083_333_333_333_333_33, // 30/360
+            31.0 / 360.0,
             epsilon = 1e-10
         );
 
@@ -444,7 +440,18 @@ mod excel_verification {
                 NaiveDate::from_ymd_opt(2020, 3, 31).unwrap(),
                 0
             ),
-            0.083_333_333_333_333_33, // 30/360
+            31.0 / 360.0,
+            epsilon = 1e-10
+        );
+
+        // A start day of 30 does turn an end day of 31 into 30
+        assert_relative_eq!(
+            test_yearfrac(
+                NaiveDate::from_ymd_opt(2023, 4, 30).unwrap(),
+                NaiveDate::from_ymd_opt(2023, 5, 31).unwrap(),
+                0
+            ),
+            30.0 / 360.0,
             epsilon = 1e-10
         );
     }
@@ -606,13 +613,13 @@ mod excel_verification {
         );
         assert_relative_eq!(result, 1.0 / 366.0, epsilon = 1e-10);
 
-        // Edge case 3: Negative year fraction
+        // Edge case 3: Reversed dates answer the forward value, not a negative
         let result = test_yearfrac(
             NaiveDate::from_ymd_opt(2020, 12, 31).unwrap(),
             NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
             0,
         );
-        assert_relative_eq!(result, -1.0, epsilon = 1e-10);
+        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
     }
 
     #[test]
@@ -779,9 +786,10 @@ mod excel_verification {
             0,
         );
 
-        // Excel shows asymmetry here due to the special February handling
-        // Our implementation maintains symmetry (negative values for reversed dates)
-        assert_relative_eq!(result1, -result2, epsilon = 1e-10);
+        // Excel takes the earlier date as the start whichever order it is given,
+        // so both orders are Feb 29 (-> 30) to Mar 1: 1 day
+        assert_relative_eq!(result1, 1.0 / 360.0, epsilon = 1e-10);
+        assert_eq!(result1, result2);
     }
 
     #[test]
@@ -844,53 +852,104 @@ mod excel_verification {
     }
 
     // =======================================================================
-    // Feb 29 (Leap Day) Edge Case Tests - GSP-77
+    // Feb 29 (Leap Day) Edge Case Tests
     // =======================================================================
     //
-    // These tests verify correct handling of Feb 29 (leap day) dates, which
-    // require special logic in the Actual/Actual (basis 1) calculation.
-    //
-    // Key insight: When the start date IS Feb 29 and the period is exactly
-    // 365 days, this represents a full year because Feb 29 doesn't exist in
-    // non-leap years. The "anniversary" of Feb 29 is Feb 28 the next year.
-    //
-    // This was identified in GSP-77 where policies with Feb 29 effective dates
-    // had 0% match rate due to this edge case.
+    // Excel's basis 1 has no leap-day anniversary rule. It asks whether the
+    // end falls in the next year on or before the start's month and day; if
+    // so it divides by 366 where the closed interval holds a 29 February and
+    // by 365 where it does not, and otherwise by the mean length of the
+    // calendar years the interval touches. So 29 February to 28 February a
+    // year later is 365/366, and 366 days that run past the anniversary are
+    // divided by a mean year.
 
     #[test]
-    fn test_feb29_to_feb28_is_one_year() {
-        // The critical test case from GSP-77
-        // Feb 29 2024 -> Feb 28 2025 = 365 days, should be exactly 1.0
+    fn test_feb29_to_feb28_is_365_over_366() {
+        // Feb 29 2024 -> Feb 28 2025 = 365 days; 28 Feb is on or before the
+        // 29 Feb anniversary, and the interval holds 29 Feb 2024
         let result = test_yearfrac(
             NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
             NaiveDate::from_ymd_opt(2025, 2, 28).unwrap(),
             1,
         );
-        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+        assert_relative_eq!(result, 365.0 / 366.0, epsilon = 1e-10);
     }
 
     #[test]
-    fn test_feb29_to_mar1_is_one_year() {
-        // Feb 29 2024 -> Mar 1 2025 = 366 days
-        // This is also essentially "one year" from Feb 29
+    fn test_feb29_to_mar1_is_over_the_mean_year() {
+        // Feb 29 2024 -> Mar 1 2025 = 366 days, past the anniversary:
+        // the mean of 2024 and 2025 is 365.5
         let result = test_yearfrac(
             NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
             NaiveDate::from_ymd_opt(2025, 3, 1).unwrap(),
             1,
         );
-        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+        assert_relative_eq!(result, 366.0 / 365.5, epsilon = 1e-10);
     }
 
     #[test]
-    fn test_feb28_to_feb29_is_one_year() {
-        // Feb 28 2023 -> Feb 29 2024 = 366 days
-        // Going TO a leap day should use 366 as denominator
+    fn test_feb28_to_feb29_is_over_the_mean_year() {
+        // Feb 28 2023 -> Feb 29 2024 = 366 days, and 29 Feb is past the
+        // 28 Feb anniversary: the mean of 2023 and 2024 is 365.5
         let result = test_yearfrac(
             NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
             NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
             1,
         );
-        assert_relative_eq!(result, 1.0, epsilon = 1e-10);
+        assert_relative_eq!(result, 366.0 / 365.5, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_366_days_past_the_anniversary_are_over_the_mean_year() {
+        // Sep 25 2020 -> Sep 26 2021 = 366 days with no 29 Feb inside: the
+        // end is past the anniversary, so not 366/365 but 366/365.5
+        let result = test_yearfrac(
+            NaiveDate::from_ymd_opt(2020, 9, 25).unwrap(),
+            NaiveDate::from_ymd_opt(2021, 9, 26).unwrap(),
+            1,
+        );
+        assert_relative_eq!(result, 366.0 / 365.5, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_every_basis_answers_the_same_in_either_order() {
+        let pairs = [
+            (
+                NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+                NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
+            ),
+            (
+                NaiveDate::from_ymd_opt(2024, 3, 31).unwrap(),
+                NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(),
+            ),
+            (
+                NaiveDate::from_ymd_opt(2030, 1, 31).unwrap(),
+                NaiveDate::from_ymd_opt(2021, 6, 30).unwrap(),
+            ),
+        ];
+        for (later, earlier) in pairs {
+            for basis in 0..=4 {
+                let reversed = test_yearfrac(later, earlier, basis);
+                let forward = test_yearfrac(earlier, later, basis);
+                assert_eq!(reversed, forward, "basis {basis}: {earlier} and {later}");
+                assert!(reversed > 0.0);
+            }
+        }
+        // Hand values for the first pair, 28 Feb 2023 to 29 Feb 2024 (366 days):
+        // basis 0, both February's last day -> 30/30: 360/360; basis 1 the mean
+        // of 2023 and 2024; basis 4 (29 - 28) + 360 = 361 days.
+        let (later, earlier) = pairs[0];
+        let by_hand = [
+            1.0,
+            366.0 / 365.5,
+            366.0 / 360.0,
+            366.0 / 365.0,
+            361.0 / 360.0,
+        ];
+        for (basis, expected) in (0..=4).zip(by_hand) {
+            let answer = test_yearfrac(later, earlier, basis);
+            assert_relative_eq!(answer, expected, epsilon = 1e-12);
+        }
     }
 
     #[test]

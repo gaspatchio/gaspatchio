@@ -1,0 +1,305 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "Orderings over text",
+  "cases": [
+    {
+      "id": "comparison-text-order-scalar",
+      "covers": [
+        "lt"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "str",
+          "values": [
+            "B",
+            "a",
+            "ab",
+            "abc",
+            "",
+            "z",
+            "\u00e9",
+            "same"
+          ]
+        },
+        "b": {
+          "dtype": "str",
+          "values": [
+            "a",
+            "B",
+            "abc",
+            "ab",
+            "a",
+            "\u00e9",
+            "z",
+            "same"
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "lt",
+        "left": {
+          "op": "col",
+          "name": "a"
+        },
+        "right": {
+          "op": "col",
+          "name": "b"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          0.0,
+          1.0,
+          0.0,
+          1.0,
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-text-order-literal",
+      "covers": [
+        "ge"
+      ],
+      "inputs": {
+        "a": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "M",
+            "Z",
+            "a",
+            "m"
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "ge",
+        "left": {
+          "op": "lit",
+          "value": "M"
+        },
+        "right": {
+          "op": "col",
+          "name": "a"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-text-order-runs",
+      "covers": [
+        "gt"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[str]",
+          "values": [
+            [
+              "b",
+              "B",
+              "\u00e9"
+            ],
+            [
+              "",
+              "zz"
+            ]
+          ]
+        },
+        "s": {
+          "dtype": "list[str]",
+          "values": [
+            [
+              "a",
+              "b",
+              "e"
+            ],
+            [
+              "a",
+              "z"
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "gt",
+        "left": {
+          "op": "col",
+          "name": "r"
+        },
+        "right": {
+          "op": "col",
+          "name": "s"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-text-order-run-against-a-policy-value",
+      "covers": [
+        "le"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[str]",
+          "values": [
+            [
+              "A",
+              "B",
+              "Ba"
+            ],
+            [
+              "Z",
+              "a"
+            ]
+          ]
+        },
+        "p": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "Z"
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "le",
+        "left": {
+          "op": "col",
+          "name": "r"
+        },
+        "right": {
+          "op": "col",
+          "name": "p"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "comparison-text-order-null",
+      "covers": [
+        "lt"
+      ],
+      "inputs": {
+        "r": {
+          "dtype": "list[str]",
+          "values": [
+            [
+              "a",
+              null
+            ],
+            [
+              "b"
+            ]
+          ]
+        },
+        "p": {
+          "dtype": "str",
+          "values": [
+            "b",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "binop",
+        "kind": "lt",
+        "left": {
+          "op": "col",
+          "name": "r"
+        },
+        "right": {
+          "op": "col",
+          "name": "p"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            null
+          ],
+          [
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    }
+  ]
+}

@@ -14,11 +14,50 @@ state - bit-identical.
 
 Aggregator classes are registered in the ``AGGREGATOR_PARAMS`` list as they
 land in subsequent tasks.
+
+**Two search budgets, chosen by hypothesis profile.** Nothing here is skipped
+under either: every case runs, both tolerance rationales apply, only the number
+of examples drawn and the length of the drawn lists move.
+
+``default`` -- what an ordinary run gets: five examples a case, and the sketch
+cases draw at most 40 values. About twenty seconds; three runs on one seed
+landed between 18 s and 19 s. (It was about a minute before ``_sketch.py``
+walked its store once per query -- see below.)
+
+``thorough`` -- ``uv run pytest tests/scenarios/test_aggregator_property.py
+--hypothesis-profile=thorough`` -- restores exactly the budgets this file
+carried before the two were separated: 50 examples for the merge cases, 20 for
+the sketch ones, lists up to 100 values. About a minute and a half (94-98 s on
+the same seed; four to seven minutes before). **Run it before a release, and
+after any change to ``_aggregators.py`` or ``_sketch.py``** -- those are the
+two files whose merge algebra this pins.
+
+The cost of an example is set by what hypothesis draws, not by how much it
+draws -- see below -- so read a single timing as a sample, not as the number.
+
+Almost all of what ``default`` still costs is the four sketch cases (``Median``
+and ``CTE``), and no search budget reaches it: a sketch extract's cost is set by
+how wide a span of magnitudes the drawn values happen to cover, because the
+DDSketch store holds every bucket between the smallest and largest magnitude
+seen (~11,500 per decade at the default accuracy; a draw near 1e-300 keys
+millions of them) and resolving an order statistic is a Python walk of that
+store. ``SignedSketch`` now collects every order statistic a ``quantile()`` or
+``cte()`` needs and walks each store once for all of them, where it used to
+walk once per fetch -- four times per quantile, up to forty per ``cte()``. That
+took this file from about a minute to about twenty seconds under ``default``
+and from six and a half minutes to a minute and a half under ``thorough``, on
+the same seeded draws. Shortening the drawn lists still buys almost nothing:
+what remains is that one walk per store on the widest draws.
+
+The profile is registered in the root ``conftest.py`` (hypothesis resolves the
+flag before a conftest deeper in the tree is imported); the numbers it selects
+live in ``_BUDGET`` below, because they are this file's business rather than the
+whole tree's.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 from hypothesis import given, settings
@@ -37,6 +76,36 @@ from gaspatchio.scenarios._aggregators import (
     Sum,
     Variance,
 )
+
+
+class _Budget(NamedTuple):
+    """How hard one profile asks this file to search.
+
+    Attributes:
+        merge_examples: Examples drawn for each closed-form merge case.
+        sketch_examples: Examples drawn for each DDSketch case. Lower than
+            ``merge_examples`` because a sketch example walks a DDSketch store
+            per extract (the module docstring says what that costs) where a
+            merge example costs microseconds.
+        sketch_values: Longest list of observations a sketch case draws.
+
+    """
+
+    merge_examples: int
+    sketch_examples: int
+    sketch_values: int
+
+
+_BUDGETS = {
+    "default": _Budget(merge_examples=5, sketch_examples=5, sketch_values=40),
+    "thorough": _Budget(merge_examples=50, sketch_examples=20, sketch_values=100),
+}
+
+# Read at import, which pytest reaches after hypothesis has resolved
+# ``--hypothesis-profile``. Any profile this file does not name -- hypothesis's
+# own ``ci``, or one somebody registers locally -- searches on the small budget:
+# the deep search is something you ask for, never something you inherit.
+_BUDGET = _BUDGETS.get(settings.get_current_profile_name(), _BUDGETS["default"])
 
 _ID_VAL = st.tuples(
     st.text(min_size=1, max_size=8),
@@ -138,7 +207,7 @@ SKETCH_SCALAR_PARAMS: list[tuple[str, Any, Any]] = [
 
 
 @pytest.mark.parametrize(("name", "factory", "value_strategy"), AGGREGATOR_PARAMS)
-@settings(max_examples=50, deadline=None)
+@settings(max_examples=_BUDGET.merge_examples, deadline=None)
 @given(st.data())
 def test_merge_is_associative(
     name: str,
@@ -168,7 +237,7 @@ def test_merge_is_associative(
 
 
 @pytest.mark.parametrize(("name", "factory", "value_strategy"), AGGREGATOR_PARAMS)
-@settings(max_examples=50, deadline=None)
+@settings(max_examples=_BUDGET.merge_examples, deadline=None)
 @given(st.data())
 def test_merge_is_commutative(
     name: str,
@@ -198,7 +267,7 @@ def test_merge_is_commutative(
 
 
 @pytest.mark.parametrize(("name", "factory", "value_strategy"), SKETCH_SCALAR_PARAMS)
-@settings(max_examples=20, deadline=None)
+@settings(max_examples=_BUDGET.sketch_examples, deadline=None)
 @given(st.data())
 def test_sketch_merge_is_associative_within_tolerance(
     name: str,
@@ -207,7 +276,9 @@ def test_sketch_merge_is_associative_within_tolerance(
     data: st.DataObject,
 ) -> None:
     """fold(A ++ B) extract-equals merge(fold(A), fold(B)) within sketch tolerance."""
-    values = data.draw(st.lists(value_strategy, min_size=10, max_size=100))
+    values = data.draw(
+        st.lists(value_strategy, min_size=10, max_size=_BUDGET.sketch_values)
+    )
     if len(values) < 4:
         pytest.skip("Need >=4 values to split.")
     split = len(values) // 2
@@ -225,7 +296,7 @@ def test_sketch_merge_is_associative_within_tolerance(
 
 
 @pytest.mark.parametrize(("name", "factory", "value_strategy"), SKETCH_SCALAR_PARAMS)
-@settings(max_examples=20, deadline=None)
+@settings(max_examples=_BUDGET.sketch_examples, deadline=None)
 @given(st.data())
 def test_sketch_merge_is_commutative_within_tolerance(
     name: str,
@@ -234,7 +305,9 @@ def test_sketch_merge_is_commutative_within_tolerance(
     data: st.DataObject,
 ) -> None:
     """merge(a, b) extract-equals merge(b, a) within sketch tolerance."""
-    values = data.draw(st.lists(value_strategy, min_size=10, max_size=100))
+    values = data.draw(
+        st.lists(value_strategy, min_size=10, max_size=_BUDGET.sketch_values)
+    )
     if len(values) < 4:
         pytest.skip("Need >=4 values to split.")
     split = len(values) // 2

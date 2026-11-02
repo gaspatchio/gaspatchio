@@ -10,7 +10,8 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from loguru import logger
+
+from gaspatchio._warning import warn
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -219,8 +220,11 @@ def fit_svensson(  # noqa: PLR0913
     beta, *_ = np.linalg.lstsq(phi, y, rcond=1e-12)
     b0, b1, b2, b3 = (float(v) for v in beta)
     if b0 <= 0 or b0 + b1 <= 0:
-        logger.warning(
-            "svensson fit: b0={} b0+b1={} <= 0 (negative-rate regime?)", b0, b0 + b1
+        warn(
+            f"The Svensson fit gave b0={b0} and b0+b1={b0 + b1}; at least one "
+            "is not positive, so the curve's long-run rate or its short-rate "
+            "limit is not positive. Check the input rates (a negative-rate "
+            "regime?)."
         )
     return {
         "b0": b0,

@@ -6,6 +6,7 @@
 # ABOUTME: Verifies Rust plugin integration eliminates EXPLODE/GROUP_BY pattern
 """Test discount_factor using list_pow plugin (no EXPLODE)."""
 
+import polars as pl
 import pytest
 
 from gaspatchio import ActuarialFrame
@@ -51,3 +52,36 @@ def test_discount_factor_spot_uses_list_pow() -> None:
     assert len(disc_factors[1]) == expected_len_row2
     assert disc_factors[1][0] == pytest.approx(1.0, abs=1e-6)
     assert disc_factors[1][1] == pytest.approx(0.997009, abs=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("base", "exponent", "expected"),
+    [
+        ([[1.0, 2.0], None], [[2.0, 2.0], [2.0, 2.0]], [[1.0, 4.0], None]),
+        ([[1.0, 2.0], [3.0]], [[2.0, 2.0], None], [[1.0, 4.0], None]),
+        ([[1.0, 2.0], None], 2.0, [[1.0, 4.0], None]),
+    ],
+    ids=["list-list-null-base", "list-list-null-exponent", "list-scalar-null-base"],
+)
+def test_a_null_outer_list_raised_to_a_power_is_null(
+    base: list[list[float] | None],
+    exponent: list[list[float] | None] | float,
+    expected: list[list[float] | None],
+) -> None:
+    """Spec 11.1.25: a null outer list yields a null result list, not ``[]``.
+
+    An empty run says the policy has no periods; a null says the policy has
+    no value. The ``list_pow`` kernel wrote the first for the second on
+    both list-base forms, where a per-policy base already answered null.
+    Needs the extension rebuilt from ``core/src/polars_functions/list_pow.rs``.
+    """
+    data: dict[str, object] = {"base": pl.Series(base, dtype=pl.List(pl.Float64))}
+    if isinstance(exponent, list):
+        data["exponent"] = pl.Series(exponent, dtype=pl.List(pl.Float64))
+    af = ActuarialFrame(pl.DataFrame(data))
+    af.raised = af.base ** (af.exponent if isinstance(exponent, list) else exponent)
+
+    held = af.collect()
+
+    assert held.schema["raised"] == pl.List(pl.Float64)
+    assert held["raised"].to_list() == expected

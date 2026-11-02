@@ -70,9 +70,7 @@ REL_TOLERANCE = 1e-9
 def _load_model(model_dir: Path) -> object:
     """Import model.py from model_dir as a fresh module."""
     model_path = model_dir / "model.py"
-    spec = importlib.util.spec_from_file_location(
-        f"model_{model_dir.name}", model_path
-    )
+    spec = importlib.util.spec_from_file_location(f"model_{model_dir.name}", model_path)
     if spec is None or spec.loader is None:
         msg = f"Cannot load spec from {model_path}"
         raise ImportError(msg)
@@ -111,6 +109,8 @@ def run_model(model_dir: Path) -> pl.DataFrame:
 
 
 class DiffRow(NamedTuple):
+    """One model point's column whose typed and untyped values differ."""
+
     point_id: int
     column: str
     typed_val: float
@@ -128,8 +128,12 @@ def compute_diffs(typed_df: pl.DataFrame, untyped_df: pl.DataFrame) -> list[Diff
     for col in PV_COLUMNS:
         if col not in typed_df.columns or col not in untyped_df.columns:
             continue
+        # strict: both models run the same model points, and a row missing
+        # from either side is a failed check, not a shorter one
         for t_row, u_row in zip(
-            typed_sorted.iter_rows(named=True), untyped_sorted.iter_rows(named=True)
+            typed_sorted.iter_rows(named=True),
+            untyped_sorted.iter_rows(named=True),
+            strict=True,
         ):
             t_val: float = t_row[col]
             u_val: float = u_row[col]
@@ -165,7 +169,9 @@ def _run_check(label: str, typed_dir: Path, untyped_dir: Path) -> bool:
     diffs = compute_diffs(typed_df, untyped_df)
 
     if diffs:
-        print(f"  FAIL — {len(diffs)} value(s) exceed rel tolerance {REL_TOLERANCE:.0e}:")
+        print(
+            f"  FAIL — {len(diffs)} value(s) exceed rel tolerance {REL_TOLERANCE:.0e}:"
+        )
         print(
             f"    {'point_id':<10} {'column':<22} {'typed':>18} {'untyped':>18} {'rel_diff':>12}"
         )

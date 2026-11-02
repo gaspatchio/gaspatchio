@@ -22,7 +22,7 @@ Deaths in period t happen to the policies that were alive at the **start** of pe
 
 ```python
 af.pols_if_prev = af.pols_if.projection.previous_period(fill_value=1.0)
-af.pols_death = af.pols_if_prev * af.mort_rate_mth   # correct
+af.pols_death = af.pols_if_prev * af.mort_rate_mth  # correct
 # NOT: af.pols_if * af.mort_rate_mth                 # undercounts deaths
 ```
 

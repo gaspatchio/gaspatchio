@@ -20,9 +20,9 @@ import polars as pl
 import pytest
 
 from gaspatchio.rollforward._builder import RollforwardBuilder
-from gaspatchio.rollforward._collector import RollforwardCollector
 from gaspatchio.rollforward._compile import compile_rollforward
 from gaspatchio.schedule import Schedule
+from tests.rollforward.conftest import _standalone_state_expr
 
 
 class TestCrossStateRatchet:
@@ -63,10 +63,9 @@ class TestCrossStateRatchet:
                 "anniv": [[False] * 11 + [True]],
             }
         )
-        collector = RollforwardCollector(compiled)
         result = df.with_columns(
-            fund=collector.expr_for("fund"),
-            gmdb=collector.expr_for("gmdb"),
+            fund=_standalone_state_expr(compiled, "fund"),
+            gmdb=_standalone_state_expr(compiled, "gmdb"),
         )
 
         fund = result.get_column("fund").to_list()[0]

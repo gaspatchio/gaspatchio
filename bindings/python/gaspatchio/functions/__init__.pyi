@@ -4,11 +4,8 @@
 
 # functions/__init__.pyi
 
-# Import and re-export types from submodules
-from .conditional import when as when
-from .vector import fill_series as fill_series
+# Nothing is re-exported here: ``when`` is reached from the top-level
+# ``gaspatchio`` namespace, and the plugin wrappers are not a modelling door.
+# This stub says what the runtime says.
 
-__all__ = [
-    "fill_series",
-    "when",
-]
+__all__: list[str] = []

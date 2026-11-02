@@ -17,14 +17,20 @@ What this demonstrates
 
   * ``ScenarioRun`` — the typed scenario plan, and the default for scenario
     work. Even when the per-scenario variation is a rate curve rather than a
-    table shock, the plan still carries the scenario ids, the base tables (for
-    the audit SHA), and the aggregations to read out of each scenario.
+    table shock, the plan still carries the scenario ids and the aggregations
+    to read out of each scenario. ``.run(af, model.main)`` runs the model you
+    reconciled as it is: no wrapper, no override, no scenario guard.
 
   * Rate scenarios live *inside* the model. ``model.main()`` holds three
-    ``Curve`` instances (BASE / UP / DOWN zero curves) and dispatches the
-    right one per row on the ``scenario_id`` column that ``ScenarioRun``
-    cross-joins onto the frame. No table is shocked here — the scenario shock
-    lists are empty — so this is a pure rate-curve sweep.
+    ``Curve`` instances (BASE / UP / DOWN zero curves), reads each on the
+    frame with ``curve.discount_factor(af.t_years)``, and picks the right one
+    per row on the ``scenario_id`` column that ``ScenarioRun`` cross-joins
+    onto the frame. Reading the curves on the frame is what puts them in the
+    model's exported graph artifact — three assumption entries here, one per
+    curve, each carrying its knots and their digest — so the record names the
+    three term structures this sweep discounted on rather than only the tables
+    it shocked. No table is shocked here — the scenario shock lists are empty
+    — so this is a pure rate-curve sweep.
 
   * Mergeable aggregators — ``Sum(...).alias(...).over("scenario_id")`` fold
     the portfolio into one summed row per scenario. Reading off a portfolio
@@ -48,6 +54,17 @@ Usage::
     cd tutorial/level-5-scenarios/base
     uv run python run_scenarios.py
 
+The plan is declared at module level as ``SCENARIO_RUN``, with ``MODEL_FN``
+beside it, and the sweep itself sits under ``__main__``. That is what lets
+the same file be a script you run and a plan the exporter runs::
+
+    uv run gspio calc-graph model.py model_points.parquet \
+        --scenarios run_scenarios.py -o level5.json
+
+which writes a calculation graph of the cross-joined run: every entry of the
+policy axis naming its scenario, one assumption entry per rate curve, and
+the plan's own per-scenario totals as the folds at the head of that axis.
+
 Parity note:
     This model uses Curve-based zero-rate discounting, which is the
     mathematically correct approach.  The untyped L5 model uses an
@@ -66,7 +83,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 # model.py lives in the same directory
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from gaspatchio import ActuarialFrame, MortalityTable, ScenarioRun
+from gaspatchio import ActuarialFrame, ScenarioRun
 from gaspatchio.scenarios import Sum
 
 import model
@@ -96,48 +113,14 @@ PV_COMPONENTS = [
 ]
 
 # ---------------------------------------------------------------------------
-# 1. Load assumptions once. Carry the raw Tables for the plan's audit identity.
-# ---------------------------------------------------------------------------
-
-assumptions = model.load_assumptions()
-SELECT_PERIOD = model.SELECT_PERIOD_LEN
-
-# MortalityTable wraps a raw Table; the plan tracks the raw Table.
-mortality_select_raw = assumptions["mortality"].table
-
-BASE_TABLES = {
-    "mortality_select": mortality_select_raw,
-    "mortality_scalars": assumptions["mortality_scalars"],
-    "lapse_rates": assumptions["lapse_rates"],
-    "surrender_charges": assumptions["surrender_charges"],
-}
-
-
-# ---------------------------------------------------------------------------
-# 2. Model wrapper. No tables are shocked here, so the model runs on its own
-#    typed assumptions; the scenario_id column drives Curve dispatch inside
-#    model.main(). Re-wrap mortality so select/ultimate dispatch still works.
+# 1. The model. ``model.main`` is the reconciled model, run as it is: it loads
+#    its own assumptions, and the scenario_id column the plan cross-joins onto
+#    the frame drives its Curve dispatch. Nothing wraps it.
 # ---------------------------------------------------------------------------
 
 
-def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
-    """Run the typed L5 model for one batch of scenarios."""
-    del drivers  # rate scenarios carry no per-scenario drivers
-    overrides = dict(assumptions)
-    overrides["mortality"] = MortalityTable(
-        table=tables["mortality_select"],
-        age_basis="age_last_birthday",
-        structure="select_ultimate",
-        select_period=SELECT_PERIOD,
-    )
-    overrides["mortality_scalars"] = tables["mortality_scalars"]
-    overrides["lapse_rates"] = tables["lapse_rates"]
-    overrides["surrender_charges"] = tables["surrender_charges"]
-    return model.main(af, assumptions_override=overrides)
-
-
 # ---------------------------------------------------------------------------
-# 3. Aggregations: one row per scenario, summed PVs across the portfolio.
+# 2. Aggregations: one row per scenario, summed PVs across the portfolio.
 # ---------------------------------------------------------------------------
 
 # ``.over("scenario_id")`` partitions each aggregation per scenario so each
@@ -147,40 +130,63 @@ AGGREGATIONS = tuple(
 )
 
 # ---------------------------------------------------------------------------
-# 4. Build the plan and run.
+# 3. Build the plan and run.
 # ---------------------------------------------------------------------------
 
-plan = ScenarioRun(
+# ``SCENARIO_RUN`` and ``MODEL_FN`` are the two names ``gspio calc-graph
+# --scenarios`` reads out of this file, the way ``--portfolio`` reads a
+# model's ``AGGREGATIONS``. The script declares; the exporter reads. Run
+# this file and it does its own sweep; point the exporter at it and the
+# same plan is run once and written up as a calculation graph::
+#
+#     uv run gspio calc-graph model.py model_points.parquet \
+#         --scenarios run_scenarios.py -o level5.json
+SCENARIO_RUN = ScenarioRun(
     shocks=SCENARIOS,
-    base_tables=BASE_TABLES,
     aggregations=AGGREGATIONS,
 )
+MODEL_FN = model.main
 
-print(plan.describe())
-print()
-
-mp = pl.read_parquet(MODEL_POINTS_PATH)
-n_points = len(mp)
-af = ActuarialFrame(mp)
-
-start = time.perf_counter()
-result = plan.run(af, model_fn)
-runtime = time.perf_counter() - start
 
 # ---------------------------------------------------------------------------
-# 5. Results — per-scenario PV totals (BASE vs UP vs DOWN)
+# 4. Run it, and print the per-scenario PV totals (BASE vs UP vs DOWN).
 # ---------------------------------------------------------------------------
+#
+# Under ``__main__`` so that reading this file for its declarations does not
+# run the sweep. The exporter imports the script to reach SCENARIO_RUN, and
+# anything left at module level here would run before the export started —
+# the same numbers, twice, for nobody.
 
-print(
-    f"\nTyped L5 run: {n_points} model points x {len(SCENARIOS)} scenarios = "
-    f"{n_points * len(SCENARIOS)} rows"
-)
-print(f"Runtime: {runtime:.2f}s\n")
 
-# Per-scenario totals — join the per-scenario aggregator outputs on scenario_id.
-scenario_totals = result.aggregations[PV_COMPONENTS[0]]
-for name in PV_COMPONENTS[1:]:
-    scenario_totals = scenario_totals.join(result.aggregations[name], on="scenario_id")
+def main() -> None:
+    """Run the plan and print the per-scenario totals."""
+    print(SCENARIO_RUN.describe())
+    print()
 
-print("=== Per-Scenario Totals (PV by component) ===")
-print(scenario_totals.sort("scenario_id"))
+    mp = pl.read_parquet(MODEL_POINTS_PATH)
+    n_points = len(mp)
+    af = ActuarialFrame(mp)
+
+    start = time.perf_counter()
+    result = SCENARIO_RUN.run(af, MODEL_FN)
+    runtime = time.perf_counter() - start
+
+    print(
+        f"\nTyped L5 run: {n_points} model points x {len(SCENARIOS)} scenarios = "
+        f"{n_points * len(SCENARIOS)} rows"
+    )
+    print(f"Runtime: {runtime:.2f}s\n")
+
+    # Per-scenario totals — join the per-scenario aggregator outputs on scenario_id.
+    scenario_totals = result.aggregations[PV_COMPONENTS[0]]
+    for name in PV_COMPONENTS[1:]:
+        scenario_totals = scenario_totals.join(
+            result.aggregations[name], on="scenario_id"
+        )
+
+    print("=== Per-Scenario Totals (PV by component) ===")
+    print(scenario_totals.sort("scenario_id"))
+
+
+if __name__ == "__main__":
+    main()

@@ -21,9 +21,9 @@ import polars as pl
 import pytest
 
 from gaspatchio.rollforward._builder import RollforwardBuilder
-from gaspatchio.rollforward._collector import RollforwardCollector
 from gaspatchio.rollforward._compile import compile_rollforward
 from gaspatchio.schedule import Schedule
+from tests.rollforward.conftest import _standalone_state_expr
 
 N = 3
 
@@ -40,8 +40,8 @@ def project(df: pl.DataFrame) -> list[float]:
     """Add a premium then grow — both read from input columns."""
     b = RollforwardBuilder(states={"av": pl.col("init")}, schedule=schedule())
     b["av"].add(pl.col("premium")).grow(pl.col("rate"))
-    collector = RollforwardCollector(compile_rollforward(b))
-    out = df.with_columns(av=collector.expr_for("av"))
+    compiled = compile_rollforward(b)
+    out = df.with_columns(av=_standalone_state_expr(compiled, "av"))
     return out.get_column("av").to_list()[0]
 
 
@@ -106,7 +106,7 @@ class TestBooleanScalar:
     def _ratchet(self, when: pl.Series | list) -> list[float]:
         b = RollforwardBuilder(states={"av": pl.col("init")}, schedule=schedule())
         b["av"].ratchet(to=pl.col("floor_to"), when=pl.col("flag"))
-        collector = RollforwardCollector(compile_rollforward(b))
+        compiled = compile_rollforward(b)
         df = pl.DataFrame(
             {
                 "init": [100.0],
@@ -114,7 +114,7 @@ class TestBooleanScalar:
                 "flag": when,
             }
         )
-        out = df.with_columns(av=collector.expr_for("av"))
+        out = df.with_columns(av=_standalone_state_expr(compiled, "av"))
         return out.get_column("av").to_list()[0]
 
     def test_scalar_flag_matches_the_repeated_list(self) -> None:

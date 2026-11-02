@@ -1,0 +1,172 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0"
+  },
+  "created_at": "2026-09-20T05:39:06Z",
+  "model": {
+    "label": null,
+    "source_path": "model.py",
+    "source_sha": "sha256:b724f368cf372da98cd53f576225a783232be301867059fa037da96531832fa9",
+    "git": null,
+    "model_points": {
+      "path": "points.parquet",
+      "fingerprint": "sha256:61a968ff653fff3c441740d21f4b7c2a12ace21a63618ea6890a06e27672a05f"
+    }
+  },
+  "graph_fingerprint": "sha256:2b76da61882fc372d87b532de566bf8a4c6b8d96a05c279b60d2902b75f90dbb",
+  "book": {
+    "columns": [
+      "number",
+      "point_id"
+    ],
+    "digest": {
+      "omitted": "unavailable",
+      "detail": "Written before documents recorded their book, and the policy data it was exported over is not kept with it."
+    }
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "point_id",
+      "column": "point_id",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:2332a1a1d41ccb6f49402e16143745f285b3a05737b33b195e9dec1370a58b00",
+      "fingerprint": "sha256:be54234f9445a2bdfd12d80a5ca816037dfc5ebee5d513a156d917df9fde864d",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 1,
+      "trace": null
+    },
+    {
+      "id": "number",
+      "column": "number",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:0c4d33076d4708fc73dfb4246e2d08eaf572ca33c2155880d676d55c22937e92",
+      "fingerprint": "sha256:5821d7a49feda8ff0d5ea16be21ae7774eb6bac2bd1111560f5e188756555f2d",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 9007199254740992,
+      "trace": null
+    },
+    {
+      "id": "result@1",
+      "column": "result",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.number + 1",
+      "reads": [
+        "number"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:b464cd5cf6f6e81a840b17c99ba7ccea4afb36a785be854ad8e9a5d5bee526f3",
+      "fingerprint": "sha256:bfeaf4fcf39cc9075e42c75ba23da99a52cebb643debbe99d065b483c17206be",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:5",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "number",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 9007199254740993,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(number) + (1)"
+        },
+        {
+          "step": 2,
+          "expr": "((9007199254740992)) + (1)",
+          "values": {
+            "number": 9007199254740992
+          }
+        },
+        {
+          "step": 3,
+          "expr": "9007199254740993",
+          "result": 9007199254740993
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "number",
+      "target": "result@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [],
+  "holes": [],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "model.py",
+      "fingerprint": "sha256:b724f368cf372da98cd53f576225a783232be301867059fa037da96531832fa9",
+      "payload": {
+        "text": "from gaspatchio import ActuarialFrame\n\n\ndef main(af: ActuarialFrame, params=None) -> ActuarialFrame:\n    af.result = af.number + 1\n    return af\n"
+      }
+    }
+  ],
+  "enrichment": {
+    "policy_id": "1",
+    "aggregation": null,
+    "periods": null,
+    "filter": null
+  },
+  "policies": [
+    {
+      "policy_id": "1",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 0 of 1 in points.parquet, selected by ':1'"
+    }
+  ],
+  "facets": {},
+  "document_digest": "sha256:9cb9a7befff5c14d193f5164be4b0254da299523791d1db55cff5f632d3020ac"
+}

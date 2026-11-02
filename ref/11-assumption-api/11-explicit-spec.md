@@ -30,7 +30,7 @@ class DimensionInfo:
     name: str
     dtype: str
     unique_count: int
-    sample_values: List[Any]  # First 5 unique values
+    sample_values: List[Any]  # The five LOWEST distinct values, ascending
     suggested_type: Literal["key", "melt", "categorical"]
     numeric_pattern: Optional[str] = None  # e.g., "1-25", "continuous"
 
@@ -50,7 +50,8 @@ class TableSchema:
     format: Literal["curve", "wide"]
     overflow_candidate: Optional[str] = None
     interpolation_opportunities: List[InterpolationHint] = field(default_factory=list)
-    row_count: int = 0
+    row_count: int = 0            # the source's own height, never a sample's
+    sampled_rows: Optional[int] = None  # None when the whole source was measured
     
     def suggest_table_config(self) -> str:
         """Generate example code for loading this table"""
@@ -63,18 +64,25 @@ class TableSchema:
 
 def analyze_table(
     source: Union[str, Path, pl.DataFrame],
-    sample_rows: int = 1000,
+    sample_rows: Optional[int] = None,
     detect_overflow: bool = True,
-    detect_interpolation: bool = True
+    detect_interpolation: bool = True,
+    value_column: Optional[str] = None
 ) -> TableSchema:
     """
     Analyze table structure and suggest loading configuration.
     
     Args:
         source: Data source to analyze
-        sample_rows: Number of rows to sample for analysis
+        sample_rows: Rows to measure the dimension facts on; None (the
+            default) is adaptive — the whole source under the scan's cell
+            budget (rows x columns), and above it the biggest sample the
+            budget buys — and `sampled_rows` on the result says which
+            happened
         detect_overflow: Whether to detect overflow columns
         detect_interpolation: Whether to detect interpolation opportunities
+        value_column: The column the caller has declared is the rate; given,
+            no rule may reach a different answer
         
     Returns:
         TableSchema with analysis results

@@ -13,9 +13,14 @@ use serde::Deserialize;
 /// # Errors
 /// Returns an error if the input series cannot be converted to i64 or if series creation fails.
 pub fn fill_series(inputs: &[Series], kwargs: &FillSeriesKwargs) -> PolarsResult<Series> {
-    // Log the inputs for debugging.
-    info!("fill_series called with inputs: {:?}", inputs);
     let length = &inputs[0];
+    // The shape, never the data: formatting the inputs would render every
+    // policy's value into the log line, once per morsel.
+    info!(
+        "fill_series called on {} rows of {}",
+        length.len(),
+        length.dtype()
+    );
     let start = kwargs.start;
     let increment = kwargs.increment;
 

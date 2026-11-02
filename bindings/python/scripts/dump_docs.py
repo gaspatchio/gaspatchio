@@ -19,7 +19,8 @@ FILES_TO_DUMP = [
     Path(__file__).parent.parent / "gaspatchio/registry.py",
     Path(__file__).parent.parent / "gaspatchio/column/column_proxy.py",
     Path(__file__).parent.parent / "gaspatchio/column/expression_proxy.py",
-    Path(__file__).parent.parent / "gaspatchio/column/dispatch.py",
+    Path(__file__).parent.parent / "gaspatchio/_semantic/operations.py",
+    Path(__file__).parent.parent / "gaspatchio/column/_generated_proxy.py",
     Path(__file__).parent.parent.parent.parent.parent
     / "gaspatchio-models/models/my-model/model_calculation.py",
     Path(__file__).parent.parent / "gaspatchio/functions/vector.py",

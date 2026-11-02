@@ -17,9 +17,9 @@ import polars as pl
 import pytest
 
 from gaspatchio.rollforward._builder import RollforwardBuilder
-from gaspatchio.rollforward._collector import RollforwardCollector
 from gaspatchio.rollforward._compile import compile_rollforward
 from gaspatchio.schedule import Schedule
+from tests.rollforward.conftest import _standalone_state_expr
 
 
 class TestLapseAllNonPositive:
@@ -44,8 +44,11 @@ class TestLapseAllNonPositive:
         # t=3: 10-30=-20  (lapse fires at end-of-period 3)
         # t=4: 0          (post-lapse zero)
         df = pl.DataFrame({"init": [100.0], "withdrawal": [[30.0] * 5]})
-        collector = RollforwardCollector(compiled)
-        av = df.with_columns(av=collector.expr_for("av")).get_column("av").to_list()[0]
+        av = (
+            df.with_columns(av=_standalone_state_expr(compiled, "av"))
+            .get_column("av")
+            .to_list()[0]
+        )
         assert av[0] == pytest.approx(70.0, rel=1e-9)
         assert av[1] == pytest.approx(40.0, rel=1e-9)
         assert av[2] == pytest.approx(10.0, rel=1e-9)
@@ -67,6 +70,9 @@ class TestLapseAllNonPositive:
         compiled = compile_rollforward(b)
 
         df = pl.DataFrame({"init": [100.0], "premium": [[10.0, 10.0, 10.0]]})
-        collector = RollforwardCollector(compiled)
-        av = df.with_columns(av=collector.expr_for("av")).get_column("av").to_list()[0]
+        av = (
+            df.with_columns(av=_standalone_state_expr(compiled, "av"))
+            .get_column("av")
+            .to_list()[0]
+        )
         assert av == pytest.approx([110.0, 120.0, 130.0], rel=1e-9)

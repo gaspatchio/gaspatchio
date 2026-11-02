@@ -1,0 +1,1727 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "rollforward",
+  "cases": [
+    {
+      "id": "rollforward-signed-credit",
+      "covers": [
+        "rollforward.increment"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        },
+        "credit": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              0.0
+            ],
+            [
+              0.0,
+              5.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2
+            ],
+            [
+              0.05,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.increment",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "credit"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "state",
+            "name": "fund@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:8ac814759093a8a571682d3039f59f27c18371666d1f977d6e5c4a9573ecff73",
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "label": "credit",
+          "shared": true
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            10.0,
+            0.0
+          ],
+          [
+            0.0,
+            5.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 1e-12
+      },
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2024-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:8ac814759093a8a571682d3039f59f27c18371666d1f977d6e5c4a9573ecff73": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "fund",
+              "init": {
+                "op": "col",
+                "name": "initial"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "credit",
+              "operation": "Add",
+              "target": "fund@eop",
+              "reads_running_balance": false,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "credit"
+                }
+              ],
+              "settings": {}
+            },
+            {
+              "label": "fee",
+              "operation": "Charge",
+              "target": "fund@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "rate"
+                },
+                {
+                  "op": "state",
+                  "name": "fund@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            }
+          ],
+          "track_increments": true,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18"
+        }
+      },
+      "producer_build": {
+        "states": {
+          "fund": "initial"
+        },
+        "steps": [
+          {
+            "state": "fund",
+            "method": "add",
+            "operand": "credit",
+            "label": "credit"
+          },
+          {
+            "state": "fund",
+            "method": "charge",
+            "operand": "rate",
+            "label": "fee"
+          }
+        ],
+        "schedule": {
+          "kind": "from_calendar_grid",
+          "n_periods": 2,
+          "frequency": "1M",
+          "calendar": "NullCalendar",
+          "convention": "Unadjusted",
+          "day_count": "OneTwelfth",
+          "anchor": "month_end",
+          "start_date": "2024-01-31"
+        },
+        "track_increments": true
+      }
+    },
+    {
+      "id": "rollforward-signed-fee",
+      "covers": [
+        "rollforward.increment"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        },
+        "credit": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              0.0
+            ],
+            [
+              0.0,
+              5.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2
+            ],
+            [
+              0.05,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.increment",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "credit"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "state",
+            "name": "fund@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:8ac814759093a8a571682d3039f59f27c18371666d1f977d6e5c4a9573ecff73",
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "label": "fee",
+          "shared": true
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -11.0,
+            -19.8
+          ],
+          [
+            -10.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 1e-12
+      },
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2024-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:8ac814759093a8a571682d3039f59f27c18371666d1f977d6e5c4a9573ecff73": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "fund",
+              "init": {
+                "op": "col",
+                "name": "initial"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "credit",
+              "operation": "Add",
+              "target": "fund@eop",
+              "reads_running_balance": false,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "credit"
+                }
+              ],
+              "settings": {}
+            },
+            {
+              "label": "fee",
+              "operation": "Charge",
+              "target": "fund@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "rate"
+                },
+                {
+                  "op": "state",
+                  "name": "fund@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            }
+          ],
+          "track_increments": true,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18"
+        }
+      },
+      "producer_build": {
+        "states": {
+          "fund": "initial"
+        },
+        "steps": [
+          {
+            "state": "fund",
+            "method": "add",
+            "operand": "credit",
+            "label": "credit"
+          },
+          {
+            "state": "fund",
+            "method": "charge",
+            "operand": "rate",
+            "label": "fee"
+          }
+        ],
+        "schedule": {
+          "kind": "from_calendar_grid",
+          "n_periods": 2,
+          "frequency": "1M",
+          "calendar": "NullCalendar",
+          "convention": "Unadjusted",
+          "day_count": "OneTwelfth",
+          "anchor": "month_end",
+          "start_date": "2024-01-31"
+        },
+        "track_increments": true
+      }
+    },
+    {
+      "id": "rollforward-delta-is-after-minus-before",
+      "covers": [
+        "rollforward.increment"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            9007199254740992.0
+          ]
+        },
+        "credit": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.increment",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "credit"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "state",
+            "name": "fund@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:8ac814759093a8a571682d3039f59f27c18371666d1f977d6e5c4a9573ecff73",
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "label": "credit",
+          "shared": true
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2024-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:8ac814759093a8a571682d3039f59f27c18371666d1f977d6e5c4a9573ecff73": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "fund",
+              "init": {
+                "op": "col",
+                "name": "initial"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "credit",
+              "operation": "Add",
+              "target": "fund@eop",
+              "reads_running_balance": false,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "credit"
+                }
+              ],
+              "settings": {}
+            },
+            {
+              "label": "fee",
+              "operation": "Charge",
+              "target": "fund@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "rate"
+                },
+                {
+                  "op": "state",
+                  "name": "fund@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            }
+          ],
+          "track_increments": true,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18"
+        }
+      },
+      "producer_build": {
+        "states": {
+          "fund": "initial"
+        },
+        "steps": [
+          {
+            "state": "fund",
+            "method": "add",
+            "operand": "credit",
+            "label": "credit"
+          },
+          {
+            "state": "fund",
+            "method": "charge",
+            "operand": "rate",
+            "label": "fee"
+          }
+        ],
+        "schedule": {
+          "kind": "from_calendar_grid",
+          "n_periods": 2,
+          "frequency": "1M",
+          "calendar": "NullCalendar",
+          "convention": "Unadjusted",
+          "day_count": "OneTwelfth",
+          "anchor": "month_end",
+          "start_date": "2024-01-31"
+        },
+        "track_increments": true
+      }
+    },
+    {
+      "id": "rollforward-bounded-state",
+      "covers": [
+        "rollforward.state"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            200.0
+          ]
+        },
+        "credit": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              0.0
+            ],
+            [
+              0.0,
+              5.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.2
+            ],
+            [
+              0.05,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.state",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "credit"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "state",
+            "name": "fund@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:796f330e9ef3766fffbb2d27c88909600a02d1f8c3c3221ce85dd31de441864f",
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "state": "fund",
+          "point": "eop",
+          "shared": true
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            99.0,
+            79.2
+          ],
+          [
+            190.0,
+            195.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 1e-12
+      },
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2024-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:796f330e9ef3766fffbb2d27c88909600a02d1f8c3c3221ce85dd31de441864f": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "fund",
+              "init": {
+                "op": "col",
+                "name": "initial"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "credit",
+              "operation": "Add",
+              "target": "fund@eop",
+              "reads_running_balance": false,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "credit"
+                }
+              ],
+              "settings": {}
+            },
+            {
+              "label": "fee",
+              "operation": "Charge",
+              "target": "fund@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "rate"
+                },
+                {
+                  "op": "state",
+                  "name": "fund@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            }
+          ],
+          "track_increments": false,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:ffbf3d15686aa2cca7cd2d58d559e66ac07ecf278e175f68625c24a18430bc18"
+        }
+      },
+      "producer_build": {
+        "states": {
+          "fund": "initial"
+        },
+        "steps": [
+          {
+            "state": "fund",
+            "method": "add",
+            "operand": "credit",
+            "label": "credit"
+          },
+          {
+            "state": "fund",
+            "method": "charge",
+            "operand": "rate",
+            "label": "fee"
+          }
+        ],
+        "schedule": {
+          "kind": "from_calendar_grid",
+          "n_periods": 2,
+          "frequency": "1M",
+          "calendar": "NullCalendar",
+          "convention": "Unadjusted",
+          "day_count": "OneTwelfth",
+          "anchor": "month_end",
+          "start_date": "2024-01-31"
+        },
+        "track_increments": false
+      },
+      "structural_covers": [
+        "rollforward"
+      ]
+    },
+    {
+      "id": "rollforward-structural-floor-that-never-bites",
+      "covers": [
+        "rollforward.state"
+      ],
+      "inputs": {
+        "av_init": {
+          "dtype": "f64",
+          "values": [
+            100000.0
+          ]
+        },
+        "fund_return": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.01,
+              0.01,
+              0.01,
+              0.01,
+              0.01,
+              0.01,
+              0.01,
+              0.01,
+              0.01,
+              0.01,
+              0.01,
+              0.01
+            ]
+          ]
+        },
+        "me_charge": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.001,
+              0.001,
+              0.001,
+              0.001,
+              0.001,
+              0.001,
+              0.001,
+              0.001,
+              0.001,
+              0.001,
+              0.001,
+              0.001
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.state",
+        "args": [
+          {
+            "op": "col",
+            "name": "av_init"
+          },
+          {
+            "op": "col",
+            "name": "fund_return"
+          },
+          {
+            "op": "state",
+            "name": "av@eop"
+          },
+          {
+            "op": "col",
+            "name": "me_charge"
+          },
+          {
+            "op": "state",
+            "name": "av@eop"
+          },
+          {
+            "op": "state",
+            "name": "av@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:8aca2606070bd6e69a2413ed422bba712b3e896d865bfe79ed01c662c6d6bd6a",
+          "schedule": "sha256:d3c7d736397d712e4559762dd8b45468d231e53e77e6809913a06a1ee59043ee",
+          "state": "av",
+          "point": "eop",
+          "shared": true
+        }
+      },
+      "producer_check": false,
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:d3c7d736397d712e4559762dd8b45468d231e53e77e6809913a06a1ee59043ee",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 12,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2025-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:8aca2606070bd6e69a2413ed422bba712b3e896d865bfe79ed01c662c6d6bd6a": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "av",
+              "init": {
+                "op": "col",
+                "name": "av_init"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "fund_return",
+              "operation": "Grow",
+              "target": "av@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "fund_return"
+                },
+                {
+                  "op": "state",
+                  "name": "av@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            },
+            {
+              "label": "me_charge",
+              "operation": "Charge",
+              "target": "av@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "me_charge"
+                },
+                {
+                  "op": "state",
+                  "name": "av@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            },
+            {
+              "label": null,
+              "operation": "Floor",
+              "target": "av@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "state",
+                  "name": "av@eop"
+                }
+              ],
+              "settings": {
+                "value": 0.0
+              }
+            }
+          ],
+          "track_increments": false,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:d3c7d736397d712e4559762dd8b45468d231e53e77e6809913a06a1ee59043ee"
+        }
+      },
+      "structural_covers": [
+        "rollforward"
+      ],
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            100899.0,
+            101806.08201,
+            102721.318687,
+            103644.783342,
+            104576.549945,
+            105516.693129,
+            106465.2882,
+            107422.411141,
+            108388.138617,
+            109362.547983,
+            110345.717289,
+            111337.725288
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 5e-07,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "rollforward-ratchet-at-the-anniversary",
+      "covers": [
+        "rollforward.state"
+      ],
+      "inputs": {
+        "fund_init": {
+          "dtype": "f64",
+          "values": [
+            100000.0
+          ]
+        },
+        "gmdb_init": {
+          "dtype": "f64",
+          "values": [
+            100000.0
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008,
+              0.008
+            ]
+          ]
+        },
+        "anniv": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              true,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              true,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              true,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              true,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              true
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.state",
+        "args": [
+          {
+            "op": "col",
+            "name": "fund_init"
+          },
+          {
+            "op": "col",
+            "name": "gmdb_init"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "state",
+            "name": "fund@eop"
+          },
+          {
+            "op": "state",
+            "name": "fund@eop"
+          },
+          {
+            "op": "col",
+            "name": "anniv"
+          },
+          {
+            "op": "state",
+            "name": "gmdb@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:62e1c633671efd1006686244db029141abf107c3483fe5d68d7fd7ed7c067332",
+          "schedule": "sha256:c6904608c8c948b19fd131ac5e33f2824cb1f834b102810a2fe39b4ad4608d15",
+          "state": "gmdb",
+          "point": "eop",
+          "shared": true
+        }
+      },
+      "producer_check": false,
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:c6904608c8c948b19fd131ac5e33f2824cb1f834b102810a2fe39b4ad4608d15",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 60,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2025-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:62e1c633671efd1006686244db029141abf107c3483fe5d68d7fd7ed7c067332": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "fund",
+              "init": {
+                "op": "col",
+                "name": "fund_init"
+              }
+            },
+            {
+              "name": "gmdb",
+              "init": {
+                "op": "col",
+                "name": "gmdb_init"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "fund_growth",
+              "operation": "Grow",
+              "target": "fund@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "rate"
+                },
+                {
+                  "op": "state",
+                  "name": "fund@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            },
+            {
+              "label": "GMDB_ratchet",
+              "operation": "Ratchet",
+              "target": "gmdb@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "state",
+                  "name": "fund@eop"
+                },
+                {
+                  "op": "col",
+                  "name": "anniv"
+                },
+                {
+                  "op": "state",
+                  "name": "gmdb@eop"
+                }
+              ],
+              "settings": {}
+            }
+          ],
+          "track_increments": false,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:c6904608c8c948b19fd131ac5e33f2824cb1f834b102810a2fe39b4ad4608d15"
+        }
+      },
+      "structural_covers": [
+        "rollforward"
+      ],
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            100000.0,
+            100000.0,
+            100000.0,
+            100000.0,
+            100000.0,
+            100000.0,
+            100000.0,
+            100000.0,
+            100000.0,
+            100000.0,
+            100000.0,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            110033.869372,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            121074.524089,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            133222.983678,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            146590.403834,
+            161299.093466
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 5e-07,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "rollforward-floors-that-bite-in-order",
+      "covers": [
+        "rollforward.state"
+      ],
+      "structural_covers": [
+        "rollforward"
+      ],
+      "inputs": {
+        "alpha_init": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            100.0
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              -0.9,
+              0.5
+            ],
+            [
+              0.1,
+              0.1,
+              0.1
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.state",
+        "args": [
+          {
+            "op": "col",
+            "name": "alpha_init"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "state",
+            "name": "alpha@eop"
+          },
+          {
+            "op": "state",
+            "name": "alpha@eop"
+          },
+          {
+            "op": "state",
+            "name": "alpha@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:8619c638628412768c88481dcf1876608fa8c7a340a5b515f3a6502cbd60fba6",
+          "schedule": "sha256:e2cdd7df876a05044c78eb705cd7e8f8b700bd9e73aed6e3adadf04c0619674e",
+          "state": "alpha",
+          "point": "eop",
+          "shared": true
+        }
+      },
+      "producer_check": false,
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:e2cdd7df876a05044c78eb705cd7e8f8b700bd9e73aed6e3adadf04c0619674e",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 3,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2025-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:8619c638628412768c88481dcf1876608fa8c7a340a5b515f3a6502cbd60fba6": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "alpha",
+              "init": {
+                "op": "col",
+                "name": "alpha_init"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "alpha_grow",
+              "operation": "Grow",
+              "target": "alpha@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "rate"
+                },
+                {
+                  "op": "state",
+                  "name": "alpha@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            },
+            {
+              "label": null,
+              "operation": "Floor",
+              "target": "alpha@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "state",
+                  "name": "alpha@eop"
+                }
+              ],
+              "settings": {
+                "value": 20.0
+              }
+            },
+            {
+              "label": null,
+              "operation": "Floor",
+              "target": "alpha@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "state",
+                  "name": "alpha@eop"
+                }
+              ],
+              "settings": {
+                "value": 25.0
+              }
+            }
+          ],
+          "track_increments": false,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:e2cdd7df876a05044c78eb705cd7e8f8b700bd9e73aed6e3adadf04c0619674e"
+        }
+      },
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            110.00000000000001,
+            25.0,
+            37.5
+          ],
+          [
+            110.00000000000001,
+            121.00000000000003,
+            133.10000000000005
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 1e-12
+      }
+    },
+    {
+      "id": "rollforward-growth-rounded-before-the-credit",
+      "covers": [
+        "rollforward.state"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            1234.56,
+            987.65
+          ]
+        },
+        "growth": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0131,
+              0.0264,
+              0.0133
+            ],
+            [
+              -0.0157,
+              0.0074,
+              -0.0132
+            ]
+          ]
+        },
+        "credit": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              117.2,
+              489.06,
+              125.09
+            ],
+            [
+              302.9,
+              242.64,
+              27.84
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.state",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "growth"
+          },
+          {
+            "op": "state",
+            "name": "fund@eop"
+          },
+          {
+            "op": "col",
+            "name": "credit"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:2551d61258b8e1302df99ce9922db2bc34f9bbceceebf0500cc0bcb13a46031b",
+          "schedule": "sha256:e311c64fd5daabef5937140ce5d486f613ae6f3591a73a8a98aaf30d89c775f8",
+          "state": "fund",
+          "point": "eop",
+          "shared": true
+        }
+      },
+      "producer_check": true,
+      "case_kind": "value",
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1367.9327360000002,
+            1893.1061602304,
+            2043.3744721614644
+          ],
+          [
+            1275.0438949999998,
+            1527.119219823,
+            1534.8012461213364
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:e311c64fd5daabef5937140ce5d486f613ae6f3591a73a8a98aaf30d89c775f8",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 3,
+            "frequency": "1M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "anchor": "month_end",
+            "start_date": "2024-01-31"
+          }
+        }
+      ],
+      "compilations": {
+        "sha256:2551d61258b8e1302df99ce9922db2bc34f9bbceceebf0500cc0bcb13a46031b": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "fund",
+              "init": {
+                "op": "col",
+                "name": "initial"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "growth",
+              "operation": "Grow",
+              "target": "fund@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "growth"
+                },
+                {
+                  "op": "state",
+                  "name": "fund@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            },
+            {
+              "label": "credit",
+              "operation": "Add",
+              "target": "fund@eop",
+              "reads_running_balance": false,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "credit"
+                }
+              ],
+              "settings": {}
+            }
+          ],
+          "track_increments": false,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:e311c64fd5daabef5937140ce5d486f613ae6f3591a73a8a98aaf30d89c775f8"
+        }
+      },
+      "producer_build": {
+        "states": {
+          "fund": "initial"
+        },
+        "steps": [
+          {
+            "state": "fund",
+            "method": "grow",
+            "operand": "growth",
+            "label": "growth"
+          },
+          {
+            "state": "fund",
+            "method": "add",
+            "operand": "credit",
+            "label": "credit"
+          }
+        ],
+        "schedule": {
+          "kind": "from_calendar_grid",
+          "n_periods": 3,
+          "frequency": "1M",
+          "calendar": "NullCalendar",
+          "convention": "Unadjusted",
+          "day_count": "OneTwelfth",
+          "anchor": "month_end",
+          "start_date": "2024-01-31"
+        },
+        "track_increments": false
+      },
+      "structural_covers": [
+        "rollforward"
+      ]
+    }
+  ]
+}

@@ -15,12 +15,25 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
+from ._shown import shown, terminal_console
 from .tutorials import get_tutorials_dir
 
-console = Console()
+console = terminal_console()
+err_console = terminal_console(stderr=True)
+
+# A destination the copy cannot be made at is a usage error, the status every
+# gspio command gives a path on its command line that it cannot use.
+_EXIT_USAGE = 2
+
+# The file every copy carries, saying this command made it. ``--force``
+# deletes a directory only while this file is in it: the one directory it
+# can know is a tutorial copy is one it wrote itself.
+_MARKER = ".gspio-tutorial"
+
+# How many of a refused directory's entries the refusal names.
+_ENTRIES_NAMED = 3
 
 tutorial_app = typer.Typer(
     name="tutorial",
@@ -131,7 +144,7 @@ def _verify_pattern(pattern_dir: Path) -> None:
     """
     scripts = sorted(pattern_dir.glob("[0-9][0-9]_*.py"))
     if not scripts:
-        console.print(f"[red]No numbered scripts found in {pattern_dir}[/red]")
+        console.print(f"[red]No numbered scripts found in {shown(pattern_dir)}[/red]")
         raise typer.Exit(code=1)
 
     for script in scripts:
@@ -143,7 +156,10 @@ def _verify_pattern(pattern_dir: Path) -> None:
             check=False,
         )
         if result.returncode != 0:
-            console.print(f"[red]FAIL: {script.name}[/red]\n{result.stderr}")
+            console.print(
+                f"[red]FAIL: {shown(script.name)}[/red]\n"
+                f"{shown(result.stderr, lines=True)}"
+            )
             raise typer.Exit(code=1)
         console.print(f"[green]PASS: {script.name}[/green]")
 
@@ -177,6 +193,71 @@ def list() -> None:  # noqa: A001
     )
 
 
+def _no_place_for_a_tutorial(dest: Path, resolved: Path, *, force: bool) -> str | None:
+    """Return why a tutorial cannot be copied to ``dest``, or None where it can.
+
+    A destination inside a file has no directory to be made in, and a file
+    given with ``--force`` would be deleted as though it were a tutorial's
+    directory. Both raised a traceback; every other destination is created,
+    parents included, or refused for existing without ``--force``.
+    """
+    blocker = next((parent for parent in resolved.parents if parent.exists()), None)
+    if blocker is not None and not blocker.is_dir():
+        return (
+            f"--dest names {dest}, which is inside {blocker}, a file rather "
+            "than a directory, so nothing was written. Name a destination "
+            "that is not inside a file."
+        )
+    if force and resolved.exists() and not resolved.is_dir():
+        return (
+            f"--dest names {dest}, which is a file, so nothing was written: "
+            "--force replaces a tutorial's directory, never a file. Name a "
+            "directory, or one that does not exist yet."
+        )
+    if force and resolved.is_dir():
+        return _not_a_tutorial_copy(dest, resolved)
+    return None
+
+
+def _not_a_tutorial_copy(dest: Path, resolved: Path) -> str | None:
+    """Return why ``--force`` must not delete the directory ``dest``, or None.
+
+    ``--force`` deletes the destination before it copies, so it replaces a
+    directory only where nothing can be lost by it: one that is empty, or a
+    copy this command made, which carries the ``.gspio-tutorial`` marker it
+    writes. Telling a tutorial copy apart by what it holds -- a ``model.py``
+    and a ``data/`` -- would also match a model of the user's own. Even a
+    marked copy is kept where it now holds ``.git``, a repository's history,
+    or where it is the directory the command was run from, or holds it.
+    """
+    entries = sorted(entry.name for entry in resolved.iterdir())
+    if not entries:
+        return None
+    kept = "so nothing was deleted or written"
+    if ".git" in entries:
+        return (
+            f"--dest names {dest}, which holds .git, a repository's history, "
+            f"{kept}: --force never replaces a repository. Name a new --dest."
+        )
+    here = Path.cwd().resolve()
+    if resolved == here or resolved in here.parents:
+        return (
+            f"--dest names {dest}, which is the directory this command runs in "
+            f"or holds it, {kept}. Name a new --dest."
+        )
+    if _MARKER not in entries:
+        named = ", ".join(entries[:_ENTRIES_NAMED])
+        more = len(entries) - _ENTRIES_NAMED
+        held = f"{named} and {more} more" if more > 0 else named
+        return (
+            f"--dest names {dest}, which gspio tutorial init did not make: it "
+            f"holds {held}, and no {_MARKER} marker, {kept}. --force replaces "
+            "only an empty directory or a tutorial copy this command made. Name "
+            f"a new --dest, or empty {dest} yourself if nothing in it is needed."
+        )
+    return None
+
+
 @tutorial_app.command()
 def init(
     level: Annotated[
@@ -190,7 +271,13 @@ def init(
         typer.Option("--dest", "-d", help="Destination directory"),
     ] = Path("my-first-model"),
     force: Annotated[  # noqa: FBT002
-        bool, typer.Option("--force", "-f", help="Overwrite destination if it exists")
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Replace the destination if it is empty or a tutorial copy "
+            "this command made; any other directory is refused",
+        ),
     ] = False,
 ) -> None:
     """Copy a tutorial into your working directory."""
@@ -204,23 +291,44 @@ def init(
     )
 
     if not source.exists():
-        console.print(f"[red]Tutorial source not found: {source}[/red]")
+        console.print(f"[red]Tutorial source not found: {shown(source)}[/red]")
         raise typer.Exit(code=1)
 
     dest_resolved = dest.resolve()
+    # Scaffolding is this command's job, so the destination and any directory
+    # above it are created. Two destinations cannot be copied to at all, and
+    # are refused by name rather than met with a traceback.
+    refusal = _no_place_for_a_tutorial(dest, dest_resolved, force=force)
+    if refusal is not None:
+        err_console.print(f"[red]{shown(refusal)}[/red]")
+        raise typer.Exit(code=_EXIT_USAGE)
 
     if dest_resolved.exists() and not force:
-        console.print(f"[red]Destination already exists: {dest_resolved}[/red]")
-        console.print("Use --force to overwrite.")
+        console.print(f"[red]Destination already exists: {shown(dest_resolved)}[/red]")
+        console.print(
+            "Use --force to replace it, if it is empty or a copy this command made."
+        )
         raise typer.Exit(code=1)
 
-    if dest_resolved.exists() and force:
+    # An empty directory is copied into rather than deleted and made again,
+    # so a shell standing in it is still standing in it afterwards.
+    if dest_resolved.exists() and force and any(dest_resolved.iterdir()):
         shutil.rmtree(dest_resolved)
 
-    shutil.copytree(source, dest_resolved, ignore=shutil.ignore_patterns("__pycache__"))
-    console.print(f"[green]Tutorial copied to: {dest_resolved}[/green]\n")
+    shutil.copytree(
+        source,
+        dest_resolved,
+        ignore=shutil.ignore_patterns("__pycache__"),
+        dirs_exist_ok=True,
+    )
+    (dest_resolved / _MARKER).write_text(
+        f"Copied by gspio tutorial init {dir_name}. gspio tutorial init --force "
+        "replaces this directory only while this file is in it.\n",
+        encoding="utf-8",
+    )
+    console.print(f"[green]Tutorial copied to: {shown(dest_resolved)}[/green]\n")
     console.print("[bold]Next steps:[/bold]")
-    console.print(f"  cd {dest}")
+    console.print(f"  cd {shown(dest)}")
     if _is_pattern(dir_name):
         scripts = sorted(source.glob("[0-9][0-9]_*.py"))
         first = f"uv run python {scripts[0].name}   # then " if scripts else ""
@@ -264,7 +372,9 @@ def verify(
     )
 
     if result.returncode != 0:
-        console.print(f"[red]Model failed to run:[/red]\n{result.stderr}")
+        console.print(
+            f"[red]Model failed to run:[/red]\n{shown(result.stderr, lines=True)}"
+        )
         raise typer.Exit(code=1)
 
     actual = result.stdout.strip()
@@ -275,7 +385,7 @@ def verify(
 
     console.print(f"[red]FAIL: {dir_name} output does not match expected[/red]\n")
     console.print("[bold]Expected:[/bold]")
-    console.print(expected)
+    console.print(expected, markup=False, highlight=False)
     console.print("\n[bold]Actual:[/bold]")
-    console.print(actual)
+    console.print(actual, markup=False, highlight=False)
     raise typer.Exit(code=1)

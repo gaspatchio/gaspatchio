@@ -1,11 +1,58 @@
 [project]
 name = "gaspatchio"
-version = "0.9.0"
+version = "1.0.0rc1"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
-license = "Apache-2.0"
+# What the wheel carries, not only what this repository wrote. Apache-2.0 is
+# the package's own licence. The extension, gaspatchio/_internal, links a few
+# hundred Rust crates and the Rust standard library, and the rest of the
+# expression is the licences they are taken under; MIT also covers the Level 4
+# tutorial's data, which derives from lifelib.
+license = "Apache-2.0 AND BSD-2-Clause AND BSD-2-Clause-Views AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib"
+# The texts land in the wheel's .dist-info/licenses/ (PEP 639; maturin 1.9 and
+# later), and in the sdist. One text for each licence above. NOTICE carries
+# lifelib's copyright line and attribution. third-party-notices.txt is every
+# crate the extension links, with the licence it is taken under and its own
+# notice; scripts/rust_notices.py writes it from Cargo.lock, and CI holds it to
+# what the extension links. PEP 639 takes the files from inside this
+# directory, so the texts are copies of the repository's LICENSES/ and NOTICE;
+# tests/test_distributions.py holds them to it byte for byte, and holds the
+# expression above to the licences the notices name.
+license-files = [
+    "LICENSES/Apache-2.0.txt",
+    "LICENSES/BSD-2-Clause.txt",
+    "LICENSES/BSD-2-Clause-Views.txt",
+    "LICENSES/BSD-3-Clause.txt",
+    "LICENSES/BSL-1.0.txt",
+    "LICENSES/ISC.txt",
+    "LICENSES/MIT.txt",
+    "LICENSES/Unicode-3.0.txt",
+    "LICENSES/Unicode-DFS-2016.txt",
+    "LICENSES/Zlib.txt",
+    "NOTICE",
+    "third-party-notices.txt",
+]
 requires-python = ">=3.12"
+# The Python versions are the wheel matrix's: CI.yml builds 3.12, 3.13 and 3.14
+# for Linux, macOS and Windows. No licence classifier: `license` above writes
+# License-Expression (PEP 639), which PyPI shows, and PEP 639 deprecates the
+# classifiers beside it and lets a build backend refuse the pair.
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Topic :: Office/Business :: Financial",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Rust",
+    "Typing :: Typed",
+]
 dependencies = [
     "logfire>=3.4.0",
     "loguru>=0.7.3",
@@ -17,11 +64,10 @@ dependencies = [
     "polars[rt64]==1.42.1",
     "rich>=13.9.4",
     "typer>=0.15.1",
-    "pyarrow>=15.0.0",
+    "pyarrow>=16.0.0",
     "thefuzz[speedup]>=0.22.1",
     "python-dateutil>=2.9.0.post0",
     "holidays>=0.50",
-    "markdown-it-py>=3.0.0",
     "docstring-parser>=0.16",
     "fastexcel>=0.14.0",
     "httpx>=0.28.0",
@@ -29,6 +75,9 @@ dependencies = [
     "vl-convert-python>=1.9.0.post1",
     "altair>=6.1.0",
     "ddsketch>=3.0.1",
+    "executing>=2.2.1",
+    "jsonschema>=4.26.0",
+    "pyyaml>=6",
 ]
 
 [project.urls]
@@ -50,6 +99,15 @@ dev = [
     "pytest-benchmark>=5.1.0",
     "psutil>=5.9.0",
     "pytest-memray>=1.8.0",
+    # Available, never automatic. `-n` is deliberately absent from `addopts`
+    # below: a bare `pytest` stays single-process, because every count and
+    # timing baseline in this repository is quoted against the serial run, and
+    # a checkout someone is reading should not sprout workers it did not ask
+    # for. The everyday form is `POLARS_MAX_THREADS=4 pytest -n 4` -- the
+    # engine is already multi-threaded, so the worker count and the thread
+    # budget are chosen together or four workers claim 4x16 threads between
+    # them.
+    "pytest-xdist>=3.8.0",
     # Pinned: the docstring-example linter validates against ruff's rules, so a
     # floating ruff changes test outcomes (0.16.0's I001 flagged ~70
     # previously-clean examples). The pin states that ruff's version is part of
@@ -72,10 +130,11 @@ benchmark = [
 ]
 evals = [
     "pydantic-ai>=0.2.16",
-    "pyyaml>=6",
 ]
 
 [project.optional-dependencies]
+jax = ["gaspatchio-jax==0.1.0rc1"]
+viewer = ["gaspatchio-viewer==0.1.0rc1"]
 pandas = ["polars[rt64]==1.42.1"]
 numpy = ["polars[rt64]==1.42.1"]
 pyarrow = ["polars[rt64]==1.42.1"]
@@ -89,10 +148,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 module-name = "gaspatchio._internal"
-# gaspatchio_core is the deprecated import alias — a one-file shim kept until
-# 1.0 so existing models keep running. It must ship in the wheel alongside the
-# real package.
-python-packages = ["gaspatchio", "gaspatchio_core"]
+python-packages = ["gaspatchio"]
 python-source = ""
 
 # Linting, formatting, type checking
@@ -151,14 +207,6 @@ notice-rgx = 'SPDX-FileCopyrightText: \d{4} Opio Inc\.'
     "PLR2004", # magic values are ok in benchmark thresholds
     "E501",    # line length relaxed for benchmark docstrings
 ]
-"examples/**/*.py" = [
-    "INP001",  # examples are standalone demo scripts
-    "T201",    # print() expected in demo output
-    "S101",    # asserts intentional in smoke scripts
-    "PLR2004", # magic tolerances acceptable in demos
-    "D301",    # backslash-as-line-continuation in module docstrings is fine
-    "D103",    # function docstrings optional for tiny demos
-]
 "gaspatchio/tutorials/**/*.py" = [
     "INP001",  # tutorials are standalone scripts, not part of a namespace package
     "T201",    # print() is expected in tutorial output
@@ -198,7 +246,7 @@ notice-rgx = 'SPDX-FileCopyrightText: \d{4} Opio Inc\.'
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["gaspatchio", "gaspatchio_core"]
+known-first-party = ["gaspatchio"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]
@@ -209,8 +257,89 @@ python_version = "3.12"
 strict = true     # Enables the full strict bundle  :contentReference[oaicite:2]{index=2}
 ignore_missing_imports = true  # relax only where stubs are unavailable
 plugins = []
+# Three trees hold standalone scripts, not importable modules, and they reuse
+# the same basenames (`model.py`, `run_scenarios.py`, `reconcile.py`) across
+# sibling directories. Without this, `mypy gaspatchio` stops at the first
+# `Duplicate module named "model"` and checks nothing at all. The tutorials in
+# particular must NOT gain `__init__.py` files: `gspio tutorial init` copies
+# them verbatim into a user's own directory, where a package marker would be
+# wrong.
+exclude = [
+    "gaspatchio/tutorials/",
+    "jobs/",
+    "tests/scratch/",
+]
+
+# Pyright ran with no configuration at all until this section landed, and an
+# unconfigured pyright reports the environment it happened to find as much as
+# the package it was pointed at. The settings below make the count a finding
+# about the code. None of them silences a diagnostic pyright would otherwise
+# have been right to raise, and none was chosen for making the count smaller.
+[tool.pyright]
+# The language level and the third-party search path. These three keys pin
+# what an unconfigured pyright DISCOVERS, and discovery depends on the shell:
+# it takes both the interpreter version and the import search path from
+# whichever Python environment it finds. Measured on 2026-09-08 with this
+# section absent, `.venv/bin/python -m pyright gaspatchio` reported 895 errors
+# from a shell with .venv/bin off PATH and 245 from one with it on -- the
+# difference dominated by 169 "Alternative syntax for unions requires Python
+# 3.10 or newer" and by 244 of 251 unresolved imports, with the attribute
+# errors downstream of those imports; every one of them a fact about which
+# interpreter was found and none about the code. Pinned, the count is 120
+# under either launch.
+#
+# That invocation-independence is the reason these are here, and it is a
+# stronger reason than the one first written in their place: a number CI and a
+# keyboard can disagree about is not a ceiling anyone can argue with. The full
+# two-by-two is in .github/RATCHETS.md under "Pyright errors". pythonVersion
+# is spelled the same way [tool.mypy] above spells it, and `uv sync` puts the
+# packages where venvPath/venv say, at a keyboard and in CI alike.
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+
+# Stated rather than inherited, for the reason the clippy job pins its
+# toolchain: a ceiling is only comparable against one rule set, and a pyright
+# release that moved its default mode would move the count with nobody having
+# touched the code. "standard" is today's default -- this writes it down, it
+# does not relax it.
+typeCheckingMode = "standard"
+
+# The first three entries are pyright's own defaults, restored because naming
+# this key replaces them wholesale rather than adding to them -- drop them and
+# a bare `pyright` walks `.venv`.
+#
+# The last three are the list `[tool.mypy]` carries, so that both type checkers
+# answer for the same files and "the files you touch must be clean" does not
+# depend on which one you ask. The reason differs from mypy's: mypy excludes
+# these three because they reuse module basenames across sibling directories
+# and it stops at the first collision, which is not a problem pyright has.
+# These are standalone scripts rather than library code -- `gspio tutorial
+# init` copies `gaspatchio/tutorials/` verbatim into a user's own directory --
+# and holding them to the library's ceiling would measure the examples' drift
+# as though it were the package's. It is the only one of the three that bites
+# here: `jobs/` and `tests/scratch/` are outside `gaspatchio/` and a run scoped
+# to the package never reached them.
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "gaspatchio/tutorials/",
+    "jobs/",
+    "tests/scratch/",
+]
 
 # Package management
+[tool.uv.sources]
+# The jax and viewer extras name the engine and the viewer by their published
+# versions; the lock resolves those names from the two projects in this
+# repository, so it locks before either is on the index and always locks what
+# the checkout holds. uv alone reads this table -- the built wheel's metadata
+# still says gaspatchio-jax==0.1.0rc1 and gaspatchio-viewer==0.1.0rc1, which is what
+# an installer outside this repo sees.
+gaspatchio-jax = { path = "../../engines/jax" }
+gaspatchio-viewer = { path = "../../viewer/python" }
+
 [tool.uv]
 # Rebuild package when any rust files change
 cache-keys = [
@@ -222,26 +351,50 @@ config-settings = { "build-args" = "--profile=dev" }
 
 # Testing
 [tool.pytest.ini_options]
+# Default discovery (`test_*.py` / `*_test.py`) would never look inside
+# `probe_emission.py` or `census.py` — both names are fixed rather than
+# `test_`-prefixed: `probe_emission.py` doubles as the
+# `python -m tests.probe.probe_emission` CLI entry, and `census.py` doubles
+# as the importable grep-driven checker module the dead-code sweep reuses.
+# Both are added explicitly here rather than renamed.
+python_files = ["test_*.py", "*_test.py", "probe_emission.py", "census.py"]
 addopts = [
-    "--gp-docstring-paths=gaspatchio/column/namespaces/dt_proxy.py",
-    "--gp-docstring-paths=gaspatchio/column/namespaces/string_proxy.py",
     "--gp-docstring-paths=gaspatchio/accessors/date.py",
     "--gp-docstring-paths=gaspatchio/accessors/excel.py",
     "--gp-docstring-paths=gaspatchio/accessors/finance.py",
     "--gp-docstring-paths=gaspatchio/accessors/projection.py",
-    "--gp-docstring-paths=gaspatchio/column/proxy.pyi",
+    "--gp-docstring-paths=gaspatchio/column/_generated_proxy.py",
+    "--gp-docstring-paths=gaspatchio/_authoring/_native_docs.py",
     "--gp-docstring-paths=gaspatchio/assumptions/_api.py",
-    "--gp-docstring-paths=gaspatchio/accessors/excel_functions/*.py",
+    "--gp-docstring-paths=gaspatchio/assumptions/_data.py",
+    "--gp-docstring-paths=gaspatchio/assumptions/_processing.py",
+    "--gp-docstring-paths=gaspatchio/frame/lowering/_excel/*.py",
     "-p",
     "gaspatchio.examples.docstrings.pytest_plugin",
     "-m",
-    "not benchmark",
+    "not benchmark and not probe",
     "--ignore=pyfuncs-outputs",
+    # `ref` is a symlink to the repository's design-reference tree. Collection
+    # follows it, and the evidence scripts kept there run their work at import
+    # time -- writing files into the working tree as a side effect of merely
+    # being collected. They are not tests, so they are not collected.
+    "--ignore=ref",
+    # Three trees of standalone scripts that reuse the same basenames
+    # (`model.py`, `run_scenarios.py`, `reconcile.py`) across sibling
+    # directories with no package markers between them. None of them holds a
+    # test, so normal runs collect nothing from them either way -- but
+    # `--doctest-modules` walks every module it can see, and the repeated
+    # basenames then abort the whole run with `import file mismatch`. Ignoring
+    # them keeps the module-level docstring sweep usable.
+    "--ignore=gaspatchio/tutorials",
+    "--ignore=jobs",
+    "--ignore=tests/scratch",
 ]
 markers = [
     "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",
     "slow: marks tests that call LLM APIs (deselect with '-m not slow')",
     "performance: marks tests as performance related",
+    "probe: marks the emission-graph performance probe (minutes, not seconds; deselect with '-m \"not probe\"')",
 ]
 
 # Scripts / CLI paths

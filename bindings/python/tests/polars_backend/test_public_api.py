@@ -2,60 +2,68 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Verify plugin import paths after polars_backend relocation."""
+"""The retired import paths refuse, and the refusal is the assertion.
+
+Every path named here once resolved to a module that held no implementation
+and only re-published another module's names. Each is deleted, and each
+import below must now raise. Not unused, not dead — do not "fix" one away.
+"""
 
 from __future__ import annotations
 
+from importlib import import_module
 
-def test_functions_vector_imports_still_work() -> None:
-    """Legacy import path remains stable for external code."""
-    from gaspatchio.functions.vector import (  # noqa: F401
-        accumulate,
-        fill_series,
-        list_clip,
-        list_conditional,
-        list_pow,
-    )
+import pytest
 
 
-def test_polars_backend_plugins_imports() -> None:
-    """New canonical import path resolves directly from the submodule.
+def test_functions_vector_is_refused() -> None:
+    """The plugin wrappers have one home, and it is not ``functions.vector``.
 
-    The package-root re-export (``from gaspatchio.polars_backend
-    import accumulate``) is wired in Task 3.5; tests for that path live
-    there. For now the canonical path is ``polars_backend.plugins``.
+    The import IS the assertion: a second spelling of the wrappers must
+    stay gone, so importing the retired path must fail. Not unused, not
+    dead — do not "fix" it away.
     """
-    from gaspatchio.polars_backend.plugins import (  # noqa: F401
-        accumulate,
-        fill_series,
-        list_clip,
-        list_conditional,
-        list_pow,
-    )
+    with pytest.raises(ModuleNotFoundError):
+        import gaspatchio.functions.vector  # noqa: F401
 
 
-def test_re_exports_are_same_function() -> None:
-    """Old and new paths reach the same callable, not a copy."""
-    from gaspatchio.functions.vector import accumulate as old_accumulate
-    from gaspatchio.polars_backend.plugins import accumulate as new_accumulate
+def test_functions_utils_is_refused() -> None:
+    """``to_polars_expression`` has one home, and it is not ``functions.utils``.
 
-    assert old_accumulate is new_accumulate
+    Same shape as the sibling above: the retired path must refuse.
+    """
+    with pytest.raises(ModuleNotFoundError):
+        import gaspatchio.functions.utils  # noqa: F401
 
 
-def test_polars_backend_package_root_imports() -> None:
-    """All public names resolve from the polars_backend package root."""
-    from gaspatchio.polars_backend import (  # noqa: F401
-        accumulate,
-        boolean_and,
-        boolean_not,
-        boolean_or,
-        dispatch_list_op,
-        execute_list_clip,
-        execute_list_pow,
-        fill_series,
-        list_clip,
-        list_conditional,
-        list_pow,
-        to_boolean_expr,
-        unwrap_for_list_eval,
-    )
+@pytest.mark.parametrize(
+    "retired_path",
+    [
+        "gaspatchio.polars_backend",
+        "gaspatchio.polars_backend._shared",
+        "gaspatchio.polars_backend.list_eval",
+        "gaspatchio.polars_backend.masks",
+        "gaspatchio.polars_backend.operators",
+        "gaspatchio.polars_backend.plugins",
+        "gaspatchio.accessors.excel_functions",
+        "gaspatchio.accessors.excel_functions.days",
+        "gaspatchio.accessors.excel_functions.edate",
+        "gaspatchio.accessors.excel_functions.eomonth",
+        "gaspatchio.accessors.excel_functions.irr",
+        "gaspatchio.accessors.excel_functions.pv",
+        "gaspatchio.accessors.excel_functions.round",
+        "gaspatchio.accessors.excel_functions.yearfrac",
+        "gaspatchio.schedule._canonical",
+    ],
+)
+def test_a_retired_second_door_is_refused(retired_path: str) -> None:
+    """Each deleted re-export module raises rather than resolving.
+
+    ``polars_backend`` re-published ``frame.lowering._polars``,
+    ``accessors.excel_functions`` re-published ``frame.lowering._excel``, and
+    ``schedule._canonical`` re-published ``canonical_bytes`` out of
+    ``gaspatchio._identity``. Those three are where the names are written,
+    and now the only places they are published from.
+    """
+    with pytest.raises(ModuleNotFoundError):
+        import_module(retired_path)

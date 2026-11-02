@@ -9,23 +9,23 @@ from __future__ import annotations
 
 class TestMaxShape:
     def test_two_scalars_is_scalar(self) -> None:
-        from gaspatchio.column.shape import _max_shape
+        from gaspatchio._shape import _max_shape
 
         assert _max_shape("scalar", "scalar") == "scalar"
 
     def test_scalar_and_list_is_list(self) -> None:
-        from gaspatchio.column.shape import _max_shape
+        from gaspatchio._shape import _max_shape
 
         assert _max_shape("scalar", "list") == "list"
         assert _max_shape("list", "scalar") == "list"
 
     def test_two_lists_is_list(self) -> None:
-        from gaspatchio.column.shape import _max_shape
+        from gaspatchio._shape import _max_shape
 
         assert _max_shape("list", "list") == "list"
 
     def test_unknown_propagates(self) -> None:
-        from gaspatchio.column.shape import _max_shape
+        from gaspatchio._shape import _max_shape
 
         assert _max_shape("unknown", "scalar") == "unknown"
         assert _max_shape("scalar", "unknown") == "unknown"
@@ -70,11 +70,46 @@ class TestResolveShapeBasics:
         assert resolve_shape(Foo(), parent=None) == "unknown"
 
 
+class TestLiteralShape:
+    """A literal reads no column, but a literal *list* is still per-period.
+
+    A projection on a shared grid lowers its timeline to a literal list, so
+    "no columns, therefore scalar" read ``af.projection.year_fractions()`` as
+    one value per policy (vm20-r5, ifrs17-r5, gmdb-r3, ul-r7).
+    """
+
+    def test_list_literal_is_list(self) -> None:
+        import polars as pl
+
+        from gaspatchio.column.shape import resolve_shape
+
+        timeline = pl.lit(pl.Series([[0.25, 0.25, 0.25, 0.25]]))
+        assert resolve_shape(timeline, parent=None) == "list"
+
+    def test_scalar_literal_expr_stays_scalar(self) -> None:
+        import polars as pl
+
+        from gaspatchio.column.shape import resolve_shape
+
+        assert resolve_shape(pl.lit(0.0), parent=None) == "scalar"
+
+    def test_list_literal_against_a_frame_is_list(self) -> None:
+        import polars as pl
+
+        from gaspatchio import ActuarialFrame
+        from gaspatchio._shape import _shape_from_expr_dtype
+
+        af = ActuarialFrame({"x": [1.0, 2.0]})
+        timeline = pl.lit(pl.Series([[0.25, 0.25]]))
+        assert _shape_from_expr_dtype(af, timeline) == "list"
+        assert _shape_from_expr_dtype(af, pl.lit(1)) == "scalar"
+
+
 class TestShapeFromSchema:
     def test_scalar_column(self) -> None:
         import polars as pl
 
-        from gaspatchio.column.shape import _shape_from_schema
+        from gaspatchio._shape import _shape_from_schema
 
         # Mock parent with a cached schema
         class FakeParent:
@@ -85,7 +120,7 @@ class TestShapeFromSchema:
     def test_list_column(self) -> None:
         import polars as pl
 
-        from gaspatchio.column.shape import _shape_from_schema
+        from gaspatchio._shape import _shape_from_schema
 
         class FakeParent:
             _schema = pl.Schema({"month": pl.List(pl.Int64)})
@@ -95,7 +130,7 @@ class TestShapeFromSchema:
     def test_missing_column_returns_unknown(self) -> None:
         import polars as pl
 
-        from gaspatchio.column.shape import _shape_from_schema
+        from gaspatchio._shape import _shape_from_schema
 
         class FakeParent:
             _schema = pl.Schema({"age": pl.Int64})
@@ -103,6 +138,6 @@ class TestShapeFromSchema:
         assert _shape_from_schema(FakeParent(), "nonexistent") == "unknown"
 
     def test_no_parent_returns_unknown(self) -> None:
-        from gaspatchio.column.shape import _shape_from_schema
+        from gaspatchio._shape import _shape_from_schema
 
         assert _shape_from_schema(None, "any") == "unknown"

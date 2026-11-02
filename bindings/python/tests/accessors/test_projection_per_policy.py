@@ -40,8 +40,12 @@ def _project_premiums(*, per_policy: bool) -> float:
         per_policy=per_policy,
     )
     af.projection_date = af.projection.period_dates()
-    af.month = (af.projection_date.dt.year() - VALUATION.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION.month
+    af.month = (
+        af.projection_date.polars_native().list.eval(pl.element().dt.year())
+        - VALUATION.year
+    ) * 12 + (
+        af.projection_date.polars_native().list.eval(pl.element().dt.month())
+        - VALUATION.month
     )
     af.premium = when(af.month <= af.remaining_term_months).then(100.0).otherwise(0.0)
     result = af.collect()
@@ -245,7 +249,7 @@ class TestMustFixHardening:
             frequency="monthly",
         )
         df = af.collect()
-        assert df["num_proj_months"].dtype == pl.Int32
+        assert df["num_proj_months"].dtype == pl.Int64
         sub = df.select((pl.col("num_proj_months") - 13).alias("s"))["s"].to_list()
         assert sub == [0, 12]  # not [0, 18446744073709551607]
 

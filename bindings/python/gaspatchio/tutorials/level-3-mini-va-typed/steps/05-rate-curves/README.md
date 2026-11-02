@@ -63,17 +63,18 @@ af.disc_factors = af.per_period_disc.cum_prod()
 
 # AFTER (typed step 05): derive shifted curves from a single base Curve object.
 # No extra parquet files; shifts are applied in Python.
-curve_base = Curve.from_zero_rates(tenors=[1.0, 5.0, 10.0, 20.0, 30.0],
-                                   rates=[0.02, 0.025, 0.035, 0.040, 0.045])
+curve_base = Curve.from_zero_rates(
+    tenors=[1.0, 5.0, 10.0, 20.0, 30.0], rates=[0.02, 0.025, 0.035, 0.040, 0.045]
+)
 
-curve_parallel = curve_base.shift_parallel(bps=100)    # NEW Curve — all knots +100bps
-curve_keyrate  = curve_base.key_rate_shift(tenor=5.0, bps=50)  # NEW Curve — 5y knot +50bps
+curve_parallel = curve_base.shift_parallel(bps=100)  # NEW Curve — all knots +100bps
+curve_keyrate = curve_base.key_rate_shift(
+    tenor=5.0, bps=50
+)  # NEW Curve — 5y knot +50bps
 
-# Each curve returns a list[float] of discount factors at the projection t-grid.
-disc_factors_list = curve.discount_factor(t_years_list)   # list[float], len 241
-af.disc_factors = pl.lit(
-    pl.Series("disc_factors", [disc_factors_list], dtype=pl.List(pl.Float64))
-).first()
+# Each curve is read on the frame, at the projection's own t-grid.
+af.t_years = af.projection.t_years()  # tracked list column, len 241
+af.disc_factors = curve.discount_factor(af.t_years)
 ```
 
 Key patterns:
@@ -85,6 +86,17 @@ Key patterns:
 - **Factor the curve out of `main()`** — passing `curve` as an argument lets you
   call `main(af, curve)` three times with three Curves and compare the resulting
   DataFrames, rather than maintaining three copies of the full model.
+- **Read the curve on the frame, not beside it** —
+  `curve.discount_factor(af.t_years)` is the recorded door. Export the
+  finished frame from any of the three runs and the artifact carries that
+  curve's own assumption entry, which is what lets a reader tell the base run
+  from the +100bp one without re-reading the script. `main()` hands back two
+  collected columns, so the export has to happen while `af` is still a frame:
+  add `GraphExporter(af).export()` (imported from `gaspatchio.frame.graph`)
+  just above the `return` in `main()`, and each of the three calls returns its
+  own artifact JSON — `export()` hands back a string, so write it out yourself
+  if you want three files. Pre-computing the vector in Python and handing it
+  to the frame with `pl.lit(...)` gives identical numbers and no such entry.
 
 ## Expected output
 

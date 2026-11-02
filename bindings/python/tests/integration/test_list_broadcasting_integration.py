@@ -44,7 +44,7 @@ def test_basic_term_pattern():
     # Create ActuarialFrame in debug mode
     print("Step 1: Create ActuarialFrame in debug mode...")
     af = ActuarialFrame(data)
-    af._tracing = True
+    af._traced_run = True
     print("  ✓ Debug mode enabled")
 
     # Test 1: pols_maturity conditional (from line 112-114 of model_projection.py)
@@ -62,16 +62,16 @@ def test_basic_term_pattern():
         print(f"  ✗ FAILED: {e}")
         return False
 
-    # Verify it was captured in computation graph
-    print("\nStep 3: Check computation graph...")
-    maturity_ops = [op for op in af._computation_graph if op.alias == "pols_maturity"]
-    if maturity_ops:
-        print(f"  ✓ Found {len(maturity_ops)} operation(s) for pols_maturity")
-        op = maturity_ops[0]
-        print(f"    - Expression: {op.expression}")
-        print(f"    - Dependencies: {op.dependencies}")
+    # Verify it was recorded in the calculation log
+    print("\nStep 3: Check the calculation log...")
+    maturity_records = [r for r in af._calculations if r.column == "pols_maturity"]
+    if maturity_records:
+        print(f"  ✓ Found {len(maturity_records)} record(s) for pols_maturity")
+        record = maturity_records[0]
+        print(f"    - Expression: {record.expr}")
+        print(f"    - Dependencies: {record.expr.meta.root_names()}")
     else:
-        print("  ✗ FAILED: No operations captured in computation graph")
+        print("  ✗ FAILED: No calculations recorded in the log")
         return False
 
     # Test 2: pols_if conditional (from line 119-123 of model_projection.py)
@@ -89,13 +89,13 @@ def test_basic_term_pattern():
         print(f"  ✗ FAILED: {e}")
         return False
 
-    # Verify it was captured
-    print("\nStep 5: Check computation graph again...")
-    if_ops = [op for op in af._computation_graph if op.alias == "pols_if"]
-    if if_ops:
-        print(f"  ✓ Found {len(if_ops)} operation(s) for pols_if")
+    # Verify it was recorded
+    print("\nStep 5: Check the calculation log again...")
+    if_records = [r for r in af._calculations if r.column == "pols_if"]
+    if if_records:
+        print(f"  ✓ Found {len(if_records)} record(s) for pols_if")
     else:
-        print("  ✗ FAILED: No operations captured for pols_if")
+        print("  ✗ FAILED: No calculations recorded for pols_if")
         return False
 
     # Collect and verify results
@@ -161,7 +161,7 @@ def test_basic_term_pattern():
     print("=" * 80)
     print("\nSummary:")
     print("  • List broadcasting conditionals work in debug mode")
-    print("  • Operations captured in computation graph")
+    print("  • Calculations recorded in the log")
     print("  • Results are correct")
     print("  • No NotImplementedError thrown")
     print()
@@ -188,7 +188,7 @@ def test_optimize_mode_comparison():
     # Run in debug mode
     print("\nRunning in debug mode...")
     af_debug = ActuarialFrame(data)
-    af_debug._tracing = True
+    af_debug._traced_run = True
     af_debug.pols_maturity = (
         when(af_debug.month == af_debug.policy_term * 12)
         .then(af_debug.pols_if_raw)
@@ -204,7 +204,7 @@ def test_optimize_mode_comparison():
     # Run in optimize mode
     print("Running in optimize mode...")
     af_opt = ActuarialFrame(data)
-    af_opt._tracing = False
+    af_opt._traced_run = False
     af_opt.pols_maturity = (
         when(af_opt.month == af_opt.policy_term * 12)
         .then(af_opt.pols_if_raw)

@@ -9,10 +9,13 @@ engine runs them over millions of model points.
 ## Install
 
 ```bash
-pip install gaspatchio        # or:  uv pip install gaspatchio
+pip install gaspatchio                # or:  uv pip install gaspatchio
+pip install "gaspatchio[jax]"         # adds the JAX engine (gaspatchio-jax)
+pip install "gaspatchio[viewer]"      # adds the viewer (gaspatchio-viewer), for --html
 ```
 
-Then `import gaspatchio`. For a source/dev build, see [Building from source](#building-from-source).
+Then `import gaspatchio`. Each extra pins its distribution exactly, and neither is needed to
+build or run a model. For a source/dev build, see [Building from source](#building-from-source).
 
 ## Quick start
 
@@ -50,13 +53,36 @@ Run models from the command line:
 ```bash
 gspio run-model model.py model-points.parquet                  # run all policies
 gspio run-single-policy model.py model-points.parquet 12345    # debug one policy (transposed output)
-gspio run-model model.py data.parquet --mode optimize          # optimized execution
+gspio run-model model.py data.parquet --mode optimize          # skip tracing and profiling
 gspio --install-completion                                     # shell tab-completion
 ```
 
-- `--policy-id-column` sets the policy-identifier column (default `"Policy number"`).
+- `--policy-id-column` sets the policy-identifier column (auto-detected if omitted).
 - `--mode {debug,optimize}` plus display flags (`--rows/-r`, `--first-n/-f`, `--last-n/-l`,
   `--start-at/-s`) control execution and terminal output.
+
+Use `--results` for calculated values across `run-model`, `run-single-policy`,
+`calc-graph` and `run-artifact`. For a review, one export can write the values,
+their calculation record and an HTML viewer:
+
+```bash
+gspio calc-graph model.py data.parquet \
+  --results results.parquet --artifact audit.json --html review.html
+```
+
+`--artifact` names the JSON calculation graph; `--html` needs the viewer extra,
+`pip install "gaspatchio[viewer]"`.
+The graph names its results file by path and content hash. Existing flags keep
+their meanings: `--output-file` still names results on the model/export commands;
+`--output` and `-o` still name the artifact on `calc-graph`, and results on
+`run-artifact`. `-o` also remains a results alias on the two model commands.
+
+Diagnostic mode and execution engine are separate choices. `--mode debug` traces
+and profiles the Python model; `--mode optimize` skips that work. Both model
+commands use Polars. `run-artifact --engine jax` selects the optional JAX engine,
+which `pip install "gaspatchio[jax]"` installs, over an artifact exported with
+`calc-graph --profile executable`; JAX configuration selects its device. Choosing
+JAX does not itself select a GPU.
 
 **Full CLI reference, with every flag and the single-policy result transposition →
 [gaspatchio.dev](https://gaspatchio.dev/).**
@@ -67,10 +93,14 @@ The Rust extension is built with [maturin](https://www.maturin.rs/). `uv sync` b
 mode (fast compiles); use `--release` for benchmarking/production:
 
 ```bash
-uv sync                                                        # debug build, into the venv
-maturin build --release -uv                                    # optimized build
-RUSTFLAGS="-C target-cpu=native" maturin build --release -uv   # + native SIMD (AVX2/512)
+uv sync                                                             # debug build, into the source tree
+uvx maturin develop --release --uv                                  # optimized build
+RUSTFLAGS="-C target-cpu=native" uvx maturin develop --release --uv # + native SIMD (AVX2/512)
 ```
+
+`develop`, not `build`: the venv imports `gaspatchio` from this directory via a `.pth`, so the
+extension has to be installed into the source tree — `maturin build` writes a wheel to
+`target/wheels` and leaves the imported `.so` exactly where it was.
 
 `target-cpu=native` binaries only run on CPUs with the same or newer instruction sets — use them
 for local benchmarking, **not** for distributable packages or CI builds.
@@ -78,8 +108,8 @@ for local benchmarking, **not** for distributable packages or CI builds.
 ## Testing
 
 ```bash
-uv run pytest                                                  # tests + docstring-example validation
-uv run python -m mypy.stubtest gaspatchio --allowlist stubtest-allowlist.txt --mypy-config-file mypy-stubtest.ini
+.venv/bin/python -m pytest                                     # tests + docstring-example validation
+.venv/bin/python -m mypy.stubtest gaspatchio --allowlist stubtest-allowlist.txt --mypy-config-file mypy-stubtest.ini
 ```
 
 Public-API docstrings carry examples validated against their output. The docstring/style tooling

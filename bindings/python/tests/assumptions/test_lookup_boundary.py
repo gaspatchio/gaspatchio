@@ -5,14 +5,14 @@
 """The lookup boundary is loud: misses raise by default, and invalid inputs
 error instead of silently returning wrong rates.
 
-Covers the F3/F5 audit cluster:
-- F3: missing keys raise under the default ``on_missing="raise"``; NaN and
+Covers the ways a lookup used to answer wrongly without saying so:
+- missing keys raise under the default ``on_missing="raise"``; NaN and
   constant-fill behaviour are explicit opt-ins.
-- F5a: null and narrow-integer keys miss (or widen) instead of aliasing to
+- null and narrow-integer keys miss (or widen) instead of aliasing to
   the hash bucket of key 0 and returning key 0's rate.
-- F5b: duplicate key rows in the source error at build time (matching the
+- duplicate key rows in the source error at build time (matching the
   append path) instead of silently last-write-winning.
-- F5c: ragged inner key lists across vector key columns error instead of
+- ragged inner key lists across vector key columns error instead of
   silently misaligning every subsequent policy's rates.
 """
 
@@ -36,7 +36,7 @@ def _age_table(name: str, storage_mode: str = "auto", **kwargs) -> Table:
     )
 
 
-# --- F3: on_missing policy -------------------------------------------------
+# --- on_missing policy -----------------------------------------------------
 
 
 @pytest.mark.parametrize("storage_mode", ["auto", "hash"])
@@ -112,7 +112,7 @@ def test_invalid_on_missing_rejected() -> None:
         _age_table("boundary_invalid", on_missing="explode")
 
 
-# --- F5a: null / narrow-int keys must not alias ------------------------------
+# --- null / narrow-int keys must not alias -----------------------------------
 
 
 def test_null_key_misses_instead_of_aliasing() -> None:
@@ -135,9 +135,7 @@ def test_null_key_misses_instead_of_aliasing() -> None:
 
 @pytest.mark.parametrize("storage_mode", ["auto", "hash"])
 @pytest.mark.parametrize("dtype", [pl.Int8, pl.Int16, pl.UInt8, pl.UInt16])
-def test_narrow_int_keys_widen_and_match(
-    dtype: pl.DataType, storage_mode: str
-) -> None:
+def test_narrow_int_keys_widen_and_match(dtype: pl.DataType, storage_mode: str) -> None:
     # Narrow-int keys fell into the hash codec catch-all (aliasing to key 0)
     # and had no KeyEncoder arms on the array path (missing entirely). They
     # must widen and match on both storage backends.
@@ -148,14 +146,12 @@ def test_narrow_int_keys_widen_and_match(
         value="rate",
         storage_mode=storage_mode,
     )
-    af = ActuarialFrame(
-        pl.DataFrame({"age": pl.Series([7], dtype=dtype)})
-    )
+    af = ActuarialFrame(pl.DataFrame({"age": pl.Series([7], dtype=dtype)}))
     af.rate = table.lookup(age=af.age)
     assert af.collect()["rate"].to_list() == pytest.approx([0.777])
 
 
-# --- F5b: duplicate key rows error at build ---------------------------------
+# --- duplicate key rows error at build --------------------------------------
 
 
 @pytest.mark.parametrize("storage_mode", ["auto", "hash"])
@@ -170,7 +166,7 @@ def test_duplicate_key_rows_error_at_build(storage_mode: str) -> None:
         )
 
 
-# --- F5c: ragged inner key lists error --------------------------------------
+# --- ragged inner key lists error -------------------------------------------
 
 
 @pytest.mark.parametrize("storage_mode", ["auto", "hash"])
@@ -201,7 +197,7 @@ def test_ragged_inner_key_lists_error(storage_mode: str) -> None:
         af.collect()
 
 
-# --- F3: prospective_value must not zero NaN --------------------------------
+# --- prospective_value must not zero NaN ------------------------------------
 
 
 def test_prospective_value_propagates_nan() -> None:
@@ -211,3 +207,99 @@ def test_prospective_value_propagates_nan() -> None:
     assert math.isnan(pv[0]), "NaN cashflow was silently zeroed in PV(0)"
     assert math.isnan(pv[1]), "NaN cashflow was silently zeroed in PV(1)"
     assert pv[2] == pytest.approx(10.0)
+
+
+# --- the refusal's first line is the stable part ------------------------------
+#
+# The collect-time replay names a calculation only when its replayed error
+# opens with the same first line the original did. The count and the
+# sampled keys vary with the batch -- the streaming collect counts the batch
+# it was handed, the replay counts the head it was given -- so they sit on
+# the second line, and the first names only the table and the key columns.
+
+
+_PREFIX = "the plugin failed with message: "
+
+
+def _first_line(message: str) -> str:
+    return message.split("\n", 1)[0]
+
+
+def _scattered_miss(name: str, engine: str) -> str:
+    """Fifty thousand policies, three at an age the table lacks, spread out."""
+    table = _age_table(name)
+    ages = [40] * 50_000
+    for row in (100, 25_000, 49_000):
+        ages[row] = 99
+    af = ActuarialFrame(pl.DataFrame({"policy_id": list(range(50_000)), "age": ages}))
+    af.rate = table.lookup(age=af.age)
+    with pytest.raises(pl.exceptions.ComputeError) as caught:
+        af.collect(engine=engine)
+    return str(caught.value)
+
+
+def test_the_refusals_first_line_is_identical_under_both_engines() -> None:
+    """Streaming counts a batch, in-memory the frame; line one knows neither."""
+    streaming = _scattered_miss("boundary_first_line", "streaming")
+    in_memory = _scattered_miss("boundary_first_line", "in-memory")
+
+    assert _first_line(streaming) == _first_line(in_memory)
+    assert _first_line(streaming) == (
+        _PREFIX
+        + "Lookup on table 'boundary_first_line' has missing keys (or NaN-valued "
+        "entries) for key column 'age'."
+    )
+    for message in (streaming, in_memory):
+        second_line = message.split("\n", 1)[1]
+        assert second_line.startswith("Missed keys (first 3 distinct): (age=99)")
+
+
+def test_the_first_line_names_every_key_column_of_a_multi_key_lookup() -> None:
+    table = Table(
+        name="boundary_two_keys",
+        source=pl.DataFrame(
+            {"age": [30, 40], "duration": [0, 0], "rate": [0.001, 0.002]}
+        ),
+        dimensions={"age": "age", "duration": "duration"},
+        value="rate",
+    )
+    af = ActuarialFrame(pl.DataFrame({"age": [30, 99], "duration": [0, 0]}))
+    af.rate = table.lookup(age=af.age, duration=af.duration)
+
+    with pytest.raises(pl.exceptions.ComputeError) as caught:
+        af.collect()
+
+    assert _first_line(str(caught.value)) == (
+        _PREFIX + "Lookup on table 'boundary_two_keys' has missing keys (or NaN-valued "
+        "entries) for key columns 'age', 'duration'."
+    )
+
+
+def test_an_enum_key_on_a_hash_table_answers_rather_than_refusing() -> None:
+    """The encoding refusal this boundary once split is no longer raised.
+
+    Hash storage hashed an Enum key by its dictionary position and refused,
+    naming the encoding; it now reads the label, as array storage does.
+    """
+    table = Table(
+        name="boundary_encoding_line",
+        source=pl.DataFrame({"fund": ["A", "B"], "rate": [0.1, 0.2]}),
+        dimensions={"fund": "fund"},
+        value="rate",
+        storage_mode="hash",
+    )
+    labels = pl.Series(["B", "A"], dtype=pl.Enum(["A", "B"]))
+    af = ActuarialFrame(pl.DataFrame({"fund": labels}))
+    af.rate = table.lookup(fund=af.fund)
+
+    assert af.collect()["rate"].to_list() == [0.2, 0.1]
+
+
+def test_dimension_mapping_does_not_become_validation_control_arguments() -> None:
+    table = Table(
+        "dimension_named_like_mapping_parameter",
+        pl.DataFrame({"raw_age": [30], "rate": [0.125]}),
+        dimensions={"_dimensions": "raw_age"},
+    )
+    expression = table.lookup(_dimensions={"_dimensions": pl.lit(30)})
+    assert pl.select(expression).item() == 0.125

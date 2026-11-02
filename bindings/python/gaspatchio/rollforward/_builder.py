@@ -21,8 +21,14 @@ Builder semantics:
 
 from __future__ import annotations
 
+import decimal
+import numbers
+import weakref
 from typing import TYPE_CHECKING
 
+import polars as pl
+
+from gaspatchio.rollforward._ir import IR, State
 from gaspatchio.rollforward._ops import (
     Add,
     Apply,
@@ -39,20 +45,16 @@ from gaspatchio.rollforward._refs import StateRef
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from typing import TypeAlias
-
-    import polars as pl
 
     from gaspatchio.column.column_proxy import ColumnProxy
     from gaspatchio.column.expression_proxy import ExpressionProxy
-    from gaspatchio.rollforward._ir import IR
     from gaspatchio.rollforward._ops import Op
     from gaspatchio.schedule import Schedule
 
     # An accepted expression-like input. Anything with ``_to_expr()`` is
     # unwrapped at the boundary; plain ``pl.Expr`` passes through unchanged.
     # TYPE_CHECKING-only — stubtest allowlists this alias by name.
-    ExprLike: TypeAlias = pl.Expr | ColumnProxy | ExpressionProxy
+    type ExprLike = pl.Expr | ColumnProxy | ExpressionProxy
 
 
 def _to_polars_expr(x: object) -> pl.Expr:
@@ -64,9 +66,33 @@ def _to_polars_expr(x: object) -> pl.Expr:
     """
     to_expr = getattr(x, "_to_expr", None)
     if callable(to_expr):
-        expr: pl.Expr = to_expr()
-        return expr
+        expr = to_expr()
+        if isinstance(expr, pl.Expr):
+            return expr
     return x  # type: ignore[return-value]
+
+
+def _amount(value: object, *, parameter: str) -> pl.Expr:
+    """Coerce one step's amount to the expression the compiler reads.
+
+    A number is a value and never a column's name, so there is nothing to
+    guess: it is the literal ``pl.lit(value)`` would be, and the compiler
+    then refuses it by name, since a compiled rollforward reads each amount
+    from a column of the frame. A bare string could be a column's name or a
+    value, so it is refused here instead of being guessed at.
+    """
+    if isinstance(value, str):
+        msg = (
+            f"{parameter}={value!r} is a bare string, which could be a column "
+            f'name or a value. For the column, pass af["{value}"] or '
+            f'pl.col("{value}"); for a value, pass a column holding the value '
+            '-- af["amount"] = 5.0, then af["amount"] -- since a compiled '
+            "rollforward reads each amount from a column of the frame."
+        )
+        raise TypeError(msg)
+    if isinstance(value, (numbers.Real, decimal.Decimal)):
+        return pl.lit(value)
+    return _to_polars_expr(value)
 
 
 class RollforwardBuilder:
@@ -102,6 +128,19 @@ class RollforwardBuilder:
         self._state_inits: dict[str, pl.Expr] = {
             k: _to_polars_expr(v) for k, v in states.items()
         }
+        # The frame the states were read from, borrowed from the first one
+        # that knows it -- the same borrow ``Table.lookup`` makes. Held
+        # weakly: a compiled rollforward is registered for the life of the
+        # process, and must not keep the frame alive with it. The frame
+        # accessor ``af.projection.rollforward(...)`` sets it outright.
+        self._frame_ref: weakref.ref[object] | None = next(
+            (
+                weakref.ref(parent)
+                for parent in (getattr(v, "_parent", None) for v in states.values())
+                if parent is not None
+            ),
+            None,
+        )
         self._points: tuple[str, ...] = pts
         self._schedule = schedule
         self._track_increments = track_increments
@@ -131,19 +170,16 @@ class RollforwardBuilder:
                 "increment(): this rollforward was built without "
                 "track_increments=True, so the kernel emits no increment "
                 "fields. Pass track_increments=True to the builder to get "
-                "per-period deltas for every labelled op."
+                "per-period deltas for every step of the chain."
             )
             raise ValueError(msg)
         return IncrementRef(label=label)
 
     def _build(self) -> IR:
-        from gaspatchio.rollforward._ir import IR as _IR
-        from gaspatchio.rollforward._ir import State
-
         states = tuple(
             State(name=name, init=init) for name, init in self._state_inits.items()
         )
-        return _IR(
+        return IR(
             states=states,
             points=self._points,
             transitions=tuple(self._transitions),
@@ -184,7 +220,7 @@ class _StateHandle:
     def add(self, expr: ExprLike, *, label: str | None = None) -> _StateHandle:
         op = Add(
             target=StateRef(state=self._state, point=self._target_point()),
-            expr=_to_polars_expr(expr),
+            expr=_amount(expr, parameter="expr"),
             label=label,
         )
         op.verify()
@@ -194,7 +230,7 @@ class _StateHandle:
     def subtract(self, expr: ExprLike, *, label: str | None = None) -> _StateHandle:
         op = Subtract(
             target=StateRef(state=self._state, point=self._target_point()),
-            expr=_to_polars_expr(expr),
+            expr=_amount(expr, parameter="expr"),
             label=label,
         )
         op.verify()
@@ -212,8 +248,10 @@ class _StateHandle:
 
         Args:
             rate: Charge rate per period, as a fraction of the balance.
-            round_charge: Round the computed charge (half away from zero,
-                Excel's ROUND) to this many decimals before applying it —
+            round_charge: Round the computed charge to this many decimals
+                before applying it, as Excel's ROUND does -- the charge's
+                15-significant-digit decimal, half away from zero, the rule
+                ``.excel.round`` applies to a column --
                 ``s -= ROUND(s*rate, d)`` — leaving the state to carry its
                 sub-unit residue forward, the placement spreadsheets use.
                 Contrast ``.round(d)``, which rounds the balance itself and
@@ -226,7 +264,7 @@ class _StateHandle:
         """
         op = Charge(
             target=StateRef(state=self._state, point=self._target_point()),
-            rate=_to_polars_expr(rate),
+            rate=_amount(rate, parameter="rate"),
             round_charge=round_charge,
             label=label,
         )
@@ -247,9 +285,12 @@ class _StateHandle:
             rate: Growth rate per period, as quoted (no schedule ``dt``
                 scaling — pre-scale an annual rate to the projection
                 frequency yourself).
-            round_charge: Round the computed credit before applying it —
-                ``s += ROUND(s*rate, d)`` — the spreadsheet placement (see
-                ``charge``).
+            round_charge: Round the computed credit before applying it, as
+                Excel's ROUND does (its 15-significant-digit decimal, half
+                away from zero) — ``s += ROUND(s*rate, d)`` — the spreadsheet
+                placement (see ``charge``). A credit of 3% on
+                5657268.499999999 is the double 169718.05499999996…, which
+                Excel holds as 169718.055000000 and credits as 169718.06.
             label: Names this credit in the increment breakdown.
 
         Returns:
@@ -258,7 +299,7 @@ class _StateHandle:
         """
         op = Grow(
             target=StateRef(state=self._state, point=self._target_point()),
-            rate=_to_polars_expr(rate),
+            rate=_amount(rate, parameter="rate"),
             round_charge=round_charge,
             label=label,
         )
@@ -276,9 +317,9 @@ class _StateHandle:
     ) -> _StateHandle:
         op = GrowCapped(
             target=StateRef(state=self._state, point=self._target_point()),
-            rate=_to_polars_expr(rate),
-            floor=_to_polars_expr(floor),
-            cap=_to_polars_expr(cap),
+            rate=_amount(rate, parameter="rate"),
+            floor=_amount(floor, parameter="floor"),
+            cap=_amount(cap, parameter="cap"),
             label=label,
         )
         op.verify()
@@ -308,8 +349,12 @@ class _StateHandle:
                 charge is taken, undiscounted. ``"end_of_period"`` measures it
                 against the accumulated balance — the benefit is paid at
                 period end — and discounts the charge back, which requires
-                both rates below. **With constant rates the two agree; they
-                diverge once rates vary, so choose deliberately.**
+                both rates below. **The two charge different amounts even at
+                flat rates** (at a flat 4%, a 1,000 balance against a 5,000
+                benefit at a 1% COI rate ends the first period at 1000.40
+                measured at the beginning and 1001.94 at the end), **so choose
+                the one the source model uses, and test with rates that vary
+                by period.**
             coi_discount_rate: Rate used to discount the COI charge back from
                 the benefit payment. Often distinct from the credited rate —
                 it is a separate product assumption. ``"end_of_period"`` only.
@@ -323,8 +368,9 @@ class _StateHandle:
                 **Omit it only for a policy whose account value can never
                 approach its face amount** — without it, a well-funded policy
                 produces a negative amount at risk, which is refused.
-            round_charge: Round the COI charge (half away from zero, Excel's
-                ROUND) to this many decimals before applying it —
+            round_charge: Round the COI charge to this many decimals before
+                applying it, as Excel's ROUND does (its 15-significant-digit
+                decimal, half away from zero) —
                 ``s -= ROUND(coi, d)`` — leaving the state to carry its
                 sub-cent residue forward, which is how spreadsheets place
                 their ROUND. Under ``"end_of_period"`` timing the exact
@@ -341,19 +387,23 @@ class _StateHandle:
         # and the kernel forms 1/(1+i) and 1+i itself.
         op = DeductNAR(
             target=StateRef(state=self._state, point=self._target_point()),
-            coi_rate=_to_polars_expr(coi_rate),
-            death_benefit=_to_polars_expr(death_benefit),
+            coi_rate=_amount(coi_rate, parameter="coi_rate"),
+            death_benefit=_amount(death_benefit, parameter="death_benefit"),
             nar_timing=nar_timing,
             coi_discount_rate=(
                 None
                 if coi_discount_rate is None
-                else _to_polars_expr(coi_discount_rate)
+                else _amount(coi_discount_rate, parameter="coi_discount_rate")
             ),
             credited_rate=(
-                None if credited_rate is None else _to_polars_expr(credited_rate)
+                None
+                if credited_rate is None
+                else _amount(credited_rate, parameter="credited_rate")
             ),
             corridor_factor=(
-                None if corridor_factor is None else _to_polars_expr(corridor_factor)
+                None
+                if corridor_factor is None
+                else _amount(corridor_factor, parameter="corridor_factor")
             ),
             round_charge=round_charge,
             label=label,
@@ -371,8 +421,8 @@ class _StateHandle:
     ) -> _StateHandle:
         op = Ratchet(
             target=StateRef(state=self._state, point=self._target_point()),
-            to=_to_polars_expr(to),
-            when=_to_polars_expr(when) if when is not None else None,
+            to=_amount(to, parameter="to"),
+            when=_amount(when, parameter="when") if when is not None else None,
             label=label,
         )
         op.verify()
@@ -389,7 +439,13 @@ class _StateHandle:
         return self
 
     def round(self, decimals: int = 2) -> _StateHandle:
-        """Round the running state, half away from zero, as Excel's ROUND.
+        """Round the running state as Excel's ROUND does.
+
+        Excel rounds the balance's 15-significant-digit decimal, half away
+        from zero -- the rule ``.excel.round`` applies to a column, in the
+        same code -- so a balance of ``1.5 * 45366.20999999999`` (the double
+        ``68049.31499999999…``, held as ``68049.3150000000``) rounds to
+        ``68049.32`` at 2 places.
 
         Args:
             decimals: Places to round to. 2 for currency; negative values round
@@ -418,9 +474,31 @@ class _StateHandle:
         return self
 
     def apply(self, body: ExprLike, *, label: str | None = None) -> _StateHandle:
+        """Record a step that sets the balance to ``body`` -- which never runs.
+
+        The rollforward kernel has no evaluation for this step, so
+        ``compile_rollforward`` refuses a rollforward that carries one,
+        whatever ``body`` is. No named operation sets the balance outright
+        yet; to set it to a column, take the balance off and add the column
+        -- ``.subtract(pl.col("av@eop")).add(af["value"])`` -- which sets
+        any finite balance and books both movements. Any other step is the
+        named operation that says what it does -- ``add``, ``subtract``,
+        ``charge``, ``grow``, ``grow_capped``, ``deduct_nar``, ``ratchet``,
+        ``floor`` or ``round`` -- and where it is arithmetic over columns
+        rather than over the running balance, work it out as a column before
+        the rollforward and ``add`` or ``subtract`` that column.
+
+        Args:
+            body: The value the step would set the balance to.
+            label: Names the step, including in the refusal.
+
+        Returns:
+            The state handle, for chaining.
+
+        """
         op = Apply(
             target=StateRef(state=self._state, point=self._target_point()),
-            body=_to_polars_expr(body),
+            body=_amount(body, parameter="body"),
             label=label,
         )
         op.verify()

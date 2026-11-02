@@ -52,7 +52,9 @@ def main() -> None:
     # === interpolation="log_linear" — linear in log-discount-factor space =====
     # log-DF(u) = -u * ln(1 + r(u)). Interpolate that linearly, convert back to a
     # spot rate. This keeps the instantaneous forward rate piecewise-constant.
-    ll = Curve.from_zero_rates(tenors=TENORS, rates=ZERO_RATES, interpolation="log_linear")
+    ll = Curve.from_zero_rates(
+        tenors=TENORS, rates=ZERO_RATES, interpolation="log_linear"
+    )
 
     # 1) Recovers the input rates exactly at every knot.
     for tenor, rate in zip(TENORS, ZERO_RATES, strict=True):
@@ -138,15 +140,21 @@ def main() -> None:
     # 2) Matches the published lifelib spot rates inside the grid and extrapolated
     #    well beyond the last liquid point (7y) toward the UFR.
     assert abs(sw.spot_rate(3.0) - 0.0264236322) < 1e-9, "SW spot(3) != lifelib oracle"
-    assert abs(sw.spot_rate(20.0) - 0.0506997613) < 1e-9, "SW spot(20) != lifelib oracle"
+    assert abs(sw.spot_rate(20.0) - 0.0506997613) < 1e-9, (
+        "SW spot(20) != lifelib oracle"
+    )
 
     print("Curve interpolation & extrapolation — every method matches its oracle")
     print(f"  knots (tenor, rate)       : {list(zip(TENORS, ZERO_RATES, strict=True))}")
-    print(f"  linear      spot(3.0)     : {Curve.from_zero_rates(tenors=TENORS, rates=ZERO_RATES).spot_rate(3.0):.6f}")
+    print(
+        f"  linear      spot(3.0)     : {Curve.from_zero_rates(tenors=TENORS, rates=ZERO_RATES).spot_rate(3.0):.6f}"
+    )
     print(f"  log_linear  spot(3.0)     : {ll.spot_rate(3.0):.6f}")
     print(f"  pchip       spot(3.0)     : {pc.spot_rate(3.0):.6f}")
     print(f"  NSS         spot(5.0)     : {nss.spot_rate(5.0):.6f}  (from_svensson)")
-    print(f"  Smith-Wilson spot(20.0)   : {sw.spot_rate(20.0):.6f}  (extrapolated to UFR)")
+    print(
+        f"  Smith-Wilson spot(20.0)   : {sw.spot_rate(20.0):.6f}  (extrapolated to UFR)"
+    )
 
 
 if __name__ == "__main__":

@@ -12,9 +12,9 @@ import polars as pl
 import pytest
 
 from gaspatchio.rollforward._builder import RollforwardBuilder
-from gaspatchio.rollforward._collector import RollforwardCollector
 from gaspatchio.rollforward._compile import compile_rollforward
 from gaspatchio.schedule import Schedule
+from tests.rollforward.conftest import _standalone_state_expr
 
 
 class TestWholeLifeSingleState:
@@ -38,8 +38,7 @@ class TestWholeLifeSingleState:
                 "rate": [[0.0, 0.0, 0.0]],
             },
         )
-        collector = RollforwardCollector(compiled)
-        result = df.with_columns(av=collector.expr_for("av"))
+        result = df.with_columns(av=_standalone_state_expr(compiled, "av"))
         av = result.get_column("av").to_list()[0]
         # period 0: 100 + 10 = 110, * (1+0) = 110, max(110,0) = 110
         # period 1: 110 + 10 = 120, * (1+0) = 120, max(120,0) = 120

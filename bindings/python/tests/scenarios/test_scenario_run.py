@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -42,7 +41,8 @@ def af() -> ActuarialFrame:
     )
 
 
-def _model_fn(af, *, tables, drivers):  # noqa: ANN202, ARG001
+def _model_fn(af):  # noqa: ANN202
+    """The frame-only model a plan runs unchanged."""
     return af.with_columns(pl.col("sum_insured").alias("value"))
 
 
@@ -90,6 +90,22 @@ def test_aggregator_missing_alias_raises(mortality_table: Table) -> None:
         )
 
 
+def test_an_alias_that_is_not_a_name_is_refused_as_one(
+    mortality_table: Table,
+) -> None:
+    """An alias names the output, so a number given as one is refused as a number.
+
+    It was refused as though no alias had been given, which sent the reader
+    looking for a missing .alias() call that is there.
+    """
+    with pytest.raises(TypeError, match=r"takes a string.*Sum was given 5"):
+        ScenarioRun(
+            shocks={"BASE": []},
+            base_tables={"mortality": mortality_table},
+            aggregations=(Sum(column="value").alias(5),),
+        )
+
+
 def test_canonical_form_is_sorted_by_alias(mortality_table: Table) -> None:
     """canonical_form's aggregations list is sorted by alias for deterministic SHA."""
     p1 = ScenarioRun(
@@ -129,9 +145,10 @@ def test_run_no_audit_by_default(
     af: ActuarialFrame,
     mortality_table: Table,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Default audit=False -> no sidecar written, audit_path is None."""
-    os.chdir(tmp_path)  # so the default location is under tmp_path
+    monkeypatch.chdir(tmp_path)  # so the default location is under tmp_path
     plan = ScenarioRun(
         shocks={"A": []},
         base_tables={"mortality": mortality_table},
@@ -147,9 +164,10 @@ def test_run_audit_true_writes_default_location(
     af: ActuarialFrame,
     mortality_table: Table,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """audit=True writes <cwd>/gaspatchio_audit/<run_id>.audit.json."""
-    os.chdir(tmp_path)
+    monkeypatch.chdir(tmp_path)
     plan = ScenarioRun(
         shocks={"A": []},
         base_tables={"mortality": mortality_table},

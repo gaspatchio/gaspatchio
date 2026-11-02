@@ -90,6 +90,8 @@ class KnowledgeAnswerResponse(BaseModel):
     model: str
     tokens_used: int
     took_ms: float
+    # Set client-side when a filter left the answer with no source to draw on.
+    note: str | None = None
 
 
 class ValidationErrorDetail(BaseModel):

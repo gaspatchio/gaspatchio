@@ -11,7 +11,7 @@ import pytest
 
 # Assuming ActuarialFrame and ExpressionProxy are part of the public API
 from gaspatchio import ActuarialFrame, ExpressionProxy
-from gaspatchio.polars_backend.plugins import _get_lib
+from gaspatchio.frame.lowering._polars.plugins import _get_lib
 
 
 @pytest.fixture
@@ -37,10 +37,9 @@ def mock_frame() -> ActuarialFrame:
 
 
 # Patch the register_plugin_function within the plugins module's scope.
-# The wrappers were relocated to polars_backend.plugins in Task 3.2;
-# functions/vector.py is now a re-export shim, so the patch target must
-# follow the implementation.
-@patch("gaspatchio.polars_backend.plugins.register_plugin_function")
+# functions/vector.py is a compatibility import; patch the implementation
+# module that owns the plugin call.
+@patch("gaspatchio.frame.lowering._polars.plugins.register_plugin_function")
 def test_frame_fill_series(mock_register_plugin: MagicMock, mock_frame: ActuarialFrame):
     """Test ActuarialFrame.fill_series method by mocking register_plugin_function."""
     # Configure the mock register_plugin_function to return a predictable pl.Expr

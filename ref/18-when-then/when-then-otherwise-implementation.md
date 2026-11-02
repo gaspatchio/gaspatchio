@@ -1,7 +1,5 @@
 # When/Then/Otherwise Conditional Expression Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Add `when().then().otherwise()` conditional expressions with automatic list broadcasting to solve the 6-8x performance issue with actuarial projections.
 
 **Architecture:** Module-level `when()` function returns `ConditionalProxy` which chains conditions/values. The `.otherwise()` method detects list vs scalar columns and uses Polars' explode/re-aggregate pattern for list broadcasting (proven to achieve 111M ops/sec).

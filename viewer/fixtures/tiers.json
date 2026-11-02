@@ -1,0 +1,870 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0rc1",
+    "versions": {
+      "omitted": "withheld"
+    }
+  },
+  "created_at": "2026-11-02T03:35:58Z",
+  "model": {
+    "label": null,
+    "source_path": "model.py",
+    "source_sha": "sha256:35ba7d1ef3d4206287ebbbfb40ed426f44ee00640967be32cb832b49f2a93f05",
+    "modules": [],
+    "git": null,
+    "model_points": {
+      "path": "model_points.csv",
+      "fingerprint": "sha256:b0f4ba70f3e204c93cd8a3366fb47eba3bf8452bb21ec8b41cc7a40f499be876"
+    }
+  },
+  "graph_fingerprint": "sha256:708e075d3097b8e82d5fec1772143772677581111e6831709c68d6102f4eb9ba",
+  "formulas_fingerprint": "sha256:c0d0b0217814d1aeeee2bcf866feff0f4435b410ddc267283c087dbc60bfd309",
+  "book": {
+    "columns": [
+      "discount_factor",
+      "mortality_rate",
+      "policy_id",
+      "sum_assured"
+    ],
+    "digest": "sha256:047da3905add2841eb3148a8ca8c64129dc7da71250e1f81758336dc8de7f6b9"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "policy_id",
+      "column": "policy_id",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b398b35427f0f53c4e58d7cef7eec6c65b1f946cfc1d9785381196ef10541a59",
+      "fingerprint": "sha256:78b37d7dd3523f7be5e475317b76036afa247a5657685f9f33267fd531412ef2",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "P-1",
+      "trace": null
+    },
+    {
+      "id": "sum_assured",
+      "column": "sum_assured",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b643510e5bc2884efbc56ffc1b90fca82f7cc07abb692dd75abb3cf7d1f60b38",
+      "fingerprint": "sha256:c7d944982f89b2858870c74491fff1c28758dbead932cdaa6ba90157ec2b3778",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 100000.0,
+      "trace": null
+    },
+    {
+      "id": "mortality_rate",
+      "column": "mortality_rate",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:64f120b2abf9efb4420476dbe0b6cd2f652fa191e45f624913888fe91831eaee",
+      "fingerprint": "sha256:2015f7398ec61fc2d380baff909a8698d3a8ab08efb8d0e051b0d5f724e89005",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 0.00123,
+      "trace": null
+    },
+    {
+      "id": "discount_factor",
+      "column": "discount_factor",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:2210c538b3ab661c27001d7a2162f6ba5e759a404a867f3c1ecb830236781ba2",
+      "fingerprint": "sha256:04662c564b862d0e71b9202957031edc7dc46c22076ef7f7a1f1b6240732f23f",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 0.95,
+      "trace": null
+    },
+    {
+      "id": "projection_start_date@1",
+      "column": "projection_start_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5132dfa219dbd49892e2f0997d405108a02ca35ed1950fa6f41fb97d2a73d61d",
+      "fingerprint": "sha256:3ccb78426bc36628d0853ee78a9103d32d4495c4129fc703583da64e376d0685",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:34",
+      "facets": {},
+      "value_sample": "2026-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_start_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_start_date",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2026-01-31",
+          "result": "2026-01-31"
+        }
+      ]
+    },
+    {
+      "id": "projection_end_date@1",
+      "column": "projection_end_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5132dfa219dbd49892e2f0997d405108a02ca35ed1950fa6f41fb97d2a73d61d",
+      "fingerprint": "sha256:3ccb78426bc36628d0853ee78a9103d32d4495c4129fc703583da64e376d0685",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:34",
+      "facets": {},
+      "value_sample": "2027-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_end_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_end_date",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2027-01-31",
+          "result": "2027-01-31"
+        }
+      ]
+    },
+    {
+      "id": "num_proj_months@1",
+      "column": "num_proj_months",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5132dfa219dbd49892e2f0997d405108a02ca35ed1950fa6f41fb97d2a73d61d",
+      "fingerprint": "sha256:3ccb78426bc36628d0853ee78a9103d32d4495c4129fc703583da64e376d0685",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:34",
+      "facets": {},
+      "value_sample": 13,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "num_proj_months"
+        },
+        {
+          "step": 2,
+          "expr": "num_proj_months",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "13",
+          "result": 13
+        }
+      ]
+    },
+    {
+      "id": "month@1",
+      "column": "month",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5132dfa219dbd49892e2f0997d405108a02ca35ed1950fa6f41fb97d2a73d61d",
+      "fingerprint": "sha256:3ccb78426bc36628d0853ee78a9103d32d4495c4129fc703583da64e376d0685",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:34",
+      "facets": {},
+      "value_sample": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "month"
+        },
+        {
+          "step": 2,
+          "expr": "month  (13 periods)",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "[0, 1, 2, \u2025, 12]  (13 periods)",
+          "result": 0,
+          "shape": "13 periods \u00b7 first 0 \u00b7 last 12 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "claims@1",
+      "column": "claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * af.mortality_rate",
+      "reads": [
+        "sum_assured",
+        "mortality_rate"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:11fdb53add6db9643a03638bfb9b35c411b78025e9ee7f961caa79498cf64446",
+      "fingerprint": "sha256:721af5a5206f10ee1a6dd0f7d2e631d1edb8cb08d8fbc51ad8155c42f0394cb0",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:37",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "mortality_rate",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 123.0,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(sum_assured) * (mortality_rate)"
+        },
+        {
+          "step": 2,
+          "expr": "((100000)) * ((0.00123))",
+          "values": {
+            "mortality_rate": 0.00123,
+            "sum_assured": 100000.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "123",
+          "result": 123.0
+        }
+      ]
+    },
+    {
+      "id": "survival@1",
+      "column": "survival",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "1 - af.mortality_rate / 12 * af.month",
+      "reads": [
+        "mortality_rate",
+        "month@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:67895285c86d8c3f32e14eef5927d562cb6e6f3b95a0957a9f860fc23796bb4a",
+      "fingerprint": "sha256:d505d2fc4d6480bdeb0ad66ecd35c59348f5b2d3a58f7d29abfb29b730bf6c66",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:38",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "mortality_rate",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "month@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        1.0,
+        0.9998975,
+        0.999795,
+        0.9996925,
+        0.99959,
+        0.9994875,
+        0.999385,
+        0.9992825,
+        0.99918,
+        0.9990775,
+        0.998975,
+        0.9988725,
+        0.99877
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(1.repeat_by(((mortality_rate) / (12)) * (month).length())) - (((mortality_rate) / (12)) * (month))"
+        },
+        {
+          "step": 2,
+          "expr": "(1.repeat_by((((0.00123)) / (12)) * (([0, 1, 2, \u2025, 12])).length())) - ((((0.00123)) / (12)) * (([0, 1, 2, \u2025, 12])))  (13 periods)",
+          "values": {
+            "mortality_rate": 0.00123,
+            "month": "[0, 1, 2, \u2025, 12] (13 periods)"
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[1, 0.999897, 0.999795, \u2025, 0.99877]  (13 periods)",
+          "result": 1.0,
+          "shape": "13 periods \u00b7 first 1 \u00b7 last 0.99877 \u00b7 \u2193 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "expected_claims@1",
+      "column": "expected_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.claims / 12 * af.survival",
+      "reads": [
+        "claims@1",
+        "survival@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:3e27a53b40269d37ef061da5d953dab14c414013542185ac6b07395d59aafff5",
+      "fingerprint": "sha256:37653b128d739e9552d173dc80b040262532fdd73b86f07226b57e9910f462ac",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:39",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "survival@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        10.25,
+        10.248949375,
+        10.24789875,
+        10.246848125,
+        10.2457975,
+        10.244746875,
+        10.24369625,
+        10.242645625,
+        10.241595,
+        10.240544374999999,
+        10.23949375,
+        10.238443125,
+        10.2373925
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "((claims) / (12)) * (survival)"
+        },
+        {
+          "step": 2,
+          "expr": "(((123)) / (12)) * (([1, 0.999897, 0.999795, \u2025, 0.99877]))  (13 periods)",
+          "values": {
+            "survival": "[1, 0.999897, 0.999795, \u2025, 0.99877] (13 periods)",
+            "claims": 123.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[10.25, 10.2489, 10.2479, \u2025, 10.2374]  (13 periods)",
+          "result": 10.25,
+          "shape": "13 periods \u00b7 first 10.25 \u00b7 last 10.2374 \u00b7 \u2193 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "discounted_claims@1",
+      "column": "discounted_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.expected_claims * af.discount_factor",
+      "reads": [
+        "expected_claims@1",
+        "discount_factor"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:cc53e0947021be8ba02f69982aaa32657c48e4e41de09d70829d79ac3865eef0",
+      "fingerprint": "sha256:2c3ab197c56261dcb30e8061724da42a34226c442c27cea32c10f3185c128098",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:40",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "expected_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "discount_factor",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        9.737499999999999,
+        9.73650190625,
+        9.7355038125,
+        9.734505718749999,
+        9.733507625,
+        9.73250953125,
+        9.731511437499998,
+        9.73051334375,
+        9.72951525,
+        9.728517156249998,
+        9.727519062499999,
+        9.72652096875,
+        9.725522875
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(expected_claims) * (discount_factor)"
+        },
+        {
+          "step": 2,
+          "expr": "(([10.25, 10.2489, 10.2479, \u2025, 10.2374])) * ((0.95))  (13 periods)",
+          "values": {
+            "expected_claims": "[10.25, 10.2489, 10.2479, \u2025, 10.2374] (13 periods)",
+            "discount_factor": 0.95
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[9.7375, 9.7365, 9.7355, \u2025, 9.72552]  (13 periods)",
+          "result": 9.737499999999999,
+          "shape": "13 periods \u00b7 first 9.7375 \u00b7 last 9.72552 \u00b7 \u2193 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "largest_claim_so_far@1",
+      "column": "largest_claim_so_far",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.claims.polars_native().cum_max()",
+      "reads": [
+        "claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [
+        "polars"
+      ],
+      "tier": "engine_native",
+      "local_fingerprint": "sha256:bbfe4af35157d5b42d66b74f84eb01d81273419a75d3f77c0b8149c7314f8974",
+      "fingerprint": "sha256:dd2d7ff30935bb4a30aab4c67632f901c5ea58e993a6ca2084810d81b8e171ad",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:41",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 123.0,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "claims.cum_max()"
+        },
+        {
+          "step": 2,
+          "expr": "(123).cum_max()",
+          "values": {
+            "claims": 123.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "123",
+          "result": 123.0
+        }
+      ]
+    },
+    {
+      "id": "loaded_claims@1",
+      "column": "loaded_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "batch",
+      "formula": null,
+      "reads": [
+        "claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [
+        "polars"
+      ],
+      "tier": "engine_native",
+      "local_fingerprint": "sha256:c0b6564d0af73183292831a5f39586173d874df4029a19b063a8ba9e898fd892",
+      "fingerprint": "sha256:48f7e1fa8543f26d0c124d6d1f7f491ae7535b2d342ebbb0adaf64d7b0781e30",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:42",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 125.46000000000001,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(claims) * (1.02).alias(\"loaded_claims\")"
+        },
+        {
+          "step": 2,
+          "expr": "((123)) * (1.02).alias(\"loaded_claims\")",
+          "values": {
+            "claims": 123.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "125.46",
+          "result": 125.46000000000001
+        }
+      ]
+    },
+    {
+      "id": "smoothed_claims@1",
+      "column": "smoothed_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "emit.call(\"acme.smoothing\", (af.claims,), af)",
+      "reads": [
+        "claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "opaque",
+      "local_fingerprint": "sha256:1a416ecad18c2a797404fd7c050b2232b218bc3f69a1b80e28bc5cb9f2c789a4",
+      "fingerprint": "sha256:8f6f77c1d37a760a40df3776fb7fec05753525be7f9744a22e8abbda51fcac0c",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:43",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 61.5,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(claims) * (0.5)"
+        },
+        {
+          "step": 2,
+          "expr": "((123)) * (0.5)",
+          "values": {
+            "claims": 123.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "61.5",
+          "result": 61.5
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "sum_assured",
+      "target": "claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "mortality_rate",
+      "target": "claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "mortality_rate",
+      "target": "survival@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "month@1",
+      "target": "survival@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "claims@1",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "survival@1",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "expected_claims@1",
+      "target": "discounted_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "discount_factor",
+      "target": "discounted_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "claims@1",
+      "target": "largest_claim_so_far@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "claims@1",
+      "target": "loaded_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "claims@1",
+      "target": "smoothed_claims@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [],
+  "holes": [],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "model.py",
+      "fingerprint": "sha256:35ba7d1ef3d4206287ebbbfb40ed426f44ee00640967be32cb832b49f2a93f05",
+      "payload": {
+        "text": "# SPDX-FileCopyrightText: 2026 Opio Inc.\n#\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"Expected claims on a twelve-month timeline, with a calculation at each tier.\n\nMost lines are written in the framework's own terms, which the format's own\nvocabulary accounts for: core. Two reach into Polars' own expression\nlanguage, one through the named escape and one as a batch of Polars\nexpressions: engine_native. One applies an operation registered the way an\nextension registers one, which nothing has classified: opaque.\n\nThe arithmetic is the four operations and nothing else, so the values it\nsamples are the same bytes on every platform that runs it.\n\"\"\"\n\nimport datetime\n\nimport polars as pl\n\nfrom gaspatchio import ActuarialFrame\nfrom gaspatchio._authoring import emit\nfrom gaspatchio.frame.lowering.polars import lower_polars, register_lowering\n\n\n@register_lowering(\"acme.smoothing\")\ndef _smoothing(node, ctx):\n    \"\"\"Halve the claims, as an extension's own operation would.\"\"\"\n    return lower_polars(node.args[0], ctx) * 0.5\n\n\ndef main(af: ActuarialFrame) -> ActuarialFrame:\n    \"\"\"Project each policy's expected claims over a year.\"\"\"\n    af = af.projection.set(\n        start_date=datetime.date(2026, 1, 1), n_periods=12, frequency=\"monthly\"\n    )\n    af.claims = af.sum_assured * af.mortality_rate\n    af.survival = 1 - af.mortality_rate / 12 * af.month\n    af.expected_claims = af.claims / 12 * af.survival\n    af.discounted_claims = af.expected_claims * af.discount_factor\n    af.largest_claim_so_far = af.claims.polars_native().cum_max()\n    af = af.with_columns((pl.col(\"claims\") * 1.02).alias(\"loaded_claims\"))\n    af.smoothed_claims = emit.call(\"acme.smoothing\", (af.claims,), af)\n    return af\n"
+      }
+    }
+  ],
+  "enrichment": {
+    "policy_id": "P-1",
+    "aggregation": null,
+    "periods": null,
+    "filter": null
+  },
+  "policies": [
+    {
+      "policy_id": "P-1",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 0 of 3 in model_points.csv, selected by ':1'"
+    }
+  ],
+  "facets": {},
+  "document_digest": "sha256:160a8e0514adcbe79e74497d41f23428e1fde920468fd4b9776b4cda276229fc"
+}

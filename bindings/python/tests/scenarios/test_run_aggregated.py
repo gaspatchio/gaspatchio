@@ -12,6 +12,7 @@ import pytest
 
 from gaspatchio import ActuarialFrame
 from gaspatchio.scenarios import (
+    CTE,
     ArgMax,
     Count,
     Mean,
@@ -21,8 +22,11 @@ from gaspatchio.scenarios import (
     PeriodMedian,
     PeriodQuantile,
     PeriodSum,
+    Quantile,
+    QuantileRank,
     Sum,
     Variance,
+    _batch,
 )
 from gaspatchio.scenarios._aggregated import AggregatedResult, run_aggregated
 
@@ -201,9 +205,11 @@ def _scalar_only_model(af: ActuarialFrame) -> ActuarialFrame:
 
 
 def test_vector_agg_on_scalar_model_raises_valueerror() -> None:
-    """PeriodSum on a scalar-only model raises ValueError with clear message."""
+    """PeriodSum on a per-policy column raises ValueError naming the column."""
     mp = pl.DataFrame({"value": [1.0, 2.0]})
-    with pytest.raises(ValueError, match="Period\\*.*vector.*aggregator"):
+    with pytest.raises(
+        ValueError, match=r"PeriodSum\('pv'\) folds one value per period"
+    ):
         run_aggregated(
             _scalar_only_model, mp, [PeriodSum("pv").alias("pv")], batch_size=2
         )
@@ -307,7 +313,9 @@ def test_auto_single_batch_when_budget_is_generous(monkeypatch) -> None:
 
     mp = pl.DataFrame({"value": [float(i) for i in range(1, 21)]})  # 20 policies
     monkeypatch.setattr(_auto_batch, "memory_budget_bytes", lambda _f: 10_000_000_000)
-    res = run_aggregated(_toy_model, mp, [PeriodSum("cf").alias("cf")], batch_size="auto")
+    res = run_aggregated(
+        _toy_model, mp, [PeriodSum("cf").alias("cf")], batch_size="auto"
+    )
     assert res.batch_size == 20  # whole portfolio fits -> one batch
 
 
@@ -318,7 +326,9 @@ def test_auto_batches_when_sizer_returns_small_b(monkeypatch) -> None:
     mp = pl.DataFrame({"value": [float(i) for i in range(1, 21)]})  # 20 policies
     full = run_aggregated(_toy_model, mp, [PeriodSum("cf").alias("cf")], batch_size=20)
     monkeypatch.setattr(agg, "size_to_budget", lambda *a, **k: 5)
-    auto = run_aggregated(_toy_model, mp, [PeriodSum("cf").alias("cf")], batch_size="auto")
+    auto = run_aggregated(
+        _toy_model, mp, [PeriodSum("cf").alias("cf")], batch_size="auto"
+    )
     assert auto.batch_size == 5  # uses the sizer's result
     assert np.allclose(auto.cf, full.cf, atol=1e-6)  # 4 batches == full
 
@@ -328,7 +338,7 @@ def test_auto_seed_peak_zero_uses_frame_size(monkeypatch) -> None:
     import gaspatchio.scenarios._aggregated as agg
 
     captured: dict[str, int] = {}
-    real_collect = agg._collect_with_peak  # noqa: SLF001
+    real_collect = _batch._collect_with_peak  # noqa: SLF001
 
     def _zero_peak(lazy: object, *, engine: str | None = None) -> object:
         frame, _peak = real_collect(lazy, engine=engine)
@@ -338,7 +348,7 @@ def test_auto_seed_peak_zero_uses_frame_size(monkeypatch) -> None:
         captured["per_cell"] = per_cell
         return 1  # tiny batch keeps the run cheap
 
-    monkeypatch.setattr(agg, "_collect_with_peak", _zero_peak)
+    monkeypatch.setattr(_batch, "_collect_with_peak", _zero_peak)
     monkeypatch.setattr(agg, "size_to_budget", _spy_size)
     mp = pl.DataFrame({"value": [float(i) for i in range(1, 11)]})  # 10 policies
     run_aggregated(_toy_model, mp, [PeriodSum("cf").alias("cf")], batch_size="auto")
@@ -362,7 +372,9 @@ def test_top_level_exports() -> None:
 def test_small_n_single_batch_is_no_op() -> None:
     """With 3 policies and batch_size='auto', resolved batch_size == 3 (one batch)."""
     mp = pl.DataFrame({"value": [1.0, 2.0, 3.0]})
-    res = run_aggregated(_toy_model, mp, [PeriodSum("cf").alias("cf")], batch_size="auto")
+    res = run_aggregated(
+        _toy_model, mp, [PeriodSum("cf").alias("cf")], batch_size="auto"
+    )
     assert res.batch_size == 3  # everything fits in one batch
 
 
@@ -384,11 +396,14 @@ def test_period_aggregator_runs_in_for_each_scenario() -> None:
     assert np.asarray(result.aggregations["cf"]).tolist() == [3.0, 6.0, 9.0]
 
 
-def test_policy_axis_period_reduces_over_all_policies_unchanged() -> None:
+@pytest.mark.parametrize("with_scenario_column", [False, True])
+def test_policy_axis_period_reduces_over_all_policies_unchanged(
+    with_scenario_column: bool,
+) -> None:
     """Policy axis (run_aggregated) reduces across ALL policies per period.
 
-    F9a control: the scenario-axis two-stage fix must NOT touch the policy axis
-    (there is no scenario_id here). PeriodMean means over all 4 policies per
+    A control: the scenario-axis two-stage fix must NOT touch the policy axis
+    (even if the data has a scenario_id column). PeriodMean means over all 4 policies per
     period, PeriodCount counts all 4 policies -- no scenario double-reduction.
 
     model: cf[policy] = [value, value*2]; value = [1,2,3,4].
@@ -396,6 +411,8 @@ def test_policy_axis_period_reduces_over_all_policies_unchanged() -> None:
       period1 values across policies = [2, 4, 6, 8]
     """
     mp = pl.DataFrame({"value": [1.0, 2.0, 3.0, 4.0]})
+    if with_scenario_column:
+        mp = mp.with_columns(pl.Series("scenario_id", [1, 1, 2, 2]))
 
     def model(af: ActuarialFrame) -> ActuarialFrame:
         return ActuarialFrame(
@@ -493,8 +510,42 @@ def test_run_aggregated_period_quantile_over_not_supported() -> None:
         )
 
 
+def test_quantile_over_is_refused_under_its_own_name_naming_kinds_that_work() -> None:
+    """Quantile.over() is refused as Quantile, and every kind it names runs.
+
+    The guard duck-types on ``levels``, which Quantile carries as well as
+    PeriodQuantile, and the sentence used to call every such refusal
+    "PeriodQuantile.over()" and offer the per-period kinds -- so a reader who
+    wrote Quantile was pointed at kinds for another column shape.
+    """
+    mp = pl.DataFrame({"value": [1.0, 2.0, 3.0], "product": ["A", "B", "A"]})
+
+    def model(af: ActuarialFrame) -> ActuarialFrame:
+        return ActuarialFrame(af._df.with_columns(pl.col("value").alias("pv")))  # noqa: SLF001
+
+    with pytest.raises(NotImplementedError) as refused:
+        run_aggregated(
+            model, mp, [Quantile("pv", levels=(0.5, 0.9)).alias("q").over("product")]
+        )
+    said = str(refused.value)
+    assert said.startswith("Quantile.over() ('q') is not yet supported")
+    assert "PeriodMedian" not in said
+    assert "Median, CTE or QuantileRank with .over()" in said
+    ran = run_aggregated(
+        model,
+        mp,
+        [
+            Median("pv").alias("median").over("product"),
+            CTE("pv", level=0.5).alias("cte").over("product"),
+            QuantileRank("pv", at=2.0).alias("rank").over("product"),
+        ],
+    )
+    for alias in ("median", "cte", "rank"):
+        assert ran.aggregations[alias]["product"].to_list() == ["A", "B"]
+
+
 def test_scalar_non_additive_aggregators_are_batch_invariant() -> None:
-    """F9b: scalar Mean/Variance/Median over the policy axis must be batch-invariant.
+    """Scalar Mean/Variance/Median over the policy axis must be batch-invariant.
 
     The fold collapsed each batch to one within_expr value and add_input'd it, so
     the non-additive scalar aggregators divided by the BATCH count — e.g. Mean over
@@ -541,7 +592,7 @@ def test_scalar_partitioned_non_additive_aggregators_are_batch_invariant() -> No
     single value into the partition's accumulator. So a non-additive inner
     aggregator (Mean/Variance/Std/Median/CTE) divided by the number of BATCHES a
     partition spanned, not the number of policies in it — batch-dependent, wrong.
-    (Same class as F9b, per partition.) Sum.over() is the additive control.
+    (The scalar batch defect, per partition.) Sum.over() is the additive control.
 
     The policy layout interleaves partitions across batch boundaries so that, at
     batch_size=2, partition A spans batches 0-1 and partition B spans batches 1-2,
@@ -572,11 +623,19 @@ def test_scalar_partitioned_non_additive_aggregators_are_batch_invariant() -> No
             batch_size=bs,
         )
         # A = mean(10,20,30) = 20 ; B = mean(40,50,60) = 50
-        assert _val(res.mean, "A", "mean") == pytest.approx(20.0), f"A mean wrong at bs={bs}"
-        assert _val(res.mean, "B", "mean") == pytest.approx(50.0), f"B mean wrong at bs={bs}"
+        assert _val(res.mean, "A", "mean") == pytest.approx(20.0), (
+            f"A mean wrong at bs={bs}"
+        )
+        assert _val(res.mean, "B", "mean") == pytest.approx(50.0), (
+            f"B mean wrong at bs={bs}"
+        )
         # additive control — already batch-invariant
-        assert _val(res.sum, "A", "sum") == pytest.approx(60.0), f"A sum wrong at bs={bs}"
-        assert _val(res.sum, "B", "sum") == pytest.approx(150.0), f"B sum wrong at bs={bs}"
+        assert _val(res.sum, "A", "sum") == pytest.approx(60.0), (
+            f"A sum wrong at bs={bs}"
+        )
+        assert _val(res.sum, "B", "sum") == pytest.approx(150.0), (
+            f"B sum wrong at bs={bs}"
+        )
         # DDSketch median is approximate
         assert _val(res.median, "A", "median") == pytest.approx(20.0, rel=0.06)
         assert _val(res.median, "B", "median") == pytest.approx(50.0, rel=0.06)

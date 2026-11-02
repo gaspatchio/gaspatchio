@@ -49,7 +49,7 @@ class TestErrorHandlingIntegration:
 
         # Create ActuarialFrame with tracing enabled
         af = ActuarialFrame(self.test_data, verbose=True)
-        af._tracing = True
+        af._traced_run = True
 
         # Add some valid operations first
         af["premium_adjusted"] = af["premium"] * 1.1
@@ -99,9 +99,9 @@ class TestErrorHandlingIntegration:
         """Test error handling when tracing is enabled."""
         # Create ActuarialFrame with tracing enabled
         af = ActuarialFrame(self.test_data)
-        af._tracing = True
+        af._traced_run = True
 
-        # Add operations to build up the computation graph
+        # Add operations to build up the calculation log
         af["calculated_field"] = (pl.col("premium") / pl.col("sum_assured")).alias(
             "calculated_field"
         )
@@ -120,7 +120,7 @@ class TestErrorHandlingIntegration:
         # Set basic error mode and no tracing/debug
         set_error_mode("basic")
         af = ActuarialFrame(self.test_data, mode="optimize")
-        af._tracing = False
+        af._traced_run = False
 
         # Add failing operation
         with pytest.raises(Exception) as exc_info:
@@ -139,7 +139,7 @@ class TestErrorHandlingIntegration:
 
         # Even with tracing enabled, should not enhance errors
         af = ActuarialFrame(self.test_data, verbose=True)
-        af._tracing = True
+        af._traced_run = True
 
         with pytest.raises(Exception) as exc_info:
             af["bad_calc"] = pl.col("missing_column") + 1
@@ -154,7 +154,7 @@ class TestErrorHandlingIntegration:
         """Test that column not found errors provide helpful suggestions."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data)
-        af._tracing = True
+        af._traced_run = True
 
         # Try to use a column with a typo
         with pytest.raises(Exception) as exc_info:
@@ -171,7 +171,7 @@ class TestErrorHandlingIntegration:
         """Test that binary search correctly identifies failing operation."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data, verbose=True)
-        af._tracing = True
+        af._traced_run = True
 
         # Add multiple valid operations
         af["calc1"] = pl.col("premium") * 1.1
@@ -205,7 +205,7 @@ class TestErrorHandlingIntegration:
         """Test suggestions for type-related errors."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data)
-        af._tracing = True
+        af._traced_run = True
 
         # Try to perform incompatible operation
         with pytest.raises(Exception) as exc_info:
@@ -221,7 +221,7 @@ class TestErrorHandlingIntegration:
         """Test error handling with complex nested expressions."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data)
-        af._tracing = True
+        af._traced_run = True
 
         # Complex expression that will fail
         with pytest.raises(Exception) as exc_info:
@@ -240,7 +240,7 @@ class TestErrorHandlingIntegration:
         """Test that profile() method also gets enhanced error handling."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data)
-        af._tracing = True
+        af._traced_run = True
 
         # Add failing operation
         af["bad_calc"] = pl.col("missing_column") * 2
@@ -256,7 +256,7 @@ class TestErrorHandlingIntegration:
         """Test that error handling gracefully falls back when formatting fails."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data, verbose=True)
-        af._tracing = True
+        af._traced_run = True
 
         # Create a scenario where error handling might fail
         # This is hard to test directly, but we can at least ensure no crashes
@@ -264,13 +264,13 @@ class TestErrorHandlingIntegration:
             af["calc"] = pl.col("nonexistent") + 1
             result = af.collect()
 
-    def test_large_computation_graph_performance(self):
-        """Test error handling performance with large computation graphs."""
+    def test_large_calculation_log_performance(self):
+        """Test error handling performance with a long calculation log."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data)
-        af._tracing = True
+        af._traced_run = True
 
-        # Build up a large computation graph
+        # Build up a long calculation log
         for i in range(50):  # 50 operations should be enough to test binary search
             af[f"calc_{i}"] = pl.col("premium") * (i + 1)
 
@@ -281,14 +281,14 @@ class TestErrorHandlingIntegration:
             result = af.collect()
 
         exception = exc_info.value
-        # Should handle large graphs efficiently
+        # Should handle a long log efficiently
         assert str(exception) is not None
 
-    def test_mixed_operation_types_in_graph(self):
-        """Test error handling with mixed operation types (backward compatibility)."""
+    def test_mixed_operation_types_in_the_log(self):
+        """Test error handling across setter and with_columns operations."""
         set_error_mode("enhanced")
         af = ActuarialFrame(self.test_data)
-        af._tracing = True
+        af._traced_run = True
 
         # Mix of different operation types
         af["calc1"] = pl.col("premium") * 2
@@ -358,7 +358,7 @@ class TestRealWorldErrorScenarios:
     def test_assumption_lookup_error(self):
         """Test error when referencing non-existent assumption column."""
         af = ActuarialFrame(self.model_points)
-        af._tracing = True
+        af._traced_run = True
 
         with pytest.raises(Exception) as exc_info:
             af["mortality_rate"] = pl.col("mortality_assumption") * pl.col("age")
@@ -373,7 +373,7 @@ class TestRealWorldErrorScenarios:
     def test_actuarial_calculation_chain_error(self):
         """Test error in complex actuarial calculation chain."""
         af = ActuarialFrame(self.model_points)
-        af._tracing = True
+        af._traced_run = True
 
         # Build up typical actuarial calculation chain
         af["annual_premium"] = pl.col("premium") * 12
@@ -402,7 +402,7 @@ class TestRealWorldErrorScenarios:
         )
 
         af = ActuarialFrame(data_with_zeros)
-        af._tracing = True
+        af._traced_run = True
 
         # Division by zero doesn't raise an exception in Polars, it produces inf
         af["expense_ratio"] = pl.col("sum_assured") / pl.col("premium")  # Division by zero

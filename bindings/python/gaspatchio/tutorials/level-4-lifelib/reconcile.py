@@ -137,7 +137,9 @@ def main() -> int:
     """Run reconciliation."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Reconcile Level 4 model against lifelib")
+    parser = argparse.ArgumentParser(
+        description="Reconcile Level 4 model against lifelib"
+    )
     parser.add_argument(
         "--gaspatchio-output",
         type=str,

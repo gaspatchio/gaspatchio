@@ -18,17 +18,18 @@ from typing import TYPE_CHECKING, Literal
 
 import psutil
 
-from gaspatchio.frame import ActuarialFrame
+from gaspatchio._dtypes import with_integers_as_i64
+from gaspatchio.frame._across_rows import one_batch_of_several
+from gaspatchio.frame.base import _frame_over_the_book
 from gaspatchio.scenarios._auto_batch import bounded_seed_size, size_to_budget
-from gaspatchio.scenarios._for_each import (
-    _collect_with_peak,
-    _reraise_with_attribution,
-)
+from gaspatchio.scenarios._batch import _collect_batch, book_in_hand
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     import polars as pl
+
+    from gaspatchio.frame import ActuarialFrame
 
 _DISK_HEADROOM = 1.10  # require 10% slack over the estimate
 
@@ -107,7 +108,13 @@ def preflight_disk(directory: Path, *, estimated_bytes: int) -> None:
 
 @dataclass(frozen=True)
 class SpillResult:
-    """Manifest of a :func:`run_to_parquet` spill."""
+    """Manifest of a :func:`run_to_parquet` spill.
+
+    ``n_policies`` is the number of policies the model valued, which is the
+    rows written. A model that chooses which policies it values
+    (``af.filter``, a semi or anti join) values fewer than the book holds,
+    and the count says so.
+    """
 
     output_dir: Path
     n_policies: int
@@ -118,7 +125,7 @@ class SpillResult:
 
 def run_to_parquet(
     model_fn: Callable[[ActuarialFrame], ActuarialFrame],
-    model_points: pl.DataFrame,
+    model_points: pl.DataFrame | pl.LazyFrame,
     output_dir: Path,
     *,
     batch_size: int | Literal["auto"] = "auto",
@@ -131,7 +138,8 @@ def run_to_parquet(
 
     Args:
         model_fn: Callable accepting an :class:`ActuarialFrame` and returning one.
-        model_points: Polars DataFrame of policy data; rows are sliced into batches.
+        model_points: Polars DataFrame of policy data, or a LazyFrame, which is
+            collected first; rows are sliced into batches.
         output_dir: Directory where ``batch_NNNN.parquet`` files are written.
         batch_size: Number of policies per batch.  ``"auto"`` sizes to the memory
             budget (no working-set cap).
@@ -142,10 +150,17 @@ def run_to_parquet(
         :class:`SpillResult` manifest with file count and timing metadata.
 
     """
+    model_points = book_in_hand(model_points, "run_to_parquet")
     n_policies = model_points.height
     if n_policies == 0:
         msg = "model_points is empty."
         raise ValueError(msg)
+    # A wide integer column is judged over the book, not over each batch:
+    # read as Int64 here where every value in the book fits, and kept in
+    # its width where one does not. Each batch is handed on as a plan, so
+    # the frame's door does not judge it again over the batch's values alone
+    # (section 10).
+    model_points = with_integers_as_i64(model_points)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     check_spill_target(output_dir, mounts_text=mounts_text)
@@ -153,15 +168,16 @@ def run_to_parquet(
     if batch_size == "auto":
         # Size to the memory budget (no working-set cap): seed -> per_cell -> B.
         seed_size = bounded_seed_size(n_policies)
-        seed_af = model_fn(ActuarialFrame(model_points.slice(0, seed_size)))
-        seed_lazy = seed_af._df  # noqa: SLF001
-        if seed_lazy is None:
-            msg = "model_fn returned an ActuarialFrame with no underlying frame."
-            raise ValueError(msg)
-        try:
-            _seed_df, seed_peak = _collect_with_peak(seed_lazy, engine="streaming")
-        except Exception as e:  # noqa: BLE001 — routed to the boundary, which raises
-            _reraise_with_attribution(seed_af, e)
+        seed = model_points.slice(0, seed_size)
+        with one_batch_of_several(
+            runner="run_to_parquet",
+            n_policies=n_policies,
+            batch_size="auto",
+            first=seed_size,
+            batch=seed,
+        ):
+            seed_af = model_fn(_frame_over_the_book(seed.lazy(), judged=True))
+        _seed_df, seed_peak = _collect_batch(seed_af, engine="streaming")
         frame_bytes = int(_seed_df.estimated_size())
         # MEMORY sizing floors the measured peak with the frame size: a fast seed
         # collect can complete between RSS samples (seed_peak==0), which would collapse
@@ -182,25 +198,30 @@ def run_to_parquet(
     baseline = psutil.Process().memory_info().rss
     peak = baseline
     batch_idx = 0
+    # The policies the model valued, which is the rows written: a model that
+    # selects (``af.filter``, a semi or anti join) values fewer than the book
+    # holds. The seed above only sizes the batches and is not written.
+    valued = 0
     for start in range(0, n_policies, resolved):
         batch = model_points.slice(start, resolved)
-        out_af = model_fn(ActuarialFrame(batch))
-        lazy = out_af._df  # noqa: SLF001
-        if lazy is None:
-            msg = "model_fn returned an ActuarialFrame with no underlying frame."
-            raise ValueError(msg)
-        try:
-            proj, _ = _collect_with_peak(lazy, engine="streaming")
-        except Exception as e:  # noqa: BLE001 — routed to the boundary, which raises
-            _reraise_with_attribution(out_af, e)
+        with one_batch_of_several(
+            runner="run_to_parquet",
+            n_policies=n_policies,
+            batch_size=batch_size,
+            first=resolved,
+            batch=batch,
+        ):
+            out_af = model_fn(_frame_over_the_book(batch.lazy(), judged=True))
+        proj, _ = _collect_batch(out_af, engine="streaming")
         safe_write_parquet(proj, output_dir / f"batch_{batch_idx:04d}.parquet")
+        valued += proj.height
         del proj
         peak = max(peak, psutil.Process().memory_info().rss)
         batch_idx += 1
 
     return SpillResult(
         output_dir=output_dir,
-        n_policies=n_policies,
+        n_policies=valued,
         n_batches=batch_idx,
         wall_time_s=time.perf_counter() - started,
         peak_rss_mb=max(0, peak - baseline) / (1024 * 1024),

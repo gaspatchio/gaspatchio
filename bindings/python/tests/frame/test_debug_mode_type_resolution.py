@@ -69,7 +69,7 @@ def test_scalar_fill_null_optimize_mode():
     }
     af = ActuarialFrame(data)
 
-    af["shifted_value"] = af["value"].shift(1).fill_null(0.0)
+    af["shifted_value"] = af["value"].polars_native().shift(1).fill_null(0.0)
 
     result = af.collect()
     assert result.shape[0] == 2
@@ -85,7 +85,7 @@ def test_scalar_fill_null_debug_mode():
     }
     af = ActuarialFrame(data)
 
-    af["shifted_value"] = af["value"].shift(1).fill_null(0.0)
+    af["shifted_value"] = af["value"].polars_native().shift(1).fill_null(0.0)
 
     result = af.collect()
     assert result.shape[0] == 2
@@ -103,7 +103,13 @@ def test_complex_expression_chain_optimize_mode():
     af = ActuarialFrame(data)
 
     # Mimic the model's P[IF] calculation
-    af["P[IF]"] = af["monthly_persist"].cum_prod().shift(1).fill_null(pl.lit([1.0]))
+    af["P[IF]"] = (
+        af["monthly_persist"]
+        .cum_prod()
+        .polars_native()
+        .list.eval(pl.element().shift(1))
+        .fill_null(pl.lit([1.0]))
+    )
 
     result = af.collect()
     assert result.shape[0] == 2
@@ -121,7 +127,13 @@ def test_complex_expression_chain_debug_mode():
     af = ActuarialFrame(data)
 
     # Mimic the model's P[IF] calculation
-    af["P[IF]"] = af["monthly_persist"].cum_prod().shift(1).fill_null(pl.lit([1.0]))
+    af["P[IF]"] = (
+        af["monthly_persist"]
+        .cum_prod()
+        .polars_native()
+        .list.eval(pl.element().shift(1))
+        .fill_null(pl.lit([1.0]))
+    )
 
     result = af.collect()
     assert result.shape[0] == 2
@@ -142,8 +154,16 @@ def test_traced_function_execution():
     def calculate_probabilities(frame):
         # Operations similar to the failing model
         frame["monthly_persist"] = [[0.99, 0.98, 0.97], [0.985, 0.975, 0.965]]
-        frame["P[IF]"] = frame["monthly_persist"].cum_prod().shift(1).fill_null(pl.lit([1.0]))
-        frame["P[death]"] = frame["P[IF]"] * (frame["mortality_rate"] / 12).shift(1).fill_null(pl.lit([0.0]))
+        frame["P[IF]"] = (
+            frame["monthly_persist"]
+            .cum_prod()
+            .polars_native()
+            .list.eval(pl.element().shift(1))
+            .fill_null(pl.lit([1.0]))
+        )
+        frame["P[death]"] = frame["P[IF]"] * (
+            frame["mortality_rate"] / 12
+        ).polars_native().list.eval(pl.element().shift(1)).fill_null(pl.lit([0.0]))
         return frame
 
     result_af = calculate_probabilities(af)

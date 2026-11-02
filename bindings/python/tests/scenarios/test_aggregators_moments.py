@@ -108,10 +108,10 @@ def test_single_value_variance_is_nan() -> None:
     assert math.isnan(a.extract_output(s))
 
 
-def test_empty_extract_returns_nan() -> None:
-    """Mean of an empty accumulator is NaN, not zero."""
+def test_empty_extract_returns_null() -> None:
+    """Mean of an empty accumulator is null, not zero."""
     a = Mean("v")
-    assert math.isnan(a.extract_output(a.create_accumulator()))
+    assert a.extract_output(a.create_accumulator()) is None
 
 
 def test_canonical_forms() -> None:

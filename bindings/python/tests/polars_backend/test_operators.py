@@ -2,14 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for polars_backend.operators — especially the scalar^list identity branches."""
+"""Unit tests for frame.lowering._polars.operators — the scalar^list domain branches."""
 
 from __future__ import annotations
 
 import polars as pl
 import pytest
 
-from gaspatchio.polars_backend.operators import (
+from gaspatchio.frame.lowering._polars.operators import (
     dispatch_list_op,
     execute_list_clip,
     execute_list_pow,
@@ -17,7 +17,7 @@ from gaspatchio.polars_backend.operators import (
 
 
 class TestScalarPowList:
-    """The scalar^list = exp(list * log(scalar)) identity has 3 branches."""
+    """The scalar^list domain guard has 3 branches, one per base sign."""
 
     @pytest.mark.parametrize(
         ("base", "expected_present"),
@@ -125,9 +125,7 @@ class TestScalarRpowProxyExp:
     def test_scalar_rpow_expressionproxy_derived_from_list(self) -> None:
         from gaspatchio import ActuarialFrame
 
-        af = ActuarialFrame(
-            {"pid": [1, 2], "months": [[0, 1, 2, 3], [0, 1, 2, 3]]}
-        )
+        af = ActuarialFrame({"pid": [1, 2], "months": [[0, 1, 2, 3], [0, 1, 2, 3]]})
         af.factor = 1.01 ** (af.months / 12.0)
         result = af.collect()["factor"][0].to_list()
         # (1.01)^(0/12) = 1.0; (1.01)^(1/12) ≈ 1.000829896
@@ -141,6 +139,6 @@ class TestScalarRpowProxyExp:
         from gaspatchio import ActuarialFrame
 
         af = ActuarialFrame({"pid": [1], "vals": [[1.0, 2.0, 3.0]]})
-        af.r = 2.0 ** af.vals
+        af.r = 2.0**af.vals
         result = af.collect()["r"][0].to_list()
         assert result == pytest.approx([2.0, 4.0, 8.0])

@@ -26,7 +26,11 @@ Section 11 (discounting) is rewritten:
 ```python
 # BEFORE (step 04): constant rate
 disc_rate_mth = (1 + DISCOUNT_RATE_ANNUAL) ** (1 / 12) - 1
-af.disc_factors = (af.month.cast(pl.Float64) * -1.0 * math.log(1 + disc_rate_mth)).exp()
+af.disc_factors = (
+    af.month.polars_native().cast(pl.List(pl.Float64))
+    * -1.0
+    * math.log(1 + disc_rate_mth)
+).exp()
 
 # AFTER (step 05): rate curve lookup
 af.year = af.month // 12

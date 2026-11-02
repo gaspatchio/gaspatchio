@@ -1,0 +1,120 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "A run of flags' least and greatest (11.1.16-11.1.17)",
+  "cases": [
+    {
+      "id": "flag-min-answers-a-flag",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              true,
+              true
+            ],
+            [
+              false,
+              false
+            ],
+            [
+              true,
+              true
+            ],
+            [
+              true
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          false,
+          false,
+          true,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "flag-max-answers-a-flag",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[bool]",
+          "values": [
+            [
+              true,
+              false,
+              true,
+              true
+            ],
+            [
+              false,
+              false
+            ],
+            [
+              true,
+              true
+            ],
+            [
+              true
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true,
+          true
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    }
+  ]
+}

@@ -15,29 +15,30 @@ uv run gspio docs "<method name>"
 
 ---
 
-## 2. `when().then(scalar).otherwise(list_column)` — Runtime Crash
+## 2. Arithmetic-masking blends in conditional code (obsolete workaround)
 
 ```python
-# WRONG — crashes with "Unsupported combination of list/scalar inputs"
-af.cso = when(af.age > 99).then(1.0).otherwise(af.cso_table)
-
-# RIGHT — arithmetic masking
+# Don't write this in new code — it's the old workaround.
 af.flag = when(af.real_attained_age > 99).then(1.0).otherwise(0.0)
 af.cso = af.cso_table * (1 - af.flag) + 1.0 * af.flag
+
+# Just write the conditional directly. gaspatchio routes the mixed
+# scalar/list branches correctly via list_conditional.
+af.cso = when(af.age > 99).then(1.0).otherwise(af.cso_table)
 ```
 
-See [conditionals-and-lists.md](conditionals-and-lists.md) for full details.
+The arithmetic-masking blend was the workaround for a list/scalar mismatch that no longer exists (PRs #99 / #100 / #101). Reading code, the `when/then/otherwise` form is auditable; the multi-line flag-and-blend is not. See [conditionals-and-lists.md](conditionals-and-lists.md) for the rest of the story.
 
 ---
 
-## 3. `projection_end_value=99` — Truncated Projection
+## 3. `until_value=99` — Truncated Projection
 
 ```python
 # WRONG — truncates final year, ~3% BEL gap
-af = af.date.create_projection_timeline(projection_end_value=99, ...)
+af = af.projection.set(until="maximum_age", until_value=99, ...)
 
-# RIGHT
-af = af.date.create_projection_timeline(projection_end_value=100, ...)
+# RIGHT — projects through age 100; 99 drops the final high-mortality year
+af = af.projection.set(until="maximum_age", until_value=100, ...)
 ```
 
 ---
@@ -145,11 +146,14 @@ mp = af.collect()  # <-- DON'T do this after projection timeline
 mp = mp.with_columns(...)
 af = ActuarialFrame(mp)
 
-# RIGHT — .collect() is only for Phase 1 (pre-projection setup)
-# After create_projection_timeline(), stay lazy
+# RIGHT — after af.projection.set(), stay lazy
 af.mort_rate = table.lookup(age=af.age)
 af.derived = af.mort_rate * af.factor  # lazy expression
 ```
+
+The collect-and-rebuild round-trip above is wrong in Phase 1 too, for a different reason: `ActuarialFrame(af.collect())` throws away everything the frame knew about itself — how each column was calculated, which projection axis it was on, which columns were inputs. To freeze the setup at the end of Phase 1, use `af = af.materialize()`, which freezes the values and keeps the frame.
+
+Where the values genuinely have to leave the frame — a numpy generator, an enrichment routine that only speaks Polars — name the frame they came out of on the way back: `af = ActuarialFrame(values, continue_from=af)`. Every column still holding the values the model's calculations produced keeps its lineage; whatever the trip changed or added is recorded as data arriving at that point, with the line it came back on.
 
 ---
 
@@ -173,13 +177,15 @@ When columns are transformed for lookup purposes (e.g., `term_offset`), create a
 When mortality reaches 1.0 (ultimate age), ALL dependent calculations must be guarded:
 
 ```python
-af.is_age_over_99 = when(af.real_attained_age > 99).then(1.0).otherwise(0.0)
-
-# Guard mortality table
-af.cso_table = af.cso_table * (1 - af.is_age_over_99) + af.is_age_over_99
+# Guard mortality table — replace it with 1.0 once age exceeds 99
+af.cso_table = (
+    when(af.real_attained_age > 99).then(1.0).otherwise(af.cso_table)
+)
 
 # Guard surrender charge too — not just mortality
-af.surrender_charge = af.surrender_charge * (1 - af.is_age_over_99)
+af.surrender_charge = (
+    when(af.real_attained_age > 99).then(0.0).otherwise(af.surrender_charge)
+)
 ```
 
 Unguarded formulas past age 100 produce negative survival probabilities that cascade through the entire projection tail.
@@ -235,18 +241,21 @@ Always verify the population scope of gold standard data before comparing.
 ## 17. Attribute Access Fails After Projection for with_columns-Created Columns
 
 ```python
-# WRONG — column created via Polars with_columns may not be accessible via dot notation
+# WRONG — a column injected by rebuilding the frame from raw Polars
 mp = af.collect()
 mp = mp.with_columns(pl.lit(12).alias("months_to_start"))
-af = ActuarialFrame(mp)
-af = af.date.create_projection_timeline(...)
+af = ActuarialFrame(mp)          # also discards the frame's whole history
+af = af.projection.set(...)
 x = af.months_to_start  # may raise AttributeError
 
-# RIGHT — use bracket notation, or compute before projection
-x = af["months_to_start"]  # bracket notation works
+# RIGHT — assign on the frame, then freeze the setup
+af.months_to_start = 12
+af = af.materialize()
+af = af.projection.set(...)
+x = af.months_to_start
 ```
 
-After `create_projection_timeline()`, columns created via Polars `with_columns` (rather than `af.col = expr`) are accessible via bracket notation but may fail with dot notation.
+Columns created by rebuilding the frame around a raw Polars result (rather than `af.col = expr` or `af.with_columns(...)`) are accessible via bracket notation — `af["months_to_start"]` always works — but may fail with dot notation. Assigning on the frame avoids the problem and keeps the calculation log; `materialize()` is how you freeze the setup without rebuilding, and `ActuarialFrame(values, continue_from=af)` is how you rebuild when the values genuinely had to leave.
 
 ---
 
@@ -266,16 +275,117 @@ Assigning a scalar directly works fine. Gaspatchio handles broadcasting when the
 
 ---
 
-## 19. Power Operations: `scalar ** list_column` (exp/log Identity)
+## 19. Power operations on list columns
+
+Both directions of `**` work directly on list-shaped operands:
 
 ```python
-# WRONG — Polars doesn't support scalar ** list directly
-af.inflation_factor = (1.0 + INFLATION_RATE) ** (af.month / 12.0)  # TypeError
+# scalar ** list_column — works
+af.inflation_factor = (1.0 + INFLATION_RATE) ** (af.month / 12.0)
 
-# RIGHT — use the identity a^b = exp(b * ln(a))
-af.inflation_factor = (af.month / 12.0 * math.log(1.0 + INFLATION_RATE)).exp()
+# list_column ** scalar — works
+af.discount_factor = (1.0 + RATE) ** (-af.month / 12.0)
+
+# list_column ** list_column — works
+af.compound = af.growth_factor ** af.holding_periods
 ```
 
-This is the standard pattern for computing `constant^(list_column)` without breaking the lazy pipeline. Result: `[(1.01)^(0/12), (1.01)^(1/12), (1.01)^(2/12), ...]`
+`__rpow__` and `__pow__` route through the `list_pow` plugin under the hood. The earlier exp/log identity (`(b * log(a)).exp()`) was a workaround for a limitation that no longer exists; it still computes the same value, but the operator form is what new code should use.
 
 See also: Level 3 base model Section 9 (expenses) for a working example.
+
+---
+
+## 20. Table.lookup() is exact-match
+
+**Wrong**: Creating a Table with breakpoint ages [25, 30, 35, 40] and expecting interpolation.
+
+**Right**: Table.lookup() requires exact key matches. Generate full-range tables (every integer age).
+
+```python
+# BAD: sparse table with gaps
+mort_data = pl.DataFrame({"age": [25, 30, 35], "qx": [0.001, 0.002, 0.004]})
+# lookup(age=27) will FAIL — no exact match
+
+# GOOD: full integer-age table
+ages = list(range(20, 100))
+mort_data = pl.DataFrame({"age": ages, "qx": [compute_qx(a) for a in ages]})
+```
+
+If you need interpolation, pre-compute the interpolated values and include them in the table.
+
+---
+
+## 23. `Table` with Multi-String-Key Dimensions Silently Returns NaN
+
+If your Table has 2+ string-type dimension columns (e.g., `sex`, `smoker`, `product_code`), the default `storage_mode="auto"` silently returns NaN on lookup. No error, no warning — the model runs but produces wrong results.
+
+```python
+# WRONG — silently returns NaN for multi-string-key tables
+mort = Table(name="mortality", source=df,
+             dimensions={"age": "age", "sex": "sex", "smoker": "smoker"},
+             value="qx")
+
+# RIGHT — explicitly use hash storage for tables with 2+ string dimensions
+mort = Table(name="mortality", source=df,
+             dimensions={"age": "age", "sex": "sex", "smoker": "smoker"},
+             value="qx",
+             storage_mode="hash")
+```
+
+**Rule**: If your Table has 2 or more string-type dimension columns, always pass `storage_mode="hash"`. If lookups return NaN unexpectedly, this is the first thing to check.
+
+---
+
+## 21. Writing Running Totals or Account Values with Python Loops
+
+```python
+# WRONG — Python loops over periods, defeats vectorization
+running_total = 0.0
+for t in range(n_periods):
+    running_total = running_total * growth[t] + deposit[t]
+    results.append(running_total)
+
+# RIGHT — accumulate() handles sequential dependency per policy
+af.shifted_growth = af.growth_factor.projection.previous_period(fill_value=1.0)
+af.balance = af.shifted_growth.projection.accumulate(
+    initial=af.opening_balance,
+    multiply=af.shifted_growth,
+    add=af.deposits,
+)
+```
+
+`accumulate` computes `state[t] = state[t-1] * multiply[t] + add[t]` via a Rust kernel.
+Polars parallelises across policies automatically. See Level 3 Step 06 and Level 4 SECTION 5 for production examples.
+
+---
+
+## 22. Using Python stdlib or raw Polars Instead of Gaspatchio Methods
+
+Gaspatchio wraps common numeric operations to work on both scalar and list columns. These are available on any AF column or expression via the proxy dispatch.
+
+```python
+# WRONG — Python stdlib (breaks on list columns, can't be lazy)
+import math
+gst_paid = math.ceil(income * GST * 100) / 100
+rounded = round(value, 2)
+
+# RIGHT — Gaspatchio methods (work on scalar AND list columns)
+af.gst_paid = (af.income * GST * 100).ceil() / 100
+af.rounded = af.value.round(2)
+```
+
+| Python / Polars | Gaspatchio Equivalent | Works on Lists? |
+|---|---|---|
+| `math.ceil(x)` | `af.col.ceil()` | Yes |
+| `math.floor(x)` | `af.col.floor()` | Yes |
+| `round(x, n)` | `af.col.round(n)` | Yes |
+| `abs(x)` | `af.col.abs()` | Yes |
+| `math.exp(x)` | `af.col.exp()` | Yes |
+| `math.log(x)` | `af.col.log()` | Yes |
+| `math.sqrt(x)` | `af.col.sqrt()` | Yes |
+| `results[i-1]["col"]` | `af.col.projection.previous_period()` | Yes |
+| `pl.col("x").shift(1)` | `af.x.projection.previous_period()` | Yes |
+| `pl.col("x").cum_sum()` | `af.x.cum_sum()` — applies within each policy's list; a running balance is `initial + af.x.cum_sum()`, no `accumulate` needed | Yes |
+
+**Key insight:** `previous_period()`, `accumulate()`, `ceil()`, `round()`, and all other AF methods work on **both** list columns (within-list operation) and scalar columns (across-row operation). The same methods you use in Phase 3 per-entity calculations also work in Phase 4 fund-level calculations.

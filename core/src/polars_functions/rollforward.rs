@@ -19,15 +19,31 @@
 //! The kernel walks transitions in declared order per period, evaluating
 //! each Op against the current per-row state vector. Output is a Polars
 //! Struct with one field per capture slot (named `"{state}@{point}"`) —
-//! plus, when track_increments=True, one field per labelled Op (named
-//! `"increment_{label}"`, in declared order) holding the SIGNED per-period
+//! plus, when track_increments=True, one field per Op (named
+//! `"increment_{key}"`, in declared order) holding the SIGNED per-period
 //! delta the Op applied to its target: negative for charges, positive for
 //! credits, zero after a stop or lapse.
+//!
+//! EVERY Op emits, not only the ones the modeller named. A labelled Op's key
+//! is its label; a structural Op — `Floor`, `Round`, which carry no label
+//! field and are not flows anyone booked — emits under the synthetic key
+//! `{kind}@{ordinal}`, `floor@3`, whose ordinal is the Op's 1-based position
+//! in the declared chain. That is what makes `closing = opening + Σ
+//! increments` the kernel's own arithmetic rather than one with a residual:
+//! a floor that absorbs 1e-6 is a row on the auditor's waterfall, quoted,
+//! and the amount is off the file if the step that took it emits nothing.
 
+// Every rounding the kernel does -- the `Round` op on the balance and the
+// `round_charge` knob on a charge or credit -- is Excel's ROUND over the
+// value's fifteen significant digits, the one rule `.excel.round` applies to
+// a column, so a rounding inside the recursion and one outside it agree.
+use crate::excel::excel_round;
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::offset::OffsetsBuffer;
 use serde::Deserialize;
+
+use super::slices::{own_rows, period_count_message, same_periods};
 
 /// Plugin kwargs payload — direct mirror of the dict produced by
 /// `LowerToPolarsPlugin.lower(ir, slots)` in
@@ -281,7 +297,13 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
     // ---- 2. Extract input List<Float64> columns ----
     let mut owned_slices: Vec<OwnedListSlice> = Vec::with_capacity(kwargs.input_columns.len());
     for (i, _name) in kwargs.input_columns.iter().enumerate() {
-        let series = &inputs[n_states + i];
+        // The streaming engine hands this kernel a slice of each list column
+        // whose inner values are still the whole column's. Everything below
+        // reads those flat values -- casts them, refuses a null among them,
+        // copies them out -- so it is handed the slice's own elements: the
+        // whole column's would cost every morsel a copy of the portfolio, and
+        // would refuse a slice for a null in a policy it was never given.
+        let series = &own_rows(&inputs[n_states + i]);
 
         // A scalar (non-List) column is a per-policy constant: broadcast it
         // across every period rather than demanding n_periods copies.
@@ -471,34 +493,55 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
                 // Off-by-exactly-one is almost always the point-vs-period trap:
                 // every projection axis carries one value per period BOUNDARY
                 // (n_periods + 1), and columns derived from an axis inherit
-                // that length. Name the actual rule and the one-line fix —
+                // that length. Name the actual rule and the moves that work —
                 // the earlier advice ("build the inputs on the schedule's
-                // axis") pointed straight back at what fails (gh#73).
-                let msg = if row_len == n_periods + 1 {
+                // axis") pointed straight back at what fails (gh#73), and the
+                // one after it named a bare `.list.head(n)`, which is not a
+                // declared operation. No declared operation drops a column's
+                // final boundary, so the period-indexed builds come first and
+                // the escape is named with what it costs.
+                // The first line is the shared one, and names nothing that
+                // varies from policy to policy -- the length goes on the next
+                // line -- so the collect-time replay, which matches a failure
+                // by its exact first line, can match it in either engine.
+                let advice = if row_len == n_periods + 1 {
                     format!(
-                        "rollforward: policy at row {r} has input lists of length \
-                         {row_len} — exactly one more than the uniform schedule's \
-                         n_periods = {n_periods}. Projection axes (month, t_years(), \
-                         period_dates()) are point-indexed: one value per period \
+                        "Exactly one more than the uniform schedule's n_periods = \
+                         {n_periods}: projection axes (month, t_years(), \
+                         period_dates()) are point-indexed, one value per period \
                          boundary, n_periods + 1 in total, and every column derived \
                          from an axis inherits the extra value. Rollforward inputs \
-                         are period-indexed: exactly one value per period. Fix: drop \
-                         the final boundary once, where the axis is first used — \
-                         e.g. `.list.head({n_periods})` — and let every downstream \
-                         column inherit the period-indexed length."
+                         are period-indexed: exactly one value per period. Fix: build \
+                         the input with one value per period — pass a per-policy \
+                         value as it stands, which the rollforward reads in every \
+                         period, repeat one with \
+                         `.projection.broadcast_to_periods(like=af.projection.year_fractions())`, \
+                         or derive the column from `af.projection.year_fractions()`, \
+                         which holds one value per period. To cut a column already \
+                         derived from an axis, \
+                         `.polars_native().list.head({n_periods})` drops its final \
+                         boundary, and records the line as engine_native: it runs \
+                         only on Polars, and so does every calculation that reads it."
                     )
                 } else {
                     format!(
-                        "rollforward: policy at row {r} has input lists of length \
-                         {row_len}, but the schedule is uniform with n_periods = \
-                         {n_periods} — every policy's input lists must have exactly \
-                         {n_periods} elements. If policies genuinely have different \
-                         horizons, use a per-policy grid \
-                         (af.projection.set(..., per_policy=True), or \
-                         Schedule.from_per_policy_grid) so each policy carries its \
-                         own length."
+                        "The schedule is uniform with n_periods = {n_periods}, so \
+                         every policy's input lists must have exactly {n_periods} \
+                         elements. If policies genuinely have different horizons, \
+                         use a per-policy grid (af.projection.set(..., \
+                         per_policy=True), or Schedule.from_per_policy_grid) so each \
+                         policy carries its own length."
                     )
                 };
+                let msg = format!(
+                    "{}\n{advice}",
+                    period_count_message(
+                        "the uniform schedule's n_periods",
+                        n_periods,
+                        "rollforward input lists",
+                        row_len,
+                    )
+                );
                 return Err(PolarsError::ComputeError(msg.into()));
             }
         }
@@ -522,16 +565,16 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         })
         .collect();
 
-    // ---- 5b. Labelled-increment output buffers (track_increments) ----
-    // One field per labelled Op, in declared order: the SIGNED delta the Op
-    // applied to its target slot in each period (state_after − state_before —
-    // negative for charges, positive for credits). Zero for periods after a
-    // stop or lapse: the kernel applied nothing, which is distinct from a
-    // source model that keeps computing a notional charge (gh#69).
-    let labelled_ops = labelled_increments(kwargs)?;
-    let n_incs = labelled_ops.len();
+    // ---- 5b. Increment output buffers (track_increments) ----
+    // One field per Op, in declared order: the SIGNED delta the Op applied to
+    // its target slot in each period (state_after − state_before — negative
+    // for charges, positive for credits). Zero for periods after a stop or
+    // lapse: the kernel applied nothing, which is distinct from a source
+    // model that keeps computing a notional charge (gh#69).
+    let tracked_ops = tracked_increments(kwargs)?;
+    let n_incs = tracked_ops.len();
     let mut inc_slot: Vec<Option<usize>> = vec![None; kwargs.ops.len()];
-    for (k, (op_idx, _)) in labelled_ops.iter().enumerate() {
+    for (k, (op_idx, _)) in tracked_ops.iter().enumerate() {
         inc_slot[*op_idx] = Some(k);
     }
     let mut increment_values: Vec<Vec<f64>> =
@@ -563,7 +606,7 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         let row_periods = if let Some(ref lengths) = per_policy_lengths {
             usize::try_from(lengths[row_idx]).map_err(|_| {
                 PolarsError::ComputeError(
-                    format!("rollforward: negative per-policy length at row {row_idx}").into(),
+                    "rollforward: a negative per-policy length for one policy".into(),
                 )
             })?
         } else if let Some(first) = first_periodic {
@@ -578,16 +621,15 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
             let s = slice.offsets[row_idx] as usize;
             let e = slice.offsets[row_idx + 1] as usize;
             let len = e - s;
-            if len != row_periods {
-                return Err(PolarsError::ComputeError(
-                    format!(
-                        "rollforward: input column {} row {}: list length {} != row period \
-                         count {} (all input columns must share one length within a policy)",
-                        kwargs.input_columns[slot_idx], row_idx, len, row_periods
-                    )
-                    .into(),
-                ));
-            }
+            same_periods(
+                "the policy's period count",
+                row_periods,
+                &format!(
+                    "rollforward input column {}",
+                    kwargs.input_columns[slot_idx]
+                ),
+                len,
+            )?;
         }
 
         // Zero-period policy (e.g. a fully matured / zero-term row): emit an
@@ -717,7 +759,7 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
             }
             capture_offsets[cap_idx].push(capture_values[cap_idx].len() as i64);
         }
-        // Emit per-labelled-op increment lists.
+        // Emit per-op increment lists.
         for k in 0..n_incs {
             increment_values[k]
                 .extend_from_slice(&row_incs[k * row_periods..(k + 1) * row_periods]);
@@ -735,8 +777,8 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         let offsets_vec = std::mem::take(&mut capture_offsets[cap_idx]);
         output_series.push(build_list_series(values, offsets_vec, field_name.as_str())?);
     }
-    for (k, (_, label)) in labelled_ops.iter().enumerate() {
-        let field_name = format!("increment_{label}");
+    for (k, (_, key)) in tracked_ops.iter().enumerate() {
+        let field_name = format!("increment_{key}");
         let values = std::mem::take(&mut increment_values[k]);
         let offsets_vec = std::mem::take(&mut increment_offsets[k]);
         output_series.push(build_list_series(values, offsets_vec, field_name.as_str())?);
@@ -748,26 +790,6 @@ pub fn rollforward_kernel(inputs: &[Series], kwargs: &RollforwardKwargs) -> Pola
         output_series.iter(),
     )?;
     Ok(struct_chunked.into_series())
-}
-
-/// Round `x` to `decimals` places, half away from zero — Excel's ROUND.
-///
-/// Non-finite values pass through unchanged, and values whose scaled form
-/// overflows f64 are returned as-is: such a value has no decimal places left
-/// to round to anyway. Shared by the `Round` op (which rounds the running
-/// state) and the `round_charge` knob on flow-shaped ops (which rounds the
-/// individual charge or credit before it is applied, as spreadsheets do).
-fn round_half_away(x: f64, decimals: i32) -> f64 {
-    if !x.is_finite() {
-        return x;
-    }
-    let scale = 10f64.powi(decimals);
-    let scaled = x * scale;
-    if scaled.is_finite() {
-        scaled.round() / scale
-    } else {
-        x
-    }
 }
 
 /// Apply a single Op to the per-row state buffer at period ``t``.
@@ -839,7 +861,7 @@ fn apply_op(
             match round_charge {
                 // Spreadsheet placement: the charge is rounded, the state
                 // carries its sub-unit residue forward unrounded.
-                Some(d) => state[i] -= round_half_away(state[i] * r, *d),
+                Some(d) => state[i] -= excel_round(state[i] * r, *d),
                 None => state[i] *= 1.0 - r,
             }
             Ok(())
@@ -866,7 +888,7 @@ fn apply_op(
             match round_charge {
                 // Spreadsheet placement: the credit is rounded, the state
                 // carries its sub-unit residue forward unrounded.
-                Some(d) => state[i] += round_half_away(state[i] * r, *d),
+                Some(d) => state[i] += excel_round(state[i] * r, *d),
                 None => state[i] *= 1.0 + r,
             }
             Ok(())
@@ -888,10 +910,9 @@ fn apply_op(
             decimals,
         } => {
             let i = *target_state * stride_state + *target_point * stride_point + t;
-            // f64::round() is half-away-from-zero, which is Excel's rule.
-            // Non-finite values and balances whose scaled form overflows pass
-            // through unchanged (see round_half_away).
-            state[i] = round_half_away(state[i], *decimals);
+            // Excel's ROUND: the balance's fifteen significant digits, half
+            // away from zero. Non-finite balances pass through unchanged.
+            state[i] = excel_round(state[i], *decimals);
             Ok(())
         }
         OpV2::GrowCapped {
@@ -1067,7 +1088,7 @@ fn apply_op(
             // timing the exact charge is solved first, then rounded — the
             // rounding does not participate in the closed-form solve.
             let charge = match round_charge {
-                Some(d) => round_half_away(charge, *d),
+                Some(d) => excel_round(charge, *d),
                 None => charge,
             };
             state[i] -= charge;
@@ -1139,8 +1160,13 @@ fn resolve_arg(
     }
 }
 
-/// Return an Op's label, if it carries one. Floor and Round are unlabelled
-/// structural ops; everything else is a flow the user may name.
+/// Return an Op's label, if it carries one. Floor and Round are structural
+/// ops with no label field; everything else is a flow the user may name.
+///
+/// None here does not mean "emits nothing" — see [`increment_key`]. It means
+/// the model's author gave this step no name, because a floor is a constraint
+/// on the balance rather than a movement anyone booked, and a label field on
+/// it would invite a modeller to book it as one.
 fn op_label(op: &OpV2) -> Option<&str> {
     match op {
         OpV2::Add { label, .. }
@@ -1155,36 +1181,80 @@ fn op_label(op: &OpV2) -> Option<&str> {
     }
 }
 
-/// The labelled Ops that emit increment fields when `track_increments`, as
-/// `(op_index, label)` in declared order. One source of truth shared by the
-/// kernel's emission and the plugin's output-schema declaration, so the two
-/// cannot drift. Duplicate labels are refused — they would produce two
-/// struct fields with one name.
+/// Return the key an Op's increment field is named under, given its 1-based
+/// position in the declared chain.
+///
+/// A labelled Op's key is its label. A structural Op has no label to give, so
+/// it takes the synthetic key `{kind}@{ordinal}` — `floor@3` for a `Floor`
+/// declared third. The ordinal is the same number the artifact's `increments`
+/// array lists against that step, so the waterfall row and the summary entry
+/// name one step rather than two.
+///
+/// `@` is reserved for this form and refused in a user label at compile time,
+/// one layer up in `rollforward/_passes.py`. A label `"floor@3"` reaching the
+/// kernel anyway would collide here, and the duplicate guard below catches it
+/// rather than letting two movements share one struct field.
 ///
 /// # Errors
 ///
-/// Returns `ComputeError` when two labelled Ops share a label.
-pub fn labelled_increments(kwargs: &RollforwardKwargs) -> PolarsResult<Vec<(usize, String)>> {
+/// Returns `ComputeError` for a label-bearing Op carrying no label. The
+/// synthetic form is closed to the two structural Ops, so there is no honest
+/// key left to give; the compiler already refuses this before the kwargs are
+/// built, and inventing a third kind here would put a name on the wire that
+/// the spec does not define.
+fn increment_key(op: &OpV2, ordinal: usize) -> PolarsResult<String> {
+    if let Some(label) = op_label(op) {
+        return Ok(label.to_string());
+    }
+    match op {
+        OpV2::Floor { .. } => Ok(format!("floor@{ordinal}")),
+        OpV2::Round { .. } => Ok(format!("round@{ordinal}")),
+        _ => Err(PolarsError::ComputeError(
+            format!(
+                "rollforward: op {ordinal} carries no label with \
+                 track_increments=True, and only Floor and Round are named \
+                 for the step instead — give it label=..."
+            )
+            .into(),
+        )),
+    }
+}
+
+/// The Ops that emit increment fields when `track_increments`, as
+/// `(op_index, key)` in declared order. One source of truth shared by the
+/// kernel's emission and the plugin's output-schema declaration, so the two
+/// cannot drift.
+///
+/// Every Op emits. A step that moved the balance and reported nothing is a
+/// gap in the audit trail exactly where the balance is hardest to explain —
+/// the floor that absorbed the overdraft — and the check line
+/// `closing = opening + Σ increments` would then close only by luck.
+///
+/// # Errors
+///
+/// Returns `ComputeError` when two Ops would emit under one key — two labels
+/// the same, or a label colliding with a structural step's reserved key — and
+/// when a label-bearing Op carries no label ([`increment_key`]).
+pub fn tracked_increments(kwargs: &RollforwardKwargs) -> PolarsResult<Vec<(usize, String)>> {
     if !kwargs.track_increments {
         return Ok(Vec::new());
     }
-    let mut seen: Vec<&str> = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
     let mut out: Vec<(usize, String)> = Vec::new();
     for (i, op) in kwargs.ops.iter().enumerate() {
-        if let Some(label) = op_label(op) {
-            if seen.contains(&label) {
-                return Err(PolarsError::ComputeError(
-                    format!(
-                        "rollforward: duplicate op label {label:?} with \
-                         track_increments=True — each labelled op emits its own \
-                         increment field, so labels must be unique"
-                    )
-                    .into(),
-                ));
-            }
-            seen.push(label);
-            out.push((i, label.to_string()));
+        let key = increment_key(op, i + 1)?;
+        if seen.contains(&key) {
+            return Err(PolarsError::ComputeError(
+                format!(
+                    "rollforward: duplicate op label {key:?} with \
+                     track_increments=True — each labelled op emits its own \
+                     increment field, so labels must be unique"
+                )
+                .into(),
+            ));
         }
+        seen.push(key.clone());
+        out.push((i, key));
     }
     Ok(out)
 }
@@ -1461,7 +1531,11 @@ mod tests {
                 .map(|p| Some(Series::new("".into(), p))),
         )
         .into_series();
+        run_av_eop_series(init_series, prem_list)
+    }
 
+    /// [`run_av_eop`] over columns built by the caller -- a slice, say.
+    fn run_av_eop_series(init_series: Series, prem_list: Series) -> PolarsResult<Vec<Vec<f64>>> {
         // n_periods is the portfolio-max capacity hint; the kernel must size
         // each policy from its own list length, not assume every row == 3.
         let kwargs_json = r#"{
@@ -1492,6 +1566,47 @@ mod tests {
             rows.push((0..f.len()).map(|i| f.get(i).unwrap()).collect());
         }
         Ok(rows)
+    }
+
+    /// Four policies of three periods; the last one's second premium is
+    /// missing when `hole` is set.
+    fn four_premium_rows(hole: bool) -> (Series, Series) {
+        let init = Series::new("av_init".into(), vec![100.0, 200.0, 300.0, 400.0]);
+        let premiums = ListChunked::from_iter((0..4).map(|r| {
+            let p = 10.0 * (r + 1) as f64;
+            let middle = if hole && r == 3 { None } else { Some(p + 1.0) };
+            Some(Series::new("".into(), vec![Some(p), middle, Some(p + 2.0)]))
+        }))
+        .into_series();
+        (init, premiums)
+    }
+
+    #[test]
+    fn a_slice_answers_what_the_whole_column_answers_for_those_rows() -> PolarsResult<()> {
+        // The streaming engine hands the kernel a slice whose inner values are
+        // the whole column's; its offsets do not start at zero.
+        let (init, premiums) = four_premium_rows(false);
+        let whole = run_av_eop_series(init.clone(), premiums.clone())?;
+        let part = run_av_eop_series(init.slice(1, 2), premiums.slice(1, 2))?;
+        assert_eq!(part, whole[1..3].to_vec());
+        Ok(())
+    }
+
+    #[test]
+    fn a_slice_is_not_refused_for_a_hole_in_a_policy_it_was_not_given() -> PolarsResult<()> {
+        // The missing premium belongs to the fourth policy, which this slice
+        // leaves out: the slice's own two policies have every period.
+        let (init, premiums) = four_premium_rows(true);
+        let part = run_av_eop_series(init.slice(0, 2), premiums.slice(0, 2))?;
+        let (init, premiums) = four_premium_rows(false);
+        let expected = run_av_eop_series(init.slice(0, 2), premiums.slice(0, 2))?;
+        assert_eq!(part, expected);
+        assert_eq!(part[0], vec![110.0, 121.0, 133.0]);
+        // The hole itself is still refused when its policy is in the batch.
+        let (init, premiums) = four_premium_rows(true);
+        let err = run_av_eop_series(init.slice(2, 2), premiums.slice(2, 2)).unwrap_err();
+        assert!(err.to_string().contains("null inner values"), "{err}");
+        Ok(())
     }
 
     #[test]
@@ -1738,11 +1853,19 @@ mod tests {
     #[test]
     fn off_by_one_length_names_the_point_indexed_trap() {
         // Length n_periods + 1 is what every axis-derived input produces, so
-        // the error must state the point- vs period-indexed rule and the
-        // .list.head fix — not point back at the axis that caused it (gh#73).
+        // the error must state the point- vs period-indexed rule and moves
+        // that work — not point back at the axis that caused it (gh#73), and
+        // not a bare `.list.head`, which is no declared operation: the cut
+        // is the escape, named with its cost.
         let msg = uniform_guard_error(vec![1.0, 2.0, 3.0, 4.0]);
         assert!(msg.contains("point-indexed"), "{msg}");
-        assert!(msg.contains(".list.head(3)"), "{msg}");
+        assert!(
+            msg.contains("broadcast_to_periods(like=af.projection.year_fractions())"),
+            "{msg}"
+        );
+        assert!(msg.contains("`.polars_native().list.head(3)`"), "{msg}");
+        assert!(!msg.contains("e.g. `.list.head("), "{msg}");
+        assert!(msg.contains("engine_native"), "{msg}");
         assert!(msg.contains("n_periods = 3"), "{msg}");
         assert!(
             !msg.contains("build the inputs on the schedule's axis"),
@@ -1834,18 +1957,19 @@ mod tests {
     }
 
     #[test]
-    fn round_half_away_is_excels_round() {
-        // Ties chosen to be exact in binary so the rule, not representation,
-        // is what's under test.
-        assert_eq!(round_half_away(2.5, 0), 3.0);
-        assert_eq!(round_half_away(-2.5, 0), -3.0);
-        assert_eq!(round_half_away(0.375, 2), 0.38);
-        assert_eq!(round_half_away(-0.375, 2), -0.38);
-        assert_eq!(round_half_away(125.0, -1), 130.0);
-        // Non-finite and overflow-on-scale values pass through unchanged.
-        assert!(round_half_away(f64::NAN, 2).is_nan());
-        assert_eq!(round_half_away(f64::INFINITY, 2), f64::INFINITY);
-        assert_eq!(round_half_away(1.7e308, 2), 1.7e308);
+    fn the_kernel_rounds_as_excel_does() {
+        // Ties chosen to be exact in binary, so the rule is what's under test.
+        assert_eq!(excel_round(2.5, 0), 3.0);
+        assert_eq!(excel_round(-2.5, 0), -3.0);
+        assert_eq!(excel_round(0.375, 2), 0.38);
+        assert_eq!(excel_round(-0.375, 2), -0.38);
+        assert_eq!(excel_round(125.0, -1), 130.0);
+        // A double just under a half is a half at fifteen digits, as in Excel.
+        assert_eq!(excel_round(5657268.499999999 * 0.03, 2), 169718.06);
+        // Non-finite values and magnitudes past the scaling pass through.
+        assert!(excel_round(f64::NAN, 2).is_nan());
+        assert_eq!(excel_round(f64::INFINITY, 2), f64::INFINITY);
+        assert_eq!(excel_round(1.7e308, 2), 1.7e308);
     }
 
     /// One-state, one-input helper: run `ops_json` over 2 periods with the
@@ -1908,6 +2032,34 @@ mod tests {
                 "round_charge": 2, "label": null}"#,
         );
         assert!((row[0] - 1033.33).abs() < 1e-9, "t1: {}", row[0]);
+    }
+
+    #[test]
+    fn grow_round_charge_rounds_the_fifteen_digit_credit_as_excel_does() {
+        // UniversalLife.xlsx, 'Account Values -- Type A', row 74, column Q =
+        // ROUND(MAX((H-P)*3%,0),2) with column H = 5657268.499999999 and
+        // column P = 0. The credit is the double 169718.05499999996…, whose
+        // fifteen digits read 169718.055000000, and Excel credits 169718.06.
+        let row = run_one_input(
+            5657268.499999999,
+            vec![0.03],
+            r#"{"op": "Grow", "target_state": 0, "target_point": 1,
+                "rate_arg": {"kind": "input", "idx": 0},
+                "round_charge": 2, "label": null}"#,
+        );
+        assert_eq!(row[0], 5657268.499999999 + 169718.06);
+    }
+
+    #[test]
+    fn round_rounds_the_fifteen_digit_balance_as_excel_does() {
+        // A balance of 1.5 * 45366.20999999999 is 68049.31499999999… as a
+        // double and 68049.3150000000 at fifteen digits; ROUND gives 68049.32.
+        let row = run_one_input(
+            1.5 * 45366.20999999999,
+            vec![0.0],
+            r#"{"op": "Round", "target_state": 0, "target_point": 1, "decimals": 2}"#,
+        );
+        assert_eq!(row[0], 68049.32);
     }
 
     #[test]
@@ -2080,7 +2232,261 @@ mod tests {
             "captures_resolved": [{"state": 0, "point": 1}]
         }"#;
         let kwargs: RollforwardKwargs = serde_json::from_str(json).unwrap();
-        let err = labelled_increments(&kwargs).unwrap_err();
+        let err = tracked_increments(&kwargs).unwrap_err();
         assert!(err.to_string().contains("duplicate op label"));
+    }
+
+    // ---- Structural increments: every step emits, a floor or a round too ----
+
+    /// Build a one-state, one-policy kernel run over `ops`, tracking on.
+    ///
+    /// The chains below all charge or credit a single balance, so one input
+    /// list and one capture is the whole shape; what varies between them is
+    /// which structural steps the chain declares and where.
+    fn run_tracked(init_v: f64, input: Vec<f64>, ops_json: &str) -> (Vec<String>, Vec<Vec<f64>>) {
+        let n = input.len();
+        let init = Series::new("av_init".into(), vec![init_v]);
+        let arg = ListChunked::from_iter([Some(Series::new("".into(), input))]).into_series();
+        let kwargs_json = format!(
+            r#"{{
+                "ir": {{"states": [{{"name": "av"}}], "points": ["bop", "eop"], "transitions": []}},
+                "captures": [["av", "eop"]],
+                "track_increments": true,
+                "lapse_when_all_non_positive": [],
+                "contract_boundary": null,
+                "n_states": 1,
+                "n_points": 2,
+                "n_periods": {n},
+                "bop_idx": 0,
+                "eop_idx": 1,
+                "input_columns": ["a"],
+                "ops": {ops_json},
+                "captures_resolved": [{{"state": 0, "point": 1}}]
+            }}"#
+        );
+        let kwargs: RollforwardKwargs = serde_json::from_str(&kwargs_json).unwrap();
+        let out = rollforward_kernel(&[init, arg], &kwargs).unwrap();
+        let fields = out.struct_().unwrap().fields_as_series();
+        let names: Vec<String> = fields.iter().map(|s| s.name().to_string()).collect();
+        let rows: Vec<Vec<f64>> = fields
+            .iter()
+            .map(|f| {
+                let s = f.list().unwrap().get_as_series(0).unwrap();
+                let ca = s.f64().unwrap();
+                (0..ca.len()).map(|i| ca.get(i).unwrap()).collect()
+            })
+            .collect();
+        (names, rows)
+    }
+
+    const SUBTRACT_THEN_FLOOR: &str = r#"[
+        {"op": "Subtract", "target_state": 0, "target_point": 1,
+         "expr_arg": {"kind": "input", "idx": 0}, "label": "drawdown"},
+        {"op": "Floor", "target_state": 0, "target_point": 1, "value": 0.0}
+    ]"#;
+
+    #[test]
+    fn a_floor_that_bites_reports_what_it_absorbed() {
+        // 100 − 60 = 40; 40 − 60 = −20, floored to 0. The floor's increment
+        // is +20 in that period: the amount it put back, signed as §16.2
+        // defines every increment, after − before.
+        let (names, rows) = run_tracked(100.0, vec![60.0, 60.0], SUBTRACT_THEN_FLOOR);
+        assert_eq!(
+            names,
+            vec!["av@eop", "increment_drawdown", "increment_floor@2"]
+        );
+        assert_eq!(rows[0], vec![40.0, 0.0]);
+        assert_eq!(rows[1], vec![-60.0, -60.0]);
+        assert_eq!(rows[2], vec![0.0, 20.0]);
+    }
+
+    #[test]
+    fn a_floor_that_never_bites_reports_zero_in_every_period() {
+        // The field is emitted regardless: a reader counting rows against the
+        // chain's steps must not have to know whether a floor fired, and a
+        // missing column and a column of zeros say different things.
+        let (names, rows) = run_tracked(100.0, vec![10.0, 10.0], SUBTRACT_THEN_FLOOR);
+        assert_eq!(
+            names,
+            vec!["av@eop", "increment_drawdown", "increment_floor@2"]
+        );
+        assert_eq!(rows[2], vec![0.0, 0.0]);
+    }
+
+    #[test]
+    fn a_round_reports_the_rounding_delta() {
+        // 100 − 33.333 = 66.667 → 66.67, so the round put back +0.003;
+        // 66.67 − 33.333 = 33.337 → 33.34, +0.003 again. The sign is the
+        // same after − before every other increment carries: a round that
+        // takes the balance down reports a negative delta.
+        let ops = r#"[
+            {"op": "Subtract", "target_state": 0, "target_point": 1,
+             "expr_arg": {"kind": "input", "idx": 0}, "label": "drawdown"},
+            {"op": "Round", "target_state": 0, "target_point": 1, "decimals": 2}
+        ]"#;
+        let (names, rows) = run_tracked(100.0, vec![33.333, 33.333], ops);
+        assert_eq!(
+            names,
+            vec!["av@eop", "increment_drawdown", "increment_round@2"]
+        );
+        for (got, want) in rows[0].iter().zip([66.67, 33.34]) {
+            assert!((got - want).abs() < 1e-9, "eop {:?}", rows[0]);
+        }
+        for got in &rows[2] {
+            assert!((got - 0.003).abs() < 1e-9, "round delta {:?}", rows[2]);
+        }
+    }
+
+    #[test]
+    fn a_chain_carrying_both_names_each_by_its_own_ordinal() {
+        // The ordinal is the step's 1-based position in the declared chain —
+        // the same number the artifact's `increments` array lists against it
+        // — so `floor@2` and `round@3` are the second and third steps and a
+        // reader citing one movement reaches one step.
+        let ops = r#"[
+            {"op": "Subtract", "target_state": 0, "target_point": 1,
+             "expr_arg": {"kind": "input", "idx": 0}, "label": "drawdown"},
+            {"op": "Floor", "target_state": 0, "target_point": 1, "value": 0.0},
+            {"op": "Round", "target_state": 0, "target_point": 1, "decimals": 2}
+        ]"#;
+        let (names, _) = run_tracked(100.0, vec![60.0, 60.0], ops);
+        assert_eq!(
+            names,
+            vec![
+                "av@eop",
+                "increment_drawdown",
+                "increment_floor@2",
+                "increment_round@3"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_chain_with_no_structural_step_keeps_the_shape_it_had() {
+        // The change is additive: a fully labelled chain emits exactly the
+        // fields it emitted before, in the order it emitted them.
+        let ops = r#"[
+            {"op": "Add", "target_state": 0, "target_point": 1,
+             "expr_arg": {"kind": "input", "idx": 0}, "label": "Premium"},
+            {"op": "Subtract", "target_state": 0, "target_point": 1,
+             "expr_arg": {"kind": "input", "idx": 0}, "label": "Withdrawal"}
+        ]"#;
+        let (names, rows) = run_tracked(0.0, vec![100.0, 100.0], ops);
+        assert_eq!(
+            names,
+            vec!["av@eop", "increment_Premium", "increment_Withdrawal"]
+        );
+        assert_eq!(rows[1], vec![100.0, 100.0]);
+        assert_eq!(rows[2], vec![-100.0, -100.0]);
+    }
+
+    #[test]
+    fn the_increments_sum_to_the_period_change_in_the_balance() {
+        // The check line under a rollforward's movements, closing on the
+        // kernel's own rows with nothing derived: closing − opening =
+        // Σ increments, in every period, with the floor biting in one of them.
+        // Opening at t is closing at t−1, with the initial state in front.
+        let (_, rows) = run_tracked(100.0, vec![60.0, 60.0, 10.0], SUBTRACT_THEN_FLOOR);
+        let closing = &rows[0];
+        let mut opening = 100.0;
+        for t in 0..closing.len() {
+            let summed: f64 = rows[1..].iter().map(|inc| inc[t]).sum();
+            let moved = closing[t] - opening;
+            assert!(
+                (moved - summed).abs() < 1e-12,
+                "period {t}: moved {moved}, increments summed {summed}"
+            );
+            opening = closing[t];
+        }
+    }
+
+    /// Hands `ops` to the key pass on the same one-state, one-period shape
+    /// `run_tracked` builds, and returns the refusal.
+    ///
+    /// Both guards below are about the key a step would emit, not about any
+    /// value it computes, so neither needs the kernel run — the op list is
+    /// the whole of what the two cases differ in.
+    fn tracked_key_error(ops_json: &str) -> String {
+        let kwargs_json = format!(
+            r#"{{
+                "ir": {{"states": [{{"name": "av"}}], "points": ["bop", "eop"], "transitions": []}},
+                "captures": [["av", "eop"]],
+                "track_increments": true,
+                "lapse_when_all_non_positive": [],
+                "contract_boundary": null,
+                "n_states": 1,
+                "n_points": 2,
+                "n_periods": 1,
+                "bop_idx": 0,
+                "eop_idx": 1,
+                "input_columns": ["a"],
+                "ops": {ops_json},
+                "captures_resolved": [{{"state": 0, "point": 1}}]
+            }}"#
+        );
+        let kwargs: RollforwardKwargs = serde_json::from_str(&kwargs_json).unwrap();
+        tracked_increments(&kwargs).unwrap_err().to_string()
+    }
+
+    #[test]
+    fn a_user_label_colliding_with_a_structural_key_is_refused() {
+        // `@` is reserved and refused in a user label at compile time, one
+        // layer up. Kwargs handed to the kernel by anything else still meet
+        // the guard here rather than producing two fields with one name.
+        let err = tracked_key_error(
+            r#"[
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": "floor@2"},
+                {"op": "Floor", "target_state": 0, "target_point": 1, "value": 0.0}
+            ]"#,
+        );
+        assert!(err.contains("duplicate op label"));
+    }
+
+    #[test]
+    fn a_flow_with_no_label_is_refused_rather_than_given_an_invented_name() {
+        // Only Floor and Round are named for the step. A flow reaching the
+        // kernel unlabelled under tracking has no honest key left, and the
+        // compiler refuses it one layer up; a third synthetic kind here would
+        // put a name on the wire that the format does not define.
+        let err = tracked_key_error(
+            r#"[
+                {"op": "Add", "target_state": 0, "target_point": 1,
+                 "expr_arg": {"kind": "input", "idx": 0}, "label": null}
+            ]"#,
+        );
+        assert!(err.contains("carries no label"));
+    }
+
+    #[test]
+    fn tracking_off_emits_no_increment_field_for_any_step() {
+        let (names, _) = {
+            let init = Series::new("av_init".into(), vec![100.0]);
+            let arg =
+                ListChunked::from_iter([Some(Series::new("".into(), vec![60.0]))]).into_series();
+            let json = format!(
+                r#"{{
+                    "ir": {{"states": [{{"name": "av"}}], "points": ["bop", "eop"], "transitions": []}},
+                    "captures": [["av", "eop"]],
+                    "track_increments": false,
+                    "lapse_when_all_non_positive": [],
+                    "contract_boundary": null,
+                    "n_states": 1,
+                    "n_points": 2,
+                    "n_periods": 1,
+                    "bop_idx": 0,
+                    "eop_idx": 1,
+                    "input_columns": ["a"],
+                    "ops": {SUBTRACT_THEN_FLOOR},
+                    "captures_resolved": [{{"state": 0, "point": 1}}]
+                }}"#
+            );
+            let kwargs: RollforwardKwargs = serde_json::from_str(&json).unwrap();
+            let out = rollforward_kernel(&[init, arg], &kwargs).unwrap();
+            let fields = out.struct_().unwrap().fields_as_series();
+            let names: Vec<String> = fields.iter().map(|s| s.name().to_string()).collect();
+            (names, ())
+        };
+        assert_eq!(names, vec!["av@eop"]);
     }
 }

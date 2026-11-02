@@ -25,8 +25,7 @@ This script proves that reconciliation:
 A clean ``uv run python 04_over_partition.py`` (exit 0, asserts pass) is the
 test.
 
-Reference: batched aggregate-and-stream design (repo ``ref/41-backend-portability``,
-GSP-89 / PR #111).
+Reference: the batched aggregate-and-stream design, shipped in PR #111.
 """
 
 from __future__ import annotations
@@ -62,9 +61,7 @@ def model_fn(af: ActuarialFrame) -> ActuarialFrame:
         frequency="monthly",
     )
     af.projection_date = af.projection.period_dates()
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() supplies month: 0 through PROJECTION_MONTHS, inclusive.
     af.premium_t = af.premium_pp + af.month * 0.0
     af.claim_t = af.claim_pp * af.month
     af.net_cf = af.premium_t - af.claim_t
@@ -99,8 +96,7 @@ def main() -> None:
     sum_of_partitions = float(by_product["pv_net_cf"].sum())
 
     assert abs(sum_of_partitions - portfolio_total) < 1e-9, (
-        f"partition subtotals {sum_of_partitions} != portfolio total "
-        f"{portfolio_total}"
+        f"partition subtotals {sum_of_partitions} != portfolio total {portfolio_total}"
     )
     assert abs(portfolio_total - direct_total) < 1e-9, (
         f"portfolio total {portfolio_total} != direct full-run total {direct_total}"

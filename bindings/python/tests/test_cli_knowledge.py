@@ -41,8 +41,10 @@ class TestKnowledgeCommand:
         assert "-j" in result.output or "jurisdiction" in result.output
         assert "-d" in result.output or "doc-type" in result.output
         assert "-r" in result.output or "retrieval" in result.output
-        assert "IFRS17" in result.output
-        assert "SolvencyII" in result.output
+        # The tags the index actually uses, as it spells them
+        assert "ifrs17" in result.output
+        assert "solvency" in result.output
+        assert "SolvencyII" not in result.output
 
     def test_knowledge_help_shows_examples(self):
         """Knowledge --help shows example queries."""
@@ -456,3 +458,129 @@ class TestKnowledgeAnswerFallback:
 
         assert result.exit_code == 1
         assert "Search still works" not in result.stderr
+
+
+class TestKnowledgeUnmatchedFilters:
+    """A filter that matches nothing is said in plain English, never dropped."""
+
+    @staticmethod
+    def _empty() -> KnowledgeSearchResponse:
+        return KnowledgeSearchResponse(
+            results=[],
+            query="mortality improvement",
+            count=0,
+            search_type="hybrid",
+            retrieval_mode="chunks",
+            took_ms=10.0,
+        )
+
+    @staticmethod
+    def _hit() -> KnowledgeResult:
+        return KnowledgeResult(
+            text="Mortality improvement scales.",
+            score=0.9,
+            doc_id="mi-scale",
+            tags=["life"],
+            jurisdiction="us",
+            doc_type="guidance",
+        )
+
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
+    def test_unknown_filter_value_is_named_with_the_values_that_exist(
+        self, mock_client_class
+    ):
+        """-T mortality matched nothing: say so, name it, list the real tags."""
+        mock_client = MagicMock()
+        mock_client.search_knowledge.return_value = self._empty()
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(
+            app,
+            ["knowledge", "mortality improvement", "-T", "mortality", "-j", "EU"],
+        )
+
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["results"] == []
+        note = output["note"]
+        assert note.startswith(
+            "No knowledge results matched --tag mortality --jurisdiction eu."
+        )
+        assert "The index is not known to use --tag mortality." in note
+        assert "Its tags are capital, gaap, general" in note
+        assert "its jurisdictions au, eu, international, uk, us" in note
+        assert "Re-run without the filters" in note
+        assert "not known to use --tag mortality" in " ".join(result.stderr.split())
+        # The filter is neither dropped nor retried without: one request, as asked
+        mock_client.search_knowledge.assert_called_once()
+        assert mock_client.search_knowledge.call_args.kwargs["tags"] == ["mortality"]
+
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
+    def test_known_values_that_match_nothing_together_say_so(self, mock_client_class):
+        """Every value exists: it is the combination that came back empty."""
+        mock_client = MagicMock()
+        mock_client.search_knowledge.return_value = self._empty()
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(
+            app, ["knowledge", "net premium ratio", "-T", "GAAP", "-j", "eu"]
+        )
+
+        assert result.exit_code == 0
+        note = json.loads(result.stdout)["note"]
+        assert "matched --tag gaap --jurisdiction eu." in note
+        assert "Each of those values is one the index uses" in note
+        assert "not known to use" not in note
+
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
+    def test_no_note_without_filters(self, mock_client_class):
+        """An unfiltered search that finds nothing has no filter to blame."""
+        mock_client = MagicMock()
+        mock_client.search_knowledge.return_value = self._empty()
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["knowledge", "mortality improvement"])
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout)["note"] is None
+        assert result.stderr == ""
+
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
+    def test_no_note_when_the_filter_finds_results(self, mock_client_class):
+        """A filter that matched something is not second-guessed."""
+        mock_client = MagicMock()
+        empty = self._empty()
+        mock_client.search_knowledge.return_value = empty.model_copy(
+            update={"results": [self._hit()], "count": 1}
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(
+            app, ["knowledge", "mortality improvement", "-T", "unheard-of"]
+        )
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout)["note"] is None
+        assert result.stderr == ""
+
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
+    def test_answer_with_no_sources_under_a_filter_says_so(self, mock_client_class):
+        """An answer drawn from no source is flagged as the filter's doing."""
+        mock_client = MagicMock()
+        mock_client.answer_knowledge.return_value = KnowledgeAnswerResponse(
+            answer="The CSM is the unearned profit...",
+            sources=[],
+            query="what is the CSM",
+            model="some-model",
+            tokens_used=100,
+            took_ms=900.0,
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["knowledge", "what is the CSM", "-a", "-T", "CSM"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["answer"].startswith("The CSM")
+        assert "The index is not known to use --tag csm." in output["note"]
+        assert "not known to use --tag csm" in " ".join(result.stderr.split())

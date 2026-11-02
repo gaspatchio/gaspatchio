@@ -35,8 +35,7 @@ from __future__ import annotations
 from datetime import date
 
 
-from gaspatchio import ActuarialFrame
-from gaspatchio.rollforward._compile import compile_rollforward
+from gaspatchio import ActuarialFrame, compile_rollforward
 
 
 def main() -> None:

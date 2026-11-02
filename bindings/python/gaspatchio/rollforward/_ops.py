@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from gaspatchio.rollforward._refs import StateRef
 
 
@@ -39,7 +41,7 @@ class Op:
         """Construction-time validation. Default is a no-op; override per Op."""
 
 
-_MAX_ROUND_DECIMALS = 15  # beyond f64's decimal precision, rounding is a no-op
+_MAX_ROUND_DECIMALS = 15  # the 15 significant digits Excel's ROUND keeps
 
 
 def _verify_round_charge(round_charge: int | None, op_name: str) -> None:
@@ -87,8 +89,9 @@ class Subtract(Op):
 class Charge(Op):
     """``s *= 1 - rate[t]`` at the target's point.
 
-    ``round_charge`` rounds the computed charge (half away from zero, Excel's
-    ROUND) to that many decimals before applying it — ``s -= ROUND(s*rate, d)``
+    ``round_charge`` rounds the computed charge to that many decimals before
+    applying it, as Excel's ROUND does (the charge's 15-significant-digit
+    decimal, half away from zero) — ``s -= ROUND(s*rate, d)``
     — leaving the running state to carry its sub-unit residue forward, which
     is the placement spreadsheets use. Contrast ``Round``, which rounds the
     state and discards the residue every period.
@@ -103,16 +106,22 @@ class Charge(Op):
         _verify_round_charge(self.round_charge, "charge")
         # Heuristic: a literal negative rate is almost certainly a bug
         # (rate=0.05 means "5% expense charge"; rate=-0.05 would mean
-        # "negative expense" i.e. a credit). Real negative rates should
-        # be modelled as Add, not Charge.
+        # "negative expense" i.e. a credit). A credit of a share of the
+        # balance is a Grow, and a compiled rollforward reads every rate
+        # from a column, so the refusal names both.
         try:
             value = pl.select(self.rate.cast(pl.Float64)).item()
         except Exception:  # noqa: BLE001
             return  # Non-literal expression — defer to runtime
         if value is not None and value < 0:
+            named = "A charge" if self.label is None else f"Charge {self.label!r}"
             msg = (
-                f"Charge {self.label!r} has negative literal rate ({value}); "
-                "use Add for credits"
+                f"{named} has the rate {value}, a number below zero: it would "
+                "credit the balance, and a compiled rollforward reads each "
+                "rate from a column of the frame in any case. For a charge, "
+                f"put the rate in a column -- af['rate'] = {-value} -- and "
+                "charge it: .charge(af['rate']). For a credit of a share of "
+                "the balance, grow it by that column: .grow(af['rate'])."
             )
             raise ValueError(msg)
 
@@ -124,8 +133,9 @@ class Grow(Op):
     The schedule ``dt`` is not threaded through, so pre-scale an annual rate to
     the projection frequency yourself (e.g. a monthly rate for a monthly grid).
 
-    ``round_charge`` rounds the computed credit before applying it —
-    ``s += ROUND(s*rate, d)`` — the spreadsheet placement (see ``Charge``).
+    ``round_charge`` rounds the computed credit before applying it, as
+    Excel's ROUND does — ``s += ROUND(s*rate, d)`` — the spreadsheet
+    placement (see ``Charge``).
     """
 
     target: StateRef
@@ -274,7 +284,7 @@ class Floor(Op):
 
 @dataclass(frozen=True)
 class Round(Op):
-    """``s = round(s, decimals)`` — half away from zero, as Excel's ROUND.
+    """``s = ROUND(s, decimals)`` — as Excel's ROUND: 15 digits, half away from zero.
 
     Reproduces a source model that rounds *inside* the recursion. Rounding only
     the final answer is not the same thing: the rounding feeds the next period's
@@ -304,12 +314,24 @@ class Round(Op):
 
 @dataclass(frozen=True)
 class Apply(Op):
-    """Escape hatch — assign ``body`` directly to the target's point.
+    """Assign ``body`` directly to the target's point -- a step no kernel runs.
 
-    Use sparingly: ``Apply.body`` is an unbounded ``pl.Expr`` that the
-    static engine-binding walk inspects. Any non-closed-subset operator
-    (``pl.max_horizontal``, raw ``pl.Expr`` calls, autopatched methods)
-    flips the IR's ``engine_binding`` from ``'portable'`` to ``'polars'``.
+    It is in the vocabulary because the artifact format names it, and it is
+    not evaluable: the rollforward kernel has no evaluation for it, so
+    ``compile_rollforward`` refuses a rollforward that carries one, whatever
+    its body, and names the operations to write instead. No named operation
+    sets a balance outright; subtracting the balance itself and adding the
+    new value composes to it exactly for a finite balance -- an infinite or
+    NaN one stays NaN, since inf - inf is NaN. A step that is arithmetic over
+    columns is worked out as a column before the rollforward and added or
+    subtracted.
+
+    The static engine-binding walk still reads ``body`` as it reads any
+    operand, accepting only the closed subset -- ``pl.col``, ``pl.lit``, the
+    arithmetic and comparison operators, ``&`` / ``|`` / ``~``,
+    when/then/otherwise, and the framework's typed inputs -- and stamping
+    anything else ``'polars'``; the subset is
+    ``_engine_binding._CLOSED_SUBSET``.
     """
 
     target: StateRef
@@ -317,7 +339,44 @@ class Apply(Op):
     label: str | None = None
 
 
+RESERVED_LABEL_CHARACTER = "@"
+"""The character a structural step's synthetic increment key is built from.
+
+Reserved, and refused in a label a model's author writes: the kernel names a
+``Floor``'s movement ``floor@3``, and a label free to carry ``@`` could be
+spelled to collide with one, which is two movements under one field name.
+"""
+
+
+def increment_key(op: Op, ordinal: int) -> str:
+    """Return the key the kernel names ``op``'s increment field under.
+
+    ``ordinal`` is the step's 1-based position in the declared chain -- the
+    same number the artifact's ``increments`` array lists against it, so the
+    waterfall row and the summary entry name one step rather than two.
+
+    A step the model's author named takes that name. ``Floor`` and ``Round``
+    carry no label field, because a floor is a constraint on the balance
+    rather than a movement anyone booked and a label on it would invite a
+    modeller to book it as one; they take the synthetic ``{kind}@{ordinal}``
+    instead. Every step emits, so that ``closing = opening + Σ increments``
+    is arithmetic the kernel closes rather than one carrying a residual.
+    """
+    label = getattr(op, "label", None)
+    if label is not None:
+        return str(label)
+    return f"{type(op).__name__.lower()}{RESERVED_LABEL_CHARACTER}{ordinal}"
+
+
+def increment_keys(transitions: Sequence[Op]) -> tuple[str, ...]:
+    """Return every increment key a chain emits, in the order it emits them."""
+    return tuple(
+        increment_key(op, ordinal) for ordinal, op in enumerate(transitions, start=1)
+    )
+
+
 __all__ = [
+    "RESERVED_LABEL_CHARACTER",
     "Add",
     "Apply",
     "Charge",
@@ -329,4 +388,6 @@ __all__ = [
     "Ratchet",
     "Round",
     "Subtract",
+    "increment_key",
+    "increment_keys",
 ]

@@ -11,6 +11,7 @@ import pytest
 
 from gaspatchio.column import ColumnProxy, ExpressionProxy
 from gaspatchio.column.condition_expression import ConditionExpression
+from gaspatchio.frame.graph.graph_utils import clean_expression_string
 
 
 # Mock ActuarialFrame specific to ColumnProxy tests if needed, or reuse a common one
@@ -22,7 +23,7 @@ class MockActuarialFrameForColumn:
         # Mock a _df with a simple schema for dispatch logic
         mock_df = pl.LazyFrame({"test_col": [1, 2, 3]})
         self._df = mock_df
-        self._tracing = False  # Add _tracing attribute required by ErrorEnhancer
+        self._traced_run = False  # Add _traced_run attribute required by ErrorEnhancer
 
     def _convert_to_expr(self, value):
         if isinstance(value, ExpressionProxy):
@@ -102,15 +103,16 @@ def test_column_proxy_binary_operators(col_proxy, op, op_symbol):
     other = 5
     result_proxy = op(col_proxy, other)
     assert isinstance(result_proxy, ExpressionProxy)
-    expected_expr_str = f'[(col("test_col")) {op_symbol} (dyn int: {other})]'
-    assert str(result_proxy._expr) == expected_expr_str
+    expected_expr_str = f'[(col("test_col")) {op_symbol} ({other})]'
+    # `/` over numbers lowers to the IEEE kernel; the export renders it as `/`.
+    assert clean_expression_string(str(result_proxy._expr)) == expected_expr_str
 
 
 def test_column_proxy_pow_operator(col_proxy):
     other = 2
     result_proxy = col_proxy**other
     assert isinstance(result_proxy, ExpressionProxy)
-    assert str(result_proxy._expr) == 'col("test_col").pow([dyn int: 2])'
+    assert str(result_proxy._expr) == 'col("test_col").pow([2])'
 
 
 @pytest.mark.parametrize(
@@ -125,7 +127,9 @@ def test_column_proxy_pow_operator(col_proxy):
     ],
 )
 def test_column_proxy_comparison_operators(col_proxy, op, op_symbol, operator_name):
-    other = "abc"
+    # A whole-number column compared with a whole number: one kind. Text
+    # against these numbers is refused at the line (test_a_comparison_*).
+    other = 7
     result = op(col_proxy, other)
     # Comparison operators now return ConditionExpression for plugin integration
     assert isinstance(result, ConditionExpression)
@@ -133,12 +137,7 @@ def test_column_proxy_comparison_operators(col_proxy, op, op_symbol, operator_na
     assert result.operator == operator_name
     assert result._parent is col_proxy._parent
     # Verify the underlying expression is correct
-    expected_expr_str_v1 = f'[(col("test_col")) {op_symbol} (String({other}))]'
-    expected_expr_str_v2 = f'[(col("test_col")) {op_symbol} ("{other}")]'
-    assert (
-        str(result._expr) == expected_expr_str_v1
-        or str(result._expr) == expected_expr_str_v2
-    )
+    assert str(result._expr) == f'[(col("test_col")) {op_symbol} ({other})]'
 
 
 @pytest.mark.parametrize(
@@ -157,8 +156,8 @@ def test_column_proxy_reverse_binary_operators(col_proxy, op, op_symbol):
     other = 5
     result_proxy = op(other, col_proxy)  # Reverse order
     assert isinstance(result_proxy, ExpressionProxy)
-    expected_expr_str = f'[(dyn int: {other}) {op_symbol} (col("test_col"))]'
-    assert str(result_proxy._expr) == expected_expr_str
+    expected_expr_str = f'[({other}) {op_symbol} (col("test_col"))]'
+    assert clean_expression_string(str(result_proxy._expr)) == expected_expr_str
 
 
 def test_column_proxy_reverse_pow_operator(col_proxy):
@@ -170,7 +169,7 @@ def test_column_proxy_reverse_pow_operator(col_proxy):
     from gaspatchio import ActuarialFrame
 
     af = ActuarialFrame({"test_col": [1, 2, 3]})
-    af.result = other ** af.test_col
+    af.result = other**af.test_col
     result = af.collect()
     vals = result["result"].to_list()
     assert vals == [2.0, 4.0, 8.0], f"2**[1,2,3] should be [2,4,8], got {vals}"
@@ -250,7 +249,6 @@ def test_column_proxy_finance_accessor_wiring(col_proxy):
         # _ACCESSOR_REGISTRY.unregister("finance", "column") # REMOVED
 
 
-# Add tests for explicitly defined methods like alias, cast if they were
-# *not* handled by autopatch in your final design, but assuming they are:
-# def test_column_proxy_alias(col_proxy): ...
-# def test_column_proxy_cast(col_proxy): ...
+# alias and cast are not declared operations, so ColumnProxy has no method
+# for either: both are reached through polars_native(), whose route
+# tests/graph/test_escape_hatch.py covers.

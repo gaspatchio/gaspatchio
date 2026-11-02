@@ -41,11 +41,11 @@ af.claims_death = af.av_pp * af.pols_death
 af.claim_pp_death = (
     when(af.has_gmdb)
     .then(
-        when(af.av_pp_mid_mth > af.sum_assured_f)    # nested when!
+        when(af.av_pp_mid_mth > af.sum_assured_f)  # nested when!
         .then(af.av_pp_mid_mth)
-        .otherwise(af.sum_assured_f)                   # guarantee kicks in
+        .otherwise(af.sum_assured_f)  # guarantee kicks in
     )
-    .otherwise(af.av_pp_mid_mth)                       # no guarantee: just AV
+    .otherwise(af.av_pp_mid_mth)  # no guarantee: just AV
 )
 ```
 

@@ -82,9 +82,7 @@ def model_fn(af: ActuarialFrame) -> ActuarialFrame:
         frequency="monthly",
     )
     af.projection_date = af.projection.period_dates()
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() supplies month: 0 through PROJECTION_MONTHS, inclusive.
     af.premium_t = af.premium_pp + af.month * 0.0
     af.claim_t = af.claim_pp * af.month
     af.net_cf = af.premium_t - af.claim_t  # list column (per period)
@@ -102,7 +100,7 @@ def numpy_loss_matrix() -> np.ndarray:
 def _interp_quantile(sorted_vals: np.ndarray, q: float) -> float:
     """Linear order-statistic interpolation, matching ``SignedSketch.quantile``.
 
-    Mirrors ``_interp_quantile`` in ``_sketch.py``: ``rank = q*(n-1)`` then
+    Mirrors ``SignedSketch._probe_values`` in ``_sketch.py``: ``rank = q*(n-1)``, then
     linearly interpolate the bracketing ascending order statistics. This is the
     oracle the sketch must reproduce up to bucket-discretisation error.
     """

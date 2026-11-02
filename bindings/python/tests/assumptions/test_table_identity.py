@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Test Table.canonical_form / source_sha / _content_sha."""
+"""Test Table.canonical_form / source_sha / fingerprint."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def test_two_tables_same_data_same_sha(mortality_df: pl.DataFrame) -> None:
 
 
 def test_content_sha_row_order_independent(mortality_df: pl.DataFrame) -> None:
-    """Shuffled rows still produce the same _content_sha."""
+    """Shuffled rows still produce the same fingerprint."""
     dims = {"age": "age", "sex": "sex"}
     t1 = Table(name="m", source=mortality_df, dimensions=dims, value="rate")
     t2 = Table(
@@ -71,7 +71,7 @@ def test_content_sha_row_order_independent(mortality_df: pl.DataFrame) -> None:
         dimensions=dims,
         value="rate",
     )
-    assert t1._content_sha() == t2._content_sha()  # noqa: SLF001
+    assert t1.fingerprint() == t2.fingerprint()
 
 
 def test_shocked_table_has_different_sha(mortality_table: Table) -> None:
@@ -90,7 +90,7 @@ def test_shocked_table_content_sha_changes_with_name_held_constant(
     )
     # Names match, but value column content differs
     assert shocked._name == mortality_table._name  # noqa: SLF001
-    assert shocked._content_sha() != mortality_table._content_sha()  # noqa: SLF001
+    assert shocked.fingerprint() != mortality_table.fingerprint()
     # And therefore source_sha differs (the new fact, not piggy-backing on name)
     assert shocked.source_sha() != mortality_table.source_sha()
 
@@ -98,13 +98,13 @@ def test_shocked_table_content_sha_changes_with_name_held_constant(
 def test_renamed_table_has_different_canonical_form(
     mortality_df: pl.DataFrame,
 ) -> None:
-    """Same content, different names -> different source_sha but same _content_sha."""
+    """Same content, different names -> different source_sha but same fingerprint."""
     dims = {"age": "age", "sex": "sex"}
     t1 = Table(name="m1", source=mortality_df, dimensions=dims, value="rate")
     t2 = Table(name="m2", source=mortality_df, dimensions=dims, value="rate")
     assert t1.source_sha() != t2.source_sha()
     # But content is identical
-    assert t1._content_sha() == t2._content_sha()  # noqa: SLF001
+    assert t1.fingerprint() == t2.fingerprint()
 
 
 def test_content_sha_empty_table() -> None:
@@ -115,19 +115,19 @@ def test_content_sha_empty_table() -> None:
     )
     dims = {"age": "age"}
     t = Table(name="m", source=empty_df, dimensions=dims, value="rate")
-    sha = t._content_sha()  # noqa: SLF001
+    sha = t.fingerprint()
     assert sha.startswith("sha256:")
 
     # Reconstructed same-shape empty table produces same SHA
     t2 = Table(name="m", source=empty_df.clone(), dimensions=dims, value="rate")
-    assert t._content_sha() == t2._content_sha()  # noqa: SLF001
+    assert t.fingerprint() == t2.fingerprint()
 
 
 def test_content_sha_single_row_table() -> None:
     """Single-row table produces a stable content_sha."""
     single_df = pl.DataFrame({"age": [30], "rate": [0.001]})
     t = Table(name="m", source=single_df, dimensions={"age": "age"}, value="rate")
-    sha = t._content_sha()  # noqa: SLF001
+    sha = t.fingerprint()
     assert sha.startswith("sha256:")
     assert len(sha) == len("sha256:") + 64
 
@@ -140,4 +140,4 @@ def test_content_sha_with_nan_value() -> None:
     dims = {"age": "age"}
     t1 = Table(name="m", source=nan_df, dimensions=dims, value="rate")
     t2 = Table(name="m", source=nan_df, dimensions=dims, value="rate")
-    assert t1._content_sha() == t2._content_sha()  # noqa: SLF001
+    assert t1.fingerprint() == t2.fingerprint()

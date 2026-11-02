@@ -13,8 +13,12 @@
 # bindings/python/uv.lock and forcing every contributor into a full Rust rebuild. The
 # Python project stays self-contained, and its lockfile stays where CI expects it.
 #
+# engines/jax is excluded for the same reason and one more: it is a second Python
+# project with a second lockfile and a venv of its own, holding an engine that the
+# core never imports. Its commands are run from engines/jax and reach nothing here.
+#
 # Run Python commands from bindings/python — see the CLI section of AGENTS.md.
 
 [tool.uv.workspace]
 members = []
-exclude = ["bindings/python"]
+exclude = ["bindings/python", "engines/jax"]

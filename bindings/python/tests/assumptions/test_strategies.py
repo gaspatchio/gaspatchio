@@ -6,6 +6,8 @@
 Tests for strategy implementations in _strategies.py
 """
 
+from typing import ClassVar
+
 import polars as pl
 import pytest
 
@@ -424,3 +426,165 @@ class TestStrategyIntegration:
             if overflow_col in ["Ultimate", "Ult", ""]:  # These should be detected
                 assert len(unique_durations) >= len(durations)  # Extended
             # else: may not be detected depending on implementation
+
+
+class TestInterpolationFollowsTheKey:
+    """A blank is interpolated along the key's value, not the column order (W5 A-F7)."""
+
+    @staticmethod
+    def _rate_at_duration_3(wide: pl.DataFrame, columns: list[str]) -> float:
+        from gaspatchio import ActuarialFrame
+        from gaspatchio.assumptions import MeltDimension, Table
+
+        table = Table(
+            name="lapse_by_key",
+            source=wide,
+            dimensions={
+                "age": "age",
+                "dur": MeltDimension(
+                    columns=columns, name="dur", fill=LinearInterpolate()
+                ),
+            },
+            value="rate",
+        )
+        af = ActuarialFrame(pl.DataFrame({"pid": [1], "age": [40], "dur": [3]}))
+        af.r = table.lookup(age=af.age, dur=af.dur)
+        return af.collect()["r"][0]
+
+    def test_a_gap_in_the_durations_is_measured_in_years(self):
+        """Durations 1, 2, 3, 5, 10 with 3 blank: one third of the way from 2 to 5."""
+        wide = pl.DataFrame(
+            {
+                "age": [40],
+                "1": [0.10],
+                "2": [0.08],
+                "3": [None],
+                "5": [0.02],
+                "10": [0.01],
+            },
+        )
+        r = self._rate_at_duration_3(wide, ["1", "2", "3", "5", "10"])
+        assert r == pytest.approx(0.08 + (0.02 - 0.08) / 3)  # 0.06, not 0.05
+
+    def test_columns_listed_in_text_order_interpolate_in_number_order(self):
+        """Headers sorted as text ('1','10','15','2',...) still interpolate by duration."""
+        values = {"1": 0.10, "2": 0.08, "3": None, "5": 0.05, "10": 0.04, "15": 0.03}
+        columns = sorted(values)  # ['1', '10', '15', '2', '3', '5']
+        wide = pl.DataFrame({"age": [40], **{c: [values[c]] for c in columns}})
+        r = self._rate_at_duration_3(wide, columns)
+        assert r == pytest.approx(0.08 + (0.05 - 0.08) / 3)  # 0.07, not 0.03
+
+    def test_evenly_spaced_columns_in_order_keep_their_old_values(self):
+        """Where the position was already the key, no number moves."""
+        df = pl.DataFrame(
+            {
+                "age": [40] * 4,
+                "duration": ["1", "2", "3", "4"],
+                "value": [0.1, None, None, 0.4],
+            },
+        )
+        result = LinearInterpolate().apply(df, group_columns=["age"])
+        assert result["value"].to_list() == pytest.approx([0.1, 0.2, 0.3, 0.4])
+
+    def test_a_label_that_is_not_a_number_is_refused(self):
+        """Labels such as 'd1', 'd2' have no distance between them, so nothing is interpolated."""
+        df = pl.DataFrame(
+            {
+                "age": [40] * 3,
+                "duration": ["d1", "d2", "d3"],
+                "value": [0.1, None, 0.3],
+            },
+        )
+        with pytest.raises(ValueError, match=r"'d1'.*is not a number"):
+            LinearInterpolate().apply(df, group_columns=["age"])
+
+    def test_two_candidate_keys_are_refused(self):
+        """With no group columns named, two key columns leave the axis ambiguous."""
+        df = pl.DataFrame(
+            {"age": [40, 40, 40], "duration": [1, 2, 3], "value": [0.1, None, 0.3]},
+        )
+        with pytest.raises(ValueError, match="which column to interpolate along"):
+            LinearInterpolate().apply(df)
+
+
+class TestForwardFillFollowsTheKey:
+    """A blank takes the rate of the key before it, not the column listed before it."""
+
+    @staticmethod
+    def _rate(values: dict[str, float | None], columns: list[str], at: int) -> float:
+        from gaspatchio import ActuarialFrame
+        from gaspatchio.assumptions import MeltDimension, Table
+
+        wide = pl.DataFrame({"age": [40], **{c: [values[c]] for c in columns}})
+        table = Table(
+            name=f"lapse_ffill_{'_'.join(columns)}",
+            source=wide,
+            dimensions={
+                "age": "age",
+                "dur": MeltDimension(columns=columns, name="dur", fill=FillForward()),
+            },
+            value="rate",
+        )
+        af = ActuarialFrame(pl.DataFrame({"pid": [1], "age": [40], "dur": [at]}))
+        af.r = table.lookup(age=af.age, dur=af.dur)
+        return af.collect()["r"][0]
+
+    _VALUES: ClassVar[dict[str, float | None]] = {
+        "1": 0.10,
+        "2": 0.08,
+        "3": None,
+        "5": 0.05,
+        "10": 0.04,
+        "15": 0.03,
+        "20": 0.02,
+    }
+
+    def test_columns_listed_in_text_order_fill_from_the_duration_before(self):
+        """Sorted as text, '20' precedes '3'; duration 3 takes duration 2's rate."""
+        columns = sorted(self._VALUES)  # ['1', '10', '15', '2', '20', '3', '5']
+        assert self._rate(self._VALUES, columns, 3) == 0.08  # duration 2, not 0.02
+
+    def test_a_column_listed_out_of_place_fills_from_the_duration_before(self):
+        """Duration 3 listed after 5 takes duration 2's 0.08, not duration 5's 0.05."""
+        columns = ["1", "2", "5", "3", "10"]
+        assert self._rate(self._VALUES, columns, 3) == 0.08
+
+    def test_the_rows_come_back_in_the_order_they_came(self):
+        """Only the blanks change; every row keeps its place."""
+        df = pl.DataFrame(
+            {
+                "age": [40, 40, 40, 41, 41, 41],
+                "duration": ["5", "1", "3", "3", "1", "5"],
+                "value": [0.05, 0.10, None, None, 0.20, 0.15],
+            },
+        )
+        result = FillForward().apply(df, group_columns=["age"])
+        assert result["duration"].to_list() == ["5", "1", "3", "3", "1", "5"]
+        assert result["value"].to_list() == [0.05, 0.10, 0.10, 0.20, 0.20, 0.15]
+
+    def test_a_label_that_is_not_a_number_is_refused(self):
+        """Labels such as 'd1', 'd2' give only the listing order: a blank is refused."""
+        df = pl.DataFrame(
+            {
+                "age": [40] * 3,
+                "duration": ["d1", "d2", "d3"],
+                "value": [0.1, None, 0.3],
+            },
+        )
+        with pytest.raises(ValueError, match=r"FillForward.*'d1'.*is not a number"):
+            FillForward().apply(df, group_columns=["age"])
+
+    def test_two_candidate_keys_are_refused(self):
+        """With no group columns named, two key columns leave the order ambiguous."""
+        df = pl.DataFrame(
+            {"age": [40, 40, 40], "duration": [1, 2, 3], "value": [0.1, None, 0.3]},
+        )
+        with pytest.raises(ValueError, match="which column to fill along"):
+            FillForward().apply(df)
+
+    def test_a_table_with_no_blank_is_not_read_for_a_key(self):
+        """No blank, nothing to fill: text labels are accepted as before."""
+        df = pl.DataFrame(
+            {"age": [40] * 2, "duration": ["d1", "d2"], "value": [0.1, 0.2]},
+        )
+        assert FillForward().apply(df, group_columns=["age"]).equals(df)

@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Build constraints for reuse 6.2.0 in licence-check.yml. reuse's one wheel
+# installs only on CPython 3.10 under glibc 2.41 or later, so CI builds it from
+# its source archive, with poetry-core: the release a fresh build resolved on
+# 3 October 2026. uv checks no hashes when it installs a tool, so it is held by
+# version.
+poetry-core==2.5.0

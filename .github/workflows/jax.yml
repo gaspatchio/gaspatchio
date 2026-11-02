@@ -1,0 +1,193 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: JAX Engine
+
+on:
+  push:
+    paths:
+      - 'engines/jax/**'
+      - 'bindings/python/**'
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'pyproject.toml'
+      - 'spec/graph-artifact/**'
+      - '.github/workflows/jax.yml'
+      - '.github/actions/lfs-pull/**'
+  pull_request:
+    paths:
+      - 'engines/jax/**'
+      - 'bindings/python/**'
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'pyproject.toml'
+      - 'spec/graph-artifact/**'
+      - '.github/workflows/jax.yml'
+      - '.github/actions/lfs-pull/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# The tools the job installs by name, at the versions its last passing run
+# used, on 3 October 2026, so that the build it tests depends on the commit
+# and not on the day; the newest JAX is what the 'current' row installs on
+# purpose. Each digest moves with its version; both are of x86-64 Linux files,
+# the platform the job runs on.
+env:
+  SETUP_UV_VERSION: "0.12.22"
+  SETUP_UV_SHA256: b9980552309f09c15172b8be828555e375097f16deb459795ce7bfd200380f0b
+  MATURIN_WHEEL: maturin-1.15.0-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.musllinux_1_1_x86_64.whl
+  MATURIN_SHA256: 653020a63525bb224e5ab0adf02e17a2e08bc86dbea7fc1399c9a56d7529b99e
+
+# What the job fetches, which bindings/python/tests/test_workflow_tool_pins.py
+# holds it to: maturin, pinned, and JAX, which the 'current' row takes at its
+# newest release on purpose.
+# pins: maturin 1
+# floats: jax jaxlib -- the 'current' row tests the engine against the newest JAX release; the 'locked' row is the engine's lockfile
+
+jobs:
+  jax-engine-tests:
+    name: JAX Engine Tests (${{ matrix.jax }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        jax: ['locked', 'current']
+    defaults:
+      run:
+        working-directory: engines/jax
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+        with:
+          lfs: false
+      - name: Fetch tutorial and engine data
+        uses: ./.github/actions/lfs-pull
+        with:
+          include: 'bindings/python/**,engines/jax/**'
+          scope: jax
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97   # v7
+        id: python
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
+          working-directory: engines/jax
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87   # stable branch
+        with:
+          toolchain: stable   # rustup resolves it when the job runs: the pin freezes the action, not the compiler
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          key: jax-python312
+      - name: Build the core wheel for this interpreter
+        working-directory: bindings/python
+        env:
+          BUILD_PYTHON: ${{ steps.python.outputs.python-path }}
+        # From maturin's x86-64 Linux wheel, checked against the digest above
+        # before uv runs it. On this Python it depends on nothing.
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL -o "/tmp/${MATURIN_WHEEL}" \
+            "https://files.pythonhosted.org/packages/py3/m/maturin/${MATURIN_WHEEL}"
+          echo "${MATURIN_SHA256}  /tmp/${MATURIN_WHEEL}" | sha256sum --check --strict
+          uvx --from "/tmp/${MATURIN_WHEEL}" maturin build --release --locked \
+            --interpreter "$BUILD_PYTHON" --out "$RUNNER_TEMP/jax-core-wheels"
+      - name: Select the single built wheel
+        run: |
+          shopt -s nullglob
+          wheels=("$RUNNER_TEMP"/jax-core-wheels/gaspatchio-*.whl)
+          if [ "${#wheels[@]}" -ne 1 ]; then
+            echo '::error::Expected exactly one freshly built core wheel.'
+            exit 1
+          fi
+          echo "CORE_WHEEL=${wheels[0]}" >> "$GITHUB_ENV"
+      - name: Install the Polars reference environment
+        working-directory: bindings/python
+        env:
+          REFERENCE_PYTHON: ${{ steps.python.outputs.python-path }}
+        # The core's locked dependencies without the core itself: installing the
+        # project would build it from this checkout a second time, and the wheel
+        # above is the one build both environments are measured on. --locked, so
+        # a core lock that no longer matches pyproject.toml, or the two projects
+        # it resolves by path (this engine and the viewer), fails here as it
+        # does in CI.yml's python-tests.
+        run: |
+          uv sync --locked --no-install-project --python "$REFERENCE_PYTHON"
+          uv pip install --python .venv/bin/python --no-deps "$CORE_WHEEL"
+      - name: Bootstrap the engine from its lock and the same wheel
+        env:
+          ENGINE_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: ./bootstrap.sh "$CORE_WHEEL" "$ENGINE_PYTHON"
+      - name: Resolve and install the current JAX release
+        if: matrix.jax == 'current'
+        run: uv pip install --python .venv/bin/python --upgrade jax jaxlib
+      - name: Stamp both environments and verify wheel ownership
+        env:
+          JAX_ROW: ${{ matrix.jax }}
+        run: |
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          import subprocess
+          import sys
+          import zipfile
+          from importlib.metadata import version
+          from pathlib import Path
+          from gaspatchio import _internal
+
+          extension = Path(_internal.__file__).resolve()
+          assert extension.is_relative_to(Path(sys.prefix).resolve()), extension
+          digest = hashlib.sha256(extension.read_bytes()).hexdigest()
+          with zipfile.ZipFile(os.environ['CORE_WHEEL']) as wheel:
+              members = [name for name in wheel.namelist()
+                         if name.startswith('gaspatchio/_internal.') and name.endswith('.so')]
+              assert len(members) == 1, members
+              assert hashlib.sha256(wheel.read(members[0])).hexdigest() == digest
+          print(json.dumps({
+              'row': os.environ['JAX_ROW'], 'interpreter': sys.executable,
+              'python': sys.version, 'platform': platform.platform(),
+              'versions': {name: version(name) for name in
+                           ('gaspatchio', 'gaspatchio-jax', 'jax', 'jaxlib', 'numpy', 'polars')},
+              'extension': str(extension), 'extension_sha256': digest,
+          }, indent=2), flush=True)
+          # Match gspio's script import path while running from the same core
+          # directory as the model tests. No checkout package may shadow the wheel.
+          core = Path('../../bindings/python').resolve()
+          script = core / '.venv/bin/stamp-reference.py'
+          script.write_text('''import hashlib, json, platform, sys
+          from importlib.metadata import version
+          from pathlib import Path
+          from gaspatchio import _internal
+          path = Path(_internal.__file__).resolve()
+          assert path.is_relative_to(Path(sys.prefix).resolve()), path
+          digest = hashlib.sha256(path.read_bytes()).hexdigest()
+          assert digest == sys.argv[1], (digest, sys.argv[1])
+          print(json.dumps(dict(interpreter=sys.executable, python=sys.version,
+              platform=platform.platform(), gaspatchio=version('gaspatchio'),
+              extension=str(path), extension_sha256=digest), indent=2))
+          ''')
+          subprocess.run([str(core / '.venv/bin/python'), str(script), digest],
+                         cwd=core, check=True)
+          PY
+      # Direct executables preserve the current row's upgrade throughout.
+      - name: Lint and format at zero
+        run: |
+          .venv/bin/ruff check src tests bench
+          .venv/bin/ruff format --check src tests bench
+      - name: Type check at zero
+        run: |
+          .venv/bin/mypy src
+          .venv/bin/pyright src
+      - name: Run the engine suite and agreement checks
+        run: .venv/bin/python -m pytest -q

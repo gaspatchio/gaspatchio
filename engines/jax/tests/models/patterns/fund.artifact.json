@@ -1,0 +1,811 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "executable",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0",
+    "versions": {
+      "omitted": "withheld"
+    }
+  },
+  "created_at": "2026-10-31T12:02:08Z",
+  "model": {
+    "label": null,
+    "source_path": "01_single_state_fund.py",
+    "source_sha": "sha256:91d78c9e90d070cc51da29a896bb71088efbb552770c7b95148680b0085a90a8",
+    "modules": [],
+    "git": null,
+    "model_points": {
+      "path": "01_model_points.parquet",
+      "fingerprint": "sha256:a678393edef4c5046315d52111ce622b662ef22c385c50c2ec4cb4e466ece0d1"
+    }
+  },
+  "graph_fingerprint": "sha256:4fd738969520c067f80d69474ef2e848bb5950ddefadde1c7843ae2ce7e48c98",
+  "formulas_fingerprint": "sha256:bd39482c1734e4a25d0648c70b020e351fbfd5bcd89c342a37545c78746c7d8e",
+  "book": {
+    "columns": [
+      "av_init",
+      "fund_return",
+      "me_charge",
+      "policy_id"
+    ],
+    "digest": "sha256:7929f0ac185eacbb92e8a6146c17446c2950fd6cbe9cd2c5d52e0319e6b88b67"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation",
+    "gaspatchio_rollforward_ir"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "policy_id",
+      "column": "policy_id",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b398b35427f0f53c4e58d7cef7eec6c65b1f946cfc1d9785381196ef10541a59",
+      "fingerprint": "sha256:78b37d7dd3523f7be5e475317b76036afa247a5657685f9f33267fd531412ef2",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "VA-0001",
+      "trace": null
+    },
+    {
+      "id": "av_init",
+      "column": "av_init",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:a8de6c7182bec667bdd3e28deb10716c729b6739a00bc5ceadaaa1dd6c5599bc",
+      "fingerprint": "sha256:feb867e3a8481b16b4acef6e06e84b202ee4a41611a375cb3b55f9a986eafb28",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 100000.0,
+      "trace": null
+    },
+    {
+      "id": "fund_return",
+      "column": "fund_return",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:c54e4680aee0f9a16e57078ff0614e58c6d0940dc0c3568eb2160faf04ecc154",
+      "fingerprint": "sha256:7f2445aa1cd4ffa88b7df253c3347d078596e2b588c9433b3e034a6ed51d3d09",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": [
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01
+      ],
+      "trace": null
+    },
+    {
+      "id": "me_charge",
+      "column": "me_charge",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:0f393a0cc831b5072b39d96baa0d9b339c63036b783632e87dcc71851e44d798",
+      "fingerprint": "sha256:db4f126929f9a0b71eee445de9103be4e56613de52be2fb10568d8075ebbef20",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": [
+        0.001,
+        0.001,
+        0.001,
+        0.001,
+        0.001,
+        0.001,
+        0.001,
+        0.001,
+        0.001,
+        0.001,
+        0.001,
+        0.001
+      ],
+      "trace": null
+    },
+    {
+      "id": "projection_start_date@1",
+      "column": "projection_start_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:02fd52ce6b46e5a315d14eb5fb0904d7920117dccf03e2e7e6c3cea751c57dac",
+      "fingerprint": "sha256:12f91072af6d08fa40fd574b5a323e56e023ad3b1bd6625a76cb0e19a2ed2d18",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "01_single_state_fund.py:53",
+      "facets": {},
+      "expr": {
+        "op": "call",
+        "name": "projection_set",
+        "args": [],
+        "attrs": {
+          "frequency": "monthly",
+          "until": null,
+          "until_value": null,
+          "valuation_date": null,
+          "start": "2025-01-31",
+          "n_periods": 12
+        }
+      },
+      "value_sample": "2025-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_start_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_start_date",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2025-01-31",
+          "result": "2025-01-31"
+        }
+      ]
+    },
+    {
+      "id": "projection_end_date@1",
+      "column": "projection_end_date",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:02fd52ce6b46e5a315d14eb5fb0904d7920117dccf03e2e7e6c3cea751c57dac",
+      "fingerprint": "sha256:12f91072af6d08fa40fd574b5a323e56e023ad3b1bd6625a76cb0e19a2ed2d18",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "01_single_state_fund.py:53",
+      "facets": {},
+      "expr": {
+        "op": "call",
+        "name": "projection_set",
+        "args": [],
+        "attrs": {
+          "frequency": "monthly",
+          "until": null,
+          "until_value": null,
+          "valuation_date": null,
+          "start": "2025-01-31",
+          "n_periods": 12
+        }
+      },
+      "value_sample": "2026-01-31",
+      "trace": [
+        {
+          "step": 1,
+          "expr": "projection_end_date"
+        },
+        {
+          "step": 2,
+          "expr": "projection_end_date",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "2026-01-31",
+          "result": "2026-01-31"
+        }
+      ]
+    },
+    {
+      "id": "num_proj_months@1",
+      "column": "num_proj_months",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:02fd52ce6b46e5a315d14eb5fb0904d7920117dccf03e2e7e6c3cea751c57dac",
+      "fingerprint": "sha256:12f91072af6d08fa40fd574b5a323e56e023ad3b1bd6625a76cb0e19a2ed2d18",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "01_single_state_fund.py:53",
+      "facets": {},
+      "expr": {
+        "op": "call",
+        "name": "projection_set",
+        "args": [],
+        "attrs": {
+          "frequency": "monthly",
+          "until": null,
+          "until_value": null,
+          "valuation_date": null,
+          "start": "2025-01-31",
+          "n_periods": 12
+        }
+      },
+      "value_sample": 13,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "num_proj_months"
+        },
+        {
+          "step": 2,
+          "expr": "num_proj_months",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "13",
+          "result": 13
+        }
+      ]
+    },
+    {
+      "id": "month@1",
+      "column": "month",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "projection",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:02fd52ce6b46e5a315d14eb5fb0904d7920117dccf03e2e7e6c3cea751c57dac",
+      "fingerprint": "sha256:12f91072af6d08fa40fd574b5a323e56e023ad3b1bd6625a76cb0e19a2ed2d18",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "01_single_state_fund.py:53",
+      "facets": {},
+      "expr": {
+        "op": "call",
+        "name": "projection_set",
+        "args": [],
+        "attrs": {
+          "frequency": "monthly",
+          "until": null,
+          "until_value": null,
+          "valuation_date": null,
+          "start": "2025-01-31",
+          "n_periods": 12
+        }
+      },
+      "value_sample": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "month"
+        },
+        {
+          "step": 2,
+          "expr": "month  (13 periods)",
+          "comment": "a column the model's own projection axis mints: monthly boundaries, whose configuration this node carries"
+        },
+        {
+          "step": 3,
+          "expr": "[0, 1, 2, \u2025, 12]  (13 periods)",
+          "result": 0,
+          "shape": "13 periods \u00b7 first 0 \u00b7 last 12 \u00b7 \u2191 \u00b7 0 without a number \u00b7 0 negative",
+          "comment": "``result`` is period 0 of 13."
+        }
+      ]
+    },
+    {
+      "id": "state:av@eop",
+      "column": null,
+      "version": null,
+      "kind": "state",
+      "dtype": "unknown",
+      "shape": "list",
+      "provenance": null,
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:47a81cd6618de9c29cd589e8fa5fd5a95586ba70769e9d2c259a7a3d367f427f",
+      "fingerprint": "sha256:8e343e7ff229961b9b9afed0d111c70da6db61269103668c6a629d673adadf3b",
+      "in_final_schema": false,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": [
+        100899.0,
+        101806.08201,
+        102721.3186872699,
+        103644.78334226846,
+        104576.54994451546,
+        105516.69312851665,
+        106465.28819974202,
+        107422.4111406577,
+        108388.13861681221,
+        109362.54798297735,
+        110345.71728934432,
+        111337.72528777552
+      ],
+      "trace": null
+    },
+    {
+      "id": "rollforward:8aca2606070b",
+      "column": null,
+      "version": null,
+      "kind": "rollforward",
+      "dtype": "unknown",
+      "shape": "unknown",
+      "provenance": "rollforward",
+      "formula": null,
+      "reads": [
+        "av_init",
+        "fund_return",
+        "state:av@eop",
+        "me_charge"
+      ],
+      "reads_assumptions": [
+        "schedule:d3c7d736"
+      ],
+      "tier": "core",
+      "local_fingerprint": "sha256:4ed17259b854b925eed089be62912475b42675816ff4c4ad0e865e37870b62ef",
+      "fingerprint": "sha256:2e72b83c456603cee87b4ad3751c6b547b79b2d7bc2d8da7670e60c506b95b4d",
+      "in_final_schema": false,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "av_init",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            },
+            {
+              "source": "fund_return",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION",
+                  "periods": {
+                    "from": "first",
+                    "to": 0
+                  }
+                }
+              ]
+            },
+            {
+              "source": "state:av@eop",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "me_charge",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION",
+                  "periods": {
+                    "from": "first",
+                    "to": 0
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward",
+        "args": [],
+        "attrs": {
+          "fingerprint": "sha256:8aca2606070bd6e69a2413ed422bba712b3e896d865bfe79ed01c662c6d6bd6a",
+          "schedule": "sha256:d3c7d736397d712e4559762dd8b45468d231e53e77e6809913a06a1ee59043ee"
+        }
+      },
+      "states": [
+        "av"
+      ],
+      "increments": [
+        {
+          "ordinal": 1,
+          "label": "fund_return",
+          "operation": "Grow",
+          "target": "av@eop",
+          "reads_running_balance": true
+        },
+        {
+          "ordinal": 2,
+          "label": "me_charge",
+          "operation": "Charge",
+          "target": "av@eop",
+          "reads_running_balance": true
+        },
+        {
+          "ordinal": 3,
+          "label": null,
+          "operation": "Floor",
+          "target": "av@eop",
+          "reads_running_balance": true
+        }
+      ],
+      "movements": {
+        "fund_return": [
+          1000.0,
+          1008.9900000000052,
+          1018.0608200999995,
+          1027.213186872701,
+          1036.4478334226878,
+          1045.7654994451586,
+          1055.1669312851736,
+          1064.6528819974192,
+          1074.2241114065837,
+          1083.8813861681265,
+          1093.6254798297741,
+          1103.4571728934388
+        ],
+        "me_charge": [
+          -101.0,
+          -101.90799000000698,
+          -102.82414283009712,
+          -103.74853187413828,
+          -104.68123117569485,
+          -105.62231544396491,
+          -106.57186005980475,
+          -107.5299410817388,
+          -108.49663525207143,
+          -109.47202000298421,
+          -110.45617346280778,
+          -111.44917446223553
+        ],
+        "floor@3": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value_sample": null,
+      "trace": null
+    },
+    {
+      "id": "av@1",
+      "column": "av",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "compiled.expr_for(\"av\")",
+      "reads": [
+        "rollforward:8aca2606070b"
+      ],
+      "reads_assumptions": [],
+      "extracts": {
+        "compilation": "rollforward:8aca2606070b",
+        "state": "av@eop"
+      },
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:fa53b9fa8bc6cb650aed834442a4bf502f7390cf93c13ac4c9f9049c82aff4a1",
+      "fingerprint": "sha256:6ffaea6080c839b17e167a1d3d19e9313b1d1544f57d368b85a8fac6ba040227",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "01_single_state_fund.py:73",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "rollforward:8aca2606070b",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "rollforward.state",
+        "args": [
+          {
+            "op": "col",
+            "name": "av_init"
+          },
+          {
+            "op": "col",
+            "name": "fund_return"
+          },
+          {
+            "op": "state",
+            "name": "av@eop"
+          },
+          {
+            "op": "col",
+            "name": "me_charge"
+          },
+          {
+            "op": "state",
+            "name": "av@eop"
+          },
+          {
+            "op": "state",
+            "name": "av@eop"
+          }
+        ],
+        "attrs": {
+          "fingerprint": "sha256:8aca2606070bd6e69a2413ed422bba712b3e896d865bfe79ed01c662c6d6bd6a",
+          "schedule": "sha256:d3c7d736397d712e4559762dd8b45468d231e53e77e6809913a06a1ee59043ee",
+          "state": "av",
+          "point": "eop",
+          "shared": true
+        }
+      },
+      "value_sample": [
+        100899.0,
+        101806.08201,
+        102721.3186872699,
+        103644.78334226846,
+        104576.54994451546,
+        105516.69312851665,
+        106465.28819974202,
+        107422.4111406577,
+        108388.13861681221,
+        109362.54798297735,
+        110345.71728934432,
+        111337.72528777552
+      ],
+      "trace": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "av_init",
+      "target": "rollforward:8aca2606070b",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "fund_return",
+      "target": "rollforward:8aca2606070b",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "state:av@eop",
+      "target": "rollforward:8aca2606070b",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "me_charge",
+      "target": "rollforward:8aca2606070b",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "rollforward:8aca2606070b",
+      "target": "av@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [
+    {
+      "kind": "schedule",
+      "name": "schedule:d3c7d736",
+      "fingerprint": "sha256:d3c7d736397d712e4559762dd8b45468d231e53e77e6809913a06a1ee59043ee",
+      "payload": {
+        "kind": "from_calendar_grid",
+        "frequency": "1M",
+        "calendar": "NullCalendar",
+        "convention": "Unadjusted",
+        "day_count": "OneTwelfth",
+        "n_periods": 12,
+        "anchor": "month_end",
+        "start_date": "2025-01-31"
+      }
+    }
+  ],
+  "holes": [],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "01_single_state_fund.py",
+      "fingerprint": "sha256:91d78c9e90d070cc51da29a896bb71088efbb552770c7b95148680b0085a90a8",
+      "payload": {
+        "text": "# SPDX-FileCopyrightText: 2026 Opio Inc.\n#\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"Single-state separate-account VA accumulation (Hardy 2003 \u00a76).\n\nThe simplest variable annuity (VA) building block: a separate account\nwhere the policyholder bears full investment risk. Each period the\naccount value (AV) grows with the fund return, then a Mortality &\nExpense (M&E) charge is deducted, and the balance is floored at zero:\n\n    AV_eop = max( AV_bop * (1 + fund_return) * (1 - me_charge), 0 )\n\nThree Ops, one state. Demonstrates the grow \u2192 charge \u2192 floor chain.\n\n**The floor never bites here, and that is worth seeing rather than\nhiding.** For any return above \u2212100% and any charge below 100%, the\nproduct ``AV_bop \u00d7 (1 + r) \u00d7 (1 \u2212 m)`` is already non-negative, so the\nfloor puts nothing back in any period and its movement reads 0.00 all\nthe way down. It stays in the chain because it is what a modeller\nwrites: the guard is a statement about what this account may never do,\nand a guard that never fires is a guard that held. Export this model\nand the audit page draws that row at zero in every period \u2014 which is\nthe truth about this model, and is the row you need to be able to read\non the account value that *would* have gone negative.\n\n``main(af)`` takes the frame ``gspio`` builds from\n``01_model_points.parquet``, so the same three Ops run under the CLI \u2014\u2014\n``gspio calc-graph 01_single_state_fund.py 01_model_points.parquet`` \u2014\u2014\nand the artifact carries what each step moved. Running the file directly\ndoes the same thing over the same points and checks the closed form.\n\nReference: Hardy (2003), *Investment Guarantees: Modeling and Risk\nManagement for Equity-Linked Life Insurance*, \u00a76.3.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom datetime import date\nfrom pathlib import Path\n\nimport polars as pl\n\nfrom gaspatchio import ActuarialFrame, compile_rollforward\n\nN_PERIODS = 12\n\nMODEL_POINTS = Path(__file__).with_name(\"01_model_points.parquet\")\n\n\ndef main(af: ActuarialFrame) -> ActuarialFrame:\n    \"\"\"Grow the account, take the M&E charge, floor the balance at zero.\"\"\"\n    af = af.projection.set(\n        start_date=date(2025, 1, 31),\n        n_periods=N_PERIODS,\n        frequency=\"monthly\",\n    )\n\n    # No per-policy contract end here \u2014 synthetic demo over a fixed\n    # horizon. ``contract_boundary=`` is omitted; the kernel runs every\n    # period.\n    b = af.projection.rollforward(\n        states={\"av\": af[\"av_init\"]},\n    )\n    (\n        b[\"av\"]\n        .grow(af[\"fund_return\"], label=\"fund_return\")\n        .charge(af[\"me_charge\"], label=\"me_charge\")\n        .floor(value=0.0)\n    )\n\n    compiled = compile_rollforward(b)\n    af.av = compiled.expr_for(\"av\")\n    return af\n\n\ndef demo() -> None:\n    \"\"\"Run the model over the shipped points and check it against the closed form.\"\"\"\n    out = main(ActuarialFrame(pl.read_parquet(MODEL_POINTS))).collect()\n    av = out.get_column(\"av\").to_list()[0]\n    initial = out.get_column(\"av_init\").to_list()[0]\n    fund_return_monthly = out.get_column(\"fund_return\").to_list()[0][0]\n    me_charge_monthly = out.get_column(\"me_charge\").to_list()[0][0]\n\n    # Closed form: AV_T = AV_0 * ((1 + r) * (1 - m))^T\n    period_factor = (1 + fund_return_monthly) * (1 - me_charge_monthly)\n    expected_terminal = initial * period_factor**N_PERIODS\n    assert abs(av[-1] - expected_terminal) < 1e-6, (\n        f\"terminal AV {av[-1]} differs from {expected_terminal}\"\n    )\n\n    print(\"Single-state fund accumulation (Hardy 2003 \u00a76)\")\n    print(f\"  Initial AV:      {initial:>12,.2f}\")\n    print(f\"  Period factor:   {period_factor:>12.6f}\")\n    print(f\"  After {N_PERIODS}M:       {av[-1]:>12,.2f}\")\n    print(f\"  Closed-form:     {expected_terminal:>12,.2f}\")\n\n\nif __name__ == \"__main__\":\n    demo()\n"
+      }
+    }
+  ],
+  "enrichment": {
+    "policy_id": "VA-0001",
+    "aggregation": null,
+    "periods": null,
+    "filter": null
+  },
+  "policies": [
+    {
+      "policy_id": "VA-0001",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 0 of 2 in 01_model_points.parquet, selected by ':1'"
+    }
+  ],
+  "facets": {
+    "gaspatchio_rollforward_ir": {
+      "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+      "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_rollforward_ir-v0-preview.1.json",
+      "compilations": {
+        "sha256:8aca2606070bd6e69a2413ed422bba712b3e896d865bfe79ed01c662c6d6bd6a": {
+          "points": [
+            "bop",
+            "eop"
+          ],
+          "states": [
+            {
+              "name": "av",
+              "init": {
+                "op": "col",
+                "name": "av_init"
+              }
+            }
+          ],
+          "increments": [
+            {
+              "label": "fund_return",
+              "operation": "Grow",
+              "target": "av@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "fund_return"
+                },
+                {
+                  "op": "state",
+                  "name": "av@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            },
+            {
+              "label": "me_charge",
+              "operation": "Charge",
+              "target": "av@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "col",
+                  "name": "me_charge"
+                },
+                {
+                  "op": "state",
+                  "name": "av@eop"
+                }
+              ],
+              "settings": {
+                "round_charge": null
+              }
+            },
+            {
+              "label": null,
+              "operation": "Floor",
+              "target": "av@eop",
+              "reads_running_balance": true,
+              "operands": [
+                {
+                  "op": "state",
+                  "name": "av@eop"
+                }
+              ],
+              "settings": {
+                "value": 0.0
+              }
+            }
+          ],
+          "track_increments": false,
+          "lapse_when_all_non_positive": [],
+          "contract_boundary": null,
+          "engine_binding": "portable",
+          "batch_axes": [
+            "policy"
+          ],
+          "schedule": "sha256:d3c7d736397d712e4559762dd8b45468d231e53e77e6809913a06a1ee59043ee"
+        }
+      }
+    }
+  },
+  "document_digest": "sha256:87725a8b51f687064da53444f17c832c1a6368d10bc913e3576c0416f9a760c3"
+}

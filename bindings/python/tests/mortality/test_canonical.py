@@ -13,7 +13,7 @@ from gaspatchio.mortality._mortality_table import MortalityTable
 
 
 class TestCanonicalForm:
-    """Canonical form keys: kind, table_name, table_dimensions, age_basis, structure, select_period."""  # noqa: E501
+    """Canonical form keys: kind, table_name, table_dimensions, table_fingerprint, age_basis, structure, select_period."""  # noqa: E501
 
     def test_aggregate_canonical_shape(self, aggregate_table: Table) -> None:
         """Aggregate canonical form has all expected keys."""
@@ -27,6 +27,7 @@ class TestCanonicalForm:
             "kind": "MortalityTable",
             "table_name": "cso_2017_male_aggregate",
             "table_dimensions": ["age"],
+            "table_fingerprint": aggregate_table.fingerprint(),
             "age_basis": "age_last_birthday",
             "structure": "aggregate",
             "select_period": None,
@@ -48,6 +49,7 @@ class TestCanonicalForm:
             "kind": "MortalityTable",
             "table_name": "select_ultimate_demo",
             "table_dimensions": ["age", "duration"],
+            "table_fingerprint": select_ultimate_table.fingerprint(),
             "age_basis": "age_last_birthday",
             "structure": "select_ultimate",
             "select_period": 10,
@@ -65,7 +67,7 @@ class TestCanonicalForm:
 
 
 class TestSourceSha:
-    """sha256:<hex> over canonical_bytes — Phase 1 ignores Table data payload."""
+    """sha256:<hex> over canonical_bytes, carrying the Table's content fingerprint."""
 
     def test_identical_mortality_tables_have_identical_sha(
         self,
@@ -154,3 +156,42 @@ class TestSourceSha:
         sha = m.source_sha()
         assert sha.startswith("sha256:")
         assert len(sha) == len("sha256:") + 64
+
+
+class TestContentIdentity:
+    """The rates are part of the wrapper's identity (spec section 11.1.10)."""
+
+    def test_same_name_different_rates_never_share_an_identity(self) -> None:
+        """Two bases under one name and one convention, rates apart, stamp apart."""
+        stamps = []
+        for rate in (0.001, 0.002):
+            table = Table(
+                name="mortality_content_identity",
+                source=pl.DataFrame({"age": [40, 41], "qx": [rate, rate * 1.1]}),
+                dimensions={"age": "age"},
+                value="qx",
+            )
+            basis = MortalityTable(
+                table=table, age_basis="age_last_birthday", structure="aggregate"
+            )
+            assert basis.fingerprint() == table.fingerprint()
+            stamps.append((basis.source_sha(), basis.fingerprint()))
+
+        assert stamps[0][0] != stamps[1][0]
+        assert stamps[0][1] != stamps[1][1]
+
+    def test_the_rates_alone_do_not_carry_the_convention(
+        self, aggregate_table: Table
+    ) -> None:
+        """One table under two conventions: one fingerprint, two source_shas."""
+        alb = MortalityTable(
+            table=aggregate_table, age_basis="age_last_birthday", structure="aggregate"
+        )
+        anb = MortalityTable(
+            table=aggregate_table,
+            age_basis="age_nearest_birthday",
+            structure="aggregate",
+        )
+
+        assert alb.fingerprint() == anb.fingerprint()
+        assert alb.source_sha() != anb.source_sha()

@@ -162,11 +162,15 @@ class TestStringOutputs:
         assert outs[1] == [None, None, "fallback"]
 
     def test_mixed_string_numeric_branches_raise(self) -> None:
-        """A string branch against a numeric branch has no output dtype."""
+        """A string branch against a numeric branch is refused where it is written.
+
+        It used to reach the kernel and fail at collect() with "mixed branch
+        dtypes"; 11.1.28 states no such pair, and the line is refused at the
+        assignment, naming both kinds and the move.
+        """
         af = ActuarialFrame({"month": [[0, 1, 2]], "term": [2]})
-        af.bad = when(af.month < af.term).then("active").otherwise(0.0)
-        with pytest.raises(pl.exceptions.ComputeError, match="mixed branch dtypes"):
-            af.collect()
+        with pytest.raises(TypeError, match="otherwise branch -- 0.0 -- is a decimal"):
+            af.bad = when(af.month < af.term).then("active").otherwise(0.0)
 
     def test_numeric_path_unchanged(self) -> None:
         """The f64 path behaves exactly as before alongside the new one."""

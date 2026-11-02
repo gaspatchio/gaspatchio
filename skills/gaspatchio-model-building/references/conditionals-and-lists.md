@@ -44,6 +44,26 @@ af.pols_if = af.survival_prob * af.policy_count * (af.duration_mth_t < af.maturi
 
 The two forms produce identical results.
 
+### Stored conditions combine with `&`, `|`, `~`
+
+A condition stored as a column (it is held as 1.0/0.0) combines with `&`, `|` and `~` like the
+comparison it came from; a column holding anything other than exactly 0.0 or 1.0 — a
+probability, a null — is refused as a condition.
+
+```python
+af.old = af.age > 60
+af.long = af.term >= 10
+af.both = af.old & af.long
+af.either = af.old | af.long
+af.young = ~af.old
+af.pay = when(af.both).then(af.benefit).otherwise(0.0)
+```
+
+The refusal comes when the frame is collected, not at the line: `Column 'half' is used as a
+condition but holds a value that is neither 0.0 nor 1.0.` A probability is not a condition on
+its own — compare it and use the comparison, `when(af.half > 0.5)`; as an operand of `&`, `|`
+or `~` the comparison goes in brackets, `(af.half == 1.0) & af.old`.
+
 ---
 
 ## String-valued conditionals and broadcasting
@@ -124,9 +144,9 @@ af.pv_claims = (af.claims * af.discount_factors).list.sum()
 af.survival = af.mort_rate.projection.cumulative_survival()
 
 # Cumulative sum
-af.running_total = af.cashflow.list.cumsum()
+af.running_total = af.cashflow.cum_sum()
 
-# Cumulative product (raw Polars, available on ExpressionProxy)
+# Cumulative product along each policy's periods
 af.compound_factor = af.growth_rate.cum_prod()
 ```
 
@@ -135,13 +155,13 @@ af.compound_factor = af.growth_rate.cum_prod()
 For values that depend on their own prior state — account values, fund balances, cumulative gains:
 
 ```python
-# Linear recurrence: state[t] = state[t-1] * multiply[t] + add[t]
+# Linear recurrence: state[t] = state[t-1] * multiplier[t] + addend[t]
 # Example: account value with growth and deposits
 af.shifted_growth = af.growth_factor.projection.previous_period(fill_value=1.0)
 af.account_value = af.shifted_growth.projection.accumulate(
     initial=af.opening_balance,
-    multiply=af.shifted_growth,
-    add=af.deposits,
+    multiplier=af.shifted_growth,
+    addend=af.deposits,
 )
 ```
 

@@ -1,0 +1,214 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Opio Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The changes list, in the identity's tokens and nothing else.
+ *
+ * **The two marks are told apart by their words and by their outline, never by
+ * their colour.** `model` is a solid border and `numbers` a dashed one, and
+ * each carries its own word; a reader with no colour vision, a page printed in
+ * grey and a screenshot pasted into a document all keep the distinction. The
+ * colours that are here are the page's existing two and they only agree with
+ * what the words already say.
+ *
+ * The rows are a grid of four columns so that the magnitudes line up down the
+ * page. A ranked list whose numbers do not line up is a list you have to read
+ * rather than scan, and scanning it is the whole point of ranking it.
+ */
+
+.changes-panel .changes-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.changes-panel .counted {
+  font-weight: 700;
+}
+
+.changes-panel .floor {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--ink-secondary);
+}
+
+.changes-panel .floor input {
+  font: inherit;
+  font-family: var(--face-mono);
+  width: 5.5em;
+  padding: 0 4px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.changes-panel .floor input:focus-visible {
+  outline: 2px solid var(--red-light);
+  outline-offset: 1px;
+}
+
+.changes-panel .cut {
+  color: var(--ink-secondary);
+}
+
+.changes-panel .says {
+  color: var(--ink-secondary);
+  margin: 8px 0;
+}
+
+.changes-panel .changes,
+.changes-panel .bases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.changes-panel .change {
+  border-bottom: 1px solid var(--rule);
+}
+
+.changes-panel .change.sel {
+  background: var(--selected);
+}
+
+.changes-panel .change-open {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  padding: 3px 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.changes-panel .change-open:hover .change-column {
+  color: var(--red-dark);
+}
+
+.changes-panel .change-column {
+  overflow-wrap: anywhere;
+}
+
+.changes-panel .change-size {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.changes-panel .change-where,
+.changes-panel .change-from {
+  color: var(--ink-secondary);
+}
+
+/*
+ * The three marks. One word each, one outline each.
+ *
+ * Solid for a model change, dashed for a numbers change, dotted for the book —
+ * the same three the grid's headings and the cone's boxes wear, defined once
+ * here and used in all three places, because a reader who learns a mark in the
+ * list must find the same mark on the column.
+ *
+ * Three outlines and three words, so a mark survives a monochrome print and a
+ * reader who does not separate these colours. The colour is a third signal and
+ * never the only one: the word is on the chip, the sentence is in its `title`,
+ * and the border says it a third time.
+ */
+.chip.mark {
+  border: 1px solid currentcolor;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.chip.mark.model {
+  border-style: solid;
+  color: var(--red-dark);
+}
+
+.chip.mark.numbers {
+  border-style: dashed;
+  color: var(--ink-secondary);
+}
+
+.chip.mark.data {
+  border-style: dotted;
+  color: var(--ink);
+}
+
+.changes-panel .chip.what {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0 4px;
+  color: var(--ink-secondary);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.changes-panel .changes-sub {
+  margin: 14px 0 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.changes-panel .base {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 4px 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.changes-panel .base-kind {
+  color: var(--ink-secondary);
+}
+
+.changes-panel .base-name {
+  overflow-wrap: anywhere;
+}
+
+.changes-panel .base-digests {
+  grid-column: 2;
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The book-wide reading beside an entry. A line the identity flags and whose
+ * numbers held in every policy is greyed and labelled "identity only" -- in a
+ * word, so the distinction survives a page printed in grey -- and never hidden.
+ */
+.changes-panel .change.identity-only {
+  color: var(--ink-secondary);
+}
+
+.changes-panel .change-book {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 8px 4px;
+  color: var(--ink-secondary);
+}
+
+.changes-panel .change-drill {
+  margin: 0 8px 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

@@ -67,7 +67,10 @@ def test_from_excel_serial(serial_col, epoch, expected_col_name):
     expected_dates = EXCEL_SERIAL_DATA[expected_col_name]
 
     res_af = af.with_columns(
-        af[serial_col].excel.from_excel_serial(epoch=epoch).alias("converted_date")
+        af[serial_col]
+        .excel.from_excel_serial(epoch=epoch)
+        .polars_native()
+        .alias("converted_date")
     )
     result_series = res_af.collect()["converted_date"]
 
@@ -120,7 +123,10 @@ class TestFromExcelSerialAgainstOpenpyxl:
 
         af = ActuarialFrame({"serial": [serial]})
         af = af.with_columns(
-            af["serial"].excel.from_excel_serial().alias("converted_date")
+            af["serial"]
+            .excel.from_excel_serial()
+            .polars_native()
+            .alias("converted_date")
         )
         result = af.collect()["converted_date"][0]
 
@@ -144,7 +150,10 @@ class TestFromExcelSerialAgainstOpenpyxl:
 
         af = ActuarialFrame({"serial": [serial]})
         af = af.with_columns(
-            af["serial"].excel.from_excel_serial().alias("converted_date")
+            af["serial"]
+            .excel.from_excel_serial()
+            .polars_native()
+            .alias("converted_date")
         )
         result = af.collect()["converted_date"][0]
 
@@ -178,7 +187,10 @@ class TestFromExcelSerialAgainstOpenpyxl:
 
         af = ActuarialFrame({"serial": [serial]})
         af = af.with_columns(
-            af["serial"].excel.from_excel_serial().alias("converted_date")
+            af["serial"]
+            .excel.from_excel_serial()
+            .polars_native()
+            .alias("converted_date")
         )
         result = af.collect()["converted_date"][0]
 
@@ -194,7 +206,10 @@ class TestFromExcelSerialAgainstOpenpyxl:
 
         af = ActuarialFrame({"serial": test_serials})
         af = af.with_columns(
-            af["serial"].excel.from_excel_serial().alias("converted_date")
+            af["serial"]
+            .excel.from_excel_serial()
+            .polars_native()
+            .alias("converted_date")
         )
         results = af.collect()["converted_date"].to_list()
 
@@ -216,7 +231,10 @@ class TestFromExcelSerialAgainstOpenpyxl:
         for serial, expected in test_cases:
             af = ActuarialFrame({"serial": [serial]})
             af = af.with_columns(
-                af["serial"].excel.from_excel_serial().alias("converted_date")
+                af["serial"]
+                .excel.from_excel_serial()
+                .polars_native()
+                .alias("converted_date")
             )
             result = af.collect()["converted_date"][0]
             assert result == expected, f"Serial {serial}: expected {expected}, got {result}"
@@ -225,7 +243,10 @@ class TestFromExcelSerialAgainstOpenpyxl:
         """Test that null values are preserved correctly."""
         af = ActuarialFrame({"serial": [1.0, None, 44197.0, None, 45777.0]})
         af = af.with_columns(
-            af["serial"].excel.from_excel_serial().alias("converted_date")
+            af["serial"]
+            .excel.from_excel_serial()
+            .polars_native()
+            .alias("converted_date")
         )
         results = af.collect()["converted_date"].to_list()
 
@@ -239,7 +260,10 @@ class TestFromExcelSerialAgainstOpenpyxl:
         """Test that invalid serials (< 1) return null."""
         af = ActuarialFrame({"serial": [0.0, -1.0, 0.5, 0.99]})
         af = af.with_columns(
-            af["serial"].excel.from_excel_serial().alias("converted_date")
+            af["serial"]
+            .excel.from_excel_serial()
+            .polars_native()
+            .alias("converted_date")
         )
         results = af.collect()["converted_date"].to_list()
 
@@ -269,7 +293,10 @@ class TestFromExcelSerialAgainstOpenpyxl:
 
             af = ActuarialFrame({"serial": [serial]})
             af = af.with_columns(
-                af["serial"].excel.from_excel_serial().alias("converted_date")
+                af["serial"]
+                .excel.from_excel_serial()
+                .polars_native()
+                .alias("converted_date")
             )
             result = af.collect()["converted_date"][0]
             assert result == expected, f"Serial {serial}: expected {expected}, got {result}"
@@ -284,7 +311,10 @@ class TestFromExcelSerial1904Epoch:
 
         af = ActuarialFrame({"serial": [1]})
         af = af.with_columns(
-            af["serial"].excel.from_excel_serial(epoch="1904").alias("converted_date")
+            af["serial"]
+            .excel.from_excel_serial(epoch="1904")
+            .polars_native()
+            .alias("converted_date")
         )
         result = af.collect()["converted_date"][0]
 
@@ -302,6 +332,7 @@ class TestFromExcelSerial1904Epoch:
         af = af.with_columns(
             af["serial"]
             .excel.from_excel_serial(epoch="1904")
+            .polars_native()
             .alias("converted_date")
         )
         result = af.collect()["converted_date"][0]

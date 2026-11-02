@@ -1,5 +1,33 @@
 # Mojo Backend Feasibility Assessment for gaspatchio-core
 
+> **Superseded in part — 2026-09-08.** This assessment is dated **2026-05-11** and is kept
+> exactly as written; nothing beneath this note has been edited. Two of its claims are now
+> false. Full evidence in [`README.md`](README.md); the short form:
+>
+> - **§3, "Ragged List<Float64>": the parenthetical *"currently enforced by
+>   `rollforward.rs:305-312`"* is false.** Uniform lengths are enforced only when the schedule
+>   declares a uniform book: the check at `rollforward.rs:466` is conditional on `require_uniform`
+>   (:69), which `rollforward/_passes.py:378` sets only for calendar-grid / inception schedules.
+>   A `per_policy_grid` schedule threads authoritative per-policy lengths instead (:60, :411,
+>   :563), and jagged timelines have been the **default** projection shape since v0.4.0
+>   (merged 2026-06-14). §4's decision to scope ragged `n_periods` out of a Mojo v0.1 is a scoping
+>   choice and is untouched by this; the parenthetical claim about what the kernel enforces is
+>   the part that is wrong.
+> - **§5, effort table, "Column-proxy seam": *"would need a Polars-Expr→Mojo-IR lowering that
+>   doesn't exist"* — the missing half now exists.** The column-proxy seam emits a neutral
+>   op-tree: the `OpNode` union in `frame/graph/ir.py` closes over seven node types, `walk`'s
+>   `match` in the same module ends on `assert_never`, and `frame/lowering/polars.py`
+>   registers 55 lowerings. What still does not exist is
+>   a *Mojo* lowering from that tree — but the seam is no longer `pl.Expr` algebra with nothing
+>   behind it, which is what the entry asserts.
+>
+> **What stands.** Everything about Mojo itself: no Polars-equivalent DataFrame, no published
+> `#[polars_expr]` equivalent, the C-ABI stability risk, the JIT-latency question, and the
+> HashStorage gap. §3's *"swap Polars for Mojo is a category error"* and the document's closing
+> recommendation — plug a Mojo kernel into the existing stack, measure the round-trip honestly
+> first — are unaffected by anything above. The three-seam map is still the right way to frame
+> the question.
+
 ## 1. Architecture map — where is Polars actually nailed in?
 
 The codebase has *three* distinct seams, not one. Any "Mojo backend" conversation must pick which seam it's targeting; they have very different effort profiles.

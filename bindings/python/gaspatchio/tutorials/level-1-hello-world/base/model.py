@@ -31,7 +31,8 @@ Key concepts introduced here:
     formulas in one pass and returns the results as a Polars DataFrame.
 
   - Methods under .projection, .finance, .date, .excel are gaspatchio-specific.
-    Everything else (.round(), .cast(), .list.sum()) is standard Polars.
+    Declared operations such as .list.sum() also belong to gaspatchio.
+    Other engine methods, such as .cast(), use .polars_native().
 
 Sections:
   1. Inline Data
@@ -96,7 +97,8 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     af.profit = af.net_premium - af.expected_claims
 
     # Loss ratio: what fraction of premium is paid out in claims
-    af.loss_ratio = (af.expected_claims / af.annual_premium).round(4)
+    af.claims_to_premium = af.expected_claims / af.annual_premium
+    af.loss_ratio = af.claims_to_premium.excel.round(4)
 
     # Profitability flag: when/then/otherwise is gaspatchio's IF()
     # Works element-wise across all policies simultaneously
@@ -117,7 +119,11 @@ if __name__ == "__main__":
     result_af = main(af)
     result = result_af.collect()
 
-    print(result.select(["policy_id", "expected_claims", "profit", "loss_ratio", "is_profitable"]))
+    print(
+        result.select(
+            ["policy_id", "expected_claims", "profit", "loss_ratio", "is_profitable"]
+        )
+    )
 
     # Expected output:
     # ┌───────────┬─────────────────┬──────────┬────────────┬───────────────┐

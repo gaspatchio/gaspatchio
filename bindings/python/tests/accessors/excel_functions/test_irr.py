@@ -13,7 +13,7 @@ def test_irr_basic_vector():
             "values": [[-100.0, 39.0, 59.0, 55.0, 20.0]],
         }
     )
-    out = af.with_columns(af["values"].excel.irr().alias("irr"))
+    out = af.with_columns(af["values"].excel.irr().polars_native().alias("irr"))
     res = out.collect()["irr"][0]
     assert abs(res - 0.28095) < 1e-3
 
@@ -26,7 +26,10 @@ def test_irr_with_guess_column():
         }
     )
     out = af.with_columns(
-        af["values"].excel.irr(guess=af["guess"], default_guess=0.05).alias("irr")
+        af["values"]
+        .excel.irr(guess=af["guess"], default_guess=0.05)
+        .polars_native()
+        .alias("irr")
     )
     res = out.collect()["irr"][0]
     assert 0.15 < res < 0.30

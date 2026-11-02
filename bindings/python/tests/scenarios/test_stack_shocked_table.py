@@ -142,7 +142,12 @@ class TestScenarioAxisGuard:
         assert "scenario_id" in stacked._dimensions
 
     def test_scenario_run_surfaces_the_guard(self) -> None:
-        """ScenarioRun raises the guard, not a deep duplicate-key error."""
+        """A shock on a scenario-keyed table raises the guard, not a duplicate key.
+
+        Only a table a shock names is stacked, so the guard is met where a
+        plan shocks a table that already carries the axis -- and a model's
+        own scenario-keyed table that nothing shocks is read as written.
+        """
         from gaspatchio.scenarios import ScenarioRun, Sum
 
         disc_rates = Table(
@@ -161,14 +166,27 @@ class TestScenarioAxisGuard:
 
         policies = ActuarialFrame(pl.DataFrame({"policy_id": [1], "premium": [100.0]}))
 
-        def model(af, params=None, tables=None):  # noqa: ANN202, ARG001
-            af.pv = af.premium * 1.0
+        def model(af):  # noqa: ANN202
+            af.rate = disc_rates.lookup(scenario_id=af.scenario_id, year=0)
+            af.pv = af.premium * af.rate
             return af
 
+        from gaspatchio.scenarios import MultiplicativeShock
+
+        unshocked = ScenarioRun(
+            shocks={"BASE": [], "UP": []},
+            aggregations=(Sum("pv").alias("total_pv").over("scenario_id"),),
+        ).run(policies, model, batch_size=1)
+        assert dict(unshocked.aggregations["total_pv"].iter_rows()) == {
+            "BASE": pytest.approx(3.0),
+            "UP": pytest.approx(5.0),
+        }
         with pytest.raises(ValueError, match="scenario_id") as excinfo:
             ScenarioRun(
-                shocks={"BASE": [], "UP": []},
-                base_tables={"disc_rates": disc_rates},
+                shocks={
+                    "BASE": [],
+                    "UP": [MultiplicativeShock(1.1, table="disc_rates_axis_guard_e2e")],
+                },
                 aggregations=(Sum("pv").alias("total_pv"),),
             ).run(policies, model, batch_size=1)
         assert "Duplicate key" not in str(excinfo.value)

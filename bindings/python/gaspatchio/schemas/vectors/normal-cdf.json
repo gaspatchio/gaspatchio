@@ -1,0 +1,462 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "The standard normal distribution function",
+  "cases": [
+    {
+      "id": "norm-cdf-body",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -6.0,
+            -3.0,
+            -2.96,
+            -1.96,
+            -1.0,
+            -0.5,
+            -1e-300,
+            0.0,
+            1e-300,
+            0.5,
+            1.0,
+            1.96,
+            3.0,
+            6.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          9.86587645037698e-10,
+          0.0013498980316300946,
+          0.0015381952117380587,
+          0.024997895148220435,
+          0.15865525393145705,
+          0.3085375387259869,
+          0.5,
+          0.5,
+          0.5,
+          0.6914624612740131,
+          0.8413447460685429,
+          0.9750021048517795,
+          0.9986501019683699,
+          0.9999999990134123
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "norm-cdf-per-period",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -1.96,
+              0.0,
+              1.96
+            ],
+            [],
+            [
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.024997895148220435,
+            0.5,
+            0.9750021048517795
+          ],
+          [],
+          [
+            0.9986501019683699
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "norm-cdf-whole-numbers",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            0,
+            1,
+            -2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.5,
+          0.8413447460685429,
+          0.02275013194817921
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "norm-cdf-lower-tail",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -8.36,
+            -10.0,
+            -20.0,
+            -30.0,
+            -37.0,
+            -37.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          3.1359128294842655e-17,
+          7.619853024160525e-24,
+          2.7536241186062337e-89,
+          4.906713927148187e-198,
+          5.725571222524577e-300,
+          4.605353009581955e-308
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "norm-cdf-upper-saturation",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            8.3,
+            9.0,
+            40.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "norm-cdf-below-the-normal-range",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -38.0,
+            -40.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          2.88542835e-316,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 4e-11,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "norm-cdf-special-values",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            {
+              "nonfinite": "nan"
+            },
+            {
+              "nonfinite": "+inf"
+            },
+            {
+              "nonfinite": "-inf"
+            }
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          {
+            "nonfinite": "nan"
+          },
+          1.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-norm_cdf-scalar",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            null,
+            -1.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.5,
+          null,
+          0.15865525393145705
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-norm_cdf-per-period",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              null
+            ],
+            null,
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.5,
+            null
+          ],
+          null,
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "empty-portfolio-norm_cdf",
+      "covers": [
+        "norm_cdf"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "norm_cdf",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    }
+  ]
+}

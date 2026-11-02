@@ -9,13 +9,12 @@ Replaces constant discount rate with risk-free rate curve from table.
 
 Delta from Step 04:
   - SECTION 1: loads risk_free_rates table; DISCOUNT_RATE_ANNUAL removed
-  - SECTION 11: rewritten — rate lookup by year, cum_prod discounting
+  - SECTION 11: rewritten — rate lookup by year, per-period discounting
   - __main__: output columns changed to show pv_premiums instead of claim breakdown
   - All other section contents: UNCHANGED
 """
 
 import datetime
-import math
 from pathlib import Path
 
 import polars as pl
@@ -119,9 +118,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
 
-    af.duration_mth_init = (VALUATION_DATE.year * 12 + VALUATION_DATE.month) - (
-        af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
-    )
+    af.duration_mth_init = af.entry_date_parsed.date.months_between(VALUATION_DATE)
 
     af = af.projection.set(
         valuation_date=VALUATION_DATE,
@@ -131,9 +128,8 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
     af.projection_date = af.projection.period_dates()
 
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() has already stamped af.month -- elapsed whole months
+    # from the valuation date, 0, 1, 2, ... one per projection period.
 
     af.duration_mth_t = af.duration_mth_init + af.month
     af.duration = af.duration_mth_t // 12
@@ -147,7 +143,11 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         when(af.sex == "M").then(af.mort_table_male).otherwise(af.mort_table_female)
     )
 
-    af.duration_capped = af.duration.clip(upper_bound=SELECT_PERIOD_LEN - 1)
+    af.duration_capped = (
+        when(af.duration > SELECT_PERIOD_LEN - 1)
+        .then(SELECT_PERIOD_LEN - 1)
+        .otherwise(af.duration)
+    )
 
     af.base_mort_rate = mortality_select.lookup(
         table_id=af.mort_table_id,
@@ -155,9 +155,14 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         duration=af.duration_capped,
     )
 
+    af.scalar_duration_capped = (
+        when(af.duration > SCALAR_DURATION_CAP)
+        .then(SCALAR_DURATION_CAP)
+        .otherwise(af.duration)
+    )
     af.mort_scalar = mortality_scalars.lookup(
         scalar_id=af.mort_scalar_id,
-        duration=af.duration.clip(upper_bound=SCALAR_DURATION_CAP),
+        duration=af.scalar_duration_capped,
     )
 
     af.mort_rate = af.base_mort_rate * af.mort_scalar
@@ -188,19 +193,33 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # SECTION 4: LAPSE RATES (with dynamic adjustment)
     # =====================================================================
 
-    af.lapse_duration_capped = af.duration.clip(upper_bound=LAPSE_DURATION_CAP)
+    af.lapse_duration_capped = (
+        when(af.duration > LAPSE_DURATION_CAP)
+        .then(LAPSE_DURATION_CAP)
+        .otherwise(af.duration)
+    )
     af.base_lapse_rate = lapse_rates.lookup(
         lapse_id=af.lapse_id, duration=af.lapse_duration_capped
     )
 
-    af.itm = af.av_pp_mid_mth / af.sum_assured.cast(pl.Float64)
+    af.itm = af.av_pp_mid_mth / af.sum_assured
 
-    af.dyn_lapse_factor = (1.0 - af.M_param * (1.0 / af.itm - af.D_param)).clip(
-        af.L, af.U
+    af.dyn_lapse_unbounded = 1.0 - af.M_param * (1.0 / af.itm - af.D_param)
+    af.dyn_lapse_factor = (
+        when(af.dyn_lapse_unbounded < af.L)
+        .then(af.L)
+        .otherwise(
+            when(af.dyn_lapse_unbounded > af.U)
+            .then(af.U)
+            .otherwise(af.dyn_lapse_unbounded)
+        )
     )
 
-    af.lapse_rate = (af.dyn_lapse_factor * af.base_lapse_rate).clip(
-        af.dyn_lapse_floor, None
+    af.lapse_rate_unfloored = af.dyn_lapse_factor * af.base_lapse_rate
+    af.lapse_rate = (
+        when(af.lapse_rate_unfloored < af.dyn_lapse_floor)
+        .then(af.dyn_lapse_floor)
+        .otherwise(af.lapse_rate_unfloored)
     )
 
     af.lapse_rate_mth = 1.0 - (1.0 - af.lapse_rate) ** (1.0 / 12.0)
@@ -210,9 +229,12 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # =====================================================================
 
     af.combined_decrement = 1.0 - (1.0 - af.mort_rate_mth) * (1.0 - af.lapse_rate_mth)
-    af.survival_factor = 1.0 - af.combined_decrement
-    af.cumulative_survival = af.survival_factor.cum_prod()
-    af.survival_prob = af.cumulative_survival.projection.previous_period(fill_value=1.0)
+    # Cumulative survival from the combined decrement:
+    #   tpx[t] = (1 - q[0]) * (1 - q[1]) * ... * (1 - q[t-1])
+    # rate_timing="beginning_of_period" is the default, and it is the
+    # convention wanted here: the decrement at t has not been applied yet,
+    # so the first element is 1.0 -- every policy in force at t=0.
+    af.survival_prob = af.combined_decrement.projection.cumulative_survival()
 
     af.maturity_month = af.policy_term * 12
 
@@ -237,20 +259,22 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # SECTION 7: CLAIMS
     # =====================================================================
 
-    af.sum_assured_f = af.sum_assured.cast(pl.Float64)
-
     af.claim_pp_death = (
         when(af.has_gmdb)
         .then(
-            when(af.av_pp_mid_mth > af.sum_assured_f)
+            when(af.av_pp_mid_mth > af.sum_assured)
             .then(af.av_pp_mid_mth)
-            .otherwise(af.sum_assured_f)
+            .otherwise(af.sum_assured)
         )
         .otherwise(af.av_pp_mid_mth)
     )
     af.claims_death = af.claim_pp_death * af.pols_death
 
-    af.duration_year_capped = af.duration.clip(upper_bound=SURR_CHARGE_DURATION_CAP)
+    af.duration_year_capped = (
+        when(af.duration > SURR_CHARGE_DURATION_CAP)
+        .then(SURR_CHARGE_DURATION_CAP)
+        .otherwise(af.duration)
+    )
     af.surr_charge_rate = (
         when(af.has_surr_charge)
         .then(
@@ -269,9 +293,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     af.claim_pp_maturity = (
         when(af.has_gmab)
-        .then(
-            when(af.av_pp > af.sum_assured_f).then(af.av_pp).otherwise(af.sum_assured_f)
-        )
+        .then(when(af.av_pp > af.sum_assured).then(af.av_pp).otherwise(af.sum_assured))
         .otherwise(af.av_pp)
     )
     af.claims_maturity = af.claim_pp_maturity * af.pols_maturity
@@ -289,7 +311,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # SECTION 9: EXPENSES & COMMISSIONS
     # =====================================================================
 
-    af.inflation_factor = (af.month / 12.0 * math.log(1.0 + INFLATION_RATE)).exp()
+    af.inflation_factor = (1.0 + INFLATION_RATE) ** (af.month / 12.0)
     af.expense_acq_total = af.expense_acq * af.pols_new_biz
     af.expense_maint_total = (
         (af.expense_maint / 12.0) * af.pols_if * af.inflation_factor
@@ -329,9 +351,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # Look up annual discount rate from rate curve
     # Using "BASE" scenario and "USD" currency (hardcoded for now)
-    af.disc_rate = risk_free_rates.lookup(
-        scenario=pl.lit("BASE"), currency=pl.lit("USD"), year=af.year
-    )
+    af.disc_rate = risk_free_rates.lookup(scenario="BASE", currency="USD", year=af.year)
 
     # Convert annual rate to monthly: (1 + r_ann)^(1/12) - 1
     af.disc_rate_mth = (1.0 + af.disc_rate) ** (1.0 / 12.0) - 1.0

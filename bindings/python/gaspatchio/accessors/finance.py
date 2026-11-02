@@ -8,16 +8,27 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-import polars as pl
-
-from gaspatchio.accessors.base import BaseColumnAccessor, BaseFrameAccessor
+from gaspatchio._authoring import emit
+from gaspatchio._semantic.ir import Col
+from gaspatchio.accessors.base import (
+    BaseColumnAccessor,
+    BaseFrameAccessor,
+    column_expr,
+    column_node,
+    refuse_bare_string_operand,
+)
+from gaspatchio.column.column_proxy import ColumnProxy
+from gaspatchio.column.expression_proxy import ExpressionProxy
+from gaspatchio.column.proxy_aware_expr import ProxyAwareExpr
+from gaspatchio.frame.lowering.context import context_for
+from gaspatchio.frame.lowering.polars import lower_polars
 from gaspatchio.frame.registry import register_accessor
 
 if TYPE_CHECKING:
-    from gaspatchio.column.column_proxy import ColumnProxy
-    from gaspatchio.column.expression_proxy import ExpressionProxy
+    import polars as pl
+
+    from gaspatchio._semantic.ir import AttrValue
     from gaspatchio.frame.base import ActuarialFrame
-    from gaspatchio.typing import IntoExprColumn
 
 
 # Register this accessor for frame objects
@@ -38,6 +49,13 @@ class FinanceFrameAccessor(BaseFrameAccessor):
         Supports spot and forward discounting without map_elements.
     present_value(cashflow_col, rate_col, period_col)
         Calculate present value of cash flows.
+
+    Notes
+    -----
+    ``finance`` is a reserved attribute on the frame, as ``date``, ``excel``,
+    ``graph`` and ``projection`` are. A model whose data really does carry a
+    column called ``finance`` still has it -- reach it as ``af["finance"]``
+    -- but ``af.finance`` is always this accessor.
 
     """
 
@@ -88,12 +106,16 @@ class FinanceFrameAccessor(BaseFrameAccessor):
         ----------
         rate_col : str
             Name of column containing interest rates (as lists).
-            Typically monthly rates for projection periods.
+            Typically monthly rates for projection periods. A **string is
+            the name of a column on this frame** (refused if the frame does
+            not carry it).
         periods_col : str
             Name of column containing time periods (as lists).
-            Must align element-wise with rate_col.
+            Must align element-wise with rate_col, and is named the same way.
         output_col : str
-            Name for the new column containing discount factors.
+            Name for the new column containing discount factors. This one
+            names the column being written, so it is the caller's to choose;
+            a name the frame already carries is overwritten.
         method : {"spot", "forward"}, default "spot"
             Discount method:
 
@@ -104,6 +126,11 @@ class FinanceFrameAccessor(BaseFrameAccessor):
         -------
         ActuarialFrame
             New frame with discount factor column added.
+
+        Raises
+        ------
+        pl.exceptions.ColumnNotFoundError
+            If ``rate_col`` or ``periods_col`` is not a column on this frame.
 
         Examples
         --------
@@ -179,48 +206,43 @@ class FinanceFrameAccessor(BaseFrameAccessor):
         to_monthly : Convert annual rates to monthly rates
 
         """
-        from gaspatchio.functions.vector import list_pow
+        # Frame level, so a string is a column NAME, checked against the
+        # frame -- the rule `column_expr` states, and the one `present_value`
+        # below already reads by. The refusal is what is wanted from it here:
+        # the two names go into the op-tree as `Col`s rather than as the
+        # expressions it hands back. Left unchecked, a typo comes back from
+        # the engine as a resolved query plan naming neither the parameter
+        # that carried it nor, unless the engine's own matcher finds one, the
+        # column that was meant.
+        column_expr(self._frame, rate_col, parameter="rate_col")
+        column_expr(self._frame, periods_col, parameter="periods_col")
 
-        if method == "spot":
-            # Prepare inputs using native Polars (fast SIMD operations)
-            rate_plus_one = pl.col(rate_col) + 1.0
-            period_neg = pl.col(periods_col) * -1.0
+        if method not in ("spot", "forward"):
+            msg = f"method must be 'spot' or 'forward', got '{method}'"
+            raise ValueError(msg)
 
-            # Use Rust plugin for (1 + rate) ** (-period)
-            # This eliminates EXPLODE/GROUP_BY pattern
-            discount_expr = list_pow(rate_plus_one, period_neg).alias(output_col)
-
-            result = self._frame._df.with_columns([discount_expr])  # noqa: SLF001
-            from gaspatchio.frame.base import ActuarialFrame
-
-            return ActuarialFrame(result)
-
-        if method == "forward":
-            # Forward method: 1 / (1 + rate), then cumulative product
-            rate_plus_one = pl.col(rate_col) + 1.0
-            reciprocal = list_pow(rate_plus_one, pl.lit(-1.0))
-
-            # Cumulative product for forward discounting
-            result = self._frame._df.with_columns(  # noqa: SLF001
-                [
-                    pl.concat_list([pl.lit([1.0]), reciprocal])
-                    .list.eval(pl.element().cum_prod())
-                    .list.head(pl.col(rate_col).list.len())
-                    .alias(output_col)
-                ]
-            )
-            from gaspatchio.frame.base import ActuarialFrame
-
-            return ActuarialFrame(result)
-
-        msg = f"method must be 'spot' or 'forward', got '{method}'"
-        raise ValueError(msg)
+        node = emit.call_node(
+            "finance.discount_factor",
+            (Col(rate_col), Col(periods_col)),
+            (("method", method),),
+        )
+        discount_expr = lower_polars(node, context_for(self._frame)).alias(output_col)
+        # Added to the frame the caller already holds, through the frame's own
+        # recorded door. Building a bare `ActuarialFrame(result)` here dropped
+        # everything the frame knew -- its calculation log, its projection
+        # axis, its mode -- so a discount factor erased the history of the
+        # rates it discounts. `with_columns` mutates in place and records,
+        # and the expression is wrapped so the record keeps this operation's
+        # own identity instead of reading as an opaque engine expression.
+        return self._frame.with_columns(
+            ProxyAwareExpr.wrap(discount_expr, node=node, parent=self._frame)
+        )
 
     def present_value(
         self,
-        cashflow_col: IntoExprColumn,
-        rate_col: IntoExprColumn,
-        period_col: IntoExprColumn,
+        cashflow_col: str | ColumnProxy | ExpressionProxy | pl.Expr | pl.Series,
+        rate_col: str | ColumnProxy | ExpressionProxy | pl.Expr | pl.Series,
+        period_col: str | ColumnProxy | ExpressionProxy | pl.Expr | pl.Series,
     ) -> ExpressionProxy:
         """Calculate the present value of cash flows.
 
@@ -240,20 +262,61 @@ class FinanceFrameAccessor(BaseFrameAccessor):
 
         Parameters
         ----------
-        cashflow_col : IntoExprColumn
-            Column containing the cash flow amounts to discount.
-        rate_col : IntoExprColumn
-            Column with discount rate per period (e.g., 0.05 for 5% annual).
-        period_col : IntoExprColumn
-            Column with period number (1, 2, 3...). Must be >= 1.
+        cashflow_col : str | ColumnProxy | ExpressionProxy | pl.Expr | pl.Series
+            The cash flow amounts to discount. A **string is the name of a
+            column on this frame** (refused if the frame does not carry it);
+            a column or expression is used as given.
+        rate_col : str | ColumnProxy | ExpressionProxy | pl.Expr | pl.Series
+            Discount rate per period (e.g., 0.05 for 5% annual), named the
+            same two ways.
+        period_col : str | ColumnProxy | ExpressionProxy | pl.Expr | pl.Series
+            Period number (1, 2, 3...), named the same two ways. Must be >= 1.
+            Each of the three is one value per policy (spec section 11.1.29);
+            one held per period is refused by name -- a per-period valuation
+            is ``.projection.prospective_value()``.
 
         Returns
         -------
         ExpressionProxy
             Present value of each cash flow discounted to time zero.
 
+        Raises
+        ------
+        pl.exceptions.ColumnNotFoundError
+            If any of the three names is not a column on this frame.
+
         Examples
         --------
+        **Naming the three columns by string**
+
+        ```python
+        from gaspatchio import ActuarialFrame
+
+        data = {
+            "policy_id": ["P001", "P002"],
+            "cashflow": [1000.0, 2000.0],
+            "rate": [0.05, 0.04],
+            "period": [1, 2],
+        }
+        af = ActuarialFrame(data)
+
+        af.pv = af.finance.present_value("cashflow", "rate", "period")
+
+        print(af.collect())
+        ```
+
+        ```text
+        shape: (2, 5)
+        ┌───────────┬──────────┬──────┬────────┬─────────────┐
+        │ policy_id ┆ cashflow ┆ rate ┆ period ┆ pv          │
+        │ ---       ┆ ---      ┆ ---  ┆ ---    ┆ ---         │
+        │ str       ┆ f64      ┆ f64  ┆ i64    ┆ f64         │
+        ╞═══════════╪══════════╪══════╪════════╪═════════════╡
+        │ P001      ┆ 1000.0   ┆ 0.05 ┆ 1      ┆ 952.380952  │
+        │ P002      ┆ 2000.0   ┆ 0.04 ┆ 2      ┆ 1849.112426 │
+        └───────────┴──────────┴──────┴────────┴─────────────┘
+        ```
+
         **Scalar Example: Discount policy cash flows**
 
         ```python
@@ -289,21 +352,27 @@ class FinanceFrameAccessor(BaseFrameAccessor):
         discount_factor : Calculate discount factors for projection timelines
 
         """
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-
-        cf_expr = self._frame._convert_to_expr(cashflow_col)  # noqa: SLF001
-        rate_expr = self._frame._convert_to_expr(rate_col)  # noqa: SLF001
-        period_expr = self._frame._convert_to_expr(period_col)  # noqa: SLF001
-
-        # Basic PV calculation: PV = CF / (1 + rate)^period
-        # Ensure period is >= 1 for the formula to make sense
-        pv_expr = (
-            pl.when(period_expr >= 1)
-            .then(cf_expr / (1 + rate_expr).pow(period_expr))
-            .otherwise(pl.lit(None))
-        )  # Or 0, or handle differently?
-
-        return ExpressionProxy(pv_expr, self._frame)
+        # Frame level, so a string is a column NAME, checked against the
+        # frame -- the same rule `discount_factor` next door already reads
+        # by. Left to the generic ingress a name becomes the literal text,
+        # and `CF / (1 + rate) ** period` fails at collect with a Polars
+        # error about String arithmetic, pages from the line that wrote it.
+        # Each operand resolves to the node this call's own tree records
+        # for it: a name to the column REFERENCE it is. `finance.
+        # present_value` is an operation the format's vocabulary names, and
+        # lowering the three names to the engine's own rendering first put
+        # three engine fragments inside its tree, so a discounted cashflow
+        # -- a closed form over three values standing at one period --
+        # exported as an escape into Polars.
+        return emit.call(
+            "finance.present_value",
+            (
+                column_node(self._frame, cashflow_col, parameter="cashflow_col"),
+                column_node(self._frame, rate_col, parameter="rate_col"),
+                column_node(self._frame, period_col, parameter="period_col"),
+            ),
+            self._frame,
+        )
 
 
 # Register this accessor for column/expression objects
@@ -329,6 +398,14 @@ class FinanceColumnAccessor(BaseColumnAccessor):
     For discount factor calculations on list columns, use the frame-level
     accessor: ``af.finance.discount_factor(rate_col, periods_col, output_col)``
 
+    **A bare string operand is refused here: write the operand as
+    ``af.column`` or ``af["column"]``.** That rule holds on every column
+    accessor, and is stated once in
+    ``gaspatchio.accessors.base.refuse_bare_string_operand`` -- along with
+    the frame-level methods, ``af.finance.present_value`` and
+    ``af.finance.discount_factor`` among them, that *do* name a column by
+    string.
+
     """
 
     def __init__(self, proxy: ColumnProxy | ExpressionProxy) -> None:
@@ -348,39 +425,34 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         # Refine type hint for clarity
         self._proxy: ColumnProxy | ExpressionProxy = proxy
 
-    def _get_polars_expr(self) -> pl.Expr:
-        """Get the underlying Polars expression from the proxy.
+    def _emit(
+        self,
+        name: str,
+        extra_args: tuple[object, ...] = (),
+        attrs: tuple[tuple[str, AttrValue], ...] = (),
+    ) -> ExpressionProxy:
+        """Emit a finance ``Call`` over this accessor's own column.
 
-        Extracts the raw Polars expression from either a ColumnProxy or
-        ExpressionProxy, enabling the accessor methods to build expressions
-        on top of the underlying column data.
-
-        Returns
-        -------
-        pl.Expr
-            The underlying Polars expression for the column or expression.
-
-        Raises
-        ------
-        TypeError
-            If the proxy is neither ColumnProxy nor ExpressionProxy.
-
+        The accessor's job ends at recording what was asked for; the
+        registered lowering in ``frame/lowering/rules/finance.py`` owns
+        how it is computed. Every method below is one call into here.
         """
-        from gaspatchio.column.column_proxy import ColumnProxy
-        from gaspatchio.column.expression_proxy import ExpressionProxy
+        if not isinstance(self._proxy, (ColumnProxy, ExpressionProxy)):
+            msg = (
+                f"FinanceColumnAccessor expected ColumnProxy or "
+                f"ExpressionProxy, got {type(self._proxy).__name__}"
+            )
+            raise TypeError(msg)
+        parent_frame = self._proxy._parent  # noqa: SLF001
+        if parent_frame is None:
+            msg = (
+                f"{name.rsplit('.', maxsplit=1)[-1]}() requires the expression "
+                "to be part of an ActuarialFrame context."
+            )
+            raise RuntimeError(msg)
+        node_args = (self._proxy._node, *extra_args)  # noqa: SLF001
+        return emit.call(name, node_args, parent_frame, attrs)
 
-        if isinstance(self._proxy, ExpressionProxy):
-            return self._proxy._expr  # noqa: SLF001
-        if isinstance(self._proxy, ColumnProxy):
-            return pl.col(self._proxy.name)
-        # Should not happen with correct type hints, but raise defensively
-        msg = (
-            f"FinanceColumnAccessor expected ColumnProxy or "
-            f"ExpressionProxy, got {type(self._proxy).__name__}"
-        )
-        raise TypeError(msg)
-
-    # --- Column/Expression-level finance methods will go here ---
     def to_monthly(
         self,
         method: Literal["compound", "simple"] = "compound",
@@ -509,42 +581,10 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         discount_factor : Calculate discount factors from interest rates
 
         """
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-
-        base_expr = self._get_polars_expr()
-        parent_frame = self._proxy._parent  # noqa: SLF001
-
-        if parent_frame is None:
-            msg = (
-                "to_monthly() requires the expression to be part of an "
-                "ActuarialFrame context."
-            )
-            raise RuntimeError(msg)
-
-        # ColumnProxy and ExpressionProxy both resolve shape, so a composed
-        # per-period expression converts element-wise, not just a named column.
-        is_list = self._proxy.shape == "list"
-
-        # Build the conversion expression
-        if method == "compound":
-            if is_list:
-                # For list columns: apply element-wise using list.eval
-                monthly_expr = base_expr.list.eval(((1 + pl.element()).pow(1 / 12)) - 1)
-            else:
-                # For scalar columns: direct expression
-                monthly_expr = ((1 + base_expr).pow(1 / 12)) - 1
-        elif method == "simple":
-            if is_list:
-                # For list columns: apply element-wise using list.eval
-                monthly_expr = base_expr.list.eval(pl.element() / 12)
-            else:
-                # For scalar columns: direct expression
-                monthly_expr = base_expr / 12
-        else:
+        if method not in ("compound", "simple"):
             msg = f"method must be 'compound' or 'simple', got '{method}'"
             raise ValueError(msg)
-
-        return ExpressionProxy(monthly_expr, parent_frame)
+        return self._emit("finance.to_monthly", attrs=(("method", method),))
 
     def compound(
         self,
@@ -612,36 +652,15 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         discount_factor : Calculate discount factors from interest rates
 
         """
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-
-        base_expr = self._get_polars_expr()
-        parent_frame = self._proxy._parent  # noqa: SLF001
-
-        if parent_frame is None:
-            msg = (
-                "compound() requires the expression to be part of an "
-                "ActuarialFrame context."
-            )
-            raise RuntimeError(msg)
-
-        # ColumnProxy and ExpressionProxy both resolve shape, so a composed
-        # per-period expression converts element-wise, not just a named column.
-        is_list = self._proxy.shape == "list"
-
-        # Build the compound growth expression: (1 + rate)^(period / periods_per_year)
-        if is_list:
-            # For list columns: apply element-wise using list.eval
-            compound_expr = base_expr.list.eval(
-                (1 + rate) ** (pl.element() / periods_per_year)
-            )
-        else:
-            # For scalar columns: direct expression
-            compound_expr = pl.lit(1 + rate) ** (base_expr / periods_per_year)
-
-        return ExpressionProxy(compound_expr, parent_frame)
+        return self._emit(
+            "finance.compound",
+            attrs=(("rate", rate), ("periods_per_year", periods_per_year)),
+        )
 
     def discount(
-        self, rate_expr: IntoExprColumn, n_periods_expr: IntoExprColumn
+        self,
+        rate_expr: ColumnProxy | ExpressionProxy | pl.Expr | float,
+        n_periods_expr: ColumnProxy | ExpressionProxy | pl.Expr | float,
     ) -> ExpressionProxy:
         """Discount the value in the current column/expression.
 
@@ -662,17 +681,22 @@ class FinanceColumnAccessor(BaseColumnAccessor):
 
         Parameters
         ----------
-        rate_expr : IntoExprColumn
+        rate_expr : ColumnProxy | ExpressionProxy | pl.Expr | float
             The discount rate per period (e.g., 0.05 for 5% annual).
-            Can be a scalar, column reference, or expression.
-        n_periods_expr : IntoExprColumn
-            The number of periods to discount over. Can be a scalar,
-            column reference, or expression.
+            Can be a number, column reference, or expression. A bare
+            string is refused — pass ``af["rate"]`` for the column.
+        n_periods_expr : ColumnProxy | ExpressionProxy | pl.Expr | float
+            The number of periods to discount over. Can be a number,
+            column reference, or expression. A bare string is refused —
+            pass ``af["periods"]`` for the column.
 
         Returns
         -------
         ExpressionProxy
-            Discounted values with same structure as input column.
+            One discounted value per policy. Every operand is one value per
+            policy (spec section 11.1.29); one held per period is refused by
+            name -- a per-period valuation is
+            ``.projection.prospective_value()``.
 
         Examples
         --------
@@ -712,36 +736,10 @@ class FinanceColumnAccessor(BaseColumnAccessor):
         discount_factor : Calculate discount factors for projection timelines
 
         """
-        from gaspatchio.column.expression_proxy import ExpressionProxy
+        refuse_bare_string_operand(rate_expr, parameter="rate_expr")
+        refuse_bare_string_operand(n_periods_expr, parameter="n_periods_expr")
+        return self._emit("finance.discount", (rate_expr, n_periods_expr))
 
-        base_expr = self._get_polars_expr()
-        parent_frame = self._proxy._parent  # noqa: SLF001
 
-        if parent_frame is None:
-            # Handle case where expression might be standalone
-            # In this basic version, we require a parent frame context.
-            msg = (
-                "Discount operation requires the expression to be part of "
-                "an ActuarialFrame context."
-            )
-            raise RuntimeError(msg)
-
-        # Convert rate and periods using the parent frame's context
-        pl_rate_expr = parent_frame._convert_to_expr(rate_expr)  # noqa: SLF001
-        pl_n_periods_expr = parent_frame._convert_to_expr(  # noqa: SLF001
-            n_periods_expr
-        )
-
-        # Calculate discount factor: 1 / (1 + rate)^n
-        discount_factor = (1 + pl_rate_expr).pow(pl_n_periods_expr)
-
-        # Apply discount: Value / Discount Factor
-        # Handle potential division by zero if discount_factor is 0
-        # (e.g., rate = -1). Polars might handle this, but check safer.
-        discounted_expr = (
-            pl.when(discount_factor != 0)
-            .then(base_expr / discount_factor)
-            .otherwise(pl.lit(None))
-        )  # Or handle error appropriately
-
-        return ExpressionProxy(discounted_expr, parent_frame)
+# What the API reference documents from this module.
+__all__ = ["FinanceColumnAccessor", "FinanceFrameAccessor"]

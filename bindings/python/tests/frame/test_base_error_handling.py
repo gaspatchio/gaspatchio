@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Integration tests for Section 1.4: Update Base Frame with error handling and mixed graph formats.
+Integration tests for Section 1.4: base frame error handling and the record store.
 
 Tests:
-- Mixed graph formats (tuples and TracedOperations)
+- The calculation log is record-only and is never replayed by collect()
 - Error handling in collect()
 - Error handling in profile()
 - Error mode configuration
@@ -19,51 +19,54 @@ import polars as pl
 import pytest
 
 from gaspatchio import ActuarialFrame
-from gaspatchio.errors.metadata import OperationMetadata, TracedOperation
+from gaspatchio._semantic.ir import Col
+from gaspatchio.frame.calculations import CalculationRecord
 from gaspatchio.util import get_error_mode, set_error_mode
 
 
-class TestMixedGraphFormats:
-    """The graph is record-only metadata; collect()/profile() never replay it.
+class TestTheLogIsRecordOnly:
+    """The calculation log is metadata; collect()/profile() never replay it.
 
     Operations reach the frame exactly once, through the setter or
-    with_columns. Entries injected directly into the graph (either legacy
-    tuple or TracedOperation format) are display metadata and must NOT be
-    executed — replaying them double-applied self-referential assignments
-    in debug mode (audit F6).
+    with_columns. A record is what the frame remembers about a calculation
+    it already applied, and must NOT be executed a second time — replaying
+    records double-applies self-referential assignments.
     """
 
-    def test_collect_ignores_injected_tuple_entries(self):
-        """Manually injected legacy-tuple graph entries are not executed."""
-        af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    def test_collect_ignores_an_injected_record(self):
+        """A record the frame's plan never received does not become a column.
 
-        af._tracing = True
-        af._computation_graph.append(("c", pl.col("a") + pl.col("b")))
+        There is one record type now, so this is the whole contract: put a
+        record in the log by hand, and the collected frame is unmoved by
+        it. Nothing about the record's origin or the run's mode changes
+        that answer.
+        """
+        af = ActuarialFrame({"sum_assured": [100.0], "mortality_rate": [0.01]})
+        af._traced_run = True
 
-        result = af.collect()
-
-        assert "c" not in result.columns
-        assert result["a"].to_list() == [1, 2, 3]
-
-    def test_collect_ignores_injected_traced_operation_entries(self):
-        """Manually injected TracedOperation graph entries are not executed."""
-        af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-
-        af._tracing = True
-        metadata = OperationMetadata("test.py", 10, "af['c'] = af['a'] + af['b']")
-        af._computation_graph.append(
-            TracedOperation("c", pl.col("a") + pl.col("b"), metadata),
+        af._calculations.append(
+            CalculationRecord(
+                column="death_claims",
+                ordinal=1,
+                operation_id=0,
+                node=Col(name="sum_assured"),
+                expr=pl.col("sum_assured") * pl.col("mortality_rate"),
+                dtype=None,
+                source=None,
+                origin="assignment",
+            )
         )
 
         result = af.collect()
 
-        assert "c" not in result.columns
+        assert "death_claims" not in result.columns
+        assert result["sum_assured"].to_list() == [100.0]
 
     def test_setter_records_and_applies_exactly_once(self):
-        """API operations under tracing are recorded AND applied once."""
+        """A traced run's assignments are recorded AND applied once each."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
-        af._tracing = True
+        af._traced_run = True
         af["c"] = pl.col("a") + pl.col("b")
         af["d"] = pl.col("c") * 2
 
@@ -71,13 +74,13 @@ class TestMixedGraphFormats:
 
         assert result["c"].to_list() == [5, 7, 9]
         assert result["d"].to_list() == [10, 14, 18]
-        assert len(af._computation_graph) == 2
+        assert [record.column for record in af._calculations] == ["c", "d"]
 
     def test_profile_matches_collect_under_tracing(self):
         """profile() returns the same applied state as collect()."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
-        af._tracing = True
+        af._traced_run = True
         af["c"] = pl.col("a") + pl.col("b")
         af["d"] = pl.col("c") * 2
 
@@ -105,7 +108,7 @@ class TestErrorModeConfiguration:
         """Test that standard error mode uses fast path (just re-raises)."""
         set_error_mode("standard")
         af = ActuarialFrame({"a": [1, 2, 3]})
-        af._tracing = False
+        af._traced_run = False
         af._mode = "run"
 
         # This should trigger an error and use fast path
@@ -118,7 +121,7 @@ class TestErrorModeConfiguration:
         """Test that enhanced error mode attempts to use enhanced error handling."""
         set_error_mode("enhanced")
         af = ActuarialFrame({"a": [1, 2, 3]})
-        af._tracing = True
+        af._traced_run = True
 
         # A lazily-failing operation through the real API (the graph is
         # record-only, so injected entries would never execute)
@@ -129,7 +132,7 @@ class TestErrorModeConfiguration:
         """Test that debug error mode enables enhanced error handling."""
         set_error_mode("debug")
         af = ActuarialFrame({"a": [1, 2, 3]})
-        af._tracing = True
+        af._traced_run = True
 
         with pytest.raises(pl.exceptions.ColumnNotFoundError):
             af.with_columns(pl.col("nonexistent").alias("b")).collect()
@@ -150,32 +153,15 @@ class TestErrorModeConfiguration:
         with pytest.raises(ValueError, match="Invalid error mode"):
             set_error_mode("invalid")
 
-    def test_error_mode_environment_variable(self):
+    def test_error_mode_environment_variable(self, monkeypatch: pytest.MonkeyPatch):
         """Test that error mode respects environment variable."""
-        # Save current state
-        original_mode = get_error_mode()
+        # get_error_mode() reads the environment on every call and prefers it
+        # over the programmatic default, so setting the variable is enough --
+        # no module reload, and monkeypatch puts the variable back afterwards
+        # whether or not the assertion holds.
+        monkeypatch.setenv("AF_ERROR_MODE", "debug")
 
-        # Set environment variable
-        os.environ["AF_ERROR_MODE"] = "debug"
-
-        # Force reload of the module to pick up environment variable
-        import importlib
-
-        import gaspatchio.util
-
-        importlib.reload(gaspatchio.util)
-
-        # Re-import after reload
-        from gaspatchio.util import get_error_mode as get_error_mode_reloaded
-
-        assert get_error_mode_reloaded() == "debug"
-
-        # Clean up
-        if "AF_ERROR_MODE" in os.environ:
-            del os.environ["AF_ERROR_MODE"]
-
-        # Restore original state
-        set_error_mode(original_mode)
+        assert get_error_mode() == "debug"
 
 
 class TestErrorHandlingIntegration:
@@ -192,7 +178,7 @@ class TestErrorHandlingIntegration:
     def test_collect_error_with_tracing_enabled(self):
         """Test that collect() calls enhanced error handling when tracing is enabled."""
         af = ActuarialFrame({"a": [1, 2, 3]})
-        af._tracing = True
+        af._traced_run = True
 
         # Add operation that will fail
         af["b"] = pl.col("nonexistent_column")
@@ -213,7 +199,7 @@ class TestErrorHandlingIntegration:
     def test_profile_error_handling(self):
         """Test that profile() also calls error handling on exceptions."""
         af = ActuarialFrame({"a": [1, 2, 3]})
-        af._tracing = True
+        af._traced_run = True
 
         # Add operation that will fail
         af["b"] = pl.col("nonexistent_column")
@@ -225,7 +211,7 @@ class TestErrorHandlingIntegration:
         """Test that error handling falls back gracefully when components fail."""
         set_error_mode("enhanced")
         af = ActuarialFrame({"a": [1, 2, 3]})
-        af._tracing = True
+        af._traced_run = True
 
         with pytest.raises(pl.exceptions.ColumnNotFoundError):
             af.with_columns(pl.col("nonexistent").alias("b")).collect()
@@ -235,29 +221,30 @@ class TestBackwardCompatibility:
     """Test that existing functionality continues to work."""
 
     def test_setitem_without_tracing(self):
-        """Test that __setitem__ works normally when tracing is disabled."""
+        """Test that __setitem__ works normally outside a traced run."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-        af._tracing = False  # Explicitly disable
+        af._traced_run = False  # Explicitly disable
 
         af["c"] = af["a"] + af["b"]
         result = af.collect()
 
         assert "c" in result.columns
         assert result["c"].to_list() == [5, 7, 9]
-        # Non-traced assignments record bare (name, expr) tuples for
-        # collect-error attribution (#39) — but never TracedOperation
-        # objects, whose stack-inspection cost belongs to tracing only.
-        assert all(isinstance(op, tuple) for op in af._computation_graph)
+        # The record is minted whether or not the run is traced: the log
+        # is what the model is auditable from, not a debugging aid a mode
+        # flag switches off.
+        assert [record.column for record in af._calculations] == ["c"]
 
     def test_setitem_with_tracing(self):
-        """Test that __setitem__ adds to graph when tracing is enabled."""
+        """Test that __setitem__ records the assignment during a traced run."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-        af._tracing = True
+        af._traced_run = True
 
         af["c"] = af["a"] + af["b"]
 
-        # Should add to graph, not execute immediately
-        assert len(af._computation_graph) == 1
+        # One record, and the same one either way — a traced run records
+        # exactly what an untraced one does.
+        assert [record.column for record in af._calculations] == ["c"]
 
         # Execute via collect
         result = af.collect()
@@ -267,7 +254,7 @@ class TestBackwardCompatibility:
     def test_with_columns_and_setter_compose_under_tracing(self):
         """Setter and with_columns operations compose; each applies once."""
         af = ActuarialFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-        af._tracing = True
+        af._traced_run = True
 
         af["c"] = pl.col("a") + pl.col("b")
         af = af.with_columns((pl.col("c") * 2).alias("d"))
@@ -276,7 +263,7 @@ class TestBackwardCompatibility:
         assert "c" in result.columns
         assert "d" in result.columns
         assert result["d"].to_list() == [10, 14, 18]
-        assert len(af._computation_graph) == 2
+        assert [record.column for record in af._calculations] == ["c", "d"]
 
     def test_empty_frame_collect(self):
         """Test that collect() works on empty frame."""

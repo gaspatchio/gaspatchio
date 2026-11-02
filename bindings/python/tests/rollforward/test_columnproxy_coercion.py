@@ -15,12 +15,8 @@ from datetime import date
 
 import polars as pl
 
-from gaspatchio import (
-    ActuarialFrame,
-    RollforwardCollector,
-    Schedule,
-    compile_rollforward,
-)
+from gaspatchio import ActuarialFrame, Schedule, compile_rollforward
+from tests.rollforward.conftest import _standalone_state_expr
 
 
 def _make_frame() -> ActuarialFrame:
@@ -61,7 +57,7 @@ def test_af_indexing_matches_pl_col() -> None:
         .floor(value=0.0)
     )
     compiled = compile_rollforward(b)
-    af_proxy.av = RollforwardCollector(compiled).expr_for("av")
+    af_proxy.av = compiled.expr_for("av")
     proxy_result = af_proxy.collect()
 
     af_col = _make_frame()
@@ -79,7 +75,7 @@ def test_af_indexing_matches_pl_col() -> None:
         .floor(value=0.0)
     )
     compiled2 = compile_rollforward(b2)
-    af_col.av = RollforwardCollector(compiled2).expr_for("av")
+    af_col.av = compiled2.expr_for("av")
     col_result = af_col.collect()
 
     assert proxy_result.equals(col_result)
@@ -100,8 +96,8 @@ def test_expr_for_cooperates_with_proxies_in_either_order() -> None:
     assert out.get_column("lhs").to_list() == out.get_column("rhs").to_list()
 
 
-def test_collector_expr_cooperates_with_proxies_in_either_order() -> None:
-    """The deprecated collector's self-contained exprs get the same interop."""
+def test_standalone_expr_cooperates_with_proxies_in_either_order() -> None:
+    """The self-contained emission gets the same interop as the shared one."""
     af = _make_frame()
     b = af.projection.rollforward(states={"av": af["av_init"]})
     b["av"].add(af["premium"], label="Premium").grow(
@@ -109,8 +105,7 @@ def test_collector_expr_cooperates_with_proxies_in_either_order() -> None:
         label="Interest",
     )
     compiled = compile_rollforward(b)
-    collector = RollforwardCollector(compiled)
-    af.lhs = collector.expr_for("av") * af["sum_assured"]
-    af.rhs = af["sum_assured"] * collector.expr_for("av")
+    af.lhs = _standalone_state_expr(compiled, "av") * af["sum_assured"]
+    af.rhs = af["sum_assured"] * _standalone_state_expr(compiled, "av")
     out = af.collect()
     assert out.get_column("lhs").to_list() == out.get_column("rhs").to_list()

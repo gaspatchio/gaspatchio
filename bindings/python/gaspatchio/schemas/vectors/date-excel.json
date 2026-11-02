@@ -1,0 +1,3908 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "date-excel",
+  "cases": [
+    {
+      "id": "calendar-month-difference",
+      "covers": [
+        "date.months_between"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28",
+            "2024-01-31",
+            "2025-01-01",
+            null
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-01",
+            "2024-02-01",
+            "2024-12-31",
+            "2025-01-01"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.months_between",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          1,
+          1,
+          -1,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-days-end-first",
+      "covers": [
+        "excel.days"
+      ],
+      "inputs": {
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-01",
+            "2024-02-01",
+            "2024-12-31",
+            "2025-01-01"
+          ]
+        },
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28",
+            "2024-01-31",
+            "2025-01-01",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.days",
+        "args": [
+          {
+            "op": "col",
+            "name": "end"
+          },
+          {
+            "op": "col",
+            "name": "start"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          2,
+          1,
+          -1,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "period-start-Y",
+      "covers": [
+        "date.to_period"
+      ],
+      "inputs": {
+        "date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28",
+            "2024-01-31",
+            "2025-01-01",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.to_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "date"
+          }
+        ],
+        "attrs": {
+          "freq": "Y"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2024-01-01",
+          "2024-01-01",
+          "2025-01-01",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "period-start-M",
+      "covers": [
+        "date.to_period"
+      ],
+      "inputs": {
+        "date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28",
+            "2024-01-31",
+            "2025-01-01",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.to_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "date"
+          }
+        ],
+        "attrs": {
+          "freq": "M"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2024-02-01",
+          "2024-01-01",
+          "2025-01-01",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "period-start-W",
+      "covers": [
+        "date.to_period"
+      ],
+      "inputs": {
+        "date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28",
+            "2024-01-31",
+            "2025-01-01",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.to_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "date"
+          }
+        ],
+        "attrs": {
+          "freq": "W"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2024-02-26",
+          "2024-01-29",
+          "2024-12-30",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "period-start-D",
+      "covers": [
+        "date.to_period"
+      ],
+      "inputs": {
+        "date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28",
+            "2024-01-31",
+            "2025-01-01",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.to_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "date"
+          }
+        ],
+        "attrs": {
+          "freq": "D"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2024-02-28",
+          "2024-01-31",
+          "2025-01-01",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "date-offset-1mo",
+      "covers": [
+        "date.offset_by"
+      ],
+      "inputs": {
+        "date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28",
+            "2024-01-31",
+            "2025-01-01",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.offset_by",
+        "args": [
+          {
+            "op": "col",
+            "name": "date"
+          }
+        ],
+        "attrs": {
+          "duration": "1mo"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2024-03-28",
+          "2024-02-29",
+          "2025-02-01",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "date-offset--1y",
+      "covers": [
+        "date.offset_by"
+      ],
+      "inputs": {
+        "date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28",
+            "2024-01-31",
+            "2025-01-01",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.offset_by",
+        "args": [
+          {
+            "op": "col",
+            "name": "date"
+          }
+        ],
+        "attrs": {
+          "duration": "-1y"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2023-02-28",
+          "2023-01-31",
+          "2024-01-01",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "date-offset-2d",
+      "covers": [
+        "date.offset_by"
+      ],
+      "inputs": {
+        "date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28",
+            "2024-01-31",
+            "2025-01-01",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.offset_by",
+        "args": [
+          {
+            "op": "col",
+            "name": "date"
+          }
+        ],
+        "attrs": {
+          "duration": "2d"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2024-03-01",
+          "2024-02-02",
+          "2025-01-03",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "date-ranges-both",
+      "covers": [
+        "date.date_ranges"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28"
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-01"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.date_ranges",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "interval": "1d",
+          "closed": "both"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-02-28",
+            "2024-02-29",
+            "2024-03-01"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "date-ranges-left",
+      "covers": [
+        "date.date_ranges"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28"
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-01"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.date_ranges",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "interval": "1d",
+          "closed": "left"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-02-28",
+            "2024-02-29"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "date-ranges-right",
+      "covers": [
+        "date.date_ranges"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28"
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-01"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.date_ranges",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "interval": "1d",
+          "closed": "right"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-02-29",
+            "2024-03-01"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "date-ranges-none",
+      "covers": [
+        "date.date_ranges"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-28"
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-01"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.date_ranges",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "interval": "1d",
+          "closed": "none"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-02-29"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "date-ranges-month-end-anchor",
+      "covers": [
+        "date.date_ranges"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-01-31",
+            "2024-02-01"
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-04-01",
+            "2024-01-01"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.date_ranges",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "interval": "1mo",
+          "closed": "both"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-01-31",
+            "2024-02-29",
+            "2024-03-31"
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel.edate-clamped",
+      "covers": [
+        "excel.edate"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-01-31",
+            "2024-02-29",
+            "2024-01-31",
+            null
+          ]
+        },
+        "months": {
+          "dtype": "i64",
+          "values": [
+            1,
+            12,
+            -1,
+            1
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.edate",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2024-02-29",
+          "2025-02-28",
+          "2023-12-31",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel.eomonth-clamped",
+      "covers": [
+        "excel.eomonth"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-01-31",
+            "2024-02-29",
+            "2024-01-31",
+            null
+          ]
+        },
+        "months": {
+          "dtype": "i64",
+          "values": [
+            1,
+            12,
+            -1,
+            1
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.eomonth",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2024-02-29",
+          "2025-02-28",
+          "2023-12-31",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-serial-1900",
+      "covers": [
+        "excel.from_excel_serial"
+      ],
+      "inputs": {
+        "serial": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.0,
+            59.0,
+            60.0,
+            60.5,
+            61.0,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.from_excel_serial",
+        "args": [
+          {
+            "op": "col",
+            "name": "serial"
+          }
+        ],
+        "attrs": {
+          "epoch": "1900"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          null,
+          "1900-01-01",
+          "1900-02-28",
+          "1900-02-28",
+          "1900-02-28",
+          "1900-03-01",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-serial-1904",
+      "covers": [
+        "excel.from_excel_serial"
+      ],
+      "inputs": {
+        "serial": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.0,
+            59.0,
+            60.0,
+            60.5,
+            61.0,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.from_excel_serial",
+        "args": [
+          {
+            "op": "col",
+            "name": "serial"
+          }
+        ],
+        "attrs": {
+          "epoch": "1904"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          null,
+          "1904-01-02",
+          "1904-02-29",
+          "1904-03-01",
+          "1904-03-01",
+          "1904-03-02",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "yearfrac-feb-end-0",
+      "covers": [
+        "excel.yearfrac"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-03-31",
+            null
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-31",
+            "2024-02-29",
+            "2024-03-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.yearfrac",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "basis": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.08611111111111111,
+          0.08611111111111111,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "yearfrac-feb-end-1",
+      "covers": [
+        "excel.yearfrac"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-03-31",
+            null
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-31",
+            "2024-02-29",
+            "2024-03-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.yearfrac",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "basis": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.08469945355191257,
+          0.08469945355191257,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "yearfrac-feb-end-2",
+      "covers": [
+        "excel.yearfrac"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-03-31",
+            null
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-31",
+            "2024-02-29",
+            "2024-03-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.yearfrac",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "basis": 2
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.08611111111111111,
+          0.08611111111111111,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "yearfrac-feb-end-3",
+      "covers": [
+        "excel.yearfrac"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-03-31",
+            null
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-31",
+            "2024-02-29",
+            "2024-03-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.yearfrac",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "basis": 3
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.08493150684931507,
+          0.08493150684931507,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "yearfrac-feb-end-4",
+      "covers": [
+        "excel.yearfrac"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-03-31",
+            null
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-31",
+            "2024-02-29",
+            "2024-03-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.yearfrac",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "basis": 4
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.08611111111111111,
+          0.08611111111111111,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "yearfrac-feb-end-act-360",
+      "covers": [
+        "excel.yearfrac"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-03-31",
+            null
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-31",
+            "2024-02-29",
+            "2024-03-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.yearfrac",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "basis": "act/360"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.08611111111111111,
+          0.08611111111111111,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "yearfrac-feb-end-30e-360",
+      "covers": [
+        "excel.yearfrac"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-03-31",
+            null
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2024-03-31",
+            "2024-02-29",
+            "2024-03-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.yearfrac",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "basis": "30e/360"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.08611111111111111,
+          0.08611111111111111,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "yearfrac-leap-anniversary",
+      "covers": [
+        "excel.yearfrac"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29"
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2025-02-28"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.yearfrac",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "basis": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.9972677595628415
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "yearfrac-anniversary-or-mean-year",
+      "covers": [
+        "excel.yearfrac"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2020-09-25",
+            "2021-09-26",
+            "2023-02-28",
+            "2023-03-01",
+            "2020-09-25"
+          ]
+        },
+        "end": {
+          "dtype": "date",
+          "values": [
+            "2021-09-26",
+            "2020-09-25",
+            "2024-02-29",
+            "2024-02-29",
+            "2021-09-25"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.yearfrac",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "basis": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1.0013679890560876,
+          1.0013679890560876,
+          1.0013679890560876,
+          0.9972677595628415,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-round-halves-False",
+      "covers": [
+        "excel.round"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "f64",
+          "values": [
+            2.5,
+            -2.5,
+            1.5,
+            -1.5,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.round",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          }
+        ],
+        "attrs": {
+          "num_digits": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          3.0,
+          -3.0,
+          2.0,
+          -2.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-round-halves-True",
+      "covers": [
+        "excel.round"
+      ],
+      "inputs": {
+        "value": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.5,
+              -2.5,
+              1.5,
+              -1.5,
+              null
+            ],
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.round",
+        "args": [
+          {
+            "op": "col",
+            "name": "value"
+          }
+        ],
+        "attrs": {
+          "num_digits": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            3.0,
+            -3.0,
+            2.0,
+            -2.0,
+            null
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-timing-None",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            0.0,
+            null
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            2.0,
+            2.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 50.0,
+          "typ": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -214.87603305785132,
+          -250.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-11,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-timing-0",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            0.0,
+            null
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            2.0,
+            2.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 50.0,
+          "typ": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -214.87603305785132,
+          -250.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-11,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-timing-1",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            0.0,
+            null
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            2.0,
+            2.0,
+            2.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            100.0,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 50.0,
+          "typ": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -232.23140495867779,
+          -250.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-11,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-zero-period-defaults",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            0.0
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            0.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": null,
+          "typ": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "irr-unique-and-unavailable",
+      "covers": [
+        "excel.irr"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -100.0,
+              110.0
+            ],
+            [
+              -100.0,
+              90.0
+            ],
+            [
+              -100.0,
+              100.0
+            ],
+            [],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              -100.0,
+              null,
+              110.0
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.irr",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          }
+        ],
+        "attrs": {
+          "default_guess": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.1,
+          -0.1,
+          0.0,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 1e-07,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "irr-per-policy-guess",
+      "covers": [
+        "excel.irr"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -100.0,
+              0.0,
+              121.0
+            ],
+            [
+              -100.0,
+              0.0,
+              121.0
+            ]
+          ]
+        },
+        "guess": {
+          "dtype": "f64",
+          "values": [
+            0.5,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.irr",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "guess"
+          }
+        ],
+        "attrs": {
+          "default_guess": 0.2
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.1,
+          0.1
+        ]
+      },
+      "comparison": {
+        "atol": 1e-07,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "irr-multiple-roots-outside-domain",
+      "covers": [
+        "excel.irr"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -100.0,
+              230.0,
+              -132.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.irr",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          }
+        ],
+        "attrs": {
+          "default_guess": null
+        }
+      },
+      "producer_check": false,
+      "refusal": "irr-multiple-sign-changes",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel.edate-months-a-whole-double",
+      "covers": [
+        "excel.edate"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-31",
+            "2025-01-31",
+            "2025-01-31"
+          ]
+        },
+        "months": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            -2.0,
+            12.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.edate",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2025-02-28",
+          "2024-11-30",
+          "2026-01-31"
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel.edate-months-not-whole",
+      "covers": [
+        "excel.edate"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-31",
+            "2025-01-31",
+            "2025-01-31"
+          ]
+        },
+        "months": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            1.5,
+            12.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.edate",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": false,
+      "refusal": "checked-integer-conversion",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel.edate-months-a-flag",
+      "covers": [
+        "excel.edate"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-31",
+            "2025-01-31",
+            "2025-01-31"
+          ]
+        },
+        "months": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false,
+            true
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.edate",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": false,
+      "refusal": "calendar-months-kind",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel.eomonth-months-a-whole-double",
+      "covers": [
+        "excel.eomonth"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-15",
+            "2025-01-15",
+            "2025-01-15"
+          ]
+        },
+        "months": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            -2.0,
+            12.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.eomonth",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "date",
+        "values": [
+          "2025-02-28",
+          "2024-11-30",
+          "2026-01-31"
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel.eomonth-months-not-whole",
+      "covers": [
+        "excel.eomonth"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-15",
+            "2025-01-15",
+            "2025-01-15"
+          ]
+        },
+        "months": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            1.5,
+            12.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.eomonth",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": false,
+      "refusal": "checked-integer-conversion",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel.eomonth-months-a-flag",
+      "covers": [
+        "excel.eomonth"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-15",
+            "2025-01-15",
+            "2025-01-15"
+          ]
+        },
+        "months": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false,
+            true
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.eomonth",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": false,
+      "refusal": "calendar-months-kind",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel-pv-near-a-zero-rate-typ-0",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            1e-15,
+            -1e-13,
+            9.99e-13,
+            1e-12,
+            1e-09,
+            1e-05,
+            0.0
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            360.0,
+            360.0,
+            360.0,
+            360.0,
+            360.0,
+            360.0,
+            360.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 1000.0,
+          "typ": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -36999.99999999314,
+          -37000.0000006858,
+          -36999.99999314886,
+          -36999.999993142,
+          -36999.99314200085,
+          -36931.50482826161,
+          -37000.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-near-a-zero-rate-typ-1",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            1e-15,
+            -1e-13,
+            9.99e-13,
+            1e-12,
+            1e-09,
+            1e-05,
+            0.0
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            360.0,
+            360.0,
+            360.0,
+            360.0,
+            360.0,
+            360.0,
+            360.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 1000.0,
+          "typ": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -36999.999999993175,
+          -37000.0000006822,
+          -36999.99999318482,
+          -36999.999993178,
+          -36999.99317800084,
+          -36931.86417924499,
+          -37000.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "date.months_between-over-a-value-per-period",
+      "covers": [
+        "date.months_between"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-31",
+            "2025-03-15"
+          ]
+        },
+        "end": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2025-06-30",
+              "2025-07-31"
+            ],
+            [
+              "2025-09-30",
+              "2025-10-31"
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.months_between",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "calendar-operand-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel.days-over-a-value-per-period",
+      "covers": [
+        "excel.days"
+      ],
+      "inputs": {
+        "end": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2025-06-30",
+              "2025-07-31"
+            ],
+            [
+              "2025-09-30",
+              "2025-10-31"
+            ]
+          ]
+        },
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-31",
+            "2025-03-15"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.days",
+        "args": [
+          {
+            "op": "col",
+            "name": "end"
+          },
+          {
+            "op": "col",
+            "name": "start"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "calendar-operand-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "date.to_period-over-a-value-per-period",
+      "covers": [
+        "date.to_period"
+      ],
+      "inputs": {
+        "date": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2025-01-31",
+              "2025-02-28"
+            ],
+            [
+              "2025-03-15",
+              "2025-04-15"
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.to_period",
+        "args": [
+          {
+            "op": "col",
+            "name": "date"
+          }
+        ],
+        "attrs": {
+          "freq": "M"
+        }
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "calendar-operand-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "date.offset_by-over-a-value-per-period",
+      "covers": [
+        "date.offset_by"
+      ],
+      "inputs": {
+        "date": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2025-01-31",
+              "2025-02-28"
+            ],
+            [
+              "2025-03-15",
+              "2025-04-15"
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.offset_by",
+        "args": [
+          {
+            "op": "col",
+            "name": "date"
+          }
+        ],
+        "attrs": {
+          "duration": "1mo"
+        }
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "calendar-operand-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel.edate-over-a-value-per-period",
+      "covers": [
+        "excel.edate"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-31",
+            "2025-03-15"
+          ]
+        },
+        "months": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              1,
+              2
+            ],
+            [
+              3,
+              4
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.edate",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "calendar-operand-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel.eomonth-over-a-value-per-period",
+      "covers": [
+        "excel.eomonth"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2025-01-31",
+              "2025-02-28"
+            ],
+            [
+              "2025-03-15",
+              "2025-04-15"
+            ]
+          ]
+        },
+        "months": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.eomonth",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "months"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "calendar-operand-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "date.date_ranges-over-a-value-per-period",
+      "covers": [
+        "date.date_ranges"
+      ],
+      "inputs": {
+        "start": {
+          "dtype": "date",
+          "values": [
+            "2025-01-31",
+            "2025-03-15"
+          ]
+        },
+        "end": {
+          "dtype": "list[date]",
+          "values": [
+            [
+              "2025-06-30",
+              "2025-07-31"
+            ],
+            [
+              "2025-09-30",
+              "2025-10-31"
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "date.date_ranges",
+        "args": [
+          {
+            "op": "col",
+            "name": "start"
+          },
+          {
+            "op": "col",
+            "name": "end"
+          }
+        ],
+        "attrs": {
+          "interval": "1mo",
+          "closed": "both"
+        }
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "calendar-operand-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel.from_excel_serial-over-a-value-per-period",
+      "covers": [
+        "excel.from_excel_serial"
+      ],
+      "inputs": {
+        "serial": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              45000.0,
+              45001.0
+            ],
+            [
+              45031.0,
+              45062.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.from_excel_serial",
+        "args": [
+          {
+            "op": "col",
+            "name": "serial"
+          }
+        ],
+        "attrs": {
+          "epoch": "1900"
+        }
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "calendar-operand-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel.irr-guess-per-period",
+      "covers": [
+        "excel.irr"
+      ],
+      "inputs": {
+        "cf": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -100.0,
+              60.0,
+              60.0
+            ],
+            [
+              -100.0,
+              110.0
+            ]
+          ]
+        },
+        "guess": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              0.1,
+              0.1
+            ],
+            [
+              0.1,
+              0.1
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.irr",
+        "args": [
+          {
+            "op": "col",
+            "name": "cf"
+          },
+          {
+            "op": "col",
+            "name": "guess"
+          }
+        ],
+        "attrs": {
+          "default_guess": 0.2
+        }
+      },
+      "producer_check": true,
+      "producer_message": "holds one value per period",
+      "refusal": "irr-guess-per-period",
+      "case_kind": "portable-domain-refusal"
+    },
+    {
+      "id": "excel-pv-per-period-rate",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.0,
+              0.04,
+              0.1
+            ],
+            [
+              0.03
+            ],
+            [
+              0.01,
+              0.02
+            ]
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            5.0,
+            0.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            50.0,
+            20.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 50.0,
+          "typ": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -802.8691555955193,
+            -1050.0,
+            -844.8677863767928,
+            -633.7338750419448
+          ],
+          [
+            -272.1157985789349
+          ],
+          [
+            -50.0,
+            -50.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-nper",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.05,
+            0.0,
+            0.03
+          ]
+        },
+        "nper": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              10,
+              0,
+              3
+            ],
+            [
+              4,
+              12
+            ],
+            [
+              1
+            ]
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            50.0,
+            -20.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": null,
+          "typ": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -772.1734929184812,
+            0.0,
+            -272.3248029370478
+          ],
+          [
+            -200.0,
+            -600.0
+          ],
+          [
+            19.41747572815534
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-pmt",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.05,
+            0.03
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            5.0
+          ]
+        },
+        "pmt": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              100.0,
+              -5.0,
+              0.0
+            ],
+            [
+              50.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 1000.0,
+          "typ": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -1424.6954211051648,
+            -573.3741451625391,
+            -613.9132535407593
+          ],
+          [
+            -1098.4637045246825,
+            -867.3258827869744
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-rate-and-nper",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.04,
+              0.0
+            ],
+            [
+              0.02,
+              0.07
+            ]
+          ]
+        },
+        "nper": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              3.0,
+              6.0
+            ],
+            [
+              1.0,
+              30.0
+            ]
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            25.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 0.0,
+          "typ": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -772.1734929184812,
+            -277.5091033227128,
+            -600.0
+          ],
+          [
+            -24.50980392156863,
+            -310.22602958764645
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-nper-and-pmt",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            0.06,
+            0.0
+          ]
+        },
+        "nper": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              12.0,
+              24.0
+            ],
+            [
+              5.0,
+              7.0,
+              9.0
+            ]
+          ]
+        },
+        "pmt": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              20.0
+            ],
+            [
+              1.0,
+              2.0,
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": -200.0,
+          "typ": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            10.525126947336995,
+            -216.6718699217818
+          ],
+          [
+            195.0,
+            186.0,
+            173.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-all-three",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.04
+            ],
+            [
+              0.0,
+              0.01,
+              0.2
+            ]
+          ]
+        },
+        "nper": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              3.0
+            ],
+            [
+              2.0,
+              40.0,
+              1.0
+            ]
+          ]
+        },
+        "pmt": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              100.0,
+              7.0
+            ],
+            [
+              3.0,
+              4.0,
+              5.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 1000.0,
+          "typ": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -1424.6954211051648,
+            -909.1990213928084
+          ],
+          [
+            -1006.0,
+            -804.3052707608213,
+            -838.3333333333334
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-near-a-zero-rate-typ-0",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1e-15,
+              -1e-13,
+              9.99e-13,
+              1e-12,
+              1e-09,
+              1e-05,
+              0.0
+            ]
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            360.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 1000.0,
+          "typ": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -36999.99999999314,
+            -37000.0000006858,
+            -36999.99999314886,
+            -36999.999993142,
+            -36999.99314200085,
+            -36931.50482826161,
+            -37000.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-near-a-zero-rate-typ-1",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1e-15,
+              -1e-13,
+              9.99e-13,
+              1e-12,
+              1e-09,
+              1e-05,
+              0.0
+            ]
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            360.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 1000.0,
+          "typ": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -36999.999999993175,
+            -37000.0000006822,
+            -36999.99999318482,
+            -36999.999993178,
+            -36999.99317800084,
+            -36931.86417924499,
+            -37000.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-empty-run",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.02
+            ],
+            []
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            10.0
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": null,
+          "typ": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -772.1734929184812,
+            -898.2585006242236
+          ],
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-null",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              null,
+              0.03
+            ],
+            null,
+            [
+              0.02
+            ]
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            10.0,
+            4.0,
+            null
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            100.0,
+            1.0,
+            5.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": null,
+          "typ": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            -772.1734929184812,
+            null,
+            -853.0202836775829
+          ],
+          null,
+          [
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-unequal-periods",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.04,
+              0.03
+            ]
+          ]
+        },
+        "nper": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ]
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            5.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": null,
+          "typ": null
+        }
+      },
+      "producer_check": true,
+      "refusal": "period-count-mismatch",
+      "case_kind": "portable-domain-refusal",
+      "producer_message": "mismatched inner list lengths"
+    },
+    {
+      "id": "excel-pv-per-period-null-payment-beside-two-runs",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.04
+            ],
+            [
+              0.02
+            ]
+          ]
+        },
+        "nper": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              3.0
+            ],
+            [
+              5.0
+            ]
+          ]
+        },
+        "pmt": {
+          "dtype": "f64",
+          "values": [
+            null,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": null,
+          "typ": 0
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          [
+            -471.34595085042054
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-null-count-beside-two-runs",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.0
+            ],
+            [
+              0.02
+            ]
+          ]
+        },
+        "nper": {
+          "dtype": "f64",
+          "values": [
+            null,
+            5.0
+          ]
+        },
+        "pmt": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              100.0,
+              7.0
+            ],
+            [
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": 50.0,
+          "typ": 1
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          [
+            -59.70972658751866
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "excel-pv-per-period-null-rate-beside-two-runs",
+      "covers": [
+        "excel.pv"
+      ],
+      "inputs": {
+        "rate": {
+          "dtype": "f64",
+          "values": [
+            null,
+            0.03
+          ]
+        },
+        "nper": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              3.0
+            ],
+            [
+              5.0,
+              1.0
+            ]
+          ]
+        },
+        "pmt": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              100.0,
+              7.0
+            ],
+            [
+              3.0,
+              4.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "excel.pv",
+        "args": [
+          {
+            "op": "col",
+            "name": "rate"
+          },
+          {
+            "op": "col",
+            "name": "nper"
+          },
+          {
+            "op": "col",
+            "name": "pmt"
+          }
+        ],
+        "attrs": {
+          "fv": null,
+          "typ": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          [
+            -13.739121561583602,
+            -3.883495145631068
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 1e-12
+      },
+      "case_kind": "value"
+    }
+  ]
+}

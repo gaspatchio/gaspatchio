@@ -2,35 +2,54 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the same-name / different-data re-registration warning (F8a).
+"""Tests for the same-name / different-data re-registration warning.
 
 Re-registering an assumption table under a name that already exists but with
-DIFFERENT content silently swaps the data under any lazy lookup expression that
-was already built against the previous same-named table (tables resolve by name
-at execution time, last-writer-wins). That is a silent-wrong-number footgun, so
-we emit a clear warning when — and only when — the content differs.
+DIFFERENT content invalidates any lazy lookup expression already built against
+the previous same-named table. The native kernel refuses those expressions at
+collection; the earlier warning tells callers to rebuild them when the content
+differs.
 
 The identical-content case is the common issue-#39 reentrancy scenario
 (re-running the same model in the same process) and must stay SILENT. Neither
 case may raise (see ``test_issue_39_reentrancy.py``).
+
+The warning is a ``GaspatchioWarning`` raised through Python's ``warnings``,
+not a log record: the package mutes its own logs when it is used as a
+library, and this is something the user must hear whether or not they are
+on. It is said through that one channel only.
 """
 
 from __future__ import annotations
 
+import warnings
+from contextlib import contextmanager
+from typing import TYPE_CHECKING
+
 import polars as pl
 from loguru import logger
 
+from gaspatchio import GaspatchioWarning
 from gaspatchio.assumptions import Table
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
-def _capture_warnings() -> tuple[list[str], int]:
-    """Add a loguru WARNING sink and return (captured_messages, sink_id)."""
-    captured: list[str] = []
+
+@contextmanager
+def _capture_warnings() -> Iterator[tuple[list[warnings.WarningMessage], list[str]]]:
+    """Record the warnings raised, and the log records written, inside the block."""
+    logged: list[str] = []
     sink_id = logger.add(
-        lambda msg: captured.append(msg.record["message"]),
+        lambda msg: logged.append(msg.record["message"]),
         level="WARNING",
     )
-    return captured, sink_id
+    try:
+        with warnings.catch_warnings(record=True) as heard:
+            warnings.simplefilter("always")
+            yield heard, logged
+    finally:
+        logger.remove(sink_id)
 
 
 def test_same_name_identical_data_emits_no_warning() -> None:
@@ -45,8 +64,7 @@ def test_same_name_identical_data_emits_no_warning() -> None:
         value="rate",
     )
 
-    captured, sink_id = _capture_warnings()
-    try:
+    with _capture_warnings() as (heard, logged):
         # Second registration with byte-identical data — common reentrancy case.
         Table(
             name="warn_identical_data",
@@ -54,10 +72,9 @@ def test_same_name_identical_data_emits_no_warning() -> None:
             dimensions={"age": "age"},
             value="rate",
         )
-    finally:
-        logger.remove(sink_id)
 
-    reregistration_warnings = [m for m in captured if "re-registered" in m]
+    said = [str(w.message) for w in heard] + logged
+    reregistration_warnings = [m for m in said if "re-registered" in m]
     assert reregistration_warnings == [], (
         f"Expected no re-registration warning for identical data, got: "
         f"{reregistration_warnings}"
@@ -74,8 +91,7 @@ def test_same_name_different_data_emits_warning() -> None:
         value="rate",
     )
 
-    captured, sink_id = _capture_warnings()
-    try:
+    with _capture_warnings() as (heard, logged):
         # Second registration with DIFFERENT values under the same name.
         Table(
             name="warn_different_data",
@@ -83,20 +99,31 @@ def test_same_name_different_data_emits_warning() -> None:
             dimensions={"age": "age"},
             value="rate",
         )
-    finally:
-        logger.remove(sink_id)
 
-    reregistration_warnings = [m for m in captured if "re-registered" in m]
+    reregistration_warnings = [w for w in heard if "re-registered" in str(w.message)]
     assert len(reregistration_warnings) == 1, (
         f"Expected exactly one re-registration warning for different data, "
-        f"got: {reregistration_warnings}"
+        f"got: {[str(w.message) for w in heard]}"
     )
-    message = reregistration_warnings[0]
+    (warning,) = reregistration_warnings
+    # A GaspatchioWarning, located at the line that registered the table
+    # again, and said through that channel only: no log record repeats it.
+    assert issubclass(warning.category, GaspatchioWarning)
+    assert warning.filename == __file__
+    assert [m for m in logged if "re-registered" in m] == []
+    message = str(warning.message)
     # The table name must be identifiable in the message.
     assert "warn_different_data" in message
-    # The message must explain the resolve-by-name / last-writer-wins hazard.
+    # The condition that raised it.
     assert "different data" in message
-    assert "name" in message
+    # The consequence, and the remedy that follows from it. These two are the
+    # half of the sentence that reversed on 2026-09-10: it previously said the
+    # already-built lookups "will now resolve to the NEW values" and that an
+    # intentional shock could ignore the warning. They are refused now, and a
+    # reword restoring the old meaning would have to drop both phrases. A
+    # reword that keeps the meaning keeps them.
+    assert "refuse to collect" in message
+    assert "rebuild expressions from the current Table" in message
 
 
 def test_same_name_different_data_does_not_raise() -> None:

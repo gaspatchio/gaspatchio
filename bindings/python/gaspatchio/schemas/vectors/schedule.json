@@ -1,0 +1,1956 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "schedule",
+  "cases": [
+    {
+      "id": "from_calendar_grid-projection_frame.period_dates",
+      "covers": [
+        "projection_frame.period_dates"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.period_dates",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-02-29",
+            "2024-08-29",
+            "2025-02-28"
+          ],
+          [
+            "2024-02-29",
+            "2024-08-29",
+            "2025-02-28"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_calendar_grid-projection_frame.year_fractions",
+      "covers": [
+        "projection_frame.year_fractions"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.year_fractions",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.5,
+            0.5
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_calendar_grid-projection_frame.t_years",
+      "covers": [
+        "projection_frame.t_years"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.t_years",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            0.5,
+            1.0
+          ],
+          [
+            0.0,
+            0.5,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_calendar_grid-projection_frame.anniversary_mask",
+      "covers": [
+        "projection_frame.anniversary_mask"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.anniversary_mask",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            true
+          ],
+          [
+            false,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_calendar_grid-schedule.year_fractions",
+      "covers": [
+        "schedule.year_fractions"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.year_fractions",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.5,
+            0.5
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_calendar_grid-schedule.is_in_force",
+      "covers": [
+        "schedule.is_in_force"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.is_in_force",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "end_date_column": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            true,
+            true
+          ],
+          [
+            true,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_calendar_grid-schedule.contract_boundary",
+      "covers": [
+        "schedule.contract_boundary"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.contract_boundary",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "end_date_column": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            false
+          ],
+          [
+            false,
+            false
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_inception-projection_frame.period_dates",
+      "covers": [
+        "projection_frame.period_dates"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.period_dates",
+        "args": [
+          {
+            "op": "col",
+            "name": "issue_date"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-02-29",
+            "2024-08-29",
+            "2025-02-28"
+          ],
+          [
+            "2024-01-31",
+            "2024-07-31",
+            "2025-01-31"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_inception-projection_frame.year_fractions",
+      "covers": [
+        "projection_frame.year_fractions"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.year_fractions",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.5,
+            0.5
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_inception-projection_frame.t_years",
+      "covers": [
+        "projection_frame.t_years"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.t_years",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0,
+            0.5,
+            1.0
+          ],
+          [
+            0.0,
+            0.5,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_inception-projection_frame.anniversary_mask",
+      "covers": [
+        "projection_frame.anniversary_mask"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.anniversary_mask",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            true
+          ],
+          [
+            false,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_inception-schedule.year_fractions",
+      "covers": [
+        "schedule.year_fractions"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.year_fractions",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.5,
+            0.5
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_inception-dates",
+      "covers": [
+        "schedule.period_dates"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.period_dates",
+        "args": [
+          {
+            "op": "col",
+            "name": "issue_date"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-02-29",
+            "2024-08-29",
+            "2025-02-28"
+          ],
+          [
+            "2024-01-31",
+            "2024-07-31",
+            "2025-01-31"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_inception-anniversary",
+      "covers": [
+        "schedule.anniversary_mask"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.anniversary_mask",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            true
+          ],
+          [
+            false,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_inception-schedule.is_in_force",
+      "covers": [
+        "schedule.is_in_force"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.is_in_force",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "end_date_column": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            true,
+            true
+          ],
+          [
+            true,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "from_inception-schedule.contract_boundary",
+      "covers": [
+        "schedule.contract_boundary"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.contract_boundary",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "end_date_column": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            false
+          ],
+          [
+            false,
+            false
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per_policy_grid-projection_frame.period_dates",
+      "covers": [
+        "projection_frame.period_dates"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.period_dates",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-01-31"
+          ],
+          [
+            "2024-01-31",
+            "2024-07-31"
+          ],
+          [
+            "2024-01-31",
+            "2024-07-31",
+            "2025-01-31"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per_policy_grid-projection_frame.year_fractions",
+      "covers": [
+        "projection_frame.year_fractions"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.year_fractions",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [],
+          [
+            0.5
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per_policy_grid-projection_frame.t_years",
+      "covers": [
+        "projection_frame.t_years"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.t_years",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0
+          ],
+          [
+            0.0,
+            0.5
+          ],
+          [
+            0.0,
+            0.5,
+            1.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per_policy_grid-projection_frame.anniversary_mask",
+      "covers": [
+        "projection_frame.anniversary_mask"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.anniversary_mask",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [],
+          [
+            false
+          ],
+          [
+            false,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per_policy_grid-schedule.year_fractions",
+      "covers": [
+        "schedule.year_fractions"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.year_fractions",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [],
+          [
+            0.5
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per_policy_grid-dates",
+      "covers": [
+        "schedule.per_policy_period_dates"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.per_policy_period_dates",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-01-31"
+          ],
+          [
+            "2024-01-31",
+            "2024-07-31"
+          ],
+          [
+            "2024-01-31",
+            "2024-07-31",
+            "2025-01-31"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per_policy_grid-anniversary",
+      "covers": [
+        "schedule.anniversary_mask"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.anniversary_mask",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [],
+          [
+            false
+          ],
+          [
+            false,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per-policy-count",
+      "covers": [
+        "schedule.per_policy_period_count"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15,
+            -1,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.per_policy_period_count",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          0,
+          1,
+          2,
+          0,
+          0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per_policy_grid-schedule.is_in_force",
+      "covers": [
+        "schedule.is_in_force"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.is_in_force",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "end_date_column": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [],
+          [
+            true
+          ],
+          [
+            true,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "per_policy_grid-schedule.contract_boundary",
+      "covers": [
+        "schedule.contract_boundary"
+      ],
+      "inputs": {
+        "term": {
+          "dtype": "i64",
+          "values": [
+            0,
+            6,
+            15
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.contract_boundary",
+        "args": [
+          {
+            "op": "col",
+            "name": "term"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "end_date_column": null
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [],
+          [
+            false
+          ],
+          [
+            false,
+            false
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:90b589dfaf64d75dd93f9d636428031fe8e950e828805e0328c37cd618b3c2d9",
+          "payload": {
+            "kind": "per_policy_grid",
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-01-31",
+            "until_kind": "term_months",
+            "until_value_column": "term"
+          }
+        }
+      ]
+    },
+    {
+      "id": "schedule.is_in_force-expiry-inclusive",
+      "covers": [
+        "schedule.is_in_force"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        },
+        "expiry": {
+          "dtype": "date",
+          "values": [
+            "2024-08-29",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.is_in_force",
+        "args": [
+          {
+            "op": "col",
+            "name": "issue_date"
+          },
+          {
+            "op": "col",
+            "name": "expiry"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "end_date_column": "expiry"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            true,
+            false
+          ],
+          [
+            true,
+            true
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "schedule.contract_boundary-expiry-inclusive",
+      "covers": [
+        "schedule.contract_boundary"
+      ],
+      "inputs": {
+        "issue_date": {
+          "dtype": "date",
+          "values": [
+            "2024-02-29",
+            "2024-01-31"
+          ]
+        },
+        "expiry": {
+          "dtype": "date",
+          "values": [
+            "2024-08-29",
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "schedule.contract_boundary",
+        "args": [
+          {
+            "op": "col",
+            "name": "issue_date"
+          },
+          {
+            "op": "col",
+            "name": "expiry"
+          }
+        ],
+        "attrs": {
+          "schedule": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "end_date_column": "expiry"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          [
+            false,
+            true
+          ],
+          [
+            false,
+            false
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:feac78cc2bda05fe69d8161e5aba44ceb5ff840fbfb9286cb5ea0b360562d1db",
+          "payload": {
+            "kind": "from_inception",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "inception_column": "issue_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "projection_frame.t_years-zero-horizon",
+      "covers": [
+        "projection_frame.t_years"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.t_years",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:419428924869f04e3178a167854e8ac29f97d590cdfecd80dba1e857ce322e2e"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:419428924869f04e3178a167854e8ac29f97d590cdfecd80dba1e857ce322e2e",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 0,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "projection_frame.year_fractions-zero-horizon",
+      "covers": [
+        "projection_frame.year_fractions"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.year_fractions",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:419428924869f04e3178a167854e8ac29f97d590cdfecd80dba1e857ce322e2e"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:419428924869f04e3178a167854e8ac29f97d590cdfecd80dba1e857ce322e2e",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 0,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "projection_frame.period_dates-zero-horizon",
+      "covers": [
+        "projection_frame.period_dates"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.period_dates",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:419428924869f04e3178a167854e8ac29f97d590cdfecd80dba1e857ce322e2e"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[date]",
+        "values": [
+          [
+            "2024-02-29"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:419428924869f04e3178a167854e8ac29f97d590cdfecd80dba1e857ce322e2e",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 0,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    },
+    {
+      "id": "projection_frame.anniversary_mask-zero-horizon",
+      "covers": [
+        "projection_frame.anniversary_mask"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.anniversary_mask",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:419428924869f04e3178a167854e8ac29f97d590cdfecd80dba1e857ce322e2e"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[bool]",
+        "values": [
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:419428924869f04e3178a167854e8ac29f97d590cdfecd80dba1e857ce322e2e",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 0,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ]
+    }
+  ]
+}

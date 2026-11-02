@@ -33,7 +33,10 @@ def process_rss_bytes() -> int:
 
 
 def memory_budget_bytes(target_memory_fraction: float) -> int:
-    """Bytes one batch may target. Cgroup-aware + base-RSS-subtracted (fails open to host RAM)."""
+    """Bytes one batch may target.
+
+    Cgroup-aware + base-RSS-subtracted (fails open to host RAM).
+    """
     return _memory.memory_budget(
         target_memory_fraction,
         root=_cgroup_root,

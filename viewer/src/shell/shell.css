@@ -1,0 +1,827 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Opio Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The shell: one strip across the top, four regions under it.
+ *
+ * Everything here is drawn on the tokens in `theme/tokens.css` and on nothing
+ * else — no component library. The amber appears exactly
+ * once, on the holes chip, and that is the whole of its use on this page.
+ */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Search first, the cursor beside it, the file's identity to the right. */
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.88rem;
+  flex: 0 0 auto;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+/*
+ * What there is to look at, offered where the reader asks for it.
+ *
+ * Under the box, on focus, while nothing is typed: the columns the model
+ * computed and then stopped at. Headed with the measurement — nothing else
+ * reads these — rather than with "results", because one of them is a date label
+ * on every model in the corpus and the file carries nothing that separates a
+ * result from a leftover.
+ */
+.ends,
+.census-names {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  max-width: 44rem;
+  padding: 8px 10px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 8%);
+}
+
+.ends-head {
+  color: var(--ink-secondary);
+  font-size: 0.78rem;
+  width: 100%;
+}
+
+.ends-name,
+.census-name {
+  font: inherit;
+  font-family: var(--face-mono);
+  font-size: 0.82rem;
+  border: 0;
+  background: none;
+  padding: 1px 3px;
+  color: var(--code-blue);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ends-name:hover,
+.census-name:hover {
+  color: var(--red-dark);
+  text-decoration: underline;
+}
+
+.search input {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  min-width: 240px;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.search input:focus {
+  outline: 2px solid var(--red-light);
+  outline-offset: 1px;
+}
+
+.search .found {
+  color: var(--ink-secondary);
+}
+
+/*
+ * The class is `period-cursor` and not `cursor` on purpose. `cursor` is the
+ * grid's row — `tr[data-period].cursor` — and a bare `.cursor { display: flex }`
+ * here reached into the table and took a row out of its own layout. Two things
+ * called the same thing in one stylesheet is a collision waiting for whichever
+ * unit adds the second one.
+ */
+.period-cursor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-secondary);
+}
+
+.period-cursor b {
+  color: var(--ink);
+  text-align: right;
+}
+
+.period-cursor input[type="range"] {
+  width: 180px;
+  accent-color: var(--red);
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  color: var(--ink-secondary);
+}
+
+.identity .model {
+  color: var(--ink);
+}
+
+/*
+ * The two documents a comparison is between.
+ *
+ * A date and a seal for each, earlier first, with an arrow between them: the
+ * strip's answer to "which two files is this?" asked before the page says what
+ * moved. Both dates are cut to the day and both seals to their first eight
+ * digits, which is what anybody reads aloud; the whole of each is on its own
+ * title, and the drawer prints the later document's in full where the rest of
+ * the envelope is.
+ */
+.identity .compared {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.identity .compared .seal {
+  font-size: 0.78rem;
+  color: var(--ink);
+}
+
+.identity .compared .to {
+  color: var(--ink-secondary);
+}
+
+/*
+ * The name the command gave a side, before its date, in the ink the model's
+ * name wears.
+ *
+ * A label longer than the strip has room for gives way, and from its start
+ * rather than its end: the end of a path at a revision is the revision, which
+ * is what tells the two sides apart. The box reads right to left, so it is its
+ * start that overflows and takes the ellipsis, and the label inside it is held
+ * left to right, so the label itself reads as written; the whole of it is on
+ * the title. The two names, with the link note, are the only things in the
+ * identity that give way -- every other fact keeps its width, and the dates,
+ * the seals and the fingerprint keep theirs -- and the identity may be
+ * narrower than all it holds, so a label two hundred characters long shortens
+ * itself rather than pushing the seals off the window.
+ */
+.identity {
+  min-width: 0;
+}
+
+.identity > * {
+  flex-shrink: 0;
+}
+
+.identity > .compared,
+.identity > .link-note {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.identity .compared .named {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  color: var(--ink);
+}
+
+/*
+ * The policy switcher, where the file carries more than one.
+ *
+ * Each option reads as the policy's id and then the producer's own sentence
+ * saying how it got into the file, so choosing between them is choosing
+ * between accounts rather than between names. Closed, the control is capped at
+ * a width the strip can afford and the browser clips the sentence; the whole
+ * of it is in the element's title, and the drawer's Model tab prints the
+ * selected one in full. A fixed max-width rather than a share of the strip
+ * because what this must not do is push the fingerprint and the holes chip
+ * off the end of a 1,440 px line.
+ */
+.identity .policies {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.policy-switcher {
+  max-width: 10rem;
+  font: inherit;
+  font-family: var(--face-mono);
+  font-size: 0.82rem;
+  padding: 1px 4px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--code-surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.policy-switcher:hover {
+  border-color: var(--red-light);
+}
+
+.fingerprint {
+  font: inherit;
+  font-family: var(--face-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--code-surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.fingerprint:hover {
+  border-color: var(--red-light);
+  color: var(--red-dark);
+}
+
+/* What the clipboard actually did, said rather than assumed. */
+.fingerprint[data-copied="true"]::after {
+  content: " copied";
+  color: var(--ink-secondary);
+}
+
+.fingerprint[data-copied="false"]::after {
+  content: " not copied — it is in the title";
+  color: var(--ink-secondary);
+}
+
+/*
+ * The link to where the reader is standing, beside the fingerprint.
+ *
+ * Quieter than the fingerprint, deliberately: the fingerprint is a fact about
+ * the file and wears the mono face a digest belongs in, and this is a verb. It
+ * says what it did for a second and then goes back to its own name, so nothing
+ * in the strip is permanently wider for having been pressed once.
+ */
+.copy-link {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--ink-secondary);
+  border-bottom: 1px dotted var(--rule);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.copy-link:hover {
+  color: var(--red-dark);
+  border-bottom-color: var(--red-light);
+}
+
+/*
+ * What a link asked for that this file does not carry.
+ *
+ * One line, first in the identity, because it is a statement about how this
+ * page came to be open and a reader should meet it before the numbers under
+ * it. Capped and clipped with the whole of it on the title, for the reason the
+ * policy switcher is capped: nothing in this strip may push the fingerprint
+ * and the holes chip off the end of a 1,440 px line.
+ */
+.identity .link-note {
+  max-width: 28rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The one amber thing on the page, and a control: it opens the Model tab. */
+.chip.holes {
+  font: inherit;
+  color: var(--amber);
+  background: none;
+  border: 1px solid var(--amber);
+  border-radius: 10px;
+  padding: 1px 10px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.chip.holes:hover {
+  background: var(--cursor);
+}
+
+/*
+ * The tier census, after the holes chip.
+ *
+ * In the secondary ink and at the size of the comparison's seals, because it
+ * is a fact about the file rather than a control, until a calculation sits
+ * below core and it opens to name them.
+ *
+ * Never shortened. Three counts cut short hide the zeros that are the point of
+ * stating them -- clipped to give the strip its one line, the census came down
+ * to 15 px in a window 1,100 px wide and to 3 beside a link note -- so it is
+ * as wide as its counts, and where the line has no room for it, it starts a
+ * line of the strip of its own. At 1,440 px every page this repository packs
+ * keeps its strip to one line but the multi-state ratchet's, whose model file's
+ * long name leaves the census a few pixels short; there the census starts a
+ * second line rather than lose the end of "opaque". The policy switcher's cap
+ * leaves it room on a page carrying several policies, and the link note gives
+ * way to it.
+ */
+.census {
+  flex: none;
+  position: relative;
+  color: var(--ink-secondary);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.census summary {
+  list-style: none;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--rule);
+}
+
+.census summary::-webkit-details-marker {
+  display: none;
+}
+
+.census summary:hover {
+  color: var(--red-dark);
+  border-bottom-color: var(--red-light);
+}
+
+/*
+ * The calculations below core, under the census, laid out as the search's list
+ * is: each tier's name, then its calculations, and past five the verb that
+ * opens the Model tab, in the face the strip's other verb wears. Hung from the
+ * census's right edge, never wider than the window, and moved right as it
+ * opens by as much as it would otherwise run off the window's left edge,
+ * which on a narrow window, where the census starts a line, it would.
+ */
+.census-names {
+  left: auto;
+  right: 0;
+  width: max-content;
+  max-width: min(30rem, calc(100vw - 24px));
+  white-space: normal;
+}
+
+.panes {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.stack {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.below {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+/*
+ * The cone region stacks: the graph, then the strip that reads it.
+ *
+ * The graph takes the room and keeps a floor. `.cone` asks for the region's
+ * whole height on its own; in this stack that would be the region's height plus
+ * the strip's, and what gives way is the canvas — measured at 125 px of a
+ * 354 px region, which is below the zoom floor, so the fit clamped and React
+ * Flow culled the nodes that fell outside. A floor here and a ceiling on the
+ * strip is what keeps the graph drawable at the default divider.
+ */
+.below > .region {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.below > .region > .cone {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 220px;
+}
+
+.region {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex-grow: 0;
+  flex-shrink: 1;
+}
+
+/*
+ * The proof takes what the cone's divider leaves, and takes it from a basis of
+ * zero rather than from its own content. With `auto` the region asked for the
+ * width of its longest unbroken line — a fingerprint is sixty-four characters —
+ * and squeezed the cone below the zoom at which its boxes can be read, which
+ * made where the divider sat a function of what was in the panel instead of
+ * where it had been dragged to.
+ */
+/*
+ * The worked example, under the cone rather than beside it.
+ *
+ * Four lines and a disclosure, so it takes the height it needs and no more and
+ * the graph keeps the rest — which is the trade: the cone is the thing that
+ * stops being readable when it is small, and the proof is the thing that does
+ * not. It scrolls on its own so a long conditional cannot push the canvas up,
+ * and it is capped so that it cannot take the pane even when it wants to.
+ */
+.proof-strip {
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow: auto;
+  border-top: 1px solid var(--rule);
+  min-height: 0;
+}
+
+.drawer {
+  flex-shrink: 0;
+  border-left: 1px solid var(--rule);
+}
+
+.divider {
+  flex: 0 0 auto;
+  background: var(--rule);
+  touch-action: none;
+}
+
+.divider.horizontal {
+  height: 5px;
+  cursor: row-resize;
+}
+
+.divider.vertical {
+  width: 5px;
+  cursor: col-resize;
+}
+
+.divider:hover {
+  background: var(--red-light);
+}
+
+/*
+ * The profile the file claims, beside the model's name.
+ *
+ * It is written only when the file says `executable`, because `audit` is what
+ * every export is unless somebody asked for the other one, and a label on the
+ * ordinary case is a label nobody reads. Not a chip and not amber: the file is
+ * not admitting anything, it is stating which of the format's two profiles it
+ * was written under, and the page ignores the `expr` either way.
+ */
+.identity .profile {
+  color: var(--ink-secondary);
+  font-family: var(--face-mono);
+  font-size: 0.82rem;
+}
+
+/*
+ * A refusal, wherever it is printed.
+ *
+ * The same shape in a pane and on a page of its own: one sentence, at reading
+ * width, with the seal under it in the mono face a digest belongs in. No red
+ * and no amber — the page is not alarmed and the file is not admitting
+ * anything, it is being told what this page does and does not read.
+ */
+.refusal {
+  padding: 12px 16px;
+  color: var(--ink-secondary);
+  max-width: 62ch;
+}
+
+.refusal-sentence {
+  margin: 0;
+}
+
+.refusal-seal {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+/* A file this page will not draw at all: the sentence, and the page is the sentence. */
+.whole-page-refusal {
+  padding: 24px;
+}
+
+/*
+ * The second artifact that turned out to be another model, said across the top.
+ *
+ * It is the one refusal that does not replace a view, because the view it would
+ * replace is the Σ toggle and the toggle is not in this cut. It sits under the
+ * strip, above the page it is about, which is where a sentence about the whole
+ * document belongs.
+ */
+.notice {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--rule);
+  background: var(--code-surface);
+}
+
+.notice .refusal {
+  max-width: none;
+  padding: 8px 12px;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Two controls on every pane, and the rail a collapsed pane becomes.
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * A region has to be a positioning context for its own controls, and has to be
+ * focusable so that 1-4 can reach it and so that `:focus-within` reveals them.
+ * Neither changes what it draws or how much room it takes.
+ */
+.region {
+  position: relative;
+}
+
+.region:focus {
+  outline: none;
+}
+
+/*
+ * The two controls, top right, and NOT IN THE PAGE AT REST.
+ *
+ * `visibility: hidden` and not merely a faded opacity, because the reason
+ * for hiding them is that they should never turn up in a screenshot by
+ * accident, and a control at zero opacity is still a control the layout is
+ * holding a place for. Out of the flow as well, so a pane that grew a pair of
+ * buttons did not lose a row of its own content to them: the default layout is
+ * what four scripted reads assert against, and this is how it stays exactly
+ * where it was.
+ */
+.pane-controls {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 8;
+  display: flex;
+  gap: 4px;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.region:hover > .pane-controls,
+.region:focus-within > .pane-controls {
+  visibility: visible;
+  opacity: 1;
+}
+
+.pane-control {
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.pane-control:hover {
+  border-color: var(--red-light);
+  color: var(--red-dark);
+}
+
+.pane-control:focus-visible {
+  outline: 2px solid var(--red-light);
+  outline-offset: 1px;
+}
+
+/* The corner that expanded is the corner that restores, and it says so. */
+.pane-control.on {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/*
+ * A rail: a collapsed pane, still on the page.
+ *
+ * It is a button because the whole strip is the way back, and it keeps its
+ * name, its one live figure and its own edge. What it must never become is a
+ * blank strip: the figure is what tells a reader whether the pane they put away
+ * is still pointed where they left it, and the rule is that a collapse
+ * cannot turn an admission into silence.
+ */
+.rail {
+  font: inherit;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: #fcfcfc;
+  color: var(--ink-secondary);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rail.horizontal {
+  height: 26px;
+  width: 100%;
+}
+
+/*
+ * The drawer's rail keeps the drawer's edge, so the geography holds: the
+ * inspector is down the right whether it is open or away, and a reviewer saying
+ * "the drawer" is still pointing at the same side of the page.
+ */
+.rail.vertical {
+  writing-mode: vertical-rl;
+  width: 26px;
+  height: 100%;
+  padding: 10px 0;
+  border-bottom: 0;
+  border-left: 1px solid var(--rule);
+  justify-content: flex-start;
+}
+
+.rail:hover {
+  background: var(--cursor);
+}
+
+.rail:focus-visible {
+  outline: 2px solid var(--red-light);
+  outline-offset: -2px;
+}
+
+.rail-name {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
+.rail-figure {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The admission, travelled to the rail.
+ *
+ * The same amber the holes chip wears, and it means here exactly what it means
+ * there: the file is owning up to something. It is the whole reason a rail is
+ * not a hidden pane.
+ */
+.rail-figure.admits {
+  color: var(--amber);
+}
+
+.rail-open {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+}
+
+.rail.vertical .rail-open {
+  margin-left: 0;
+  margin-top: auto;
+}
+
+/*
+ * The four layouts, as four letters, after the identity.
+ *
+ * Letters rather than words, and last in the strip rather than in the middle of
+ * it: the strip carries the search box, the period cursor and the file's
+ * identity at 1,440 px, and a control wide enough to wrap that line would push
+ * the panes down and make the default layout a different layout. The letters
+ * are the keyboard's own, so the control teaches the shortcut.
+ */
+.layouts {
+  display: flex;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.layout {
+  font: inherit;
+  font-family: var(--face-mono);
+  font-size: 0.78rem;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.layout:hover {
+  border-color: var(--red-light);
+  color: var(--red-dark);
+}
+
+.layout.sel {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/*
+ * The proof footer's source location, now a control.
+ *
+ * It keeps the footer's own face and size, because it is still the stamp it
+ * was: the same text, in the same place, that now opens the file it names. The
+ * dotted underline is the only thing that says it can be pressed.
+ */
+.proof-foot .open-source {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--red);
+  border-bottom: 1px dotted var(--red);
+  cursor: pointer;
+}
+
+.proof-foot .open-source:hover {
+  color: var(--red-dark);
+}
+
+/*
+ * The corner the controls stand in, reserved by the three bars that would
+ * otherwise have something under it.
+ *
+ * One rule in one place, because it exists for one reason and that reason is
+ * the overlay above rather than anything those three bars are doing. Without it
+ * the drawer's fourth tab sits underneath two buttons that appear exactly when
+ * a pointer arrives to click it — reachable only by not reaching for it — and
+ * the cone's node count disappears behind them at the moment a reader is in the
+ * cone reading it.
+ *
+ * Padding rather than a shorter bar: all three are laid out from the left, so
+ * reserving room on the right moves nothing that was already drawn. The
+ * drawer's tabs share the width between them and simply share a little less of
+ * it.
+ *
+ * **The grid's pinned scalars are deliberately not in this list.** They wrap
+ * inside a fixed height, so reserving the corner there does move the default
+ * layout: on the level-4 export it pushes two pins below the fold, and that
+ * layout is what the four scripted reads were taken against. A pin under the
+ * controls is covered only while the pointer is in the grid, and the row
+ * scrolls — so the cost of leaving it is a pin reached a moment later, against
+ * a page that opens differently for everybody.
+ */
+.region .cone-bar,
+.region .proof-head,
+.region .tabs {
+  padding-right: 52px;
+}
+
+/*
+ * Only the buttons take the pointer, not the box around them.
+ *
+ * The corner above is reserved for the two controls; this makes the gap
+ * between them, and the few pixels of margin, go on belonging to whatever is
+ * underneath.
+ */
+.pane-controls {
+  pointer-events: none;
+}
+
+.pane-control {
+  pointer-events: auto;
+}

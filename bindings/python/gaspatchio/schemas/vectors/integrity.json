@@ -1,0 +1,299 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "integrity",
+  "cases": [
+    {
+      "id": "curve-payload-change",
+      "covers": [
+        "curve.spot_rate"
+      ],
+      "inputs": {
+        "time": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            5.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "curve.spot_rate",
+        "args": [
+          {
+            "op": "col",
+            "name": "time"
+          }
+        ],
+        "attrs": {
+          "curve": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453"
+        }
+      },
+      "producer_check": false,
+      "case_kind": "integrity-mutation",
+      "assumptions": [
+        {
+          "kind": "curve",
+          "source_sha": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453",
+          "payload": {
+            "kind": "Curve",
+            "tenors": [
+              1.0,
+              3.0
+            ],
+            "rates": [
+              0.03,
+              0.06
+            ],
+            "day_count": "ActualActualISDA",
+            "interpolation": "linear"
+          }
+        }
+      ],
+      "refusal": "curve-payload-identity"
+    },
+    {
+      "id": "schedule-payload-change",
+      "covers": [
+        "projection_frame.period_dates"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.period_dates",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c"
+        }
+      },
+      "producer_check": false,
+      "case_kind": "integrity-mutation",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 3,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ],
+      "refusal": "schedule-payload-identity"
+    },
+    {
+      "id": "table-payload-change",
+      "covers": [
+        "lookup"
+      ],
+      "inputs": {
+        "age": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              45.0,
+              55.0
+            ],
+            [
+              55.0
+            ]
+          ]
+        },
+        "duration": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "lookup",
+        "args": [
+          {
+            "op": "col",
+            "name": "age"
+          },
+          {
+            "op": "col",
+            "name": "duration"
+          }
+        ],
+        "attrs": {
+          "table": "conformance_select_rates",
+          "table_fingerprint": "sha256:a5eff77f310b3a6017f40934bc709f3e7fcf43e163b811938163c6309c182673",
+          "on_missing": "raise",
+          "fill_value": null
+        }
+      },
+      "producer_check": false,
+      "case_kind": "integrity-mutation",
+      "assumptions": [
+        {
+          "kind": "table",
+          "name": "conformance_select_rates",
+          "fingerprint": "sha256:a5eff77f310b3a6017f40934bc709f3e7fcf43e163b811938163c6309c182673",
+          "payload": {
+            "dimensions": [
+              "age",
+              "duration"
+            ],
+            "value": "rate",
+            "columns": [
+              {
+                "name": "age",
+                "dtype": "f64"
+              },
+              {
+                "name": "duration",
+                "dtype": "f64"
+              },
+              {
+                "name": "rate",
+                "dtype": "f64"
+              }
+            ],
+            "rows": [
+              [
+                45.0,
+                1.0,
+                0.02
+              ],
+              [
+                45.0,
+                2.0,
+                0.02
+              ],
+              [
+                55.0,
+                1.0,
+                0.03
+              ],
+              [
+                55.0,
+                2.0,
+                0.04
+              ]
+            ]
+          }
+        }
+      ],
+      "refusal": "lookup-payload-identity"
+    },
+    {
+      "id": "curve-payload-missing",
+      "covers": [
+        "curve.spot_rate"
+      ],
+      "inputs": {
+        "time": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            5.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "curve.spot_rate",
+        "args": [
+          {
+            "op": "col",
+            "name": "time"
+          }
+        ],
+        "attrs": {
+          "curve": "sha256:96f3f8600a9ac26a92f09327964f642a3a7f489d9d68baf33d44d78c631df453"
+        }
+      },
+      "producer_check": false,
+      "case_kind": "backend-capability-refusal",
+      "assumptions": [],
+      "refusal": "curve-payload-missing-or-ambiguous"
+    },
+    {
+      "id": "schedule-payload-duplicate",
+      "covers": [
+        "projection_frame.period_dates"
+      ],
+      "inputs": {
+        "policy": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_frame.period_dates",
+        "args": [],
+        "attrs": {
+          "schedule": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c"
+        }
+      },
+      "producer_check": false,
+      "case_kind": "integrity-mutation",
+      "assumptions": [
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        },
+        {
+          "kind": "schedule",
+          "source_sha": "sha256:49afc79e7d33a652d8c72f23df46f3d482aa148a4a56d886674239d8aaa8653c",
+          "payload": {
+            "kind": "from_calendar_grid",
+            "n_periods": 2,
+            "frequency": "6M",
+            "calendar": "NullCalendar",
+            "convention": "Unadjusted",
+            "day_count": "OneTwelfth",
+            "start_date": "2024-02-29",
+            "anchor": "exact_date"
+          }
+        }
+      ],
+      "refusal": "schedule-payload-missing-or-ambiguous"
+    }
+  ]
+}

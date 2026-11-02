@@ -14,12 +14,15 @@ Fields:
   - schedule: the bound Schedule
   - batch_axes: tuple of axis names; defaults to ('policy',). Forward-compat
     for stochastic projection (vmap over scenario axis).
-  - track_increments: bool — the kernel emits one ``increment_{label}``
-    struct field per labelled Op, holding the SIGNED per-period delta the
-    Op applied to its target (negative for charges, positive for credits,
-    zero after a stop or lapse). Surfaced via
-    ``CompiledRollforward.increment_for(label)``. Requires every
-    label-bearing Op to carry a unique label (validated).
+  - track_increments: bool — the kernel emits one ``increment_{key}``
+    struct field per Op, holding the SIGNED per-period delta the Op applied
+    to its target (negative for charges, positive for credits, zero after a
+    stop or lapse). Every Op emits: a labelled one under its label, and a
+    structural one — ``Floor``, ``Round``, which carry no label field —
+    under the synthetic ``{kind}@{ordinal}`` built from its 1-based position
+    in the chain, ``floor@3``. Surfaced via
+    ``CompiledRollforward.increment_for(key)``. Requires every label-bearing
+    Op to carry a unique label, and no label to carry ``@`` (validated).
   - lapse_when_all_non_positive: tuple of state names — kernel stops
     advancing when all named states are <= 0 at end-of-period.
   - contract_boundary: optional closed-subset bool Expr — kernel stops at
@@ -29,6 +32,11 @@ Fields:
 
 The IR is JSON-serialisable via ``_canonical.canonical_form()``. Two IRs
 producing the same canonical bytes have identical spec_fingerprint.
+
+Of the three modules named for an intermediate representation -- separated
+in ``spec/graph-artifact/README.md``, "Three modules named for an
+intermediate representation" -- this is the one that answers what the kernel
+will execute, and which compilation it is.
 """
 
 from __future__ import annotations
@@ -40,7 +48,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from gaspatchio.rollforward._ops import Op
-    from gaspatchio.schedule import Schedule
+    from gaspatchio.schedule._data import ScheduleData
 
 EngineBinding = Literal["portable", "polars"]
 
@@ -65,7 +73,7 @@ class IR:
     states: tuple[State, ...]
     points: tuple[str, ...]
     transitions: tuple[Op, ...]
-    schedule: Schedule
+    schedule: ScheduleData
     batch_axes: tuple[str, ...]
     track_increments: bool
     lapse_when_all_non_positive: tuple[str, ...]

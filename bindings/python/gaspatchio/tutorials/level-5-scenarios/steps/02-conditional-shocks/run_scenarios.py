@@ -19,8 +19,8 @@ The shock vocabulary
 
   * ``TimeConditionalShock`` — shock applies only during specified
                          projection periods. e.g. "10% expense overrun in
-                         the first five years". Targets a time column on
-                         the base table (here ``duration``).
+                         the first five years". Its ``when=`` names the
+                         table's own time key (here ``duration``).
 
   * ``PipelineShock``  — chain operations left-to-right. e.g. Solvency II
                          lapse-up: multiply by 1.5, then clip at 100%.
@@ -48,7 +48,7 @@ from pathlib import Path
 
 import polars as pl
 
-from gaspatchio import ActuarialFrame, MortalityTable
+from gaspatchio import ActuarialFrame
 from gaspatchio.scenarios import (
     ClipShock,
     FilteredShock,
@@ -65,24 +65,9 @@ sys.path.insert(0, str(L5_BASE_DIR))
 import model  # noqa: E402
 
 MODEL_POINTS_PATH = L5_BASE_DIR / "model_points.parquet"
-SELECT_PERIOD = model.SELECT_PERIOD_LEN
 
 # ---------------------------------------------------------------------------
-# 1. Load base assumptions once.
-# ---------------------------------------------------------------------------
-
-assumptions = model.load_assumptions()
-mortality_select_raw = assumptions["mortality"].table
-
-BASE_TABLES = {
-    "mortality_select": mortality_select_raw,
-    "mortality_scalars": assumptions["mortality_scalars"],
-    "lapse_rates": assumptions["lapse_rates"],
-    "surrender_charges": assumptions["surrender_charges"],
-}
-
-# ---------------------------------------------------------------------------
-# 2. Conditional shock specifications.
+# 1. Conditional shock specifications, each on a table the model builds.
 # ---------------------------------------------------------------------------
 
 SHOCKS = {
@@ -106,7 +91,6 @@ SHOCKS = {
             shock=MultiplicativeShock(factor=1.10),
             when={"duration": {"lte": 5}},
             table="surrender_charges",
-            time_column="duration",
         ),
     ],
     "SOLVENCY_II_LAPSE_UP": [
@@ -121,7 +105,7 @@ SHOCKS = {
 }
 
 # ---------------------------------------------------------------------------
-# 3. Aggregations — same per-scenario PV roll-up as step 01.
+# 2. Aggregations — same per-scenario PV roll-up as step 01.
 # ---------------------------------------------------------------------------
 
 AGGREGATIONS = (
@@ -131,33 +115,11 @@ AGGREGATIONS = (
 )
 
 # ---------------------------------------------------------------------------
-# 4. Model wrapper (identical adapter as step 01).
-# ---------------------------------------------------------------------------
-
-
-def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
-    """Rebuild typed assumptions dict from shocked base tables, then run."""
-    del drivers
-    overrides = dict(assumptions)
-    overrides["mortality"] = MortalityTable(
-        table=tables["mortality_select"],
-        age_basis="age_last_birthday",
-        structure="select_ultimate",
-        select_period=SELECT_PERIOD,
-    )
-    overrides["mortality_scalars"] = tables["mortality_scalars"]
-    overrides["lapse_rates"] = tables["lapse_rates"]
-    overrides["surrender_charges"] = tables["surrender_charges"]
-    return model.main(af, assumptions_override=overrides)
-
-
-# ---------------------------------------------------------------------------
-# 5. Run.
+# 3. Run the model as it is.
 # ---------------------------------------------------------------------------
 
 plan = ScenarioRun(
     shocks=SHOCKS,
-    base_tables=BASE_TABLES,
     aggregations=AGGREGATIONS,
 )
 
@@ -168,11 +130,11 @@ mp = pl.read_parquet(MODEL_POINTS_PATH)
 af = ActuarialFrame(mp)
 
 start = time.perf_counter()
-result = plan.run(af, model_fn, audit=True)
+result = plan.run(af, model.main, audit=True)
 runtime = time.perf_counter() - start
 
 # ---------------------------------------------------------------------------
-# 6. Report
+# 4. Report
 # ---------------------------------------------------------------------------
 
 print(f"Runtime: {runtime:.2f}s")
@@ -189,7 +151,11 @@ print("=== Per-Scenario PV Aggregates ===")
 print(scenario_table)
 print()
 
-base_pv = scenario_table.filter(pl.col("scenario_id") == "BASE").get_column("pv_net_cf").item()
+base_pv = (
+    scenario_table.filter(pl.col("scenario_id") == "BASE")
+    .get_column("pv_net_cf")
+    .item()
+)
 
 deltas = (
     scenario_table.filter(pl.col("scenario_id") != "BASE")

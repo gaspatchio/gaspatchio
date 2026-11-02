@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "title": "gaspatchio_column_transformation facet",
+  "description": "How each of a node's reads was narrowed, carried on the node that did the reading (sections 6 and 9 of the specification) and announced in facets_used, never in facets_required. The definition is the artifact schema's own, referenced rather than restated here, so the facet a validator holds an artifact to and the facet this document describes cannot part company.",
+  "$ref": "https://gaspatchio.dev/schemas/gaspatchio-graph-v0.schema.json#/$defs/column_transformation_facet"
+}

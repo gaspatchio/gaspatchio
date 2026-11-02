@@ -7,7 +7,7 @@
 """Tests for when/then/otherwise conditional expressions.
 
 Covers scalar conditionals, list broadcasting, error handling,
-and computation graph integration.
+and calculation-log integration.
 """
 
 import pytest
@@ -205,19 +205,18 @@ class TestWhenListBroadcasting:
                 }
             )
 
-            # Manually enable tracing (debug mode enables it in decorator,
+            # Mark the run as traced (debug mode does this in the decorator,
             # but for direct assignment we need to set it)
-            af._tracing = True  # noqa: SLF001
+            af._traced_run = True  # noqa: SLF001
 
             # List broadcasting conditional now works in tracing mode!
             af.result = when(af.month == af.policy_term * 12).then(1).otherwise(0)
 
-            # Verify operation was captured in computation graph
-            assert len(af._computation_graph) > 0  # noqa: SLF001
-            assert any(
-                getattr(op, "alias", None) == "result"
-                for op in af._computation_graph  # noqa: SLF001
-            )
+            # Verify the calculation was recorded
+            assert [
+                record.column
+                for record in af._calculations  # noqa: SLF001
+            ] == ["result"]
 
             # Verify results are correct
             # month values: [0, 12, 24], policy_term * 12 = 12
@@ -240,11 +239,8 @@ class TestWhenErrorHandling:
         # Create incomplete conditional
         incomplete = when(af.age > RETIREMENT_AGE).then(0.05)
 
-        # Should raise TypeError when trying to use it
-        with pytest.raises(
-            TypeError,
-            match="cannot create expression literal for value of type ConditionalProxy",
-        ):
+        # Should raise TypeError, in the chain's own words, when trying to use it
+        with pytest.raises(TypeError, match=r"requires \.otherwise\(\)"):
             # Trigger _to_expr via _convert_to_expr
             af._convert_to_expr(incomplete)  # noqa: SLF001
 
@@ -473,8 +469,8 @@ class TestWhenErrorValidation:
         assert result["result"].to_list() == expected
 
 
-class TestWhenComputationGraph:
-    """Tests for computation graph integration with conditionals."""
+class TestWhenCalculationLog:
+    """Tests for calculation-log integration with conditionals."""
 
     def test_conditional_in_chain_of_calculations(self) -> None:
         """Test conditional as part of computation chain."""
@@ -588,8 +584,20 @@ class TestWhenComputationGraph:
         assert result["income_category"].to_list() == expected_income
 
 
+@pytest.mark.benchmark
 class TestWhenPerformance:
-    """Performance benchmark tests comparing when/then to alternatives."""
+    """Performance benchmark tests comparing when/then to alternatives.
+
+    Every test here hands a callable to the ``benchmark`` fixture and asserts
+    nothing: what each produces is a timing table, not a verdict. The marker
+    is what makes that visible to the runner. Without it the default
+    ``-m "not benchmark and not probe"`` could not deselect them, and four
+    timing tables cost the everyday serial run around a hundred seconds of the
+    wall time the edit-run-refine loop is measured in. They are still here and
+    still runnable -- ``pytest -m benchmark`` collects and runs exactly these
+    four -- and nothing any of them checked has been dropped, because none of
+    them checked anything.
+    """
 
     def test_benchmark_scalar_conditional(self, benchmark) -> None:
         """Benchmark scalar conditional performance."""

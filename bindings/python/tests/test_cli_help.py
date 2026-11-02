@@ -6,6 +6,7 @@
 # ABOUTME: Validates command groups and LLM guidance text.
 """Tests for gspio --help output."""
 
+import pytest
 from typer.testing import CliRunner
 
 from gaspatchio.cli import app
@@ -68,3 +69,65 @@ class TestMainHelp:
         assert "gspio" in result.output
         # Should have examples section
         assert "example" in result.output.lower()
+
+
+class TestViewerExtraNamed:
+    """The --html help names the extra it needs, brackets and all."""
+
+    @pytest.mark.parametrize("command", ["calc-graph", "diff"])
+    def test_html_help_names_the_viewer_extra(self, command: str):
+        """``gaspatchio[viewer]`` survives rich markup in the help text.
+
+        Rich reads ``[viewer]`` as a style tag, and the unescaped help printed
+        "needs the gaspatchio extra" -- an install line that installs nothing
+        the page needs. Whitespace and the panel's borders are dropped before
+        the search, so a narrow terminal folding the name cannot hide it.
+        """
+        result = runner.invoke(app, [command, "--help"], env={"COLUMNS": "200"})
+        assert result.exit_code == 0
+        flattened = "".join(result.output.replace("\u2502", "").split())
+        assert "needsthegaspatchio[viewer]extra" in flattened, result.output
+
+
+class TestAuditPanel:
+    """The commands that read or write an audit file are listed together."""
+
+    _AUDIT = ("calc-graph", "validate", "diff", "sheet", "compare", "verify", "graph")
+
+    def _panels(self) -> dict[str, list[str]]:
+        result = runner.invoke(app, ["--help"], env={"COLUMNS": "200"})
+        assert result.exit_code == 0
+        panels: dict[str, list[str]] = {}
+        current: str | None = None
+        for line in result.output.splitlines():
+            if line.startswith("╭─ "):
+                current = line.split("─ ", 1)[1].split(" ─", 1)[0]
+                panels[current] = []
+            elif line.startswith("╰"):
+                current = None
+            elif current is not None:
+                words = line.strip("│ ").split()
+                if words:
+                    panels[current].append(words[0])
+        return panels
+
+    def test_the_audit_commands_sit_under_one_panel(self):
+        """calc-graph sat under Model Execution, the rest under Data Inspection."""
+        panels = self._panels()
+        assert set(self._AUDIT) <= set(panels["Audit"])
+        assert "calc-graph" not in panels["Model Execution"]
+        assert panels["Data Inspection"] == ["describe"]
+
+    @pytest.mark.parametrize(
+        "command", ["run-model", "run-single-policy", "calc-graph", "run-artifact"]
+    )
+    def test_the_policy_id_help_names_the_columns_it_looks_for(self, command: str):
+        """'auto-detected if omitted' named nothing a reader could check."""
+        result = runner.invoke(app, [command, "--help"], env={"COLUMNS": "200"})
+        assert result.exit_code == 0
+        flattened = " ".join(result.output.replace("│", " ").split())
+        assert "auto-detected" not in flattened
+        assert (
+            "policy_id, policy_number, policy number, policyid, pol_id, point_id "
+            "or id, the first the book carries, in any case"
+        ) in flattened

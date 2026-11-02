@@ -1,0 +1,245 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0"
+  },
+  "created_at": "2026-08-30T09:00:00Z",
+  "model": {
+    "label": "variable-annuity-gmdb",
+    "source_path": "models/variable_annuity_gmdb.py",
+    "source_sha": "sha256:40551445273459fcc75ec17ac9011110a6fbaeddbabb747c77e47e3d27c180c2",
+    "git": {
+      "commit": "1d8f3b6c9a2e5f0c7b4a1d6e3f8c5b2a9e6d3c0f",
+      "dirty": false
+    },
+    "model_points": {
+      "path": "data/variable_annuity_model_points.parquet",
+      "fingerprint": "sha256:e78fe213fcd84357fc261d36d775be85cd85cefed5b3ea04ece194e8e1cf7b2f"
+    }
+  },
+  "graph_fingerprint": "sha256:961c68253cda1ce35ddde9c45e40a46e73df66ef91f6bcc0763db314f74e21b4",
+  "book": {
+    "columns": [
+      "account_value",
+      "attained_age",
+      "guarantee_base"
+    ],
+    "digest": "sha256:5ce2f8f1379cf412bc6ea22ae70f9137eb14a384eafb212b847868b0c522e42e"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "account_value",
+      "column": "account_value",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:f159867647c2b81d20da82071cfb1355b3987d7c21c904db21dfea3805b9edc5",
+      "fingerprint": "sha256:394cf895467294ab3686f874d8c24c1de939b8d6f89374025cd360120922c2ec",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "guarantee_base",
+      "column": "guarantee_base",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:8a47451e4d5b98e44202fb7d1402f29fe666812002e090bbd1b4d5afef00b96a",
+      "fingerprint": "sha256:0f54ec9a92f2c11e74d4a5c88172d5f7cd0c9eb1d890b60042b074a83a298662",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "attained_age",
+      "column": "attained_age",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:87cd6e94143b046c596d1356ebcbc7e15a6a2aca3d7ef37783ee45af782e6442",
+      "fingerprint": "sha256:7e8263dd06af87538cd6ec5356a7a4d911eb63333d0d6182ca2a41cd5816b109",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "nested_valuation:present_value_of_guarantee",
+      "column": null,
+      "version": null,
+      "kind": "nested_valuation",
+      "dtype": "unknown",
+      "shape": "unknown",
+      "provenance": null,
+      "formula": null,
+      "reads": [
+        "account_value",
+        "guarantee_base",
+        "attained_age"
+      ],
+      "reads_assumptions": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:e063bccdb76912fd337e74c38ad276d28128cfd1d3af302a3710769769631e6e",
+      "fingerprint": "sha256:965e094d3c48f22ca43719ae91dd3980c0783a52f3b74a42748f9594a827fb4b",
+      "in_final_schema": false,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "account_value",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            },
+            {
+              "source": "guarantee_base",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            },
+            {
+              "source": "attained_age",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "nested_valuation": {
+        "graph_fingerprint": "sha256:efaf363e79a29b5465c1a8d31a09346359c010751a40cc77190d5aff10ff3be8",
+        "interface": {
+          "inputs": [
+            "account_value",
+            "guarantee_base",
+            "attained_age"
+          ],
+          "outputs": [
+            "present_value_of_guarantee"
+          ]
+        },
+        "context": {
+          "measure": "risk_neutral",
+          "paths": 1000,
+          "seed": 20260830,
+          "generator": "pcg64",
+          "reduction": "mean"
+        }
+      }
+    },
+    {
+      "id": "guarantee_reserve@1",
+      "column": "guarantee_reserve",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "gmdb_inner.value(af, at=\"all_periods\")",
+      "reads": [
+        "nested_valuation:present_value_of_guarantee"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:bd69cc5b9ae6a17229380578f6d3b5199ae8da06fe9cb69060edb955ed98ad80",
+      "fingerprint": "sha256:b3a140055d9b0856957d5a9201a80075ab4c565fae880565830aa06c4237e25b",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "models/variable_annuity_gmdb.py:96",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "nested_valuation:present_value_of_guarantee",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "account_value",
+      "target": "nested_valuation:present_value_of_guarantee",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "guarantee_base",
+      "target": "nested_valuation:present_value_of_guarantee",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "attained_age",
+      "target": "nested_valuation:present_value_of_guarantee",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "nested_valuation:present_value_of_guarantee",
+      "target": "guarantee_reserve@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [],
+  "holes": [],
+  "boundaries": [
+    {
+      "ordinal": 0,
+      "position": 6,
+      "source_location": "models/variable_annuity_gmdb.py:88"
+    }
+  ],
+  "enrichment": null,
+  "policies": [],
+  "facets": {},
+  "document_digest": "sha256:e1e058638be1bcb5b8cd677f1044de494bae2d0a7e03c3932fecfe8897b544e9"
+}

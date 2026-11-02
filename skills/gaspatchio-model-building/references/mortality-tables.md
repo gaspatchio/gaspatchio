@@ -270,45 +270,41 @@ bare `Table.lookup` because it:
 ## Audit fingerprinting
 
 `MortalityTable.source_sha()` returns a `"sha256:<hex>"` string over the table's
-canonical form (name, dimensions, age_basis, structure, select_period). Use it for
-model audit trails or caching:
+canonical form: the underlying table's name, dimensions and content fingerprint, plus
+age_basis, structure and select_period. `MortalityTable.fingerprint()` is the rates alone --
+the wrapped table's `fingerprint()`, the hash the calculation graph records for the base:
 
 ```python
 fingerprint = m.source_sha()
-# "sha256:4a7f..." — changes if table name, dimensions, age_basis, structure,
-#                    or select_period change.
+# "sha256:4a7f..." — changes if a rate, the table name, dimensions, age_basis,
+#                    structure, or select_period change.
+rates_only = m.fingerprint()
+# changes only when a rate does (see "Table identity: which hash is which" in
+# assumptions.md).
 ```
 
-Note: The SHA does **not** hash the underlying data rows. Use distinct `Table.name`
-values per data revision to distinguish different data loads.
+Two mortality tables under one name with different rates never share either stamp.
 
 ---
 
 ## Using `MortalityTable` with scenarios
 
-`model-scenarios` re-wraps the shocked `Table` back into a `MortalityTable` inside the
-`model_fn` bridge so that the mortality metadata (age_basis, structure, select_period) is
-preserved across scenario runs:
+A shock names the **underlying `Table`** by the name it was built with, and the plan
+answers the model's own `.at()` read of it: the read is emitted from the same
+convention (age_basis, structure, select_period) over the table shocked per scenario.
+Nothing re-wraps anything, and the model file is not modified:
 
 ```python
-# Excerpt from model-scenarios pattern — see model-scenarios/SKILL.md
-def model_fn(af, *, tables, drivers):
-    overrides = dict(base_assumptions)
-    if "mortality_select" in tables:
-        overrides["mortality"] = MortalityTable(
-            table=tables["mortality_select"],   # shocked Table from ScenarioRun
-            age_basis="age_last_birthday",
-            structure="select_ultimate",
-            select_period=SELECT_PERIOD,
-        )
-    return model.main(af, assumptions_override=overrides)
+plan = ScenarioRun(
+    shocks={"BASE": [], "MORT_UP_20": [MultiplicativeShock(1.2, table="mortality_select")]},
+    aggregations=AGGREGATIONS,
+)
+result = plan.run(af, model.main)     # model.main calls mortality.at(...) as written
 ```
 
-The `table=` argument is replaced with the scenario-stacked `Table`; all other
-`MortalityTable` metadata stays the same. `model.main` receives a fully typed
-`MortalityTable` and calls `.at()` unchanged — no modification to the model file.
+`table="mortality_select"` is the `Table`'s name, not the `MortalityTable` variable.
 
-To unwrap a `MortalityTable` to its underlying `Table` (e.g., when stacking scenarios):
+To unwrap a `MortalityTable` to its underlying `Table` (e.g., to read its name for a shock):
 
 ```python
 raw_table = m_mortality.table   # the .table attribute

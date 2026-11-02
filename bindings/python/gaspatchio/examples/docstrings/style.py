@@ -143,28 +143,6 @@ class BracketNotationRule:
         return None
 
 
-class ImplicitOutputRule:
-    """Detects expressions that produce output but lack output blocks.
-
-    When a code example ends with an expression (not a statement), the output
-    should be explicitly documented. This rule helps catch missing output blocks.
-    """
-
-    code: str = "GP002"
-    name: str = "Expression requires output block"
-
-    def check(self, _code: str) -> list[StyleViolation]:
-        """Check for expressions that need output documentation."""
-        violations: list[StyleViolation] = []
-
-        # This is a simplified version - the full implementation would need
-        # access to whether an output block exists, which requires integration
-        # with the DocstringCodeExample model
-        # For now, return empty - this will be implemented as needed
-
-        return violations
-
-
 class StyleChecker:
     """Orchestrates running multiple style rules on code snippets."""
 
@@ -172,7 +150,7 @@ class StyleChecker:
         """Initialize the style checker.
 
         Args:
-            enabled_rules: List of rule codes to enable (e.g., ["GP001", "GP002"]).
+            enabled_rules: List of rule codes to enable (e.g., ["GP001"]).
                           If None, all rules are enabled.
 
         """

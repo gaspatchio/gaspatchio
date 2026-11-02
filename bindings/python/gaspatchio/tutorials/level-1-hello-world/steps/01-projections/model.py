@@ -27,8 +27,9 @@ New concepts introduced here:
 
   - projection_date: assigning af.projection.period_dates() materialises the
     per-period date vector as a list column on the frame. Each element is a
-    date — the first day of each projected month. Use af.projection_date.dt.year(),
-    .dt.month(), etc. to extract components.
+    date — the first day of each projected month. Extract components with
+    af.projection_date.polars_native().list.eval(pl.element().dt.year())
+    or af.projection_date.polars_native().list.eval(pl.element().dt.month()).
 
   - Month index: af.projection.set() does not produce a month counter
     automatically. Derive it from the projection date and valuation date:
@@ -102,13 +103,9 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # is the first day of a projected month.
     af.projection_date = af.projection.period_dates()
 
-    # Month index (0 = valuation date, 1 = one month later, ...).
-    # af.projection.set() now materialises `month` automatically at monthly
-    # frequency — this hand-rolled version is kept to show the formula, and
-    # produces identical values to the stamped column it replaces.
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # There is no month index to write. af.projection.set() has already
+    # stamped `month` at monthly frequency: elapsed whole months from the
+    # valuation date, 0, 1, 2, ... one per projection period.
 
     # =====================================================================
     # SECTION 3: MONTHLY PROJECTIONS

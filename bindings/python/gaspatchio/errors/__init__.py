@@ -2,18 +2,31 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .boundary import ErrorBoundaryFinder
+"""Error types and formatters that turn failures into actionable messages."""
+
+from gaspatchio._warning import GaspatchioWarning
+
+from .boundary import AmbiguousAttribution
 from .compilation_finder import CompilationErrorFinder
 from .formatter import ValidationErrorFormatter
 from .formatting_errors import (
     PerformanceWarning,
-    _extract_missing_column_robust,
-    _format_column_error,
-    _handle_execution_error,
-    _handle_frame_error,
-    _handle_plan_lowering_panic,
 )
-from .metadata import OperationMetadata, TracedOperation, capture_source_context
+from .formatting_errors import (
+    _extract_missing_column_robust as _extract_missing_column_robust,
+)
+
+# The frame and the scenario runner reach these handlers through this package,
+# so it keeps them importable by name; they are not among its public names.
+from .formatting_errors import (
+    _handle_execution_error as _handle_execution_error,
+)
+from .formatting_errors import (
+    _handle_frame_error as _handle_frame_error,
+)
+from .formatting_errors import (
+    _handle_plan_lowering_panic as _handle_plan_lowering_panic,
+)
 from .models import (
     ColumnInfo,
     DataFrameContext,
@@ -32,26 +45,21 @@ from .validation import (
 )
 
 __all__ = [
+    "AmbiguousAttribution",
     "ColumnInfo",
     "CompilationErrorFinder",
     "DataFrameContext",
     "EnhancedError",
-    "ErrorBoundaryFinder",
     "ErrorMetadata",
     "ErrorType",
+    "GaspatchioWarning",
     "OperationContext",
-    "OperationMetadata",
     "PerformanceWarning",
     "SourceLocation",
     "Suggestion",
     "SuggestionType",
-    "TracedOperation",
     "ValidationError",
     "ValidationErrorFormatter",
-    "_handle_execution_error",
-    "_handle_frame_error",
-    "_handle_plan_lowering_panic",
-    "capture_source_context",
     "capture_validation_context",
     "raise_validation_error",
 ]

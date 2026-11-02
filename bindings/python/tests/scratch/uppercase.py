@@ -12,6 +12,6 @@ data = {
 
 af = ActuarialFrame(data)
 
-af.status_upper = af.status_raw.str.to_uppercase()
+af.status_upper = af.status_raw.polars_native().str.to_uppercase()
 
 print(af.collect())

@@ -42,7 +42,7 @@ curve = Curve.from_zero_rates(
 )
 ```
 
-All other sections (2-11) are identical — same formulas, same variable names, same typed primitives (`MortalityTable.at()`, `Schedule`, discount factor broadcast).
+All other sections (2-11) are identical — same formulas, same variable names, same typed primitives (`MortalityTable.at()`, `Schedule`, and `curve.discount_factor(af.t_years)` for the discount factors).
 
 ## Expected output
 

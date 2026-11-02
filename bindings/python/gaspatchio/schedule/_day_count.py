@@ -53,6 +53,11 @@ class OneTwelfth(DayCount):
 
     Ignores varying month length. Matches US VM-20/VM-21, UK/EU SII, and
     IFRS 17 production practice (~80% of life-insurance models).
+
+    It measures the month-aligned cadences (1M, 3M, 6M, 1Y), whose periods
+    are whole months. A weekly or daily period spans no whole month, so a
+    1W or 1D schedule on this day count refuses to give year fractions;
+    use ``Actual365Fixed`` or ``ActualActualISDA`` there.
     """
 
     __hash__ = DayCount.__hash__
@@ -60,11 +65,11 @@ class OneTwelfth(DayCount):
     def year_fraction(self, start: date, end: date) -> float:
         """Return 1/12 per calendar month between start and end.
 
-        Whole-month count from start to end, signed.
-        Treat day-of-month as a continuous interpolation within the month
-        so cross-month-boundary calls (rare) still produce a meaningful fraction.
-        (The kernel calls year_fraction at exact period boundaries, where the
-        day-of-month adjustment is zero — so this is a defensive default.)
+        The signed count of calendar months from start to end, divided by
+        12. The day of the month is ignored: 31 January to 28 February is
+        1/12, and 31 January to 7 February is also 1/12, while 1 February to
+        7 February is 0. Exact on boundaries a whole number of months apart,
+        which is every boundary of a month-aligned schedule.
         """
         months = (end.year - start.year) * 12 + (end.month - start.month)
         return months / 12.0

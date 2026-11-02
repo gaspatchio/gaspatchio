@@ -1,0 +1,297 @@
+name: Viewer
+
+# Scoped to the workspace it tests. GitHub filters paths on a workflow's
+# trigger and not on one job of many, so a job that should run only when the
+# viewer changes has to be a workflow of its own -- which is how the other
+# scoped workflows here do it: bench-pr.yml to core/**, trigger-rag-rebuild.yml
+# to bindings/python/gaspatchio/**, jax.yml to the engine and the core.
+#
+# On pushes to main as well as pull requests, and by hand, because GitHub
+# matches a path filter against only the first 3,000 files of a diff. The pull
+# request that brought the viewer in changed 6,634 files and none of its first
+# 3,000 was under viewer/, so with a pull_request trigger alone this workflow
+# never ran. A push is filtered on the commits it carries, usually a few files.
+# workflow_dispatch covers the rest -- a release candidate, a branch -- once
+# this file is on the default branch, which GitHub requires before it will
+# dispatch it. The workflow's own file is in both filters so that editing it
+# runs it. Tag pushes are left out: a push filter that names branches does
+# not fire for tags, and a release candidate is dispatched by hand.
+on:
+  push:
+    branches: [main]
+    paths: ['viewer/**', '.github/workflows/viewer.yml']
+  pull_request:
+    paths: ['viewer/**', '.github/workflows/viewer.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A superseded run on the same ref is cancelled, as in CI.yml and jax.yml.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# What the job fetches, which bindings/python/tests/test_workflow_tool_pins.py
+# holds it to: playwright, which npx runs from the lockfile.
+# pins: playwright 1
+
+jobs:
+  viewer-tests:
+    name: Viewer (Node)
+    runs-on: ubuntu-latest
+    # Ten before the engines were added; the download of Chromium and WebKit
+    # with their system libraries is the new cost and the rest of the job is
+    # under a minute.
+    timeout-minutes: 20
+    # The lockfile lane: install exactly what viewer/package-lock.json pins, so
+    # the reader a contributor runs and the reader CI runs are the same bytes.
+    defaults:
+      run:
+        working-directory: viewer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020   # v7.0.0
+        with:
+          # Exact, not "24": the bundle's gzip ceiling in .github/ratchets.env is
+          # this Node's zlib output, which moves between Node releases. Bump the
+          # version and re-measure VIEWER_BUNDLE_GZIP_MAX in one commit.
+          node-version: 24.21.0
+          cache: npm
+          cache-dependency-path: viewer/package-lock.json
+      - name: Install from the lockfile
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Run the reader's tests
+        run: npm test
+      - name: Pack the bundle
+        run: npm run build
+      - name: The bundle's gzip size is not above its ceiling
+        run: |
+          . ../.github/ratchets.env
+          # The same three patterns the ruff step in CI.yml uses, for the
+          # reasons it spells out there. A ceiling that went missing must fail
+          # this step rather than skip it: `[ 5 -gt "" ]` exits 2, which `if`
+          # reads as false and `set -e` exempts, so a variable deleted from
+          # ratchets.env would wave a real regression through while printing
+          # "(ceiling )". A value with a non-digit in it does the same. And the
+          # third pattern closes the more dangerous half — `[ 5 -gt
+          # 999999999999999999999999 ]` also exits 2, but the value is all
+          # digits, so a size ABOVE its ceiling would pass silently. Ten digits
+          # or more is refused; nine is already far above anything this
+          # repository builds. Every figure compared here gets all three,
+          # whether it was read from the file or parsed out of the build.
+          case "${VIEWER_BUNDLE_GZIP_MAX:-}" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::VIEWER_BUNDLE_GZIP_MAX is missing, is not a whole number, or has ten or more digits and cannot be compared by the shell, in .github/ratchets.env (read: '${VIEWER_BUNDLE_GZIP_MAX:-}'). Refusing to compare against it."
+              exit 1
+              ;;
+          esac
+          # Built a second time deliberately. The step above proves the build
+          # runs; this is the measurement, spelled exactly as the section in
+          # .github/RATCHETS.md spells it, so that the command a contributor
+          # runs by hand and the command this comparison is made on are the
+          # same one. build.json is ignored by git and exists for the line
+          # below to read.
+          node build.mjs | tee build.json
+          if ! size=$(jq -r '.gzipBytes' build.json); then
+            echo "::error::Could not read .gzipBytes out of viewer/build.json — see the parse error above. A build that failed to print its sizes is not a build that cost no bytes."
+            exit 1
+          fi
+          case "$size" in
+            ''|*[!0-9]*|??????????*)
+              echo "::error::The gzip size did not parse as a whole number the shell can compare (read: '${size}')."
+              exit 1
+              ;;
+          esac
+          echo "viewer bundle: ${size} gzip bytes (ceiling ${VIEWER_BUNDLE_GZIP_MAX})"
+          if [ "$size" -gt "$VIEWER_BUNDLE_GZIP_MAX" ]; then
+            echo "::error::The reader's bundle grew to ${size} gzip bytes, above the ${VIEWER_BUNDLE_GZIP_MAX} recorded in .github/ratchets.env. Take the bytes back out, or — if a capability earned them — raise VIEWER_BUNDLE_GZIP_MAX in this commit with that reason beside it, in BOTH .github/ratchets.env and its section in .github/RATCHETS.md; bindings/python/tests/test_ratchet_documents_agree.py holds the two documents to each other, so moving one leaves the suite red."
+            exit 1
+          fi
+          if [ "$size" -lt "$VIEWER_BUNDLE_GZIP_MAX" ]; then
+            echo "::notice::The reader's bundle is down to ${size} gzip bytes; lower VIEWER_BUNDLE_GZIP_MAX in .github/ratchets.env to hold the ground."
+          fi
+      # Both, because the page is opened by whoever was sent it: Chromium for
+      # Chrome and Edge, WebKit for Safari. With --no, npx runs the playwright
+      # npm ci installed from the lockfile, at the version the tests are
+      # written for, and fails rather than fetching another.
+      - name: Install the engines the page is opened in
+        run: npx --no playwright install --with-deps chromium webkit
+      # Packs dist/level4.html from the committed assets and opens it from a
+      # file:// origin, which is the only way this page is ever opened.
+      - name: Open the exported page from a disk
+        run: npm run e2e
+      # Frame times, ENFORCED since 2026-09-17, with the history of why not from
+      # the start. viewer/perf/measure.mjs takes them in Chromium — installed
+      # two steps above, over dist/level4.html AND dist/compare-after.html,
+      # which the step above packs — and viewer/perf/check.mjs judges them
+      # against the page's frame budget: a 95th-percentile
+      # frame under 33 ms on pan, zoom and scrub, and a cold open under one
+      # second.
+      #
+      # First measured 2026-09-17 on headless Chromium
+      # 153.0.8010.12, 1440x900 at one device pixel per CSS pixel, over the
+      # level-4 export (128 nodes, 184 edges, 83 periods), the cone opened on
+      # net_cf and widened to its whole 101-node ancestor cone: pan p50 16.7 /
+      # p95 16.8, zoom p50 16.7 / p95 16.8, neither with a frame over 33 ms in
+      # 363, and a cold open of 345 ms — all well inside. Scrub p50 33.3 / p95
+      # 50.0, with 222 of 249 frames over 33 ms and 34.5 ms of main-thread
+      # work per frame. It was not the grid: scrubbing with no column selected
+      # was p50 16.7 and no frame over 33 ms in 83. It was the cone —
+      # views/Cone.tsx built its node array in a useMemo that listed
+      # selection.period among its dependencies, so every period step handed
+      # ReactFlow a freshly built array and memo on the node body could not
+      # help: the naive path, which measurements on a prototype of the page,
+      # taken before it was built, had put at ~1.7x the main-thread cost of a
+      # cursor held in a store the node bodies subscribe to. The default
+      # two-step cone was over the budget too (p95 33.4). So
+      # this step was written and left commented out rather than allow-failing,
+      # so that nothing in the log claimed a pass it had not earned — the same
+      # rule the import layering contracts in CI.yml are held to.
+      #
+      # Switched on 2026-09-17 in the commit that took the cursor out of the
+      # node array and into a store the boxes subscribe to
+      # (viewer/src/state/cursor.ts). Measured on that tree, same engine, same
+      # page, same 101-node window: pan p50 16.7 / p95 16.8, zoom p50 16.7 /
+      # p95 16.7, scrub p50 16.7 / p95 16.8 with 6 of 249 frames over 33 ms,
+      # cold open 348 ms. The budget did not move and will not move to quieten
+      # this step; a frame over it is fixed in the page. Run it by hand from
+      # viewer/ with `node pack.mjs level4 && npm run perf`.
+      #
+      # A FOURTH measurement since 2026-09-18, in the commit that let a pane expand:
+      # the same scrub with the cone expanded across the whole pane area, which
+      # is the viewport the lineage layout leaves a reader in. Same budget, no
+      # new threshold. Measured on that tree: pan p50 16.7 / p95 16.8 with none
+      # of 363 over, zoom the same, scrub p50 16.7 / p95 16.8 with 2 of 249
+      # over, expanded scrub p50 16.7 / p95 16.8 with none of 249 over, cold
+      # open 376.7 ms. The expanded one is the faster of the two because
+      # expanding the cone rails the grid and the proof, so a period step costs
+      # the cone's work plus two short strings rather than the cone's plus a
+      # grid and a worked example -- 2.70 ms of script per frame against 5.53 --
+      # while the canvas itself draws 69 node bodies rather than 41.
+      #
+      # A FIFTH measurement since 2026-09-19, in the commit that added the comparison page:
+      # the same scrub on the two-document comparison page, which is the shape
+      # `gspio diff --html` writes. Same budget, no new threshold — the budget
+      # is for THE PAGE, and a ceiling covering only the cheaper of the two
+      # shapes would leave the expensive one free to sit above it.
+      #
+      # THAT MEASUREMENT PUT THIS STEP IN THE RED, and it was left there for a
+      # month rather than quietened, because the budget does not move to make a
+      # step green — the rule this file has followed since it was written.
+      # Measured on that tree, same engine, same 101-node window, with net_cf
+      # selected (a column the comparison marks, so the proof panel is in its
+      # two-sided state):
+      #
+      #   pan               p50 16.7 / p95 16.7,  0 of 363 over 33 ms
+      #   zoom              p50 16.7 / p95 16.8,  0 of 363 over
+      #   scrub             p50 16.7 / p95 16.8,  3 of 249 over
+      #   scrubConeExpanded p50 16.7 / p95 16.8,  0 of 249 over
+      #   scrubCompare      p50 16.7 / p95 33.3, 14 of 249 over   <-- over
+      #   cold open         412.6 ms
+      #
+      # scrubCompare was 40 of 249 before that commit and 14 to 29 of 249
+      # after it, depending on the machine and the hour; the p95 never moved
+      # off 33.3. The spread was quoted rather than the best of the runs, and
+      # the count of frames over 33 is the noisy statistic on a laptop across
+      # an afternoon where the p95 is the stable one — which is why the p95 is
+      # what check.mjs judges.
+      #
+      # The diagnosis recorded there was that there was no single lever left:
+      # main-thread work per frame was 16.55 ms on the comparison page against
+      # 15.27 ms on the one-artifact page, on a 16.7 ms frame, so the plain
+      # scrub was already at 91% of a frame and the comparison's extra 1.28 ms
+      # was spread across a wider tree and more DOM. Two of the three causes had
+      # been fixed in that commit — the earlier document's proof is not computed
+      # while the cursor moves (it says "settling" and fills in 80 ms after the
+      # cursor rests, which never puts two different periods side by side), and
+      # the open column's earlier values are formatted once rather than once a
+      # frame — and what remained was the base scrub's own cost.
+      #
+      # GREEN SINCE 2026-09-20, by making the base scrub cheaper rather than by
+      # moving anything here. The 33 ms in perf/check.mjs is untouched and the
+      # five interactions are the same five. What was wrong was measured before
+      # anything was changed: a period step re-rendered 69 of the grid's body
+      # rows to move one row's highlight, and redrew the overview's 128 marks
+      # for a window the row cursor does not move. Three memo boundaries — the
+      # grid's body row, the overview, the changes panel a comparison opens on
+      # — with the props narrowed so they hold. The grid is at 2.6 rows a step
+      # now; the cone's 46 boxes still re-render, which is by design and is
+      # one line of text each. Measured on that tree, same engine, same window:
+      #
+      #   pan               p50 16.7 / p95 16.8,  0 of 363 over 33 ms
+      #   zoom              p50 16.7 / p95 16.8,  1 of 362 over
+      #   scrub             p50 16.7 / p95 16.8,  1 of 249 over
+      #   scrubConeExpanded p50 16.7 / p95 16.7,  0 of 249 over
+      #   scrubCompare      p50 16.7 / p95 16.8,  4 of 249 over
+      #   cold open         426.2 ms
+      #
+      # Across three runs of the finished tree scrubCompare read 4, 1 and 0 of
+      # 249 over and the plain scrub 1, 2 and 2, with a p95 of 16.8 in every
+      # one of the six — the spread, not the best of them. Main-thread work per
+      # frame is 13.69 ms on the comparison page against 13.22 ms on the
+      # one-artifact page, 82% of a frame where it was 97%, and script is
+      # 3.10 ms against the 5.62 it was. The page draws exactly what it drew:
+      # no case here and none of the four scripted reads was edited to get it.
+      #
+      # A SIXTH CHAPTER, 2026-09-29: a slower runner. The step's
+      # first run on CI was on a 2-core ubuntu-latest runner, Node 24.21.0, and
+      # it put both scrubs over the budget the development Mac held them inside:
+      #
+      #   pan                          p95 16.8,  0 of 363 over 33 ms
+      #   zoom                         p95 16.7,  1 of 362 over
+      #   scrub             p50 16.7 / p95 33.4, 47 of 249 over   <-- over
+      #   scrubConeExpanded            p95 16.8,  1 of 249 over
+      #   scrubCompare      p50 16.7 / p95 33.4, 73 of 249 over   <-- over
+      #   cold open         480 ms
+      #
+      # measure.mjs slows the page's CPU when VIEWER_PERF_CPU_THROTTLE names a
+      # rate; this step never sets it, and measures the runner it is on. On the
+      # development Mac 1.25 reproduces that run — both scrubs at a p95 of 33.4
+      # with 41 and 50 of 249 frames over, pan, zoom and the expanded scrub
+      # inside — and the page was fixed at that rate and is judged at it.
+      #
+      # A period step's cost there was the grid's before it was the cone's, and
+      # every part of it was measured before it was changed: 2.76 layouts a
+      # frame; every heading of the grid sticking on its own, each a compositing
+      # layer — 119 of the page's 163; the table taking a row in and a row out
+      # on every frame it scrolled; each move of the cursor's wash repainting
+      # every row in the window for the two that changed; and React Flow
+      # re-rendering the wrapper around each of the cone's forty-six boxes on
+      # every step, where a step changes the value line of fourteen of them. Six
+      # commits, each carrying its own measurement and each measured again by
+      # taking it back out of the finished page: the header sticks as one block;
+      # the grid's rows are measured at the 23 px they draw, which moves where
+      # the cursor follow lands and lets the block window move nothing; the rows
+      # are drawn in blocks of sixteen; each body row paints on its own; the
+      # cone keeps its click handler; and a box re-renders only when its line
+      # changes.
+      #
+      # Measured on the finished tree against the one before it, on the Mac,
+      # headless Chromium 153, same windows, one run of each on a quiet
+      # machine — p95 in ms and frames over 33 ms of 249, then main-thread ms
+      # a frame:
+      #
+      #   rate                   1             1.25          1.5           2
+      #   scrub         before   16.8,   0     33.3,  16     33.4,  53     33.4, 144
+      #                 after    16.8,   0     16.7,   1     16.8,   0     33.3,  27
+      #   scrubCompare  before   16.8,   1     33.4,  27     33.4,  66     33.4, 163
+      #                 after    16.8,   1     16.8,   0     16.7,   1     16.8,  12
+      #   work a frame, scrub    13.2 -> 9.2   16.4 -> 9.8   19.8 -> 11.6  26.7 -> 17.3
+      #   work a frame, compare  14.0 -> 9.4   17.5 -> 10.2  20.9 -> 12.2  27.9 -> 16.6
+      #
+      # Pan, zoom and the expanded scrub are inside the budget before and after
+      # at every rate, and the cold open does not move: 420.7 ms natively
+      # before, 409.1 after. Nor did the budget: the 33 ms in perf/check.mjs is
+      # untouched. The page holds it at the reproducing
+      # rate and at 1.5 with room to spare; at 2 it is at the edge, and in the
+      # run above the plain scrub read a p95 of 33.3 with 27 of 249 frames over.
+      #
+      # check.mjs judges the median of the three timed runs' 95th percentiles,
+      # since 2026-10-08: pooled, one noisy run on this shared runner failed the
+      # step three times on unchanged code. The 33 ms budget is the same.
+      - name: Frame times are inside the budget
+        run: node perf/measure.mjs && node perf/check.mjs

@@ -318,6 +318,14 @@ fn eval_one(t: f64, kw: &CurveEvalKwargs) -> PolarsResult<f64> {
             for (uj, zj) in u.iter().zip(zeta.iter()) {
                 p += (-omega * (t + uj)).exp() * sw_heart_scalar(t, *uj, alpha) * zj;
             }
+            // A fitted discount factor at or below zero has no spot rate. A
+            // fractional power of a negative price is NaN already, but a whole
+            // one (t = 1, 1/2, 1/3, ...) is a real number, and it read as a
+            // rate -- and as a positive discount factor at t = 1/2. The scalar
+            // path refuses the same points.
+            if p <= 0.0 {
+                return Ok(f64::NAN);
+            }
             Ok(p.powf(-1.0 / t) - 1.0)
         }
         other => Err(polars_err!(ComputeError: "curve_eval: unknown method '{}'", other)),
@@ -958,6 +966,35 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A Smith-Wilson fit whose discount factor falls to or below zero has no
+    /// spot rate there, at a tenor whose power of the price is real (t = 1/2,
+    /// t = 1) as at one where it is not (t = 3/4). The fit is u = [1.5, 2],
+    /// r = [1.271, -0.381], UFR = 0, alpha = 0.05, with zeta from the Python
+    /// ``solve_zeta``; it prices all three below zero. A positive price keeps
+    /// its rate: at the knot t = 1.5 the spot is the input rate.
+    #[test]
+    fn test_eval_one_smith_wilson_non_positive_price_is_nan() {
+        let kw = CurveEvalKwargs {
+            u: Some(vec![1.5, 2.0]),
+            zeta: Some(vec![-168464.9791605976, 127411.43440391058]),
+            omega: Some(0.0),
+            alpha: Some(0.05),
+            ..smith_wilson_kwargs()
+        };
+        for &t in &[0.5_f64, 0.75, 1.0] {
+            let got = eval_one(t, &kw).unwrap();
+            assert!(
+                got.is_nan(),
+                "smith_wilson prices t={t} below zero; its spot should be NaN, got {got}"
+            );
+        }
+        let at_knot = eval_one(1.5, &kw).unwrap();
+        assert!(
+            (at_knot - 1.271).abs() < 1e-8,
+            "smith_wilson at the knot t=1.5 should be its input rate 1.271, got {at_knot}"
+        );
     }
 
     /// Regression: `linear` and `pchip` at finite `t = 0` still return `ys[0]`

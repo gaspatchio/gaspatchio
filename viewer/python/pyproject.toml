@@ -1,0 +1,71 @@
+[project]
+name = "gaspatchio-viewer"
+version = "0.1.0rc1"
+description = "The viewer's built page, for gspio calc-graph --html"
+readme = "README.md"
+authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
+# What the wheel carries, not only what this repository wrote. The bundle and
+# its stylesheet (assets/viewer.js, assets/viewer.css) inline npm packages under
+# MIT, ISC and BSD-3-Clause, and assets/fonts.css inlines three font faces under
+# the SIL Open Font License; each built file's own SPDX header says which of
+# them it carries. viewer/build.mjs writes assets/third-party-notices.txt from
+# the build's metafile: every bundled package with its own licence file, and
+# the faces with their copyright lines. It is listed here so that it lands with
+# the licence texts in the wheel's .dist-info/licenses/ as well as beside the
+# assets. PEP 639 takes the texts from inside this directory, so LICENSES/ holds
+# copies of the repository's; bindings/python/tests/test_distributions.py holds
+# them to it byte for byte.
+license = "Apache-2.0 AND BSD-3-Clause AND ISC AND MIT AND OFL-1.1"
+license-files = [
+    "LICENSES/Apache-2.0.txt",
+    "LICENSES/BSD-3-Clause.txt",
+    "LICENSES/ISC.txt",
+    "LICENSES/MIT.txt",
+    "LICENSES/OFL-1.1.txt",
+    "gaspatchio_viewer/assets/third-party-notices.txt",
+]
+requires-python = ">=3.10"
+# Beta, for the engine's reason: tested in Chromium and WebKit against every
+# committed fixture, but a 0.1.0 preview that reads exactly one artifact schema,
+# which may still move. No licence classifier, for the reason
+# bindings/python/pyproject.toml gives.
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Topic :: Office/Business :: Financial",
+    "Operating System :: OS Independent",
+    "Programming Language :: JavaScript",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+# None, deliberately. This distribution is a built page and the three calls
+# that assemble it; it does not import gaspatchio, and gaspatchio does not
+# import it except through the door that refuses by name when it is absent.
+# A reader who has been handed an exported HTML file needs neither.
+dependencies = []
+
+[project.urls]
+Homepage = "https://gaspatchio.dev/"
+Documentation = "https://gaspatchio.dev/"
+Repository = "https://github.com/gaspatchio/gaspatchio"
+Issues = "https://github.com/gaspatchio/gaspatchio/issues"
+
+[build-system]
+# 1.27 is the first hatchling to write PEP 639 metadata: License-Expression and
+# a License-File for each text (1.26 writes a free-text License: and neither).
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gaspatchio_viewer"]
+# The built assets are the distribution: a wheel without them has a render()
+# with nothing to render. Said here rather than left to the default file
+# selection, which reads the workspace's ignore files and would drop anything
+# they happen to cover.
+artifacts = ["gaspatchio_viewer/assets/**"]

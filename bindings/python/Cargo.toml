@@ -1,8 +1,12 @@
 [package]
 name = "gaspatchio_core_python"
-version = "0.9.0"
+version = "1.0.0-rc.1"
 edition = "2021"
 license = "Apache-2.0"
+# `ref` is a symlink to the repository's design-reference tree. Cargo follows
+# it when it lists the package, and maturin builds the sdist from that list,
+# so the sdist carried the whole tree, once here and once through core/.
+exclude = ["ref"]
 
 [lib]
 name = "gaspatchio_core_python"

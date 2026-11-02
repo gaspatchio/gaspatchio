@@ -8,8 +8,8 @@ from pathlib import Path
 import polars as pl
 from loguru import logger
 
-import gaspatchio as gs
 from gaspatchio import ActuarialFrame
+from gaspatchio.assumptions import DataDimension, MeltDimension, Table
 
 # Add the current directory to the path so we can import setup.py
 current_dir = Path(__file__).parent
@@ -17,53 +17,45 @@ if str(current_dir) not in sys.path:
     sys.path.append(str(current_dir))
 
 
-def setup_mortality_table(mortality_file_path=None):
-    """
-    Setup the mortality table for lookup using the new load_assumptions API.
-    """
+def mortality_table() -> Table:
+    """Build the wide mortality table, one column per gender/smoking pair."""
     mortality_df = pl.read_parquet("jobs/example/assumptions/mortality.parquet")
-
-    logger.info("Read mortality table, registering...")
-
-    # Use new load_assumptions API instead of TableRegistry + WideToLongTransformSpec
-    gs.load_assumptions(
-        "mortality_rates",
-        mortality_df,
-        id="age-last",
+    logger.info("Read mortality table, building...")
+    return Table(
+        name="mortality_rates",
+        source=mortality_df,
+        dimensions={
+            "age-last": DataDimension("age-last"),
+            "variable": MeltDimension(columns=["MNS", "FNS", "MS", "FS"]),
+        },
         value="mortality_rate",
-        value_vars=["MNS", "FNS", "MS", "FS"],
     )
 
 
-def setup_lapse_table(lapse_file_path=None):
-    """
-    Setup the lapse table for lookup using the new load_assumptions API.
-    """
+def lapse_table() -> Table:
+    """Build the lapse curve, one rate per policy duration."""
     lapse_df = pl.read_parquet("jobs/example/assumptions/lapse.parquet")
-
-    logger.info("Read lapse table, registering...")
-
-    # Use new load_assumptions API - this is already a curve table
-    gs.load_assumptions(
-        "lapse_rates", lapse_df, id="policy duration", value="lapse rate"
+    logger.info("Read lapse table, building...")
+    return Table(
+        name="lapse_rates",
+        source=lapse_df,
+        dimensions={"policy duration": DataDimension("policy duration")},
+        value="lapse rate",
     )
 
 
-def setup_premium_table(premium_file_path=None):
-    """
-    Setup the premium table for lookup using the new load_assumptions API.
-    """
+def premium_table() -> Table:
+    """Build the wide premium-rate table, one column per gender/smoking pair."""
     premium_df = pl.read_parquet("jobs/example/assumptions/premium-rate.parquet")
-
-    logger.info("Read premium table, registering...")
-
-    # Use new load_assumptions API instead of TableRegistry + WideToLongTransformSpec
-    gs.load_assumptions(
-        "premium_rates",
-        premium_df,
-        id="age-last",
+    logger.info("Read premium table, building...")
+    return Table(
+        name="premium_rates",
+        source=premium_df,
+        dimensions={
+            "age-last": DataDimension("age-last"),
+            "variable": MeltDimension(columns=["MNS", "FNS", "MS", "FS"]),
+        },
         value="premium_rate",
-        value_vars=["MNS", "FNS", "MS", "FS"],
     )
 
 
@@ -92,48 +84,36 @@ def setup_ages(af: ActuarialFrame) -> ActuarialFrame:
 
     # 2. Calculate integer duration for lookups by flooring the fractional duration list
     #    This mimics Excel's ROUNDDOWN(duration, 0)
-    af["policy_duration_as_int"] = (
-        af["policy duration"].floor().cast(pl.List(pl.Int64))
-    )  # <------ This needs to be an int.
+    af["policy_duration_as_int"] = af["policy duration"].floor().to_integer()
     # --- End Core Change ---
 
-    # Use floor to get age last and cast the list elements to Int64
-    af["age-last"] = af["age"].floor().cast(pl.List(pl.Int64))
+    # Use floor to get age last and convert the list elements to whole numbers
+    af["age-last"] = af["age"].floor().to_integer()
 
     return af
 
 
-def mortality_rate(af: ActuarialFrame) -> ActuarialFrame:
+def mortality_rate(af: ActuarialFrame, table: Table) -> ActuarialFrame:
     logger.info("Calculating mortality cost")
 
     # Combine gender and smoking status for lookup
-    # Note: Ensure 'gender' and 'smoking_status' columns exist before this point
+    # Note: Ensure 'gender' and 'smoking status' columns exist before this point
     af["variable"] = af["gender"] + af["smoking status"]
 
-    # Create the expression inside the function
-    af["mortality rate"] = gs.assumption_lookup(
-        "age-last",
-        "variable",
-        table_name="mortality_rates",
+    af["mortality rate"] = table.lookup(
+        **{"age-last": af["age-last"], "variable": af["variable"]}
     )
     return af
 
 
-def lapse_rate(af: ActuarialFrame) -> ActuarialFrame:
-    # Only create the expression when the function is called in the pipeline
-    af["lapse rate"] = gs.assumption_lookup(
-        "policy_duration_as_int",
-        table_name="lapse_rates",
-    )
-
+def lapse_rate(af: ActuarialFrame, table: Table) -> ActuarialFrame:
+    af["lapse rate"] = table.lookup(**{"policy duration": af["policy_duration_as_int"]})
     return af
 
 
-def premium_rate(af: ActuarialFrame) -> ActuarialFrame:
-    af["premium rate"] = gs.assumption_lookup(
-        "age-last",
-        "variable",
-        table_name="premium_rates",
+def premium_rate(af: ActuarialFrame, table: Table) -> ActuarialFrame:
+    af["premium rate"] = table.lookup(
+        **{"age-last": af["age-last"], "variable": af["variable"]}
     )
     return af
 
@@ -258,22 +238,21 @@ def discount_rate(af: ActuarialFrame, interest_rate: float) -> ActuarialFrame:
 
 
 # Define a model function
-def life_model(af):
+def main(af: ActuarialFrame) -> ActuarialFrame:
     """Simple model function that works with the actual model points columns"""
     maintenance_cost = 15
     interest_rate = 0.05
 
-    # Setup the mortality table
-    setup_lapse_table()
-    setup_mortality_table()
-    setup_premium_table()
+    lapse = lapse_table()
+    mortality = mortality_table()
+    premium = premium_table()
 
     af = setup_ages(af)
 
     # Calculate the rates using the assumption lookup functions
-    af = mortality_rate(af)
-    af = lapse_rate(af)
-    af = premium_rate(af)
+    af = mortality_rate(af, mortality)
+    af = lapse_rate(af, lapse)
+    af = premium_rate(af, premium)
 
     af["expenses"] = maintenance_cost / 12
 

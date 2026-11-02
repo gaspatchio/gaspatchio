@@ -9,6 +9,7 @@ import pytest
 
 from gaspatchio.column import ColumnProxy, ExpressionProxy
 from gaspatchio.column.condition_expression import ConditionExpression
+from gaspatchio.frame.graph.graph_utils import clean_expression_string
 
 
 # Mock ActuarialFrame specific to ExpressionProxy tests
@@ -18,7 +19,7 @@ class MockActuarialFrameForExpr:
         # Mock a _df with a simple schema for dispatch logic
         mock_df = pl.LazyFrame({"some_col": [1, 2, 3], "test_col": [1, 2, 3]})
         self._df = mock_df
-        self._tracing = False  # Add _tracing attribute required by ErrorEnhancer
+        self._traced_run = False  # Add _traced_run attribute required by ErrorEnhancer
 
     def _convert_to_expr(self, value):
         if isinstance(value, ExpressionProxy):
@@ -86,16 +87,17 @@ def test_expression_proxy_binary_operators(expr_proxy, col_expr_proxy, op, op_sy
     # Test op with literal
     result_lit = op(expr_proxy, 5)
     assert isinstance(result_lit, ExpressionProxy)
+    # `/` over numbers lowers to the IEEE kernel; the export renders it as `/`.
     assert (
-        str(result_lit._expr)
-        == f'[(dyn int: 10.alias("base_expr")) {op_symbol} (dyn int: 5)]'
+        clean_expression_string(str(result_lit._expr))
+        == f'[(dyn int: 10.alias("base_expr")) {op_symbol} (5)]'
     )
 
     # Test op with another expression proxy
     result_expr = op(expr_proxy, col_expr_proxy)
     assert isinstance(result_expr, ExpressionProxy)
     assert (
-        str(result_expr._expr)
+        clean_expression_string(str(result_expr._expr))
         == f'[(dyn int: 10.alias("base_expr")) {op_symbol} (col("some_col").alias("col_expr"))]'
     )
 
@@ -104,7 +106,7 @@ def test_expression_proxy_pow_operator(expr_proxy):
     # Test op with literal
     result_lit = expr_proxy**2
     assert isinstance(result_lit, ExpressionProxy)
-    assert str(result_lit._expr) == 'dyn int: 10.alias("base_expr").pow([dyn int: 2])'
+    assert str(result_lit._expr) == 'dyn int: 10.alias("base_expr").pow([2])'
 
 
 @pytest.mark.parametrize(
@@ -127,8 +129,7 @@ def test_expression_proxy_comparison_operators(
     assert result_lit.operator == operator_name
     assert result_lit._parent is expr_proxy._parent
     assert (
-        str(result_lit._expr)
-        == f'[(dyn int: 10.alias("base_expr")) {op_symbol} (dyn int: 0)]'
+        str(result_lit._expr) == f'[(dyn int: 10.alias("base_expr")) {op_symbol} (0)]'
     )
 
     # Test op with another expression proxy
@@ -157,17 +158,18 @@ def test_expression_proxy_reverse_binary_operators(expr_proxy, op, op_symbol):
     other = 5
     result_proxy = op(other, expr_proxy)  # Reverse order
     assert isinstance(result_proxy, ExpressionProxy)
-    expected_expr_str = (
-        f'[(dyn int: {other}) {op_symbol} (dyn int: 10.alias("base_expr"))]'
-    )
-    assert str(result_proxy._expr) == expected_expr_str
+    expected_expr_str = f'[({other}) {op_symbol} (dyn int: 10.alias("base_expr"))]'
+    assert clean_expression_string(str(result_proxy._expr)) == expected_expr_str
 
 
 def test_expression_proxy_reverse_pow_operator(expr_proxy):
     other = 2
     result_proxy = other**expr_proxy
     assert isinstance(result_proxy, ExpressionProxy)
-    assert str(result_proxy._expr) == 'dyn int: 2.pow([dyn int: 10.alias("base_expr")])'
+    # A whole-number literal is stated as the i64 section 10 names it, so a
+    # power's base too (11.1.25): Polars renders it as a typed literal rather
+    # than ``dyn int: 2`` -- whose power answered Int32 and wrapped at 2**31.
+    assert str(result_proxy._expr) == '2.pow([dyn int: 10.alias("base_expr")])'
 
 
 # --- ExpressionProxy Accessor Tests (Wiring) ---
@@ -222,7 +224,8 @@ def test_expression_proxy_finance_accessor_wiring(expr_proxy):
         # _ACCESSOR_REGISTRY.unregister("finance", "column") # REMOVED
 
 
-# --- ExpressionProxy Chaining (Handled by Autopatch tests in test_dispatch.py) ---
-# Tests like expr_proxy.alias("new").cast(pl.Float64) are implicitly covered
-# by the autopatch mechanism tested in test_dispatch.py, ensuring methods
-# return new ExpressionProxy instances.
+# --- ExpressionProxy chaining (covered by test_dispatch.py) ---
+# Chains like expr_proxy.abs().round(2) are implicitly covered by the
+# generated surface tested in test_dispatch.py, ensuring declared operations
+# return new ExpressionProxy instances. alias and cast are not declared
+# operations; they are reached through polars_native().

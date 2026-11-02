@@ -92,6 +92,22 @@ fn make_list_i64(
     lists.into_series().with_name(name.into())
 }
 
+/// Creates a List(Int64) column whose inner values may be null.
+fn make_nullable_list_i64(
+    name: &str,
+    n_policies: usize,
+    months_per_policy: usize,
+    value_fn: impl Fn(usize, usize) -> Option<i64>,
+) -> Series {
+    let lists: ListChunked = (0..n_policies)
+        .map(|p| {
+            let vals: Vec<Option<i64>> = (0..months_per_policy).map(|m| value_fn(p, m)).collect();
+            Some(Series::new("".into(), vals))
+        })
+        .collect();
+    lists.into_series().with_name(name.into())
+}
+
 /// Creates a String scalar column: `n_policies` rows, each a single string value.
 fn make_scalar_str(
     name: &str,
@@ -186,6 +202,102 @@ fn bench_lapse_rates_vector(c: &mut Criterion) {
                 |b, _| {
                     b.iter(|| {
                         black_box(table.lookup_series(black_box(&keys)).unwrap());
+                    })
+                },
+            );
+        }
+    }
+
+    group.finish();
+}
+
+/// Lapse rates with a null duration every seventh period.
+fn bench_nullable_lapse_rates_vector(c: &mut Criterion) {
+    let lapse_ids = ["L001", "L002"];
+    let months: usize = 120;
+
+    let mut group = c.benchmark_group("realistic_vector/lapse_rates_nullable");
+    group.sample_size(20);
+
+    for &n_policies in &[1_000, 10_000] {
+        let reference_duration = make_list_i64("duration", n_policies, months, |p, m| {
+            let base_duration = (p % 10) as i64;
+            (base_duration + m as i64 / 12).min(14)
+        });
+        let nullable_duration = make_nullable_list_i64("duration", n_policies, months, |p, m| {
+            let base_duration = (p % 10) as i64;
+            if m % 7 == 0 {
+                None
+            } else {
+                Some((base_duration + m as i64 / 12).min(14))
+            }
+        });
+        let lapse_id = make_scalar_str("lapse_id", n_policies, |p| lapse_ids[p % lapse_ids.len()]);
+        let reference_keys: Vec<&Series> = vec![&reference_duration, &lapse_id];
+        let nullable_keys: Vec<&Series> = vec![&nullable_duration, &lapse_id];
+
+        for &mode in &[StorageMode::Array, StorageMode::Hash] {
+            let mode_name = match mode {
+                StorageMode::Array => "array",
+                StorageMode::Hash => "hash",
+                StorageMode::Auto => "auto",
+            };
+            let table = load_lapse_rates(mode).expect("Failed to load nullable lapse rates");
+            assert_eq!(table.storage_mode(), mode);
+
+            // Verify the nullable branch before timing it. The matching
+            // null-free lookup supplies the fixture value for each valid key.
+            let expected = table
+                .lookup_series(&reference_keys)
+                .expect("Failed to look up reference lapse rates");
+            let actual = table
+                .lookup_series(&nullable_keys)
+                .expect("Failed to look up nullable lapse rates");
+            let expected = expected
+                .list()
+                .expect("Expected reference lapse-rate lists");
+            let actual = actual.list().expect("Expected nullable lapse-rate lists");
+            assert_eq!(expected.len(), n_policies);
+            assert_eq!(actual.len(), n_policies);
+
+            for policy in 0..n_policies {
+                let expected_row = expected
+                    .get_as_series(policy)
+                    .expect("Expected one reference list per policy");
+                let actual_row = actual
+                    .get_as_series(policy)
+                    .expect("Expected one nullable list per policy");
+                let expected_row = expected_row
+                    .f64()
+                    .expect("Expected Float64 reference lapse rates");
+                let actual_row = actual_row
+                    .f64()
+                    .expect("Expected Float64 nullable lapse rates");
+                assert_eq!(expected_row.len(), months);
+                assert_eq!(actual_row.len(), months);
+
+                for period in 0..months {
+                    let expected_value = expected_row
+                        .get(period)
+                        .expect("Expected a reference lapse rate");
+                    assert!(expected_value.is_finite());
+                    let actual_value = actual_row
+                        .get(period)
+                        .expect("Expected a nullable lookup result");
+                    if period % 7 == 0 {
+                        assert!(actual_value.is_nan());
+                    } else {
+                        assert_eq!(actual_value.to_bits(), expected_value.to_bits());
+                    }
+                }
+            }
+
+            group.bench_with_input(
+                BenchmarkId::new(format!("{mode_name}_{n_policies}"), n_policies),
+                &n_policies,
+                |b, _| {
+                    b.iter(|| {
+                        let _ = black_box(table.lookup_series(black_box(&nullable_keys)).unwrap());
                     })
                 },
             );
@@ -359,6 +471,7 @@ criterion_group!(
     benches,
     bench_mortality_select_vector,
     bench_lapse_rates_vector,
+    bench_nullable_lapse_rates_vector,
     bench_surrender_charges_vector,
     bench_risk_free_rates_vector,
     bench_combined_model_lookups,

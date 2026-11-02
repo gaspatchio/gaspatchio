@@ -10,18 +10,63 @@ on:
 permissions:
   contents: read
 
+# uv, for both setup-uv steps: the release CI.yml pins, which a passing run of
+# each workflow used on 3 October 2026. The digest is of the x86-64 Linux
+# archive, which both jobs run on. setup-uv checks it before it unpacks
+# anything; its own table of digests ends at uv 0.10.10.
+env:
+  SETUP_UV_VERSION: "0.12.22"
+  SETUP_UV_SHA256: b9980552309f09c15172b8be828555e375097f16deb459795ce7bfd200380f0b
+
+# What the jobs below fetch, which bindings/python/tests/test_workflow_tool_pins.py
+# holds them to, one line a tool: its name, and how many install commands
+# fetch it.
+# pins: reuse 1
+# pins: pip-licenses 1
+# pins: cargo-license 1
+
 jobs:
   reuse-compliance:
     name: REUSE 3.3 Compliance (SPDX headers)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      # Each tool this workflow's verdict comes from is pinned, as CI.yml pins
+      # cargo-about, so the verdict moves only in a commit that moves a pin.
+      # The digest is of the source archive PyPI serves for this version.
+      # Moving the version means moving both, and the versions below.
+      REUSE_VERSION: "6.2.0"
+      REUSE_SHA256: 4feae057a2334c9a513e6933cdb9be819d8b822f3b5b435a36138bd218897d23
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
-      - name: Install reuse
-        run: uv tool install reuse
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
+      # reuse publishes a source archive and one wheel, which installs only on
+      # CPython 3.10 under glibc 2.41 or later, so the archive is what runs
+      # here: checked against the digest above before it is built. uv checks
+      # no hashes when it installs a tool, so what reuse depends on, and the
+      # build backend that builds it, are held by version instead, in
+      # .github/pins/reuse.txt and .github/pins/reuse-build.txt. With its
+      # charset-normalizer extra, which the lint below detects encodings with.
+      - name: Install reuse ${{ env.REUSE_VERSION }}, checked
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL -o "/tmp/reuse-${REUSE_VERSION}.tar.gz" \
+            "https://files.pythonhosted.org/packages/source/r/reuse/reuse-${REUSE_VERSION}.tar.gz"
+          echo "${REUSE_SHA256}  /tmp/reuse-${REUSE_VERSION}.tar.gz" | sha256sum --check --strict
+          uv tool install "reuse[charset-normalizer] @ file:///tmp/reuse-${REUSE_VERSION}.tar.gz" \
+            --constraints .github/pins/reuse.txt \
+            --build-constraints .github/pins/reuse-build.txt
+      # The executable just installed, rather than `uv tool run`, which
+      # fetches the newest reuse whenever the installed one does not match
+      # its request. charset-normalizer, not python-magic, detects each file's
+      # encoding: python-magic needs the runner's libmagic, so the verdict
+      # would depend on whether the image carries it.
       - name: Run reuse lint
-        run: uv tool run reuse lint
+        env:
+          REUSE_ENCODING_MODULE: charset_normalizer
+        run: reuse lint
 
   python-wheel-licences:
     name: Python Wheel Runtime Closure
@@ -33,10 +78,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78   # v7
-      - name: Install workspace + pip-licenses
+        with:
+          version: ${{ env.SETUP_UV_VERSION }}
+          checksum: ${{ env.SETUP_UV_SHA256 }}
+      # pip-licenses and the two packages it needs, each at one version and
+      # one file, whose SHA-256 uv checks before installing it: the pins are
+      # .github/pins/pip-licenses.txt.
+      - name: Install workspace + pip-licenses 5.5.5, checked
         run: |
           uv sync --locked
-          uv pip install pip-licenses
+          uv pip install --require-hashes -r "${GITHUB_WORKSPACE}/.github/pins/pip-licenses.txt"
       - name: Resolve runtime closure
         run: |
           uv pip compile pyproject.toml \
@@ -94,11 +145,29 @@ jobs:
     name: Rust Crate Dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Pinned as CI.yml pins cargo-about: the digest is of the crate archive
+      # crates.io serves for this version, the same one its index records.
+      # Moving the version means moving both.
+      CARGO_LICENSE_VERSION: "0.7.0"
+      CARGO_LICENSE_SHA256: 662dc8581a263e6330eefdfff955851edcbffcd6d6d96e79384f6fe7a31a1d80
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
-      - uses: dtolnay/rust-toolchain@stable   # intentionally not SHA-pinned — no `toolchain:` version is set, so this ref *is* the mechanism that tracks current stable Rust; pinning it would freeze the toolchain instead
-      - name: Install cargo-license
-        run: cargo install cargo-license --quiet
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87   # stable branch
+        with:
+          toolchain: stable   # rustup resolves it when the job runs: the pin freezes the action, not the compiler
+      # From the crate archive, checked against the digest above before it is
+      # unpacked, and built with the lockfile it was published with (--locked),
+      # so every dependency is the one its author tested and cargo checks each
+      # against the registry's checksum.
+      - name: Install cargo-license ${{ env.CARGO_LICENSE_VERSION }}, checked
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL -o /tmp/cargo-license.crate \
+            "https://static.crates.io/crates/cargo-license/cargo-license-${CARGO_LICENSE_VERSION}.crate"
+          echo "${CARGO_LICENSE_SHA256}  /tmp/cargo-license.crate" | sha256sum --check --strict
+          mkdir /tmp/cargo-license-src
+          tar -xzf /tmp/cargo-license.crate -C /tmp/cargo-license-src --strip-components=1
+          cargo install --locked --path /tmp/cargo-license-src
       - name: Audit core/
         run: |
           cd core

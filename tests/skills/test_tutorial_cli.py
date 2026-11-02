@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# ruff: noqa: S101, ANN201, D102, S607
+# ruff: noqa: S101, ANN201, D102
 """Tests for the gspio tutorial CLI commands."""
 
 import subprocess
+import sys
 from pathlib import Path
 
 TUTORIALS_DIR = (
@@ -18,9 +19,14 @@ TUTORIALS_DIR = (
 
 
 def run_gspio(*args: str) -> subprocess.CompletedProcess[str]:
-    """Run gspio command and return result."""
-    return subprocess.run(  # noqa: S603
-        ["uv", "run", "gspio", *args],
+    """Run gspio through this interpreter and return the result.
+
+    The installed CLI, run as ``python -m gaspatchio.cli`` by the interpreter
+    running the tests, so the test reads the package under test and never
+    asks a package manager to resolve -- or build -- the tree it runs in.
+    """
+    return subprocess.run(  # noqa: S603 -- this interpreter, a fixed argument list
+        [sys.executable, "-m", "gaspatchio.cli", *args],
         capture_output=True,
         text=True,
         cwd=TUTORIALS_DIR.parent.parent,  # bindings/python/

@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Constraints for twine in CI.yml's two metadata checks: the packages twine
+# 7.0.0 depends on, at the versions uv resolved them to on 3 October 2026 for
+# CPython 3.12 on x86-64 Linux. twine itself comes from its wheel, checked
+# against TWINE_SHA256 at the top of CI.yml. uv checks no hashes when it runs
+# a tool, so these are held by version. Move them in the commit that moves
+# twine: resolve the new release with `uv pip compile` for that Python and
+# platform, and copy its pins here.
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.2
+cryptography==50.0.2
+docutils==0.23
+id==1.6.1
+idna==3.20
+jaraco-classes==3.4.0
+jaraco-context==6.1.2
+jaraco-functools==4.6.0
+jeepney==0.9.0
+keyring==25.7.0
+markdown-it-py==4.2.0
+mdurl==0.1.2
+more-itertools==11.1.0
+nh3==0.3.7
+packaging==26.3
+pycparser==3.0
+pygments==2.21.0
+readme-renderer==46.0
+requests==2.34.2
+requests-toolbelt==1.0.0
+rfc3986==2.0.0
+rich==15.0.0
+secretstorage==3.5.0
+urllib3==2.8.0

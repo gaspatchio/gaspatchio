@@ -34,7 +34,7 @@ from pathlib import Path
 
 import polars as pl
 
-from gaspatchio import ActuarialFrame, MortalityTable
+from gaspatchio import ActuarialFrame
 from gaspatchio.scenarios import (
     MultiplicativeShock,
     ScenarioRun,
@@ -47,37 +47,12 @@ sys.path.insert(0, str(L5_BASE_DIR))
 import model  # noqa: E402
 
 MODEL_POINTS_PATH = L5_BASE_DIR / "model_points.parquet"
-SELECT_PERIOD = model.SELECT_PERIOD_LEN
 
 # ---------------------------------------------------------------------------
-# 1. Base tables + model wrapper (identical to step 01/02).
+# 1. The model is ``model.main``, run as it is: each sweep's shocks name the
+#    tables it builds (mortality_select, lapse_rates), and the plan answers
+#    the model's own reads of them per scenario.
 # ---------------------------------------------------------------------------
-
-assumptions = model.load_assumptions()
-mortality_select_raw = assumptions["mortality"].table
-
-BASE_TABLES = {
-    "mortality_select": mortality_select_raw,
-    "lapse_rates": assumptions["lapse_rates"],
-}
-
-
-def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
-    """Plan-agnostic adapter: override whichever tables the current plan supplies."""
-    del drivers
-    overrides = dict(assumptions)
-    if "mortality_select" in tables:
-        overrides["mortality"] = MortalityTable(
-            table=tables["mortality_select"],
-            age_basis="age_last_birthday",
-            structure="select_ultimate",
-            select_period=SELECT_PERIOD,
-        )
-    for name in ("mortality_scalars", "lapse_rates", "surrender_charges"):
-        if name in tables:
-            overrides[name] = tables[name]
-    return model.main(af, assumptions_override=overrides)
-
 
 # ---------------------------------------------------------------------------
 # 2. 1D sweep — mortality multiplier across a range.
@@ -99,7 +74,6 @@ sweep_1d_shocks = {
 
 plan_1d = ScenarioRun(
     shocks=sweep_1d_shocks,
-    base_tables={"mortality_select": mortality_select_raw},
     aggregations=(Sum("pv_net_cf").alias("pv_net_cf").over("scenario_id"),),
 )
 
@@ -110,7 +84,7 @@ mp = pl.read_parquet(MODEL_POINTS_PATH)
 af = ActuarialFrame(mp)
 
 start = time.perf_counter()
-result_1d = plan_1d.run(af, model_fn, audit=True)
+result_1d = plan_1d.run(af, model.main, audit=True)
 runtime_1d = time.perf_counter() - start
 
 curve_1d = (
@@ -151,7 +125,6 @@ for m, lap in itertools.product(MORT_VALUES, LAPSE_VALUES):
 
 plan_2d = ScenarioRun(
     shocks=sweep_2d_shocks,
-    base_tables=BASE_TABLES,
     aggregations=(Sum("pv_net_cf").alias("pv_net_cf").over("scenario_id"),),
 )
 
@@ -159,7 +132,7 @@ print("=== 2D Sweep: mortality × lapse (25 cells) ===")
 print(plan_2d.describe())
 
 start = time.perf_counter()
-result_2d = plan_2d.run(af, model_fn, audit=True)
+result_2d = plan_2d.run(af, model.main, audit=True)
 runtime_2d = time.perf_counter() - start
 
 # scenario_id format is "M{mort:.2f}_L{lapse:.2f}" — split on '_' then strip the prefix.

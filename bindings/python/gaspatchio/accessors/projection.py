@@ -14,13 +14,19 @@ from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
-from gaspatchio.accessors.base import BaseColumnAccessor
+from gaspatchio.accessors.base import (
+    BaseColumnAccessor,
+    refuse_bare_string_operand,
+    refuse_bare_string_override,
+)
 from gaspatchio.frame.registry import register_accessor
 
 if TYPE_CHECKING:
+    from polars.datatypes import DataTypeClass
+
+    from gaspatchio._semantic.ir import OpNode
     from gaspatchio.column.column_proxy import ColumnProxy
     from gaspatchio.column.expression_proxy import ExpressionProxy
-    from gaspatchio.column.shape import Shape
     from gaspatchio.frame.base import ActuarialFrame
 
 
@@ -36,10 +42,13 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
     Design Philosophy:
         - Complex cumulative operations: Use projection methods
         - Simple arithmetic: Use operators (`*`, `+`, `-`, `/`)
-        - Terminal/aggregate values: Use Polars (`.list.last()`)
+        - Terminal/aggregate values: Use Polars (`.polars_native().list.last()`)
 
     Accessed via `.projection` on a column or expression, e.g.,
     `af["mortality_rate"].projection.cumulative_survival()`.
+
+    A bare string operand is refused here, as on every column accessor;
+    see `refuse_bare_string_operand` for the rule and why it holds.
 
     Examples:
         Cumulative survival from mortality rates:
@@ -58,7 +67,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         af.premium = af.annual_premium * af.survival_to_t
 
         # Terminal value - use Polars
-        af.maturity_benefit = af.face_amount.list.last()
+        af.maturity_benefit = af.face_amount.polars_native().list.last()
         ```
 
         Premium holiday modeling:
@@ -88,25 +97,19 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         super().__init__(proxy)
         self._proxy: ColumnProxy | ExpressionProxy = proxy
 
-    def _get_polars_expr(self) -> pl.Expr:
-        """Get the underlying Polars expression from the proxy.
+    def _get_node(self) -> OpNode:
+        """Get the op-tree node this accessor's column stands for.
 
-        Helper method to extract the raw Polars expression from either a ColumnProxy
-        or ExpressionProxy for use in projection calculations.
-
-        Returns
-        -------
-        pl.Expr
-            The underlying Polars expression
-
+        Every method below emits a ``Call`` over this node rather than
+        building a Polars expression: the accessor decides *what* the
+        actuary asked for, and the registered lowering in
+        ``frame/lowering/rules/projection.py`` decides how it is computed.
         """
         from gaspatchio.column.column_proxy import ColumnProxy
         from gaspatchio.column.expression_proxy import ExpressionProxy
 
-        if isinstance(self._proxy, ExpressionProxy):
-            return self._proxy._expr  # noqa: SLF001
-        if isinstance(self._proxy, ColumnProxy):
-            return pl.col(self._proxy.name)
+        if isinstance(self._proxy, (ColumnProxy, ExpressionProxy)):
+            return self._proxy._node  # noqa: SLF001
         msg = (
             f"ProjectionColumnAccessor expected ColumnProxy or "
             f"ExpressionProxy, got {type(self._proxy).__name__}"
@@ -162,8 +165,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         is tiny (~1e-17) but avoidable for free, and a strict tie-out sees it.
 
         For list columns, applies element-wise cumulative product within each list.
-        For scalar columns, applies cumulative product across rows (use `.over()` for
-        grouping by policy).
+        A per-policy (scalar) column is refused on a frame with a projection
+        timeline, where the rows are policies: derive a per-period column first. On
+        a frame without one, where each row is a period, it applies the cumulative
+        product down the rows (use `.over()` for grouping by policy).
 
         !!! note "When to use"
             * **Life Insurance Projections:** Calculate the probability policies remain
@@ -174,6 +179,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
                 to project policy persistency over time.
             * **Pricing Models:** Calculate expected present values of benefits and
                 premiums weighted by survival probabilities.
+
+        A null decrement ends the running survival's knowledge of itself.
 
         Timing Conventions
         ------------------
@@ -187,8 +194,14 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
           survival at t represents the probability of surviving THROUGH period t.
           This matches Excel-style timing. Result: ``[tpx[0], tpx[0]*tpx[1], ...]``
 
-        With constant rates, both conventions give identical values. The difference
-        only appears when rates change over time (e.g., at age boundaries).
+        The two conventions do not give the same values, even at a flat rate: the
+        end-of-period survival at t is the beginning-of-period survival at t+1, one
+        period's decrement further on -- at q = 0.01 the default gives
+        ``[1.0, 0.99, 0.9801]`` and ``end_of_period`` gives
+        ``[0.99, 0.9801, 0.970299]``.
+        Use the one the source model uses, and test with rates that vary by period
+        (across an age boundary, say): a flat-rate test can pass a wrong conversion
+        between the two timing conventions, which fails once rates vary.
 
         Parameters
         ----------
@@ -205,7 +218,11 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
             - 1.0 (default): Beginning-of-period [1.0, tpx[0], tpx[1], ...]
             - None: End-of-period [tpx[0], tpx[1], ...]
-            - Other: Custom initial value (e.g., 0.95 for partial cohort)
+            - Other ``a``: ``[a, tpx[0], tpx[1], ...]`` -- ``a`` is the value
+              at the opening boundary only, not a factor on later periods
+              (spec 11.1.19). To scale the whole curve, for a cohort of which
+              95% survived underwriting, multiply it:
+              ``0.95 * af.qx.projection.cumulative_survival()``.
         from_survival : bool, optional
             The column already holds survival-shaped factors (px, persistency),
             not decrement rates. Factors cumulate directly — no ``1 - x``
@@ -316,7 +333,11 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         └───────────────────────┴─────────────────────────────┘
         ```
 
-        **Custom Initial Value (Partial Cohort)**
+        **A Partial Cohort Scales the Whole Curve**
+
+        ``start_at`` is only the opening boundary's value -- ``start_at=0.95``
+        gives ``[0.95, 0.999, 0.997002]``, an in-force that rises at t=1. For a
+        cohort of which 95% survived underwriting, multiply the curve:
 
         ```python
         from gaspatchio import ActuarialFrame
@@ -326,23 +347,22 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         }
         af = ActuarialFrame(data)
 
-        # 95% survived underwriting - use start_at for custom values
-        af.pols_if = af.qx.projection.cumulative_survival(start_at=0.95)
+        # 95% of the cohort survived underwriting: scale the whole curve by 0.95
+        af.pols_if = 0.95 * af.qx.projection.cumulative_survival()
 
         print(af.collect())
         ```
 
         ```text
         shape: (1, 2)
-        ┌───────────────────────┬─────────────────────────┐
-        │ qx                    ┆ pols_if                 │
-        │ ---                   ┆ ---                     │
-        │ list[f64]             ┆ list[f64]               │
-        ╞═══════════════════════╪═════════════════════════╡
-        │ [0.001, 0.002, 0.003] ┆ [0.95, 0.999, 0.997002] │
-        └───────────────────────┴─────────────────────────┘
+        ┌───────────────────────┬───────────────────────────┐
+        │ qx                    ┆ pols_if                   │
+        │ ---                   ┆ ---                       │
+        │ list[f64]             ┆ list[f64]                 │
+        ╞═══════════════════════╪═══════════════════════════╡
+        │ [0.001, 0.002, 0.003] ┆ [0.95, 0.94905, 0.947152] │
+        └───────────────────────┴───────────────────────────┘
         ```
-
         """
         # Handle rate_timing parameter - maps to start_at for backwards compatibility
         if rate_timing is not None:
@@ -366,48 +386,17 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
             # Map rate_timing to start_at
             start_at = 1.0 if rate_timing == "beginning_of_period" else None
-        from gaspatchio.column.expression_proxy import ExpressionProxy
+        from gaspatchio._authoring import emit
 
-        # Get base expression and parent frame
-        base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
+        return emit.call(
+            "projection.cumulative_survival",
+            (_read_as_a_double(self._get_node(), parent_af, opening=False),),
+            parent_af,
+            (("start_at", start_at), ("from_survival", from_survival)),
+        )
 
-        # ColumnProxy and ExpressionProxy both resolve shape, so a composed
-        # per-period expression takes the within-list cumulative product path,
-        # not just a named column.
-        is_list = self._proxy.shape == "list"
-
-        # Apply appropriate calculation based on column type
-        if is_list:
-            # For list columns, apply element-wise cumulative product within each list.
-            # This computes survival[t] = px[0] * px[1] * ... * px[t], where
-            # px[i] = 1 - qx[i] for rate input, or the element itself when the
-            # column is already survival-shaped (from_survival=True) — inverting
-            # twice would lose bits below px = 0.5.
-            factor = pl.element() if from_survival else 1 - pl.element()
-            survival_expr = base_expr.list.eval(factor.cum_prod())
-
-            # Apply start_at shift if requested (for list columns)
-            if start_at is not None:
-                # Prepend start_at value and drop last element to maintain length
-                # This gives beginning-of-period values: [start_at, tpx[0], tpx[1], ...]
-                list_len = survival_expr.list.len()
-                survival_expr = pl.concat_list(
-                    [pl.lit([start_at]), survival_expr]
-                ).list.slice(0, list_len)
-        else:
-            # For scalar columns, apply cumulative product across rows.
-            # User should add .over() for grouping if needed.
-            scalar_factor = base_expr if from_survival else 1 - base_expr
-            survival_expr = scalar_factor.cum_prod()
-
-            # Apply start_at shift if requested (for scalar columns)
-            if start_at is not None:
-                survival_expr = survival_expr.shift(1, fill_value=start_at)
-
-        return ExpressionProxy(survival_expr, parent_af)
-
-    def with_period(self, period: int, value: float | str) -> ExpressionProxy:
+    def with_period(self, period: int, value: float) -> ExpressionProxy:
         """Override value at a specific period (zero-indexed).
 
         Creates a modified version of a list column with a specific element set to
@@ -416,6 +405,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         This method only works with list columns. For scalar columns, use conditional
         logic with `.when()` and `.then()`.
+
+        The override is one number, so a bare string is refused (see
+        `refuse_bare_string_override`) and so is a column: a replacement
+        that varies by policy is a `when/otherwise` conditional.
 
         !!! note "When to use"
             * **Premium Holidays:** Model scheduled breaks in premium payments, such
@@ -431,8 +424,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         ----------
         period : int
             Zero-based index to modify. Negative indices supported (-1 = last period).
-        value : float or str
-            Value to set at that period
+        value : int or float
+            The number to set at that period.
 
         Returns
         -------
@@ -441,6 +434,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         Raises
         ------
             RuntimeError: If proxy not associated with an ActuarialFrame
+            TypeError: If ``value`` is a bare string
             ValueError: If period is out of bounds for the list
 
         Examples
@@ -516,69 +510,28 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         │ [100000, 100000, 100000] ┆ [100000, 150000, 100000] │
         └──────────────────────────┴──────────────────────────┘
         ```
-
         """
-        from gaspatchio.column.expression_proxy import ExpressionProxy
+        from gaspatchio._authoring import emit
 
-        base_expr = self._get_polars_expr()
+        refuse_bare_string_override(value, parameter="value")
+
         parent_af = self._get_parent_frame()
-
-        # Slice the list to extract parts before and after the target period
-        # Polars list.slice doesn't handle negative lengths like Python,
-        # so we need to compute the actual length for negative indices
-        if period < 0:
-            # For negative indices, compute length from list size
-            # period = -1 means last element, so before has length = len - 1
-            # period = -2 means second-to-last, so before has length = len - 2
-            list_len = base_expr.list.len()
-            before_length = (
-                list_len + period
-            )  # period is negative, so this is len - abs(period)
-            before_slice = base_expr.list.slice(0, before_length)
-
-            # After slice: from position (len + period + 1) to end
-            if period == -1:
-                # Last element: no elements after
-                after_slice = base_expr.list.slice(0, 0)  # Empty slice
-            else:
-                # Other negative: take from (period + 1) onwards
-                after_start = list_len + period + 1
-                after_slice = base_expr.list.slice(after_start, None)
-        else:
-            # Positive indices work as expected
-            before_slice = base_expr.list.slice(0, period)
-            after_slice = base_expr.list.slice(period + 1, None)
-
-        # Create a list with single replacement value
-        # We need to ensure it's wrapped as a list column
-        replacement = pl.lit([[value]])
-
-        # Concatenate slices with new value in the middle
-        # concat_list concatenates list elements, so we need to extract the inner list
-        modified_expr = pl.concat_list(
-            [before_slice, replacement.list.first(), after_slice]
+        return emit.call(
+            "projection.with_period",
+            (self._get_node(),),
+            parent_af,
+            (("period", period), ("value", value)),
         )
 
-        # A fixed period index may be out of range for shorter (jagged)
-        # policies. list.slice clamps silently, so the naive concat would
-        # APPEND the replacement and grow such rows — a phantom value at a
-        # period the policy never reaches. Apply the replacement only where the
-        # index exists; leave out-of-range (already-matured) rows unchanged.
-        # Positive t is in-bounds when len > t; negative t (from the end) when
-        # len >= -t.
-        list_len = base_expr.list.len()
-        in_bounds = list_len > period if period >= 0 else list_len >= -period
-        modified_expr = pl.when(in_bounds).then(modified_expr).otherwise(base_expr)
-
-        return ExpressionProxy(modified_expr, parent_af)
-
-    def with_periods(self, updates: dict[int, int | float | str]) -> ExpressionProxy:
+    def with_periods(self, updates: dict[int, int | float]) -> ExpressionProxy:
         """Override values at multiple specific periods.
 
         Creates a modified version of a list column with multiple elements changed
         at once. More efficient and readable than chaining multiple `with_period()`
         calls. Essential for modeling complex benefit schedules, premium patterns,
         and assumption variations across policy durations.
+
+        Each override is one number, on the same terms as `with_period`.
 
         !!! note "When to use"
             * **Benefit Schedules:** Model policies with multiple benefit changes,
@@ -592,9 +545,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         Parameters
         ----------
-        updates : dict[int, int | float | str]
-            Dictionary mapping period indices (zero-based) to new values.
-            Negative indices are supported (-1 = last period).
+        updates : dict[int, int | float]
+            Dictionary mapping period indices (zero-based) to the numbers to
+            set there. Negative indices are supported (-1 = last period).
 
         Returns
         -------
@@ -603,6 +556,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         Raises
         ------
             RuntimeError: If proxy not associated with an ActuarialFrame
+            TypeError: If any override is a bare string
             ValueError: If any period is out of bounds for the list
 
         Examples
@@ -654,26 +608,30 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         │ [1000, 1000, 1000] ┆ [1500, 1000, 5000] │
         └────────────────────┴────────────────────┘
         ```
-
         """
         from gaspatchio.column.expression_proxy import ExpressionProxy
 
-        # Start with the base expression and parent frame
-        result_expr = self._get_polars_expr()
+        # Every override is checked before any of them is applied, and each
+        # refusal names its own dict entry -- `updates[3]`, not `value` --
+        # so the message points at the line the actuary wrote rather than
+        # at whichever entry the chaining below happened to reach first.
+        for period, override in updates.items():
+            refuse_bare_string_override(override, parameter=f"updates[{period}]")
+
         parent_af = self._get_parent_frame()
 
-        # Sort updates by period index to apply them in order
-        # This ensures negative indices work correctly
+        # Sort updates by period index to apply them in order.
+        # This ensures negative indices work correctly.
         sorted_updates = sorted(updates.items(), key=lambda x: x[0])
 
-        # Apply each update sequentially by chaining with_period calls
-        temp_proxy = ExpressionProxy(result_expr, parent_af)
-        temp_accessor = ProjectionColumnAccessor(temp_proxy)
-
+        # Apply each update sequentially by chaining with_period calls. No
+        # expression is built here -- each step nests one Call inside the
+        # next, so the whole sequence of overrides is one op-tree.
+        temp_proxy = ExpressionProxy._from_node(  # noqa: SLF001
+            self._get_node(), parent_af
+        )
         for period, value in sorted_updates:
-            temp_proxy = temp_accessor.with_period(period, value)
-            # Update accessor for next iteration
-            temp_accessor = ProjectionColumnAccessor(temp_proxy)
+            temp_proxy = ProjectionColumnAccessor(temp_proxy).with_period(period, value)
 
         return temp_proxy
 
@@ -683,8 +641,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         Equivalent to shifting back one period. Most common case for
         actuarial projections when referencing prior period values.
 
-        For list columns, shifts values within each list. For scalar columns,
-        shifts across rows (use `.over()` for grouping).
+        For list columns, shifts values within each list. A per-policy (scalar)
+        column is refused on a frame with a projection timeline, where the rows
+        are policies. On a frame without one, where each row is a period, it
+        shifts down the rows (use `.over()` for grouping).
 
         !!! note "When to use"
             * **Inforce Rollforward:** Calculate beginning-of-period inforce values
@@ -797,31 +757,14 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         at_period : Get value at arbitrary period offset
 
         """
-        from gaspatchio.column.column_proxy import ColumnProxy
-        from gaspatchio.column.expression_proxy import ExpressionProxy
+        from gaspatchio._authoring import emit
 
-        base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
-
-        # Read the proxy's cached shape — both ColumnProxy and ExpressionProxy
-        # expose `.shape`, so a single check covers both cases.
-        is_list = (
-            isinstance(self._proxy, (ColumnProxy, ExpressionProxy))
-            and self._proxy.shape == "list"
+        return emit.call(
+            "projection.previous_period",
+            (_a_run_shifted_under(self._get_node(), fill_value, parent_af), fill_value),
+            parent_af,
         )
-
-        if is_list:
-            # For list columns: use list.eval with shift to operate element-wise
-            # This applies shift(1, fill_value) to each element within the list
-            # More efficient and compatible than concat_list approach
-            shifted_expr = base_expr.list.eval(
-                pl.element().shift(1, fill_value=fill_value)
-            )
-        else:
-            # For scalar columns: use shift(1) to get previous period value
-            shifted_expr = base_expr.shift(1, fill_value=fill_value)
-
-        return ExpressionProxy(shifted_expr, parent_af)
 
     def next_period(self, fill_value=0.0) -> ExpressionProxy:
         """Get value from next period (t+1).
@@ -830,8 +773,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         `previous_period()` but useful for certain actuarial calculations
         requiring forward-looking values.
 
-        For list columns, shifts values within each list. For scalar columns,
-        shifts across rows (use `.over()` for grouping).
+        For list columns, shifts values within each list. A per-policy (scalar)
+        column is refused on a frame with a projection timeline, where the rows
+        are policies. On a frame without one, where each row is a period, it
+        shifts down the rows (use `.over()` for grouping).
 
         !!! note "When to use"
             * **Forward-Looking Calculations:** Access next period values for
@@ -912,31 +857,14 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         at_period : Get value at arbitrary period offset
 
         """
-        from gaspatchio.column.column_proxy import ColumnProxy
-        from gaspatchio.column.expression_proxy import ExpressionProxy
+        from gaspatchio._authoring import emit
 
-        base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
-
-        # Read the proxy's cached shape — both ColumnProxy and ExpressionProxy
-        # expose `.shape`, so a single check covers both cases.
-        is_list = (
-            isinstance(self._proxy, (ColumnProxy, ExpressionProxy))
-            and self._proxy.shape == "list"
+        return emit.call(
+            "projection.next_period",
+            (_a_run_shifted_under(self._get_node(), fill_value, parent_af), fill_value),
+            parent_af,
         )
-
-        if is_list:
-            # For list columns: use list.eval with shift to operate element-wise
-            # This applies shift(-1, fill_value) to each element within the list
-            # More efficient and compatible than concat_list approach
-            shifted_expr = base_expr.list.eval(
-                pl.element().shift(-1, fill_value=fill_value)
-            )
-        else:
-            # For scalar columns: use shift(-1) to get next period value
-            shifted_expr = base_expr.shift(-1, fill_value=fill_value)
-
-        return ExpressionProxy(shifted_expr, parent_af)
 
     def at_period(
         self, relative_period: int, fill_value: float | None = 0.0
@@ -951,8 +879,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         complementing the convenience methods `previous_period()` (t-1) and
         `next_period()` (t+1).
 
-        For list columns, shifts values within each list. For scalar columns,
-        shifts across rows (use `.over()` for grouping).
+        For list columns, shifts values within each list. A per-policy (scalar)
+        column is refused on a frame with a projection timeline, where the rows
+        are policies. On a frame without one, where each row is a period, it
+        shifts down the rows (use `.over()` for grouping).
 
         !!! note "When to use"
             * **Multi-Period Lag Analysis:** Access values from multiple periods back
@@ -1093,40 +1023,15 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         next_period : Convenience method for t+1
 
         """
-        from gaspatchio.column.column_proxy import ColumnProxy
-        from gaspatchio.column.expression_proxy import ExpressionProxy
+        from gaspatchio._authoring import emit
 
-        base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
-
-        # Read the proxy's cached shape — both ColumnProxy and ExpressionProxy
-        # expose `.shape`, so a single check covers both cases.
-        is_list = (
-            isinstance(self._proxy, (ColumnProxy, ExpressionProxy))
-            and self._proxy.shape == "list"
+        return emit.call(
+            "projection.at_period",
+            (_a_run_shifted_under(self._get_node(), fill_value, parent_af), fill_value),
+            parent_af,
+            (("relative_period", relative_period),),
         )
-
-        if is_list:
-            # For list columns: use list.eval with shift to operate element-wise
-            # This applies shift(-relative_period, fill_value) within the list
-            # Note: Polars shift convention is opposite, so negate relative_period
-            # at_period(-1) means t-1 (prior), which needs shift(1)
-            # at_period(1) means t+1 (future), which needs shift(-1)
-            if relative_period == 0:
-                # Zero offset: no shift
-                shifted_expr = base_expr
-            else:
-                shifted_expr = base_expr.list.eval(
-                    pl.element().shift(-relative_period, fill_value=fill_value)
-                )
-        else:
-            # For scalar columns: negate relative_period
-            # (Polars uses opposite convention)
-            # at_period(-1) means t-1 (prior), which needs shift(1)
-            # at_period(1) means t+1 (future), which needs shift(-1)
-            shifted_expr = base_expr.shift(-relative_period, fill_value=fill_value)
-
-        return ExpressionProxy(shifted_expr, parent_af)
 
     def broadcast_to_periods(
         self, like: ColumnProxy | ExpressionProxy | pl.Expr | None = None
@@ -1233,41 +1138,48 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         previous_period : Access prior-period values on the same axis
 
         """
+        from gaspatchio._authoring import emit
+        from gaspatchio._semantic.ir import Col
         from gaspatchio.column.column_proxy import ColumnProxy
         from gaspatchio.column.expression_proxy import ExpressionProxy
 
-        base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
+        args: tuple[object, ...] = (self._get_node(),)
 
         if like is not None:
-            if isinstance(like, ColumnProxy):
-                like_expr = like._to_expr()  # noqa: SLF001
-            elif isinstance(like, ExpressionProxy):
-                like_expr = like._expr  # noqa: SLF001
-            elif isinstance(like, pl.Expr):
-                like_expr = like
-            else:
+            if not isinstance(like, (ColumnProxy, ExpressionProxy, pl.Expr)):
                 msg = (
                     "broadcast_to_periods(like=...) expects a list column "
                     f"(ColumnProxy/ExpressionProxy/pl.Expr); got {type(like)}"
                 )
                 raise TypeError(msg)
-            length_expr = like_expr.list.len()
+            args = (*args, like)
         else:
             columns = getattr(parent_af, "columns", None)
-            if columns is not None and "month" not in columns:
+            # A calendar axis stamps `month` where it is honest, and a
+            # fixed-step axis always stamps `step`; either is one value per
+            # boundary, so either gives the period length.
+            schema = getattr(parent_af, "_schema", None) or {}
+            index = (
+                "step"
+                if "month" not in schema and isinstance(schema.get("step"), pl.List)
+                else "month"
+            )
+            if columns is not None and index not in columns:
                 msg = (
                     "broadcast_to_periods() needs a period length and this "
-                    "frame has no `month` period index (projection.set() "
-                    "stamps one). Either set a projection axis first, or "
-                    "pass like=<a list column> to broadcast to that "
-                    "column's lengths."
+                    "frame has no `month` or `step` period index "
+                    "(projection.set() stamps one). Either set a projection "
+                    "axis first, or pass like=<a list column> to broadcast to "
+                    "that column's lengths."
                 )
                 raise ValueError(msg)
-            length_expr = pl.col("month").list.len()
 
-        result_expr = base_expr.repeat_by(length_expr)
-        return ExpressionProxy(result_expr, parent_af)
+            # The axis affects the result just as an explicit `like` does.
+            # Record the read so graph traversal and portable replay see it.
+            args = (*args, Col(index))
+
+        return emit.call("projection.broadcast_to_periods", args, parent_af)
 
     def remaining_sum(self) -> ExpressionProxy:
         """Compute backward cumulative sum (remaining sum from each period to end).
@@ -1290,6 +1202,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             * **Annuity-Due Factors:** Derive the running sum of future
                 discount factors for annuity-due present value calculations.
 
+        A null period makes that position and every earlier position null. A
+        modeller who means nought writes ``af.col.fill_null(0.0)`` before the
+        total, and the graph then records that they said so.
+
         Returns
         -------
         ExpressionProxy
@@ -1303,13 +1219,15 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         ```python
         from gaspatchio import ActuarialFrame
 
-        af = ActuarialFrame({
-            "policy_id": ["P001", "P002"],
-            "coverage_units": [
-                [100, 90, 80, 70, 60],
-                [200, 180, 160, 140, 120],
-            ],
-        })
+        af = ActuarialFrame(
+            {
+                "policy_id": ["P001", "P002"],
+                "coverage_units": [
+                    [100, 90, 80, 70, 60],
+                    [200, 180, 160, 140, 120],
+                ],
+            }
+        )
 
         af.cu_remaining = af.coverage_units.projection.remaining_sum()
 
@@ -1341,68 +1259,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         prospective_value : Present value of future cashflows from each period
 
         """
-        from gaspatchio.column.expression_proxy import ExpressionProxy
+        from gaspatchio._authoring import emit
 
-        base_expr = self._get_polars_expr()
         parent_af = self._get_parent_frame()
-
-        result_expr = base_expr.list.eval(
-            pl.element().reverse().cum_sum().reverse()
-        )
-
-        return ExpressionProxy(result_expr, parent_af)
-
-    def _build_discount_factors(
-        self,
-        cashflow_expr: pl.Expr,
-        discount_rate: float | ExpressionProxy | ColumnProxy | None,
-        discount_factor: ExpressionProxy | ColumnProxy | None,
-    ) -> pl.Expr:
-        """Build discount factor expression from rate or factor input.
-
-        Helper method to construct the v^t discount factor expression from either
-        a discount rate (scalar or list) or pre-computed discount factors.
-
-        """
-        from gaspatchio.column.column_proxy import ColumnProxy
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-
-        if discount_factor is not None:
-            # Use provided discount factors directly
-            if isinstance(discount_factor, ExpressionProxy):
-                return discount_factor._expr  # noqa: SLF001
-            if isinstance(discount_factor, ColumnProxy):
-                return pl.col(discount_factor.name)
-            msg = (
-                "discount_factor must be ExpressionProxy or ColumnProxy, "
-                f"got {type(discount_factor)}"
-            )
-            raise TypeError(msg)
-
-        # Compute discount factors from rate: v(t) = 1 / (1 + r(t))
-        if isinstance(discount_rate, (int, float)):
-            # Scalar rate: v^t = v^t for each period t
-            v = 1.0 / (1.0 + discount_rate)
-            return cashflow_expr.list.eval(
-                pl.lit(v).pow(pl.int_range(0, pl.element().len()))
-            )
-
-        if isinstance(discount_rate, ExpressionProxy):
-            rate_expr = discount_rate._expr  # noqa: SLF001
-        elif isinstance(discount_rate, ColumnProxy):
-            rate_expr = pl.col(discount_rate.name)
-        else:
-            msg = (
-                "discount_rate must be float, ExpressionProxy, or ColumnProxy, "
-                f"got {type(discount_rate)}"
-            )
-            raise TypeError(msg)
-
-        # List column of rates: cumulative product of 1/(1+r)
-        v_expr = rate_expr.list.eval((1.0 / (1.0 + pl.element())).cum_prod())
-        # Shift to get beginning-of-period: [1, v[0], v[0]*v[1], ...]
-        list_len = v_expr.list.len()
-        return pl.concat_list([pl.lit([1.0]), v_expr]).list.slice(0, list_len)
+        return emit.call("projection.remaining_sum", (self._get_node(),), parent_af)
 
     def prospective_value(
         self,
@@ -1413,8 +1273,13 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
     ) -> ExpressionProxy:
         """Calculate prospective (present) value of future cashflows from each time t.
 
-        Computes the present value of all future cashflows from each projection period
-        onwards, using backward recursion: PV(t) = CF(t) + PV(t+1) * v(t).
+        Computes, at each period t, the present value at t of the cashflows from t to
+        the end: a discounted reverse cumulative sum. Under the default
+        ``end_of_period`` timing every cashflow is discounted a full period,
+        PV(t) = v(t) * (CF(t) + PV(t+1)); under ``beginning_of_period`` the period's
+        own cashflow is not, PV(t) = CF(t) + v(t) * PV(t+1). It is summed in one
+        pass, not stepped, so it can differ from a hand-stepped recursion in the
+        last few bits.
 
         This is the standard actuarial "prospective policy value" calculation, essential
         for reserve valuations, embedded value projections, profit testing, and asset
@@ -1430,6 +1295,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
                 for pricing validation and profitability analysis.
             * **Asset Adequacy:** Test sufficiency of assets to cover future liabilities
                 under various interest rate scenarios.
+
+        A null cashflow period makes that position and every earlier position null.
+        A modeller who means nought writes ``af.col.fill_null(0.0)`` before the
+        total, and the graph then records that they said so.
 
         Parameters
         ----------
@@ -1481,6 +1350,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         ValueError
             If both `discount_rate` and `discount_factor` are specified,
             or if neither is specified
+        TypeError
+            If either operand is a bare string, or is otherwise not one of
+            the forms above
 
         Examples
         --------
@@ -1579,7 +1451,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         previous_period : Access prior period values for reserve rollforward
 
         """
-        from gaspatchio.column.expression_proxy import ExpressionProxy
+        from gaspatchio._authoring import emit
 
         # Validate parameters
         if discount_rate is not None and discount_factor is not None:
@@ -1598,118 +1470,129 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             )
             raise ValueError(msg)
 
-        # Get base cashflow expression and parent frame
-        cashflow_expr = self._get_polars_expr()
-        parent_af = self._get_parent_frame()
-
-        # Build discount factor expression
-        v_expr = self._build_discount_factors(
-            cashflow_expr, discount_rate, discount_factor
-        )
-
-        # Compute discounted cashflows: CF(t) * v(t)
-        discounted_cf = cashflow_expr * v_expr
-
-        # Apply reverse -> cumsum -> reverse pattern to get remaining PV.
-        # NaN cashflows propagate: a NaN here means an upstream defect (e.g. a
-        # lookup miss under on_missing="nan") and zeroing it would silently
-        # understate the reserve.
-        remaining_pv = (
-            discounted_cf.list.reverse()
-            .list.eval(pl.element().cum_sum())
-            .list.reverse()
-        )
-
-        # Timing adjustment (F4 Excel-alignment fix).
-        #
-        # `remaining_pv / v_expr` leaves the cashflow at time t undiscounted, so it is
-        # the annuity-DUE value: the cashflow at t is paid at the START of the period,
-        # worth its full face value at the valuation point t, and only later cashflows
-        # are discounted. Multiplying by one extra per-period discount v[t] pushes every
-        # cashflow a full period into the future, giving the ORDINARY annuity value
-        # (cashflow at t paid at the END of the period).
-        #
-        # Excel PV/annuity convention:
-        #   type=1 / beginning_of_period -> annuity-DUE (LARGER, first CF undiscounted)
-        #   type=0 / end_of_period       -> ordinary    (SMALLER, each CF discounted a
-        #                                                 full period)
-        due_result = remaining_pv / v_expr
-
-        # Ordinary (end_of_period) value. Each cashflow slides one period
-        # into the future and must carry ITS OWN period's discount v[s]:
-        #   ord(t) = sum_{s>=t} CF[s] * prod_{u=t..s} v[u]
-        # A single per-position multiplier on the due value (due(t) * v[t])
-        # is only exact for constant rates — with varying rates it discounts
-        # the whole tail by position t's factor instead of each cashflow's.
-        if discount_rate is not None:
-            # Rate inputs: v_expr is the start-anchored cumulative
-            # (prod_{u=0..t-1} v[u]); multiply elementwise by v[t] to get the
-            # end-anchored cumulative prod_{u=0..t}.
-            if isinstance(discount_rate, (int, float)):
-                per_period_v = 1.0 / (1.0 + discount_rate)
-            else:
-                from gaspatchio.column.column_proxy import ColumnProxy
-                from gaspatchio.column.expression_proxy import ExpressionProxy
-
-                if isinstance(discount_rate, ExpressionProxy):
-                    rate_expr = discount_rate._expr  # noqa: SLF001
-                elif isinstance(discount_rate, ColumnProxy):
-                    rate_expr = pl.col(discount_rate.name)
-                else:
-                    rate_expr = discount_rate
-                per_period_v = rate_expr.list.eval(1.0 / (1.0 + pl.element()))
-            v_end = v_expr * per_period_v
-            ordinary_divisor = v_expr
-        else:
-            # discount_factor input is END-anchored by contract (df[0] already
-            # includes one period's discounting), so it IS the end-anchored
-            # cumulative; divide by its shift (df[-1] := 1).
-            v_end = v_expr
-            ordinary_divisor = v_expr.list.eval(
-                pl.element().shift(1, fill_value=1.0)
-            )
-
-        ordinary_result = (
-            (cashflow_expr * v_end)
-            .list.reverse()
-            .list.eval(pl.element().cum_sum())
-            .list.reverse()
-        ) / ordinary_divisor
-
-        if timing == "end_of_period":
-            # Ordinary annuity: every cashflow discounted a full period (SMALLER).
-            result_expr = ordinary_result
-        elif timing == "beginning_of_period":
-            # Annuity-due: first cashflow undiscounted (LARGER).
-            result_expr = due_result
-        else:
+        if timing not in ("beginning_of_period", "end_of_period"):
             msg = (
                 f"Invalid timing value: {timing!r}. "
                 "Must be 'beginning_of_period' or 'end_of_period'"
             )
             raise ValueError(msg)
 
-        return ExpressionProxy(result_expr, parent_af)
+        from gaspatchio.column.column_proxy import ColumnProxy
+        from gaspatchio.column.expression_proxy import ExpressionProxy
+
+        # A bare string is the one wrong operand that looks right, so it is
+        # answered first and in the framework's one voice for it. The value
+        # half of that answer differs between the two: a discount RATE may
+        # be a constant number, while a FACTOR is one value per period, so
+        # the actuary who wrote a number there is pointed at discount_rate=
+        # rather than at a number this argument would refuse anyway. Neither
+        # takes the date the default phrase would offer -- the type check
+        # below refuses one -- so both name what they actually accept.
+        refuse_bare_string_operand(
+            discount_factor,
+            parameter="discount_factor",
+            value_hint=(
+                "discount_rate=<the rate> instead -- a factor is one value "
+                "per period, never a single number"
+            ),
+        )
+        refuse_bare_string_operand(
+            discount_rate, parameter="discount_rate", value_hint="a number"
+        )
+
+        # Beyond that the two operands are not interchangeable and neither
+        # is anything else. A single number where a factor belongs is a rate
+        # somebody put in the wrong argument, and accepting it would raise
+        # deep inside a list evaluation instead of here. A raw Polars
+        # expression is not on the rate's contract either: the framework
+        # cannot tell whether it is start- or end-anchored, and guessing is
+        # the silent valuation error this method exists to avoid. Both
+        # refusals name the type they got, at the line the actuary wrote.
+        if discount_factor is not None and not isinstance(
+            discount_factor, (ExpressionProxy, ColumnProxy)
+        ):
+            msg = (
+                "discount_factor must be ExpressionProxy or ColumnProxy, "
+                f"got {type(discount_factor)}"
+            )
+            raise TypeError(msg)
+        if discount_rate is not None and not isinstance(
+            discount_rate, (int, float, ExpressionProxy, ColumnProxy)
+        ):
+            msg = (
+                "discount_rate must be float, ExpressionProxy, or ColumnProxy, "
+                f"got {type(discount_rate)}"
+            )
+            raise TypeError(msg)
+
+        # Which of the two the actuary supplied is part of what the formula
+        # MEANS -- a rate is start-anchored and a factor is end-anchored, and
+        # the end-of-period adjustment differs accordingly -- so it is stamped
+        # on the node rather than re-derived from the operand's type later.
+        discount_kind = "rate" if discount_rate is not None else "factor"
+        discount = discount_rate if discount_rate is not None else discount_factor
+
+        parent_af = self._get_parent_frame()
+        return emit.call(
+            "projection.prospective_value",
+            (
+                _read_as_a_double(self._get_node(), parent_af, opening=False),
+                _read_as_a_double(discount, parent_af, opening=False),
+            ),
+            parent_af,
+            (("timing", timing), ("discount_kind", discount_kind)),
+        )
 
     def accumulate(
         self,
         *,
-        initial: str | pl.Expr | ExpressionProxy | ColumnProxy,
-        multiply: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
-        add: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
+        initial: float | pl.Expr | ExpressionProxy | ColumnProxy,
+        multiplier: float | pl.Expr | ExpressionProxy | ColumnProxy,
+        addend: float | pl.Expr | ExpressionProxy | ColumnProxy,
+        reverse: bool = False,
     ) -> ExpressionProxy:
-        """Accumulate values using a linear recurrence.
+        """Accumulate values using a linear recurrence, forward or backward.
 
-        Computes ``state[t] = state[t-1] * multiply[t] + add[t]`` for each
+        Computes ``state[t] = state[t-1] * multiplier[t] + addend[t]`` for each
         time step, returning all intermediate states as a list column. This is
         the core primitive for account value rollforwards and other
         state-dependent actuarial projections where cashflows at time *t*
         depend on accumulated state at *t-1*.
 
+        With ``reverse=True`` the same recurrence runs from each policy's own
+        last period back to its first:
+        ``state[t] = state[t+1] * multiplier[t] + addend[t]``, where
+        ``initial`` is the value after the last period. That is a workbook's
+        rollback -- a reserve whose row reads the row below it, ``R[1]C`` --
+        written as one line rather than as "reverse, accumulate, reverse
+        back". Discounting alone has its own name,
+        ``projection.prospective_value``, and so does a suffix sum,
+        ``projection.remaining_sum``; this is for any other linear rollback.
+        The recurrence is stepped, never divided out, so a zero multiplier is
+        an ordinary value in either direction. The direction is on the record:
+        the node carries ``reverse`` whichever way it ran.
+
         The actuary pre-computes the multiplicative and additive components in
         Python, keeping business logic readable, while the Rust kernel handles
         the tight sequential loop per policy. Polars parallelises across
         policies automatically.
+
+        All three operands are column-level, so a bare string is refused
+        here as it is everywhere else on a column accessor; see
+        `refuse_bare_string_operand` for the rule.
+
+        All three are numbers, read when the formula is assigned. A number or
+        a null is read as it is, and a Decimal is read as its value. A
+        Boolean, text, a category, a date, a time, a duration and any other
+        type is refused there, because the kernel would read what the engine
+        stores rather than what the column means -- a date as its count of
+        days since 1970-01-01, a category as its code, a flag as 1 or 0. An
+        in-force flag used as a mask is written as the amount it stands
+        for: ``when(af.in_force).then(1.0).otherwise(0.0)``. A length of time
+        is measured into a column first --
+        ``af.valuation_date.excel.days(af.issue_date)`` for days, or
+        ``af.issue_date.excel.yearfrac(af.valuation_date)`` for years -- and
+        text that holds numbers is cast to a number first.
 
         !!! note "When to use"
             * **Account Value Rollforward:** Accumulate account values where
@@ -1724,29 +1607,65 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
                 where management charges are deducted as a proportion of the
                 current fund value.
 
+            * **Reserve Rollback:** Roll a net premium reserve or a
+                discounted value back from the end of each policy's term --
+                a backward recursion, ``V[t] = v[t] * V[t+1] + cf[t]`` --
+                with ``reverse=True``.
+            * **Not a floored rollback:** A backward recursion floored each
+                period -- ``MAX(0, v * V[t+1] + cf)``, a reserve zeroized
+                when it turns negative -- is not this recurrence: the floor is
+                not linear, so ``accumulate`` cannot carry it, and 1.0 has no
+                named form for it.
+
+        A null multiplier or a null addend at position ``t`` makes ``s[t]`` and
+        every later position null -- under ``reverse=True``, every earlier
+        position, because the recurrence then runs toward period zero and
+        that is the direction the missing term would have travelled. A
+        modeller who means nought writes ``af.col.fill_null(0.0)`` before the
+        recurrence, and the graph then records that they said so.
+
         Parameters
         ----------
-        initial : str or pl.Expr or ExpressionProxy or ColumnProxy
+        initial : float or pl.Expr or ExpressionProxy or ColumnProxy
             Initial state per policy (e.g., starting account value). A scalar
-            column with one value per row. Broadcasts when length is 1.
-        multiply : float or str or pl.Expr or ExpressionProxy or ColumnProxy
+            column with one value per row, or one number for every policy.
+            Broadcasts when length is 1. Under ``reverse=True`` this is the
+            value after each policy's last period (e.g., ``0.0`` for a
+            reserve that runs off at the end of the term).
+        multiplier : float or pl.Expr or ExpressionProxy or ColumnProxy
             Multiplicative growth factor per time step (e.g.,
             ``1 + interest_rate``). A list column with one list per policy,
             or a scalar (number or scalar column) — a scalar broadcasts to
-            the ``add`` list's per-policy lengths.
-        add : float or str or pl.Expr or ExpressionProxy or ColumnProxy
+            the ``addend`` list's per-policy lengths.
+        addend : float or pl.Expr or ExpressionProxy or ColumnProxy
             Additive flow per time step (e.g., premiums minus charges, grown
             by the interest factor). A list column with one list per policy,
-            or a scalar — broadcasts to ``multiply``'s per-policy lengths.
+            or a scalar — broadcasts to ``multiplier``'s per-policy lengths.
             When both are lists, inner lengths must match. At least one of
-            ``multiply``/``add`` must be a list: two scalars leave no
+            ``multiplier``/``addend`` must be a list: two scalars leave no
             timeline to broadcast onto, and the growth-free case has a
             closed form (``initial + flow.cum_sum()``).
+        reverse : bool, default False
+            ``False`` runs the recurrence forward from period zero;
+            ``True`` runs it backward from each policy's own last period.
+            The value at position ``t`` is still the state at period ``t``
+            either way, so the result needs no reversing back.
 
         Returns
         -------
         ExpressionProxy
             List column of accumulated values at each time step.
+
+        Raises
+        ------
+        TypeError
+            At the call, if an operand is a bare string, or if ``reverse`` is
+            not ``True`` or ``False``. When the formula is assigned, if an
+            operand resolves to anything but a number, a Boolean, a null or a
+            Decimal.
+        ValueError
+            When the formula is assigned, if ``multiplier`` and ``addend``
+            are both scalar.
 
         Examples
         --------
@@ -1763,9 +1682,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         af = ActuarialFrame(data)
 
         af.av = af.growth.projection.accumulate(
-            initial="av_init",
-            multiply="growth",
-            add="net_flow",
+            initial=af.av_init,
+            multiplier=af.growth,
+            addend=af.net_flow,
         )
         print(af.collect()["av"].to_list())
         # [[1060.0, 1120.6, 1181.8059999999998], [2140.0, 2282.8, 2428.456]]
@@ -1773,7 +1692,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
 
         **Scalar Growth Factor**
 
-        A scalar ``multiply`` broadcasts to the flow's per-policy timeline —
+        A scalar ``multiplier`` broadcasts to the flow's per-policy timeline —
         each policy's list length sets its own repetition count:
 
         ```python
@@ -1786,86 +1705,159 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             }
         )
         af.av = af.net_flow.projection.accumulate(
-            initial="av_init",
-            multiply=1.5,
-            add="net_flow",
+            initial=af.av_init,
+            multiplier=1.5,
+            addend=af.net_flow,
         )
         print(af.collect()["av"].to_list())
         # [[1600.0, 2500.0, 3850.0]]
         ```
 
+        **Reserve Rollback From the End of the Term**
+
+        A workbook column whose row reads the row below it,
+        ``V[t] = v * V[t+1] + cf[t]``, rolled back from zero after each
+        policy's own last period -- the second policy is one period long:
+
+        ```python
+        from gaspatchio import ActuarialFrame
+
+        af = ActuarialFrame(
+            {
+                "cf": [[1.0, 2.0, 3.0], [10.0]],
+                "v": [[0.9, 0.9, 0.9], [0.5]],
+            }
+        )
+        af.reserve = af.cf.projection.accumulate(
+            initial=0.0,
+            multiplier=af.v,
+            addend=af.cf,
+            reverse=True,
+        )
+        print(af.collect()["reserve"].to_list())
+        # [[5.23, 4.7, 3.0], [10.0]]
+        ```
+
         """
-        from gaspatchio.column.column_proxy import ColumnProxy
-        from gaspatchio.column.expression_proxy import ExpressionProxy
-        from gaspatchio.functions.vector import accumulate as _accumulate
+        from gaspatchio._authoring import emit
+
+        # All three are numeric: a date is refused when the formula is
+        # assigned (the kernel would read it as its epoch day, a plausible
+        # number and a meaningless one), so the remedy names only what the
+        # recurrence can actually use.
+        refuse_bare_string_operand(initial, parameter="initial", value_hint="a number")
+        refuse_bare_string_operand(
+            multiplier, parameter="multiplier", value_hint="a number"
+        )
+        refuse_bare_string_operand(addend, parameter="addend", value_hint="a number")
+        # The direction is the calculation, so it is never inferred: a 1, a
+        # "yes" or a NumPy flag is refused rather than read as one.
+        if not isinstance(reverse, bool):
+            msg = (
+                "accumulate(reverse=...) takes True or False, and got "
+                f"{reverse!r} ({type(reverse).__name__}). reverse=False runs "
+                "the recurrence forward from period zero; reverse=True runs it "
+                "back from each policy's own last period. Write the one you mean."
+            )
+            raise TypeError(msg)
 
         parent_af = self._get_parent_frame()
-
-        def _to_expr(
-            param: str | pl.Expr | ExpressionProxy | ColumnProxy,
-        ) -> pl.Expr:
-            if isinstance(param, ExpressionProxy):
-                return param._expr  # noqa: SLF001
-            if isinstance(param, ColumnProxy):
-                return pl.col(param.name)
-            if isinstance(param, str):
-                return pl.col(param)
-            return param
-
-        from gaspatchio.column.shape import resolve_shape
-
-        def _normalise(
-            param: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
-        ) -> tuple[pl.Expr, Shape]:
-            if isinstance(param, int | float) and not isinstance(param, bool):
-                return pl.lit(float(param)), "scalar"
-            if isinstance(param, str):
-                # A bare string is a column name in this signature, but
-                # resolve_shape() deliberately treats raw strings as
-                # ambiguous/unknown — so resolve the converted pl.col
-                # expression instead, which classifies via the schema.
-                expr = _to_expr(param)
-                return expr, resolve_shape(expr, parent_af)
-            return _to_expr(param), resolve_shape(param, parent_af)
-
-        initial_expr = _to_expr(initial)
-        multiply_expr, multiply_shape = _normalise(multiply)
-        add_expr, add_shape = _normalise(add)
-        multiply_expr, add_expr = self._broadcast_accumulate_operands(
-            multiply_expr, multiply_shape, add_expr, add_shape
+        return emit.call(
+            "projection.accumulate",
+            (
+                _read_as_a_double(initial, parent_af, opening=True),
+                _read_as_a_double(multiplier, parent_af, opening=False),
+                _read_as_a_double(addend, parent_af, opening=False),
+            ),
+            parent_af,
+            (("reverse", reverse),),
         )
 
-        result_expr = _accumulate(initial_expr, multiply_expr, add_expr)
-        return ExpressionProxy(result_expr, parent_af)
 
-    @staticmethod
-    def _broadcast_accumulate_operands(
-        multiply_expr: pl.Expr,
-        multiply_shape: Shape,
-        add_expr: pl.Expr,
-        add_shape: Shape,
-    ) -> tuple[pl.Expr, pl.Expr]:
-        """Broadcast a scalar multiply/add over the sibling list's lengths.
+def _read_as_a_double(
+    operand: object, parent_af: ActuarialFrame, *, opening: bool
+) -> object:
+    """Return one operand of a Float64 period operation with the widening it applies.
 
-        A scalar has no period axis of its own, so it borrows the sibling
-        list's per-row lengths — jagged-safe, since each policy's own
-        timeline sets its repetition count (mirrors ``initial=``, which
-        already broadcasts; GSP-156 / gh#128). Two scalars leave no axis to
-        infer; unknown shapes pass through to the kernel's check.
-        """
-        if multiply_shape == "scalar" and add_shape == "list":
-            multiply_expr = multiply_expr.cast(pl.Float64).repeat_by(
-                add_expr.list.len()
-            )
-        elif add_shape == "scalar" and multiply_shape == "list":
-            add_expr = add_expr.cast(pl.Float64).repeat_by(multiply_expr.list.len())
-        elif multiply_shape == "scalar" and add_shape == "scalar":
-            msg = (
-                "accumulate() needs a per-period axis: multiply and add are "
-                "both scalar, so there is no timeline to broadcast onto. "
-                "Pass at least one list column (one value per period) — or, "
-                "for growth-free accumulation, use the closed form: "
-                "initial + flow.cum_sum()."
-            )
-            raise ValueError(msg)
-        return multiply_expr, add_expr
+    The rule section 11.1.20 states for ``accumulate``, and the one
+    ``cumulative_survival``, ``prospective_value`` and a period shift under a
+    decimal fill follow too: each runs in doubles, and an integer operand
+    handed to one is widened on the record, never silently in the engine.
+
+    The recurrence runs in doubles, and the kernel widens an integer
+    operand to one on the way in -- an opening balance read from an
+    integer column, a step read from ``af.month``. The record used to
+    carry the integer column bare, so the tree said ``projection.accumulate``
+    over an ``i64`` where section 11.1.20 states the operation over Float64
+    only, and a reader holding the published vocabulary refused the line
+    and every calculation downstream of it. The widening is real, so the
+    record now states it: an integer operand reaches the tree as
+    ``to_float(...)``, the checked widening section 11.1.38 defines, which
+    refuses an integer outside ``[-2**53, 2**53]`` rather than rounding it.
+
+    An integer *literal* opening balance (``initial=0``) is recorded as the
+    double it opens the recurrence at, the same number in the type the
+    section states. A literal step stays as written: the section takes a
+    numeric literal there. Anything that is not an integer -- a double, a
+    Boolean, a type the lowering refuses -- is handed on unchanged,
+    and the lowering says what is wrong with it where it already does.
+    """
+    from gaspatchio._authoring.emit import call_node
+    from gaspatchio._semantic.ir import Lit
+    from gaspatchio.frame.lowering.ingress import to_node
+
+    if isinstance(operand, (bool, float, str)) or operand is None:
+        return operand
+    node = to_node(operand)
+    if isinstance(node, Lit):
+        value = node.value
+        if opening and isinstance(value, int) and not isinstance(value, bool):
+            return Lit(float(value))
+        return node
+    element = _element_type(node, parent_af)
+    if element is None or not element.is_integer():
+        return node
+    return call_node("to_float", (node,))
+
+
+def _a_run_shifted_under(
+    run: OpNode, fill_value: object, parent_af: ActuarialFrame
+) -> object:
+    """Return the run a period shift moves, widened where its fill makes it a double.
+
+    A shift keeps the run's own type, so a whole-number run shifted under a
+    whole-number fill (or none) stays the ``i64`` it is. Under a decimal fill
+    -- the ``0.0`` default -- the frame computed the run in doubles without
+    a word: a policy count of 2**53 + 1 came back as 2**53, while the record
+    still named the column ``list[i64]``. That is the widening ``accumulate``
+    states (section 11.1.20), and it is stated the same way here: the run
+    reaches the tree as ``to_float(...)``, which refuses a whole number no
+    double names exactly rather than rounding it.
+    """
+    if not isinstance(fill_value, float):
+        return run
+    return _read_as_a_double(run, parent_af, opening=False)
+
+
+def _element_type(
+    node: OpNode, parent_af: ActuarialFrame
+) -> pl.DataType | DataTypeClass | None:
+    """Return the type one operand holds per value, or None where it cannot be read.
+
+    None is not a verdict: an operand whose type cannot be resolved here is
+    lowered again with the rest of the line, and refused there by name if
+    it has to be.
+    """
+    from gaspatchio.frame.lowering.context import LoweringContext
+    from gaspatchio.frame.lowering.polars import lower_polars
+
+    context = LoweringContext(frame=parent_af)
+    try:
+        dtype = context.dtype_of_expr(lower_polars(node, context))
+    except Exception:  # noqa: BLE001 — the line's own lowering names the fault
+        return None
+    return dtype.inner if isinstance(dtype, pl.List) else dtype
+
+
+# What the API reference documents from this module.
+__all__ = ["ProjectionColumnAccessor"]

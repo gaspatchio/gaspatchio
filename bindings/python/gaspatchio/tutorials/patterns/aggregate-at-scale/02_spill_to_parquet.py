@@ -25,8 +25,7 @@ test. Output is written under this script's own directory and cleaned up —
 NOT under ``/tmp`` (on Linux ``run_to_parquet`` rejects RAM-backed
 filesystems, and a full tmpfs re-OOMs the process anyway).
 
-Reference: batched aggregate-and-stream design (repo ``ref/41-backend-portability``,
-GSP-89 / PR #111).
+Reference: the batched aggregate-and-stream design, shipped in PR #111.
 """
 
 from __future__ import annotations
@@ -63,9 +62,7 @@ def model_fn(af: ActuarialFrame) -> ActuarialFrame:
         frequency="monthly",
     )
     af.projection_date = af.projection.period_dates()
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() supplies month: 0 through PROJECTION_MONTHS, inclusive.
     af.premium_t = af.premium_pp + af.month * 0.0
     af.claim_t = af.claim_pp * af.month
     af.net_cf = af.premium_t - af.claim_t
@@ -101,7 +98,9 @@ def main() -> None:
         print(f"  Parquet shards written: {spill.n_batches}")
         print(f"  Policies written:       {spill.n_policies}")
         print(f"  Rows read back:         {readback_rows}")
-        print(f"  PV net CF (read back):  {readback_pv:>14,.4f}  (direct: {direct_pv:,.4f})")
+        print(
+            f"  PV net CF (read back):  {readback_pv:>14,.4f}  (direct: {direct_pv:,.4f})"
+        )
     finally:
         shutil.rmtree(out, ignore_errors=True)
 

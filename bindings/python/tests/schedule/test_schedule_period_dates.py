@@ -6,8 +6,11 @@
 
 from __future__ import annotations
 
-from datetime import date
+import calendar
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
+
+import pytest
 
 from gaspatchio.schedule._business_day import BusinessDayConvention
 from gaspatchio.schedule._calendar import UnitedStates
@@ -65,6 +68,42 @@ class TestFromCalendarGridPeriodDates:
             date(2027, 12, 31),
             date(2028, 12, 31),
         ]
+
+    def test_annual_month_end_grid_lands_on_leap_day(self) -> None:
+        """An annual month-end grid lands on 29 February in a leap year."""
+        sched = Schedule.from_calendar_grid(
+            start_date=date(2023, 2, 28),
+            n_periods=6,
+            frequency="1Y",
+        )
+        assert sched.period_dates() == [
+            date(2023, 2, 28),
+            date(2024, 2, 29),
+            date(2025, 2, 28),
+            date(2026, 2, 28),
+            date(2027, 2, 28),
+            date(2028, 2, 29),
+            date(2029, 2, 28),
+        ]
+
+    @pytest.mark.parametrize(
+        ("frequency", "n_periods"), [("1M", 60), ("3M", 20), ("6M", 10), ("1Y", 8)]
+    )
+    def test_every_month_cadence_stays_on_month_ends(
+        self, frequency: str, n_periods: int
+    ) -> None:
+        """From any start day over two years, every boundary is a month-end."""
+        for offset in range(0, 731, 7):
+            start = date(2023, 1, 1) + timedelta(days=offset)
+            sched = Schedule.from_calendar_grid(
+                start_date=start, n_periods=n_periods, frequency=frequency
+            )
+            off_end = [
+                d
+                for d in sched.period_dates()
+                if d.day != calendar.monthrange(d.year, d.month)[1]
+            ]
+            assert off_end == [], f"{frequency} from {start}: {off_end}"
 
     def test_business_day_convention_following_skips_us_holiday(self) -> None:
         """Following convention rolls Jan 1 2025 (US holiday) to Jan 2."""

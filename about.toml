@@ -1,0 +1,534 @@
+# cargo-about's configuration, for bindings/python/third-party-notices.txt:
+# the notices of the Rust crates compiled into gaspatchio's extension.
+# scripts/rust_notices.py runs cargo-about with it and says how the file is
+# made; nothing else reads it.
+
+# The licence each crate is taken under, when it offers a choice. MIT first:
+# most crates offer it, and a crate's MIT text carries its own copyright line,
+# which is the notice the licence asks copies to carry. Apache-2.0 next, for
+# the crates that do not offer MIT. The rest are never offered as an
+# alternative to either by any crate the extension links.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "BSL-1.0",
+]
+
+# The four platforms the wheels are built for (CI.yml's manylinux, macos and
+# windows jobs), then the two arm64 platforms pip builds the sdist on for want
+# of a wheel: Windows, which links one crate the others do not, and Linux,
+# which links none. A crate that only some of them use is listed once for all.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+    "aarch64-unknown-linux-gnu",
+]
+
+# Tests, benchmarks and build scripts are not linked into the extension.
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+
+# Read the licence files at a crate's root and nowhere else. Below the root,
+# cargo-about takes any file that looks enough like a licence for the text of
+# one, source files with a licence header among them, and it ignores a file
+# whose licence the crate does not declare, which is what vendored code
+# usually is. So a notice below the root -- a licence file, or a licence
+# written out at the head of a compiled source file under a copyright the
+# crate's own licence does not name -- is carried by a clarification below,
+# or scripts/rust_notices.py says why it need not be.
+max-depth = 1
+
+# Crate by crate, in name order. A clarification replaces cargo-about's
+# reading of the crate: it names the licence and the files that carry it, each
+# held to a SHA-256 of its text, so a file that changes stops the notices
+# being written rather than letting them drift. The `license` of a
+# clarification is the crate's own declared licence unless a comment says
+# otherwise.
+
+# Its MIT text is set in short lines, which cargo-about scores below its
+# threshold and reads as no licence at all.
+[async-stream.clarify]
+license = "MIT"
+
+[[async-stream.clarify.files]]
+path = "LICENSE"
+checksum = "157d381f6304eba77459fc10dfb5b1b22fc0d04e384a32865f32d8e67a34c0eb"
+
+# Its Apache-2.0 text, with the copyright line in its appendix, is LICENSE_A2,
+# a file name cargo-about does not read.
+[blake3.clarify]
+license = "CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception"
+
+[[blake3.clarify.files]]
+path = "LICENSE_A2"
+license = "Apache-2.0"
+checksum = "00fcc7a934ddbc9ece2a7cc063ac788e284b703b1d705ccbba72d462aa97921e"
+
+# Offered under BSD-3-Clause or MIT, and it ships the BSD text only, so it is
+# taken under BSD-3-Clause, whose notice it carries.
+[brotli-decompressor.clarify]
+license = "BSD-3-Clause"
+
+[[brotli-decompressor.clarify.files]]
+path = "LICENSE"
+checksum = "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae"
+
+# One file holds both texts and the copyright line above them; carried whole.
+[chrono.clarify]
+license = "MIT OR Apache-2.0"
+
+[[chrono.clarify.files]]
+path = "LICENSE.txt"
+license = "MIT"
+checksum = "a3d4e565d73d108b07074757733e1dcd3ee20617350a135e1122935881311d50"
+
+# As chrono, with the time zone database's public-domain statement above.
+[chrono-tz.clarify]
+license = "MIT OR Apache-2.0"
+
+[[chrono-tz.clarify.files]]
+path = "LICENSE"
+license = "MIT"
+checksum = "4789210f4df8abc03fce1cddd9c2ba517f184840687f2815d741de282c1aa93a"
+
+# Its Apache-2.0 text has no appendix, which cargo-about does not recognise.
+[constant_time_eq.clarify]
+license = "CC0-1.0 OR MIT-0 OR Apache-2.0"
+
+[[constant_time_eq.clarify.files]]
+path = "LICENSE-APACHE"
+license = "Apache-2.0"
+checksum = "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+
+# Its multi-producer queue, src/mpsc/queue.rs, is Dmitry Vyukov's, under his
+# BSD licence with the views sentence, which asks binaries to reproduce it.
+[futures-channel]
+accepted = ["BSD-2-Clause-Views"]
+
+[futures-channel.clarify]
+license = "(MIT OR Apache-2.0) AND BSD-2-Clause-Views"
+
+[[futures-channel.clarify.files]]
+path = "LICENSE-MIT"
+license = "MIT"
+checksum = "6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd"
+
+[[futures-channel.clarify.files]]
+path = "src/mpsc/queue.rs"
+license = "BSD-2-Clause-Views"
+checksum = "8982be7e032ab245da96855a73c509e7e24834e849c398f980ac1e50f0b34186"
+start = "Copyright (c) 2010-2011 Dmitry Vyukov."
+end = "of Dmitry Vyukov."
+
+# One file holds the MIT and Apache-2.0 texts and the copyright notices of the
+# musl and CORE-MATH code the crate is ported from; carried whole.
+[libm.clarify]
+license = "MIT"
+
+[[libm.clarify.files]]
+path = "LICENSE.txt"
+checksum = "3823dda7cf046602f4b4e77ec8e227863dc4736037cc85bb33d9f19febe16bb7"
+
+# The crate's build script compiles the LZ4 library's C sources, from
+# liblz4/lib, into the extension. They are BSD-2-Clause, which the crate's own
+# MIT declaration does not say. liblz4/lib/LICENSE names 2011-2020; lz4.c's
+# own notice, 2011-2023, is carried beside it for the years since.
+[lz4-sys.clarify]
+license = "MIT AND BSD-2-Clause"
+
+[[lz4-sys.clarify.files]]
+path = "LICENSE"
+license = "MIT"
+checksum = "77633124ac69bf094e06cf9f3157c54d6e51d6b58a38d4f28141947815ecadfa"
+
+[[lz4-sys.clarify.files]]
+path = "liblz4/lib/LICENSE"
+license = "BSD-2-Clause"
+checksum = "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c"
+
+[[lz4-sys.clarify.files]]
+path = "liblz4/lib/lz4.c"
+license = "BSD-2-Clause"
+checksum = "810fe81a95ef1a4b1634746bfc519baefc8ba104ccfeaeab32b986be1407a847"
+start = "Copyright (C) 2011-2023, Yann Collet."
+end = "EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+
+# src/raw_field.rs carries its own MIT notice, 2020, Gilad Naaman and Ralf
+# Jung, beside the crate's 2017 one.
+[memoffset.clarify]
+license = "MIT"
+
+[[memoffset.clarify.files]]
+path = "LICENSE"
+checksum = "3234ac55816264ee7b6c7ee27efd61cf0a1fe775806870e3d9b4c41ea73c5cb1"
+
+[[memoffset.clarify.files]]
+path = "src/raw_field.rs"
+checksum = "9470acfc9c6c34abf136f97d7970a6b23b2163afa725e0d9a35097f7cd6ee06b"
+start = "Copyright (c) 2020 Gilad Naaman, Ralf Jung"
+end = "DEALINGS IN THE\n// SOFTWARE."
+
+# Offered under MIT or Apache-2.0, and it ships the Apache-2.0 text only, so it
+# is taken under Apache-2.0. Its NOTICE.txt is carried beside it: section 4(d)
+# of that licence asks for it.
+[object_store.clarify]
+license = "Apache-2.0"
+
+[[object_store.clarify.files]]
+path = "LICENSE.txt"
+checksum = "240b8a39fdfd2bd3b3539c02e34466334884fc84b056b57f06e9da35323ecd97"
+
+# LICENSE-THIRD-PARTY is the Rust Project Developers' notice, 2014-2020, for
+# the code parking takes from the Rust standard library. It holds no licence
+# text, so cargo-about does not read it as one.
+[parking.clarify]
+license = "Apache-2.0 OR MIT"
+
+[[parking.clarify.files]]
+path = "LICENSE-MIT"
+license = "MIT"
+checksum = "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+
+[[parking.clarify.files]]
+path = "LICENSE-THIRD-PARTY"
+license = "MIT"
+checksum = "9a6d7a3c1b8edcc706c4b6c37f8dae9a77f02c7f9051df603f975db136b55419"
+
+# MIT for polars' own code and Apache-2.0 for what came from arrow2. The crate
+# ships the Apache-2.0 text; its MIT text is the Polars repository's LICENSE,
+# which it points at and does not ship, so that is read from the repository
+# at the commit the crate was published from.
+[polars-arrow.clarify]
+license = "MIT AND Apache-2.0"
+
+[[polars-arrow.clarify.files]]
+path = "LICENSE"
+license = "Apache-2.0"
+checksum = "3b6a01cb120cb12798d0800824736f38011a066c6ddaea1e69e69966308959a9"
+
+[[polars-arrow.clarify.git]]
+path = "LICENSE"
+license = "MIT"
+checksum = "4d20ca90c471a6f3d736055da756db1ce24038c2869a4df5c78be5668dafa15b"
+
+# Ships no licence file; its MIT text is the Polars repository's, as above.
+[polars-ffi.clarify]
+license = "MIT"
+
+[[polars-ffi.clarify.git]]
+path = "LICENSE"
+checksum = "4d20ca90c471a6f3d736055da756db1ce24038c2869a4df5c78be5668dafa15b"
+
+# As polars-arrow, for what came from arrow2 and parquet2.
+[polars-parquet.clarify]
+license = "MIT AND Apache-2.0"
+
+[[polars-parquet.clarify.files]]
+path = "LICENSE"
+license = "Apache-2.0"
+checksum = "d165878db23c4f8124645ce4e536f2b4c32fcedb4ce0c7e15e8a368007844440"
+
+[[polars-parquet.clarify.git]]
+path = "LICENSE"
+license = "MIT"
+checksum = "4d20ca90c471a6f3d736055da756db1ce24038c2869a4df5c78be5668dafa15b"
+
+# Ships no licence file at its root, and its repository has none either. The
+# one it ships is the MIT text of the variable-length integer code under
+# src/thrift/varint; Apache-2.0's standard text stands for the rest.
+[polars-parquet-format.clarify]
+license = "MIT AND Apache-2.0"
+
+[[polars-parquet-format.clarify.files]]
+path = "src/thrift/varint/LICENSE"
+license = "MIT"
+checksum = "96acf5df7e3c47eb9d49c9a3f517749a7521ade2e19ecc3baeef465f0af05273"
+
+# src/buffer.rs carries Daniel Grunwald's MIT notice, 2017, from the
+# rust-cpython code it began as.
+[pyo3.clarify]
+license = "MIT OR Apache-2.0"
+
+[[pyo3.clarify.files]]
+path = "LICENSE-MIT"
+license = "MIT"
+checksum = "afcbe3b2e6b37172b5a9ca869ee4c0b8cdc09316e5d4384864154482c33e5af6"
+
+[[pyo3.clarify.files]]
+path = "src/buffer.rs"
+license = "MIT"
+checksum = "c3c6e7cf08d2f969a5ea0937f2998a53a52fa77191cb6ce246c88dddfa2f078e"
+start = "Copyright (c) 2017 Daniel Grunwald"
+end = "DEALINGS IN THE SOFTWARE."
+
+# Its Unicode tables are generated from the Unicode Character Database, under
+# the licence of the Unicode data files, which its MIT OR Apache-2.0
+# declaration does not say.
+[regex-syntax]
+accepted = ["Unicode-DFS-2016"]
+
+[regex-syntax.clarify]
+license = "(MIT OR Apache-2.0) AND Unicode-DFS-2016"
+
+[[regex-syntax.clarify.files]]
+path = "LICENSE-MIT"
+license = "MIT"
+checksum = "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb"
+
+[[regex-syntax.clarify.files]]
+path = "src/unicode_tables/LICENSE-UNICODE"
+license = "Unicode-DFS-2016"
+checksum = "74db5baf44a41b1000312c673544b3374e4198af5605c7f9080a402cec42cfa3"
+
+# ring's LICENSE says where each part's licence is: ISC for its own code, in
+# LICENSE-other-bits; Apache-2.0 for what came from BoringSSL, in
+# LICENSE-BoringSSL; Apache-2.0 for fiat-crypto's code, in
+# third_party/fiat/LICENSE; and, for the rest, "at the top of the file". The
+# ISC notices at the top of its compiled files whose copyright is not ring's
+# own author's are carried too, one for each holder and year, as the ISC
+# licence asks: Intel 2014, Google 2014, 2015, 2016 and 2019, Trent Clarke
+# 2018, David Judd 2016 and Simon Sapin 2016. src/polyfill/slice.rs, ported
+# from the Rust standard library, carries the MIT permission notice instead,
+# with no copyright line of its own.
+[ring.clarify]
+license = "Apache-2.0 AND ISC AND MIT"
+
+[[ring.clarify.files]]
+path = "LICENSE-other-bits"
+license = "ISC"
+checksum = "f025ccfb7dfb6bdfedc75ca0f67acc69e6fb4998143d834f7c2f38a29989680f"
+
+[[ring.clarify.files]]
+path = "LICENSE-BoringSSL"
+license = "Apache-2.0"
+checksum = "005fc765ddc5115da796cca915baa9557abae13ff35e0a47c47affc56f6c414d"
+
+[[ring.clarify.files]]
+path = "third_party/fiat/LICENSE"
+license = "Apache-2.0"
+checksum = "9eacbcb81be660840c714a560a9d65ba07913db98dd4baf969f78dd499fdd60f"
+
+[[ring.clarify.files]]
+path = "crypto/fipsmodule/ec/ecp_nistz384.h"
+license = "ISC"
+checksum = "4e622e20d04fd552b8b528b950c08a8125b0c7f934f20a2a1df75f8273a17773"
+start = "Copyright (c) 2014, Intel Corporation."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+[[ring.clarify.files]]
+path = "crypto/poly1305/poly1305.c"
+license = "ISC"
+checksum = "ed6813e62aea0e5af661f769415dc44e1d316c37487634181661d9c2ea974391"
+start = "Copyright (c) 2014, Google Inc."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+[[ring.clarify.files]]
+path = "crypto/fipsmodule/ec/ecp_nistz.h"
+license = "ISC"
+checksum = "a4716a1ece644e3e80c2fab29012c567f6c4edb4a5ad8ff0590e42c2c751b34f"
+start = "Copyright (c) 2015, Google Inc."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+[[ring.clarify.files]]
+path = "crypto/fipsmodule/aes/aes_nohw.c"
+license = "ISC"
+checksum = "a3e1cc5cfe20882b769f280a2090cbbee3d33f844901379401b6840f7861f7ae"
+start = "Copyright (c) 2019, Google Inc."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+[[ring.clarify.files]]
+path = "src/debug.rs"
+license = "ISC"
+checksum = "14a67430aef942ebaf72deed89a78834d1725f7c99ebf5cbbad2585a44adeec5"
+start = "Copyright 2018 Trent Clarke."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+[[ring.clarify.files]]
+path = "src/limb.rs"
+license = "ISC"
+checksum = "b146bcea2f89d2e464f3d9cd13f1126e978c6228539bee216627c6366a05ee17"
+start = "Copyright 2016 David Judd."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+[[ring.clarify.files]]
+path = "src/aead/chacha.rs"
+license = "ISC"
+checksum = "dfafd9dadfdf390b9f25a6548cd235b8aeffb7dc63ea023df99e9f1d85232bb9"
+start = "Portions Copyright (c) 2016, Google Inc."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+[[ring.clarify.files]]
+path = "src/digest/sha1.rs"
+license = "ISC"
+checksum = "a56eee0a66e50007cf79d5e29f5995a744cd1b9ca21cd04a9b6819ea81e543bc"
+start = "Copyright 2016 Simon Sapin."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+[[ring.clarify.files]]
+path = "src/polyfill/slice.rs"
+license = "MIT"
+checksum = "bb3d04914b1c366ab90cb8728b67f8d38e9f4d01e2f65929ca8c941f92425a66"
+start = "Permission is hereby granted, free of charge, to any"
+end = "DEALINGS IN THE SOFTWARE."
+
+# Brian Smith's ISC licence, at its root, and two files under other
+# copyrights, carried beside it: Daniel McCarney's, 2023, and Rafael
+# Fernández López's, 2022.
+[rustls-webpki.clarify]
+license = "ISC"
+
+[[rustls-webpki.clarify.files]]
+path = "LICENSE"
+checksum = "5b698ca13897be3afdb7174256fa1574f8c6892b8bea1a66dd6469d3fe27885a"
+
+[[rustls-webpki.clarify.files]]
+path = "src/crl/mod.rs"
+checksum = "d68ec5cbcf80ef02f43343b35f2164c0d9fd20e9dee53251fb3315cc975247e6"
+start = "Copyright 2023 Daniel McCarney."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+[[rustls-webpki.clarify.files]]
+path = "src/subject_name/mod.rs"
+checksum = "9fbef21ebbdf736edcdadb087f3fd76620a8fdea779691524edddbbd8d6ef1a5"
+start = "Copyright 2022 Rafael Fernández López."
+end = "PERFORMANCE OF THIS SOFTWARE."
+
+# Offered under Apache-2.0 or BSL-1.0; taken under Apache-2.0, whose text it
+# ships without the appendix cargo-about looks for.
+[ryu.clarify]
+license = "Apache-2.0 OR BSL-1.0"
+
+[[ryu.clarify.files]]
+path = "LICENSE-APACHE"
+license = "Apache-2.0"
+checksum = "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+
+# Ships no licence text, only COPYING, which holds its copyright lines and
+# names the two licences; carried with MIT's standard text.
+[siphasher.clarify]
+license = "MIT OR Apache-2.0"
+
+[[siphasher.clarify.files]]
+path = "COPYING"
+license = "MIT"
+checksum = "4d40ffd1478e61d103063fe87b133d13b6784688b8855acd7ebc2aeb64095c6d"
+
+# Its Apache-2.0 text has no appendix, which cargo-about does not recognise.
+[sync_wrapper.clarify]
+license = "Apache-2.0"
+
+[[sync_wrapper.clarify.files]]
+path = "LICENSE"
+checksum = "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+
+# Carries a copy of the spin crate's code, under src/spin, with spin's MIT
+# text beside it.
+[tracing-core.clarify]
+license = "MIT"
+
+[[tracing-core.clarify.files]]
+path = "LICENSE"
+checksum = "898b1ae9821e98daf8964c8d6c7f61641f5f5aa78ad500020771c0939ee0dea1"
+
+[[tracing-core.clarify.files]]
+path = "src/spin/LICENSE"
+checksum = "58545fed1565e42d687aecec6897d35c6d37ccb71479a137c0deb2203e125c79"
+
+# The windows crates name their texts license-mit and license-apache-2.0, in
+# lower case, which cargo-about does not read. Microsoft's MIT text carries
+# its copyright line.
+[windows-link.clarify]
+license = "MIT OR Apache-2.0"
+
+[[windows-link.clarify.files]]
+path = "license-mit"
+license = "MIT"
+checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+
+[windows-sys.clarify]
+license = "MIT OR Apache-2.0"
+
+[[windows-sys.clarify.files]]
+path = "license-mit"
+license = "MIT"
+checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+
+[windows-targets.clarify]
+license = "MIT OR Apache-2.0"
+
+[[windows-targets.clarify.files]]
+path = "license-mit"
+license = "MIT"
+checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+
+[windows_aarch64_msvc.clarify]
+license = "MIT OR Apache-2.0"
+
+[[windows_aarch64_msvc.clarify.files]]
+path = "license-mit"
+license = "MIT"
+checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+
+[windows_x86_64_msvc.clarify]
+license = "MIT OR Apache-2.0"
+
+[[windows_x86_64_msvc.clarify.files]]
+path = "license-mit"
+license = "MIT"
+checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+
+# The crate's build script compiles Zstandard's C sources, from zstd/, into
+# the extension. Zstandard is BSD-3-Clause or GPL-2.0-only, and is taken under
+# BSD-3-Clause; its bindings, generated from those sources, carry a
+# BSD-3-Clause text of their own. Two parts of it carry notices of their own:
+# the dictionary builder's suffix sorting, dictBuilder/divsufsort.c, is Yuta
+# Mori's, MIT; and the legacy decoders embed Yann Collet's FSE code under his
+# BSD-2-Clause notices, 2013 to 2016, which zstd_v07.c's covers. The crate's
+# own MIT OR Apache-2.0 declaration says none of this.
+[zstd-sys.clarify]
+license = "(MIT OR Apache-2.0) AND (BSD-3-Clause OR GPL-2.0-only) AND MIT AND BSD-2-Clause"
+
+[[zstd-sys.clarify.files]]
+path = "LICENSE.Mit"
+license = "MIT"
+checksum = "129e8edef29e9abcd2ebabe252f4ef1b1289cdca356bf0040284a2fbccfb96c8"
+
+[[zstd-sys.clarify.files]]
+path = "LICENSE.BSD-3-Clause"
+license = "BSD-3-Clause"
+checksum = "48341f685c87304089aa099b23c386f8bacc519ef555aa7a13e239908907b3fd"
+
+[[zstd-sys.clarify.files]]
+path = "zstd/LICENSE"
+license = "BSD-3-Clause"
+checksum = "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+
+[[zstd-sys.clarify.files]]
+path = "zstd/lib/dictBuilder/divsufsort.c"
+license = "MIT"
+checksum = "0d59773d5f128f7a9e3529aee1d745e6ae1445701f14f62b1d14a3acd233085a"
+start = "Copyright (c) 2003-2008 Yuta Mori All Rights Reserved."
+end = "OTHER DEALINGS IN THE SOFTWARE."
+
+[[zstd-sys.clarify.files]]
+path = "zstd/lib/legacy/zstd_v07.c"
+license = "BSD-2-Clause"
+checksum = "0159997694e6cec50c8883317e5a3e5be05c7c6f24f2216e9b843bb034d2e8ae"
+start = "Copyright (C) 2013-2016, Yann Collet."
+end = "EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+
+# target-lexicon is not linked: it is a dependency of PyO3's procedural
+# macros, which run while the extension compiles. cargo-about reads every
+# crate a normal dependency reaches, procedural macros' included, and refuses
+# to write anything while one of them is unresolved; this resolves it. The
+# notices list only what the extension links (scripts/rust_notices.py).
+[target-lexicon]
+accepted = ["Apache-2.0 WITH LLVM-exception"]

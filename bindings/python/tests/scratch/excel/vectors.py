@@ -7,7 +7,7 @@
 import polars as pl
 
 from gaspatchio import ActuarialFrame
-from gaspatchio.accessors.excel_functions.irr import irr
+from gaspatchio.frame.lowering._excel.irr import irr
 
 # Configure Polars for better terminal display
 pl.Config.set_tbl_cols(-1)  # Show all columns

@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Opio Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# pip-licenses for licence-check.yml's Python runtime closure, with the two
+# packages it needs, at the versions the check last passed with on 3 October
+# 2026. Installed with --require-hashes, so uv checks each file against its
+# SHA-256 and refuses anything this file does not pin. The pure-Python wheel
+# of each, so that one digest serves every platform.
+pip-licenses==5.5.5 --hash=sha256:f4c4c6d9e6a03612cf59f29f19dc8ab54904d82e055b8e191498f2279a224e14
+prettytable==3.18.0 --hash=sha256:b3346e0e6f79180833aebaac088ae926340586cf6d7d991b9eb125b65f72313a
+wcwidth==0.9.1 --hash=sha256:e0c3a1c45c5b9550c6919a4449e95f5b177f6e165786376981db8f1addae9b21

@@ -60,13 +60,19 @@ class TestReturnsProxyAwareExpressions:
         assert len(result["t_years_col"][0]) == 13
 
     def test_concat_list_interop(self) -> None:
-        """The L3-typed tutorial idiom: result passed straight to pl.concat_list."""
+        """The mask, stored, then passed to ``pl.concat_list``.
+
+        Stored first: the schedule read inside a Polars free function would be
+        recorded by Polars' text, which does not name the schedule, so the
+        frame refuses that line and names this form.
+        """
         import polars as pl
 
         af = _af_with_synthetic_projection(n=24)
+        af.anniversary = af.projection.anniversary_mask()
         af.is_anniversary = pl.concat_list(
             [
-                af.projection.anniversary_mask(),
+                pl.col("anniversary"),
                 pl.lit([False], dtype=pl.List(pl.Boolean)),
             ]
         )

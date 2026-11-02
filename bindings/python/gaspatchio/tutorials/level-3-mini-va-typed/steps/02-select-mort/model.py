@@ -7,7 +7,7 @@ Level 3 (Typed Inputs Variant) -> Step 02: Select/Ultimate Mortality
 
 Upgrades simple age-based mortality to a select/ultimate table with
 mortality scalars and sex-based table selection — using MortalityTable
-instead of manual Table.lookup() + .clip().
+instead of a manual Table.lookup() over a separately capped key.
 
 Delta from typed Step 01:
   - SECTION 1: load_assumptions() now loads mortality_select (wrapped in
@@ -20,26 +20,25 @@ Delta from typed Step 01:
 What's different from the untyped level-3-mini-va Step 02:
   - MortalityTable wraps the raw Table, carrying age_basis and structure
     metadata. select_period=24 clamps duration internally — no manual
-    .clip(upper_bound=24) needed.
+    capped key column needed.
   - Table dimension key "age" maps to the parquet column "attained_age"
     so MortalityTable.at() dispatches correctly.
   - Discount factors computed via Curve + Schedule (same as typed base).
 
 Parity gate: output must match level-3-mini-va/steps/02-select-mort/
 expected output when MortalityTable's select_ultimate clamp semantics
-(duration > select_period -> select_period) agree with the original's
-.clip(upper_bound=SELECT_PERIOD_LEN - 1). SELECT_PERIOD_LEN=25, so
-upper_bound=24, identical to clamping at select_period=24.
+(duration > select_period -> select_period) agree with the untyped step's
+when(duration > SELECT_PERIOD_LEN - 1).then(SELECT_PERIOD_LEN - 1) cap.
+SELECT_PERIOD_LEN=25, so that cap is 24, identical to clamping at
+select_period=24.
 """
 
 import datetime
-import math
 from pathlib import Path
 
 import polars as pl
 from gaspatchio import ActuarialFrame, Curve, MortalityTable, when
-from gaspatchio.assumptions import Table
-from gaspatchio.assumptions._dimensions import DataDimension
+from gaspatchio.assumptions import DataDimension, Table
 from gaspatchio.schedule import OneTwelfth, Schedule
 
 # =========================================================================
@@ -71,9 +70,9 @@ def load_assumptions() -> dict:
     """
     # Select mortality: 3 dimensions (table_id, attained_age, duration).
     # DataDimension(rename_to="age") renames the parquet column "attained_age"
-    # to "age" in the Table's internal DataFrame, so that MortalityTable's
-    # _at_select_ultimate can call table.lookup(age=..., duration=..., table_id=...)
-    # with consistent dimension names. "table_id" flows through **other.
+    # to "age" in the Table's internal DataFrame, so that MortalityTable.at()
+    # reads table.lookup(age=..., duration=..., table_id=...) with consistent
+    # dimension names. "table_id" flows through **other.
     mortality_select_raw = Table(
         name="mortality_select",
         source=pl.read_parquet(DATA_DIR / "mortality_select.parquet"),
@@ -86,7 +85,7 @@ def load_assumptions() -> dict:
     )
     # MortalityTable wraps the raw Table with actuarial convention metadata.
     # structure="select_ultimate" + select_period=24 means duration > 24
-    # is clamped to 24 — identical to the original .clip(upper_bound=24).
+    # is clamped to 24 — identical to capping the key at 24 by hand.
     mortality = MortalityTable(
         table=mortality_select_raw,
         age_basis="age_last_birthday",
@@ -148,15 +147,14 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     curve = assumptions["curve"]
 
     # Schedule: generates the per-period year-fraction grid using
-    # OneTwelfth day-count. year_fractions() returns 240 per-period widths
-    # (each = 1/12). Prepend 0.0 and accumulate for 241 cumulative t_years.
+    # OneTwelfth day-count. Declared on the frame below; Section 11 reads
+    # its 241 cumulative t_years values back with af.projection.t_years().
     schedule = Schedule.from_calendar_grid(
         start_date=VALUATION_DATE,
         n_periods=PROJECTION_MONTHS,
         frequency="1M",
         day_count=OneTwelfth(),
     )
-    t_years_list = schedule.cumulative_year_fractions()
 
     # =====================================================================
     # SECTION 2: TIME SETUP
@@ -164,16 +162,13 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
 
-    af.duration_mth_init = (VALUATION_DATE.year * 12 + VALUATION_DATE.month) - (
-        af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
-    )
+    af.duration_mth_init = af.entry_date_parsed.date.months_between(VALUATION_DATE)
 
     af = af.projection.set(schedule=schedule)
     af.projection_date = af.projection.period_dates()
 
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() has already stamped af.month -- elapsed whole months
+    # from the valuation date, 0, 1, 2, ... one per projection period.
 
     af.duration_mth_t = af.duration_mth_init + af.month
     af.duration = af.duration_mth_t // 12
@@ -199,8 +194,9 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
 
     # MortalityTable.at(): convention-aware lookup with internal duration clamping.
-    # select_period=24 means duration > 24 -> 24 (equivalent to original's
-    # .clip(upper_bound=24)). No manual af.duration_capped column needed.
+    # select_period=24 means duration > 24 -> 24, the same rule the untyped step
+    # writes out as when(duration > 24).then(24).otherwise(duration).
+    # No manual af.duration_capped column needed.
     af.base_mort_rate = mortality.at(
         age=af.age,
         duration=af.duration,
@@ -208,9 +204,14 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
 
     # Mortality scalar by duration (calibration adjustment)
+    af.scalar_duration_capped = (
+        when(af.duration > SCALAR_DURATION_CAP)
+        .then(SCALAR_DURATION_CAP)
+        .otherwise(af.duration)
+    )
     af.mort_scalar = mortality_scalars.lookup(
         scalar_id=af.mort_scalar_id,
-        duration=af.duration.clip(upper_bound=SCALAR_DURATION_CAP),
+        duration=af.scalar_duration_capped,
     )
 
     # Final mortality rate = base rate x scalar
@@ -251,9 +252,12 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # =====================================================================
 
     af.combined_decrement = 1.0 - (1.0 - af.mort_rate_mth) * (1.0 - af.lapse_rate_mth)
-    af.survival_factor = 1.0 - af.combined_decrement
-    af.cumulative_survival = af.survival_factor.cum_prod()
-    af.survival_prob = af.cumulative_survival.projection.previous_period(fill_value=1.0)
+    # Cumulative survival from the combined decrement:
+    #   tpx[t] = (1 - q[0]) * (1 - q[1]) * ... * (1 - q[t-1])
+    # rate_timing="beginning_of_period" is the default, and it is the
+    # convention wanted here: the decrement at t has not been applied yet,
+    # so the first element is 1.0 -- every policy in force at t=0.
+    af.survival_prob = af.combined_decrement.projection.cumulative_survival()
 
     af.maturity_month = af.policy_term * 12
 
@@ -294,7 +298,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # SECTION 9: EXPENSES & COMMISSIONS
     # =====================================================================
 
-    af.inflation_factor = (af.month / 12.0 * math.log(1.0 + INFLATION_RATE)).exp()
+    af.inflation_factor = (1.0 + INFLATION_RATE) ** (af.month / 12.0)
     af.expense_acq_total = af.expense_acq * af.pols_new_biz
     af.expense_maint_total = (
         (af.expense_maint / 12.0) * af.pols_if * af.inflation_factor
@@ -328,13 +332,12 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # SECTION 11: DISCOUNT FACTORS & PRESENT VALUES
     # =====================================================================
 
-    # Curve-based discount factors (same as typed base and step 01).
-    # curve.discount_factor(t_years_list) returns list[float], len 241.
-    # pl.lit(Series([list])).first() broadcasts the single list to all rows.
-    disc_factors_list = curve.discount_factor(t_years_list)  # list[float], len 241
-    af.disc_factors = pl.lit(
-        pl.Series("disc_factors", [disc_factors_list], dtype=pl.List(pl.Float64))
-    ).first()
+    # Curve-based discount factors (same as typed base and step 01), read
+    # through the recorded door: curve.discount_factor() on the tracked
+    # af.t_years column, so the artifact names the curve these liabilities
+    # were discounted on (*Audit by default*).
+    af.t_years = af.projection.t_years()
+    af.disc_factors = curve.discount_factor(af.t_years)
 
     af.pv_claims = (af.claims * af.disc_factors).list.sum()
     af.pv_premiums = (af.premiums * af.disc_factors).list.sum()

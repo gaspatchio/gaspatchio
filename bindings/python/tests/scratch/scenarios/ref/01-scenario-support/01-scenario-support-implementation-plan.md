@@ -1,7 +1,5 @@
 # Scenario Support Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Add scenario support to appliedlife model with explicit scenarios (BASE/UP/DOWN) and dynamic shocks (fund return sensitivity).
 
 **Architecture:** Make the base model scenario-ready by checking for `scenario_id` column in lookups. Create two example scripts demonstrating explicit file-based scenarios and dynamic programmatic shocks. Document everything in SCENARIOS.md.

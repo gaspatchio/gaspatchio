@@ -1,0 +1,2158 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "Null boundaries the specification states",
+  "cases": [
+    {
+      "id": "null-ceil-scalar",
+      "covers": [
+        "ceil"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -1.9,
+            null,
+            1.9
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "ceil",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -1.0,
+          null,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-floor-scalar",
+      "covers": [
+        "floor"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -1.9,
+            null,
+            1.9
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "floor",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -2.0,
+          null,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-round-period",
+      "covers": [
+        "round"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.5,
+              null,
+              3.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "round",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "decimals": 0,
+          "mode": "half_to_even"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            2.0,
+            null,
+            4.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-abs-scalar",
+      "covers": [
+        "abs"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -8.0,
+            null,
+            8.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "abs",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          8.0,
+          null,
+          8.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-sign-scalar",
+      "covers": [
+        "sign"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -8.0,
+            null,
+            8.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sign",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -1.0,
+          null,
+          1.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-sqrt-scalar",
+      "covers": [
+        "sqrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            null,
+            9.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sqrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          null,
+          3.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-cbrt-scalar",
+      "covers": [
+        "cbrt"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -8.0,
+            null,
+            27.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cbrt",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          -2.0,
+          null,
+          3.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-exp-scalar",
+      "covers": [
+        "exp"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            -1.0,
+            null,
+            1.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "exp",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.36787944117144233,
+          null,
+          2.718281828459045
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-log-scalar",
+      "covers": [
+        "log"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            null,
+            7.3890560989306495
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          null,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-log10-scalar",
+      "covers": [
+        "log10"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.0,
+            null,
+            100.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log10",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          null,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-log1p-scalar",
+      "covers": [
+        "log1p"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.0,
+            null,
+            6.3890560989306495
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "log1p",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.0,
+          null,
+          2.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-round_sig_figs-scalar",
+      "covers": [
+        "round_sig_figs"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1234.0,
+            null,
+            -1234.0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "round_sig_figs",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "digits": 3
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          1230.0,
+          null,
+          -1230.0
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-sum-period",
+      "covers": [
+        "sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-mean-period",
+      "covers": [
+        "mean"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "mean",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-mean-all-null",
+      "covers": [
+        "mean"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "mean",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-min-period",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-min-is-not-a-nought",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              null,
+              3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-min-all-null",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-max-period",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-max-is-not-a-nought",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              -2.0,
+              null,
+              -3.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-max-all-null",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-sum-all-null",
+      "covers": [
+        "sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-cum_sum-period",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            10.0,
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-cum_sum-period-reverse",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null,
+            70.0,
+            40.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-cum_prod-period",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            10.0,
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-cum_prod-period-reverse",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": true
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null,
+            1200.0,
+            40.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-survival-period",
+      "covers": [
+        "projection.cumulative_survival"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              null,
+              0.3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.cumulative_survival",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "start_at": null,
+          "from_survival": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            0.9,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-survival-period-start_at",
+      "covers": [
+        "projection.cumulative_survival"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.1,
+              null,
+              0.3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.cumulative_survival",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "start_at": 1.0,
+          "from_survival": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            0.9,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-15,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-sum-outer-list",
+      "covers": [
+        "sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              30.0
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          40.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-mean-outer-list",
+      "covers": [
+        "mean"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              30.0
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "mean",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          20.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-min-outer-list",
+      "covers": [
+        "min"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              30.0
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "min",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          10.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-max-outer-list",
+      "covers": [
+        "max"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              30.0
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "max",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          30.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-cum_sum-outer-list",
+      "covers": [
+        "cum_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              30.0
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            10.0,
+            40.0
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-cum_prod-outer-list",
+      "covers": [
+        "cum_prod"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              30.0
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "cum_prod",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            10.0,
+            300.0
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-remaining_sum-period",
+      "covers": [
+        "projection.remaining_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.remaining_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null,
+            70.0,
+            40.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-remaining_sum-all-null",
+      "covers": [
+        "projection.remaining_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              null
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.remaining_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-remaining_sum-outer-list",
+      "covers": [
+        "projection.remaining_sum"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              30.0
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.remaining_sum",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            40.0,
+            30.0
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-prospective_value-period",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "end_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null,
+            70.0,
+            40.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-prospective_value-period-beginning",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              10.0,
+              null,
+              30.0,
+              40.0
+            ]
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.05,
+              0.05,
+              0.05,
+              0.05
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "beginning_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null,
+            68.0952380952381,
+            40.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 1e-12,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-prospective_value-all-null",
+      "covers": [
+        "projection.prospective_value"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              null
+            ],
+            null
+          ]
+        },
+        "rate": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.prospective_value",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          },
+          {
+            "op": "col",
+            "name": "rate"
+          }
+        ],
+        "attrs": {
+          "timing": "end_of_period",
+          "discount_kind": "rate"
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-accumulate-multiplier",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              null,
+              3.0,
+              4.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            21.0,
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-accumulate-addend",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              2.0,
+              2.0,
+              2.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              2.0,
+              null,
+              4.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            21.0,
+            44.0,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-accumulate-first-period",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              3.0,
+              4.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-accumulate-initial",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            null
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              2.0,
+              3.0
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "null-accumulate-all-null",
+      "covers": [
+        "projection.accumulate"
+      ],
+      "inputs": {
+        "initial": {
+          "dtype": "f64",
+          "values": [
+            10.0
+          ]
+        },
+        "multiplier": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              null,
+              null
+            ]
+          ]
+        },
+        "addend": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.0,
+              1.0
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection.accumulate",
+        "args": [
+          {
+            "op": "col",
+            "name": "initial"
+          },
+          {
+            "op": "col",
+            "name": "multiplier"
+          },
+          {
+            "op": "col",
+            "name": "addend"
+          }
+        ],
+        "attrs": {
+          "reverse": false
+        }
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            null,
+            null
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    }
+  ]
+}

@@ -1,0 +1,735 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0"
+  },
+  "created_at": "2026-09-19T01:15:54Z",
+  "model": {
+    "label": null,
+    "source_path": "model.py",
+    "source_sha": "sha256:fcf2fab7548d610827de4517007f205a678b167951d179b9ba938a41b38f8203",
+    "git": null,
+    "model_points": {
+      "path": "model_points.parquet",
+      "fingerprint": "sha256:5858404c8566a6044c1c09bd1cea90bece10d7c2413817e3e9012d0059eecf0a"
+    }
+  },
+  "graph_fingerprint": "sha256:0a1e74786c79678ef7bdca9fba220a63ebc74dfbe6c4903f9dc5157bf771d152",
+  "book": {
+    "columns": [
+      "age",
+      "annual_premium",
+      "expense_rate",
+      "mortality_rate",
+      "policy_id",
+      "sex",
+      "sum_assured"
+    ],
+    "digest": {
+      "omitted": "unavailable",
+      "detail": "Written before documents recorded their book, and the policy data it was exported over is not kept with it."
+    }
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "policy_id",
+      "column": "policy_id",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b398b35427f0f53c4e58d7cef7eec6c65b1f946cfc1d9785381196ef10541a59",
+      "fingerprint": "sha256:78b37d7dd3523f7be5e475317b76036afa247a5657685f9f33267fd531412ef2",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "POL001",
+      "trace": null
+    },
+    {
+      "id": "age",
+      "column": "age",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:6d069d845d916caef77bea838a2a2e88c5ac50290a259af9fbf0001307bd3dc7",
+      "fingerprint": "sha256:45fdcc51b013181d3cc67b681bb53e5943632d7b05001fd07a970bb30fcdef3b",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 30,
+      "trace": null
+    },
+    {
+      "id": "sex",
+      "column": "sex",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:3b9a309985ee0ec4e64aae02d58b82526553ada57402bdb8e1eb4d1874ea3a01",
+      "fingerprint": "sha256:358ef186b4d91c4667ef23ff33a60662011530dfb8d75737eed95bfccbde7a63",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "M",
+      "trace": null
+    },
+    {
+      "id": "sum_assured",
+      "column": "sum_assured",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:386f393064b709225d6b2626f034dcfb114a93c5e0ebfff47cff7e271a5b4565",
+      "fingerprint": "sha256:f80b941ac67fb8d5945a6294f6dbae95c369c8729b48397955e50504701bf817",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 500000,
+      "trace": null
+    },
+    {
+      "id": "annual_premium",
+      "column": "annual_premium",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:c871732c9d661447e9ff3e61cd381cf56b75bd383eb846cb4c1752f014877ba6",
+      "fingerprint": "sha256:3cd1b306e04a30b7f481f49f8c038e2faea9d3b9e94147af5610293756d49f24",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 450,
+      "trace": null
+    },
+    {
+      "id": "mortality_rate",
+      "column": "mortality_rate",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:64f120b2abf9efb4420476dbe0b6cd2f652fa191e45f624913888fe91831eaee",
+      "fingerprint": "sha256:2015f7398ec61fc2d380baff909a8698d3a8ab08efb8d0e051b0d5f724e89005",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 0.001,
+      "trace": null
+    },
+    {
+      "id": "expense_rate",
+      "column": "expense_rate",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:14706b65a897d04e9f99ae42413252a46854e8514f067cc3e98836302841f179",
+      "fingerprint": "sha256:fbaec840f2c2c24dad77b5dd08b568eb2bb49000677596a7933c30be0b827594",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 0.1,
+      "trace": null
+    },
+    {
+      "id": "expected_claims@1",
+      "column": "expected_claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * af.mortality_rate",
+      "reads": [
+        "sum_assured",
+        "mortality_rate"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:11fdb53add6db9643a03638bfb9b35c411b78025e9ee7f961caa79498cf64446",
+      "fingerprint": "sha256:9566235d980dd279e43ff2f819e3458f30793f44f2d7da6ab67e8b442faa8bda",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:84",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "mortality_rate",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 500.0,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(sum_assured) * (mortality_rate)"
+        },
+        {
+          "step": 2,
+          "expr": "((500000)) * ((0.001))",
+          "values": {
+            "mortality_rate": 0.001,
+            "sum_assured": 500000
+          }
+        },
+        {
+          "step": 3,
+          "expr": "500",
+          "result": 500.0
+        }
+      ]
+    },
+    {
+      "id": "expenses@1",
+      "column": "expenses",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.annual_premium * af.expense_rate",
+      "reads": [
+        "annual_premium",
+        "expense_rate"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:ca5a111ca53177573e55df5d11789dce1cd5b460d05ec80b311e418a88c4384c",
+      "fingerprint": "sha256:ea63e96a8d71db884d015e0afc7a313574989eda29b56b9e89e2bd7dd4476c03",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:87",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "annual_premium",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "expense_rate",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 45.0,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(annual_premium) * (expense_rate)"
+        },
+        {
+          "step": 2,
+          "expr": "((450)) * ((0.1))",
+          "values": {
+            "annual_premium": 450,
+            "expense_rate": 0.1
+          }
+        },
+        {
+          "step": 3,
+          "expr": "45",
+          "result": 45.0
+        }
+      ]
+    },
+    {
+      "id": "net_premium@1",
+      "column": "net_premium",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.annual_premium - af.expenses",
+      "reads": [
+        "annual_premium",
+        "expenses@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:696070345370bf1e26d4a14ae620c801129a579bd16686d5f33bd47ada7405a4",
+      "fingerprint": "sha256:7476546b4c8cbc440c50b26a6b690ea6c0fbadfac522961962bd4a872716cdd8",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:90",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "annual_premium",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "expenses@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 405.0,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(annual_premium) - (expenses)"
+        },
+        {
+          "step": 2,
+          "expr": "((450)) - ((45))",
+          "values": {
+            "annual_premium": 450,
+            "expenses": 45.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "405",
+          "result": 405.0
+        }
+      ]
+    },
+    {
+      "id": "profit@1",
+      "column": "profit",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.net_premium - af.expected_claims",
+      "reads": [
+        "net_premium@1",
+        "expected_claims@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:78b955067571cbd390a0bb6c71ee3ba30149852b410639444f969ae149473aea",
+      "fingerprint": "sha256:73e1b8d5162ceab4fee727fd5d9e62db34ba9992f19bc3e8388d32c7d7569dd4",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:97",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "net_premium@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "expected_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": -95.0,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(net_premium) - (expected_claims)"
+        },
+        {
+          "step": 2,
+          "expr": "((405)) - ((500))",
+          "values": {
+            "expected_claims": 500.0,
+            "net_premium": 405.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "-95",
+          "result": -95.0
+        }
+      ]
+    },
+    {
+      "id": "claims_to_premium@1",
+      "column": "claims_to_premium",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.expected_claims / af.annual_premium",
+      "reads": [
+        "expected_claims@1",
+        "annual_premium"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:e39525fc3f6455f44d3b3e9dcb83dfb5ea51fe98c36bf750f3f437809c0db939",
+      "fingerprint": "sha256:1c2bfef3a75bd0282606c275182f4404ab94806e6c3e79c0af7cda338362262f",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:100",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "expected_claims@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "annual_premium",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 1.111111,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(expected_claims) / (annual_premium)"
+        },
+        {
+          "step": 2,
+          "expr": "((500)) / ((450))",
+          "values": {
+            "expected_claims": 500.0,
+            "annual_premium": 450
+          }
+        },
+        {
+          "step": 3,
+          "expr": "1.11111",
+          "result": 1.111111
+        }
+      ]
+    },
+    {
+      "id": "loss_ratio@1",
+      "column": "loss_ratio",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.claims_to_premium.excel.round(4)",
+      "reads": [
+        "claims_to_premium@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:df65099f073d5bb49d7fdd7bc3ebd13c7d09a9a8f6a72522f3b772543b0857d0",
+      "fingerprint": "sha256:9998bfa1d1eefc6c4ec55b52056f6036c3e5c8454e3b871e9daa2cfca1f161f3",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:101",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "claims_to_premium@1",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 1.1111,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "claims_to_premium.round()"
+        },
+        {
+          "step": 2,
+          "expr": "(1.11111).round()",
+          "values": {
+            "claims_to_premium": 1.111111
+          },
+          "comment": "claims_to_premium rounded to 4 places, a tie going to the neighbour further from zero as Excel rounds"
+        },
+        {
+          "step": 3,
+          "expr": "1.1111",
+          "result": 1.1111
+        }
+      ]
+    },
+    {
+      "id": "is_profitable@1",
+      "column": "is_profitable",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "when(af.profit > 0).then(\"Yes\").otherwise(\"No\")",
+      "reads": [
+        "profit@1"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:2cb8f214779e6fe98974488a8af87e01bb71c93e97f3f0389c651a35c1801a10",
+      "fingerprint": "sha256:19832327175d53d286e7aa8dfc741660fdaca2879d47c60030b30a60c14faf81",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "model.py:105",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "profit@1",
+              "transformations": [
+                {
+                  "type": "INDIRECT",
+                  "subtype": "CONDITIONAL"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": "No",
+      "trace": [
+        {
+          "step": 1,
+          "expr": ".when((profit) > (0)).then(\"Yes\").otherwise(\"No\")"
+        },
+        {
+          "step": 2,
+          "expr": ".when(((-95)) > (0)).then(\"Yes\").otherwise(\"No\")",
+          "values": {
+            "profit": -95.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "No",
+          "result": "No"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "sum_assured",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "mortality_rate",
+      "target": "expected_claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "annual_premium",
+      "target": "expenses@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "expense_rate",
+      "target": "expenses@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "annual_premium",
+      "target": "net_premium@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "expenses@1",
+      "target": "net_premium@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "net_premium@1",
+      "target": "profit@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "expected_claims@1",
+      "target": "profit@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "expected_claims@1",
+      "target": "claims_to_premium@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "annual_premium",
+      "target": "claims_to_premium@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "claims_to_premium@1",
+      "target": "loss_ratio@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "profit@1",
+      "target": "is_profitable@1",
+      "relationship": "INDIRECT"
+    }
+  ],
+  "assumptions": [],
+  "holes": [],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "model.py",
+      "fingerprint": "sha256:fcf2fab7548d610827de4517007f205a678b167951d179b9ba938a41b38f8203",
+      "payload": {
+        "text": "# SPDX-FileCopyrightText: 2026 Opio Inc.\n#\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"\nLevel 1: Hello World \u2014 Term Life Portfolio\n\nThe simplest possible gaspatchio model. Three term life policies, no\ntime dimension, five lines of business logic.\n\nRun this first. Once it works, move to Step 01 to add projections.\n\nKey concepts introduced here:\n\n  - ActuarialFrame: a portfolio container \u2014 one row per policy. You read\n    columns as attributes (af.sum_assured) and assign new ones the same\n    way (af.expected_claims = ...). Each line records the formula; no\n    numbers are computed until you ask for them with .collect().\n\n  - Column arithmetic: Python operators (+, -, *, /, **) apply the same\n    formula to every policy at once. Write the formula once; gaspatchio\n    evaluates it across the whole portfolio.\n\n  - when().then().otherwise(): the conditional expression \u2014 the same shape\n    as Excel's IF(condition, value_if_true, value_if_false). Applies the\n    rule policy-by-policy so business logic reads like plain English:\n      when(profit > 0).then(\"Yes\").otherwise(\"No\")\n\n  - .collect(): assignments record what you want to calculate. Call\n    .collect() when you want the actual numbers \u2014 gaspatchio runs all the\n    formulas in one pass and returns the results as a Polars DataFrame.\n\n  - Methods under .projection, .finance, .date, .excel are gaspatchio-specific.\n    Declared operations such as .list.sum() also belong to gaspatchio.\n    Other engine methods, such as .cast(), use .polars_native().\n\nSections:\n  1. Inline Data\n  2. Claims & Premiums\n  3. Profitability\n\nHow to run:\n  uv run python model.py\n\"\"\"\n\nfrom gaspatchio import ActuarialFrame, when\n\n# =========================================================================\n# SECTION 1: INLINE DATA\n# =========================================================================\n\n# Three term life insurance policies \u2014 representative spread of ages/sums\nMODEL_POINTS = {\n    \"policy_id\": [\"POL001\", \"POL002\", \"POL003\"],\n    \"age\": [30, 45, 60],\n    \"sex\": [\"M\", \"F\", \"M\"],\n    \"sum_assured\": [500_000, 250_000, 100_000],\n    \"annual_premium\": [450, 1_200, 2_800],\n    \"mortality_rate\": [0.001, 0.004, 0.015],  # annual qx\n    \"expense_rate\": [0.10, 0.10, 0.10],  # % of premium\n}\n\n\n# =========================================================================\n# MODEL ENTRY POINT\n# =========================================================================\n\n\ndef main(af: ActuarialFrame) -> ActuarialFrame:\n    \"\"\"Run the term life portfolio model.\n\n    Args:\n        af: ActuarialFrame with model points.\n\n    Returns:\n        ActuarialFrame with computed results.\n\n    \"\"\"\n    # =====================================================================\n    # SECTION 2: CLAIMS & PREMIUMS\n    # =====================================================================\n\n    # Expected claims: sum assured weighted by annual mortality rate\n    af.expected_claims = af.sum_assured * af.mortality_rate\n\n    # Expense loading: a percentage of annual premium\n    af.expenses = af.annual_premium * af.expense_rate\n\n    # Net premium: premium income after expenses\n    af.net_premium = af.annual_premium - af.expenses\n\n    # =====================================================================\n    # SECTION 3: PROFITABILITY\n    # =====================================================================\n\n    # Profit: net premium minus expected claims\n    af.profit = af.net_premium - af.expected_claims\n\n    # Loss ratio: what fraction of premium is paid out in claims\n    af.claims_to_premium = af.expected_claims / af.annual_premium\n    af.loss_ratio = af.claims_to_premium.excel.round(4)\n\n    # Profitability flag: when/then/otherwise is gaspatchio's IF()\n    # Works element-wise across all policies simultaneously\n    af.is_profitable = when(af.profit > 0).then(\"Yes\").otherwise(\"No\")\n\n    return af\n\n\n# =========================================================================\n# STANDALONE EXECUTION\n# =========================================================================\n\nif __name__ == \"__main__\":\n    # Standalone entry point. `gspio run-model` never runs this block: it\n    # builds the frame from your model-points file and calls main() directly,\n    # so everything main() needs must be created inside main().\n    af = ActuarialFrame(MODEL_POINTS)\n    result_af = main(af)\n    result = result_af.collect()\n\n    print(\n        result.select(\n            [\"policy_id\", \"expected_claims\", \"profit\", \"loss_ratio\", \"is_profitable\"]\n        )\n    )\n\n    # Expected output:\n    # \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n    # \u2502 policy_id \u2506 expected_claims \u2506 profit   \u2506 loss_ratio \u2506 is_profitable \u2502\n    # \u2502 ---       \u2506 ---             \u2506 ---      \u2506 ---        \u2506 ---           \u2502\n    # \u2502 str       \u2506 f64             \u2506 f64      \u2506 f64        \u2506 str           \u2502\n    # \u255e\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2561\n    # \u2502 POL001    \u2506 500.0           \u2506 -95.0    \u2506 1.1111     \u2506 No            \u2502\n    # \u2502 POL002    \u2506 1000.0          \u2506 80.0     \u2506 0.8333     \u2506 Yes           \u2502\n    # \u2502 POL003    \u2506 1500.0          \u2506 1020.0   \u2506 0.5357     \u2506 Yes           \u2502\n    # \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
+      }
+    }
+  ],
+  "enrichment": {
+    "policy_id": "POL001",
+    "aggregation": null,
+    "periods": null,
+    "filter": null
+  },
+  "policies": [
+    {
+      "policy_id": "POL001",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "row 0 of 3 in model_points.parquet, selected by ':1'"
+    }
+  ],
+  "facets": {},
+  "document_digest": "sha256:a58b079a2c20aab3cda84d8bf0a07163fc33731f8c57cf7cc45a2b6923818543"
+}

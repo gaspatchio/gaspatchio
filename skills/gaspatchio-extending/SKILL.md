@@ -8,7 +8,7 @@ allowed-tools: Bash(uv:*,gspio:*) Read Grep Glob
 
 ## Overview
 
-Gaspatchio is extended through **accessor methods** that compose Polars expressions. Every extension must be vectorized — no Python loops, no `map_elements`, no exceptions.
+Gaspatchio is extended through **accessor methods** that compose gaspatchio's own operations — and Polars expressions only where none exists. Every extension must be vectorized — no Python loops, no `map_elements`, no exceptions.
 
 This skill provides the decision framework and templates. Detailed patterns live in `references/` files — load them as needed.
 
@@ -57,9 +57,10 @@ Before writing anything, determine where your calculation belongs. Work through 
 | Question | If Yes | Action |
 |----------|--------|--------|
 | Does a built-in method already exist? | Stop | Use it. Do not reimplement. Check accessors AND frame-level methods (`quantile`, `sum`, `mean`). |
-| Is it a scenario stress or shock to an assumption? | Stop | Use the `scenarios/shocks` composables. Not an accessor. The current set is `MultiplicativeShock`, `AdditiveShock`, `OverrideShock`, `ClipShock`, `FilteredShock` (WHERE), `TimeConditionalShock` (WHEN), `PipelineShock` (chain), `MaxShock`, `MinShock`, `RelativeFloorShock`, `ParameterShock` — most stresses compose from these. |
+| Is it a scenario stress or shock to an assumption? | Stop | Use the `scenarios/shocks` composables. Not an accessor. The current set is `MultiplicativeShock`, `AdditiveShock`, `OverrideShock`, `ClipShock`, `FilteredShock` (WHERE), `TimeConditionalShock` (WHEN), `PipelineShock` (chain), `MaxShock`, `MinShock` — each aimed with `table=` or, for a scalar, `column=` a model-point column. Most stresses compose from these. |
 | Is it a custom mergeable aggregator (skewness, weighted TVaR, a portfolio Sharpe ratio)? | Stop | Subclass `BaseAggregator` with the `@scenario_aggregator("Name")` decorator. Not an accessor. The aggregator carries its own column, alias, `.over()` partition, `.of()` polars escape, and survives YAML round-trip + parallel merge for free. See `concepts/scenarios/custom-aggregators.md` for the contract. |
 | Is it within-period state-machine logic (COI on NAR, IUL floor/cap, GMDB ratchet)? | Stop | Use `af.projection.rollforward(states={…})`. Not an accessor. The kernel handles the within-period balance dependency the loop was working around. |
+| Is it probability moving between states (disability with recovery, levels of care)? | Stop | Not the rollforward and not an accessor: one `projection.accumulate()` per state on the fixed-step axis (model-building's `recursive-patterns.md`, Pattern 6). |
 | Is it a one-off formula in a single model? | Stop | Use operators inline (`af.x * af.y`). Not an accessor. |
 | Is it too simple for an accessor (single operator like `a / b`)? | Stop | Use operators inline. Accessors are for formulas with branching, parameters, or non-obvious logic. |
 | Does it run once per model (curve fitting, table prep, data loading)? | Stop | Write a Python utility function in the model's setup phase. Not an accessor. |
@@ -80,7 +81,8 @@ Before writing anything, determine where your calculation belongs. Work through 
 | Annuity certain (due/immediate) | Column accessor (`finance.annuity_due()`) | Closed-form formula, reusable |
 | Life-contingent annuity with full mortality | Flag for Rust | Inner loop to omega per policy across millions |
 | Gompertz/Makeham hazard rate | Column accessor | Single formula: `a * exp(b * age) + c` |
-| Solvency II lapse stress | Not an accessor — use `scenarios/shocks` | `PipelineShock(MultiplicativeShock(1.4), ClipShock(1.0))` |
+| Solvency II lapse-up stress | Not an accessor — use `scenarios/shocks` | `PipelineShock(shocks=(MultiplicativeShock(factor=1.5), ClipShock(max_value=1.0)), column="lapse_rate")` — keywords, because a bare number in `ClipShock` is its `min_value` (a *floor*) and a second positional shock in `PipelineShock` lands in `table=` |
+| Standard normal Φ, Excel `NORM.S.DIST` | Not an accessor — already declared | `af.z.norm_cdf()`, `af.z.excel.norm_s_dist()` |
 | Perpetuity PV (`payment / rate`) | Not an accessor — use operators inline | Single operator, too simple for accessor overhead |
 | Solvency II VaR at 99.5% | Not an accessor — use `af.quantile(0.995)` | Already exists as a frame method |
 
@@ -99,9 +101,10 @@ For methods that operate on a single column or expression. The user calls it as 
 Key rules:
 - Inherit from `BaseColumnAccessor`
 - Register with `@register_accessor("name", kind="column")`
-- Accept `proxy: ColumnProxy | ExpressionProxy` in `__init__`
+- Write no `__init__`: the base class takes the column or expression and keeps it as `self._proxy`
 - Return `ExpressionProxy` from every method
-- Handle both scalar and list columns by reading the proxy's cached `.shape` (`proxy.shape == "list"`)
+- **Compose the proxy's own operations first** — `a * (b * self._proxy).exp()` handles a scalar and a list column alike and records as core operations, portable to every engine
+- Only where no declared operation exists, build a Polars expression and wrap it in `ExpressionProxy`, branching on the proxy's cached `.shape` (`proxy.shape == "list"`). That line records as `engine_native`: it runs only on Polars, and so does every calculation that reads it — `af.graph.tiers()` names the line, and `gspio validate --engine jax` names it and every calculation that reads it. On a table read it is refused outright. Say so in the docstring
 
 ### Frame Accessor (less common)
 
@@ -110,7 +113,7 @@ For methods that operate on the entire frame. The user calls it as `af.namespace
 Key rules:
 - Inherit from `BaseFrameAccessor`
 - Register with `@register_accessor("name", kind="frame")`
-- Accept `frame: ActuarialFrame` in `__init__`
+- Write no `__init__`: the base class takes the frame and keeps it as `self._frame`
 - Return `ActuarialFrame` from methods that transform the frame
 
 Templates with real code: [references/accessor-template.md](references/accessor-template.md)
@@ -119,8 +122,8 @@ Templates with real code: [references/accessor-template.md](references/accessor-
 
 ## Non-Negotiable Rules
 
-1. **Compose Polars expressions.** No `map_elements`, `apply`, `iter_rows`, or Python for-loops. Ever.
-2. **Handle both scalar and list columns.** Read the proxy's cached shape (`proxy.shape == "list"`) to detect and branch. Never assume one or the other.
+1. **Compose expressions, never loops.** Declared operations on the proxy first, Polars expressions where none exists. No `map_elements`, `apply`, `iter_rows`, or Python for-loops. Ever.
+2. **Handle both scalar and list columns.** Declared operations do it for you; a Polars-expression body reads the proxy's cached shape (`proxy.shape == "list"`) to detect and branch. Never assume one or the other.
 3. **Return the correct type.** Column methods return `ExpressionProxy`. Frame methods return `ActuarialFrame`.
 4. **Include a docstring with a working example.** These are tested by `uv run pytest --doctest-modules`.
 5. **Look up existing methods first.** `uv run gspio docs "<method>"` is mandatory before you start writing.
@@ -157,6 +160,12 @@ uv run pytest --doctest-modules                 # validate docstring examples
 uv run python3 -c "import gaspatchio; ..."  # inline scripts
 ```
 
+A local accessor file beside the model is found because gspio puts the model's directory on
+`sys.path` while it imports the model file — so import it at the top of the model file, not
+inside `main()`. Each local module the model imports is recorded in the audit file's
+`model.modules` with its sha256, and `gspio verify --model` checks it. Details:
+[references/accessor-template.md](references/accessor-template.md).
+
 ---
 
 ## Reference Files
@@ -179,7 +188,9 @@ Load these when working in the relevant area:
 | "This is a one-off, not worth an accessor" | If the formula has branching, parameters, or non-obvious logic, it IS worth an accessor. |
 | "I'll add the accessor later" | Later never comes. Write it now while you understand the pattern. |
 | "The performance ladder is overkill for this" | 20/20 test agents followed the ladder correctly. You should too. |
-| "I need a for-loop for this sequential calculation" | Check for existing Rust kernels first (accumulate, prospective_value, cumulative_survival). |
+| "I need a for-loop for this sequential calculation" | Check for existing Rust kernels first (accumulate — forward or `reverse=True` — prospective_value, cumulative_survival). |
+| "I'll build the formula in `pl.Expr`, it's what the template shows" | That records `engine_native` and is refused on a table read. Compose the proxy's own operations first. |
+| "I'll import my helper inside `main()`" | gspio puts the model's directory on `sys.path` only while it imports the model file. Import helpers at the top. |
 | "This stress test should be an accessor" | Stresses belong in `scenarios/shocks` composables, not accessors. Invoke `gaspatchio-model-scenarios`. |
 
 ---
@@ -218,10 +229,10 @@ Extension is complete when:
 - [ ] Existing methods checked via `uv run gspio docs`
 - [ ] Accessor inherits from correct base class (`BaseColumnAccessor` or `BaseFrameAccessor`)
 - [ ] Registration uses `@register_accessor` with correct name and kind
-- [ ] `_get_polars_expr()` helper defined (for column accessors) — handles both `ColumnProxy` and `ExpressionProxy`
-- [ ] `_parent is None` guard present with clear error message
-- [ ] All methods compose Polars expressions (no `map_elements`, `apply`, for-loops)
-- [ ] Both scalar and list columns handled (verified via `proxy.shape == "list"` against `ColumnProxy`/`ExpressionProxy`)
+- [ ] Each method composes the proxy's declared operations, or — where none exists — builds a Polars expression through a `_get_polars_expr()` helper (handles both `ColumnProxy` and `ExpressionProxy`) behind a `_parent is None` guard, and its docstring says the line records `engine_native`
+- [ ] `af.graph.tiers()` read on a frame using the accessor: every line you meant to be portable is under `core`
+- [ ] No `map_elements`, `apply`, or for-loops in any method
+- [ ] Both scalar and list columns handled (declared operations, or `proxy.shape == "list"` against `ColumnProxy`/`ExpressionProxy`)
 - [ ] Return types are correct (`ExpressionProxy` for column, `ActuarialFrame` for frame)
 - [ ] Docstring uses NumPy style with working example
 - [ ] Mathematical correctness verified against a known reference value

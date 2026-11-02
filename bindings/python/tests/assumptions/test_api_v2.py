@@ -300,8 +300,13 @@ class TestTableDataProcessing:
 class TestTableLookup:
     """Test table lookup functionality"""
 
-    def test_lookup_with_column_names(self):
-        """Test lookup using column names as strings"""
+    def test_a_bare_string_on_a_numeric_dimension_is_refused(self):
+        """A bare string is a dimension VALUE (#37), and text never equals a number.
+
+        This test once built ``lookup(age="age")`` and checked only that an
+        expression came back -- a read that missed on every row it ever ran.
+        It is refused when written now, naming the dimension.
+        """
         data = pl.DataFrame(
             {
                 "age": [30, 31, 32],
@@ -318,11 +323,8 @@ class TestTableLookup:
             value="qx",
         )
 
-        # Create lookup expression
-        lookup_expr = table.lookup(age="age")
-
-        # Should return a Polars expression
-        assert isinstance(lookup_expr, pl.Expr)
+        with pytest.raises(TypeError, match="dimension 'age' with text"):
+            table.lookup(age="age")
 
     def test_lookup_with_expressions(self):
         """Test lookup using Polars expressions"""

@@ -69,7 +69,7 @@ This skill initializes and runs existing tutorials. It does NOT write model code
 If you catch yourself doing any of the following, STOP and re-read this skill:
 
 - **NEVER write a model from scratch.** Use `gspio tutorial init` to get a working model. The tutorials exist and are tested.
-- **NEVER import internal functions** like `list_conditional`, `accumulate`, or anything from `gaspatchio.functions.vector`. These are internal implementation details.
+- **NEVER import internal functions** like `list_conditional`, `accumulate`, or any other plugin wrapper. They are internal implementation details with no supported import path.
 - **NEVER use raw Polars patterns** like `af.with_columns(pl.col(...))`. The gaspatchio API uses `af.column_name = expression`.
 - **NEVER build projection timelines manually** with `[[i for i in range(n)]] * rows`. Use `af.projection.set(...)`.
 - **NEVER skip `gspio tutorial init`** and improvise. If the command fails, diagnose why — do not fall back to writing code.
@@ -89,8 +89,9 @@ Based on what the user needs, recommend a tutorial:
 | "I'm porting from lifelib or another platform" | Level 4 — Lifelib | `tutorial/level-4-lifelib/base/` |
 | "I need scenario analysis, stress testing, or a sensitivity sweep" | Level 5 — Scenarios | `tutorial/level-5-scenarios/base/` |
 | "I need VaR, CTE, or Solvency II SCR aggregation" | Level 5 — Scenarios | `tutorial/level-5-scenarios/steps/03-sensitivity/` and `04-scenario-comparison/` — the `CTE` and `Quantile` aggregators on `ScenarioRun` cover this directly. |
-| "I need Monte Carlo / stochastic scenarios" | Level 5 step 05 — Stochastic | `tutorial/level-5-scenarios/steps/05-stochastic/` — `ScenarioRun(master_seed=…)` injects a deterministic per-scenario RNG seed; `drivers["rng_seed"]` flows to the model. Same API runs deterministic and stochastic alike. |
+| "I need Monte Carlo / stochastic scenarios" | Level 5 step 05 — Stochastic | `tutorial/level-5-scenarios/steps/05-stochastic/` — `ScenarioRun(master_seed=…)` hands each scenario a deterministic seed as the `rng_seed` column, at any batch size; the model reads it like any other column. Same API runs deterministic and stochastic alike. |
 | "I have UL / IUL / VA with GMxB — charges depend on the running account balance" | Level 3 step 07 + `tutorial/patterns/rollforward-patterns/` | The `af.projection.rollforward(states={…})` state-machine kernel — declare the within-period steps (`.add`, `.charge`, `.grow`, `.deduct_nar`, `.ratchet`); the kernel runs in parallel across every policy. Start with `rollforward-patterns/01_single_state_fund.py`, then `02_multistate_ratchet.py` for VA + GMDB, then `03_lapse_stop.py` for GMWB run-off. L3 step 07 shows the migration from `cum_prod` to rollforward on the L3 mini-VA model. |
+| "My workbook has no dates — a step column 0..T and a time column written `x + A*h` (a teaching sheet, a Thiele or Kolmogorov grid)" | No tutorial level — route to `gaspatchio-model-discovery` | The fixed-step axis, `af.projection.set(n_periods=T, step_years=h)` or `steps_per_year=n`: it stamps `step` `0..T`, gives `t_years()` as `k·h` exactly, and has no dates. Probability moving between states (disability with recovery, levels of care) is one `accumulate()` per state on it, **not** the rollforward — model-building's `recursive-patterns.md`. |
 
 **Default**: If no data provided and user is just exploring, recommend **Level 1 base**.
 
@@ -103,6 +104,7 @@ Ask the user which level fits, or choose based on the data you inspected in Step
 - User explicitly mentions lifelib or platform porting -> Level 4.
 - User mentions deterministic scenarios, stress testing, or sensitivity -> Level 5.
 - User mentions UL/IUL/VA with COI on NAR, floor/cap on credits, or anniversary ratchets — anything where within-period charges depend on the running balance -> point at `tutorial/patterns/rollforward-patterns/` and L3 step 07.
+- User's workbook has a step index and no dates, or the product is multi-state occupancy -> the fixed-step axis row above; route to `gaspatchio-model-discovery`.
 
 ---
 
@@ -167,6 +169,18 @@ Also point the user to:
 - **Tutorial steps**: Each level has a `steps/` directory with progressive enhancements (e.g., `tutorial/level-1-hello-world/steps/01-projections/`).
 - **`gspio docs`**: Search the API documentation from the command line.
 - **`gspio knowledge`**: Look up actuarial concepts and regulatory frameworks.
+
+### The commands they will use next
+
+| Command | What it does, and the default that surprises |
+|---|---|
+| `uv run gspio run-model model.py data.parquet --output-file results.parquet` | Runs the whole book and writes the results Parquet. |
+| `uv run gspio run-single-policy model.py data.parquet P2 --output-file p2.parquet` | One policy — the policy id is **positional**. |
+| `--policy-id-column COL` | Omitted, the id column is the first of `policy_id`, `policy_number`, `policy number`, `policyid`, `pol_id`, `point_id`, `id` the book carries, in any case; a book keyed by another column is refused, naming these. When one column does not name each row once — the same policy ids in two cohorts, or a scenario run — give `--policy-id-column` again for each further column; the results file records the identity it was written under, and `compare`/`diff` pair rows on it. |
+| `uv run gspio calc-graph model.py data.parquet -o model.audit.json` | Writes the audit file. It carries values for **one policy by default** (`:1`, the first row: `One policy: row 0 of 3 in data.parquet, selected by ':1'.`); `--policies all`, `--policies :30` or `--policies id:P2` choose others. The model still runs the whole book. |
+| `uv run gspio verify model.audit.json --model model.py --model-points data.parquet` | Holds the files you have against the audit file; exit 0 only when every check asked for agrees. |
+
+`gaspatchio-model-review` teaches the rest of the audit tools (`diff`, `graph`, `sheet`, `compare`).
 
 ---
 

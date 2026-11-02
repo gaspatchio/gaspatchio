@@ -4,17 +4,26 @@
 
 """Column submodule, providing proxy classes for interacting with Polars expressions."""
 
-# Import the proxy classes from their respective modules
-from .column_proxy import ColumnProxy
+# The escape a column or expression opens into Polars, and the namespaces a
+# column carries, are documented with it; this is where they are imported from.
+from gaspatchio._authoring.escape import (
+    PolarsNative,
+    PolarsNativeDate,
+    PolarsNativeString,
+)
 
-# Import the autopatching function
-from .dispatch import _autopatch
+from ._generated_proxy import ListNamespace, StringNamespace
+from .column_proxy import ColumnProxy
+from .condition_expression import ConditionExpression
 from .expression_proxy import ExpressionProxy
 
-# Apply the autopatching logic to add Polars methods dynamically
-# This must happen after the classes are defined and imported.
-_autopatch(ColumnProxy)
-_autopatch(ExpressionProxy)
-
-# Define the public API for this submodule
-__all__ = ["ColumnProxy", "ExpressionProxy"]
+__all__ = [
+    "ColumnProxy",
+    "ConditionExpression",
+    "ExpressionProxy",
+    "ListNamespace",
+    "PolarsNative",
+    "PolarsNativeDate",
+    "PolarsNativeString",
+    "StringNamespace",
+]

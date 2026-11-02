@@ -30,7 +30,8 @@ class SizingDefaults:
     target_memory_fraction: float = 0.5
     # Streaming-batch search (shape-aware driver) + policy-axis budget sizer:
     ladder: tuple[int, ...] = (1, 4, 16, 64)  # geometric rungs to probe
-    safety_margin: float = 1.3  # inflate measured/predicted peak before the budget comparison
+    # Inflate measured/predicted peak before the budget comparison.
+    safety_margin: float = 1.3
     # Probe-gate inflation for the scenario cross-join under the STREAMING engine:
     # peak is NOT linear-in-batch at high policy counts (Polars #20786) -- a CI cell
     # measured the b=4 rung at ~8.6x the b=1 rung (2.2x above linear extrapolation).

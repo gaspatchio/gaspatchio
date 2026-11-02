@@ -72,9 +72,9 @@ def test_semi_annual_month_steps_by_six() -> None:
     assert _collected("semi-annual", 3)["month"].to_list()[0] == [0, 6, 12, 18]
 
 
-def test_month_dtype_is_int32() -> None:
-    """One dtype on every path — a period index does not need Int64."""
-    assert _collected("monthly", 12).schema["month"] == pl.List(pl.Int32)
+def test_month_dtype_is_int64() -> None:
+    """One dtype on every path, the i64 every integer the record names is."""
+    assert _collected("monthly", 12).schema["month"] == pl.List(pl.Int64)
 
 
 @pytest.mark.parametrize("frequency", ["weekly", "daily"])
@@ -323,7 +323,7 @@ def test_jagged_timeline_month_lengths_differ_per_policy() -> None:
         per_policy=True,
     )
     out = af.collect()
-    assert out.schema["month"] == pl.List(pl.Int32)
+    assert out.schema["month"] == pl.List(pl.Int64)
     lengths = [len(m) for m in out["month"].to_list()]
     assert lengths[0] != lengths[1]
     for months in out["month"].to_list():

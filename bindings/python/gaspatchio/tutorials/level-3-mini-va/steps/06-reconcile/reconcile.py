@@ -104,10 +104,7 @@ def compare(gaspatchio_df: pl.DataFrame, lifelib_df: pl.DataFrame) -> bool:
         # Match by point_id
         lifelib_row = lifelib_df.filter(pl.col("point_id") == point_id)
         if len(lifelib_row) == 0:
-            print(
-                f"{point_id:<8} {'?':<8} {'?':<8} "
-                f"{'N/A':<18} {'':<20} SKIP"
-            )
+            print(f"{point_id:<8} {'?':<8} {'?':<8} {'N/A':<18} {'':<20} SKIP")
             continue
 
         total_count += 1

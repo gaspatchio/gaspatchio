@@ -1,0 +1,746 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0",
+    "versions": {
+      "omitted": "withheld"
+    }
+  },
+  "created_at": "2026-10-20T00:00:00Z",
+  "model": {
+    "label": null,
+    "source_path": null,
+    "source_sha": null,
+    "git": null,
+    "model_points": null
+  },
+  "graph_fingerprint": "sha256:0316dc7475680aea46e073e3ac4f3215e4fd66c5f83b37993df93ac39a0df742",
+  "formulas_fingerprint": "sha256:3d3cdf0ef00b1aa121be843f25a989e7e332f59792539594e64c09f7e85ca3aa",
+  "book": {
+    "columns": [
+      "active",
+      "count",
+      "huge",
+      "issued",
+      "label",
+      "missing",
+      "neg_zero",
+      "policy_id",
+      "rate",
+      "ratio",
+      "small_count",
+      "sum_assured",
+      "tiny",
+      "unbounded"
+    ],
+    "digest": "sha256:81cd3cd4597b897c47a8f3ee7cdf6448ef337a71a403d59fa42f9e098ad746aa"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "policy_id",
+      "column": "policy_id",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b398b35427f0f53c4e58d7cef7eec6c65b1f946cfc1d9785381196ef10541a59",
+      "fingerprint": "sha256:78b37d7dd3523f7be5e475317b76036afa247a5657685f9f33267fd531412ef2",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "P-1",
+      "trace": null
+    },
+    {
+      "id": "sum_assured",
+      "column": "sum_assured",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b643510e5bc2884efbc56ffc1b90fca82f7cc07abb692dd75abb3cf7d1f60b38",
+      "fingerprint": "sha256:c7d944982f89b2858870c74491fff1c28758dbead932cdaa6ba90157ec2b3778",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 100000.0,
+      "trace": null
+    },
+    {
+      "id": "ratio",
+      "column": "ratio",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:4bbb69ac8f02f0e6aa47d6b9089a8cee69a6e034814c5cdb834b561dfeff6d4a",
+      "fingerprint": "sha256:5ef5082eaddaa1f7a8a363d6fa1a73fad09b028e6b508dc8cb7bf58352470bee",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 0.30000000000000004,
+      "trace": null
+    },
+    {
+      "id": "tiny",
+      "column": "tiny",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:51a451b2ec2ff7e68d1471191e966d4f1a8a6f186753f063d63704dd21ad5db0",
+      "fingerprint": "sha256:4929c82b3db52fc0442e82f472bc137ea771efe3a50132da6faee895a90c58b2",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 5e-324,
+      "trace": null
+    },
+    {
+      "id": "huge",
+      "column": "huge",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:197d12d9bca64c6132c5c66f23829de1a1a6c414fdbf2738e239e414cca0a488",
+      "fingerprint": "sha256:0025e2afbd1868940b5c29e2c93b43750e55d5e5521d03c60da49ffd26a93647",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 1.7976931348623157e+308,
+      "trace": null
+    },
+    {
+      "id": "neg_zero",
+      "column": "neg_zero",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:3a495c54a8ce9d7bd0f8569bf9daa69023e589e33875054cebb2a2b19ab3c898",
+      "fingerprint": "sha256:f68bdc9835466fb84792a9b255601f097668b2696babf9392c933fdb7ee1cb81",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": -0.0,
+      "trace": null
+    },
+    {
+      "id": "missing",
+      "column": "missing",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:a51ce2c8a5a13e25c3469f96130fabe9ad04b4cc9c95e8d322290832628dd96e",
+      "fingerprint": "sha256:14ef6e805061a9e2307b205c4c9a6e4978cc5c1c8ee52641b3f089e854bcbcfe",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "NaN",
+      "trace": null
+    },
+    {
+      "id": "unbounded",
+      "column": "unbounded",
+      "version": null,
+      "kind": "input",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:827e1c6f6142adff5a8299b79c8e9d76a082aaa4d3ffb198faca5b4a215fc8dc",
+      "fingerprint": "sha256:1c2dc99246037e942189ea079dd047f121acb0fea32079b4d0b053999005d62d",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "-Infinity",
+      "trace": null
+    },
+    {
+      "id": "count",
+      "column": "count",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:54f09da042e42a17fa4b9b68b2c85ad9b77e422e2d932b45694d9dbd15473284",
+      "fingerprint": "sha256:c6358f651580b09186ce3efae7394c66a684d04d6e6d46bce03d2f2980491911",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": 9007199254740993,
+      "trace": null
+    },
+    {
+      "id": "small_count",
+      "column": "small_count",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:f3a58a1bc408c42d71e380918bf02aec2002585024580721601d80f9424b4115",
+      "fingerprint": "sha256:2fbe5811aaec4b73563d3207ace20ce881012b5b5e691c959b1d66f462576b2e",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": -42,
+      "trace": null
+    },
+    {
+      "id": "label",
+      "column": "label",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:3d101573d41c274cdb2137cd25b58e45e218af8b6bf913d4cb960de921437438",
+      "fingerprint": "sha256:95f344c5dc7dfe25319bfbab30441ba3a84636074ce5a1e99e5c79c0d0273c1d",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "=SUM(A1) <&> \"quoted\" _x0041_ \r\n\u0001 tab\there ",
+      "trace": null
+    },
+    {
+      "id": "issued",
+      "column": "issued",
+      "version": null,
+      "kind": "input",
+      "dtype": "date",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:e3f4b7c69843386b168e9c0d5503bd8e01c79cca5180f98ed3496c9a321dc1b0",
+      "fingerprint": "sha256:d122130d6cd02ee80f1415e61a8b62aa804235bbf5acd146a742d9d5c4afb3fe",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": "2025-01-01",
+      "trace": null
+    },
+    {
+      "id": "active",
+      "column": "active",
+      "version": null,
+      "kind": "input",
+      "dtype": "bool",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:b951412a37237a1251351454197fee19a5ff470075e27b4e87798d5a453b31ae",
+      "fingerprint": "sha256:2754ed37200f71dfd69d93736543fd57df6a0fa0c78d2ef0619f3b93646bb936",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": true,
+      "trace": null
+    },
+    {
+      "id": "rate",
+      "column": "rate",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:28c7282885dbd5ff125d018752b87693a7afecdba4c36f7eac6636b09b557184",
+      "fingerprint": "sha256:d3b270cc77624666d82855bc099bea04250c06374356105e203a23abdc821972",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {},
+      "value_sample": [
+        0.1,
+        0.2,
+        0.30000000000000004,
+        "NaN",
+        "Infinity",
+        -0.0,
+        0.3333333333333333
+      ],
+      "trace": null
+    },
+    {
+      "id": "claims@1",
+      "column": "claims",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.sum_assured * af.ratio",
+      "reads": [
+        "sum_assured",
+        "ratio"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5bbbb5139b480e68812efed36f5e70cd1d6b00f24056035e801219b6911b590b",
+      "fingerprint": "sha256:3381bd1f05286e4191deb90befef200e9e1ba6dd092d03b0748d8df2d952eec9",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_xlsx_export.py:98",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            },
+            {
+              "source": "ratio",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 30000.000000000004,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(sum_assured) * (ratio)"
+        },
+        {
+          "step": 2,
+          "expr": "((100000)) * ((0.3))",
+          "values": {
+            "sum_assured": 100000.0,
+            "ratio": 0.30000000000000004
+          }
+        },
+        {
+          "step": 3,
+          "expr": "30000",
+          "result": 30000.000000000004
+        }
+      ]
+    },
+    {
+      "id": "third@1",
+      "column": "third",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "af.sum_assured / 3.0",
+      "reads": [
+        "sum_assured"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:269d1e68721d23ed149f4ac55556d7c6d2ffb1403cfe5c9c4cc9acd66615c1b6",
+      "fingerprint": "sha256:abbdc053640d75e3c59b58b415e47d24fcb58d87fb89342341c98a4d0a54fbb3",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_xlsx_export.py:99",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "sum_assured",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": 33333.333333333336,
+      "trace": [
+        {
+          "step": 1,
+          "expr": "(sum_assured) / (3)"
+        },
+        {
+          "step": 2,
+          "expr": "((100000)) / (3)",
+          "values": {
+            "sum_assured": 100000.0
+          }
+        },
+        {
+          "step": 3,
+          "expr": "33333.3",
+          "result": 33333.333333333336
+        }
+      ]
+    },
+    {
+      "id": "scaled@1",
+      "column": "scaled",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.rate * 1.0",
+      "reads": [
+        "rate"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:42ec9626653a43dd04c3425f7248ba0c34054f43bd861a76d7e6af36b94282c5",
+      "fingerprint": "sha256:67c9892a9e01d583acec08df45cb3323b43335c5a1dc0e0bd9130536cab69287",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_xlsx_export.py:100",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "rate",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        0.1,
+        0.2,
+        0.30000000000000004,
+        "NaN",
+        "Infinity",
+        -0.0,
+        0.3333333333333333
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "rate.eval((element()) * (1))"
+        },
+        {
+          "step": 2,
+          "expr": "([0.1, 0.2, 0.3, \u2025, 0.333333]).eval((element()) * (1))  (7 periods)",
+          "values": {
+            "rate": "[0.1, 0.2, 0.3, \u2025, 0.333333] (7 periods)"
+          }
+        },
+        {
+          "step": 3,
+          "expr": "[0.1, 0.2, 0.3, \u2025, 0.333333]  (7 periods)",
+          "result": 0.1,
+          "shape": "7 periods \u00b7 first 0.1 \u00b7 last 0.333333 \u00b7 mixed \u00b7 1 without a number (first at t=3) \u00b7 0 negative",
+          "pointer": "no value at t=3 (the first period holding neither a number nor a value at all)",
+          "comment": "``result`` is period 0 of 7."
+        }
+      ]
+    },
+    {
+      "id": "prior@1",
+      "column": "prior",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.rate.projection.previous_period()",
+      "reads": [
+        "rate"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:5a96f168c16355ab7a11696594eb47920713d5311caba0d1cbbe84ecd1de815c",
+      "fingerprint": "sha256:8b02b0da33a302debc5a8f4d8f3c345b9b39652468a96eaf6c70dee65e9b7d15",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_xlsx_export.py:101",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "rate",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION",
+                  "offset": -1
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        0.0,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        "NaN",
+        "Infinity",
+        -0.0
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "rate.eval(element().shift_and_fill(1, 0))"
+        },
+        {
+          "step": 2,
+          "expr": "([0.1, 0.2, 0.3, \u2025, 0.333333]).eval(element().shift_and_fill(1, 0))  (7 periods)",
+          "values": {
+            "rate": "[0.1, 0.2, 0.3, \u2025, 0.333333] (7 periods)"
+          },
+          "comment": "rate read one period back -- t-1 -- with 0.0 at the projection's start"
+        },
+        {
+          "step": 3,
+          "expr": "[0, 0.1, 0.2, \u2025, -0]  (7 periods)",
+          "result": 0.0,
+          "shape": "7 periods \u00b7 first 0 \u00b7 last -0 \u00b7 mixed \u00b7 1 without a number (first at t=4) \u00b7 0 negative",
+          "pointer": "no value at t=4 (the first period holding neither a number nor a value at all)",
+          "comment": "``result`` is period 0 of 7."
+        }
+      ]
+    },
+    {
+      "id": "running@1",
+      "column": "running",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "list[f64]",
+      "shape": "list",
+      "provenance": "assignment",
+      "formula": "af.rate.cum_sum()",
+      "reads": [
+        "rate"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:fc79ac31790ac6118dddbeec98df28c7867f2d4420337e8acbbe8542be61bb84",
+      "fingerprint": "sha256:bf9a063fd7ee013b9ab45ee7c81772795da9c76711ff168d8db3a3441d1a28eb",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "bindings/python/tests/graph/test_xlsx_export.py:102",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "rate",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION",
+                  "periods": {
+                    "from": "first",
+                    "to": 0
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "value_sample": [
+        0.1,
+        0.30000000000000004,
+        0.6000000000000001,
+        "NaN",
+        "NaN",
+        "NaN",
+        "NaN"
+      ],
+      "trace": [
+        {
+          "step": 1,
+          "expr": "rate.eval(.when((element().is_null().cum_sum()) > (0)).then(null).otherwise(element().cum_sum()))"
+        },
+        {
+          "step": 2,
+          "expr": "([0.1, 0.2, 0.3, \u2025, 0.333333]).eval(.when((element().is_null().cum_sum()) > (0)).then(null).otherwise(element().cum_sum()))  (7 periods)",
+          "values": {
+            "rate": "[0.1, 0.2, 0.3, \u2025, 0.333333] (7 periods)"
+          },
+          "comment": "a running total of rate along the projection's periods, from the start of the projection"
+        },
+        {
+          "step": 3,
+          "expr": "[0.1, 0.3, 0.6, \u2025, nan]  (7 periods)",
+          "result": 0.1,
+          "shape": "7 periods \u00b7 first 0.1 \u00b7 last nan \u00b7 \u2191 \u00b7 4 without a number (first at t=3) \u00b7 0 negative",
+          "pointer": "no value at t=3 (the first period holding neither a number nor a value at all)",
+          "comment": "``result`` is period 0 of 7."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "sum_assured",
+      "target": "claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "ratio",
+      "target": "claims@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "sum_assured",
+      "target": "third@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "rate",
+      "target": "scaled@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "rate",
+      "target": "prior@1",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "rate",
+      "target": "running@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [],
+  "holes": [],
+  "boundaries": [],
+  "sources": [
+    {
+      "path": "bindings/python/tests/graph/test_xlsx_export.py",
+      "fingerprint": "sha256:94b35335831981b52744f60befebe93f656e2ef26289600371bc9febff5227e6",
+      "payload": {
+        "text": "# SPDX-FileCopyrightText: 2026 Opio Inc.\n#\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"A record laid out as a workbook holds the record's own doubles, digit for digit.\n\n``render_xlsx`` writes its own OOXML because the Python spreadsheet writers\nkeep sixteen significant digits, and a sheet claiming to show the record's\nnumbers would quietly undo the full precision the record carries. So the\nclaim held here is exact: every numeric cell's text is ``repr`` of the double\nthe record holds and parses back to that double bit for bit, ``-0.0``\nincluded; a NaN or an infinity, which a spreadsheet number cannot hold, is\nthe record's own word for it as text; a whole number past 2^53, which Excel\nwould round, is its digits as text. Read three ways -- the raw XML, openpyxl\nand fastexcel, which is calamine -- and held against the record and against\nthe results file the run wrote.\n\nBeside exactness: the bytes are a function of the record (a committed golden,\n``goldens/one_policy_sheet.json`` laid out to ``goldens/one_policy_sheet.xlsx``),\nthe package is OOXML a reader opens (a schema-light check of every part), no\ncell holds a formula, and the layout follows the record's policy axis.\n\nTo regenerate the golden after a deliberate change to the layout::\n\n    from tests.graph.test_xlsx_export import _GOLDEN_RECORD, _GOLDEN_SHEET\n    from gaspatchio.frame.graph import render_xlsx\n\n    _GOLDEN_SHEET.write_bytes(render_xlsx(_GOLDEN_RECORD))\n\nThe record itself was written by :func:`_tricky_record` with ``created_at``\npinned and the document sealed again; it is committed so that the golden\nholds the writer alone, whatever the exporter does next.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport datetime\nimport io\nimport json\nimport math\nimport re\nimport struct\nimport zipfile\nfrom pathlib import Path\nfrom typing import Any\nfrom xml.etree import ElementTree as ET\n\nimport polars as pl\nimport pytest\n\nfrom gaspatchio import ActuarialFrame\nfrom gaspatchio.frame.graph import (\n    GraphExportConfig,\n    GraphExporter,\n    document_digest_of,\n    render_xlsx,\n    xlsx_export,\n)\n\n_GOLDENS = Path(__file__).resolve().parent / \"goldens\"\n_GOLDEN_RECORD = _GOLDENS / \"one_policy_sheet.json\"\n_GOLDEN_SHEET = _GOLDENS / \"one_policy_sheet.xlsx\"\n_PINNED_AT = \"2026-10-20T00:00:00Z\"\n\n_MAIN = \"{http://schemas.openxmlformats.org/spreadsheetml/2006/main}\"\n_PKG_REL = \"{http://schemas.openxmlformats.org/package/2006/relationships}\"\n_DOC_REL = \"{http://schemas.openxmlformats.org/officeDocument/2006/relationships}\"\n_TYPES = \"{http://schemas.openxmlformats.org/package/2006/content-types}\"\n\n# Doubles that a sixteen-digit writer gets wrong, or that sit at an edge of\n# the type: 0.1 + 0.2, a third, the smallest subnormal, the largest double,\n# a negative zero, and the non-finite three.\n_RATES = [0.1, 0.2, 0.1 + 0.2, math.nan, math.inf, -0.0, 1 / 3]\n_TEXT = '=SUM(A1) <&> \"quoted\" _x0041_ \\r\\n\\x01 tab\\there '\n\n\ndef _tricky_record() -> dict[str, Any]:\n    \"\"\"Return the record of a one-policy model holding every awkward value.\"\"\"\n    book = pl.DataFrame(\n        {\n            \"policy_id\": [\"P-1\"],\n            \"sum_assured\": [100_000.0],\n            \"ratio\": [0.1 + 0.2],\n            \"tiny\": [5e-324],\n            \"huge\": [1.7976931348623157e308],\n            \"neg_zero\": [-0.0],\n            \"missing\": [math.nan],\n            \"unbounded\": [-math.inf],\n            \"count\": [2**53 + 1],\n            \"small_count\": [-42],\n            \"label\": [_TEXT],\n            \"issued\": [datetime.date(2025, 1, 1)],\n            \"active\": [True],\n            \"rate\": [_RATES],\n        }\n    )\n    af = ActuarialFrame(book)\n    af.claims = af.sum_assured * af.ratio\n    af.third = af.sum_assured / 3.0\n    af.scaled = af.rate * 1.0\n    af.prior = af.rate.projection.previous_period()\n    af.running = af.rate.cum_sum()\n    config = GraphExportConfig(policy_id_column=\"policy_id\")\n    record = GraphExporter(af).export(af.collect(), config, versions=\"withheld\")\n    return json.loads(record)\n\n\ndef _pinned(document: dict[str, Any], created_at: str = _PINNED_AT) -> dict[str, Any]:\n    \"\"\"Return the record written at ``created_at``, sealed again over that date.\"\"\"\n    pinned = {key: value for key, value in document.items() if key != \"document_digest\"}\n    pinned[\"created_at\"] = created_at\n    pinned[\"document_digest\"] = document_digest_of(pinned)\n    return pinned\n\n\n# --- reading a workbook back, with nothing but the standard library ----------\n\n\ndef _parts(workbook: bytes) -> dict[str, bytes]:\n    with zipfile.ZipFile(io.BytesIO(workbook)) as archive:\n        return {name: archive.read(name) for name in archive.namelist()}\n\n\ndef _sheet_files(parts: dict[str, bytes]) -> dict[str, str]:\n    \"\"\"Return each sheet's name and the part holding it, in workbook order.\"\"\"\n    book = ET.fromstring(parts[\"xl/workbook.xml\"])  # noqa: S314 -- our own bytes\n    rels = ET.fromstring(parts[\"xl/_rels/workbook.xml.rels\"])  # noqa: S314\n    target = {rel.get(\"Id\"): rel.get(\"Target\") for rel in rels}\n    return {\n        sheet.get(\"name\"): f\"xl/{target[sheet.get(f'{_DOC_REL}id')]}\"\n        for sheet in book.iter(f\"{_MAIN}sheet\")\n    }\n\n\ndef _decoded(text: str) -> str:\n    \"\"\"Return OOXML text with its ``_xHHHH_`` escapes undone.\"\"\"\n    return re.sub(r\"_x([0-9A-Fa-f]{4})_\", lambda m: chr(int(m.group(1), 16)), text)\n\n\ndef _grid(workbook: bytes, sheet: str) -> dict[tuple[int, int], tuple[str, str]]:\n    \"\"\"Return each cell of one sheet as ``(row, column) -> (type, text)``.\n\n    The type is ``n`` for a number, ``b`` for a Boolean and ``s`` for text;\n    the text is the cell's own characters, as the file holds them.\n    \"\"\"\n    parts = _parts(workbook)\n    root = ET.fromstring(parts[_sheet_files(parts)[sheet]])  # noqa: S314\n    grid: dict[tuple[int, int], tuple[str, str]] = {}\n    for cell in root.iter(f\"{_MAIN}c\"):\n        found = re.fullmatch(r\"([A-Z]+)(\\d+)\", cell.get(\"r\", \"\"))\n        assert found is not None\n        column = 0\n        for letter in found.group(1):\n            column = column * 26 + ord(letter) - 64\n        kind = cell.get(\"t\", \"n\")\n        if kind == \"inlineStr\":\n            text = \"\".join(cell.find(f\"{_MAIN}is\").itertext())  # type: ignore[union-attr]\n            grid[int(found.group(2)) - 1, column - 1] = (\"s\", _decoded(text))\n        else:\n            grid[int(found.group(2)) - 1, column - 1] = (\n                kind,\n                cell.find(f\"{_MAIN}v\").text or \"\",  # type: ignore[union-attr]\n            )\n    return grid\n\n\ndef _bits(value: float) -> bytes:\n    return struct.pack(\"<d\", value)\n\n\ndef _assert_holds(cell: tuple[str, str] | None, recorded: object, where: str) -> None:\n    \"\"\"Assert one cell holds exactly what the record holds at that place.\"\"\"\n    if recorded is None:\n        assert cell is None, f\"{where}: a null is a blank cell, found {cell}\"\n        return\n    assert cell is not None, f\"{where}: the record holds {recorded!r}, the cell none\"\n    kind, text = cell\n    if isinstance(recorded, bool):\n        assert (kind, text) == (\"b\", str(int(recorded))), where\n    elif isinstance(recorded, int) and abs(recorded) > 2**53:\n        assert (kind, text) == (\"s\", str(recorded)), where\n    elif isinstance(recorded, int | float):\n        assert kind == \"n\", where\n        written = repr(recorded) if isinstance(recorded, float) else str(recorded)\n        assert text == written, f\"{where}: {text} is not {written}\"\n        assert _bits(float(text)) == _bits(float(recorded)), f\"{where}: {text}\"\n    else:\n        assert kind == \"s\", where\n        assert text == recorded, where\n\n\ndef _nodes(document: dict[str, Any]) -> dict[str, dict[str, Any]]:\n    return {node[\"id\"]: node for node in document[\"nodes\"]}\n\n\n# --- exactness -------------------------------------------------------------------\n\n\ndef test_every_timeline_cell_is_the_records_double_bit_for_bit() -> None:\n    document = _tricky_record()\n    grid = _grid(render_xlsx(document), \"Timeline\")\n    nodes = _nodes(document)\n\n    headers = {column: text for (row, column), (_, text) in grid.items() if row == 0}\n    assert headers[0] == \"period\"\n    per_period = [node for node in document[\"nodes\"] if node[\"shape\"] == \"list\"]\n    assert [headers[at] for at in range(1, len(headers))] == [\n        node[\"id\"] for node in per_period\n    ]\n    checked = 0\n    for column, node_id in headers.items():\n        if column == 0:\n            continue\n        node = nodes[node_id]\n        assert grid.get((1, column), (\"s\", \"\"))[1] == (node[\"formula\"] or \"\")\n        for period, recorded in enumerate(node[\"value_sample\"]):\n            _assert_holds(\n                grid.get((3 + period, column)), recorded, f\"{node_id}[{period}]\"\n            )\n            checked += 1\n    assert checked == 4 * len(_RATES)  # rate, scaled, prior, running\n\n\ndef test_every_scalar_cell_is_the_records_value_bit_for_bit() -> None:\n    document = _tricky_record()\n    grid = _grid(render_xlsx(document), \"Scalars\")\n    rows = {text: row for (row, column), (_, text) in grid.items() if column == 0}\n    for node in document[\"nodes\"]:\n        if node[\"shape\"] == \"list\":\n            assert node[\"id\"] not in rows\n            continue\n        _assert_holds(grid.get((rows[node[\"id\"]], 4)), node[\"value_sample\"], node[\"id\"])\n\n\n@pytest.mark.parametrize(\n    (\"node_id\", \"expected\"),\n    [\n        (\"ratio\", (\"n\", \"0.30000000000000004\")),\n        (\"tiny\", (\"n\", \"5e-324\")),\n        (\"huge\", (\"n\", \"1.7976931348623157e+308\")),\n        (\"neg_zero\", (\"n\", \"-0.0\")),\n        (\"missing\", (\"s\", \"NaN\")),\n        (\"unbounded\", (\"s\", \"-Infinity\")),\n        (\"count\", (\"s\", \"9007199254740993\")),\n        (\"small_count\", (\"n\", \"-42\")),\n        (\"label\", (\"s\", _TEXT)),\n        (\"issued\", (\"s\", \"2025-01-01\")),\n        (\"active\", (\"b\", \"1\")),\n        (\"third@1\", (\"n\", \"33333.333333333336\")),\n    ],\n)\ndef test_awkward_values_are_written_as_the_record_writes_them(\n    node_id: str, expected: tuple[str, str]\n) -> None:\n    grid = _grid(render_xlsx(_tricky_record()), \"Scalars\")\n    rows = {text: row for (row, column), (_, text) in grid.items() if column == 0}\n    assert grid[rows[node_id], 4] == expected\n\n\ndef test_a_negative_zero_keeps_its_sign() -> None:\n    grid = _grid(render_xlsx(_tricky_record()), \"Scalars\")\n    rows = {text: row for (row, column), (_, text) in grid.items() if column == 0}\n    assert math.copysign(1.0, float(grid[rows[\"neg_zero\"], 4][1])) == -1.0\n\n\ndef test_openpyxl_reads_back_the_records_doubles() -> None:\n    openpyxl = pytest.importorskip(\"openpyxl\")\n    document = _tricky_record()\n    sheet = openpyxl.load_workbook(io.BytesIO(render_xlsx(document)))[\"Timeline\"]\n    nodes = _nodes(document)\n    header = [cell.value for cell in sheet[1]]\n    for at, node_id in enumerate(header[1:], start=2):\n        column = [row[at - 1] for row in sheet.iter_rows(min_row=4, values_only=True)]\n        for read, recorded in zip(column, nodes[node_id][\"value_sample\"], strict=True):\n            if isinstance(recorded, str):\n                assert read == recorded\n            else:\n                assert _bits(read) == _bits(recorded), (node_id, read, recorded)\n\n\ndef test_fastexcel_reads_back_the_results_files_own_doubles(tmp_path: Path) -> None:\n    \"\"\"The design's own test: the workbook against the results Parquet, bit for bit.\"\"\"\n    fastexcel = pytest.importorskip(\"fastexcel\")\n    book = pl.DataFrame(\n        {\n            \"policy_id\": [\"A\", \"B\"],\n            \"sum_assured\": [100_000.0, 250_000.0],\n            \"q\": [[0.001, 0.0012, 0.0015, 0.0019], [0.002, 0.0023, 0.0027, 0.0031]],\n        }\n    )\n    af = ActuarialFrame(book)\n    af.survival = (1.0 - af.q).cum_prod()\n    af.claims = af.sum_assured * af.q * af.survival / 3.0\n    results = af.collect()\n    results.write_parquet(tmp_path / \"results.parquet\")\n    record = GraphExporter(af).export(\n        results, GraphExportConfig(policy_id=\"B\", policy_id_column=\"policy_id\")\n    )\n    (tmp_path / \"policy.xlsx\").write_bytes(render_xlsx(record))\n\n    read = (\n        fastexcel.read_excel(tmp_path / \"policy.xlsx\")\n        .load_sheet(\"Timeline\", header_row=0, skip_rows=2)\n        .to_polars()\n    )\n    row = pl.read_parquet(tmp_path / \"results.parquet\").row(1, named=True)\n    for column in (\"q\", \"survival\", \"claims\"):\n        (header,) = [name for name in read.columns if name.split(\"@\")[0] == column]\n        assert [_bits(value) for value in read[header].to_list()] == [\n            _bits(value) for value in row[column]\n        ], column\n\n\ndef test_a_value_sixteen_digits_cannot_hold_is_written_with_seventeen() -> None:\n    \"\"\"The finding the writer exists for: ``.16g`` reads back as another double.\"\"\"\n    grid = _grid(render_xlsx(_tricky_record()), \"Scalars\")\n    rows = {text: row for (row, column), (_, text) in grid.items() if column == 0}\n    text = grid[rows[\"ratio\"], 4][1]\n    assert float(f\"{float(text):.16g}\") != float(text)\n    assert float(text) == 0.1 + 0.2\n\n\n# --- determinism -----------------------------------------------------------------\n\n\ndef test_one_record_lays_out_to_one_file() -> None:\n    document = _pinned(_tricky_record())\n    assert render_xlsx(document) == render_xlsx(json.dumps(document))\n\n\ndef test_the_created_date_is_the_records_and_moves_only_its_own_part() -> None:\n    document = _tricky_record()\n    earlier = _parts(render_xlsx(_pinned(document, \"2026-01-01T00:00:00Z\")))\n    later = _parts(render_xlsx(_pinned(document, \"2027-01-01T00:00:00Z\")))\n    assert b\"2027-01-01T00:00:00Z\" in later[\"docProps/core.xml\"]\n    moved = {name for name in earlier if earlier[name] != later[name]}\n    # The README quotes created_at and the digest; the properties carry the date.\n    assert moved == {\"docProps/core.xml\", \"xl/worksheets/sheet1.xml\"}\n\n\ndef test_the_golden_record_lays_out_to_the_golden_bytes() -> None:\n    assert render_xlsx(_GOLDEN_RECORD) == _GOLDEN_SHEET.read_bytes(), (\n        \"The workbook layout moved. If that was meant, regenerate the golden as \"\n        \"this module's docstring says, and open it in Excel before committing.\"\n    )\n\n\ndef test_the_archive_states_no_machine() -> None:\n    with zipfile.ZipFile(io.BytesIO(render_xlsx(_GOLDEN_RECORD))) as archive:\n        for member in archive.infolist():\n            assert member.date_time == (1980, 1, 1, 0, 0, 0)\n            assert member.create_system == 0\n            assert member.compress_type == zipfile.ZIP_STORED\n\n\n# --- the package is OOXML ------------------------------------------------------\n\n\ndef test_the_package_is_ooxml_a_reader_opens() -> None:\n    workbook = render_xlsx(_pinned(_tricky_record()))\n    parts = _parts(workbook)\n    for name, data in parts.items():\n        ET.fromstring(data)  # noqa: S314 -- every part is well-formed XML\n        assert data.startswith(b'<?xml version=\"1.0\" encoding=\"UTF-8\"'), name\n\n    types = ET.fromstring(parts[\"[Content_Types].xml\"])  # noqa: S314\n    overridden = {item.get(\"PartName\") for item in types.iter(f\"{_TYPES}Override\")}\n    defaults = {item.get(\"Extension\") for item in types.iter(f\"{_TYPES}Default\")}\n    for name in parts:\n        assert f\"/{name}\" in overridden or name.rsplit(\".\", 1)[-1] in defaults, name\n    assert {part[1:] for part in overridden} <= set(parts)\n\n    package = ET.fromstring(parts[\"_rels/.rels\"])  # noqa: S314\n    assert {rel.get(\"Target\") for rel in package.iter(f\"{_PKG_REL}Relationship\")} == {\n        \"xl/workbook.xml\",\n        \"docProps/core.xml\",\n    }\n    sheets = _sheet_files(parts)\n    assert list(sheets) == [\n        \"README\",\n        \"Timeline\",\n        \"Scalars\",\n        \"Nodes\",\n        \"Edges\",\n        \"Assumptions\",\n    ]\n    assert set(sheets.values()) <= set(parts)\n    assert \"xl/styles.xml\" in parts\n\n    for name in sheets.values():\n        root = ET.fromstring(parts[name])  # noqa: S314\n        assert root.find(f\".//{_MAIN}f\") is None, f\"{name} holds a formula\"\n        rows = [int(row.get(\"r\", \"0\")) for row in root.iter(f\"{_MAIN}row\")]\n        assert rows == sorted(set(rows))\n        for cell in root.iter(f\"{_MAIN}c\"):\n            assert cell.get(\"t\") in {None, \"b\", \"inlineStr\"}, cell.get(\"t\")\n            if cell.get(\"t\") == \"inlineStr\":\n                assert cell.find(f\"{_MAIN}is/{_MAIN}t\") is not None\n\n\ndef test_no_cell_anywhere_holds_a_formula() -> None:\n    for name, data in _parts(render_xlsx(_GOLDEN_RECORD)).items():\n        assert b\"<f>\" not in data, name\n        assert b\"<f \" not in data, name\n\n\ndef test_text_a_spreadsheet_would_read_as_a_formula_stays_text() -> None:\n    grid = _grid(render_xlsx(_tricky_record()), \"Scalars\")\n    rows = {text: row for (row, column), (_, text) in grid.items() if column == 0}\n    assert grid[rows[\"label\"], 4] == (\"s\", _TEXT)\n\n\n# --- the layout follows the record -------------------------------------------\n\n\ndef test_the_readme_names_the_record_it_was_laid_out_from() -> None:\n    document = _pinned(_tricky_record())\n    grid = _grid(render_xlsx(document), \"README\")\n    readme = {\n        grid[row, 0][1]: grid.get((row, 1), (\"\", \"\"))[1]\n        for row in range(1, 1 + max(r for r, _ in grid))\n        if (row, 0) in grid\n    }\n    assert readme[\"document_digest\"] == document[\"document_digest\"]\n    assert readme[\"graph_fingerprint\"] == document[\"graph_fingerprint\"]\n    assert readme[\"formulas_fingerprint\"] == document[\"formulas_fingerprint\"]\n    assert readme[\"book digest\"] == document[\"book\"][\"digest\"]\n    assert readme[\"policy\"] == \"P-1\"\n    assert readme[\"  why\"] == document[\"policies\"][0][\"why\"]\n    assert readme[\"check: seal\"].startswith(\"agree\")\n\n\ndef test_a_record_carrying_several_policies_gives_each_a_timeline() -> None:\n    record = _GOLDENS / \"policy_axis_example.json\"\n    parts = _parts(render_xlsx(record))\n    assert list(_sheet_files(parts)) == [\n        \"README\",\n        \"Timeline POL-000343\",\n        \"Timeline GB-2019-88231\",\n        \"Timeline 3_40\",\n        \"Scalars\",\n        \"Nodes\",\n        \"Edges\",\n        \"Assumptions\",\n    ]\n    document = json.loads(record.read_text())\n    grid = _grid(render_xlsx(record), \"Timeline GB-2019-88231\")\n    header = {column: text for (row, column), (_, text) in grid.items() if row == 0}\n    for column, node_id in header.items():\n        if column == 0:\n            continue\n        sample = _nodes(document)[node_id][\"value_sample\"][1]\n        for period, recorded in enumerate(sample):\n            _assert_holds(grid.get((3 + period, column)), recorded, node_id)\n\n\ndef test_one_policy_of_several_is_laid_out_alone() -> None:\n    record = _GOLDENS / \"policy_axis_example.json\"\n    sheets = list(_sheet_files(_parts(render_xlsx(record, policy=\"3:40\"))))\n    assert sheets == [\"README\", \"Timeline\", \"Scalars\", \"Nodes\", \"Edges\", \"Assumptions\"]\n\n\ndef test_a_fold_of_the_book_is_laid_out_under_its_aggregation() -> None:\n    record = _GOLDENS / \"portfolio_fold_example.json\"\n    sheets = list(_sheet_files(_parts(render_xlsx(record))))\n    assert sheets[1:3] == [\"Timeline sum\", \"Timeline period_sum\"]\n    grid = _grid(render_xlsx(record), \"Scalars\")\n    assert [grid[0, column][1] for column in range(4, 8)] == [\n        \"sum\",\n        \"period_sum\",\n        \"POL-000343\",\n        \"GB-2019-88231\",\n    ]\n\n\ndef test_a_policy_the_record_does_not_carry_is_refused_naming_the_axis() -> None:\n    record = _GOLDENS / \"policy_axis_example.json\"\n    with pytest.raises(ValueError, match=r\"'POL-9' is not on the record's axis\") as no:\n        render_xlsx(record, policy=\"POL-9\")\n    assert \"'GB-2019-88231'\" in str(no.value)\n    assert \"--policies id:POL-9\" in str(no.value)\n\n\ndef test_a_record_whose_seal_does_not_hold_is_refused() -> None:\n    document = _pinned(_tricky_record())\n    document[\"nodes\"][1][\"value_sample\"] = 1.0\n    with pytest.raises(ValueError, match=\"seal does not hold\"):\n        render_xlsx(document)\n\n\ndef test_a_record_carrying_no_values_lays_out_its_calculations() -> None:\n    af = ActuarialFrame(pl.DataFrame({\"sum_assured\": [100_000.0]}))\n    af.claims = af.sum_assured * 0.00123\n    workbook = render_xlsx(GraphExporter(af).export())\n    assert list(_sheet_files(_parts(workbook))) == [\n        \"README\",\n        \"Nodes\",\n        \"Edges\",\n        \"Assumptions\",\n    ]\n    readme = _grid(workbook, \"README\")\n    assert any(\"carries no values\" in text for _, text in readme.values())\n\n\ndef test_the_edges_carry_each_reads_offset_and_window() -> None:\n    grid = _grid(render_xlsx(_tricky_record()), \"Edges\")\n    header = [grid[0, column][1] for column in range(8)]\n    rows = {\n        (grid[row, 1][1], grid[row, 0][1]): {\n            header[column]: grid[row, column][1]\n            for column in range(8)\n            if (row, column) in grid\n        }\n        for row in range(1, 1 + max(r for r, _ in grid))\n    }\n    assert rows[\"prior@1\", \"rate\"][\"offset\"] == \"-1\"\n    assert rows[\"running@1\", \"rate\"][\"narrowing\"] == \"AGGREGATION\"\n    assert rows[\"running@1\", \"rate\"][\"periods from\"] == \"first\"\n    assert rows[\"running@1\", \"rate\"][\"periods to\"] == \"0\"\n    assert \"offset\" not in rows[\"scaled@1\", \"rate\"]\n\n\ndef test_the_nodes_sheet_names_every_node_in_the_records_order() -> None:\n    document = _tricky_record()\n    grid = _grid(render_xlsx(document), \"Nodes\")\n    ids = [grid[row, 0][1] for row in range(1, len(document[\"nodes\"]) + 1)]\n    assert ids == [node[\"id\"] for node in document[\"nodes\"]]\n    header = [grid[0, column][1] for column in range(14)]\n    assert {\"formula\", \"kind\", \"tier\", \"reads\", \"local_fingerprint\"} <= set(header)\n    assert \"source_location\" in header\n\n\ndef test_a_text_past_excels_cell_limit_is_cut_and_says_so() -> None:\n    cell = xlsx_export._cell_xml(\"A1\", xlsx_export._Cell(\"x\" * 40_000))  # noqa: SLF001\n    text = ET.fromstring(cell).find(\"is/t\").text or \"\"  # type: ignore[union-attr]  # noqa: S314\n    assert len(text) == 32_767\n    assert text.endswith(\"the record holds the whole text]\")\n\n\ndef test_a_sheet_past_excels_columns_is_refused(\n    monkeypatch: pytest.MonkeyPatch,\n) -> None:\n    monkeypatch.setattr(xlsx_export, \"_MAX_COLUMNS\", 3)\n    with pytest.raises(ValueError, match=r\"5 columns, past Excel.s 3:\"):\n        render_xlsx(_tricky_record())\n\n\ndef test_sheet_names_are_made_legal_and_unique() -> None:\n    names = xlsx_export._unique_sheet_names(  # noqa: SLF001\n        [\"Timeline a/b\", \"Timeline a?b\", \"Timeline \" + \"x\" * 40, \"Nodes\"]\n    )\n    assert names == [\n        \"Timeline a_b\",\n        \"Timeline a_b (2)\",\n        \"Timeline \" + \"x\" * 22,\n        \"Nodes (2)\",\n    ]\n    assert all(len(name) <= 31 for name in names)\n\n\ndef test_af_graph_to_excel_writes_the_frames_record(tmp_path: Path) -> None:\n    af = ActuarialFrame(pl.DataFrame({\"policy_id\": [\"Z\"], \"premium\": [0.1]}))\n    af.loaded = af.premium + 0.2\n    written = af.graph.to_excel(\n        tmp_path / \"policy.xlsx\",\n        af.collect(),\n        GraphExportConfig(policy_id_column=\"policy_id\"),\n    )\n    grid = _grid(written.read_bytes(), \"Scalars\")\n    rows = {text: row for (row, column), (_, text) in grid.items() if column == 0}\n    assert grid[rows[\"loaded@1\"], 4] == (\"n\", \"0.30000000000000004\")\n\n\ndef test_a_carriage_return_survives_any_xml_reader() -> None:\n    \"\"\"A bare CR would be read back as a line feed; a character reference is not.\"\"\"\n    openpyxl = pytest.importorskip(\"openpyxl\")\n    cell = xlsx_export._cell_xml(\"A1\", xlsx_export._Cell(\"one\\r\\ntwo\"))  # noqa: SLF001\n    assert \"&#13;\" in cell\n    text = ET.fromstring(cell).find(\"is/t\").text  # type: ignore[union-attr]  # noqa: S314\n    assert text == \"one\\r\\ntwo\"\n    document = _tricky_record()\n    sheet = openpyxl.load_workbook(io.BytesIO(render_xlsx(document)))[\"Scalars\"]\n    (label,) = [\n        row[4] for row in sheet.iter_rows(values_only=True) if row[0] == \"label\"\n    ]\n    assert \"\\r\\n\" in label\n"
+      }
+    }
+  ],
+  "enrichment": {
+    "policy_id": "P-1",
+    "aggregation": null,
+    "periods": null,
+    "filter": null
+  },
+  "policies": [
+    {
+      "policy_id": "P-1",
+      "aggregation": null,
+      "periods": null,
+      "filter": null,
+      "why": "the first row of the frame the values were read from, which is where the data happened to put it rather than a policy anybody chose"
+    }
+  ],
+  "facets": {},
+  "document_digest": "sha256:a6dc50e96642edd532427f973926e42f21322e6d6386b6f2cb9a07c3f2fe825e"
+}

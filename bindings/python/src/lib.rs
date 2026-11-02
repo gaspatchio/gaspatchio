@@ -4,6 +4,7 @@
 
 mod assumptions;
 mod excel;
+mod identity;
 mod vector;
 
 use log::{debug, info};
@@ -26,6 +27,10 @@ fn _internal(m: &Bound<PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
     m.add_class::<assumptions::PyAssumptionTableRegistry>()?;
+
+    // The content grammar (spec section 12.3): a frame's bytes, and their digest.
+    m.add_function(wrap_pyfunction!(identity::content_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(identity::content_sha256, m)?)?;
 
     Ok(())
 }

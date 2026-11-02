@@ -4,6 +4,8 @@
 
 """Tests for ActuarialFrame join, filter, rename, drop, sort methods."""
 
+import datetime
+
 import polars as pl
 import pytest
 
@@ -30,7 +32,7 @@ class TestJoin:
         assert sorted(collected["rate"].to_list()) == [0.05, 0.05, 0.08]
 
     def test_join_returns_self(self, sample_af):
-        params = pl.DataFrame({"product_code": ["TERM"], "rate": [0.05]})
+        params = pl.DataFrame({"product_code": ["TERM", "WL"], "rate": [0.05, 0.08]})
         result = sample_af.join(params, on="product_code")
         assert result is sample_af
 
@@ -63,11 +65,66 @@ class TestJoin:
         af = af.join(other, on="id", maintain_order="left")
         assert af.collect()["id"].to_list() == [3, 1, 2]
 
-    def test_join_maintain_order_default_unchanged(self, sample_af):
-        """Omitting maintain_order keeps the existing join behavior."""
+    def test_join_keeps_the_frame_s_row_order_by_default(self):
+        """Omitting maintain_order keeps this frame's rows where they were."""
+        af = ActuarialFrame({"id": [3, 1, 2], "val": [30, 10, 20]})
+        other = pl.DataFrame({"id": [1, 2, 3], "extra": ["a", "b", "c"]})
+        af = af.join(other, on="id")
+        assert af.collect()["id"].to_list() == [3, 1, 2]
+
+
+class TestJoinRefusesBeforeAnythingChanges:
+    """A join the frame cannot record, or Polars cannot resolve, changes nothing.
+
+    The frame's plan used to be replaced first and the join's record written
+    after, so a join that failed half way left a frame holding the other
+    table's columns with no record of where they came from.
+    """
+
+    def test_an_expression_key_is_refused_by_name(
+        self, sample_af: ActuarialFrame
+    ) -> None:
+        """The record names the columns a join matched on, so a key is a name."""
         params = pl.DataFrame({"product_code": ["TERM", "WL"], "rate": [0.05, 0.08]})
-        result = sample_af.join(params, on="product_code")
-        assert sorted(result.collect()["rate"].to_list()) == [0.05, 0.05, 0.08]
+        before = list(sample_af.columns)
+
+        with pytest.raises(TypeError, match="by name") as refused:
+            sample_af.join(params, on=pl.col("product_code"))  # type: ignore[arg-type]
+
+        assert 'col("product_code")' in str(refused.value)
+        assert list(sample_af.columns) == before
+        assert sample_af.graph.holes() == []
+        assert sample_af.collect().columns == before
+
+    def test_a_column_of_lists_is_refused_as_a_key(self) -> None:
+        """A projected column holds a value per period; a join matches one per row."""
+        af = ActuarialFrame({"policy_id": [1, 2], "issue_age": [40, 50]})
+        af = af.projection.set(
+            start_date=datetime.date(2025, 1, 31), n_periods=3, frequency="monthly"
+        )
+        af.duration = af.month // 12
+        rates = pl.DataFrame({"duration": [0, 1], "loading": [0.1, 0.2]})
+        before = list(af.columns)
+
+        with pytest.raises(ValueError, match="'duration'") as refused:
+            af.join(rates, on="duration")
+
+        assert "Table" in str(refused.value)
+        assert list(af.columns) == before
+        assert "loading" not in af.collect().columns
+
+    def test_a_join_polars_cannot_resolve_leaves_the_frame_as_it_was(
+        self, sample_af: ActuarialFrame
+    ) -> None:
+        """Polars' own refusal still reaches the caller, over an untouched frame."""
+        params = pl.DataFrame({"code": ["TERM"], "rate": [0.05]})
+        before = list(sample_af.columns)
+
+        with pytest.raises(pl.exceptions.ColumnNotFoundError):
+            sample_af.join(params, on="code")
+
+        assert list(sample_af.columns) == before
+        assert sample_af.collect().height == 3
 
 
 class TestFilter:

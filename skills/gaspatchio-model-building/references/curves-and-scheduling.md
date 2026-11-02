@@ -15,7 +15,7 @@ Most short-duration models discount at a single flat rate. The two paths are:
 | Discounting approach | Use when |
 |----------------------|----------|
 | `projection.prospective_value(discount_rate=0.03)` | Single flat rate, quick sensitivity analysis |
-| `Curve` + pre-computed DF (see below) | Yield-curve input required (Solvency II, IFRS 17, EIOPA, rate-scenario stress) |
+| `Curve.discount_factor(af.projection.t_years())` | Yield-curve input required (Solvency II, IFRS 17, EIOPA, rate-scenario stress) |
 
 `Curve` is the upgrade path, not the default. The flat-rate approach in
 `prospective_value` remains correct whenever a single discount rate is the
@@ -46,7 +46,8 @@ Rules:
 - Interpolation between knots is selectable via `interpolation=` (default
   `"linear"`); flat extrapolation outside the knot range (first/last rate holds
   to any tenor beyond the grid). See [Interpolation methods](#interpolation-methods).
-- Default day-count: `ActualActualISDA`. Override via `day_count=`.
+- A `Curve`'s default day count is `ActualActualISDA` (a `Schedule`'s is `OneTwelfth`, below).
+  Override via `day_count=`.
 
 #### From par (coupon swap) rates — bootstrap
 
@@ -147,38 +148,147 @@ supported.
 
 ---
 
-### Per-period discounting — production pre-computes, never `map_elements`
+### Per-period discounting — read the curve through the recorded door
 
-`Curve.discount_factor()` on a **scalar or a Python `list[float]`** is pure and
-fast. But calling it on a **list column** (`af.projection.t_years()` is a
-`ColumnProxy`/`pl.Expr`) falls back to `map_elements` internally — which the
-framework's performance rules forbid (~14x slower; defeats vectorization). It is
-acceptable only for a one-off single-policy debug check, never a portfolio run.
+**Recommended: call `Curve.discount_factor()` on a tracked time column.** This is
+both the fast path and the audited one, and the two no longer trade against each
+other:
 
-**Production (recommended) — pre-compute the discount-factor vector once and
-broadcast it.** The curve is static and, on a uniform schedule, every policy
-shares the same `t` grid, so you compute the DF list once in Python (no per-row
-work) and broadcast it as a literal. Full setup in
-[Schedule-based pre-computation](#schedule-based-pre-computation) below:
+```python
+af.t_years = af.projection.t_years()                    # tracked list column, length n_periods + 1
+af.discount_factor = rfr_curve.discount_factor(af.t_years)
+af.pv_net_cf = (af.net_cf * af.discount_factor).list.sum()
+```
+
+- **Audited.** `curve.discount_factor` on a tracked column is a recorded
+  core-tier operation. The node carries the curve's own `source_sha`, and the
+  audit artifact grows an assumption entry holding the curve's `canonical_form()`
+  — so a reviewer re-hashes the knots the liabilities were discounted on, and a
+  quarter-over-quarter comparison can say *which* curve moved.
+- **Fast.** It lowers through the `curve_eval` and `list_pow` Rust kernels — one
+  pass over the list column, no `map_elements` in the lazy graph.
+- **Works on any grid.** Because it evaluates per row, a jagged per-policy
+  timeline (`from_per_policy_grid`, or `until_value=` a column) discounts on each
+  policy's own `t` vector. Pre-computing cannot do this at all.
+
+**Measured**, 10,000 policies on a shared monthly grid of 120 periods, whole
+model end-to-end through `.collect()`, on a sixteen-thread laptop with eight
+physical cores (medians of nine interleaved repetitions, loadavg 1.2–4.1).
+**Every time below is on the streaming engine** — the one
+`ActuarialFrame.collect()` uses unless you ask for another — because the door
+costs four times as much on the in-memory one, so a time without an engine
+beside it is not a time:
+
+| Path | Time (streaming) | Recorded? |
+|------|------|-----------|
+| `curve.discount_factor(af.t_years)` — recorded door | **~28 ms** | Yes — curve `source_sha` + assumption entry |
+| the same projection built and `af.t_years` materialised, discount factors broadcast in — **the like-for-like broadcast** | ~17 ms | No — nothing ties the values to the curve |
+| `pl.lit(pre_computed_df)` with no projection built at all — **the bare broadcast** | ~9 ms | No — nothing ties the values to the curve |
+| the same discounting hand-rolled through `map_elements` | ~0.63 s–1.44 s — set by your callable | No — the curve is inside a Python callable, so the artifact never sees it, and because the line *does* read a column no *validator* warning fires either (the runtime's own telemetry logger does warn on `map_elements`, twice per call — a clean artifact is a different thing from a quiet run) |
+
+**Rows two and three are different comparisons, and this page keeps them apart by
+name.** The **like-for-like broadcast** builds the same projection the door does and
+swaps only the discounting — that is the comparison a model faces. The **bare
+broadcast** builds no projection at all, so it also books the projection scaffolding
+to the curve read. Every multiple below says which of the two it is divided by.
+
+**That last row is a range because the cost is the Python callable, not the
+framework.** Three correct spellings of the same discounting, timed here against the
+streaming door: a plain-Python spot-and-compound hand-roll with the segment table
+hoisted out of the callable reads ~0.63 s, about **21x** the door; handing the row
+straight to the curve (`curve.discount_factor(ts)`) reads ~0.97 s, about **33x**;
+re-deriving the spot rate with the `oracle_spot()` that `04_curve_discounting.py`
+already defines — the function a reader of that pattern is likeliest to reuse —
+costs ~1.41 s, about **48x**. Same discounting, same PV, and the multiple more than
+doubles across the three, so quote it against the callable you actually wrote rather
+than off this page.
+
+**Budget against the like-for-like broadcast: under 2x on the engine `collect()`
+uses.** A real model has a projection either way — its `net_cf` came from one — so
+`projection.set` and `t_years()` are not part of what the curve read buys you. Hold
+them equal and vary only the discounting, and on the **streaming** engine the
+recorded door costs **1.6x–1.9x** the like-for-like broadcast: 1.60x–1.88x at
+10,000 × 120 over seven runs, 1.90x–1.94x at 100,000 × 120, 1.71x–1.74x at
+10,000 × 360. It drifts upward with policy count rather than standing still, so
+carry the range and not a point. On the **in-memory** engine the same comparison
+reads **10.0x–15.5x** — 10.8x and 12.2x at 10,000 × 120, 15.5x at 100,000 × 120, 10.0x
+at 10,000 × 360 — and it stands still on no axis there either. The door against the
+bare broadcast is a different and larger number, because that comparison books the
+projection scaffolding to the curve read as well; that difference is real, but it is
+not the one a model actually faces.
+
+**That multiple travels furthest on the engine axis and the thread axis, and least
+on the scale axis.** The band above is a threaded one on the streaming engine, sixteen
+threads on this machine, loadavg 1.2–4.1. Pin it (`POLARS_MAX_THREADS=1`) and the
+same comparison reads **~10.6x** — ~113 ms against ~10.7 ms — because the door
+parallelises about 4x and the like-for-like broadcast it is divided by does not: the
+broadcast is in fact *faster* on one thread, ~10.7 ms against ~17.5 ms. Pinned
+streaming lands almost exactly where free-running in-memory does — 113 / 10.7 / 8.3 ms
+against 115 / 10.6 / 8.3 ms for door / like-for-like / bare — and that is the whole of
+the mechanism: the door's speed on the default engine *is* its parallelism, so an
+engine or a thread count that takes that away moves the multiple from under 2x to
+over 10x. Quote the figure with the engine and the thread count it was measured on;
+without both it is not a figure.
+
+**The two whole-script figures are each stable on one axis and only one.** Say which
+axis you are quoting, because a figure moved onto the other one is simply wrong.
+Streaming, sixteen threads, for all six cells:
+
+| Figure | 10,000 × 120 | 100,000 × 120 | 10,000 × 360 | Holds still across… |
+|---|---|---|---|---|
+| ratio (door ÷ the bare broadcast) | 3.3x | 3.6x | 3.4x | **scale** — one machine, one engine, one load |
+| delta (door − the bare broadcast) | ~20 ms | ~196 ms | ~55 ms | **machines** — one fixed scale |
+
+The ratio barely moves over a tenfold change in policies and a threefold change in
+grid; the delta moves an order of magnitude over the same range, because the door
+evaluates the curve once per policy per period and the count of those *is* the job.
+Re-time the same scale somewhere else and it is the other way round — the delta is
+what reproduces, and the ratio is not. So neither is a band to carry off this page:
+re-time on the job you actually run. The denominator makes that advice sharper than
+it sounds — single repetitions of the bare broadcast ran 4.5 ms to 13.4 ms across
+sixty-three of them here, which against a fixed ~28 ms numerator spans the ratio
+from 2.1x to 6.4x on its own.
+
+**Threads land very unevenly across the four rows, and hardest on the door.** Pinned
+to a single thread (`POLARS_MAX_THREADS=1`) the door takes ~110–113 ms at
+10,000 × 120 against ~28 ms on sixteen — 4.0x out of eight physical cores, and the
+same 4.0x at 100,000 × 120 and at 10,000 × 360 — and the
+whole-script ratio goes to **13x–16x** at all three scales. The bare broadcast and the
+`map_elements` row gain nothing measurable: each lands within a few per cent of its
+threaded time on one thread. The like-for-like broadcast goes the other way and is
+*faster* pinned, ~10.7 ms against ~17.5 ms, because on this job sixteen threads cost
+it more to coordinate than they save it in work.
+The multiple you measure is therefore set by how many cores the door gets: give it
+fewer, by pinning or on a machine busy enough to contend for them, and the door moves a
+long way while the other three barely move at all.
+
+**Escape hatch — pre-compute in Python and broadcast.** On a *shared uniform*
+grid every policy has the same `t`, so the DF vector can be computed once outside
+the frame and handed over as a list literal. It gives the identical numbers about
+1.7x quicker like-for-like on the streaming engine, in a model that has its
+projection either way — ~11 ms saved at 10,000 × 120, ~130 ms at 100,000 × 120 —
+because it does one curve evaluation per period rather than one per policy per
+period:
 
 ```python
 import polars as pl
 
 t_years_list = sched.cumulative_year_fractions()        # Python list[float] (from a Schedule, below)
 disc_factors = rfr_curve.discount_factor(t_years_list)  # computed ONCE → list[float]
-af.discount_factor = pl.lit(disc_factors, dtype=pl.List(pl.Float64))  # broadcast, zero per-row cost
+af.discount_factor = pl.lit(disc_factors, dtype=pl.List(pl.Float64))  # broadcast, unrecorded
 af.pv_net_cf = (af.net_cf * af.discount_factor).list.sum()
 ```
 
-**Debug only (single policy)** — the inline list-column form reads nicely but
-`map_elements`; fine under `run-single-policy`, never ship it in a model:
-
-```python
-# DEBUG ONLY — map_elements path; do not use for a portfolio run
-af.t = af.projection.t_years()
-af.discount_factor = rfr_curve.discount_factor(af.t)   # ⚠ map_elements
-af.pv_net_cf = (af.net_cf * af.discount_factor).list.sum()
-```
+**The audit cost, in one sentence:** `pl.lit(...)` reads no column of the model
+and names no assumption base, so nothing in the artifact ties those discount
+factors to the curve — no assumption entry, no `source_sha`, nothing for next
+quarter's comparison to attribute a movement to — and the artifact validator
+warns on exactly that shape. On the engine `collect()` uses, the like-for-like
+broadcast buys under a doubling — about 11 ms at 10,000 policies and about 130 ms at
+100,000 — which is a poor price for the lineage; on the in-memory engine, or pinned
+to one thread, it buys ~104 ms and ~1.0 s instead and the price is still the lineage.
+Take the hatch only when a *measured* bottleneck justifies it, and say in the model
+why.
 
 The flat-rate built-in stays valid and correct for single-rate discounting:
 
@@ -191,7 +301,8 @@ af.pv_net_cf = af.net_cf.projection.prospective_value(discount_rate=0.03)
 ### Curve stress — parallel and key-rate shifts
 
 `Curve` stress methods return new `Curve` instances, leaving the original
-unchanged. This composability integrates directly with the scenario system.
+unchanged. Each stressed curve is a plain Python object you hand to a scenario
+yourself — see the dispatch note below the examples.
 
 ```python
 # Parallel shift — all knot rates move together
@@ -214,18 +325,25 @@ for tenor in [2.0, 5.0, 10.0, 20.0, 30.0]:
         ...
 ```
 
-Stress curves integrate with the `ScenarioRun` / shock system — build stressed
-`Curve` objects outside the model, pass them in via `assumptions_override`, and
-let the scenario runner handle the dispatch. See
-[references/scenarios.md](scenarios.md) for the full two-script pattern.
+**There is no curve shock, so a stressed curve cannot ride the shock dispatch.**
+A shock moves a `Table` or a model-point column; a `Curve` is neither, and
+`ScenarioRun.run()` has no parameter that would carry one. Build the
+stressed curves yourself, as above, and give each scenario **its own `Curve`
+object** through the drivers shape of `for_each_scenario` at `batch_size=1`, which
+calls the model once per scenario and forwards the drivers to it. Anything else —
+one run, one curve, a `scenario_id` column that changes nothing — produces
+scenario rows that all carry the base answer. See
+[references/scenarios.md](scenarios.md) for the worked call and for what the
+record then carries.
 
 ---
 
-### Schedule-based pre-computation
+### Schedule-based pre-computation — the escape hatch in full
 
-For portfolio-scale runs (many policies), pre-compute discount-factor lists once
-using `Schedule.cumulative_year_fractions()` and broadcast them rather than
-computing per-row via a list-column expression:
+The recorded door above needs no `Schedule` of its own: `af.projection.t_years()`
+already gives the projection's cumulative year fractions as a tracked column. Build
+an explicit `Schedule` when you are taking the pre-compute-and-broadcast escape
+hatch and need the same year fractions as a Python `list[float]`:
 
 ```python
 from datetime import date
@@ -248,18 +366,23 @@ t_years_list = sched.cumulative_year_fractions()
 # Compute discount factors once as a Python list[float]
 disc_factors_list = rfr_curve.discount_factor(t_years_list)
 
-# Broadcast into the model as a literal — zero per-row overhead
+# Broadcast into the model as a literal — zero per-row overhead, and no record
 import polars as pl
 af.discount_factor = pl.lit(disc_factors_list, dtype=pl.List(pl.Float64))
 af.pv_net_cf = (af.net_cf * af.discount_factor).list.sum()
 ```
 
-Pre-computing once is the only optimize-safe way to apply a static curve across a
-uniform projection — it keeps `map_elements` out of the lazy graph entirely. (For
-a jagged / per-policy grid the `t` lists differ by policy, so pre-broadcast does
-not apply; fall back to a flat rate or a per-period rate column fed to
-`af.finance.discount_factor(rate_col, periods_col, output_col)`, the Rust
-`list_pow` path.)
+Two conditions have to hold before this is available at all. The grid must be
+**shared and uniform** — the moment `t` differs by policy the single vector is
+wrong, and only the recorded door still works. And the curve must be **static**
+across the run; a scenario that re-points the curve needs the pre-compute moved
+with it, which is one more thing to keep in step by hand.
+
+What you give up is the record: the broadcast column reads no input and names no
+assumption base, so the artifact cannot say the numbers came off this curve. Weigh
+that against a like-for-like multiple of under 2x on the streaming engine, whose
+absolute size is whatever your scale makes it — ~11 ms saved at 10,000 policies ×
+120 periods, ~130 ms at 100,000 × 120 — before reaching for it.
 
 ---
 
@@ -268,7 +391,7 @@ not apply; fall back to a flat rate or a per-period rate column fed to
 | Situation | Approach |
 |-----------|----------|
 | Single discount rate, fixed across scenarios | `prospective_value(discount_rate=r)` |
-| EIOPA / SII risk-free rate (term structure) | `Curve.from_zero_rates(…)` + pre-computed DF broadcast |
+| EIOPA / SII risk-free rate (term structure) | `Curve.from_zero_rates(…)` + `curve.discount_factor(af.projection.t_years())` |
 | Regulatory rate stress (parallel shift) | `rfr_curve.shift_parallel(bps=N)` + re-run |
 | Key-rate sensitivity (one tenor at a time) | `rfr_curve.key_rate_shift(tenor=T, bps=N)` + re-run |
 | Monthly discount factor from annual rate | `finance.to_monthly(method="compound")` still valid — flat-rate path |
@@ -293,10 +416,13 @@ af = af.projection.set(
 
 Use a `Schedule` explicitly when you need:
 
-- `cumulative_year_fractions()` — to feed `Curve.discount_factor(t_years)` (see above).
+- `cumulative_year_fractions()` — a Python `list[float]` of the grid's year fractions, for the pre-compute-and-broadcast escape hatch (see above); the recorded path uses `af.projection.t_years()` and needs no explicit `Schedule`.
 - Per-policy inception-anchored period grids (`from_inception`).
 - Non-default `Calendar`, `DayCount`, or `BusinessDayConvention`.
 - Per-policy variable-length (jagged) timelines with their own horizon column (`from_per_policy_grid`).
+- An axis of fixed steps in years with no calendar under it (`fixed_step`) — the same axis as
+  `af.projection.set(n_periods=..., step_years=...)`; see
+  [model-phases.md](model-phases.md#off-calendar-workbooks-a-fixed-step-axis).
 
 ---
 
@@ -362,7 +488,6 @@ from gaspatchio import Schedule
 
 sched = Schedule.from_per_policy_grid(
     start_date=date(2025, 1, 31),
-    n_periods=360,                       # portfolio maximum (for reference / error messages)
     frequency="1M",
     until_kind="term_months",            # "term_months" or "term_years"
     until_value_column="remaining_term", # column of per-policy horizon lengths
@@ -372,6 +497,12 @@ sched = Schedule.from_per_policy_grid(
 dates_expr = sched.per_policy_period_dates_expr()   # pl.Expr → List<Date>
 count_expr = sched.per_policy_period_count_expr()   # pl.Expr → Int64 (per-policy length)
 ```
+
+The grid takes no `n_periods`: each policy's length is its own column, so no
+other policy's horizon is part of the schedule's identity, and a model's
+`graph_fingerprint` stays put when another policy's term changes or the book
+runs in batches. The longest horizon in a run is in the run record
+(`run_metadata.n_periods`).
 
 ---
 
@@ -443,17 +574,22 @@ needed.
 ### Quick-reference: constructor decision tree
 
 ```
+Is the axis a calendar at all? (dates, months, a valuation date)
+└── No — k steps of h years, no dates → Schedule.fixed_step(n_periods=, step_years=h)
+                                         or Schedule.fixed_step(n_periods=, steps_per_year=n)
+
 Do all policies share the same period grid?
 ├── Yes → Schedule.from_calendar_grid(start_date=, n_periods=, frequency=)
 │         └── Need cumulative year fractions for Curve? → .cumulative_year_fractions()
 └── No — each policy has its own inception date?
     ├── Yes, same projection length → Schedule.from_inception(inception_column=, n_periods=, frequency=)
-    └── Yes, variable-length horizon → Schedule.from_per_policy_grid(start_date=, n_periods=, frequency=,
+    └── Yes, variable-length horizon → Schedule.from_per_policy_grid(start_date=, frequency=,
                                          until_kind=, until_value_column=)
 
-Need t_years for Curve.discount_factor?
-├── Shared grid → sched.cumulative_year_fractions()          # returns list[float]
-└── Per-policy → af.projection.t_years()                     # returns pl.Expr → List<Float64>
+Need t for Curve.discount_factor?
+└── Any grid, shared or per-policy → af.projection.t_years() # tracked column; recorded + kernel-lowered
+    └── Escape hatch, shared uniform grid only, unrecorded:
+        sched.cumulative_year_fractions() → pl.lit(...)      # returns list[float]
 ```
 
 ---
@@ -472,4 +608,4 @@ uv run gspio docs "Curve.from_zero_rates"
 > **Related references**
 >
 > - [model-phases.md](model-phases.md) — Phase 2 timeline setup, `af.projection.t_years()`
-> - [scenarios.md](scenarios.md) — Curve stress, `ScenarioRun`, the two-script pattern
+> - [scenarios.md](scenarios.md) — the cross-join boundary, and one `Curve` per scenario through the drivers shape

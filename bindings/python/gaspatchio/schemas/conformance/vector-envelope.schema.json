@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gaspatchio-operation-vectors/v0-preview.1",
+  "title": "Gaspatchio synthetic operation vector envelope",
+  "description": "Validates the invocation envelope. Expression grammar, typed cells, resource identity and supported value domains have separate checks in the artifact schema, specification and readers.",
+  "type": "object",
+  "required": ["schema", "artifact_schema", "fingerprint_algorithm", "family", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "gaspatchio-operation-vectors/v0-preview.1"},
+    "artifact_schema": {"const": "gaspatchio-graph/v0-preview.2"},
+    "fingerprint_algorithm": {"const": "gspv0-preview-3"},
+    "family": {"type": "string", "minLength": 1},
+    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "column": {
+      "type": "object",
+      "required": ["dtype", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "dtype": {"enum": ["i64", "f64", "bool", "str", "date", "list[i64]", "list[f64]", "list[bool]", "list[str]", "list[date]"]},
+        "values": {"type": "array"}
+      }
+    },
+    "input_column": {
+      "description": "An input column. Beyond the names a result may carry, an input may also arrive in a storage type a conversion clause names as its door from outside: an unsigned or 128-bit integer width, a dictionary-encoded string, a fixed-width array, or a duration (a whole number of microseconds per value), which section 10 has no name for and which the duration refusals take as the value a call would read. These names appear on inputs only; a result is named from the closed vocabulary of section 10.",
+      "type": "object",
+      "required": ["dtype", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "dtype": {
+          "anyOf": [
+            {"enum": ["i64", "f64", "bool", "str", "date", "list[i64]", "list[f64]", "list[bool]", "list[str]", "list[date]"]},
+            {"enum": ["u64", "i128", "u128", "categorical", "duration", "list[duration]"]},
+            {"type": "string", "pattern": "^array\\[(i64|f64|bool|str|date),[0-9]+\\]$"}
+          ]
+        },
+        "values": {"type": "array"}
+      }
+    },
+    "bound": {
+      "description": "One end of a window: a whole number of periods from the period being computed, or an end of the policy's own run (specification section 9).",
+      "anyOf": [{"type": "integer"}, {"enum": ["first", "last"]}]
+    },
+    "perturbation": {
+      "description": "This case is the case named in `of` with one cell moved: the operand, the policy and the period moved. `window` is what the answer's read of that operand states (section 9). Every period of the answer whose window excludes the moved period, and every other policy's answer, equals the base case's; where some period's window includes it, at least one such period differs.",
+      "type": "object",
+      "required": ["of", "operand", "policy", "period", "window"],
+      "additionalProperties": false,
+      "properties": {
+        "of": {"type": "string", "minLength": 1},
+        "operand": {"type": "string", "minLength": 1},
+        "policy": {"type": "integer", "minimum": 0},
+        "period": {"type": "integer", "minimum": 0},
+        "window": {
+          "oneOf": [
+            {
+              "type": "object", "required": ["periods"], "additionalProperties": false,
+              "properties": {"periods": {
+                "type": "object", "required": ["from", "to"], "additionalProperties": false,
+                "properties": {"from": {"$ref": "#/$defs/bound"}, "to": {"$ref": "#/$defs/bound"}}
+              }}
+            },
+            {
+              "type": "object", "required": ["position"], "additionalProperties": false,
+              "properties": {"position": {"type": "integer"}}
+            }
+          ]
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "required": ["id", "covers", "inputs", "expr", "producer_check", "case_kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "covers": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "structural_covers": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "inputs": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/input_column"}},
+        "expr": {"type": "object"},
+        "producer_check": {"type": "boolean"},
+        "case_kind": {"enum": ["value", "recording-door-value", "selection-value", "portable-domain-refusal", "backend-capability-refusal", "integrity-mutation", "artifact-type-refusal"]},
+        "expected": {"$ref": "#/$defs/column"},
+        "comparison": {
+          "type": "object", "required": ["atol", "rtol"], "additionalProperties": false,
+          "properties": {"atol": {"type": "number", "minimum": 0}, "rtol": {"type": "number", "minimum": 0}}
+        },
+        "refusal": {"type": "string", "minLength": 1},
+        "producer_message": {"type": "string"},
+        "assumptions": {"type": "array", "items": {"type": "object"}},
+        "compilations": {"type": "object"},
+        "producer_build": {"type": "object"},
+        "producer_setup": {"type": "object"},
+        "output_column": {"type": "string"},
+        "sort_output_by": {"type": "array", "items": {"type": "string"}},
+        "perturbation": {"$ref": "#/$defs/perturbation"},
+        "selection": {
+          "description": "A selection-value case's recorded steps, in order (specification section 7.6): each the kind and the predicate's expr a document's selection entry carries, and for a semi or anti join the right side it matched against, as columns of values. The expr is evaluated over the rows the steps keep.",
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "required": ["kind", "expr"], "additionalProperties": false,
+            "properties": {
+              "kind": {"enum": ["filter", "semi", "anti"]},
+              "expr": {"type": "object"},
+              "right": {"type": "object", "additionalProperties": {"type": "array"}}
+            }
+          }
+        }
+      },
+      "allOf": [{
+        "if": {"properties": {"case_kind": {"enum": ["value", "recording-door-value", "selection-value"]}}},
+        "then": {"required": ["expected", "comparison"], "not": {"required": ["refusal"]}},
+        "else": {"required": ["refusal"], "not": {"anyOf": [{"required": ["expected"]}, {"required": ["comparison"]}]}}
+      }]
+    }
+  }
+}

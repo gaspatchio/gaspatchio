@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ABOUTME: Tests for the for_each_scenario bounded-memory loop primitive.
-# ABOUTME: Phase 1 covers the list[ScenarioID] shape only (no shocks / drivers).
-"""Test for_each_scenario core loop (Phase 1: list[ID] shape)."""
+# ABOUTME: Covers the list[ScenarioID] shape only (no shocks / drivers).
+"""Test for_each_scenario core loop (the list[ID] shape)."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ def test_fold_batch_helper_exists() -> None:
 
 
 # ---------------------------------------------------------------------------
-# F9a: Period* aggregators reduce ACROSS scenarios per period (two-stage),
+# Period* aggregators reduce ACROSS scenarios per period (two-stage),
 #      not over policy x scenario cells. Full hand-computed derivation lives in
 #      the docstring of test_period_reduces_across_scenarios_per_period below.
 # ---------------------------------------------------------------------------

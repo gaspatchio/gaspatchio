@@ -101,10 +101,16 @@ def test_plugin_payload_carries_nothing_but_skills() -> None:
     assert {p.name for p in SKILLS_DIR.iterdir()} <= allowed
 
 
-def test_agents_md_count_and_list_in_sync() -> None:
-    """The AGENTS.md install count and list match the registry."""
+def test_readme_count_and_list_in_sync() -> None:
+    """The README install count and list match the registry.
+
+    The install instructions moved out of bindings/python/AGENTS.md so that file
+    plus the root AGENTS.md fit Codex's merged project-doc window; the pin moved
+    with the text. The README is where someone deciding to install actually
+    reads, which a file inside the plugin cache directory is not.
+    """
     order = registry_order()
-    text = (REPO_ROOT / "bindings" / "python" / "AGENTS.md").read_text(encoding="utf-8")
+    text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert f"get {len(order)} actuarial modeling skills" in text
     assert f"- **{len(order)} skills**: {', '.join(order)}" in text
 
@@ -155,7 +161,102 @@ def test_license_consistent_across_manifests() -> None:
         assert json.loads(path.read_text())["license"] == "Apache-2.0"
 
 
-def test_agents_md_npx_slug_is_correct() -> None:
-    text = (REPO_ROOT / "bindings" / "python" / "AGENTS.md").read_text(encoding="utf-8")
+def test_readme_npx_slug_is_correct() -> None:
+    text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert "npx skills add gaspatchio/gaspatchio" in text
     assert "npx skills add gaspatchio/gaspatchio-core" not in text
+
+
+# --- PRINCIPLES.md is inlined into AGENTS.md, not merely linked ------------
+# Codex does not expand `@file` imports the way CLAUDE.md does, and
+# `project_doc_fallback_filenames` only fires when AGENTS.md is absent. The
+# principles reach the model only if they are physically in AGENTS.md.
+
+AGENTS_MD = REPO_ROOT / "AGENTS.md"
+END_PRINCIPLES = b"<!-- END GENERATED PRINCIPLES -->"
+CODEX_PROJECT_DOC_DEFAULT_CAP = 32 * 1024
+
+
+def test_principles_inlined_into_agents_md() -> None:
+    """Every principle heading in PRINCIPLES.md appears in the generated block."""
+    principles = (REPO_ROOT / "PRINCIPLES.md").read_text(encoding="utf-8")
+    agents = AGENTS_MD.read_text(encoding="utf-8")
+    headings = [ln[3:].strip() for ln in principles.splitlines() if ln.startswith("## ")]
+    assert headings, "PRINCIPLES.md has no '##' sections"
+    for heading in headings:
+        assert f"### {heading}" in agents, f"principle not inlined: {heading}"
+
+
+def test_principles_survive_codex_default_truncation() -> None:
+    """The principles block sits inside Codex's default 32 KB project-doc window.
+
+    Codex truncates the merged AGENTS.md at `project_doc_max_bytes` (default
+    32 KB), keeping the HEAD and dropping the tail, with no warning. Contributors
+    cannot commit a larger cap -- repo-level `.codex/config.toml` is ignored -- so
+    anything that must always be in context has to sit in the first 32 KB.
+    """
+    data = AGENTS_MD.read_bytes()
+    end = data.index(END_PRINCIPLES)
+    assert end < CODEX_PROJECT_DOC_DEFAULT_CAP, (
+        f"principles block ends at byte {end}, past the {CODEX_PROJECT_DOC_DEFAULT_CAP} B "
+        f"default cap; it would be silently dropped for anyone who has not raised "
+        f"project_doc_max_bytes in ~/.codex/config.toml"
+    )
+
+
+# --- The budget is the chain's, not the root file's ------------------------
+# Codex merges instruction files from the repository root down to the working
+# directory and stops adding them once their combined size reaches
+# `project_doc_max_bytes` (32 KiB by default), silently. Guarding the root file
+# alone missed exactly that: on 2026-09-14 the root sat 25 B under the cap, and a
+# session in core/ loaded 65,178 B against the budget while one in
+# bindings/python/ loaded 62,068 B -- so the subtree's rules, the rules for the
+# code in front of the agent, were dropped whole. The 2026-09-15 restructure
+# fits the root file plus either subtree file inside that budget.
+
+SUBTREE_AGENTS_MD = (
+    REPO_ROOT / "core" / "AGENTS.md",
+    REPO_ROOT / "bindings" / "python" / "AGENTS.md",
+)
+CHAIN_HEADROOM = 1024           # trim before adding, not at the cliff edge
+ROOT_AGENTS_CEILING = 23_000    # 18,053 B of it is the framework half, unmovable
+SUBTREE_AGENTS_CEILING = 8_700
+
+
+def test_agents_md_chain_fits_codex_default_cap() -> None:
+    """Root AGENTS.md plus either subtree file fits the window Codex merges.
+
+    Nothing warns when it does not: the tail is dropped in silence, and the tail
+    is whichever file came last, which is the subtree one.
+    """
+    budget = CODEX_PROJECT_DOC_DEFAULT_CAP - CHAIN_HEADROOM
+    root = len(AGENTS_MD.read_bytes())
+    for path in SUBTREE_AGENTS_MD:
+        subtree = len(path.read_bytes())
+        chain = root + subtree
+        assert chain <= budget, (
+            f"AGENTS.md ({root} B) + {path.relative_to(REPO_ROOT)} ({subtree} B) = "
+            f"{chain} B, over the {budget} B working budget by {chain - budget} B. "
+            f"A Codex session in that directory loses the tail of the pair with no "
+            f"warning. Move text to a file the instruction file points at by path."
+        )
+
+
+def test_each_agents_md_is_under_its_own_ceiling() -> None:
+    """Each file stays under its share, so one growing cannot starve the other."""
+    assert ROOT_AGENTS_CEILING + SUBTREE_AGENTS_CEILING <= (
+        CODEX_PROJECT_DOC_DEFAULT_CAP - CHAIN_HEADROOM
+    ), "the per-file ceilings no longer add up to a chain that fits the budget"
+    root = len(AGENTS_MD.read_bytes())
+    assert root <= ROOT_AGENTS_CEILING, (
+        f"AGENTS.md is {root} B, over its {ROOT_AGENTS_CEILING} B ceiling by "
+        f"{root - ROOT_AGENTS_CEILING} B; it keeps the framework knowledge, and "
+        f"contributor rules belong in CONTRIBUTING.md"
+    )
+    for path in SUBTREE_AGENTS_MD:
+        size = len(path.read_bytes())
+        assert size <= SUBTREE_AGENTS_CEILING, (
+            f"{path.relative_to(REPO_ROOT)} is {size} B, over its "
+            f"{SUBTREE_AGENTS_CEILING} B ceiling by {size - SUBTREE_AGENTS_CEILING} B; "
+            f"general practice belongs in that subtree's docs/ directory"
+        )

@@ -27,6 +27,35 @@ audit exports and downstream joins where you genuinely need every policy.
 immediately folds the result into per-period accumulators. Peak RSS is approximately one
 batch's working set, not the full portfolio.
 
+**A policy's value never depends on its batch.** A read across rows -- a `sum`, `mean`,
+`rank`, `cum_sum`, `rolling_*` or `over` written through `.polars_native()` or raw
+`pl.col`, or `pl.len()` -- answers from the rows in the frame, which here is the batch.
+Both runners refuse such a read, naming it, wherever they cut the book into more than one
+batch -- in an assignment, and in a filter's condition (`af.filter(pl.col("sa") >
+pl.col("sa").mean())` would keep the policies above the batch's mean). Compute a figure across the book (an expense allocated by share of sum assured)
+before the run, as a model-point column the model reads, or run the book in one batch.
+A shared projection grid sized from the rows is the same read -- `per_policy=False` over a
+maximum age, a term column or a term expression, lays every policy's axis to the youngest life or the longest horizon in the batch -- and is
+refused there too. Leave `per_policy` at its default, which runs each policy to its own
+horizon, or state the grid's length as a number taken over the book before the run.
+
+**A frame rebuilt from collected values is judged against the batch.** The 0.9 setup step
+-- `mp = af.collect()`, a join or a column in plain Polars, `af = ActuarialFrame(mp)` -- does
+its work outside the frame's record, where neither runner can read it. Wherever they cut
+the book into more than one batch, both refuse a frame the model builds from a DataFrame
+(with or without `continue_from=`) holding a column the batch did not hold, a changed batch
+column, or other rows; a DataFrame that is the batch's own values passes, and a `LazyFrame`
+is judged on its plan, so a per-row `af._df.with_columns(...)` runs. Join a side file with
+`af.join(table, on=...)`, compute the column on the book before the run, run the book in one
+batch, or fold it with `engine="jax"`, which runs the setup over the whole book first.
+
+A scenario plan (`ScenarioRun.run`, `for_each_scenario`) judges a rebuild the same way
+wherever a batch holds more than one scenario: the batch is every scenario's copy of the
+book, so whole policies do not excuse it, and `batch_size="auto"` can pack fifty scenarios
+into one batch. Its routes are the first two above, or one scenario a batch,
+`batch_size=1`, where the frame is that scenario's whole book -- see
+[scenarios.md](scenarios.md#phase-1-under-a-plan-keep-the-setup-on-the-frame).
+
 ### Imports
 
 ```python
@@ -46,6 +75,7 @@ run_aggregated(
     *,
     batch_size: int | "auto" = "auto",
     align: "calendar" | "duration" | None = None,
+    engine: str | None = None,           # "jax" folds on the JAX engine, below
 ) -> AggregatedResult
 ```
 
@@ -63,12 +93,17 @@ model_points = pl.read_parquet("data/model_points.parquet")
 aggregations = [
     Sum("pv_net_cf").alias("pv_net_cf"),             # scalar: one number for the portfolio
     Sum("pv_claims").alias("pv_claims"),
-    PeriodSum("net_cf").alias("net_cf"),             # per-period vector (term structure)
+    PeriodSum("net_cf").alias("net_cf"),             # one value per projection boundary
     PeriodQuantile("net_cf", levels=(0.05, 0.95)).alias("net_cf_q"),  # term-structure quantiles
 ]
 
 res = run_aggregated(model_fn, model_points, aggregations)  # batch_size="auto"
 ```
+
+`Sum` folds a column holding **one value per policy**. `prospective_value()` gives one value
+per period, so a `pv_net_cf` written that way is per-period: fold its valuation-date value,
+`af.pv0 = af.pv_net_cf.list.get(0)` and `Sum("pv0")`, or the whole line with `PeriodSum`.
+`Sum` over a per-period column is refused, naming `PeriodSum`.
 
 ### Reading `AggregatedResult`
 
@@ -78,9 +113,9 @@ res = run_aggregated(model_fn, model_points, aggregations)  # batch_size="auto"
 | Attribute | Type | What it is |
 |---|---|---|
 | `res.pv_net_cf` | `float` | Scalar aggregate — sum of PV net cashflow across the portfolio |
-| `res.net_cf` | `np.ndarray` | Per-period vector — portfolio net cashflow term structure |
-| `res.net_cf_q` | `dict[float, np.ndarray]` | `{level: per-period array}` when `PeriodQuantile` with levels (un-partitioned) |
-| `res.n_policies` | `int` | Total policies processed |
+| `res.net_cf` | `np.ndarray` (masked) | One value per projection boundary — `n_periods + 1` values — summed over every policy the run folded: the portfolio's term structure |
+| `res.net_cf_q` | `dict[float, np.ndarray]` | `{level: array}`, one value per boundary, when `PeriodQuantile` with levels (un-partitioned) |
+| `res.n_policies` | `int` | Policies the model valued — the rows the totals were folded over, so fewer than the book where the model filters — on every engine |
 | `res.n_periods` | `int` | Maximum projection length observed |
 | `res.batch_size` | `int` | Resolved batch size (useful when `"auto"`) |
 | `res.wall_time_s` | `float` | Wall-clock seconds for the full run |
@@ -95,17 +130,20 @@ print(f"Portfolio PV net cashflow: {res.pv_net_cf:,.0f}")
 print(f"Term structure of net CF: {res.net_cf}")
 print(f"Run: {res.n_policies} policies, {res.wall_time_s:.1f}s, peak {res.peak_rss_mb:.0f} MB per batch")
 
-# Per-period quantile output is a dict keyed by level; each value is a
-# per-period array (term structure), NOT a tidy DataFrame.
+# Per-period quantile output is a dict keyed by level; each value is an
+# array with one value per projection boundary, NOT a tidy DataFrame.
 net_cf_q = res.net_cf_q              # {0.05: np.ndarray, 0.95: np.ndarray}
-q05_term_structure = net_cf_q[0.05]  # one value per projection period
+q05_term_structure = net_cf_q[0.05]  # n_periods + 1 values
 ```
 
 ### Partitioned aggregation with `.over()`
 
 Use `.over(by)` to split a result by a low-cardinality dimension (product line, fund,
 scenario id). Scalar aggregators return a `{*by, alias}` DataFrame; `Period*` aggregators
-return a tidy `{*by, period, alias}` DataFrame.
+return a long `{*by, period, alias}` DataFrame, one row per group and boundary. Call
+`.alias(name)` before `.over(...)` so the output column is named. In a scenario plan the
+same holds: a `Period*` aggregator without `.over("scenario_id")` sums across every scenario
+together, so name the scenario axis whenever the plan has more than one.
 
 ```python
 aggregations = [
@@ -131,6 +169,30 @@ res = run_aggregated(model_fn, model_points, aggregations, align="duration")
 
 Without this flag, `run_aggregated` raises `ValueError` when it detects an
 inception-aligned frame.
+
+### On the JAX engine: `engine="jax"`
+
+For a book too big to hold, or to fold on a GPU: install the engine
+(`pip install "gaspatchio[jax]"`) and pass `engine="jax"`. The model is built once, the
+engine is handed its executable artifact, and each batch is folded on the device as it
+is computed, so only the totals come back. The answer is the same `AggregatedResult`,
+agreeing with the default Polars path to 1e-12 of each line's scale (the quantile family
+to its sketch's accuracy).
+
+```python
+res = run_aggregated(model_fn, model_points, aggregations, engine="jax")
+```
+
+`Count`, `ArgMin`, `ArgMax`, `.of()`, `PeriodQuantile`, `PeriodMedian` and `PeriodCTE`
+are refused by name before the book is read, as is an operation the engine does not
+lower: keep those on `engine=None`. JAX's own configuration picks the device; naming the
+engine does not. The same fold from the command line, over an exported artifact and a
+JSON list of each aggregator's `canonical_form()` with its `alias`:
+
+```bash
+gspio calc-graph model.py points.parquet --profile executable --artifact model.json
+gspio run-artifact model.json points.parquet --engine jax --aggregate aggs.json --results totals.json
+```
 
 ---
 
@@ -195,7 +257,7 @@ reserve_by_product = (
 | Field | Type | What it is |
 |---|---|---|
 | `spill.output_dir` | `Path` | Directory where `batch_NNNN.parquet` files were written |
-| `spill.n_policies` | `int` | Total policies written |
+| `spill.n_policies` | `int` | Policies the model valued — the rows written, so fewer than the book where the model filters |
 | `spill.n_batches` | `int` | Number of parquet files |
 | `spill.wall_time_s` | `float` | Wall-clock seconds for the full run |
 | `spill.peak_rss_mb` | `float \| None` | Peak RSS per batch in MB |
@@ -273,10 +335,13 @@ pv = res.pv_net_cf          # scalar
 cf_vec = res.net_cf         # np.ndarray (Period* aggregator)
 ```
 
-### 3. `PeriodQuantile.over()` is not supported on `run_aggregated`
+### 3. `PeriodQuantile.over()` and `Quantile.over()` are not supported
 
-`PeriodQuantile` with `.over(by)` has no tidy single-column representation and raises
-`NotImplementedError` early. Use one of these alternatives:
+A quantile at several levels has no single-column long form, so `.over(by)` on
+`PeriodQuantile` or `Quantile` raises `NotImplementedError` where `.over()` is written:
+`PeriodQuantile.over() ('q') is not yet supported; use PeriodMedian or PeriodCTE with .over(),
+or PeriodQuantile without .over().` (`Quantile.over()` names `Median`, `CTE` or
+`QuantileRank`). Use one of these alternatives:
 
 ```python
 # Instead of PeriodQuantile(...).alias(...).over("product"):
@@ -289,11 +354,11 @@ PeriodCTE("net_cf", level=0.95).alias("net_cf_cte").over("product_line"),
 PeriodQuantile("net_cf", levels=(0.05, 0.95)).alias("net_cf_q"),
 ```
 
-### 4. `model_points` must be a `pl.DataFrame`, not an `ActuarialFrame`
+### 4. `model_points` must be a Polars frame, not an `ActuarialFrame`
 
 `run_aggregated` and `run_to_parquet` both take a plain Polars `DataFrame` for
-`model_points`. The `model_fn` callable receives an `ActuarialFrame` per batch — that is
-handled internally.
+`model_points`, or the `LazyFrame` `pl.scan_parquet` returns, which they collect first. The
+`model_fn` callable receives an `ActuarialFrame` per batch — that is handled internally.
 
 ```python
 # WRONG — model_points is already an ActuarialFrame

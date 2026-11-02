@@ -1,0 +1,1657 @@
+{
+  "schema": "gaspatchio-boundary-review/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "claim": "Reviewed selected boundaries and explicit exclusions for every stated operation clause; not exhaustive combinations or a general backend certificate.",
+  "clauses": [
+    {
+      "clause": "10",
+      "identifiers": [],
+      "reviewed_boundaries": "Supported typed null scalar/outer/item and empty lists; untyped passengers refuse both profiles without mutation.",
+      "limits": "No neutral Null or Struct type; unknown remains unresolved history. Raw cut category/Struct outputs still need named supported columns.",
+      "case_ids": [
+        "raw-struct-export-refuses"
+      ],
+      "producer_tests": [
+        "tests/graph/test_portable_output_boundaries.py",
+        "tests/graph/test_dtypes.py",
+        "tests/frame/test_integers_arrive_as_i64.py"
+      ]
+    },
+    {
+      "clause": "11.1.1",
+      "identifiers": [
+        "projection_set"
+      ],
+      "reviewed_boundaries": "Synthetic monthly month index, boundary count and empty portfolio; the fixed-step form's step index and its month where a step is whole months.",
+      "limits": "Reader checks the synthetic month column and the fixed-step step/month columns only. Other axis columns/cadences/horizon doors have producer tests; data-derived unrecorded horizons are not portable replay promises.",
+      "case_ids": [
+        "door-projection_set",
+        "door-projection_set-fixed-step",
+        "door-projection_set-fixed-step-month",
+        "empty-portfolio-projection_set"
+      ],
+      "producer_tests": [
+        "tests/accessors/test_projection_set.py",
+        "tests/accessors/test_maximum_age_per_policy.py",
+        "tests/graph/test_executable_profile.py",
+        "tests/projection/test_fixed_step_axis.py"
+      ]
+    },
+    {
+      "clause": "11.1.2",
+      "identifiers": [
+        "join"
+      ],
+      "reviewed_boundaries": "Left join, key match/miss and empty left portfolio; compare by policy identity.",
+      "limits": "Right data is supplied in the fixture. General relational replay, cross and full joins, ambiguous encoded names and ordering are not claimed by the reader; semi and anti joins are claimed only as the selection steps of section 7.6, on one key.",
+      "case_ids": [
+        "door-join",
+        "door-join-every-key-matched",
+        "door-join-unmatched-refused",
+        "empty-portfolio-join",
+        "selection-anti-join",
+        "selection-semi-join",
+        "selection-two-steps-in-order"
+      ],
+      "producer_tests": [
+        "tests/graph/test_executable_profile.py"
+      ]
+    },
+    {
+      "clause": "11.1.3",
+      "identifiers": [
+        "clip"
+      ],
+      "reviewed_boundaries": "Inclusive bounds, lower/upper-only, crossed bounds in both shapes, null source, empty portfolio.",
+      "limits": "Ordered lower-first evaluation is observable for crossed bounds. Nonfinite/mixed-type bounds are not established by these numeric fixtures.",
+      "case_ids": [
+        "clip-crossed-False",
+        "clip-crossed-True",
+        "clip-decimal-value-whole-bounds-policies",
+        "clip-decimal-value-whole-floor-periods",
+        "clip-lower-only",
+        "clip-two-bounds",
+        "clip-upper-only",
+        "empty-portfolio-clip"
+      ],
+      "producer_tests": [
+        "tests/polars_backend/test_list_clip_matches_engine.py"
+      ]
+    },
+    {
+      "clause": "11.1.4",
+      "identifiers": [
+        "cut"
+      ],
+      "reviewed_boundaries": "Named interval through a label comparison and empty portfolio.",
+      "limits": "Raw category/include_breaks output has no portable type; implicit label spelling remains producer-specific. Producer emission tests cover both closure modes.",
+      "case_ids": [
+        "band-equal-to-a-label-outside-its-categories",
+        "band-ordered-against-text-policies",
+        "cut-of-a-nan-periods",
+        "cut-of-a-nan-policies",
+        "cut-through-label-comparison",
+        "empty-portfolio-cut"
+      ],
+      "producer_tests": [
+        "tests/graph/test_executable_profile.py"
+      ]
+    },
+    {
+      "clause": "11.1.5",
+      "identifiers": [
+        "is_in"
+      ],
+      "reviewed_boundaries": "Membership equality and nullable input; empty portfolio; a NaN is a member of no set (11.1.26), per policy and per period, and not of a set held per policy that holds a NaN.",
+      "limits": "Fixture set is an explicit ordered sequence, except the one case whose set is a per-policy column holding a NaN. Unordered Python collections stay engine-native; general expression-supplied sets are not independently certified. A NaN written into a set literal has no document form (a vector cell's non-finite tag is never an operation literal); the producer refuses it where the formula is written, held by producer tests.",
+      "case_ids": [
+        "empty-portfolio-is_in",
+        "is-in-of-a-logical-unknown-policies",
+        "membership-in-a-set-holding-a-nan",
+        "membership-null",
+        "membership-of-a-nan-is-false",
+        "membership-of-a-nan-is-false-per-period",
+        "selection-filter-compound"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/functions/test_is_in_members_keep_to_one_kind.py",
+        "tests/frame/test_is_in_of_a_nan_is_false.py"
+      ]
+    },
+    {
+      "clause": "11.1.6",
+      "identifiers": [
+        "replace"
+      ],
+      "reviewed_boundaries": "Simultaneous replacement, unmatched/null preservation, canonical operand order, empty portfolio.",
+      "limits": "Producer grammar/emission checks cover the mapping spelling; no iterative substitution is inferred.",
+      "case_ids": [
+        "empty-portfolio-replace",
+        "replace-simultaneous"
+      ],
+      "producer_tests": [
+        "tests/graph/test_executable_profile.py"
+      ]
+    },
+    {
+      "clause": "11.1.7",
+      "identifiers": [
+        "str.to_date"
+      ],
+      "reviewed_boundaries": "Explicit format, invalid-to-null and strict refusal, empty portfolio; substring/inferred-format capability refusals.",
+      "limits": "The stdlib reader only implements exact parsing with an explicit format. Producer supports additional format/substring forms; null format is not independently reproducible.",
+      "case_ids": [
+        "empty-portfolio-str.to_date",
+        "parse-explicit-date",
+        "parse-inferred-format-capability",
+        "parse-invalid-strict-refusal",
+        "parse-substring-capability"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.8",
+      "identifiers": [
+        "ceil",
+        "floor",
+        "round"
+      ],
+      "reviewed_boundaries": "Positive/negative values, both tie modes, scalar/list, null, empty portfolio; a negative decimals over doubles and whole numbers in both tie modes, per policy and per period, a reading that is a half only at fifteen digits, a whole number past 2**53, both type limits, and a whole number refused past i64; a stored flag per policy and a comparison per period read as their 0.0/1.0, answering f64; floor and ceil of a whole number past 2**53 and at the edge of i64, answering the i64 itself.",
+      "limits": "Past 22 places either side of the point, and from 10**37, a producer may answer by its native scaling, and no case claims those bits. A fixed-point decimal under a negative decimals is outside the vocabulary. Significant figures have their own identifier in 11.1.12. A null flag, a mask and a stored run of flags under these three are held by producer tests, not by published cases.",
+      "case_ids": [
+        "ceil-bounded-False",
+        "ceil-bounded-True",
+        "ceil-of-a-per-period-comparison",
+        "ceil-of-a-stored-flag",
+        "ceil-of-a-whole-number-past-2-53",
+        "duration-ceil-per-period-refused",
+        "duration-ceil-per-policy-refused",
+        "duration-floor-per-period-refused",
+        "duration-floor-per-policy-refused",
+        "duration-round-per-period-refused",
+        "duration-round-per-policy-refused",
+        "empty-portfolio-ceil",
+        "empty-portfolio-floor",
+        "empty-portfolio-round",
+        "floor-bounded-False",
+        "floor-bounded-True",
+        "floor-of-a-per-period-comparison",
+        "floor-of-a-stored-flag",
+        "floor-of-a-whole-number-past-2-53",
+        "null-ceil-scalar",
+        "null-floor-scalar",
+        "null-round-period",
+        "round-a-double-past-every-step-a-double-holds",
+        "round-a-double-to-hundreds-away-from-zero",
+        "round-a-double-to-tens-to-the-even-neighbour",
+        "round-a-run-of-doubles-to-thousands",
+        "round-a-run-of-whole-numbers-to-hundreds",
+        "round-a-whole-number-past-every-step-an-i64-holds",
+        "round-a-whole-number-to-a-step-past-i64",
+        "round-a-whole-number-to-tens-away-from-zero",
+        "round-a-whole-number-to-tens-to-the-even-neighbour",
+        "round-half_away_from_zero",
+        "round-half_to_even",
+        "round-of-a-per-period-comparison",
+        "round-of-a-stored-flag"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/column/test_maths_over_a_flag_reads_its_0_or_1.py"
+      ]
+    },
+    {
+      "clause": "11.1.9",
+      "identifiers": [
+        "cum_prod",
+        "cum_sum"
+      ],
+      "reviewed_boundaries": "Forward/reverse scans, jagged and empty lists, a lost period propagating in each direction, null outer list, empty portfolio; whole-number runs past 2**53 summed and multiplied exactly in both directions, and a running sum or product with a period past i64 refused. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "Periods never reduce across policies. Nonfinite scan behavior is not a numerical agreement claim; past i64 a period is outside the portable domain, which the published refusals show.",
+      "case_ids": [
+        "cum_prod-False",
+        "cum_prod-True",
+        "cum_prod-of-whole-numbers-past-2-53",
+        "cum_prod-of-whole-numbers-past-i64-refuses",
+        "cum_prod-over-a-value-per-policy",
+        "cum_sum-False",
+        "cum_sum-True",
+        "cum_sum-of-whole-numbers-past-2-53",
+        "cum_sum-of-whole-numbers-past-i64-refuses",
+        "cum_sum-over-a-value-per-policy",
+        "cum_sum-reverse-of-whole-numbers-past-2-53",
+        "duration-cum-prod-per-period-refused",
+        "empty-portfolio-cum_prod",
+        "empty-portfolio-cum_sum",
+        "null-cum_prod-outer-list",
+        "null-cum_prod-period",
+        "null-cum_prod-period-reverse",
+        "null-cum_sum-outer-list",
+        "null-cum_sum-period",
+        "null-cum_sum-period-reverse",
+        "window-cum_prod",
+        "window-cum_prod-moved",
+        "window-cum_prod-reverse",
+        "window-cum_prod-reverse-moved",
+        "window-cum_sum",
+        "window-cum_sum-moved",
+        "window-cum_sum-of-previous_period",
+        "window-cum_sum-of-previous_period-moved",
+        "window-cum_sum-reverse",
+        "window-cum_sum-reverse-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.10",
+      "identifiers": [
+        "mortality.at"
+      ],
+      "reviewed_boundaries": "Select/ultimate duration clamp and empty portfolio.",
+      "limits": "Aggregate/joint producer paths are separately tested. Wrapper identity cannot be independently authenticated from the table payload alone; age basis is descriptive, never converted.",
+      "case_ids": [
+        "empty-portfolio-mortality.at",
+        "select-ultimate-clamp"
+      ],
+      "producer_tests": [
+        "tests/mortality/test_at_joint.py"
+      ]
+    },
+    {
+      "clause": "11.1.11",
+      "identifiers": [],
+      "reviewed_boundaries": "Producer signature census, typed attributes, operand order and rejected variants.",
+      "limits": "This is a grammar checklist, not an additional value identifier. The standalone invocation reader is not a general signature validator.",
+      "case_ids": [
+        "list-get-integral-decimal-position",
+        "lookup-arity",
+        "lookup-keyword-order"
+      ],
+      "producer_tests": [
+        "tests/graph/test_executable_profile.py",
+        "tests/graph/test_artifact_conformance.py"
+      ]
+    },
+    {
+      "clause": "11.1.12",
+      "identifiers": [
+        "abs",
+        "cbrt",
+        "exp",
+        "log",
+        "log10",
+        "log1p",
+        "norm_cdf",
+        "round_sig_figs",
+        "sign",
+        "sqrt"
+      ],
+      "reviewed_boundaries": "Ten named elementary functions in scalar/list form, nullable cells, exact/toleranced values and empty portfolio; norm_cdf against a 60-digit Phi through the body, both tails to -37.5, the subnormal and underflowed answers under the line rule, and its exact null, NaN and infinite values; each of the ten over a stored flag per policy and a comparison per period, read as its 0.0/1.0 and answering f64, log and log10 of the false one minus infinity; abs and sign of a whole number past 2**53 keeping i64, round_sig_figs of one to seventeen figures, the six transcendental calls of a whole number answering f64, and the absolute value of -2**63 refused.",
+      "limits": "Bounded finite examples do not certify every transcendental exceptional input or underflow. No case claims Excel's own bits for norm_cdf. A null flag, a mask and a stored run of flags under these ten are held by producer tests, not by published cases.",
+      "case_ids": [
+        "abs-bounded-False",
+        "abs-bounded-True",
+        "abs-of-a-per-period-comparison",
+        "abs-of-a-stored-flag",
+        "abs-of-a-whole-number-past-2-53",
+        "abs-of-a-whole-number-run-past-2-53",
+        "abs-of-the-least-whole-number-refuses",
+        "cbrt-bounded-False",
+        "cbrt-bounded-True",
+        "cbrt-of-a-per-period-comparison",
+        "cbrt-of-a-stored-flag",
+        "cbrt-of-a-whole-number",
+        "duration-cbrt-per-period-refused",
+        "duration-cbrt-per-policy-refused",
+        "duration-exp-per-period-refused",
+        "duration-exp-per-policy-refused",
+        "duration-log-per-period-refused",
+        "duration-log-per-policy-refused",
+        "duration-log10-per-period-refused",
+        "duration-log10-per-policy-refused",
+        "duration-log1p-per-period-refused",
+        "duration-log1p-per-policy-refused",
+        "duration-norm-cdf-per-period-refused",
+        "duration-norm-cdf-per-policy-refused",
+        "duration-round-sig-figs-per-period-refused",
+        "duration-round-sig-figs-per-policy-refused",
+        "duration-sign-per-period-refused",
+        "duration-sign-per-policy-refused",
+        "duration-sqrt-per-period-refused",
+        "duration-sqrt-per-policy-refused",
+        "empty-portfolio-abs",
+        "empty-portfolio-cbrt",
+        "empty-portfolio-exp",
+        "empty-portfolio-log",
+        "empty-portfolio-log10",
+        "empty-portfolio-log1p",
+        "empty-portfolio-norm_cdf",
+        "empty-portfolio-round_sig_figs",
+        "empty-portfolio-sign",
+        "empty-portfolio-sqrt",
+        "exp-bounded-False",
+        "exp-bounded-True",
+        "exp-of-a-per-period-comparison",
+        "exp-of-a-stored-flag",
+        "exp-of-a-whole-number",
+        "log-bounded-False",
+        "log-bounded-True",
+        "log-of-a-per-period-comparison",
+        "log-of-a-stored-flag",
+        "log-of-a-whole-number",
+        "log10-bounded-False",
+        "log10-bounded-True",
+        "log10-of-a-per-period-comparison",
+        "log10-of-a-stored-flag",
+        "log10-of-a-whole-number",
+        "log1p-bounded-False",
+        "log1p-bounded-True",
+        "log1p-of-a-per-period-comparison",
+        "log1p-of-a-stored-flag",
+        "log1p-of-a-whole-number",
+        "lookup-negative-zero-answer-sign-is-zero",
+        "norm-cdf-below-the-normal-range",
+        "norm-cdf-body",
+        "norm-cdf-lower-tail",
+        "norm-cdf-per-period",
+        "norm-cdf-special-values",
+        "norm-cdf-upper-saturation",
+        "norm-cdf-whole-numbers",
+        "norm_cdf-of-a-per-period-comparison",
+        "norm_cdf-of-a-stored-flag",
+        "null-abs-scalar",
+        "null-cbrt-scalar",
+        "null-exp-scalar",
+        "null-log-scalar",
+        "null-log10-scalar",
+        "null-log1p-scalar",
+        "null-norm_cdf-per-period",
+        "null-norm_cdf-scalar",
+        "null-round_sig_figs-scalar",
+        "null-sign-scalar",
+        "null-sqrt-scalar",
+        "round-significant-digits",
+        "round_sig_figs-a-tie-at-one-figure",
+        "round_sig_figs-a-tie-at-three-figures",
+        "round_sig_figs-of-a-per-period-comparison",
+        "round_sig_figs-of-a-stored-flag",
+        "round_sig_figs-of-a-whole-number-past-2-53",
+        "sign-bounded-False",
+        "sign-bounded-True",
+        "sign-of-a-nan-periods",
+        "sign-of-a-nan-policies",
+        "sign-of-a-per-period-comparison",
+        "sign-of-a-stored-flag",
+        "sign-of-a-whole-number-past-2-53",
+        "sqrt-bounded-False",
+        "sqrt-bounded-True",
+        "sqrt-of-a-per-period-comparison",
+        "sqrt-of-a-stored-flag",
+        "sqrt-of-a-whole-number"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_normal_cdf.py",
+        "tests/column/test_maths_over_a_flag_reads_its_0_or_1.py"
+      ]
+    },
+    {
+      "clause": "11.1.13",
+      "identifiers": [
+        "fill_nan",
+        "fill_null",
+        "is_finite",
+        "is_infinite",
+        "is_nan",
+        "is_not_nan",
+        "is_not_null",
+        "is_null"
+      ],
+      "reviewed_boundaries": "Null vs NaN/infinity, predicates, fill_null preserving NaN, fill_nan replacing NaN while keeping an infinity, a null period and a null outer list, a value, column, per-policy-over-period, per-period and expression fill, whole-number values and fills, scalar/list and empty portfolio.",
+      "limits": "Producer suites cover whole-number predicates and unsupported semantic families, and fill_null's bounded domain: a fill of another family than the value's, or a number filling a bool, is refused while the formula is written. No extra numeric truthiness is inferred. fill_nan over a Boolean, text or date value states no answer, and a per-period fill over a per-policy value is outside the entry.",
+      "case_ids": [
+        "empty-portfolio-fill_nan",
+        "empty-portfolio-fill_null",
+        "empty-portfolio-is_finite",
+        "empty-portfolio-is_infinite",
+        "empty-portfolio-is_nan",
+        "empty-portfolio-is_not_nan",
+        "empty-portfolio-is_not_null",
+        "empty-portfolio-is_null",
+        "fill-nan-column-fill-policies",
+        "fill-nan-expression-fill-over-periods",
+        "fill-nan-f64-periods",
+        "fill-nan-f64-policies",
+        "fill-nan-i64-decimal-fill",
+        "fill-nan-i64-periods",
+        "fill-nan-i64-whole-fill",
+        "fill-nan-null-stays-null-periods",
+        "fill-nan-null-stays-null-policies",
+        "fill-nan-period-fill-over-periods",
+        "fill-nan-policy-fill-over-periods",
+        "fill-nan-whole-fill-over-decimal",
+        "fill-null-keeps-nan",
+        "fill-null-of-a-logical-unknown-policies",
+        "is-null-of-a-flag-chosen-over-a-nan-periods",
+        "is-null-of-a-logical-unknown-policies",
+        "is_finite-missing-False",
+        "is_finite-missing-True",
+        "is_infinite-missing-False",
+        "is_infinite-missing-True",
+        "is_nan-missing-False",
+        "is_nan-missing-True",
+        "is_not_nan-missing-False",
+        "is_not_nan-missing-True",
+        "is_not_null-missing-False",
+        "is_not_null-missing-True",
+        "is_null-missing-False",
+        "is_null-missing-True"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_fill_nan.py",
+        "tests/functions/test_fills_over_flags_text_and_dates.py"
+      ]
+    },
+    {
+      "clause": "11.1.14",
+      "identifiers": [
+        "sum"
+      ],
+      "reviewed_boundaries": "Per-policy sum, a null period nulling the total, all-null run answering null, empty list still summing to nought, null outer list and empty portfolio; whole numbers past 2**53 summed exactly, a total that fits answered where a running total on the way passed i64, and a total past i64 refused. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "No row-axis aggregation or arbitrary reassociation budget.",
+      "case_ids": [
+        "empty-portfolio-sum",
+        "floordiv-by-a-sum-in-period-order",
+        "null-sum-all-null",
+        "null-sum-outer-list",
+        "null-sum-period",
+        "sum-in-period-order",
+        "sum-of-an-empty-run-is-positive-zero",
+        "sum-of-whole-numbers-past-2-53",
+        "sum-of-whole-numbers-past-i64-refuses",
+        "sum-of-whole-numbers-whose-running-total-passes-i64",
+        "sum-over-a-value-per-policy",
+        "sum-period-reduction",
+        "window-sum",
+        "window-sum-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.15",
+      "identifiers": [
+        "mean"
+      ],
+      "reviewed_boundaries": "Per-policy mean over its own periods, a null period nulling the answer instead of leaving the denominator, empty/all-null/null outer and empty portfolio; the mean of whole numbers, to the edge of i64, answering f64. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "No padded common-grid denominator.",
+      "case_ids": [
+        "empty-portfolio-mean",
+        "mean-of-whole-numbers",
+        "mean-over-a-value-per-policy",
+        "mean-period-reduction",
+        "null-mean-all-null",
+        "null-mean-outer-list",
+        "null-mean-period",
+        "window-mean",
+        "window-mean-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.16",
+      "identifiers": [
+        "min"
+      ],
+      "reviewed_boundaries": "Per-policy min, a null period nulling the answer on the clause's own run and on values it does not reach, empty/all-null/null outer and empty portfolio. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "No replacement of missing values by zero.",
+      "case_ids": [
+        "empty-portfolio-min",
+        "flag-min-answers-a-flag",
+        "min-of-a-run-holding-a-nan",
+        "min-over-a-value-per-policy",
+        "min-period-reduction",
+        "null-min-all-null",
+        "null-min-is-not-a-nought",
+        "null-min-outer-list",
+        "null-min-period",
+        "window-min",
+        "window-min-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.17",
+      "identifiers": [
+        "max"
+      ],
+      "reviewed_boundaries": "Per-policy max, a null period nulling the answer above and below zero, empty/all-null/null outer and empty portfolio. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "No replacement of missing values by zero.",
+      "case_ids": [
+        "empty-portfolio-max",
+        "flag-max-answers-a-flag",
+        "max-of-a-run-holding-a-nan",
+        "max-over-a-value-per-policy",
+        "max-period-reduction",
+        "null-max-all-null",
+        "null-max-is-not-a-nought",
+        "null-max-outer-list",
+        "null-max-period",
+        "window-max",
+        "window-max-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.18",
+      "identifiers": [],
+      "reviewed_boundaries": "Every bounded value identifier has a zero-policy case; scalar/list broadcasting, jagged lists, null outer lists and unequal-length refusal.",
+      "limits": "Backend rectangular-only capability is distinct from the portable per-policy shape rule. Not every dtype/configuration Cartesian product is enumerated.",
+      "case_ids": [
+        "arithmetic-length-mismatch",
+        "broadcast-explicit-jagged",
+        "comparison-null-list"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.19",
+      "identifiers": [
+        "projection.at_period",
+        "projection.cumulative_survival",
+        "projection.next_period",
+        "projection.previous_period"
+      ],
+      "reviewed_boundaries": "Shift direction/fill, cumulative-survival opening value with and without start_at, a lost decrement propagating through the running survival, empty lists and empty portfolio. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "Finite list values, numeric literal fill and from_survival=false only. The shifts' null boundary and alternative survival modes are not certified by these fixtures. A shifted run of Booleans is outside the entry; the producer's refusal of a numeric fill for one is a producer test.",
+      "case_ids": [
+        "duration-projection-cumulative-survival-per-period-refused",
+        "empty-portfolio-projection.at_period",
+        "empty-portfolio-projection.cumulative_survival",
+        "empty-portfolio-projection.next_period",
+        "empty-portfolio-projection.previous_period",
+        "null-survival-period",
+        "null-survival-period-start_at",
+        "projection.at_period-bounded",
+        "projection.next_period-bounded",
+        "projection.previous_period-bounded",
+        "survival-1.0",
+        "survival-None",
+        "window-cum_sum-of-previous_period",
+        "window-cum_sum-of-previous_period-moved",
+        "window-survival",
+        "window-survival-moved",
+        "window-survival-start_at",
+        "window-survival-start_at-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/frame/test_per_period_flags.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.20",
+      "identifiers": [
+        "projection.accumulate",
+        "projection.remaining_sum"
+      ],
+      "reviewed_boundaries": "Linear recurrence in both directions, including zero/negative multiplier, literal steps, a jagged book whose reverse runs each open at their own last period, the workbook rollback and its spelling between two reversals, a lost step or a lost opening state nulling it from there on in the run's own direction, and a run whose every step is lost; suffix sums with a lost period nulling back toward period zero, an all-null run and a null outer list; suffix sums of whole numbers past 2**53 and to the edge of i64 answering list[i64] exactly, and one past i64 refused; empty lists/portfolio. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "Finite f64 domain. A non-finite operand and a null outer list to the recurrence stay outside the entry in either direction. No scalar-column step, nonfinite-state or two-scalar-axis interpretation is promised. The to_float a producer writes around a whole-number operand, and its refusal of a Boolean one, are producer tests.",
+      "case_ids": [
+        "accumulate-between-two-reversals",
+        "accumulate-product-rounded-before-addend",
+        "accumulate-reverse-empty-portfolio",
+        "accumulate-reverse-jagged",
+        "accumulate-reverse-literal-addend",
+        "accumulate-reverse-literal-multiplier",
+        "accumulate-reverse-workbook-rollback",
+        "accumulate-reverse-zero-and-negative-multiplier",
+        "accumulation-literal-multiplier",
+        "empty-portfolio-projection.accumulate",
+        "empty-portfolio-projection.remaining_sum",
+        "linear-accumulation",
+        "null-accumulate-addend",
+        "null-accumulate-all-null",
+        "null-accumulate-first-period",
+        "null-accumulate-initial",
+        "null-accumulate-multiplier",
+        "null-accumulate-reverse-addend",
+        "null-accumulate-reverse-initial",
+        "null-accumulate-reverse-last-period",
+        "null-accumulate-reverse-multiplier",
+        "null-remaining_sum-all-null",
+        "null-remaining_sum-outer-list",
+        "null-remaining_sum-period",
+        "projection.accumulate-initial-per-period",
+        "remaining-sum",
+        "remaining_sum-of-whole-numbers-past-2-53",
+        "remaining_sum-of-whole-numbers-past-i64-refuses",
+        "window-accumulate",
+        "window-accumulate-moved-addend",
+        "window-accumulate-moved-multiplier",
+        "window-accumulate-reverse",
+        "window-accumulate-reverse-moved-addend",
+        "window-accumulate-reverse-moved-multiplier",
+        "window-remaining_sum",
+        "window-remaining_sum-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_dtypes.py",
+        "tests/accessors/test_projection.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.21",
+      "identifiers": [
+        "projection.prospective_value"
+      ],
+      "reviewed_boundaries": "Both timings under varying rates, scalar-rate forms, a lost cashflow period nulling back toward period zero under either timing, an all-null run and a null outer list, empty lists and empty portfolio. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "Rate inputs only, and a null rate stays outside the clause. Factor mode and literal end-of-period behavior remain outside this clause.",
+      "case_ids": [
+        "empty-portfolio-projection.prospective_value",
+        "null-prospective_value-all-null",
+        "null-prospective_value-period",
+        "null-prospective_value-period-beginning",
+        "prospective-factor-excluded",
+        "prospective-value-beginning_of_period",
+        "prospective-value-end_of_period",
+        "window-prospective_value",
+        "window-prospective_value-beginning",
+        "window-prospective_value-beginning-moved-rate",
+        "window-prospective_value-moved-cashflow",
+        "window-prospective_value-moved-rate"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.22",
+      "identifiers": [
+        "list.get"
+      ],
+      "reviewed_boundaries": "Negative and positive positions, selected null, null list/position, empty/out-of-bounds refusal and empty portfolio. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "Decimal position refused even when integral; no null-on-bounds fallback.",
+      "case_ids": [
+        "empty-portfolio-list.get",
+        "list-get-empty-refuses",
+        "list-get-integral-decimal-position",
+        "list-get-negative",
+        "list-get-negative-oob",
+        "list-get-null-list",
+        "list-get-null-position",
+        "list-get-selected-null",
+        "window-list-get",
+        "window-list-get-last",
+        "window-list-get-last-moved",
+        "window-list-get-moved-at-the-position",
+        "window-list-get-moved-elsewhere"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.23",
+      "identifiers": [
+        "to_integer"
+      ],
+      "reviewed_boundaries": "Checked conversion, empty portfolio/list, fractional/null scalar/item/outer, nonfinite and signed upper-overflow refusal, and the wider storage widths judged on their value at both ends of the i64 range.",
+      "limits": "No truncation, bool/text conversion or unknown type substitution. A width past i64 refuses as a range rather than as a fraction; the two refusals are separate and each names its own door.",
+      "case_ids": [
+        "checked-integer-fraction",
+        "checked-integer-nonfinite",
+        "checked-integer-null-item",
+        "checked-integer-null-list",
+        "checked-integer-upper-overflow",
+        "conditional-does-not-hide-invalid-conversion",
+        "conversion-to_integer-signed-128-below-i64",
+        "conversion-to_integer-unsigned-past-i64",
+        "conversion-to_integer-unsigned-within-range",
+        "empty-portfolio-to_integer",
+        "integer-checked-conversion",
+        "integer-fraction-refuses"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.38",
+      "identifiers": [
+        "to_float"
+      ],
+      "reviewed_boundaries": "Widening on a scalar and a list, both signs of the 2**53 boundary and the first value past each, a null carried on scalar/item/outer, empty list and empty portfolio, a double returned unchanged, and an unsigned width judged on its value.",
+      "limits": "Bool, text and date refuse on type while the formula is written rather than while it runs. Non-finite doubles pass through as themselves and are not re-examined here; no rounding, nearest-double or saturating mode exists to be reviewed.",
+      "case_ids": [
+        "conversion-to_float-at-the-boundary",
+        "conversion-to_float-below-the-boundary",
+        "conversion-to_float-double-unchanged",
+        "conversion-to_float-empty-list",
+        "conversion-to_float-list",
+        "conversion-to_float-null-carried",
+        "conversion-to_float-null-period",
+        "conversion-to_float-past-the-boundary",
+        "conversion-to_float-refuses-bool",
+        "conversion-to_float-refuses-date",
+        "conversion-to_float-refuses-text",
+        "conversion-to_float-scalar",
+        "conversion-to_float-unsigned-past-the-boundary",
+        "conversion-to_float-unsigned-within-the-boundary",
+        "empty-portfolio-to_float"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.39",
+      "identifiers": [
+        "to_text"
+      ],
+      "reviewed_boundaries": "Every accepted type written out -- integer, shortest-form double, bool, date, text, category -- on a scalar and a list, a null carried on scalar/item/outer, empty list and empty portfolio, and the two doors from outside: an unsigned value past 2**63 and a 128-bit value, each keeping every digit.",
+      "limits": "Only floats whose shortest form carries no exponent or a positive one are published, because the spelling of a small negative exponent is a printer's habit rather than the clause's claim. Datetime text is stated but not exhibited: its fractional digits follow a time unit section 10 does not record. Duration, decimal, time-of-day and binary refusals are producer tests; the envelope has no name to exhibit them under.",
+      "case_ids": [
+        "conversion-to_text-bool",
+        "conversion-to_text-categorical",
+        "conversion-to_text-date",
+        "conversion-to_text-empty-list",
+        "conversion-to_text-float-shortest-form",
+        "conversion-to_text-integer",
+        "conversion-to_text-list",
+        "conversion-to_text-null-carried",
+        "conversion-to_text-null-period",
+        "conversion-to_text-refuses-an-array",
+        "conversion-to_text-signed-128",
+        "conversion-to_text-text-unchanged",
+        "conversion-to_text-unsigned-past-i64",
+        "empty-portfolio-to_text",
+        "to_text-a-whole-number-and-a-signed-zero-keep-a-point",
+        "to_text-an-exponent-carries-its-sign-and-no-padding",
+        "to_text-the-fixed-form-reaches-down-to-ten-to-the-minus-five",
+        "to_text-the-fixed-form-reaches-up-to-ten-to-the-fifteenth",
+        "to_text-the-three-non-finite-spellings",
+        "to_text-the-two-ends-of-the-double"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.40",
+      "identifiers": [
+        "to_list"
+      ],
+      "reviewed_boundaries": "A two-element and a three-element array, a null element and a null array, an array of width zero, an empty portfolio, and the refusals of a list and of a scalar.",
+      "limits": "An array whose element type section 10 cannot name is a producer test; the envelope's array name admits section 10 element types only, so there is no case to exhibit it with. Nested arrays and re-widthing are outside the entry.",
+      "case_ids": [
+        "conversion-to_list-integer-array",
+        "conversion-to_list-null-element-and-null-array",
+        "conversion-to_list-refuses-a-list",
+        "conversion-to_list-refuses-a-scalar",
+        "conversion-to_list-two-element-array",
+        "conversion-to_list-zero-width-array",
+        "empty-portfolio-to_list"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.41",
+      "identifiers": [
+        "list.reverse"
+      ],
+      "reviewed_boundaries": "Jagged lists including a one-period and an empty one, every list element type the envelope names, a null moving with its position, a null outer list, reversal applied twice, the forward recurrence between two reversals and an empty portfolio. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "A per-policy operand has no periods to turn and is outside the entry. Nothing is folded, so no null propagation is claimed or exhibited beyond the null moving.",
+      "case_ids": [
+        "accumulate-between-two-reversals",
+        "empty-portfolio-list.reverse",
+        "list-reverse-bool",
+        "list-reverse-date",
+        "list-reverse-i64",
+        "list-reverse-jagged",
+        "list-reverse-null-moves",
+        "list-reverse-null-outer",
+        "list-reverse-str",
+        "list-reverse-twice",
+        "window-list-reverse",
+        "window-list-reverse-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_backward_recurrence.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.24",
+      "identifiers": [
+        "lookup"
+      ],
+      "reviewed_boundaries": "Ordered tuple keys, scalar/list and empty keys/portfolio, safe numeric endpoints/fractions, all miss modes, duplicate/empty table, answer-layout/arity and exact payload identity refusals.",
+      "limits": "Only present bounded string/numeric keys with finite f64 answers. An answer column of whole numbers or single-precision values read as f64, and one past 2**53 or not a number refused, is held by producer tests, not by a published case. The extreme fractional fixture explicitly uses hash storage; this does not certify auto storage selection.",
+      "case_ids": [
+        "empty-portfolio-lookup",
+        "gt-of-a-per-policy-lookup-stored",
+        "lookup-arity",
+        "lookup-duplicate-key",
+        "lookup-duplicate-payload",
+        "lookup-empty-table",
+        "lookup-exact-fingerprint-required",
+        "lookup-extra-answer",
+        "lookup-guarded-null-key-fill",
+        "lookup-guarded-null-key-nan",
+        "lookup-guarded-null-key-raise",
+        "lookup-keyword-order",
+        "lookup-large-query",
+        "lookup-miss-fill",
+        "lookup-miss-nan",
+        "lookup-miss-raise",
+        "lookup-negative-zero-answer-reads-as-zero",
+        "lookup-negative-zero-answer-sign-is-zero",
+        "lookup-nonfinite-query",
+        "lookup-null-outer",
+        "lookup-null-query",
+        "lookup-numeric-key-endpoints-and-fractions",
+        "lookup-query-key-order-is-significant",
+        "lookup-reaches-a-blank-answer-cell-fill",
+        "lookup-reaches-a-blank-answer-cell-nan",
+        "lookup-reaches-a-blank-answer-cell-raise",
+        "lookup-unreached-blank-answer-cell",
+        "table-payload-change"
+      ],
+      "producer_tests": [
+        "tests/assumptions/test_lookup_portable_contract.py",
+        "tests/assumptions/test_lookup_operand_order.py",
+        "tests/assumptions/test_integer_answer_column.py"
+      ]
+    },
+    {
+      "clause": "11.1.25",
+      "identifiers": [
+        "add",
+        "div",
+        "floordiv",
+        "mod",
+        "mul",
+        "pow",
+        "sub"
+      ],
+      "reviewed_boundaries": "Both shapes and operand orders, signed division/remainder, zero divisor, nullable inputs, empty portfolio, exact integer endpoints, huge-exponent/overflow and mixed-range refusals.",
+      "limits": "Producer wrapping outside i64 range is not portable agreement. Negative scalar base with list exponent and nonfinite inputs remain excluded. A Boolean operand, per period or per policy, read as its f64 indicator, an integer power under a written exponent outside [0, 2^32-1] answering f64, and a column exponent past that range refused naming to_float(), are held by producer tests, not by published cases.",
+      "case_ids": [
+        "add-f64-periods",
+        "add-f64-policies",
+        "add-i64-periods",
+        "add-i64-policies",
+        "add-list-scalar",
+        "add-missing",
+        "add-product-rounded-first-periods",
+        "add-product-rounded-first-policies",
+        "add-zero-policies",
+        "arithmetic-length-mismatch",
+        "comparison-in-arithmetic",
+        "compound-scalar-plus-list",
+        "div-f64-periods",
+        "div-f64-policies",
+        "div-float-zero-divisor",
+        "div-i64-periods",
+        "div-i64-policies",
+        "div-list-scalar",
+        "div-missing",
+        "div-zero-policies",
+        "empty-portfolio-add",
+        "empty-portfolio-div",
+        "empty-portfolio-floordiv",
+        "empty-portfolio-mod",
+        "empty-portfolio-mul",
+        "empty-portfolio-pow",
+        "empty-portfolio-sub",
+        "float-floor-uses-rounded-quotient",
+        "floordiv-by-a-sum-in-period-order",
+        "floordiv-f64-periods",
+        "floordiv-f64-policies",
+        "floordiv-float-zero-divisor",
+        "floordiv-i64-periods",
+        "floordiv-i64-policies",
+        "floordiv-integer-zero-divisor",
+        "floordiv-list-scalar",
+        "floordiv-missing",
+        "floordiv-negative-zero-quotient-divides",
+        "floordiv-zero-policies",
+        "ge-threshold-after-product-and-sum",
+        "integer-endpoints-exact",
+        "integer-overflow",
+        "integer-power-endpoints",
+        "integer-power-huge-exponent",
+        "lookup-guarded-null-key-nan",
+        "lookup-negative-zero-answer-reads-as-zero",
+        "lookup-negative-zero-answer-sign-is-zero",
+        "mixed-arithmetic-outside-exact-range",
+        "mixed-integer-float",
+        "mod-f64-periods",
+        "mod-f64-policies",
+        "mod-float-zero-divisor",
+        "mod-i64-periods",
+        "mod-i64-policies",
+        "mod-integer-zero-divisor",
+        "mod-list-scalar",
+        "mod-missing",
+        "mod-product-dividend-periods",
+        "mod-product-dividend-policies",
+        "mod-zero-policies",
+        "mul-f64-periods",
+        "mul-f64-policies",
+        "mul-flag-negative-zero-divides-periods",
+        "mul-flag-negative-zero-divides-policies",
+        "mul-i64-periods",
+        "mul-i64-policies",
+        "mul-list-scalar",
+        "mul-missing",
+        "mul-of-a-flag-chosen-over-a-nan-periods",
+        "mul-of-a-logical-unknown-policies",
+        "mul-zero-policies",
+        "negative-scalar-list-power",
+        "pow-null-base-over-a-run",
+        "power-integer",
+        "power-integer-lists",
+        "power-integer-negative-literal",
+        "power-integer-negative-literal-periods",
+        "power-periods",
+        "power-policies",
+        "power-scalar-list",
+        "power-zero-base-null-period",
+        "scalar-minus-list",
+        "sub-f64-periods",
+        "sub-f64-policies",
+        "sub-i64-periods",
+        "sub-i64-policies",
+        "sub-list-scalar",
+        "sub-missing",
+        "sub-zero-policies",
+        "sum-of-an-empty-run-is-positive-zero"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/frame/test_per_period_flags.py",
+        "tests/frame/test_per_policy_flag_arithmetic.py",
+        "tests/frame/test_integer_power_written_exponent.py",
+        "tests/errors/test_an_integer_power_past_its_range_names_to_float.py"
+      ]
+    },
+    {
+      "clause": "11.1.26",
+      "identifiers": [
+        "eq",
+        "ge",
+        "gt",
+        "le",
+        "lt",
+        "ne"
+      ],
+      "reviewed_boundaries": "All six predicates in both shapes, inline predicate vs stored indicator, scalar semantic types, nullable/empty input; NaN refusal; whole numbers past 2**53 compared exactly per policy and per period; list-shaped dates against a date and against a date run, with a null element; text ordered by code point per policy and per period -- a capital before a small letter, a prefix before its extension, the empty string first, an accent after every ASCII letter -- against a column, a literal on the left and a run, with a null on either shape; a comparison of a table lookup stored as the f64 indicator.",
+      "limits": "Only a whole number compared with a decimal is bounded by the exact numeric range; no NaN ordering or cross-family ordering is selected, and the producer refuses a comparison across families while the formula is written. Text order is code-point order only: no case folding, collation or locale is claimed. List-shaped text equality is held by producer tests, not by a published case; date/datetime mixing stays outside the entry. Date-and-time and duration comparisons exact to the last unit, and a column wider than i64 compared in its own width, are held by producer tests, not by published cases.",
+      "case_ids": [
+        "abs-of-a-per-period-comparison",
+        "and-beside-a-nan-comparison-policies",
+        "and-of-a-flag-chosen-over-a-nan-periods",
+        "and-over-a-logical-unknown-policies",
+        "and-over-a-nan-comparison-periods",
+        "band-equal-to-a-label-outside-its-categories",
+        "band-ordered-against-text-policies",
+        "cbrt-of-a-per-period-comparison",
+        "ceil-of-a-per-period-comparison",
+        "compare-eq-periods",
+        "compare-eq-policies",
+        "compare-ge-periods",
+        "compare-ge-policies",
+        "compare-gt-periods",
+        "compare-gt-policies",
+        "compare-le-periods",
+        "compare-le-policies",
+        "compare-lt-periods",
+        "compare-lt-policies",
+        "compare-ne-periods",
+        "compare-ne-policies",
+        "comparison-large-integer-list",
+        "comparison-large-integer-scalar",
+        "comparison-list-date-literal",
+        "comparison-list-date-runs",
+        "comparison-list-date-scalar",
+        "comparison-nan",
+        "comparison-null-list",
+        "comparison-scalar-bool",
+        "comparison-scalar-date",
+        "comparison-scalar-str",
+        "comparison-text-order-literal",
+        "comparison-text-order-null",
+        "comparison-text-order-run-against-a-policy-value",
+        "comparison-text-order-runs",
+        "comparison-text-order-scalar",
+        "cut-of-a-nan-periods",
+        "cut-of-a-nan-policies",
+        "empty-portfolio-eq",
+        "empty-portfolio-ge",
+        "empty-portfolio-gt",
+        "empty-portfolio-le",
+        "empty-portfolio-lt",
+        "empty-portfolio-ne",
+        "eq-a-nan-with-itself-policies",
+        "eq-of-a-logical-unknown-policies",
+        "exp-of-a-per-period-comparison",
+        "fill-null-of-a-logical-unknown-policies",
+        "floor-of-a-per-period-comparison",
+        "ge-threshold-after-product-and-sum",
+        "gt-a-nan-periods",
+        "gt-a-nan-policies",
+        "gt-of-a-per-policy-lookup-stored",
+        "is-in-of-a-logical-unknown-policies",
+        "is-null-of-a-flag-chosen-over-a-nan-periods",
+        "is-null-of-a-logical-unknown-policies",
+        "log-of-a-per-period-comparison",
+        "log10-of-a-per-period-comparison",
+        "log1p-of-a-per-period-comparison",
+        "mul-of-a-flag-chosen-over-a-nan-periods",
+        "mul-of-a-logical-unknown-policies",
+        "nan-comparison-and-beside-policies",
+        "nan-comparison-or-beside-policies",
+        "ne-a-nan-periods",
+        "norm_cdf-of-a-per-period-comparison",
+        "not-of-a-flag-chosen-over-a-nan-periods",
+        "or-beside-a-nan-comparison-policies",
+        "or-over-a-logical-unknown-policies",
+        "round-of-a-per-period-comparison",
+        "round_sig_figs-of-a-per-period-comparison",
+        "selection-filter-compound",
+        "selection-filter-in-force",
+        "selection-filter-in-force-sum-assured",
+        "selection-filter-null-is-not-kept",
+        "selection-keeps-no-policy",
+        "selection-two-steps-in-order",
+        "sign-of-a-per-period-comparison",
+        "sqrt-of-a-per-period-comparison",
+        "when-over-a-date-run-below-a-nan-test-periods",
+        "when-over-a-flag-chosen-over-a-nan-periods",
+        "when-over-a-flag-run-unequal-to-a-nan-test-periods",
+        "when-over-a-logical-unknown-policies",
+        "when-over-a-nan-comparison-periods",
+        "when-over-a-nan-comparison-policies",
+        "when-over-a-nan-flag-beside-a-null-whole-number-periods",
+        "when-over-a-nan-mask-with-a-null-otherwise-periods",
+        "when-over-a-nan-test-or-a-flag-run-compared-periods",
+        "when-over-a-nan-with-a-null-otherwise-periods",
+        "when-over-a-negated-unknown-policies",
+        "when-over-a-null-beside-a-nan-comparison-policies",
+        "when-over-a-per-policy-nan-with-a-null-in-the-run-periods",
+        "when-over-a-scalar-date-against-a-run-and-a-nan-test-periods",
+        "when-over-a-text-run-and-a-nan-test-periods",
+        "when-over-a-whole-number-run-or-a-nan-test-periods"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/functions/test_a_comparison_keeps_to_one_kind.py",
+        "tests/functions/test_text_list_comparison.py"
+      ]
+    },
+    {
+      "clause": "11.1.27",
+      "identifiers": [
+        "and",
+        "not_",
+        "or"
+      ],
+      "reviewed_boundaries": "Scalar Kleene truth table and list null propagation, not_, empty portfolio; a per-policy null beside a test a NaN left unknown, in either order under and/or and as a condition, the null winning; a per-policy result a NaN left null read inline by is_in, is_null, fill_null, a comparison, arithmetic, a when and an enclosing and/or; stored f64 indicators per policy and per period, negative zero, a nullable Boolean beside one, mixed shapes, use as a condition, and null/NaN/infinity/2.0/0.5 refusal.",
+      "limits": "Only a direct stored f64 column is an indicator operand. i64 operands, numeric literals and arithmetic results stay outside the clause, and the producer refuses them while the formula is written.",
+      "case_ids": [
+        "and-beside-a-nan-comparison-policies",
+        "and-nullable-list",
+        "and-nullable-scalar",
+        "and-of-a-flag-chosen-over-a-nan-periods",
+        "and-over-a-logical-unknown-policies",
+        "and-over-a-nan-comparison-periods",
+        "empty-portfolio-and",
+        "empty-portfolio-not_",
+        "empty-portfolio-or",
+        "eq-of-a-logical-unknown-policies",
+        "fill-null-of-a-logical-unknown-policies",
+        "is-in-of-a-logical-unknown-policies",
+        "is-null-of-a-logical-unknown-policies",
+        "logical-stored-float-and-list",
+        "logical-stored-float-and-null-boolean",
+        "logical-stored-float-and-scalar",
+        "logical-stored-float-as-condition",
+        "logical-stored-float-empty-portfolio",
+        "logical-stored-float-half-refuses",
+        "logical-stored-float-infinity-refuses",
+        "logical-stored-float-nan-refuses",
+        "logical-stored-float-not-list",
+        "logical-stored-float-not-scalar",
+        "logical-stored-float-null-refuses",
+        "logical-stored-float-null-scalar-refuses",
+        "logical-stored-float-or-across-shapes",
+        "logical-stored-float-or-scalar",
+        "logical-stored-float-two-refuses",
+        "mul-of-a-logical-unknown-policies",
+        "nan-comparison-and-beside-policies",
+        "nan-comparison-or-beside-policies",
+        "not-list",
+        "not-of-a-flag-chosen-over-a-nan-periods",
+        "not-scalar",
+        "or-beside-a-nan-comparison-policies",
+        "or-nullable-list",
+        "or-nullable-scalar",
+        "or-over-a-logical-unknown-policies",
+        "selection-filter-compound",
+        "when-over-a-logical-unknown-policies",
+        "when-over-a-nan-mask-with-a-null-otherwise-periods",
+        "when-over-a-nan-test-or-a-flag-run-compared-periods",
+        "when-over-a-negated-unknown-policies",
+        "when-over-a-null-beside-a-nan-comparison-policies",
+        "when-over-a-scalar-date-against-a-run-and-a-nan-test-periods",
+        "when-over-a-text-run-and-a-nan-test-periods",
+        "when-over-a-whole-number-run-or-a-nan-test-periods"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/frame/test_a_nan_has_no_order.py",
+        "tests/frame/test_a_null_beside_an_unknown_wins.py"
+      ]
+    },
+    {
+      "clause": "11.1.28",
+      "identifiers": [],
+      "reviewed_boundaries": "Both branch shapes, Boolean and checked numeric masks, nullable scalar/list distinction, inline comparison/logical masks, invalid unused-branch refusal; a null run in the selected and in the unselected branch, beside a run and beside a per-policy condition, nulling the policy; a per-policy NaN test combined with a whole-number, text, date or flag run (no truth value in any period); a flag answer left null per period read by arithmetic, not_, and, is_null and another when; a condition a NaN left without a truth value beside a null in either branch at that cell (NaN in a double answer).",
+      "limits": "Selection does not suppress branch evaluation errors. Invalid numeric masks are refused rather than cast by truthiness.",
+      "case_ids": [
+        "conditional-boolean-list",
+        "conditional-boolean-scalar",
+        "conditional-does-not-hide-invalid-conversion",
+        "conditional-inline-comparison",
+        "conditional-inline-nullable-logical",
+        "conditional-invalid-float-list",
+        "conditional-invalid-float-scalar",
+        "conditional-null-float-False",
+        "conditional-null-float-True",
+        "conditional-stored-float-list",
+        "conditional-stored-float-scalar"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.29",
+      "identifiers": [
+        "finance.compound",
+        "finance.discount",
+        "finance.present_value",
+        "finance.to_monthly"
+      ],
+      "reviewed_boundaries": "Simple/compound monthly conversion, negative/zero periods, nulls, zero base, scalar discounts/contributions, empty portfolio and unknown configuration refusal.",
+      "limits": "Finite representable factors only. List cashflow valuation uses prospective_value, not the scalar discount forms.",
+      "case_ids": [
+        "compound-False",
+        "compound-True",
+        "compound-negative-rate-False",
+        "compound-negative-rate-True",
+        "compound-zero-periods-per-year",
+        "empty-portfolio-finance.compound",
+        "empty-portfolio-finance.discount",
+        "empty-portfolio-finance.present_value",
+        "empty-portfolio-finance.to_monthly",
+        "finance.discount-missing",
+        "finance.discount-period-per-period",
+        "finance.discount-rate-per-period",
+        "finance.discount-scalar",
+        "finance.discount-value-per-period",
+        "finance.present_value-missing",
+        "finance.present_value-period-per-period",
+        "finance.present_value-rate-per-period",
+        "finance.present_value-scalar",
+        "finance.present_value-value-per-period",
+        "monthly-compound-False",
+        "monthly-compound-True",
+        "monthly-null-and-zero-base",
+        "monthly-simple-False",
+        "monthly-simple-True",
+        "monthly-unknown-method"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.30",
+      "identifiers": [
+        "finance.discount_factor"
+      ],
+      "reviewed_boundaries": "Spot/forward, varying and negative rates, scalar/list operand positions, retained unused periods, empty portfolio and method refusal. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "Rates > -1, non-null finite domain. No forward/spot convention substitution.",
+      "case_ids": [
+        "discount-factor-forward-records-unused-periods",
+        "discount-factor-forward-varying",
+        "discount-factor-list-rate-scalar-time",
+        "discount-factor-negative-forward-rate",
+        "discount-factor-spot-scalar-rate",
+        "discount-factor-spot-varying",
+        "empty-portfolio-finance.discount_factor",
+        "empty-portfolio-forward-factors",
+        "factor-unknown-method",
+        "window-discount_factor-forward",
+        "window-discount_factor-forward-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.31",
+      "identifiers": [
+        "curve.discount_factor",
+        "curve.spot_rate"
+      ],
+      "reviewed_boundaries": "Knots, interior interpolation, both flat endpoints, scalar/list, empty portfolio; changed/missing/ambiguous payload refusal.",
+      "limits": "Linear/flat knot recipe only. Parametric and nonlinear identities remain outside this reader capability.",
+      "case_ids": [
+        "curve-duplicate-payload",
+        "curve-payload-change",
+        "curve-payload-missing",
+        "curve.discount_factor-linear-flat-False",
+        "curve.discount_factor-linear-flat-True",
+        "curve.spot_rate-linear-flat-False",
+        "curve.spot_rate-linear-flat-True",
+        "curve.spot_rate-linear-producer-grouping",
+        "empty-portfolio-curve.discount_factor",
+        "empty-portfolio-curve.spot_rate"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.32",
+      "identifiers": [
+        "projection.broadcast_to_periods",
+        "projection.with_period"
+      ],
+      "reviewed_boundaries": "Positive/negative/out-of-range override, no extension, null element/outer; typed broadcasts over jagged/empty axes, empty portfolio; implicit month graph dependency.",
+      "limits": "Historical one-operand broadcast recognized but not evaluated; other override dtypes are outside the clause.",
+      "case_ids": [
+        "broadcast-bool",
+        "broadcast-explicit-jagged",
+        "broadcast-i64",
+        "broadcast-str",
+        "empty-portfolio-projection.broadcast_to_periods",
+        "empty-portfolio-projection.with_period",
+        "projection.broadcast_to_periods-onto-a-per-policy-axis",
+        "projection.with_period-over-a-value-per-policy",
+        "with-period--1",
+        "with-period--2",
+        "with-period-0",
+        "with-period-1",
+        "with-period-9",
+        "with-period-replaces-null"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.33",
+      "identifiers": [
+        "date.date_ranges",
+        "date.months_between",
+        "date.offset_by",
+        "date.to_period",
+        "excel.days",
+        "excel.edate",
+        "excel.eomonth",
+        "excel.from_excel_serial"
+      ],
+      "reviewed_boundaries": "Date order, period starts, signed/leap-clamped offsets, original-start ranges/closure/reversal/null, serial 59/60/61 and epochs, empty portfolio and unsupported token refusal.",
+      "limits": "Date-only scalar domain, finite serials, years 1..9999. Compound durations and offsets outside the date range are excluded.",
+      "case_ids": [
+        "calendar-month-difference",
+        "calendar-range-empty-reversed-and-null",
+        "calendar-unknown-epoch",
+        "calendar-unknown-period",
+        "date-offset--1y",
+        "date-offset-1mo",
+        "date-offset-2d",
+        "date-ranges-both",
+        "date-ranges-left",
+        "date-ranges-month-end-anchor",
+        "date-ranges-none",
+        "date-ranges-right",
+        "date.date_ranges-over-a-value-per-period",
+        "date.months_between-over-a-value-per-period",
+        "date.offset_by-over-a-value-per-period",
+        "date.to_period-over-a-value-per-period",
+        "empty-portfolio-date.date_ranges",
+        "empty-portfolio-date.months_between",
+        "empty-portfolio-date.offset_by",
+        "empty-portfolio-date.to_period",
+        "empty-portfolio-excel.days",
+        "empty-portfolio-excel.edate",
+        "empty-portfolio-excel.eomonth",
+        "empty-portfolio-excel.from_excel_serial",
+        "excel-days-end-first",
+        "excel-serial-1900",
+        "excel-serial-1904",
+        "excel.days-over-a-value-per-period",
+        "excel.edate-clamped",
+        "excel.edate-months-a-flag",
+        "excel.edate-months-a-whole-double",
+        "excel.edate-months-not-whole",
+        "excel.edate-over-a-value-per-period",
+        "excel.eomonth-clamped",
+        "excel.eomonth-months-a-flag",
+        "excel.eomonth-months-a-whole-double",
+        "excel.eomonth-months-not-whole",
+        "excel.eomonth-over-a-value-per-period",
+        "excel.from_excel_serial-over-a-value-per-period",
+        "period-start-D",
+        "period-start-M",
+        "period-start-W",
+        "period-start-Y"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.34",
+      "identifiers": [
+        "excel.yearfrac"
+      ],
+      "reviewed_boundaries": "All five bases and every named alias, forward/reversed/equal dates, leap/February anniversaries, nullable elements and empty portfolio; unsupported basis refusal.",
+      "limits": "No null outer list; basis 1 is not Actual/Actual ISDA.",
+      "case_ids": [
+        "empty-portfolio-excel.yearfrac",
+        "yearfrac-alias-30-360",
+        "yearfrac-alias-30e-360",
+        "yearfrac-alias-act-360",
+        "yearfrac-alias-act-365",
+        "yearfrac-alias-act-act",
+        "yearfrac-alias-actual-360",
+        "yearfrac-alias-actual-365",
+        "yearfrac-alias-actual-actual",
+        "yearfrac-alias-actual_360",
+        "yearfrac-alias-actual_365",
+        "yearfrac-alias-european_30_360",
+        "yearfrac-alias-us_nasd_30_360",
+        "yearfrac-anniversary-or-mean-year",
+        "yearfrac-feb-end-0",
+        "yearfrac-feb-end-1",
+        "yearfrac-feb-end-2",
+        "yearfrac-feb-end-3",
+        "yearfrac-feb-end-30e-360",
+        "yearfrac-feb-end-4",
+        "yearfrac-feb-end-act-360",
+        "yearfrac-leap-anniversary",
+        "yearfrac-multi-year-mean-length",
+        "yearfrac-unknown-basis"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/accessors/excel_functions/test_yearfrac_is_excels.py"
+      ]
+    },
+    {
+      "clause": "11.1.35",
+      "identifiers": [
+        "excel.pv",
+        "excel.round"
+      ],
+      "reviewed_boundaries": "Away-from-zero ties in both shapes; the fifteen-digit value rounded rather than the double (a workbook's cached values, doubles just under a decimal tie, whole units just under a half, a sixteenth digit that is an exact 5 at a negative place, fifteen digits coarser than the step), both signs and a negative place; PV zero rate/period/default/timing/null and empty portfolio.",
+      "limits": "Bounded scale, integral nonnegative scalar periods and typ 0/1; no arbitrary overflow/cancellation budget.",
+      "case_ids": [
+        "empty-portfolio-excel.pv",
+        "empty-portfolio-excel.round",
+        "excel-pv-near-a-zero-rate-typ-0",
+        "excel-pv-near-a-zero-rate-typ-1",
+        "excel-pv-per-period-all-three",
+        "excel-pv-per-period-empty-run",
+        "excel-pv-per-period-near-a-zero-rate-typ-0",
+        "excel-pv-per-period-near-a-zero-rate-typ-1",
+        "excel-pv-per-period-nper",
+        "excel-pv-per-period-nper-and-pmt",
+        "excel-pv-per-period-null",
+        "excel-pv-per-period-null-count-beside-two-runs",
+        "excel-pv-per-period-null-payment-beside-two-runs",
+        "excel-pv-per-period-null-rate-beside-two-runs",
+        "excel-pv-per-period-pmt",
+        "excel-pv-per-period-rate",
+        "excel-pv-per-period-rate-and-nper",
+        "excel-pv-per-period-unequal-periods",
+        "excel-pv-timing-0",
+        "excel-pv-timing-1",
+        "excel-pv-timing-None",
+        "excel-pv-zero-period-defaults",
+        "excel-round-halves-False",
+        "excel-round-halves-True",
+        "excel.round-a-double-just-under-its-decimal-tie",
+        "excel.round-a-sixteenth-digit-that-is-an-exact-five-at-a-negative-place",
+        "excel.round-a-workbook-s-cached-values-at-fifteen-digits",
+        "excel.round-fifteen-digits-coarser-than-the-step",
+        "excel.round-whole-units-just-under-a-half"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "11.1.36",
+      "identifiers": [
+        "excel.irr"
+      ],
+      "reviewed_boundaries": "Unique root, unavailable streams, absent/null/per-policy guesses, 600-period zero root, empty portfolio and multiple-root exclusion. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "Unique root in [-.9,1], one sign change, bounded cashflows; no general solver convergence or Excel multi-root selection claim.",
+      "case_ids": [
+        "empty-portfolio-excel.irr",
+        "excel.irr-guess-per-period",
+        "irr-multiple-roots-outside-domain",
+        "irr-per-policy-guess",
+        "irr-six-hundred-period-zero-root",
+        "irr-unique-and-unavailable",
+        "window-irr",
+        "window-irr-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "11.1.37",
+      "identifiers": [
+        "projection_frame.anniversary_mask",
+        "projection_frame.period_dates",
+        "projection_frame.t_years",
+        "projection_frame.year_fractions",
+        "schedule.anniversary_mask",
+        "schedule.contract_boundary",
+        "schedule.is_in_force",
+        "schedule.per_policy_period_count",
+        "schedule.per_policy_period_dates",
+        "schedule.period_dates",
+        "schedule.year_fractions"
+      ],
+      "reviewed_boundaries": "All eleven identifiers and three calendar kinds, month-aligned cadences, T versus T+1, expiry inclusive/null, null/negative term counts, zero horizon/portfolio, month-end clamp distinctions and unsupported recipe refusals; fixed_step t_years exact in both spellings, discriminating the other spelling and a running sum.",
+      "limits": "NullCalendar/Unadjusted/OneTwelfth only. Shared exact_date advances successively; inception/per-policy grids offset from original start. Other calendars/anchors/cadences need separate capabilities. fixed_step's other readings and its refusals have producer and engine tests, not published cases.",
+      "case_ids": [
+        "calendar-1Y-projection_frame.period_dates",
+        "calendar-1Y-projection_frame.t_years",
+        "calendar-1Y-projection_frame.year_fractions",
+        "calendar-3M-projection_frame.period_dates",
+        "calendar-3M-projection_frame.t_years",
+        "calendar-3M-projection_frame.year_fractions",
+        "calendar-6M-projection_frame.period_dates",
+        "calendar-6M-projection_frame.t_years",
+        "calendar-6M-projection_frame.year_fractions",
+        "empty-portfolio-projection_frame.anniversary_mask",
+        "empty-portfolio-projection_frame.period_dates",
+        "empty-portfolio-projection_frame.t_years",
+        "empty-portfolio-projection_frame.year_fractions",
+        "empty-portfolio-schedule.anniversary_mask",
+        "empty-portfolio-schedule.contract_boundary",
+        "empty-portfolio-schedule.is_in_force",
+        "empty-portfolio-schedule.per_policy_period_count",
+        "empty-portfolio-schedule.per_policy_period_dates",
+        "empty-portfolio-schedule.period_dates",
+        "empty-portfolio-schedule.year_fractions",
+        "fixed-step-t-years-step-years",
+        "fixed-step-t-years-steps-per-year",
+        "from_calendar_grid-projection_frame.anniversary_mask",
+        "from_calendar_grid-projection_frame.period_dates",
+        "from_calendar_grid-projection_frame.t_years",
+        "from_calendar_grid-projection_frame.year_fractions",
+        "from_calendar_grid-schedule.contract_boundary",
+        "from_calendar_grid-schedule.is_in_force",
+        "from_calendar_grid-schedule.year_fractions",
+        "from_inception-anniversary",
+        "from_inception-dates",
+        "from_inception-projection_frame.anniversary_mask",
+        "from_inception-projection_frame.period_dates",
+        "from_inception-projection_frame.period_dates-missing-payload",
+        "from_inception-projection_frame.t_years",
+        "from_inception-projection_frame.year_fractions",
+        "from_inception-schedule.contract_boundary",
+        "from_inception-schedule.is_in_force",
+        "from_inception-schedule.year_fractions",
+        "per-policy-count",
+        "per_policy_grid-anniversary",
+        "per_policy_grid-dates",
+        "per_policy_grid-dates-missing-payload",
+        "per_policy_grid-projection_frame.anniversary_mask",
+        "per_policy_grid-projection_frame.period_dates",
+        "per_policy_grid-projection_frame.t_years",
+        "per_policy_grid-projection_frame.year_fractions",
+        "per_policy_grid-schedule.contract_boundary",
+        "per_policy_grid-schedule.is_in_force",
+        "per_policy_grid-schedule.year_fractions",
+        "projection_frame.anniversary_mask-zero-horizon",
+        "projection_frame.period_dates-zero-horizon",
+        "projection_frame.t_years-zero-horizon",
+        "projection_frame.year_fractions-zero-horizon",
+        "quarterly-original-start-from_inception-projection_frame.period_dates",
+        "quarterly-original-start-per_policy_grid-dates",
+        "schedule-excluded-anchor",
+        "schedule-excluded-calendar",
+        "schedule-excluded-convention",
+        "schedule-excluded-day_count",
+        "schedule-excluded-frequency",
+        "schedule-payload-change",
+        "schedule-payload-duplicate",
+        "schedule.contract_boundary-expiry-inclusive",
+        "schedule.is_in_force-expiry-inclusive"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "16.1",
+      "identifiers": [
+        "rollforward",
+        "rollforward.state"
+      ],
+      "reviewed_boundaries": "State values, both shipped rollforward patterns replayed against the state arrays their own exports carry, two floors biting in serialized order on a chain that tells them apart by ordinal alone, exact compilation selection, T=0/zero policies, state/point/axis/operand/period binding refusals, the ratchet gate's own column type, and structural identity. The window its edge states (section 9) is held by a perturbation vector: one operand cell moved outside it leaves every period it excludes, and every other policy, where they stood.",
+      "limits": "Bounded BOP/EOP machine only, over Add, Subtract, Charge, Grow, Floor and Ratchet in the forms a compilation writes them. GrowCapped, DeductNAR, Round and Apply stay outside, as do a rounded Charge or Grow, a Floor without a finite bound, a Ratchet lifting to anything but a declared state, and an ungated Ratchet. No general independent compiler digest or version-binding reconstruction is claimed.",
+      "case_ids": [
+        "compilation-floor-without-a-bound",
+        "compilation-numeric-ratchet-gate",
+        "compilation-ratchet-lifts-to-a-column",
+        "compilation-round-stays-outside",
+        "compilation-rounded-grow",
+        "compilation-ungated-ratchet",
+        "empty-portfolio-rollforward.state",
+        "rollforward-bounded-state",
+        "rollforward-floors-that-bite-in-order",
+        "rollforward-growth-rounded-before-the-credit",
+        "rollforward-ratchet-at-the-anniversary",
+        "rollforward-structural-floor-that-never-bites",
+        "rollforward-zero-horizon-False",
+        "window-rollforward",
+        "window-rollforward-moved"
+      ],
+      "producer_tests": [
+        "tests/graph/test_portable_rollforward_execution.py",
+        "tests/graph/test_period_windows.py"
+      ]
+    },
+    {
+      "clause": "16.2",
+      "identifiers": [
+        "rollforward.increment"
+      ],
+      "reviewed_boundaries": "Signed credit/charge, after-minus-before cancellation, T=0/zero policies, tracking/label/settings/arity refusals.",
+      "limits": "Tracked subset only; delta is not the notional operand or full-period change. A structural step's movement is named by the reserved {kind}@{ordinal}, and no published case extracts one: the movements a node carries are the producer's re-track, not a reader's to reproduce.",
+      "case_ids": [
+        "compilation-bop-target",
+        "compilation-charge-wrong-balance",
+        "compilation-duplicate-label",
+        "compilation-duplicate-state",
+        "compilation-extra-body-field",
+        "compilation-jagged-operand",
+        "compilation-missing",
+        "compilation-missing-column-binding",
+        "compilation-missing-extraction",
+        "compilation-null-operand",
+        "compilation-rounded-charge",
+        "compilation-tracking-disabled",
+        "compilation-unknown-state-read",
+        "compilation-wrong-batch-axis",
+        "compilation-wrong-operation-arity",
+        "empty-portfolio-rollforward.increment",
+        "rollforward-delta-is-after-minus-before",
+        "rollforward-signed-credit",
+        "rollforward-signed-fee",
+        "rollforward-zero-horizon-True"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    },
+    {
+      "clause": "16.3",
+      "identifiers": [
+        "rollforward.struct"
+      ],
+      "reviewed_boundaries": "Native raw result refuses both export profiles with named state/increment guidance.",
+      "limits": "Excluded portable output, retained core identifier; no Struct type or implicit flattening.",
+      "case_ids": [
+        "raw-struct-export-refuses"
+      ],
+      "producer_tests": [
+        "tests/graph/test_operation_vectors.py"
+      ]
+    }
+  ]
+}

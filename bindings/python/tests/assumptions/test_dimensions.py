@@ -6,6 +6,8 @@
 Tests for dimension implementations in _dimensions.py
 """
 
+from typing import Any
+
 import polars as pl
 import pytest
 
@@ -125,6 +127,27 @@ class TestDataDimension:
         with pytest.raises(ValueError, match="Failed to convert column 'age'"):
             dimension.process(df)
 
+    def test_a_failed_conversion_keeps_the_polars_error_as_its_cause(self):
+        """The refusal carries the engine's own error, not just its text."""
+        df = pl.DataFrame({"age": ["thirty", "31"], "rate": [0.001, 0.002]})
+        dimension = DataDimension(column="age", dtype=pl.Int32)
+
+        with pytest.raises(ValueError, match="Failed to convert column 'age'") as e:
+            dimension.process(df)
+
+        assert isinstance(e.value.__cause__, pl.exceptions.PolarsError)
+
+    def test_a_dtype_that_is_not_one_is_refused_the_same_way(self):
+        """A dtype written as a string is a TypeError in polars, said as ours."""
+        df = pl.DataFrame({"age": ["30", "31"], "rate": [0.001, 0.002]})
+        not_a_dtype: Any = "Int64"
+        dimension = DataDimension(column="age", dtype=not_a_dtype)
+
+        with pytest.raises(ValueError, match="Failed to convert column 'age'") as e:
+            dimension.process(df)
+
+        assert isinstance(e.value.__cause__, TypeError)
+
     def test_data_dimension_no_rename_when_same(self):
         """Test that no rename occurs when rename_to equals column name"""
         df = pl.DataFrame(
@@ -219,21 +242,21 @@ class TestMeltDimension:
     def test_melt_dimension_fillforward_is_within_group(self):
         """FillForward must carry a group's OWN prior value, not a neighbour's.
 
-        Regression for F11: the per-group fill fell back to a single GLOBAL
+        Regression: the per-group fill fell back to a single GLOBAL
         forward-fill over the melted column, so age 31's null d1 was filled
         from age 30's d1 (0.11) instead of carrying age 31's own d0 (0.20).
         """
         wide = pl.DataFrame(
             {
                 "age": [30, 31],
-                "d0": [0.10, 0.20],
-                "d1": [0.11, None],
-                "d2": [0.12, None],
-                "d3": [0.13, 0.23],
+                "0": [0.10, 0.20],
+                "1": [0.11, None],
+                "2": [0.12, None],
+                "3": [0.13, 0.23],
             },
         )
         md = MeltDimension(
-            columns=["d0", "d1", "d2", "d3"],
+            columns=["0", "1", "2", "3"],
             name="duration",
             fill=FillForward(),
         )
@@ -244,30 +267,33 @@ class TestMeltDimension:
                 (pl.col("age") == age) & (pl.col("duration") == dur),
             )["value"][0]
 
-        # Within-group ffill carries age 31's own d0 (0.20), NOT age 30's rates.
-        assert val(31, "d1") == 0.20
-        assert val(31, "d2") == 0.20
+        # Within-group ffill carries age 31's own duration 0 (0.20), NOT age
+        # 30's rates. The labels are numbers because the fill runs along the
+        # key's value; 'd0'..'d3' with a blank are refused.
+        assert val(31, "1") == 0.20
+        assert val(31, "2") == 0.20
         # Age 30 is untouched.
-        assert val(30, "d1") == 0.11
+        assert val(30, "1") == 0.11
 
     def test_melt_dimension_interpolate_is_within_group(self):
         """LinearInterpolate must interpolate within each group only.
 
-        Regression for F11: age 31 (own rates d0=0.20, d3=0.23) must give
-        d1=0.21, d2=0.22 — interpolated between age 31's OWN endpoints — not
-        0.115/0.125 (interpolations of age 30's neighbouring rates).
+        Regression: age 31 (own rates at durations 0 and 3: 0.20, 0.23) must
+        give 0.21, 0.22 at durations 1 and 2 — interpolated between age 31's
+        OWN endpoints — not 0.115/0.125 (interpolations of age 30's
+        neighbouring rates).
         """
         wide = pl.DataFrame(
             {
                 "age": [30, 31],
-                "d0": [0.10, 0.20],
-                "d1": [0.11, None],
-                "d2": [0.12, None],
-                "d3": [0.13, 0.23],
+                "0": [0.10, 0.20],
+                "1": [0.11, None],
+                "2": [0.12, None],
+                "3": [0.13, 0.23],
             },
         )
         md = MeltDimension(
-            columns=["d0", "d1", "d2", "d3"],
+            columns=["0", "1", "2", "3"],
             name="duration",
             fill=LinearInterpolate(method="linear"),
         )
@@ -278,8 +304,8 @@ class TestMeltDimension:
                 (pl.col("age") == age) & (pl.col("duration") == dur),
             )["value"][0]
 
-        assert val(31, "d1") == pytest.approx(0.21)
-        assert val(31, "d2") == pytest.approx(0.22)
+        assert val(31, "1") == pytest.approx(0.21)
+        assert val(31, "2") == pytest.approx(0.22)
 
     def test_melt_dimension_validation_missing_columns(self):
         """Test validation error when melt columns don't exist"""
@@ -521,6 +547,16 @@ class TestComputedDimension:
         with pytest.raises(ValueError, match="Invalid expression"):
             dimension.validate(df)
 
+    def test_an_invalid_expression_keeps_the_polars_error_as_its_cause(self):
+        """The refusal carries the engine's own error, not just its text."""
+        df = pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.002]})
+        dimension = ComputedDimension(expression=pl.col("missing"), name="computed")
+
+        with pytest.raises(ValueError, match="Invalid expression") as e:
+            dimension.validate(df)
+
+        assert isinstance(e.value.__cause__, pl.exceptions.PolarsError)
+
     def test_computed_dimension_with_string_operations(self):
         """Test computed dimension with string operations"""
         df = pl.DataFrame(
@@ -616,7 +652,7 @@ class TestDimensionEdgeCases:
         actual_durations = set(result["duration"].unique().to_list())
         assert actual_durations == expected_durations
 
-        # Fill is now applied per-group (F11). Age 30 has all its own rates, so
+        # Fill is now applied per-group. Age 30 has all its own rates, so
         # it is fully filled.
         age30 = result.filter(pl.col("age") == 30)
         assert age30["value"].null_count() == 0

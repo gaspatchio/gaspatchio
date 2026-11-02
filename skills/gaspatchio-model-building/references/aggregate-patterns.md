@@ -72,7 +72,7 @@ These CAN be handled with gaspatchio methods — the same tools used in Phase 3 
 | Pattern | Method |
 |---------|--------|
 | "Prior period's value" | `previous_period(fill_value=0.0)` or Polars `.shift(1).fill_null(0.0)` |
-| "Running balance" | `initial + flow.cum_sum()` — a growth-free balance is a cumulative sum, not a recursion; `accumulate()` is for genuine growth (a scalar `multiply` broadcasts to the flow's timeline) |
+| "Running balance" | `initial + flow.cum_sum()` — a growth-free balance is a cumulative sum, not a recursion; `accumulate()` is for genuine growth (a scalar `multiplier` broadcasts to the flow's timeline) |
 | "Cumulative total" | `af.x.cum_sum()` (applies within a list column) or Polars `.cum_sum()` (across rows) |
 | "Circular dependency" (expenses depend on equity, equity depends on expenses) | Rearrange into `accumulate()` form — see example below |
 
@@ -111,8 +111,8 @@ helper_af = ActuarialFrame({
 })
 helper_af.equity = helper_af.mult.projection.accumulate(
     initial=0.0,
-    multiply=helper_af.mult,
-    add=helper_af.add,
+    multiplier=helper_af.mult,
+    addend=helper_af.add,
 )
 equity_values = helper_af.collect()["equity"][0].to_list()
 fund = fund.with_columns(pl.Series("total_equity", equity_values))

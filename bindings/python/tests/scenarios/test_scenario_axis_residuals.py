@@ -2,12 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# ABOUTME: F9 residuals — sketch Period* and partitioned Period* on the
+# ABOUTME: Scenario-axis residuals — sketch Period* and partitioned Period* on the
 # ABOUTME: scenario axis reduce ACROSS scenarios; .of() rejects non-additive.
 
-"""Scenario-axis residuals of the F9 cluster.
+"""Scenario-axis residuals of the per-period aggregation fix.
 
-The shipped F9a fix made non-partitioned closed-form ``Period*`` aggregators
+The shipped fix made non-partitioned closed-form ``Period*`` aggregators
 reduce ACROSS scenarios of each scenario's per-period portfolio total. This
 suite covers the remaining paths:
 

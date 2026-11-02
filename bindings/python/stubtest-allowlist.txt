@@ -2,101 +2,63 @@
 # Format: one entry per line, supports patterns with wildcards
 # See: https://mypy.readthedocs.io/en/stable/stubtest.html#allowlist
 
-# Dynamically patched methods from Polars expressions (added by _autopatch)
-# The runtime uses generic wrapper signatures while stubs document the actual API.
-# This is intentional for better IDE support.
-gaspatchio\.ColumnProxy\..*
-gaspatchio\.ExpressionProxy\..*
-gaspatchio\.column\.ColumnProxy\..*
-gaspatchio\.column\.ExpressionProxy\..*
-gaspatchio\.column\.column_proxy\.ColumnProxy\..*
-gaspatchio\.column\.expression_proxy\.ExpressionProxy\..*
+# Registry-backed accessors resolve on instances rather than the proxy classes.
+gaspatchio\.column\.column_proxy\.ColumnProxy\.projection
+gaspatchio\.column\.expression_proxy\.ExpressionProxy\.excel
+gaspatchio\.column\.expression_proxy\.ExpressionProxy\.projection
 
-# Internal frame modules
-gaspatchio\.frame\.graph\..*
+# frame.graph exports public API (CalcGraph, diff_artifacts, verify_artifact,
+# ...), so it is checked; what is listed here is each tooling limit it meets.
+# Literal type aliases: stubtest reads an alias for a Literal of several
+# strings as a Union it cannot match against the runtime object, and one of a
+# single string as no alias it recognises. Same limit as the aliases below.
+gaspatchio\.frame\.graph\.assumptions\.ArtefactKind
+gaspatchio\.frame\.graph\.calc_graph\._Scope
+gaspatchio\.frame\.graph\.diff\.(ChangeKind|ChangeOrigin|DataKind)
+gaspatchio\.frame\.graph\.edges\.(EdgeSubtype|EdgeType)
+gaspatchio\.frame\.graph\.execution\.(_Check|_Status)
+gaspatchio\.frame\.graph\.graph_models\.HoleReason
+gaspatchio\.frame\.graph\.validate\.(Section|Severity)
+gaspatchio\.frame\.graph\.values_moved\.(DataCause|LineCause|PairedBy)
+gaspatchio\.frame\.graph\.verify\.CheckOutcome
+# @lru_cache-decorated: stubtest sees the cache wrapper's (*args, **kwargs)
+# where the runtime has the wrapped (name: str), as for the holiday helpers
+# below. Tooling noise, not a stub bug.
+gaspatchio\.frame\.graph\.trace_generator\._name_here
+
+# str-mixin enums: on every `class X(str, Enum)` stubtest compares str.__new__'s
+# parameters with the runtime Enum.__new__. Tooling noise, not a stub bug.
+gaspatchio\.errors\.models\.(ErrorType|SuggestionType)\.__new__
+
+# A TypedDict on the 3.13 runtime carries __mutable_keys__ and
+# __readonly_keys__, which stubtest's 3.12 view of the class does not.
+# Tooling noise, not a stub bug.
+gaspatchio\.errors\.validation\._ValidationContextFields\.__(mutable|readonly)_keys__
+gaspatchio\.frame\.graph\.graph_models\.(NodeType|Provenance)\.__new__
 
 # Scenarios internals
 gaspatchio\.scenarios\._.*
 # gaspatchio\.scenarios\.T  # removed: unused
-gaspatchio\.scenarios\.shocks\.Any.*
-
-# Public aggregator dataclass __init__ signatures: stubs intentionally omit
-# the private dataclass fields (alias_, within_expr_override) and inherit
-# field order from _BaseAggregator at runtime. Users construct via
-# Sum("col").alias("name") / .over() / .of(), not positional kwargs. The
-# per-period (vector) family (VectorAggregator + Period*) follows the same
-# convention; its sketch members (PeriodQuantile/Median/CTE) additionally
-# expose levels/relative_accuracy/level/direction in the stub for discovery.
-gaspatchio\.scenarios\.(Sum|Count|Min|Max|ArgMin|ArgMax|Mean|Variance|Std|Quantile|Median|CTE|QuantileRank|BaseAggregator|VectorAggregator|PeriodSum|PeriodCount|PeriodMin|PeriodMax|PeriodMean|PeriodVariance|PeriodStd|PeriodQuantile|PeriodMedian|PeriodCTE)\.__init__
-# Same convention, re-checked under the top-level re-export namespace
-# (gaspatchio/__init__.pyi re-exports the Period* family).
-gaspatchio\.(PeriodSum|PeriodCount|PeriodMin|PeriodMax|PeriodMean|PeriodVariance|PeriodStd|PeriodQuantile|PeriodMedian|PeriodCTE)\.__init__
-# BaseAggregator's Protocol methods are filled in by concrete subclasses;
-# abstract stubs in .pyi don't exist on the bare _BaseAggregator at runtime.
-gaspatchio\.scenarios\.BaseAggregator\.(add_input|create_accumulator|merge_accumulators|extract_output|canonical_form|within_expr)
-# PEP 695 type alias — exists only in type-checker scope, not at runtime.
-gaspatchio\.scenarios\.ScenarioID
-
-# CLI is not part of the public API
-gaspatchio\.cli\..*
-
-# Runner module has pydantic issues
-gaspatchio\.runner.*
 
 # TYPE_CHECKING imports that show as "not present at runtime"
-gaspatchio\..*\.IntoExprColumn
-gaspatchio\.typing\.DataType
-gaspatchio\.typing\.DataTypeClass
 gaspatchio\.typing\.PolarsDataType
 
 # Metaclass differences for ABC classes (acceptable)
 gaspatchio\.accessors\.excel\.ExcelColumnAccessor
 gaspatchio\.accessors\.excel\.ExcelFrameAccessor
 
-# API module re-exports type annotations and has pydantic issues
-gaspatchio\.api\.models.*
-
 # Module-level `except ImportError as e` in _api.py — the except clause deletes
 # the name after the block, which stubtest reports as a phantom deleted symbol.
-# Same artifact as functions.vector.e below. Not a stub bug.
-gaspatchio\.assumptions\._api\.e
+# Not a stub bug.
 
 # Projection accessor TYPE_CHECKING imports (covered by generic patterns above)
 # gaspatchio\.accessors\.projection\.ActuarialFrame  # removed: matched by .*\.ActuarialFrame$
 # gaspatchio\.accessors\.projection\.ColumnProxy  # removed: matched by .*\.ColumnProxy$
 # gaspatchio\.accessors\.projection\.ExpressionProxy  # removed: matched by .*\.ExpressionProxy$
 
-# Util module internal function
-gaspatchio\.util\._expr_to_str
-
-# Python 3.13 Path changes - new parameters added to pathlib.Path methods
-# that aren't in typeshed stubs yet. These are stdlib mismatches, not our code.
-# Pattern matches Path in any submodule.
-gaspatchio\..*\.Path\..*
-
-# Frame module TypeVars and internal types
-gaspatchio\.frame\.base\.ActuarialFrameT
-
-# Functions module
-gaspatchio\.functions\.when
-gaspatchio\.functions\.vector\.e
-
-# Registry module typing issues
-gaspatchio\.registry\..*
-
 # TYPE_CHECKING imports that show as "not present at runtime"
 # These are imports only used for type annotations, not available at runtime
-.*\.ActuarialFrame$
-.*\.ColumnProxy$
-.*\.ExpressionProxy$
-.*\.TracedOperation$
-.*\.ValidationError$
 .*\.ProxyType$
-.*\.ParentProxyType$
-.*\.PolarsTemporalType$
-.*\.Callable$
-.*\.Any$
-.*\.TypedDict$
 
 # TYPE_CHECKING-only type alias for the rollforward builder's `ExprLike`
 # (pl.Expr | ColumnProxy | ExpressionProxy). Lives behind `if TYPE_CHECKING:`
@@ -105,25 +67,8 @@ gaspatchio\.registry\..*
 gaspatchio\.rollforward\._builder\.ExprLike
 gaspatchio\.accessors\.projection_frame\.ExprLike
 
-# Errors module
-gaspatchio\.errors\..*
-
-# Column namespaces
-gaspatchio\.column\.namespaces\..*
-gaspatchio\.column\.proxy$
-
 # Examples module (not part of public API)
 gaspatchio\.examples\..*
-
-# Python 3.13 typing.Any.__new__ signature change — affects all modules using Any
-.*\.Any\.__new__
-
-# CLI module — PydanticUserError when stubtest imports module-level Pydantic models
-gaspatchio\.cli
-
-# Tutorial CLI module
-gaspatchio\.tutorial_cli\..*
-gaspatchio\.tutorial_cli
 
 # Telemetry — @wraps(original_map_elements) intentionally changes the visible signature
 # so the warning wrapper looks like the original Polars method to callers.
@@ -131,39 +76,43 @@ gaspatchio\.telemetry\._map_with_warning_impl
 
 # Tutorials — standalone scripts, not importable modules (hyphenated dirs, missing deps)
 gaspatchio\.tutorials\..*
-gaspatchio\.tutorials
 
 # Type aliases — stubtest cannot match Literal type aliases against runtime objects.
-gaspatchio\.column\.shape\.Shape
-gaspatchio\.column\.shape\.Kind
+gaspatchio\._shape\.Shape
+gaspatchio\._shape\.Kind
+gaspatchio\.frame\.calculations\.RecordOrigin
+gaspatchio\.frame\.calculations\.StructuralKind
+gaspatchio\.frame\.calculations\.SelectionKind
 
-# Schedule module — TYPE_CHECKING-only imports not present at runtime
-gaspatchio\.schedule\._business_day\.Calendar
-gaspatchio\.schedule\._calendar\.date
+# Engine seam — Literal TypeAliases, and the two Annotated option aliases the
+# artifact commands share. Same tooling limit as the four above: stubtest
+# cannot match an alias against the runtime object it resolves to.
+gaspatchio\.engines\.protocol\.TreeStatus
+gaspatchio\.engines\.protocol\.Scope
+gaspatchio\.engines\.compare\.Verdict
+gaspatchio\.engines\.report\.Group
+gaspatchio\.cli\._JsonOutput
+gaspatchio\.cli\._ReportFile
+# The two Annotated option aliases docs and knowledge share, for the same reason.
+gaspatchio\.cli\._MaxChars
+gaspatchio\.cli\._FullTexts
 
-# Schedule module — Enum __init__ *args variance (stdlib Enum implementation detail)
-gaspatchio\.schedule\._business_day\.Enum\.__init__
+# @cache-decorated versions mapping, the extension's digest among it — the
+# same wrapper/wrapped signature mismatch as the holiday helpers below;
+# tooling noise, not a stub bug. The second is the @cache-decorated read of
+# which distributions provide each import name, the same mismatch.
+gaspatchio\.engines\._versions\._taken_once
+gaspatchio\.engines\._versions\._import_names
 
 # Schedule module — Literal TypeAliases in private module (not part of public stub surface)
-gaspatchio\.schedule\._schedule\.Anchor
-gaspatchio\.schedule\._schedule\.Frequency
-
-# Curves module — Literal TypeAliases in private module (not part of public stub surface)
-gaspatchio\.curves\._curve\.InterpolationMethod
+gaspatchio\.schedule\._data\.Anchor
+gaspatchio\.schedule\._data\.Frequency
 
 # Curves module — private submodules (not part of the public stub surface)
 gaspatchio\.curves\._.*
 
-# Curves module — TimeInput and InterpolationMethod in stub but not re-exported from __init__.py
-gaspatchio\.curves\.InterpolationMethod
-gaspatchio\.curves\.TimeInput
-
 # Mortality module — private submodules (not part of the public stub surface)
 gaspatchio\.mortality\._.*
-
-# Mortality module — Literal TypeAliases: `type X = ...` syntax not recognised as Union by stubtest
-gaspatchio\.mortality\.AgeBasis
-gaspatchio\.mortality\.Structure
 
 # Rollforward module — private submodules; TYPE_CHECKING imports are referenced
 # in stubs (IR, Op, Schedule, StateRef, RollforwardBuilder, CompiledRollforward,
@@ -171,25 +120,7 @@ gaspatchio\.mortality\.Structure
 # stubtest reports them as MISSING. Also covers the `Protocol` typing.Protocol
 # meta-class drift in _passes.py and the Literal-alias EngineBinding that
 # stubtest cannot match against runtime.
-gaspatchio\.rollforward\._.*\.IR
-gaspatchio\.rollforward\._.*\.Op
-gaspatchio\.rollforward\._.*\.Schedule
-gaspatchio\.rollforward\._.*\.StateRef
-gaspatchio\.rollforward\._.*\.RollforwardBuilder
-gaspatchio\.rollforward\._.*\.CompiledRollforward
 gaspatchio\.rollforward\._.*\.EngineBinding
-gaspatchio\.rollforward\._.*\.Iterable
-gaspatchio\.rollforward\._passes\.Protocol
-
-# ConditionExpression — TYPE_CHECKING-only import in column.shape and
-# polars_backend.masks (referenced for type annotations only).
-gaspatchio\.column\.shape\.ConditionExpression
-gaspatchio\.polars_backend\.masks\.ConditionExpression
-
-# Shape Literal alias re-imported into condition_expression — stubtest cannot
-# match Literal type aliases against runtime objects (same as the existing
-# entry for column.shape.Shape).
-gaspatchio\.column\.condition_expression\.Shape
 
 # @lru_cache-decorated holiday helpers — stubgen sees the lru_cache wrapper's
 # (*args, **kwargs) signature, runtime sees the wrapped function's actual
@@ -207,39 +138,20 @@ gaspatchio\.schedule\._calendar\._us_holidays_for_year
 # surface gets stubbed, and never add one without a reason line.
 # ============================================================================
 
-# Dataclass-generated members (__match_args__, Python 3.13's __replace__,
-# __post_init__ hooks) — generated on every dataclass; tooling noise, not
-# stub bugs.
-.*\.__match_args__
+# Python 3.13's dataclass-generated __replace__ — generated on every
+# dataclass; tooling noise, not a stub bug.
 .*\.__replace__
-.*\.__post_init__
-
-# Internal dispatch machinery — the column stubs are a curated public façade
-# (proxy.pyi documents the user surface; dispatch internals are not it).
-gaspatchio\.column\.dispatch\..*
 
 # Rust extension internals not part of the public stub surface.
 gaspatchio\._internal\.__all__
-gaspatchio\._internal\.PyAssumptionTableRegistry
 
-# Accessor registry internals.
-gaspatchio\.frame\.registry\.AccessorClass
+
+# These three Literal aliases previously fell under frame.graph.*.
+# Relocation narrows their exception to the aliases; other semantic code is checked.
+gaspatchio\._semantic\.ir\.BinOpKind
+gaspatchio\._semantic\.ir\.EngineName
+gaspatchio\._semantic\.vocabulary\.OpTier
+
+# The runtime-typed registry replaces its duplicate stub. PEP 695 alias tooling
+# limitation (not a missing implementation).
 gaspatchio\.frame\.registry\.AccessorRegistryDict
-
-# Scenario aggregator engine plumbing — users construct aggregators and hand
-# them to run_aggregated; the batch protocol is engine-facing, not user API.
-gaspatchio\.scenarios\..*\.add_batch
-gaspatchio\.scenarios\..*\.requires_scenario_id
-gaspatchio\.scenarios\..*\.batch_reduce_over
-gaspatchio\.scenarios\..*\.batch_reduce_over_within
-gaspatchio\.scenarios\.Aggregator\.within_expr
-
-# Assumption overflow-strategy engine hook (.apply) and schema helper —
-# engine-facing, invoked by Table, not by users.
-gaspatchio\.assumptions\..*\.apply
-gaspatchio\.assumptions\.TableSchema\.suggest_table_config
-
-# Submodule __all__ drift pending each module's own stub audit.
-gaspatchio\.assumptions\.__all__
-gaspatchio\.functions\.__all__
-gaspatchio\.util\.__all__

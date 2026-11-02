@@ -22,7 +22,7 @@ baseline. A clean run is the success signal.
 | `01_curve_construction.py` | `Curve.from_zero_rates` + `spot_rate` / `discount_factor` / `forward_rate`; `Curve.from_par_rates` bootstrap | `DF(t)` == `(1 + spot(t))^(-t)` at every knot; `DF(0) == 1.0`; mid-knot `spot_rate` == hand linear interp; `forward_rate` == DF-implied forward; bootstrapped curve re-prices a 5y par bond to `1.0` |
 | `02_curve_stress.py` | `shift_parallel(bps=100)`, `key_rate_shift(tenor=10.0, bps=25)` | Shifted `spot_rate` at each knot == base `+ 0.01` (+100bp); base curve **unchanged** after the shift (immutability); key-rate bump touches only the 10y knot; `key_rate_shift` on a non-knot tenor raises `ValueError` (caught) |
 | `03_schedule_daycount.py` | `Schedule.from_calendar_grid` with `OneTwelfth()` vs `ActualActualISDA()`, spanning 2024 leap-Feb | `OneTwelfth` `year_fractions()` all exactly `1/12`; `ActualActualISDA` period 0 == `29/366` and period 1 == `31/366` (source-grounded hand calc); leap Jan→Feb is **below** 1/12, Feb→Mar **above**; the two totals disagree; `period_dates()` length == `n_periods + 1` |
-| `04_curve_precompute_discount.py` | Production discounting: `cumulative_year_fractions()` → `discount_factor(t_years)` once → `pl.lit(disc, …)` broadcast → `(net_cf * df).list.sum()` | Broadcast-DF PV == independent Python dot product of the same DF vector and `net_cf`; shared-grid policies share PV |
+| `04_curve_discounting.py` | The recorded door: `af.projection.t_years()` → `curve.discount_factor(<that column>)` → `(net_cf * df).list.sum()`; the pre-compute-and-broadcast escape hatch kept below it, labelled with its audit cost | Recorded DFs == a hand-derived spot-rate-and-compounding oracle (plain Python, no Gaspatchio) to 1e-12; recorded PV == that oracle's dot product; shared-grid policies share PV; the escape hatch returns the **identical** PV |
 | `05_interpolation_methods.py` | Beyond default-linear: `interpolation="log_linear"` / `"pchip"`; `Curve.from_svensson` (Nelson-Siegel-Svensson); `Curve.fit_smith_wilson` (EIOPA / Solvency II) | Every method recovers its input rates at the knots; `log_linear` mid-knot == hand-built log-DF blend; `pchip` is monotone (no overshoot); NSS == independent Svensson eq.22 re-derivation + short/long limits; Smith-Wilson == published lifelib spot values at 3y / 20y |
 
 ## Running
@@ -33,7 +33,7 @@ uv run python \
 ```
 
 Swap in `02_curve_stress.py`, `03_schedule_daycount.py`,
-`04_curve_precompute_discount.py`, or `05_interpolation_methods.py`. Each script
+`04_curve_discounting.py`, or `05_interpolation_methods.py`. Each script
 asserts internally; a clean run with the printed reconciliation is the success
 signal.
 
@@ -51,7 +51,7 @@ from gaspatchio import ActuarialFrame, Curve, Schedule, ActualActualISDA, OneTwe
 - `Curve.from_svensson(b0=, b1=, b2=, b3=, tau1=, tau2=)` — Nelson-Siegel-Svensson parametric curve (Fed / ECB published form); `Curve.fit_svensson(tenors=, rates=)` calibrates the six parameters to market knots
 - `Curve.fit_smith_wilson(tenors=, rates=, ufr=, alpha=)` — EIOPA / Solvency II extrapolation: fits the liquid knots, pulls smoothly to the Ultimate Forward Rate
 - `Curve.spot_rate(t)` — interpolated zero rate; scalar/list/ndarray/Series/Expr in, matching shape out
-- `Curve.discount_factor(t)` — annually-compounded `DF(t) = (1 + r(t))^(-t)`
+- `Curve.discount_factor(t)` — annually-compounded `DF(t) = (1 + r(t))^(-t)`; on a **tracked column** (`af.projection.t_years()`) it is a recorded core-tier operation publishing the curve's digest as the assumption entry's `fingerprint`, lowering through the `curve_eval` + `list_pow` Rust kernels
 - `Curve.forward_rate(t1=, t2=)` — annually-compounded forward between two tenors (keyword-only, scalar)
 - `Curve.shift_parallel(bps=)` / `Curve.key_rate_shift(tenor=, bps=)` — return a **new** stressed curve; `key_rate_shift` requires an exact knot
 - `Schedule.from_calendar_grid(start_date=, n_periods=, frequency=, day_count=)` — shared grid; `anchor="month_end"` default
@@ -59,7 +59,8 @@ from gaspatchio import ActuarialFrame, Curve, Schedule, ActualActualISDA, OneTwe
 - `Schedule.year_fractions()` — per-period year fractions under the schedule's day-count (length `n_periods`)
 - `Schedule.cumulative_year_fractions()` — `[0, yf[0], yf[0]+yf[1], …]`, length `n_periods + 1`; feeds `Curve.discount_factor`
 - `OneTwelfth()` / `ActualActualISDA()` — day-count conventions passed to `from_calendar_grid(day_count=)`
-- `pl.lit(disc, dtype=pl.List(pl.Float64))` — broadcast a pre-computed DF vector as a list literal (the production discounting path)
+- `af.projection.t_years()` — the projection's own cumulative year fractions as a tracked list column, length `n_periods + 1`; the input `Curve.discount_factor` is meant to read
+- `pl.lit(disc, dtype=pl.List(pl.Float64))` — broadcast a pre-computed DF vector as a list literal (the **escape hatch**: faster on a shared grid, but the values arrive with no recorded source)
 
 ## Conventions grounded from source
 
@@ -89,13 +90,51 @@ these scripts was confirmed against the source — not a textbook variant:
 
 ## Gotchas these scripts encode
 
-- **Pre-compute the DF vector; never call `curve.discount_factor()` on a list
-  column.** The inline list-column form (`curve.discount_factor(af.t)`) reads
-  nicely but falls back to `map_elements` internally (~14x slower; banned for
-  portfolio runs — the GSP-116 footgun). On a shared uniform grid every policy
-  has the same `t` vector, so compute the DF list **once** in Python from
-  `cumulative_year_fractions()` and broadcast it with `pl.lit(…, dtype=pl.List(…))`.
-  `04_curve_precompute_discount.py` shows the safe path and comments the footgun.
+- **Discount through the recorded door: `curve.discount_factor(<a tracked
+  column>)`.** It is a recorded core-tier operation — the curve's digest reaches
+  the artifact as the assumption entry's `fingerprint`, and under the
+  `executable` profile as the node's `expr.attrs.curve`, the same string, while
+  the artifact carries the curve's canonical form — and it lowers to the
+  `curve_eval` + `list_pow` Rust kernels, one pass over the list column with
+  no `map_elements`. Measured at 10,000 policies × 120 monthly
+  periods, end-to-end through `.collect()` on the streaming engine — the one
+  `collect()` uses — on a sixteen-thread laptop with eight physical cores:
+  ~28 ms, against ~0.63 s–1.44 s for the same discounting hand-rolled through
+  `map_elements` — about **21x–48x**, and where in that range you land is set by
+  the Python callable you wrote rather than by the framework (a plain-Python
+  hand-roll with the segment table hoisted out of the callable costs ~0.63 s;
+  handing the row straight to the curve, ~0.97 s; re-deriving the spot rate in
+  Python, as `04`'s own `oracle_spot()` does, ~1.41 s). (No *validator* warning
+  fires on that hand-roll, because the line does read a column; the runtime's
+  telemetry logger warns on it twice per call regardless.)
+- **Pre-compute-and-broadcast is the escape hatch, and it costs the record.**
+  On a shared grid the DF vector can be computed once in Python from
+  `cumulative_year_fractions()` and handed over with `pl.lit(…, dtype=pl.List(…))`
+  — numerically identical, and **under 2x** quicker like-for-like on the engine
+  `collect()` uses: hold `projection.set` and `t_years()` equal, as a real model
+  does, and that **like-for-like broadcast** reads ~17 ms against the door's
+  ~28 ms — 1.6x–1.9x at every scale measured here (1.60x–1.88x at 10,000 × 120,
+  1.90x–1.94x at 100,000 × 120, 1.71x–1.74x at 10,000 × 360). That band is a
+  **streaming, sixteen-thread** one and nothing else: on the in-memory engine the
+  same comparison reads 10.0x–15.5x, and pinned to a single thread ~10.6x, because
+  the door parallelises about 4x and the broadcast it is divided by does not.
+  Skip the projection entirely, as the script's hatch does — the **bare
+  broadcast** — and it reads ~9 ms: a bigger gap, but one that books the
+  projection scaffolding to the curve read. On the whole-script comparison, the
+  door against that bare broadcast, each figure is stable on one axis only: the
+  ratio (3.3x, 3.6x, 3.4x on those three scales) across **scale**, on one machine
+  at one engine and one load; the delta (~20 ms, ~196 ms, ~55 ms) across
+  **machines**, at one fixed scale. Neither is a band to lift from someone else's
+  portfolio — and threads land very unevenly across the four rows: the door reads
+  ~110–113 ms pinned to a single thread against ~28 ms on sixteen (4.0x out of
+  eight physical cores), the bare broadcast and the `map_elements` row
+  gain nothing measurable, and the like-for-like broadcast is *faster* pinned
+  (~10.7 ms against ~17.5 ms). So re-time on the job you actually run. But `pl.lit()`
+  reads no column and names no assumption base, so nothing in the artifact ties
+  those numbers to the curve, and the artifact validator warns on the shape. Take
+  it only when a measured bottleneck justifies giving up the lineage.
+  `04_curve_discounting.py` teaches the recorded door and keeps the hatch below
+  it, labelled.
 - **Curve stress returns a new curve; the base is immutable.** `shift_parallel`
   / `key_rate_shift` never mutate the original — safe to fan out scenarios from
   one base curve.

@@ -45,7 +45,7 @@ class TestCompilationErrorHandling:
         set_error_mode("enhanced")
 
         af = ActuarialFrame(self.test_data, mode="debug")
-        af._tracing = True  # Enable tracing to capture operations
+        af._traced_run = True  # Enable tracing to capture operations
 
         # Add some valid operations first
         af["ratio"] = pl.col("sum_assured") / pl.col("premium")
@@ -92,7 +92,7 @@ class TestCompilationErrorHandling:
         set_error_mode("enhanced")
 
         af = ActuarialFrame(self.test_data, mode="debug")
-        af._tracing = True
+        af._traced_run = True
         af["missing"] = pl.col("not_found")
 
         with pytest.raises(pl.ColumnNotFoundError) as exc_info:
@@ -118,7 +118,7 @@ class TestCompilationErrorHandling:
         set_error_mode("enhanced")
 
         af = ActuarialFrame(self.test_data, mode="debug")
-        af._tracing = True
+        af._traced_run = True
         af["calc"] = pl.col("missing_col") + 1
 
         with pytest.raises(pl.ColumnNotFoundError) as exc_info:
@@ -140,7 +140,7 @@ class TestCompilationErrorHandling:
         set_error_mode("enhanced")
 
         af = ActuarialFrame(self.test_data, mode="debug")
-        af._tracing = True
+        af._traced_run = True
         af["result"] = pl.col("unknown")
 
         with pytest.raises(pl.ColumnNotFoundError) as exc_info:
@@ -169,7 +169,7 @@ class TestCompilationErrorHandling:
         })
 
         af = ActuarialFrame(data, mode="debug")
-        af._tracing = True
+        af._traced_run = True
 
         # This should cause a type error (can't add string to number)
         af["bad_mix"] = pl.col("text") + pl.col("number")
@@ -217,7 +217,7 @@ class TestCompilationErrorHandling:
         set_error_mode("enhanced")
 
         af = ActuarialFrame(self.test_data, mode="debug")
-        af._tracing = True
+        af._traced_run = True
         af["bad"] = pl.col("missing")
 
         # Test with console detected
@@ -242,7 +242,7 @@ class TestCompilationErrorHandling:
         set_error_mode("enhanced")
 
         af = ActuarialFrame(self.test_data, mode="debug")
-        af._tracing = True
+        af._traced_run = True
 
         # Add several successful operations
         af["ratio"] = pl.col("sum_assured") / pl.col("premium")
@@ -274,7 +274,7 @@ class TestCompilationErrorHandling:
         set_error_mode("enhanced")
 
         af = ActuarialFrame(self.test_data, mode="debug")
-        af._tracing = True
+        af._traced_run = True
 
         # Typo in column name
         af["calc"] = pl.col("permium") * 2  # Should be "premium"
@@ -327,3 +327,45 @@ class TestCompilationErrorEdgeCases:
             console_output = exc_info.value.enhanced_error.to_console()
             # Should truncate long expressions
             assert "..." in console_output
+
+
+class TestSourceScopeHonesty:
+    """The report never claims a scope it does not know."""
+
+    def setup_method(self):
+        """Set up test data for each test."""
+        self.test_data = pl.DataFrame({
+            "policy_id": [1, 2, 3],
+            "sum_assured": [100_000.0, 200_000.0, 150_000.0],
+        })
+        self.original_error_mode = get_error_mode()
+
+    def teardown_method(self):
+        """Reset error mode after each test."""
+        set_error_mode(self.original_error_mode)
+
+    def test_a_calculation_inside_a_helper_is_not_reported_as_module_level(self):
+        """A span carries a file and a line, not an enclosing function name.
+
+        The report used to print ``Function: module level`` whenever no
+        function name was supplied, which is a claim rather than an absence:
+        a reserve calculated inside a helper is not written at module level,
+        and pointing the reader -- or an LLM reading the report -- at module
+        scope sends them somewhere the calculation is not. An omitted line
+        says nothing, which is the truthful answer.
+        """
+        set_error_mode("enhanced")
+
+        def calculate_reserves(frame: ActuarialFrame) -> None:
+            frame["reserves"] = pl.col("mortality_rate") * pl.col("sum_assured")
+
+        af = ActuarialFrame(self.test_data, mode="debug")
+        af._traced_run = True
+        calculate_reserves(af)
+
+        with pytest.raises(pl.exceptions.ColumnNotFoundError) as exc_info:
+            af.collect()
+
+        message = str(exc_info.value)
+        assert "reserves" in message
+        assert "module level" not in message

@@ -30,21 +30,35 @@ Section 3 (mortality) is completely rewritten:
 af.mort_rate = mortality_table.lookup(age=af.age)
 
 # AFTER (step 02): 3-dimensional lookup + scalar adjustment
-af.mort_table_id = when(af.sex == "M").then(af.mort_table_male).otherwise(af.mort_table_female)
-af.duration_capped = af.duration.clip(upper_bound=SELECT_PERIOD_LEN - 1)
+af.mort_table_id = (
+    when(af.sex == "M").then(af.mort_table_male).otherwise(af.mort_table_female)
+)
+af.duration_capped = (
+    when(af.duration > SELECT_PERIOD_LEN - 1)
+    .then(SELECT_PERIOD_LEN - 1)
+    .otherwise(af.duration)
+)
 
 af.base_mort_rate = mortality_select.lookup(
-    table_id=af.mort_table_id, attained_age=af.age, duration=af.duration_capped,
+    table_id=af.mort_table_id,
+    attained_age=af.age,
+    duration=af.duration_capped,
+)
+af.scalar_duration_capped = (
+    when(af.duration > SCALAR_DURATION_CAP)
+    .then(SCALAR_DURATION_CAP)
+    .otherwise(af.duration)
 )
 af.mort_scalar = mortality_scalars.lookup(
-    scalar_id=af.mort_scalar_id, duration=af.duration.clip(upper_bound=SCALAR_DURATION_CAP),
+    scalar_id=af.mort_scalar_id,
+    duration=af.scalar_duration_capped,
 )
 af.mort_rate = af.base_mort_rate * af.mort_scalar
 ```
 
 Key patterns introduced:
 - **Sex-based table selection** using `when/then/otherwise`
-- **Duration capping** with `.clip(upper_bound=N)` — the select table only covers durations 0-24
+- **Duration capping** with `when/then/otherwise` — the select table only covers durations 0-24
 - **Multi-key lookup** — Table.lookup() with 3 dimensions
 - **Scalar adjustment** — final rate = base × scalar
 
@@ -81,4 +95,4 @@ uv run gspio run-single-policy tutorial/level-3-mini-va/steps/02-select-mort/mod
 - "How do I do multi-dimensional table lookups?"
 - "How do I handle different assumptions for male vs female?"
 - "What are mortality scalars?"
-- "How do I cap lookup dimensions with .clip()?"
+- "How do I cap a lookup dimension at the top of a table's range?"

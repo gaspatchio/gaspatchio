@@ -82,6 +82,41 @@ uv run gspio describe --json /tmp/result.parquet
 
 The Level 4 full reconciliation (`tutorial/level-4-lifelib/reconcile_full.py`) compares 25 intermediate variables per point per timestep — this is the gold standard.
 
+### Which intermediates, in which order, and at which period
+
+The model can list the intermediates behind any variable, in the order to
+reconcile them, and say which period each arrow reads — do not reconstruct
+either by reading or regexing formulas:
+
+```bash
+uv run gspio calc-graph model.py data.parquet -o /tmp/audit.json
+
+# Everything behind the variable, each node after everything it reads.
+# Each arrow says how it read: t−1 / t+1 for a shift, first…t or t…last for
+# a cumulative or remaining window, first…last for a sum, position k for list.get
+uv run gspio graph trace /tmp/audit.json pv_claims --depth 3
+
+# The one formula's own operands, and what reads a variable
+uv run gspio graph precedents /tmp/audit.json pols_if
+uv run gspio graph dependents /tmp/audit.json mort_rate --json
+```
+
+On the live frame the same questions are `af.graph.trace("pv_claims", depth=3)`,
+`af.graph.precedents("pols_if")` and `af.graph.dependents("mort_rate")`. A
+column written twice answers for its live definition; ask `"pols_if@1"` for the
+earlier one. Reconcile the trace top to bottom: the first node that does not
+match is the one to fix, and everything after it may be fine.
+
+`calc-graph` writes values for one policy by default (`:1`, the first row of
+the book): export your specimen by name, `--policies id:<specimen id>`. Every
+value in the audit file is the full double the run held, so a timeline read
+from it reconciles to the bit; only a `trace` step's prose rounds, to six
+significant figures, as a reading aid. To lay the specimen beside the
+workbook, `uv run gspio sheet /tmp/audit.json -o specimen.xlsx` writes one
+Timeline per sampled policy — a row per period, a column per calculation
+headed by its formula and tier, every number the run's own double and no
+cell a formula — and its Edges sheet lists the periods each read takes.
+
 ---
 
 ## Diagnostic Toolkit
@@ -159,6 +194,14 @@ You are the diagnostician, not the fixer. Identify the problem precisely, then r
 | **Tight** | <1% | Per-policy cashflows, early periods | Investigate root cause; document if accepted |
 | **Reasonable** | <5% | Aggregate BEL, complex stress scenarios | Investigate major drivers; may accept with justification |
 | **Directional** | Sign + order of magnitude | Extreme stress, known methodology gaps | Document known differences; flag for future work |
+
+**Last-bit differences in time are expected, not a tolerance breach.** On a
+calendar grid `t_years()` is a running sum of year fractions, so a monthly
+grid differs from `k/12` in the last bits (219 of 241 monthly boundaries,
+up to 25 ulp, measured); a workbook computing time as `A/12` will show that.
+Where the source has no calendar under it, project on the fixed-step axis —
+`af.projection.set(n_periods=…, steps_per_year=12)` — whose `t_years()` is
+`k/12` exactly.
 
 ---
 
@@ -352,8 +395,14 @@ When a value doesn't match between source and gaspatchio, debug in this order:
    - Are derived indexing variables (`age`, `duration`, `policy_year`) aligned?
 3. **Check formula**
    - Is the business logic exactly the same (including caps/floors/options)?
+   - `uv run gspio graph precedents /tmp/audit.json <variable>` names exactly what
+     the formula read, and which definition of each — a variable reading the
+     pre-decrement `pols_if@1` where the source reads the post-decrement value is
+     found here.
 4. **Check timing**
    - Beginning vs end of period? Mid-month conventions? Effective date vs valuation date?
+   - Read the period of each read off `gspio graph trace` (`t−1`, `first…t`,
+     `t…last`) and compare it with the source's cell references.
 5. **Check rounding**
    - When and where is rounding applied in the source model vs gaspatchio?
 6. **Check edge cases**
@@ -388,6 +437,36 @@ This shows schema, column types, detected dimensions, and sample rows. Use it to
 
 Use Polars to compare the gaspatchio outputs to the source model outputs at the **column + time-step** level.
 
+### What a fix moved, and whether two runs agree
+
+Comparing gaspatchio with itself has its own commands; do not hand-roll them.
+
+```bash
+# Two versions of the model (before and after a fix): which lines' numbers moved
+uv run gspio calc-graph model.py data.parquet -o after.audit.json --results after.parquet
+uv run gspio diff before.audit.json after.audit.json
+
+# Two runs of one version (a re-run, another machine): do they agree?
+uv run gspio compare after.audit.json run1.parquet run2.parquet
+
+# The ids repeat (two cohorts, a scenario axis): name every column a row is known by
+uv run gspio compare after.audit.json run1.parquet run2.parquet \
+    --policy-id-column policy_id --policy-id-column cohort
+```
+
+`gspio diff` on two audit files says what changed — formulas, tables, policy
+data — and, reading the two results files the audit files record, which
+lines' numbers moved, in how many policies, from which period and by how
+much; `gspio compare` answers a different question, whether two runs of *one*
+artifact agree. Put each fix's diff in its build-log entry: the line the fix
+edited reads `(self)`, and every other line that moved reads `(inherited)`. A
+line that moved and was not meant to is the next mismatch. When one column
+does not name each row once, give `--policy-id-column` again for each further
+column (`run-model`, `calc-graph`, `run-artifact`, `compare` and `diff` all
+repeat it); the
+results file records the identity it was written under, and `compare`/`diff`
+pair rows on it.
+
 ## Example: Level 4 Tutorial Reconciliation
 
 **Canonical example**: Level 4 reconciliation — 0.0000% across 1,016 model points, 35 variables, ~9 million data points. See `tutorial/level-4-lifelib/reconciliation_report.md` for the full breakdown including upstream lifelib bugs found.
@@ -408,6 +487,13 @@ Reconciliation is complete when:
   - A set of diverse test policies
   - Edge cases that stress timing and options
 - No unexplained differences remain.
+- The reconciled run is pinned: its audit file was exported with `--results`,
+  and `gspio verify` of that file against the model, the policy data, the
+  assumption files and the results file the build log cites exits 0. The build
+  log cites `graph_fingerprint` **and** `book.digest` — `graph_fingerprint`
+  covers the formulas and the tables' content, not the policy data (which
+  identity answers which question:
+  [../gaspatchio-model-review/references/audit-record.md](../gaspatchio-model-review/references/audit-record.md)).
 - Any remaining tiny differences (if allowed) are:
   - Explicitly documented
   - Numerically bounded

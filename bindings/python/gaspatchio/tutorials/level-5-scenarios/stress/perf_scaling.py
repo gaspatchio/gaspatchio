@@ -5,14 +5,16 @@
 """
 L5 Performance Scaling Stress
 
-Exercises three shapes that matter for the GSP-92 spec target
+Exercises three shapes that matter at a variable-annuity illustration's scale
 (1200 periods x 100k policies = 120M policy-months) and that the
 standard benchmark does not cover.
 
 Variant 1 — Long projection (1200 months, monthly)
-    Override projection_months to 1200.  The Schedule builds a 1201-element
-    t-grid and the Curve pre-computes 1201 discount factors; per-policy
-    ``list.head(n)`` trimming then selects the correct slice.
+    Override projection_months to 1200.  The model discounts through
+    ``curve.discount_factor(af.t_years)`` on the tracked year-fraction
+    column, and ``af.projection.t_years()`` is each policy's own vector, so
+    the curve is read on exactly the periods that policy has and nothing
+    trims a shared grid down to them.
 
     Two data extensions keep the long horizon honest:
 
@@ -22,8 +24,11 @@ Variant 1 — Long projection (1200 months, monthly)
     - Policy terms are capped so entry age + term never runs past the
       mortality table's limiting age — the AGENTS.md rule in action:
       *your mortality table must cover every attained age the projection
-      reaches.* The full 1200-month grid is still built and stressed;
-      per-policy trimming keeps every lookup on-table.
+      reaches.* The 1200-month override is still passed, but no 1200-month
+      horizon is built from it: each policy runs to its own capped term, so on
+      the shipped 1k model points the longest timeline this variant stresses
+      is 681 periods rather than the 1200 the label promises. The cap shortens
+      the stress; the per-policy timelines keep every lookup on-table.
 
 Variant 2 — 10k × 1200 (full stress)
     Runs only when ``--full`` is passed (default off). Same data extension as
@@ -47,21 +52,23 @@ Usage::
 
 Output::
 
-    tutorial/level-5-scenarios/report/stress_perf_scaling.md
+    tutorial / level - 5 - scenarios / report / stress_perf_scaling.md
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import gc
 import importlib.util
 import platform
 import resource
+import shutil
 import subprocess
 import time
 import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from loguru import logger
@@ -70,10 +77,15 @@ from gaspatchio import ActuarialFrame
 from gaspatchio.scenarios import with_scenarios
 from gaspatchio.schedule import (
     BusinessDayConvention,
+    Calendar,
+    DayCount,
     OneTwelfth,
     Schedule,
     TARGET,
 )
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -113,7 +125,7 @@ def _peak_rss_mb() -> float:
 # ---------------------------------------------------------------------------
 
 
-def _load_module(path: Path, name: str) -> Any:
+def _load_module(path: Path, name: str) -> ModuleType:
     """Load a model.py file as a Python module."""
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -173,8 +185,12 @@ def _cap_terms_to_table_coverage(mp: pl.DataFrame) -> pl.DataFrame:
     attained age 135, past the table's limiting age — and the lookup raises
     on the miss, as it should. The stress demonstrates the rule instead of
     violating it: the limiting age is read from the table itself and each
-    policy's term is capped at (limiting age − entry age). The full-length
-    t-grid is still built; per-policy trimming keeps every lookup on-table.
+    policy's term is capped at (limiting age − entry age). Nothing then builds
+    the full-length grid the override names, and nothing trims one down: the
+    projection constructs each policy's own timeline out to its capped term,
+    so the longest one is as long as the longest surviving term and no longer.
+    The cap is what keeps every lookup on-table, and it is also what makes the
+    stress shorter than the horizon the caller asked for.
     """
     limiting_age = int(
         pl.read_parquet(ASSUMPTIONS_DIR / "mortality_select.parquet")
@@ -194,7 +210,7 @@ def _cap_terms_to_table_coverage(mp: pl.DataFrame) -> pl.DataFrame:
 
 
 def _run_once(
-    model_mod: Any,
+    model_mod: ModuleType,
     points_path: Path,
     projection_months: int,
     scenarios: list[str],
@@ -248,7 +264,7 @@ def _run_once(
 
 
 def _benchmark(
-    model_mod: Any,
+    model_mod: ModuleType,
     points_path: Path,
     label: str,
     proj_months: int,
@@ -374,7 +390,7 @@ def _schedule_isolation_benchmark(
 
 
 def _benchmark_slow_calendar(
-    model_mod: Any,
+    model_mod: ModuleType,
     points_path: Path,
     proj_months: int,
     n_repeats: int = 3,
@@ -407,17 +423,19 @@ def _benchmark_slow_calendar(
     # --- slow path: monkey-patch Schedule ---
     _orig = Schedule.from_calendar_grid
 
+    # The stand-in keeps from_calendar_grid's keywords, so every call the model
+    # makes still binds; calendar and convention are taken and overridden.
     @classmethod  # type: ignore[misc]
     def _slow_from_calendar_grid(
-        cls: type,
+        _cls: type,
         *,
         start_date: datetime.date,
         n_periods: int,
         frequency: str,
         anchor: str = "month_end",
-        calendar: Any = None,
-        convention: Any = None,
-        day_count: Any = None,
+        calendar: Calendar | None = None,  # noqa: ARG001 -- overridden
+        convention: BusinessDayConvention | None = None,  # noqa: ARG001 -- overridden
+        day_count: DayCount | None = None,
     ) -> Schedule:
         return _orig(
             start_date=start_date,
@@ -464,7 +482,7 @@ def _write_report(
     scenario_returns_note: str,
 ) -> Path:
     """Write stress_perf_scaling.md to REPORT_DIR."""
-    today = datetime.date.today().isoformat()
+    today = datetime.datetime.now().astimezone().date().isoformat()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = []
@@ -514,11 +532,15 @@ def _write_report(
     lines.append("## Variant 1 — Long Projection (1200 months)")
     lines.append("")
     lines.append(
-        "Projection horizon extended to 1200 months. The Schedule builds a "
-        "1201-element t-grid; per-policy `list.head(n)` trimming selects the "
-        "correct slice. Policy terms are capped at the mortality table's "
-        "limiting age minus entry age, so every attained age the projection "
-        "reaches stays on the table (the AGENTS.md coverage rule)."
+        "Projection horizon override set to 1200 months. The model discounts "
+        "through `curve.discount_factor(af.t_years)` on the tracked "
+        "year-fraction column, which is each policy's own vector, so no "
+        "trimming step is on the path. Policy terms are capped at the "
+        "mortality table's limiting age minus entry age, so every attained "
+        "age the projection reaches stays on the table (the AGENTS.md "
+        "coverage rule) — which also means no policy is projected for the "
+        "full 1200 months, and the longest timeline built is the longest "
+        "capped term, not the override."
     )
     lines.append("")
     if v1_results:
@@ -590,7 +612,11 @@ def _write_report(
     # Findings
     lines.append("## Findings")
     lines.append("")
-    lines.extend(_generate_findings(baseline_results, v1_results, v2_results, v3_fast, v3_slow, sched_isolation))
+    lines.extend(
+        _generate_findings(
+            baseline_results, v1_results, v2_results, v3_fast, v3_slow, sched_isolation
+        )
+    )
     lines.append("")
 
     report_path = REPORT_DIR / "stress_perf_scaling.md"
@@ -623,7 +649,7 @@ def _generate_findings(
             f"{r['time_median_s']:.3f}s median, "
             f"{r['throughput_pts_per_s']:,.1f} pts/s, peak RSS delta "
             f"{r['peak_rss_mb']:.1f} MB. Schedule fast-paths keep the "
-            "1201-element t-grid build negligible relative to model runtime."
+            "per-policy timeline build negligible relative to model runtime."
         )
 
     for r in v2:
@@ -682,25 +708,28 @@ def main(full: bool = False) -> None:
     """
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Get git SHA
-    try:
-        git_sha = (
-            subprocess.check_output(
-                [
-                    "git",
-                    "-C",
-                    str(_STRESS_DIR),  # git resolves the repo from any subdir
-                    "rev-parse",
-                    "--short",
-                    "HEAD",
-                ],
-                stderr=subprocess.DEVNULL,
+    # Get git SHA, or "unknown" with no git or no repository. The command line
+    # is the literal rev-parse and this script's own directory; nothing in it
+    # comes from outside.
+    git_sha = "unknown"
+    git = shutil.which("git")
+    if git is not None:
+        with contextlib.suppress(subprocess.CalledProcessError):
+            git_sha = (
+                subprocess.check_output(  # noqa: S603 -- see above
+                    [
+                        git,
+                        "-C",
+                        str(_STRESS_DIR),  # git resolves the repo from any subdir
+                        "rev-parse",
+                        "--short",
+                        "HEAD",
+                    ],
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
             )
-            .decode()
-            .strip()
-        )
-    except subprocess.CalledProcessError:
-        git_sha = "unknown"
 
     python_version = platform.python_version()
     arch = platform.machine()
@@ -800,7 +829,9 @@ def main(full: bool = False) -> None:
     v3_slow: dict[str, Any] | None = None
 
     if POINTS_1K.exists():
-        v3_fast, v3_slow = _benchmark_slow_calendar(model_mod, POINTS_1K, 82, n_repeats=3)
+        v3_fast, v3_slow = _benchmark_slow_calendar(
+            model_mod, POINTS_1K, 82, n_repeats=3
+        )
 
     # -----------------------------------------------------------------------
     # Print summary to stdout

@@ -14,29 +14,22 @@ fn list_int64_output(_: &[Field]) -> PolarsResult<Field> {
     ))
 }
 
-fn same_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = &input_fields[0];
-    Ok(field.clone())
-}
-
-fn int64_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = &input_fields[0];
-    let name = field.name();
-    let output_type = match field.dtype() {
-        DataType::List(_) => DataType::List(Box::new(DataType::Int64)),
-        _ => DataType::Int64,
+/// Output type for a binary numeric kernel: List<Float64> when either operand
+/// is a list column, Float64 when neither is. Named after the first operand.
+fn float_or_float_list_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    let name = input_fields
+        .first()
+        .map(|f| f.name().clone())
+        .unwrap_or_else(|| PlSmallStr::from_static("value"));
+    let any_list = input_fields
+        .iter()
+        .any(|f| matches!(f.dtype(), DataType::List(_)));
+    let dtype = if any_list {
+        DataType::List(Box::new(DataType::Float64))
+    } else {
+        DataType::Float64
     };
-    Ok(Field::new(name.clone(), output_type))
-}
-
-/// Output type for list_pow: mirrors base shape (List<Float64> for list base, Float64 for scalar base).
-fn list_pow_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = &input_fields[0];
-    let dtype = match field.dtype() {
-        DataType::List(_) => DataType::List(Box::new(DataType::Float64)),
-        _ => DataType::Float64,
-    };
-    Ok(Field::new(field.name().clone(), dtype))
+    Ok(Field::new(name, dtype))
 }
 
 #[polars_expr(output_type_func = list_int64_output)]
@@ -47,10 +40,52 @@ pub fn fill_series(
     gaspatchio_core_lib::polars_functions::vector::fill_series(inputs, &kwargs)
 }
 
-/// PyO3 wrapper for list_pow - element-wise power on list columns
-#[polars_expr(output_type_func = list_pow_output)]
+/// PyO3 wrapper for list_pow - element-wise power on list columns, or a
+/// per-row base raised to a list of exponents
+#[polars_expr(output_type_func = float_or_float_list_output)]
 pub fn list_pow(inputs: &[Series]) -> PolarsResult<Series> {
     gaspatchio_core_lib::polars_functions::list_pow(inputs)
+}
+
+/// Run the IEEE quotient kernel for one named operation.
+fn ieee_quotient_for(inputs: &[Series], op: &str) -> PolarsResult<Series> {
+    let kwargs = gaspatchio_core_lib::QuotientKwargs { op: op.to_string() };
+    gaspatchio_core_lib::polars_functions::ieee_quotient(inputs, &kwargs)
+}
+
+// Three symbols rather than one kernel with an `op` keyword: Polars renders a
+// plugin call by its symbol and leaves its keywords out, so the symbol is the
+// only place a rendered plan -- the engine's account an audit export carries,
+// the walk-through a reader is shown -- can say which quotient ran.
+
+/// PyO3 wrapper for `/` over numbers: IEEE division, one per element
+#[polars_expr(output_type_func = float_or_float_list_output)]
+pub fn ieee_div(inputs: &[Series]) -> PolarsResult<Series> {
+    ieee_quotient_for(inputs, "div")
+}
+
+/// PyO3 wrapper for `//` over numbers: the floor of the IEEE quotient
+#[polars_expr(output_type_func = float_or_float_list_output)]
+pub fn ieee_floordiv(inputs: &[Series]) -> PolarsResult<Series> {
+    ieee_quotient_for(inputs, "floordiv")
+}
+
+/// PyO3 wrapper for `%` over numbers: `l - r * floor(l / r)` in binary64
+#[polars_expr(output_type_func = float_or_float_list_output)]
+pub fn ieee_mod(inputs: &[Series]) -> PolarsResult<Series> {
+    ieee_quotient_for(inputs, "mod")
+}
+
+/// Output type for norm_cdf: Float64, or List<Float64> for a list column.
+fn norm_cdf_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    gaspatchio_core_lib::polars_functions::norm_cdf_output_type(input_fields)
+}
+
+/// PyO3 wrapper for `norm_cdf`: the standard normal distribution function,
+/// `0.5 * erfc(-x / sqrt 2)`, one value at a time (section 11.1.12)
+#[polars_expr(output_type_func = norm_cdf_output)]
+pub fn norm_cdf(inputs: &[Series]) -> PolarsResult<Series> {
+    gaspatchio_core_lib::polars_functions::norm_cdf_series(inputs)
 }
 
 /// Output type for list_clip: List<Float64>
@@ -61,7 +96,10 @@ fn list_clip_output(input_fields: &[Field]) -> PolarsResult<Field> {
         .unwrap_or_else(|| PlSmallStr::from_static("list_clip"));
 
     // Always return List<Float64>
-    Ok(Field::new(name, DataType::List(Box::new(DataType::Float64))))
+    Ok(Field::new(
+        name,
+        DataType::List(Box::new(DataType::Float64)),
+    ))
 }
 
 /// PyO3 wrapper for list_clip - element-wise clip on list columns with per-row bounds
@@ -91,7 +129,7 @@ pub fn accumulate(inputs: &[Series]) -> PolarsResult<Series> {
 /// schema consistent with every input the kernel accepts.
 fn list_conditional_output(input_fields: &[Field]) -> PolarsResult<Field> {
     let name = input_fields
-        .get(0)
+        .first()
         .map(|f| f.name().clone())
         .unwrap_or_else(|| PlSmallStr::from_static("list_conditional"));
 
@@ -131,9 +169,15 @@ fn rollforward_output(
     _input_fields: &[Field],
     kwargs: gaspatchio_core_lib::RollforwardKwargs,
 ) -> PolarsResult<Field> {
-    let states = kwargs.ir.get("states").and_then(|v| v.as_array()).ok_or_else(|| {
-        PolarsError::ComputeError("rollforward: kwargs.ir.states missing or not an array".into())
-    })?;
+    let states = kwargs
+        .ir
+        .get("states")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| {
+            PolarsError::ComputeError(
+                "rollforward: kwargs.ir.states missing or not an array".into(),
+            )
+        })?;
     let state_names: Vec<String> = states
         .iter()
         .map(|s| {
@@ -145,17 +189,21 @@ fn rollforward_output(
                 })
         })
         .collect::<PolarsResult<Vec<_>>>()?;
-    let points = kwargs.ir.get("points").and_then(|v| v.as_array()).ok_or_else(|| {
-        PolarsError::ComputeError("rollforward: kwargs.ir.points missing or not an array".into())
-    })?;
+    let points = kwargs
+        .ir
+        .get("points")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| {
+            PolarsError::ComputeError(
+                "rollforward: kwargs.ir.points missing or not an array".into(),
+            )
+        })?;
     let point_names: Vec<String> = points
         .iter()
         .map(|p| {
-            p.as_str()
-                .map(str::to_string)
-                .ok_or_else(|| {
-                    PolarsError::ComputeError("rollforward: ir.points entry not str".into())
-                })
+            p.as_str().map(str::to_string).ok_or_else(|| {
+                PolarsError::ComputeError("rollforward: ir.points entry not str".into())
+            })
         })
         .collect::<PolarsResult<Vec<_>>>()?;
 
@@ -173,11 +221,11 @@ fn rollforward_output(
 
     // Increment fields (track_increments): the same helper the kernel's
     // emission uses, so the declared schema and the emitted struct cannot
-    // drift apart.
-    for (_, label) in
-        gaspatchio_core_lib::polars_functions::rollforward::labelled_increments(&kwargs)?
+    // drift apart. One per Op — a structural step under its reserved
+    // `{kind}@{ordinal}` key, everything else under its label.
+    for (_, key) in gaspatchio_core_lib::polars_functions::rollforward::tracked_increments(&kwargs)?
     {
-        let name = format!("increment_{label}");
+        let name = format!("increment_{key}");
         fields.push(Field::new(
             PlSmallStr::from(name.as_str()),
             DataType::List(Box::new(DataType::Float64)),
@@ -190,7 +238,7 @@ fn rollforward_output(
     ))
 }
 
-/// PyO3 wrapper for rollforward — D2/D3 IR-driven rollforward kernel.
+/// PyO3 wrapper for rollforward — the IR-driven rollforward kernel.
 #[polars_expr(output_type_func_with_kwargs = rollforward_output)]
 pub fn rollforward(
     inputs: &[Series],

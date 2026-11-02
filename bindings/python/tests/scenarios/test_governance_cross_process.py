@@ -62,9 +62,7 @@ if "Skewness" not in _AGGREGATOR_REGISTRY:
             term1 = delta * delta_n * state["n"]
             new_mean = state["mean"] + delta_n
             new_m3 = (
-                state["m3"]
-                + term1 * delta_n * (n1 - 2.0)
-                - 3.0 * delta_n * state["m2"]
+                state["m3"] + term1 * delta_n * (n1 - 2.0) - 3.0 * delta_n * state["m2"]
             )
             new_m2 = state["m2"] + term1
             return {"n": n1, "mean": new_mean, "m2": new_m2, "m3": new_m3}
@@ -181,7 +179,14 @@ class Skewness(_BaseAggregator):
         return {"kind": "Skewness", "column": self.column, "within": self.within}
 
 
-def _model_fn(af, *, tables=None, drivers=None):  # noqa: ARG001
+def _model_fn(af):
+    mortality = Table(
+        name="mortality",
+        source=pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.0012]}),
+        dimensions={"age": "age"},
+        value="rate",
+    )
+    af.mort_rate = mortality.lookup(age=af.age)
     return af.with_columns(pl.col("premium").alias("loss"))
 
 
@@ -218,8 +223,7 @@ if __name__ == "__main__":
 """
 
 
-@pytest.fixture
-def mortality_table() -> Table:
+def _mortality() -> Table:
     """Two-row mortality assumption table keyed by age."""
     return Table(
         name="mortality",
@@ -230,22 +234,31 @@ def mortality_table() -> Table:
 
 
 @pytest.fixture
+def mortality_table() -> Table:
+    """The table the model reads, as the plan states it."""
+    return _mortality()
+
+
+@pytest.fixture
 def af() -> ActuarialFrame:
     """Five-policy frame: enough rows for skewness to be non-NaN (n=5 >= 3)."""
-    return ActuarialFrame({
-        "policy_id": [1, 2, 3, 4, 5],
-        "premium": [100.0, 200.0, 300.0, 400.0, 500.0],
-        "age": [30, 31, 30, 31, 30],
-    })
+    return ActuarialFrame(
+        {
+            "policy_id": [1, 2, 3, 4, 5],
+            "premium": [100.0, 200.0, 300.0, 400.0, 500.0],
+            "age": [30, 31, 30, 31, 30],
+        }
+    )
 
 
-def _model_fn(
-    af: ActuarialFrame,
-    *,
-    tables: dict | None = None,  # noqa: ARG001
-    drivers: dict | None = None,  # noqa: ARG001
-) -> ActuarialFrame:
-    """Model function: alias 'premium' as 'loss' for aggregation."""
+def _model_fn(af: ActuarialFrame) -> ActuarialFrame:
+    """Model function: read the shocked table, alias 'premium' as 'loss'.
+
+    The plan shocks ``mortality``, so the model reads it -- its own table,
+    through its own lookup: a shock no read reaches is refused rather than
+    folded as BASE.
+    """
+    af.mort_rate = _mortality().lookup(age=af.age)
     return af.with_columns(pl.col("premium").alias("loss"))
 
 

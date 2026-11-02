@@ -1,0 +1,321 @@
+{
+  "aggregator_identity": {
+    "pv_av_change": {
+      "by": [
+        "scenario_id"
+      ],
+      "inner": {
+        "column": "pv_av_change",
+        "kind": "Sum",
+        "within": "sum"
+      },
+      "kind": "_Partitioned"
+    },
+    "pv_claims": {
+      "by": [
+        "scenario_id"
+      ],
+      "inner": {
+        "column": "pv_claims",
+        "kind": "Sum",
+        "within": "sum"
+      },
+      "kind": "_Partitioned"
+    },
+    "pv_commissions": {
+      "by": [
+        "scenario_id"
+      ],
+      "inner": {
+        "column": "pv_commissions",
+        "kind": "Sum",
+        "within": "sum"
+      },
+      "kind": "_Partitioned"
+    },
+    "pv_expenses": {
+      "by": [
+        "scenario_id"
+      ],
+      "inner": {
+        "column": "pv_expenses",
+        "kind": "Sum",
+        "within": "sum"
+      },
+      "kind": "_Partitioned"
+    },
+    "pv_inv_income": {
+      "by": [
+        "scenario_id"
+      ],
+      "inner": {
+        "column": "pv_inv_income",
+        "kind": "Sum",
+        "within": "sum"
+      },
+      "kind": "_Partitioned"
+    },
+    "pv_net_cf": {
+      "by": [
+        "scenario_id"
+      ],
+      "inner": {
+        "column": "pv_net_cf",
+        "kind": "Sum",
+        "within": "sum"
+      },
+      "kind": "_Partitioned"
+    },
+    "pv_premiums": {
+      "by": [
+        "scenario_id"
+      ],
+      "inner": {
+        "column": "pv_premiums",
+        "kind": "Sum",
+        "within": "sum"
+      },
+      "kind": "_Partitioned"
+    }
+  },
+  "aggregator_outputs": {
+    "pv_av_change": [
+      {
+        "pv_av_change": -307718813.59241813,
+        "scenario_id": "BASE"
+      },
+      {
+        "pv_av_change": -339674268.5488009,
+        "scenario_id": "DOWN"
+      },
+      {
+        "pv_av_change": -277982460.0286026,
+        "scenario_id": "UP"
+      }
+    ],
+    "pv_claims": [
+      {
+        "pv_claims": 315918531.98214793,
+        "scenario_id": "BASE"
+      },
+      {
+        "pv_claims": 348259370.43622315,
+        "scenario_id": "DOWN"
+      },
+      {
+        "pv_claims": 285793600.6922586,
+        "scenario_id": "UP"
+      }
+    ],
+    "pv_commissions": [
+      {
+        "pv_commissions": 0.0,
+        "scenario_id": "BASE"
+      },
+      {
+        "pv_commissions": 0.0,
+        "scenario_id": "DOWN"
+      },
+      {
+        "pv_commissions": 0.0,
+        "scenario_id": "UP"
+      }
+    ],
+    "pv_expenses": [
+      {
+        "pv_expenses": 1615846.7756487448,
+        "scenario_id": "BASE"
+      },
+      {
+        "pv_expenses": 1722680.3758515012,
+        "scenario_id": "DOWN"
+      },
+      {
+        "pv_expenses": 1517589.4256880414,
+        "scenario_id": "UP"
+      }
+    ],
+    "pv_inv_income": [
+      {
+        "pv_inv_income": -1842213.4592039464,
+        "scenario_id": "BASE"
+      },
+      {
+        "pv_inv_income": -3370624.6976878345,
+        "scenario_id": "DOWN"
+      },
+      {
+        "pv_inv_income": -428239.1184411021,
+        "scenario_id": "UP"
+      }
+    ],
+    "pv_net_cf": [
+      {
+        "pv_net_cf": -11657778.624582592,
+        "scenario_id": "BASE"
+      },
+      {
+        "pv_net_cf": -13678406.96096161,
+        "scenario_id": "DOWN"
+      },
+      {
+        "pv_net_cf": -9756969.20778511,
+        "scenario_id": "UP"
+      }
+    ],
+    "pv_premiums": [
+      {
+        "pv_premiums": 0.0,
+        "scenario_id": "BASE"
+      },
+      {
+        "pv_premiums": 0.0,
+        "scenario_id": "DOWN"
+      },
+      {
+        "pv_premiums": 0.0,
+        "scenario_id": "UP"
+      }
+    ]
+  },
+  "bases": {},
+  "graph_fingerprint": null,
+  "graph_fingerprint_by_scenario": {
+    "BASE": "sha256:adb95fe5bf72c9374468765d020bc68e7b6119c3791cb5848afb5b17b69863da",
+    "DOWN": "sha256:9b852cb4fd03ec7d12b98c4c6ec058fbf0929b570363ab6a490ebafcfb27cd75",
+    "UP": "sha256:f352d2df6e729c65fbfcc73f20b1d351e82ca2061ff1a95fc9390a1a0403f5c7"
+  },
+  "input_data_fingerprint": {
+    "model_points": "sha256:f62d260422c671790af7e1791d92dc902a91c62d81acf056e65eaef9640ff6b4"
+  },
+  "plan_canonical_form": {
+    "aggregations": {
+      "pv_av_change": {
+        "by": [
+          "scenario_id"
+        ],
+        "inner": {
+          "column": "pv_av_change",
+          "kind": "Sum",
+          "within": "sum"
+        },
+        "kind": "_Partitioned"
+      },
+      "pv_claims": {
+        "by": [
+          "scenario_id"
+        ],
+        "inner": {
+          "column": "pv_claims",
+          "kind": "Sum",
+          "within": "sum"
+        },
+        "kind": "_Partitioned"
+      },
+      "pv_commissions": {
+        "by": [
+          "scenario_id"
+        ],
+        "inner": {
+          "column": "pv_commissions",
+          "kind": "Sum",
+          "within": "sum"
+        },
+        "kind": "_Partitioned"
+      },
+      "pv_expenses": {
+        "by": [
+          "scenario_id"
+        ],
+        "inner": {
+          "column": "pv_expenses",
+          "kind": "Sum",
+          "within": "sum"
+        },
+        "kind": "_Partitioned"
+      },
+      "pv_inv_income": {
+        "by": [
+          "scenario_id"
+        ],
+        "inner": {
+          "column": "pv_inv_income",
+          "kind": "Sum",
+          "within": "sum"
+        },
+        "kind": "_Partitioned"
+      },
+      "pv_net_cf": {
+        "by": [
+          "scenario_id"
+        ],
+        "inner": {
+          "column": "pv_net_cf",
+          "kind": "Sum",
+          "within": "sum"
+        },
+        "kind": "_Partitioned"
+      },
+      "pv_premiums": {
+        "by": [
+          "scenario_id"
+        ],
+        "inner": {
+          "column": "pv_premiums",
+          "kind": "Sum",
+          "within": "sum"
+        },
+        "kind": "_Partitioned"
+      }
+    },
+    "base_tables": {},
+    "kind": "ScenarioRun",
+    "master_seed": null,
+    "shocks": {
+      "BASE": [],
+      "DOWN": [],
+      "UP": []
+    }
+  },
+  "run_metadata": {
+    "batch_size": 1,
+    "batch_size_resolution": "auto_search",
+    "core_version": {
+      "omitted": "withheld"
+    },
+    "ddsketch_version": {
+      "omitted": "withheld"
+    },
+    "extension_sha256": {
+      "omitted": "withheld"
+    },
+    "extension_version": {
+      "omitted": "withheld"
+    },
+    "master_seed": null,
+    "n_scenarios": 3,
+    "platform": {
+      "omitted": "withheld"
+    },
+    "polars_version": {
+      "omitted": "withheld"
+    },
+    "python_version": {
+      "omitted": "withheld"
+    },
+    "selection_engine": "streaming",
+    "selection_probed": [
+      {
+        "batch": 1,
+        "engine": "streaming",
+        "fits": true,
+        "peak_mb": 3.921875,
+        "per_sc_s": 0.021321585401892662
+      }
+    ],
+    "selection_reason": "fastest_fitting",
+    "wall_time_s": 0.5834854654967785
+  },
+  "schema_version": "2.1",
+  "source_sha": "sha256:9c12cd8208b9eb135989f4326c61fbb9ca8ed649ff0d55905ed48751465c7afe"
+}

@@ -6,10 +6,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
-
-import polars as pl
+from typing import TYPE_CHECKING
 
 from ._api import Table
 from ._dimensions import (
@@ -19,6 +16,13 @@ from ._dimensions import (
     Dimension,
     MeltDimension,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import polars as pl
+
+    from ._strategies import FillStrategy, OverflowStrategy
 
 
 class TableBuilder:
@@ -82,8 +86,8 @@ class TableBuilder:
         self,
         name: str,
         columns: list[str],
-        overflow: Any | None = None,
-        fill: Any | None = None,
+        overflow: OverflowStrategy | None = None,
+        fill: FillStrategy | None = None,
     ) -> TableBuilder:
         """
         Add a melt dimension that transforms wide columns to long format.
@@ -109,7 +113,7 @@ class TableBuilder:
     def with_categorical_dimension(
         self,
         name: str,
-        value: Any,
+        value: object,
         dimension_name: str | None = None,
     ) -> TableBuilder:
         """
@@ -241,6 +245,6 @@ class TableBuilder:
         return (
             f"TableBuilder(name={self.name!r}, "
             f"dimensions={len(self._dimensions)}, "
-            f"source={'set' if self._source else 'unset'}, "
+            f"source={'set' if self._source is not None else 'unset'}, "
             f"value={self._value!r})"
         )

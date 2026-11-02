@@ -1,0 +1,70 @@
+gaspatchio-core
+Copyright 2026 Opio Inc.
+
+This product is licensed under the Apache License, Version 2.0
+(the "License"); see the LICENSE file at the root of this repository
+for the full text.
+
+================================================================================
+Third-party notices
+================================================================================
+
+This product's source code in this repository is Apache-2.0 licensed and
+Copyright Opio Inc. as recorded in the per-file SPDX-FileCopyrightText
+headers (see REUSE.toml for the blanket assertion covering non-code files).
+
+This product includes other open-source software in its compiled
+extension, gaspatchio._internal: the Rust crates it is built from, the C
+code some of them compile into it, and the Rust standard library. Their
+licences and copyright notices are in third-party-notices.txt, which every
+wheel and the sdist carry beside this file; in this repository it is
+bindings/python/third-party-notices.txt.
+
+This product also depends at runtime on Python packages that it does not
+include: pip installs each one separately, with its own licence text in
+its own distribution. Of those, the following are not under MIT / BSD /
+Apache / ISC / PSF terms and so are called out explicitly:
+
+  certifi (https://github.com/certifi/python-certifi)
+    Mozilla Public License 2.0
+    File-level copyleft; redistribution of certifi source must
+    comply with MPL-2.0 §3 (Source Form) and §5 (Larger Works).
+
+No source files from certifi are vendored into gaspatchio-core; the
+dependency is resolved at install time by pip and installed into the
+user's Python environment as a separate package.
+
+================================================================================
+Bundled reference data — lifelib (Level 4 tutorial)
+================================================================================
+
+The Level 4 tutorial at
+"bindings/python/gaspatchio/tutorials/level-4-lifelib/" reconciles a
+gaspatchio-native model against lifelib's "IntegratedLife" example model. The
+reference outputs and the assumption / model-point data distributed with that
+tutorial (the ".parquet" files under "reference/" and "base/") are derived from
+lifelib and are redistributed here under the MIT License. The tutorial's own
+model code ("model.py", "reconcile*.py", "run_benchmark.py") is Apache-2.0,
+Copyright Opio Inc., as recorded in its per-file SPDX headers.
+
+  lifelib (https://github.com/lifelib-dev/lifelib)
+
+    Copyright (c) 2022 lifelib Developers
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.

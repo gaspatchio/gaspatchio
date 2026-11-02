@@ -1209,3 +1209,39 @@ def test_parse_docstring_when_to_use_no_indent(parser: GaspatchioDocstringParser
     assert result is not None
     # Content not indented after the marker should not be captured
     assert result.when_to_use is None
+
+
+def test_examples_survive_a_docstring_the_field_parser_rejects(
+    parser: GaspatchioDocstringParser,
+):
+    """A docstring the field parser cannot read still yields its examples.
+
+    A stray colon before a reST field makes ``docstring_parser`` raise, and
+    the parser falls back to an empty parse so the fenced examples are still
+    extracted. Building that empty parse once assigned to two read-only
+    properties, which raised in the fallback itself: the whole docstring was
+    dropped, and its examples silently left the test run.
+    """
+    docstring_text = textwrap.dedent(
+        """
+        Annual rate.
+
+        : :param rate: the annual rate
+
+        ```python
+        print(1)
+        ```
+        """
+    )
+
+    result = parser.parse_docstring_from_text(
+        docstring_text=docstring_text,
+        object_path="test_mod.rate",
+        file_path_str="/fake/path/test_mod.py",
+        docstring_start_line=1,
+    )
+
+    assert result is not None
+    assert [example.snippet for example in result.examples] == ["print(1)"]
+    assert result.parameters == []
+    assert result.returns is None

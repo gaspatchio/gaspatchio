@@ -6,15 +6,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from functools import cached_property
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from gaspatchio._authoring import emit
+from gaspatchio.column.proxy_aware_expr import ProxyAwareExpr
+from gaspatchio.frame.lowering.artefacts import register_rollforward
+from gaspatchio.frame.lowering.polars import lower_polars
+from gaspatchio.rollforward._data import CompiledData
+from gaspatchio.rollforward._ops import increment_keys
+from gaspatchio.rollforward._refs import StateRef
 
 if TYPE_CHECKING:
     import polars as pl
 
     from gaspatchio.rollforward._ir import IR
-    from gaspatchio.rollforward._refs import StateRef
 
 
 def capture_slot_error(
@@ -72,7 +78,7 @@ def capture_slot_error(
 
 
 @dataclass(frozen=True)
-class CompiledRollforward:
+class CompiledRollforward(CompiledData):
     """Frozen artefact carrying the compiled IR and inspection surface.
 
     Returned by :func:`compile_rollforward`. Carries everything the kernel
@@ -80,18 +86,6 @@ class CompiledRollforward:
     the expression surface (``expr_for``, ``increment_for``), and three
     inspection helpers for governance and audit.
     """
-
-    ir: IR
-    plugin_kwargs: dict[str, Any]
-    capture_slots: tuple[StateRef, ...]
-    plugin_args: tuple[pl.Expr, ...] = field(default_factory=tuple)
-
-    @cached_property
-    def _hidden_column(self) -> str:
-        """Name of the hidden struct column this rollforward materialises as."""
-        from gaspatchio.rollforward._registry import hidden_column_name
-
-        return hidden_column_name(self.fingerprint())
 
     def plugin_expr(self) -> pl.Expr:
         """Return the raw kernel call as a self-contained Polars expression.
@@ -104,45 +98,48 @@ class CompiledRollforward:
 
         Inside ``ActuarialFrame`` prefer :meth:`expr_for`, which shares one
         kernel call across every extraction automatically.
+
+        Emitted like the two extraction methods, so the escape hatch is not
+        the one public rollforward expression with no semantic record behind
+        it. Still a real ``pl.Expr``, so the usage above is unchanged.
         """
-        from polars.plugins import register_plugin_function
+        return self._emit("rollforward.struct", ())
 
-        from gaspatchio import _internal
+    def _emit(self, name: str, attrs: tuple[tuple[str, Any], ...]) -> pl.Expr:
+        """Emit a rollforward ``Call`` and hand back the expression it lowers to.
 
-        return register_plugin_function(
-            plugin_path=_internal.__file__,
-            function_name="rollforward",
-            args=list(self.plugin_args),
-            kwargs=self.plugin_kwargs,
-            is_elementwise=True,
+        The node records what this rollforward reads, in the op-tree's own
+        vocabulary — each state's opening value, each operation's operand,
+        and a running-state read as a ``State`` child rather than a string
+        inside a plugin keyword argument. The call carries the machine's
+        published ``fingerprint`` and, beside it, the ``schedule`` the
+        machine runs on, by that schedule's own ``source_sha()``: the
+        fingerprint leaves the schedule out, so the schedule is
+        stated as the data it is, and the pair is what the lowering resolves
+        this compiled artefact by before calling the same kernel path as
+        before, so the plan is unchanged. The engine
+        expressions live in ``frame/lowering/rules/rollforward.py``; the
+        compiler and this per-instance cache keep their existing ownership.
+        """
+        # `rules.rollforward` loads with its siblings the first time anything
+        # reads ``LOWERINGS``; importing one rule module at module scope would
+        # populate the registry while ``_RULES_LOADED`` is still False.
+        from gaspatchio.frame.lowering.rules.rollforward import (  # noqa: PLC0415 — rules load lazily
+            operand_nodes,
         )
 
-    @cached_property
-    def _cached_plugin_expr(self) -> pl.Expr:
-        """The plugin expr built once per instance (exprs are immutable, shareable)."""
-        return self.plugin_expr()
-
-    def _field_expr(self, field_name: str) -> pl.Expr:
-        """Return a field extraction from the shared hidden struct column.
-
-        Registers the plugin expr under the fingerprint-derived hidden name so
-        ``ActuarialFrame`` can materialise the struct ONCE on first reference;
-        every extraction is then a cheap ``.struct.field`` on that column.
-        This is what makes the one-kernel-call guarantee structural, rather
-        than dependent on the Polars optimiser deduplicating plugin calls
-        (which Polars stopped doing in 1.42).
-        """
-        import polars as pl
-
-        from gaspatchio.column.proxy_aware_expr import ProxyAwareExpr
-        from gaspatchio.rollforward import _registry
-
-        _registry.register(self._hidden_column, self._cached_plugin_expr)
-        # Wrapped so extractions cooperate with af-column operands in either
-        # operand order (gh#67) — same contract as Table.lookup.
-        return ProxyAwareExpr.wrap(
-            pl.col(self._hidden_column).struct.field(field_name),
+        fingerprint, schedule = register_rollforward(self)
+        node = emit.call_node(
+            name,
+            operand_nodes(self.ir),
+            (("fingerprint", fingerprint), ("schedule", schedule), *attrs),
         )
+        # Bound to the frame the rollforward was built from, where it was
+        # built from one, so ``expr_for("av").cum_sum()`` or ``.shift(1)``
+        # means what it means on the column it would be assigned to.
+        frame_ref = self.__dict__.get("_frame_ref")
+        parent = None if frame_ref is None else frame_ref()
+        return ProxyAwareExpr.wrap(lower_polars(node), node=node, parent=parent)
 
     def expr_for(self, state: str, *, point: str = "eop") -> pl.Expr:
         """Return a Polars Expr selecting the per-period values for (state, point).
@@ -152,31 +149,58 @@ class CompiledRollforward:
 
             af.fund = compiled.expr_for("fund")
             af.gmdb = compiled.expr_for("gmdb")  # no second kernel run
-        """
-        from gaspatchio.rollforward._refs import StateRef
 
+        That one run is over the inputs as they stood where the frame first
+        read the rollforward, so an extraction written after one of them
+        was written again is refused at its assignment, naming the input:
+        give the later values a column of their own, read by a rollforward
+        of their own.
+        """
         ref = StateRef(state=state, point=point)
         if ref not in self.capture_slots:
             raise capture_slot_error(state, point, self.ir, self.capture_slots)
-        return self._field_expr(f"{state}@{point}")
+        return self._emit(
+            "rollforward.state",
+            (("state", state), ("point", point), ("shared", True)),
+        )
 
     def increment_for(self, label: str) -> pl.Expr:
-        """Return a Polars Expr selecting the per-period delta for a labelled Op.
+        """Return a Polars Expr selecting the per-period delta for one Op.
 
-        The delta is signed — what the op actually applied to its target:
+        The delta is signed — the movement the op made in its target:
         negative for charges, positive for credits, zero after a stop or
         lapse (the kernel applied nothing, where a source sheet may keep
         computing a notional charge against the full face amount).
+
+        It is the target's value after the op minus its value before, in
+        binary64 (graph-artifact spec section 16.2), not the operand the op
+        computed. The two agree to floating point, and the difference is
+        visible: interest of 151.62 credited with ``round_charge=2`` onto a
+        balance of 4738.22 reads ``151.6199999999999``, because that is what
+        the balance moved by. This is what makes a period's increments sum to
+        that period's change in the balance. Round the column when you
+        display it; the identity holds on the values as reported.
+
+        ``label`` is the name the model's author gave the step, or — for the
+        two structural steps that have no label to give — the key the kernel
+        names their movement under, ``floor@3`` for a ``Floor`` declared
+        third. Every step of a tracked rollforward has one, which is what
+        lets a waterfall quote the amount a floor absorbed rather than
+        deriving it.
+
+        Read from the frame's one run of the rollforward, like
+        :meth:`expr_for`, and refused on the same terms once one of its
+        inputs has been written again since the frame first read it.
         """
         self._validate_increment_label(label)
-        return self._field_expr(f"increment_{label}")
+        return self._emit("rollforward.increment", (("label", label), ("shared", True)))
 
     def _validate_increment_label(self, label: str) -> None:
         """Refuse an unknown/untracked increment label at the call that asks.
 
-        Shared with the deprecated ``RollforwardCollector`` facade so both
-        paths refuse immediately with identical wording, rather than letting
-        an unknown label die at collect time as a missing struct field.
+        ``increment_for`` refuses here rather than letting an unknown label
+        reach collect time as a missing struct field, far from the call that
+        asked for it.
         """
         if not self.ir.track_increments:
             msg = (
@@ -185,51 +209,13 @@ class CompiledRollforward:
                 "fields. Pass track_increments=True to the builder."
             )
             raise ValueError(msg)
-        labels = [
-            found
-            for op in self.ir.transitions
-            if (found := getattr(op, "label", None)) is not None
-        ]
-        if label not in labels:
+        keys = list(increment_keys(self.ir.transitions))
+        if label not in keys:
             msg = (
-                f"increment_for({label!r}): no op carries that label. "
-                f"Labelled ops in this rollforward: {labels}."
+                f"increment_for({label!r}): no step of this rollforward emits "
+                f"that increment. The steps it emits: {keys}."
             )
             raise KeyError(msg)
-
-    def canonical_form(self) -> dict[str, Any]:
-        """Return a stable, deterministic dict describing the model structure.
-
-        Two compiled rollforwards with the same Op chain (in the same order),
-        same states, same Schedule canonical-form, and same configuration
-        produce equal canonical-form dicts. Column-name aliases inside Op
-        expressions are reduced to ``str(expr)``, so renaming a column does
-        not change the canonical form.
-        """
-        from gaspatchio.rollforward._canonical import canonical_form
-
-        return canonical_form(self.ir)
-
-    def fingerprint(self) -> str:
-        """Return a SHA-256 fingerprint of the canonical form.
-
-        Stable across runs and across machines for an unchanged model.
-        Suitable for governance metadata and run logs.
-        """
-        from gaspatchio.rollforward._fingerprint import spec_fingerprint
-
-        return spec_fingerprint(self.ir)
-
-    def explain(self) -> str:
-        """Return a multi-line human-readable summary of the model.
-
-        Lists states, points, schedule, transitions in order, and the
-        cross-cutting configuration (lapse, contract boundary, increment
-        tracking). Plain text — fits in audit reports and TRACE logs.
-        """
-        from gaspatchio.rollforward._explain import explain
-
-        return explain(self.ir)
 
 
 __all__ = ["CompiledRollforward"]

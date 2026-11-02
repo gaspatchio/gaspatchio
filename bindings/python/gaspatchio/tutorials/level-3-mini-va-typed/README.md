@@ -38,11 +38,11 @@ uv run python tutorial/level-3-mini-va-typed/steps/07-anniversary-aware/model.py
 
 These are real surface-area gaps and ergonomic friction points discovered while building the steps. They inform what future iterations and the docs site need to address.
 
-**Broadcasting a Python list to a Polars list-column** uses an awkward `pl.lit(pl.Series([list])).first()` idiom. Worth documenting; better idiom needed.
+**`Curve.discount_factor()` on a tracked list column is the recorded door** — feed `af.projection.t_years()` in directly, which is what every model here now does. The curve's digest reaches the artifact as the assumption entry's `fingerprint`, and under the `executable` profile as the discount-factor node's `expr.attrs.curve` — the same string — and it lowers through the `curve_eval` + `list_pow` kernels with no `map_elements`. This bullet previously claimed the call did not work on list-column expressions; that has not been true since the recorded curve path landed. See `skills/gaspatchio-model-building/references/curves-and-scheduling.md`.
 
-**`Curve.discount_factor(pl.Expr)` does not work on list-column expressions** — `map_elements` is scalar-only. Currently you must convert to a list and broadcast (per above) rather than feeding `af.projection.t_years()` directly.
+**Pre-computing the discount factors in Python and broadcasting them in** — the `pl.lit(pl.Series([list])).first()` idiom these models used to carry — is the escape hatch, not the default. It is awkward to write, and the reason to avoid it is not the ergonomics: the broadcast column reads nothing and names no assumption base, so the artifact cannot say the numbers came off a curve at all. The artifact validator warns on exactly that shape.
 
-**`MortalityTable.at(structure="select_ultimate", duration=...)` originally crashed on ActuarialFrame columns** because `pl.Expr.clip()` doesn't work on list dtypes and `ColumnProxy.__gt__` returns a `ConditionExpression` not a `pl.Expr`. Fixed during step 02 build; the `_to_expr()` bridge + `list_clip` plugin path is now wired in.
+**`MortalityTable.at(structure="select_ultimate", duration=...)` originally crashed on ActuarialFrame columns** because `pl.Expr.clip()` doesn't work on list dtypes and `ColumnProxy.__gt__` returns a `ConditionExpression` not a `pl.Expr`. Fixed during step 02 build. The clamp is now rebuilt in the lowering from the recorded `structure` and `select_period`, and a list-shaped duration clips inside each row through `list.eval(element().clip(...))` — the `list_clip` kernel this bullet used to name is no longer on the path.
 
 **`Table` dimension shorthand `{"age": "attained_age"}`** does not rename the underlying column — `Table.lookup(age=...)` then fails because the actual column is `attained_age`. Use `DataDimension(column="attained_age", rename_to="age")` instead.
 

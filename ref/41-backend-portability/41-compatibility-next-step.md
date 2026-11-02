@@ -1,5 +1,46 @@
 # Backend portability — what to do next in gaspatchio-core
 
+> **Partly overtaken, partly vindicated — 2026-09-08.** This document is dated **2026-05-11**
+> and is kept exactly as written; nothing beneath this note has been edited. Read it with three
+> corrections, and do **not** discard it — most of its judgement holds, and one of its warnings
+> has since been proved right.
+>
+> - **The recommended sequence was inverted, and the recommendation itself was never built.**
+>   There is no `LeafExpr` anywhere in the package: Option B (§3–§4) did not happen. What happened
+>   instead is §5 item 5 — the column-algebra IR this document ranked **last**. An op-tree now
+>   exists in `frame/graph/ir.py`: seven node types in the `OpNode` union, closed by the
+>   `assert_never` that ends `walk`'s `match`, with 55 registered lowerings in
+>   `frame/lowering/polars.py`. It kept Option B's best idea: the
+>   type-tagged escape hatch proposed here as `OpaqueExpr(body, reason)` shipped as
+>   `EngineNative(engine, text, deps)`.
+> - **§1's diagnosis of the rollforward IR is still exactly right.** Op fields are still raw
+>   `pl.Expr` (`rollforward/_ops.py:73` and following) and `derive_engine_binding` still defends
+>   the boundary by string-matching `str(expr)` (`rollforward/_engine_binding.py`). Nothing in
+>   the op-tree reached that layer. This section describes today's code.
+> - **§1's picture of the column layer is out of date.** *"The 'expression tree' the user authors
+>   is, structurally, a Polars expression tree"* no longer follows: every operator emits a
+>   semantic node (`column/column_proxy.py:114`) and the Polars expression is derived later, by
+>   lowering. `_to_expr` still returns `pl.col(...)` (:156) — the observation stands, the
+>   inference from it does not.
+>
+> **§6's anti-recommendations, precisely.**
+>
+> - *"Don't break the user-facing `pl.Expr` ergonomic"* — **still the position.**
+> - *"Don't try to make `pl.Expr` itself the neutral IR… The IR should consume `pl.Expr` (lift),
+>   never be `pl.Expr`"* — **vindicated, and built exactly that way.**
+>   `frame/lowering/ingress.py:119` `to_node` takes a `pl.Expr` and returns an `EngineNative`
+>   node. The tree consumes `pl.Expr` and is never one.
+> - *"Removing autopatch before there's a second backend just deletes ergonomics for no
+>   portability gain"* — the **condition has moved, the warning has not been struck.** A
+>   second-engine path is now demonstrated (a 2026-09 JAX spike lowered seven formulas
+>   bit-exactly with neither `polars` nor `gaspatchio` importable), though no second engine
+>   ships. A decision of 2026-09-07 takes the further step this document could not: the
+>   proxy surface is generated from the op set rather than from `dir(pl.Expr)`,
+>   because a reflectively-delegated method has no op-node and therefore nothing a second engine
+>   can lower. Read the warning as conditional on a second backend, which is what it says.
+> - The remaining three anti-recommendations (no `Frame` Protocol first, no multi-backend
+>   `engine_binding` enum, no per-Op backend negotiation) are **untested and unrefuted here.**
+
 ## 1. Where we are
 
 Two prior assessments (`/tmp/jax_backend_assessment.md`, `/tmp/mojo_backend_assessment.md`) converge on the same picture, and a quick re-verification confirms it:

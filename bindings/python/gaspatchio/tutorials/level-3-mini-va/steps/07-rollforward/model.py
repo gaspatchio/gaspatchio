@@ -45,7 +45,6 @@ Run::
 
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
@@ -89,9 +88,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # --- §2 Time setup (unchanged from base) ---
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
-    af.duration_mth_init = (VALUATION_DATE.year * 12 + VALUATION_DATE.month) - (
-        af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
-    )
+    af.duration_mth_init = af.entry_date_parsed.date.months_between(VALUATION_DATE)
     af = af.projection.set(
         valuation_date=VALUATION_DATE,
         until="term_months",
@@ -99,9 +96,8 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         frequency="monthly",
     )
     af.projection_date = af.projection.period_dates()
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() has already stamped af.month -- elapsed whole months
+    # from the valuation date, 0, 1, 2, ... one per projection period.
     af.duration_mth_t = af.duration_mth_init + af.month
     af.duration = af.duration_mth_t // 12
     af.age = af.age_at_entry + af.duration
@@ -128,7 +124,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
         1.0 + af.inv_return_mth
     )
     af.effective_growth_rate = (
-        af.combined_growth_factor.list.head(
+        af.combined_growth_factor.polars_native().list.head(
             PROJECTION_MONTHS,
         )
         - 1.0
@@ -164,9 +160,12 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
 
     # --- §6-§11 unchanged from base ---
     af.combined_decrement = 1.0 - (1.0 - af.mort_rate_mth) * (1.0 - af.lapse_rate_mth)
-    af.survival_factor = 1.0 - af.combined_decrement
-    af.cumulative_survival = af.survival_factor.cum_prod()
-    af.survival_prob = af.cumulative_survival.projection.previous_period(fill_value=1.0)
+    # Cumulative survival from the combined decrement:
+    #   tpx[t] = (1 - q[0]) * (1 - q[1]) * ... * (1 - q[t-1])
+    # rate_timing="beginning_of_period" is the default, and it is the
+    # convention wanted here: the decrement at t has not been applied yet,
+    # so the first element is 1.0 -- every policy in force at t=0.
+    af.survival_prob = af.combined_decrement.projection.cumulative_survival()
 
     af.maturity_month = af.policy_term * 12
     af.pols_if = (
@@ -217,9 +216,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
 
     disc_rate_mth = (1 + DISCOUNT_RATE_ANNUAL) ** (1 / 12) - 1
-    af.disc_factors = (
-        af.month.cast(pl.Float64) * -1.0 * math.log(1 + disc_rate_mth)
-    ).exp()
+    af.disc_factors = (1.0 + disc_rate_mth) ** (af.month * -1.0)
 
     af.pv_claims = (af.claims * af.disc_factors).list.sum()
     af.pv_premiums = (af.premiums * af.disc_factors).list.sum()

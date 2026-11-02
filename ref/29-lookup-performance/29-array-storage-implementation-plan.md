@@ -1,7 +1,5 @@
 # Array Storage Implementation Plan (RFC 29 Strategy 5)
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Replace hash table lookups with multi-dimensional array indexing using dictionary-encoded keys, achieving ~3-5x lookup speedup while maintaining full backward compatibility.
 
 **Architecture:** Add `ArrayNDTable` as an alternative storage backend alongside existing `AHashMap`. Both backends live behind a `TableStorage` enum with unified `lookup_series()` interface. Python controls which backend via a flag. Benchmarks run identical inputs through both backends for direct comparison.

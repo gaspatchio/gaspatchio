@@ -18,19 +18,138 @@ This module provides the core shock types for actuarial stress testing:
 - **TimeConditionalShock**: Apply shock only at specific projection times (when clause)
 
 These support the full range of Solvency II SCR, IFRS 17, and US RBC scenarios.
+
+Every shock in a scenario plan names exactly one target: ``table=`` an
+assumption table the model reads, by the name the ``Table`` was built with,
+or ``column=`` a model-point column -- a valuation rate, an expense, a
+solved premium -- that the plan rewrites per scenario before the model runs.
+A table shock is confined to some rows with ``FilteredShock(where=...)``.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from dataclasses import dataclass, field, fields
+from typing import Any
 
-if TYPE_CHECKING:
-    import polars as pl
+import polars as pl
 
 # Type alias for filter conditions
 FilterCondition = dict[str, Any]  # e.g., {"duration": {"lte": 5}}
+
+# The two fields that name what a shock moves: an assumption table, or a
+# model-point column. A plan's shock names exactly one.
+_TARGETS = frozenset({"table", "column"})
+
+# Each shock written with every argument named, as a refusal quotes it. A
+# shock's arguments are read in order -- ``ClipShock``'s first is
+# ``min_value``, ``PipelineShock``'s second is ``table`` -- so one written
+# without its keyword lands in the next slot, and only the keyword says
+# which slot was meant.
+_SPELLED_OUT: dict[str, str] = {
+    "MultiplicativeShock": 'MultiplicativeShock(factor=1.2, table="mortality")',
+    "AdditiveShock": 'AdditiveShock(delta=0.01, column="valuation_rate")',
+    "OverrideShock": 'OverrideShock(value=0.0, table="lapse")',
+    "ClipShock": 'ClipShock(max_value=1.0, table="lapse")',
+    "PipelineShock": (
+        "PipelineShock(shocks=(MultiplicativeShock(1.4), "
+        'ClipShock(max_value=1.0)), column="lapse_rate")'
+    ),
+    "FilteredShock": (
+        "FilteredShock(shock=MultiplicativeShock(1.25), "
+        'where={"duration": {"lte": 3}}, table="lapse")'
+    ),
+    "TimeConditionalShock": (
+        "TimeConditionalShock(shock=AdditiveShock(0.40), "
+        'when={"policy_year": {"eq": 1}}, table="lapse")'
+    ),
+    "MaxShock": (
+        "MaxShock(shock_a=MultiplicativeShock(0.5), "
+        'shock_b=AdditiveShock(-0.2), table="lapse")'
+    ),
+    "MinShock": (
+        "MinShock(shock_a=MultiplicativeShock(1.5), "
+        'shock_b=OverrideShock(0.1), table="mortality")'
+    ),
+}
+
+# What each target names, in the words a refusal uses.
+_TARGET_SAID: dict[str, str] = {
+    "table": "the name of the assumption table the shock moves",
+    "column": "the name of the model-point column the shock moves",
+}
+
+
+def _held(value: object) -> str:
+    """Return how a refusal names a misplaced argument: its kind, or its value."""
+    if isinstance(value, Shock):
+        return f"a {type(value).__name__}"
+    shown = repr(value)
+    if len(shown) > 60:  # noqa: PLR2004 -- a value quoted in a sentence, not a dump
+        shown = f"{shown[:57]}..."
+    return f"{shown}, a {type(value).__name__}"
+
+
+def _misplaced(shock: Shock, name: str, value: object, belongs: str) -> TypeError:
+    """Return the refusal for an argument that cannot be what its slot holds."""
+    kind = type(shock).__name__
+    named = getattr(value, "name", None)
+    hint = (
+        f" If it is the Table itself, pass its name: {name}={named!r}."
+        if name in _TARGETS and not isinstance(value, Shock) and isinstance(named, str)
+        else ""
+    )
+    msg = (
+        f"{kind}: {name}= holds {_held(value)}, where {belongs} belongs. A "
+        "shock's arguments are read in order, so one written without its "
+        "keyword lands in the next slot, and the run would fail on it later. "
+        f"Name each argument: {_SPELLED_OUT[kind]}.{hint}"
+    )
+    return TypeError(msg)
+
+
+def _refuse_misplaced_arguments(
+    shock: Shock,
+    *,
+    nested: tuple[str, ...] = (),
+    sequence: str | None = None,
+    condition: str | None = None,
+) -> None:
+    """Refuse, at construction, an argument that landed in the wrong slot.
+
+    ``PipelineShock(MultiplicativeShock(1.4), ClipShock(1.0))`` built a
+    pipeline whose ``table`` was a ``ClipShock`` and failed only at the run,
+    with "'ClipShock' object is not iterable". A target is a name; a nested
+    shock is a shock; a pipeline's steps are a sequence of shocks; a filter
+    is a mapping. Anything else is refused here, naming the keyword spelling.
+    """
+    for name in ("table", "column"):
+        value = getattr(shock, name)
+        if value is not None and not isinstance(value, str):
+            raise _misplaced(shock, name, value, _TARGET_SAID[name])
+    for name in nested:
+        value = getattr(shock, name)
+        if not isinstance(value, Shock):
+            raise _misplaced(shock, name, value, "a shock")
+    if sequence is not None:
+        _refuse_steps_that_are_not_shocks(shock, sequence)
+    if condition is not None:
+        value = getattr(shock, condition)
+        if not isinstance(value, Mapping):
+            raise _misplaced(
+                shock, condition, value, 'a condition such as {"age": {"gte": 60}}'
+            )
+
+
+def _refuse_steps_that_are_not_shocks(shock: Shock, sequence: str) -> None:
+    """Refuse pipeline steps that are not a sequence of shocks."""
+    steps = getattr(shock, sequence)
+    if not isinstance(steps, (tuple, list)):
+        raise _misplaced(shock, sequence, steps, "a sequence of shocks")
+    for step in steps:
+        if not isinstance(step, Shock):
+            raise _misplaced(shock, sequence, step, "a shock at each step")
 
 
 class Shock(ABC):
@@ -77,10 +196,22 @@ class Shock(ABC):
                 (e.g. ``OverrideShock`` with a non-scalar value).
 
         """
-        from dataclasses import fields
+        return self._canonical(nested=False)
 
+    def _canonical(self, *, nested: bool) -> dict[str, Any]:
+        """Return the canonical form, with a nested shock's target left to its outer.
+
+        A shock moves the target its outermost shock names; one nested
+        inside it -- a pipeline step, the shock a filter wraps -- may repeat
+        that target or name none, and the plan refuses any other. So the two
+        spellings say one thing and share one identity, which is what lets a
+        plan written down and read back keep its SHA.
+        """
         out: dict[str, Any] = {"kind": type(self).__name__}
         for fld in fields(self):  # type: ignore[arg-type]
+            if nested and fld.name in _TARGETS:
+                out[fld.name] = None
+                continue
             out[fld.name] = Shock._encode_field(getattr(self, fld.name))
         return dict(sorted(out.items()))
 
@@ -88,7 +219,7 @@ class Shock(ABC):
     def _encode_field(val: Any) -> Any:  # noqa: ANN401 — recursive any-encoder by design
         """Recursive JSON-safe encoding for canonical_form field values."""
         if isinstance(val, Shock):
-            return val.canonical_form()
+            return val._canonical(nested=True)  # noqa: SLF001 -- the same class
         if isinstance(val, tuple):
             return [Shock._encode_field(v) for v in val]
         if isinstance(val, list):
@@ -111,8 +242,10 @@ class MultiplicativeShock(Shock):
 
     Args:
         factor: The multiplicative factor to apply
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
+        table: The assumption table this shock moves, by the name the
+            ``Table`` was built with. A shock names exactly one target.
+        column: The model-point column this shock moves, instead of a
+            table: a single number the model reads off each policy.
 
     !!! note "When to use"
         - Stress testing with percentage changes
@@ -141,6 +274,10 @@ class MultiplicativeShock(Shock):
     table: str | None = None
     column: str | None = None
 
+    def __post_init__(self) -> None:
+        """Refuse a target that is not a name, naming the keyword spelling."""
+        _refuse_misplaced_arguments(self)
+
     def to_expression(self, col: pl.Expr) -> pl.Expr:
         """Apply multiplicative shock to column expression."""
         return col * self.factor
@@ -165,8 +302,10 @@ class AdditiveShock(Shock):
 
     Args:
         delta: The additive constant to apply
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
+        table: The assumption table this shock moves, by the name the
+            ``Table`` was built with. A shock names exactly one target.
+        column: The model-point column this shock moves, instead of a
+            table: a single number the model reads off each policy.
 
     !!! note "When to use"
         - Interest rate shocks (parallel shifts)
@@ -195,6 +334,10 @@ class AdditiveShock(Shock):
     table: str | None = None
     column: str | None = None
 
+    def __post_init__(self) -> None:
+        """Refuse a target that is not a name, naming the keyword spelling."""
+        _refuse_misplaced_arguments(self)
+
     def to_expression(self, col: pl.Expr) -> pl.Expr:
         """Apply additive shock to column expression."""
         return col + self.delta
@@ -220,8 +363,10 @@ class OverrideShock(Shock):
 
     Args:
         value: The constant value to set
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
+        table: The assumption table this shock moves, by the name the
+            ``Table`` was built with. A shock names exactly one target.
+        column: The model-point column this shock moves, instead of a
+            table: a single number the model reads off each policy.
 
     !!! note "When to use"
         - Extreme stress scenarios
@@ -250,14 +395,18 @@ class OverrideShock(Shock):
     table: str | None = None
     column: str | None = None
 
+    def __post_init__(self) -> None:
+        """Refuse a target that is not a name, naming the keyword spelling."""
+        _refuse_misplaced_arguments(self)
+
     def to_expression(self, col: pl.Expr) -> pl.Expr:
         """Apply override shock to column expression."""
-        import polars as pl
-
         # Cast column to Float64 first to avoid type coercion issues.
         # The original `col * 0 + lit(value)` fails when col is integer
         # and value is float. Casting to Float64 ensures compatibility.
-        return col.cast(pl.Float64) * 0 + self.value
+        # (`value` is typed Any, so the sum is too until it is named here.)
+        overridden: pl.Expr = col.cast(pl.Float64) * 0 + self.value
+        return overridden
 
     def describe(self) -> str:
         """Return description of this shock."""
@@ -283,8 +432,10 @@ class ClipShock(Shock):
     Args:
         min_value: Optional floor value (values below are set to this)
         max_value: Optional ceiling value (values above are set to this)
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
+        table: The assumption table this shock moves, by the name the
+            ``Table`` was built with. A shock names exactly one target.
+        column: The model-point column this shock moves, instead of a
+            table: a single number the model reads off each policy.
 
     !!! note "When to use"
         - Post-shock value constraints (e.g., lapse ≤ 100%)
@@ -322,7 +473,8 @@ class ClipShock(Shock):
     column: str | None = None
 
     def __post_init__(self) -> None:
-        """Validate that at least one bound is provided."""
+        """Validate the target and that at least one bound is provided."""
+        _refuse_misplaced_arguments(self)
         if self.min_value is None and self.max_value is None:
             msg = "ClipShock requires at least one of min_value or max_value"
             raise ValueError(msg)
@@ -339,8 +491,6 @@ class ClipShock(Shock):
 
     def to_expression(self, col: pl.Expr) -> pl.Expr:
         """Apply clip shock to column expression."""
-        import polars as pl
-
         result = col
         if self.min_value is not None:
             result = (
@@ -384,8 +534,10 @@ class PipelineShock(Shock):
 
     Args:
         shocks: Sequence of shocks to apply in order
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
+        table: The assumption table this shock moves, by the name the
+            ``Table`` was built with. A shock names exactly one target.
+        column: The model-point column this shock moves, instead of a
+            table: a single number the model reads off each policy.
 
     !!! note "When to use"
         - Solvency II lapse up: multiply then cap
@@ -423,7 +575,8 @@ class PipelineShock(Shock):
     column: str | None = None
 
     def __post_init__(self) -> None:
-        """Validate that at least one shock is provided."""
+        """Validate the target and the steps, and that there is at least one."""
+        _refuse_misplaced_arguments(self, sequence="shocks")
         if not self.shocks:
             msg = "PipelineShock requires at least one shock in the pipeline"
             raise ValueError(msg)
@@ -464,9 +617,7 @@ def _build_filter_expr(filter_config: FilterCondition) -> pl.Expr:
         Polars boolean expression for the filter
 
     """
-    import polars as pl
-
-    conditions = []
+    conditions: list[pl.Expr] = []
 
     for column, condition in filter_config.items():
         if isinstance(condition, dict):
@@ -519,13 +670,13 @@ class FilteredShock(Shock):
     Used for dimension-filtered shocks like "increase early-duration lapse by 25%"
     where only rows matching the filter are modified.
 
-    This implements GSP-65: Dimension-filtered shocks.
-
     Args:
         shock: The shock to apply to matching rows
         where: Filter condition dictionary
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
+        table: The assumption table this shock moves, by the name the
+            ``Table`` was built with. A shock names exactly one target.
+        column: The model-point column this shock moves, instead of a
+            table: a single number the model reads off each policy.
 
     !!! note "When to use"
         - Apply shocks to specific segments (e.g., early durations)
@@ -574,10 +725,12 @@ class FilteredShock(Shock):
     table: str | None = None
     column: str | None = None
 
+    def __post_init__(self) -> None:
+        """Refuse an argument that landed in the wrong slot, naming the spelling."""
+        _refuse_misplaced_arguments(self, nested=("shock",), condition="where")
+
     def to_expression(self, col: pl.Expr) -> pl.Expr:
         """Apply shock only to rows matching the filter."""
-        import polars as pl
-
         filter_expr = _build_filter_expr(self.where)
         shocked_expr = self.shock.to_expression(col)
 
@@ -622,46 +775,55 @@ class FilteredShock(Shock):
 @dataclass(frozen=True)
 class TimeConditionalShock(Shock):
     """
-    A shock that applies only at specific projection times (WHEN clause).
+    A shock that applies only to the time-keyed rows a condition names (WHEN clause).
 
-    Used for time-conditional shocks like "40% mass lapse at t=0 only"
-    where the shock is applied based on projection period.
-
-    This implements GSP-74: Time-conditional shocks.
+    Used for time-conditional shocks like "a 40% mass lapse in the first
+    policy year only". The condition is read against the shocked table's own
+    key columns -- the policy year or duration the table is keyed by -- not
+    the model's projection time, so write it in that key's values: a lapse
+    table keyed by policy year 1 to 20 has its first year at
+    ``{"policy_year": {"eq": 1}}``. A condition on a column the table does not
+    hold, or one that selects none of its rows (``{"policy_year": {"eq": 0}}``
+    on that table), is refused when the scenario is built, as the scenario
+    would otherwise equal BASE.
 
     Args:
-        shock: The shock to apply at matching times
-        when: Time condition dictionary (uses 't' column by default)
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
-        time_column: Column name for time (default: "t")
+        shock: The shock to apply to the matching rows
+        when: Condition on the table's key columns, such as
+            ``{"policy_year": {"lte": 5}}``
+        table: The assumption table this shock moves, by the name the
+            ``Table`` was built with. A shock names exactly one target.
+        column: The model-point column this shock moves, instead of a
+            table: a single number the model reads off each policy.
 
     !!! note "When to use"
-        - Mass lapse at policy inception (t=0)
+        - Mass lapse in the first policy year
         - First-year expense shocks
         - Time-limited stress scenarios
         - Shock only during specific periods
 
     Examples:
     --------
-    **Mass lapse at t=0:**
+    **Mass lapse in the first policy year** (a lapse table keyed by
+    ``policy_year`` from 1):
 
     ```python no_output_check
     from gaspatchio.scenarios.shocks import TimeConditionalShock, AdditiveShock
 
     shock = TimeConditionalShock(
         shock=AdditiveShock(delta=0.40),  # Add 40% lapse
-        when={"t": {"eq": 0}},
+        when={"policy_year": {"eq": 1}},
         table="lapse",
     )
     ```
 
-    **Expense shock for first 5 years:**
+    **Expense shock for the first 5 years** (an expense table keyed by
+    ``policy_year`` from 1):
 
     ```python no_output_check
     shock = TimeConditionalShock(
         shock=MultiplicativeShock(factor=1.10),
-        when={"t": {"lte": 5}},
+        when={"policy_year": {"lte": 5}},
         table="expenses",
     )
     ```
@@ -672,12 +834,13 @@ class TimeConditionalShock(Shock):
     when: FilterCondition
     table: str | None = None
     column: str | None = None
-    time_column: str = "t"
+
+    def __post_init__(self) -> None:
+        """Refuse an argument that landed in the wrong slot, naming the spelling."""
+        _refuse_misplaced_arguments(self, nested=("shock",), condition="when")
 
     def to_expression(self, col: pl.Expr) -> pl.Expr:
         """Apply shock only at matching times."""
-        import polars as pl
-
         filter_expr = _build_filter_expr(self.when)
         shocked_expr = self.shock.to_expression(col)
 
@@ -718,83 +881,20 @@ class TimeConditionalShock(Shock):
 
 
 @dataclass(frozen=True)
-class RelativeFloorShock(Shock):
-    """
-    A shock that applies a floor relative to the original value.
-
-    Used for scenarios like Solvency II lapse down: "max(lapse × 0.5, lapse - 0.2)"
-    where the floor is relative to the original value, not absolute.
-
-    Args:
-        delta: The maximum decrease from original value
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
-
-    !!! note "When to use"
-        - Solvency II lapse down scenario
-        - Relative floors that depend on original values
-        - Preventing excessive decreases
-
-    !!! warning "Not yet implemented"
-        ``RelativeFloorShock`` raises ``NotImplementedError`` at execution:
-        applying a relative floor needs the pre-shock table values at shock
-        time, which the pipeline does not yet thread through. Construction
-        and serialization succeed (plans can declare intent), but a run
-        fails loudly instead of silently skipping the floor. Until it is
-        implemented, apply relative floors in model code — e.g. compute the
-        shocked rate as the maximum of ``rate * 0.5`` and ``rate - 0.2``
-        with ``when/then/otherwise`` on the looked-up column.
-
-    """
-
-    delta: float
-    table: str | None = None
-    column: str | None = None
-
-    def to_expression(self, col: pl.Expr) -> pl.Expr:
-        """Raise — ``RelativeFloorShock`` is not implemented.
-
-        A floor *relative to the pre-shock original value* cannot be computed
-        here: by the time this shock runs, ``col`` is already the shocked value
-        and the original is unavailable. The previous placeholder floored at
-        ``col - delta`` using the shocked value, so the condition was never true
-        and the shock silently did nothing. Use :class:`MaxShock` instead, which
-        composes the two transformations explicitly.
-        """
-        del col
-        msg = (
-            "RelativeFloorShock is not implemented: a floor relative to the "
-            "original (pre-shock) value cannot be computed here because this "
-            "shock only receives the already-shocked value. Use MaxShock "
-            "instead to express 'max(shocked, original - delta)' (e.g. the "
-            "Solvency II lapse-down max(lapse*0.5, lapse-0.2)); see the MaxShock "
-            "docstring."
-        )
-        raise NotImplementedError(msg)
-
-    def describe(self) -> str:
-        """Return description of this shock."""
-        target = ""
-        if self.table:
-            target = f" {self.table}"
-        if self.column:
-            target += f".{self.column}" if self.table else f" {self.column}"
-        return f"relative_floor{target} (original - {self.delta})"
-
-
-@dataclass(frozen=True)
 class MaxShock(Shock):
     """
     A shock that takes the maximum of two shock expressions.
 
-    Used for scenarios like Solvency II lapse down: "max(lapse × 0.5, lapse - 0.2)"
+    Used for scenarios like Solvency II lapse down: "max(lapse * 0.5, lapse - 0.2)"
     where the result is the larger of two transformations.
 
     Args:
         shock_a: First shock option
         shock_b: Second shock option
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
+        table: The assumption table this shock moves, by the name the
+            ``Table`` was built with. A shock names exactly one target.
+        column: The model-point column this shock moves, instead of a
+            table: a single number the model reads off each policy.
 
     !!! note "When to use"
         - Solvency II lapse down: max(×0.5, -0.2)
@@ -817,7 +917,7 @@ class MaxShock(Shock):
         shock_b=AdditiveShock(delta=-0.2),
         table="lapse",
     )
-    # Result: max(lapse × 0.5, lapse - 0.2)
+    # Result: max(lapse * 0.5, lapse - 0.2)
     ```
 
     """
@@ -827,10 +927,12 @@ class MaxShock(Shock):
     table: str | None = None
     column: str | None = None
 
+    def __post_init__(self) -> None:
+        """Refuse an argument that landed in the wrong slot, naming the spelling."""
+        _refuse_misplaced_arguments(self, nested=("shock_a", "shock_b"))
+
     def to_expression(self, col: pl.Expr) -> pl.Expr:
         """Apply max of two shock expressions."""
-        import polars as pl
-
         expr_a = self.shock_a.to_expression(col)
         expr_b = self.shock_b.to_expression(col)
 
@@ -857,8 +959,10 @@ class MinShock(Shock):
     Args:
         shock_a: First shock option
         shock_b: Second shock option
-        table: Optional table name this shock targets
-        column: Optional column name this shock targets
+        table: The assumption table this shock moves, by the name the
+            ``Table`` was built with. A shock names exactly one target.
+        column: The model-point column this shock moves, instead of a
+            table: a single number the model reads off each policy.
 
     !!! note "When to use"
         - Taking the more severe of two shocks
@@ -890,10 +994,12 @@ class MinShock(Shock):
     table: str | None = None
     column: str | None = None
 
+    def __post_init__(self) -> None:
+        """Refuse an argument that landed in the wrong slot, naming the spelling."""
+        _refuse_misplaced_arguments(self, nested=("shock_a", "shock_b"))
+
     def to_expression(self, col: pl.Expr) -> pl.Expr:
         """Apply min of two shock expressions."""
-        import polars as pl
-
         expr_a = self.shock_a.to_expression(col)
         expr_b = self.shock_b.to_expression(col)
 
@@ -909,94 +1015,6 @@ class MinShock(Shock):
         return f"min({self.shock_a.describe()}, {self.shock_b.describe()}){target}"
 
 
-@dataclass(frozen=True)
-class ParameterShock:
-    """
-    A shock specification for scalar model parameters (not table values).
-
-    Used for scenarios like "increase expense inflation by 1%" where the
-    target is a scalar model input rather than an assumption table.
-
-    Unlike table shocks, parameter shocks store the transformation specification
-    and are applied at model setup time by the model code.
-
-    Args:
-        param: Name of the parameter to shock
-        operation: Type of operation ("multiply", "add", or "set")
-        value: Value for the operation (factor, delta, or constant)
-
-    !!! note "When to use"
-        - Shocking scalar model inputs (expense inflation, discount rate spread)
-        - Parameters that aren't stored in assumption tables
-        - Model-level sensitivity analysis
-
-    !!! warning "Not a Shock subclass"
-        ParameterShock is NOT a Shock subclass because it doesn't operate on
-        Polars expressions. It stores the shock specification for the model
-        code to apply.
-
-    Examples:
-    --------
-    **Add 1% to expense inflation:**
-
-    ```python no_output_check
-    from gaspatchio.scenarios.shocks import ParameterShock
-
-    shock = ParameterShock(param="expense_inflation", operation="add", value=0.01)
-
-    # Apply in model code:
-    base_inflation = 0.02
-    shocked_inflation = shock.apply(base_inflation)  # 0.03
-    ```
-
-    **Multiply discount spread:**
-
-    ```python no_output_check
-    shock = ParameterShock(param="discount_spread", operation="multiply", value=1.5)
-    ```
-
-    """
-
-    param: str
-    operation: str  # "multiply", "add", or "set"
-    value: float
-
-    def __post_init__(self) -> None:
-        """Validate operation type."""
-        valid_ops = {"multiply", "add", "set"}
-        if self.operation not in valid_ops:
-            msg = f"ParameterShock operation must be one of {valid_ops}, got '{self.operation}'"
-            raise ValueError(msg)
-
-    def apply(self, base_value: float) -> float:
-        """
-        Apply this shock to a base parameter value.
-
-        Args:
-            base_value: The original parameter value
-
-        Returns:
-            The shocked parameter value
-
-        """
-        if self.operation == "multiply":
-            return base_value * self.value
-        if self.operation == "add":
-            return base_value + self.value
-        # "set"
-        return self.value
-
-    def describe(self) -> str:
-        """Return a human-readable description of this shock."""
-        if self.operation == "multiply":
-            return f"param {self.param} × {self.value}"
-        if self.operation == "add":
-            sign = "+" if self.value >= 0 else ""
-            return f"param {self.param} {sign}{self.value}"
-        # "set"
-        return f"param {self.param} = {self.value}"
-
-
 __all__ = [
     "AdditiveShock",
     "ClipShock",
@@ -1006,9 +1024,7 @@ __all__ = [
     "MinShock",
     "MultiplicativeShock",
     "OverrideShock",
-    "ParameterShock",
     "PipelineShock",
-    "RelativeFloorShock",
     "Shock",
     "TimeConditionalShock",
 ]

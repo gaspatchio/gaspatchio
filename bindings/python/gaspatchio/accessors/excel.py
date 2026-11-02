@@ -4,42 +4,35 @@
 
 """Accessors for Excel-related operations on ActuarialFrame columns/expressions."""
 
-import datetime
-from typing import TYPE_CHECKING, Literal, Union
+from typing import TYPE_CHECKING
 
-import polars as pl
+from gaspatchio._authoring import emit
 
 # Import registry decorator
-from ..frame.registry import register_accessor
+from gaspatchio.frame.registry import register_accessor
 
 # Use the new base location
-from .base import BaseColumnAccessor, BaseFrameAccessor
+from .base import BaseColumnAccessor, BaseFrameAccessor, refuse_bare_string_operand
 
 # Use TYPE_CHECKING for core components to avoid circular imports
 if TYPE_CHECKING:
-    # Update imports to new locations
-    from ..column.column_proxy import ColumnProxy
-    from ..column.expression_proxy import ExpressionProxy
-    from ..frame.base import ActuarialFrame
-    from ..typing import IntoExprColumn  # Added for yearfrac
+    import datetime
 
-# Define Excel basis constants
-BasisType = Union[
-    Literal[
-        0,
-        1,
-        2,
-        3,
-        4,
-        "us_nasd_30_360",
-        "act/act",
-        "actual/360",
-        "actual/365",
-        "european_30_360",
-    ],
-    int,
-    str,
-]
+    import polars as pl
+
+    from gaspatchio._semantic.ir import AttrValue
+
+    # Update imports to new locations
+    from gaspatchio.column.column_proxy import ColumnProxy
+    from gaspatchio.column.expression_proxy import ExpressionProxy
+    from gaspatchio.frame.base import ActuarialFrame
+
+# A day-count basis: 0-4, or a name for one -- "us_nasd_30_360", "act/act",
+# "actual/360", "actual/365", "european_30_360" and the aliases the yearfrac
+# lowering also reads (frame/lowering/_excel/yearfrac.py). Names are matched in
+# any case, so a Literal of these spellings would refuse ones that work; the
+# list lives in yearfrac's docstring, and a bad value is refused at run time.
+BasisType = int | str
 
 
 @register_accessor("excel", kind="frame")
@@ -48,10 +41,15 @@ class ExcelFrameAccessor(BaseFrameAccessor):
 
     Accessed via `.excel` on an ActuarialFrame instance,
     e.g., `af.excel`.
+
+    ``excel`` is a reserved attribute on the frame, as ``date``, ``finance``,
+    ``graph`` and ``projection`` are. A model whose data really does carry a
+    column called ``excel`` still has it -- reach it as ``af["excel"]`` --
+    but ``af.excel`` is always this accessor.
     """
 
-    def __init__(self, frame: "ActuarialFrame"):
-        """Initializes the accessor with the parent ActuarialFrame.
+    def __init__(self, frame: "ActuarialFrame") -> None:
+        """Initialize the accessor with the parent ActuarialFrame.
 
         Internal initialization method for the Excel frame accessor.
         """
@@ -65,54 +63,84 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
     Accessed via `.excel` on an ActuarialFrame column or expression proxy,
     e.g., `af["my_excel_col"].excel`.
+
+    **A bare string operand is refused here: write the operand as
+    ``af.column`` or ``af["column"]``.** That rule holds on every column
+    accessor, and is stated once in
+    ``gaspatchio.accessors.base.refuse_bare_string_operand`` -- along with
+    the frame-level methods that *do* name a column by string.
     """
 
-    def __init__(self, proxy: "ColumnProxy | ExpressionProxy"):
-        """Initializes the accessor with the parent proxy.
+    def __init__(self, proxy: "ColumnProxy | ExpressionProxy") -> None:
+        """Initialize the accessor with the parent proxy.
 
         Internal initialization method for the Excel column accessor.
         """
         super().__init__(proxy)
         self._proxy: ColumnProxy | ExpressionProxy = proxy
 
-    def _get_polars_expr(self) -> pl.Expr:
-        """Helper to get the underlying Polars expression from the proxy.
-
-        Internal helper method that extracts the Polars expression from
-        the column or expression proxy for further processing.
-        """
-        if hasattr(self._proxy, "_expr") and isinstance(self._proxy._expr, pl.Expr):
-            return self._proxy._expr
-        if hasattr(self._proxy, "name") and isinstance(self._proxy.name, str):
-            return pl.col(self._proxy.name)
-        raise TypeError(
-            f"ExcelColumnAccessor expected ColumnProxy or ExpressionProxy, got {type(self._proxy).__name__}"
-        )
-
     def _get_parent_frame(self) -> "ActuarialFrame":
-        """Helper to get the parent ActuarialFrame, raising error if absent.
+        """Return the frame this accessor's column belongs to.
 
-        Internal helper method that retrieves the parent ActuarialFrame
-        context, which is required for many Excel operations.
+        Every Excel method emits a ``Call`` node carried by a proxy, and a
+        proxy carries the frame whose schema its formula is written
+        against. A detached column has no such frame, so there is nothing
+        to attach the result to and nothing to resolve shapes against --
+        which is a refusal, not a default.
+
+        Raises:
+            RuntimeError: If the column is detached from any frame.
+
         """
-        if not hasattr(self._proxy, "_parent") or self._proxy._parent is None:
-            raise RuntimeError(
-                "Operation requires the expression/column to be part of an ActuarialFrame context."
+        # Friend access: ColumnProxy and ExpressionProxy both set ``_parent``
+        # in ``__init__`` and expose the frame under no public name.
+        parent = self._proxy._parent  # noqa: SLF001 -- the bound proxy's frame
+        if parent is None:
+            msg = (
+                "Operation requires the expression/column to be part of an "
+                "ActuarialFrame context."
             )
-        return self._proxy._parent
+            raise RuntimeError(msg)
+        return parent
+
+    def _emit(
+        self,
+        name: str,
+        extra_args: tuple[object, ...] = (),
+        attrs: tuple[tuple[str, "AttrValue"], ...] = (),
+    ) -> "ExpressionProxy":
+        """Emit an Excel-compatibility ``Call`` over this accessor's column.
+
+        The method's job ends at recording which Excel function was asked
+        for and with what configuration; the registered lowering in
+        ``frame/lowering/rules/excel.py`` owns how it computes.
+        """
+        node = getattr(self._proxy, "_node", None)
+        if node is None:
+            msg = (
+                f"ExcelColumnAccessor expected ColumnProxy or ExpressionProxy, "
+                f"got {type(self._proxy).__name__}"
+            )
+            raise TypeError(msg)
+        return emit.call(name, (node, *extra_args), self._get_parent_frame(), attrs)
 
     def from_excel_serial(self, epoch: str = "1900") -> "ExpressionProxy":
-        """Converts Excel serial numbers (integers or floats) to Polars Date.
+        """Convert Excel serial numbers (integers or floats) to Polars Date.
 
         Follows logic similar to openpyxl for compatibility. This method handles
         Excel's date serialization system, including the notorious Excel 1900
         leap year bug where Excel incorrectly treats 1900 as a leap year.
 
         !!! note "When to use"
-            *   **Excel File Import:** When importing Excel files that contain date columns stored as serial numbers rather than proper date values.
-            *   **Legacy Data Processing:** When working with older Excel files or systems that export dates as numeric serial values.
-            *   **Cross-Platform Compatibility:** When handling Excel files that may have been created on different platforms (Windows vs Mac) with different epoch systems.
-            *   **Data Validation:** When you need to convert and validate date serial numbers from external Excel-based data sources.
+            *   **Excel File Import:** When importing Excel files that contain date
+                columns stored as serial numbers rather than proper date values.
+            *   **Legacy Data Processing:** When working with older Excel files or
+                systems that export dates as numeric serial values.
+            *   **Cross-Platform Compatibility:** When handling Excel files that may
+                have been created on different platforms (Windows vs Mac) with different
+                epoch systems.
+            *   **Data Validation:** When you need to convert and validate date serial
+                numbers from external Excel-based data sources.
 
         Args:
             epoch: The epoch system used by Excel ('1900' or '1904').
@@ -159,77 +187,51 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             │ P003      ┆ 44927             ┆ 2023-01-01  │
             └───────────┴───────────────────┴─────────────┘
             ```
-
         """
-        base_expr = self._get_polars_expr()
-        numeric_expr = base_expr.cast(pl.Float64, strict=False)
-        int_expr = numeric_expr.floor()  # For exact comparison like == 60
-
-        if epoch == "1900":
-            EPOCH_DT = datetime.date(1899, 12, 30)
-
-            # Excel serial date adjustment for the 1900 leap year bug:
-            # - Serial 1-59: EPOCH + serial + 1 (compensate for Excel's phantom Feb 29)
-            # - Serial 60: Special case handled separately (maps to Feb 28, same as 59)
-            # - Serial > 60: EPOCH + serial (direct mapping after the phantom date)
-            effective_serial_days = (
-                pl.when(numeric_expr > 60)
-                .then(numeric_expr)
-                .otherwise(numeric_expr + 1)
-            )
-
-            date_expr = (
-                pl.when(numeric_expr < 1)
-                .then(None)  # Invalid serial
-                .when(int_expr == 60)
-                .then(pl.lit(datetime.date(1900, 2, 28)))  # Excel's phantom 1900-02-29 → real Feb 28
-                .otherwise(pl.lit(EPOCH_DT) + pl.duration(days=effective_serial_days))
-                .cast(pl.Date)
-            )
-
-        elif epoch == "1904":
-            EPOCH_DT = datetime.date(1904, 1, 1)
-            # For 1904 epoch (Mac Excel):
-            # - Serial 0 represents midnight (just time, no date) → treat as invalid
-            # - Serial 1 = 1904-01-02 (EPOCH + 1 day)
-            # - Serial N = EPOCH + N days
-            days_to_add = numeric_expr
-
-            date_expr = (
-                pl.when(numeric_expr < 1)
-                .then(None)  # Serial 0 or less is invalid (0 represents just time)
-                .otherwise(pl.lit(EPOCH_DT) + pl.duration(days=days_to_add))
-                .cast(pl.Date)
-            )
-
-        else:
-            raise ValueError(f"Invalid epoch '{epoch}'. Must be '1900' or '1904'.")
-
-        parent_frame = self._get_parent_frame()
-        from ..column.expression_proxy import ExpressionProxy
-
-        return ExpressionProxy(date_expr, parent_frame)
+        if epoch not in ("1900", "1904"):
+            msg = f"Invalid epoch '{epoch}'. Must be '1900' or '1904'."
+            raise ValueError(msg)
+        return self._emit("excel.from_excel_serial", attrs=(("epoch", epoch),))
 
     def yearfrac(
-        self, end_date_expr: "IntoExprColumn", basis: BasisType = "act/act"
+        self,
+        end_date_expr: "ColumnProxy | ExpressionProxy | pl.Expr | datetime.date",
+        basis: BasisType = "act/act",
     ) -> "ExpressionProxy":
-        """Calculate the year fraction between two dates, similar to Excel's YEARFRAC.
+        """Calculate the year fraction between two dates, as Excel's YEARFRAC does.
 
         This function computes the fraction of a year represented by the number of
         whole days between a start date (the column/expression this accessor is on)
         and an end date. It uses a specified day count basis.
 
+        As in Excel, the answer does not depend on which date comes first: the
+        earlier one is the start, and the fraction is never negative, so a
+        workbook's ``YEARFRAC(valuation, issue)`` converts as written. To tell
+        a future-dated policy's pre-inception periods apart, compare the dates
+        (``when(af["date"] < af.issue_date)``) rather than the sign. The
+        leap-day and one-year rules of basis 1 and the February rules of basis
+        0 are Excel's as well, on both the Polars and the JAX engine.
+
         !!! note "When to use"
-            *   **Premium Proration**: Calculate the portion of an annual premium that corresponds to a partial policy term, for example, if a policy starts or ends mid-year.
-            *   **Exposure Calculation**: Determine fractional exposure periods for reserving or IBNR (Incurred But Not Reported) calculations, especially when dealing with policies that are not in force for a full year.
-            *   **Investment Analysis**: Compute fractional year periods for accrued interest calculations or for annualizing returns on investments held for parts of a year.
-            *   **Performance Metrics**: Analyze time-based metrics such as time-to-claim or duration of an event, expressed as a fraction of a year.
+            *   **Premium Proration**: Calculate the portion of an annual premium that
+                corresponds to a partial policy term, for example, if a policy starts or
+                ends mid-year.
+            *   **Exposure Calculation**: Determine fractional exposure periods for
+                reserving or IBNR (Incurred But Not Reported) calculations, especially
+                when dealing with policies that are not in force for a full year.
+            *   **Investment Analysis**: Compute fractional year periods for accrued
+                interest calculations or for annualizing returns on investments held for
+                parts of a year.
+            *   **Performance Metrics**: Analyze time-based metrics such as
+                time-to-claim or duration of an event, expressed as a fraction of a
+                year.
 
         Parameters
         ----------
-        end_date_expr : IntoExprColumn
-            An expression or column representing the end dates. Can be a scalar date,
-            a column of dates.
+        end_date_expr : ColumnProxy | ExpressionProxy | pl.Expr | datetime.date
+            The end dates: a column of dates, an expression, or a fixed
+            ``datetime.date``. A bare string is refused — pass ``af["col"]``
+            for the column.
         basis : int or str, optional
             The day count basis to use. Can be an integer (0-4) or a string name.
             Defaults to "act/act" (which is basis 1).
@@ -249,7 +251,8 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         Raises
         ------
         TypeError
-            If the underlying proxy for the start date is not a `ColumnProxy` or `ExpressionProxy`.
+            If the underlying proxy for the start date is not a `ColumnProxy` or
+            `ExpressionProxy`.
         RuntimeError
             If the operation requires an `ActuarialFrame` context that is not available.
         ValueError
@@ -259,7 +262,8 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         --------
         Calculating Policy Term as Year Fraction (Scalar/Column Operations)::
 
-            Scenario: You have policy start and end dates and want to calculate the policy term in years.
+            Scenario: You have policy start and end dates and want to calculate the
+            policy term in years.
 
             ```python
             import datetime
@@ -301,20 +305,21 @@ class ExcelColumnAccessor(BaseColumnAccessor):
 
         List Column Workaround::
 
-            For actuarial projections stored as list columns (e.g., monthly projection dates),
-            use the explode/group_by pattern:
+            For actuarial projections stored as list columns (e.g., monthly projection
+            dates), use the explode/group_by pattern:
 
             ```python
             import datetime
             import polars as pl
             from gaspatchio import ActuarialFrame
-            from gaspatchio.accessors.excel_functions.yearfrac import yearfrac
+            from gaspatchio.frame.lowering._excel.yearfrac import yearfrac
 
             # Example with monthly projection dates
             projection_data = {
                 "policy_id": ["P001", "P002"],
                 "projection_dates": [
-                    [datetime.date(2024, i, 1) for i in range(1, 13)],  # 12 monthly dates
+                    # 12 monthly dates
+                    [datetime.date(2024, i, 1) for i in range(1, 13)],
                     [datetime.date(2024, i, 15) for i in range(1, 13)]
                 ],
                 "maturity_date": [
@@ -331,7 +336,11 @@ class ExcelColumnAccessor(BaseColumnAccessor):
                 .with_row_index("_idx")
                 .explode("projection_dates")
                 .with_columns(
-                    yearfrac(pl.col("projection_dates"), pl.col("maturity_date"), basis="act/act")
+                    yearfrac(
+                        pl.col("projection_dates"),
+                        pl.col("maturity_date"),
+                        basis="act/act",
+                    )
                     .alias("years_to_maturity")
                 )
                 .group_by("_idx")
@@ -358,31 +367,19 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             └───────────┴──────────────────────────────────┴───────────────┘
             ```
 
-            Note: List columns are not directly supported due to Polars plugin limitations.
-            Excel 365 achieves this with dynamic arrays, but we require explicit data
-            transformation.
+            Note: List columns are not directly supported due to Polars plugin
+            limitations. Excel 365 achieves this with dynamic arrays, but we require
+            explicit data transformation.
 
         """
+        refuse_bare_string_operand(end_date_expr, parameter="end_date_expr")
         # Import the yearfrac function from the accessor functions module
-        from .excel_functions.yearfrac import yearfrac
-
-        # Get the start expression from the proxy
-        start_expr = self._get_polars_expr()
-
-        # Use the standard yearfrac implementation
-        result_expr = yearfrac(start_expr, end_date_expr, basis=basis)
-
-        # Return wrapped in ExpressionProxy
-        from ..column.expression_proxy import ExpressionProxy
-
-        parent_frame = self._get_parent_frame()
-
-        return ExpressionProxy(result_expr, parent_frame)
+        return self._emit("excel.yearfrac", (end_date_expr,), (("basis", basis),))
 
     def irr(
         self,
         *,
-        guess: "IntoExprColumn | None" = None,
+        guess: "ColumnProxy | ExpressionProxy | pl.Expr | float | None" = None,
         default_guess: float | None = None,
     ) -> "ExpressionProxy":
         """Calculate the internal rate of return for a series of cash flows.
@@ -391,15 +388,21 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         of all cash flows equal to zero, using Excel's IRR algorithm.
 
         !!! note "When to use"
-            *   **Investment Analysis**: Evaluate the profitability of investment portfolios or individual securities
-            *   **Project Evaluation**: Compare the returns of different actuarial projects or initiatives
-            *   **Premium Adequacy**: Assess whether premium cash flows generate sufficient returns
-            *   **Asset-Liability Matching**: Evaluate the performance of matched asset and liability cash flows
+            *   **Investment Analysis**: Evaluate the profitability of investment
+                portfolios or individual securities
+            *   **Project Evaluation**: Compare the returns of different actuarial
+                projects or initiatives
+            *   **Premium Adequacy**: Assess whether premium cash flows generate
+                sufficient returns
+            *   **Asset-Liability Matching**: Evaluate the performance of matched asset
+                and liability cash flows
 
         Parameters
         ----------
-        guess : IntoExprColumn, optional
-            Optional per-row initial guess for IRR. If not provided, uses default_guess.
+        guess : ColumnProxy | ExpressionProxy | pl.Expr | float, optional
+            Optional per-row initial guess for IRR. If not provided, uses
+            default_guess. A bare string is refused — pass ``af["col"]``
+            for the column.
         default_guess : float, optional
             Scalar fallback guess when `guess` is not provided. Defaults to 0.1 (10%).
 
@@ -442,19 +445,14 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             ```
 
         """
-        from .excel_functions.irr import irr as _irr
-
-        values_expr = self._get_polars_expr()
-        parent_frame = self._get_parent_frame()
-        result_expr = _irr(values_expr, guess=guess, default_guess=default_guess)
-        from ..column.expression_proxy import ExpressionProxy
-
-        return ExpressionProxy(result_expr, parent_frame)
+        refuse_bare_string_operand(guess, parameter="guess")
+        extra = () if guess is None else (guess,)
+        return self._emit("excel.irr", extra, (("default_guess", default_guess),))
 
     def pv(
         self,
-        nper: "IntoExprColumn",
-        pmt: "IntoExprColumn",
+        nper: "ColumnProxy | ExpressionProxy | pl.Expr | float",
+        pmt: "ColumnProxy | ExpressionProxy | pl.Expr | float",
         *,
         fv: float | None = None,
         typ: int | None = None,
@@ -465,17 +463,23 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         constant interest rate and regular payments, using Excel's PV formula.
 
         !!! note "When to use"
-            *   **Reserve Calculations**: Calculate the present value of future benefit payments for reserve valuations
-            *   **Annuity Pricing**: Determine the present value of annuity payment streams
-            *   **Loan Analysis**: Evaluate the present value of loan repayments for asset-liability management
-            *   **Capital Budgeting**: Assess the present value of project cash flows for investment decisions
+            *   **Reserve Calculations**: Calculate the present value of future benefit
+                payments for reserve valuations
+            *   **Annuity Pricing**: Determine the present value of annuity payment
+                streams
+            *   **Loan Analysis**: Evaluate the present value of loan repayments for
+                asset-liability management
+            *   **Capital Budgeting**: Assess the present value of project cash flows
+                for investment decisions
 
         Parameters
         ----------
-        nper : IntoExprColumn
-            Number of periods as scalar/column or list column.
-        pmt : IntoExprColumn
-            Payment per period as scalar/column or list column.
+        nper : ColumnProxy | ExpressionProxy | pl.Expr | float
+            Number of periods as a number, column or list column. A bare
+            string is refused — pass ``af["col"]`` for the column.
+        pmt : ColumnProxy | ExpressionProxy | pl.Expr | float
+            Payment per period as a number, column or list column. A bare
+            string is refused — pass ``af["col"]`` for the column.
         fv : float, optional
             Future value at the end of nper periods. Defaults to 0.0.
         typ : int, optional
@@ -501,7 +505,9 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             }
             af = ActuarialFrame(data)
 
-            af.present_value = af.interest_rate.excel.pv(nper=af.num_periods, pmt=af.payment)
+            af.present_value = af.interest_rate.excel.pv(
+                nper=af.num_periods, pmt=af.payment
+            )
 
             print(af.collect())
             ```
@@ -520,25 +526,29 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             ```
 
         """
-        from .excel_functions.pv import pv as _pv
-
-        rate_expr = self._get_polars_expr()
-        parent_frame = self._get_parent_frame()
-        result_expr = _pv(rate_expr, nper, pmt, fv=fv, typ=typ)
-        from ..column.expression_proxy import ExpressionProxy
-
-        return ExpressionProxy(result_expr, parent_frame)
+        refuse_bare_string_operand(nper, parameter="nper")
+        refuse_bare_string_operand(pmt, parameter="pmt")
+        return self._emit("excel.pv", (nper, pmt), (("fv", fv), ("typ", typ)))
 
     def round(self, num_digits: int = 0) -> "ExpressionProxy":
-        """Round half away from zero, exactly like Excel's ROUND.
+        """Round as Excel's ROUND does: the value Excel holds, half away from zero.
 
-        Excel sends a tie away from zero — ``ROUND(0.125, 2)`` is ``0.13`` —
-        while Polars' native ``.round()`` uses banker's rounding (half to
-        even) and gives ``0.12``. When a workbook rounds inside its recursion
-        the tie-breaking rule compounds, so a conversion must use the
-        workbook's rule. The rollforward's ``rf["state"].round()`` op applies
-        this same away-from-zero convention to a running state; this method
-        is its column-side counterpart.
+        Excel rounds the value a cell shows -- its **15-significant-digit
+        decimal** -- not the binary double underneath, and sends a half **away
+        from zero**. So ``ROUND(0.125, 2)`` is ``0.13`` (Polars' native
+        ``.round()``, half to even, gives ``0.12``), and a workbook's
+        ``ROUND(1.5 * 45366.20999999999, 2)`` is ``68049.32``: the double is
+        ``68049.31499999999…``, but its fifteen digits read
+        ``68049.3150000000``, a half. Rounding the double alone answers
+        ``68049.31``. When a workbook rounds inside its recursion that cent
+        compounds, so a conversion must use the workbook's rule. A sixteenth
+        digit of 5 or more goes away from zero, a double that is exactly a
+        sixteen-digit tie included. Where the fifteen digits are coarser than
+        the step (10^13 or more at cents) the answer is the fifteen-digit
+        value itself, as in Excel. The
+        rollforward's ``rf["state"].round()`` and ``round_charge=`` apply this
+        same rule, in the same code; this method is their column-side
+        counterpart.
 
         Works on scalar and per-period list columns; list columns are rounded
         element-wise.
@@ -558,8 +568,8 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         Returns
         -------
         ExpressionProxy
-            Float64 (or List[Float64] for list columns) rounded half away
-            from zero.
+            Float64 (or List[Float64] for list columns) rounded as Excel
+            rounds it.
 
         Examples
         --------
@@ -568,45 +578,119 @@ class ExcelColumnAccessor(BaseColumnAccessor):
             ```python
             from gaspatchio import ActuarialFrame
 
-            af = ActuarialFrame({"coi": [[10.125, 7558.485]]})
-            af.coi_rounded = af.coi.excel.round(2)
+            af = ActuarialFrame({"coi": [[10.125, 7558.485, 1.5 * 45366.20999999999]]})
+            af.coi_rounded = af.coi.excel.round(2)  # [10.13, 7558.49, 68049.32]
             ```
 
         """
-        from ..column.expression_proxy import ExpressionProxy
-        from .excel_functions.round import round as _excel_round
+        return self._emit("excel.round", attrs=(("num_digits", num_digits),))
 
-        base_expr = self._get_polars_expr()
-        parent_frame = self._get_parent_frame()
+    def norm_s_dist(self, *, cumulative: bool = True) -> "ExpressionProxy":
+        """Evaluate Excel's NORM.S.DIST(z, TRUE): the standard normal distribution.
 
-        # ColumnProxy and ExpressionProxy both resolve shape, so a composed
-        # per-period expression rounds element-wise, not just a named column.
-        is_list = self._proxy.shape == "list"
-        if is_list:
-            result_expr = base_expr.list.eval(_excel_round(pl.element(), num_digits))
-        else:
-            result_expr = _excel_round(base_expr, num_digits)
+        This is the Excel spelling of ``.norm_cdf()``, and it records that same
+        operation: ``af.z.excel.norm_s_dist()`` and ``af.z.norm_cdf()`` are one
+        node with one identity, so a model converted from a workbook and one
+        written from a textbook's N(d1) publish the same digest.
+        ``NORMSDIST(z)`` is the same function under Excel's older name.
 
-        return ExpressionProxy(result_expr, parent_frame)
+        Excel's ``NORM.DIST(x, mean, sd, TRUE)`` has no door of its own:
+        standardise first and write ``((x - mean) / sd).norm_cdf()``.
 
-    def days(self, start_date: "IntoExprColumn") -> "ExpressionProxy":
-        """Calculate the number of days between two dates, similar to Excel's DAYS.
-
-        This function computes the number of days between an end date (the column/expression
-        this accessor is on) and a start date. The result is positive if the end date
-        is after the start date, and negative if before.
+        The accuracy is ``.norm_cdf()``'s: 1e-12 relative to the mathematical
+        Φ wherever Φ is a normal double, exact at null, NaN and the
+        infinities, and about 1e-14 in practice. Excel's own bits are not
+        reproduced: its algorithm is unpublished, and its cached values sit
+        within about 1e-14 of the true Φ, so reconcile a converted workbook at
+        that order.
 
         !!! note "When to use"
-            *   **Duration Calculations**: Calculate the length of policy terms, claim periods, or other time-based intervals.
-            *   **Age Calculations**: Determine the number of days between birth dates and valuation dates for precise age calculations.
-            *   **Interest Calculations**: Calculate the exact number of days for interest accrual between two specific dates.
-            *   **Exposure Period Analysis**: Measure exposure periods in days for risk assessment or premium calculations.
+            *   **Workbook Conversion**: A cell reading ``NORM.S.DIST(z, TRUE)``,
+                ``NORMSDIST(z)`` or ``NORM.DIST(z, 0, 1, TRUE)``.
+            *   **Guarantees priced as options**: The N(-d1) and N(-d2) of a
+                GMDB or GMMB valued as a Black-Scholes put.
 
         Parameters
         ----------
-        start_date : IntoExprColumn
-            An expression or column representing the start dates. Can be a scalar date,
-            a column of dates.
+        cumulative : bool
+            ``True``, the distribution function, as Excel's second argument
+            says. ``False`` asks for the density, which is refused with the
+            density written in core operations:
+            ``(-z**2 / 2).exp() / (2 * math.pi) ** 0.5``.
+
+        Returns
+        -------
+        ExpressionProxy
+            Φ of each value: Float64, or List[Float64] for a list column.
+
+        Raises
+        ------
+        ValueError
+            If ``cumulative`` is ``False``.
+        TypeError
+            If ``cumulative`` is not a bool.
+
+        Examples
+        --------
+        The N(-d2) of a GMDB put, as the workbook writes it::
+
+            ```python
+            from gaspatchio import ActuarialFrame
+
+            af = ActuarialFrame({"d2": [0.24, -0.15]})
+            # =NORM.S.DIST(-d2, TRUE)
+            af.n_minus_d2 = (-af.d2).excel.norm_s_dist()  # [0.405165, 0.559618]
+            ```
+
+        """
+        if cumulative is False:
+            msg = (
+                "excel.norm_s_dist(cumulative=False) is the standard normal "
+                "density, which is not an operation of its own: no workbook in "
+                "evidence asks for it. Write it in core operations, which "
+                "record and run on every engine: for a column z, "
+                "(-z**2 / 2).exp() / (2 * math.pi) ** 0.5. The distribution "
+                "function, cumulative=True, is .excel.norm_s_dist() or "
+                ".norm_cdf()."
+            )
+            raise ValueError(msg)
+        if cumulative is not True:
+            msg = (
+                "excel.norm_s_dist(cumulative=...) takes True or False, as "
+                f"Excel's second argument does; it was given {cumulative!r}."
+            )
+            raise TypeError(msg)
+        from gaspatchio.column._declared import (  # noqa: PLC0415 -- import cycle
+            _call_declared_method,
+        )
+
+        return _call_declared_method("norm_cdf", self._proxy)
+
+    def days(
+        self, start_date: "ColumnProxy | ExpressionProxy | pl.Expr | datetime.date"
+    ) -> "ExpressionProxy":
+        """Calculate the number of days between two dates, similar to Excel's DAYS.
+
+        This function computes the number of days between an end date (the
+        column/expression this accessor is on) and a start date. The result is positive
+        if the end date is after the start date, and negative if before.
+
+        !!! note "When to use"
+            *   **Duration Calculations**: Calculate the length of policy terms, claim
+                periods, or other time-based intervals.
+            *   **Age Calculations**: Determine the number of days between birth dates
+                and valuation dates for precise age calculations.
+            *   **Interest Calculations**: Calculate the exact number of days for
+                interest accrual between two specific dates.
+            *   **Exposure Period Analysis**: Measure exposure periods in days for risk
+                assessment or premium calculations.
+
+        Parameters
+        ----------
+        start_date : ColumnProxy | ExpressionProxy | pl.Expr | datetime.date
+            The start dates: a column of dates, an expression, or a fixed
+            ``datetime.date``. A bare string is refused — pass ``af["col"]``
+            for the column.
 
         Returns
         -------
@@ -634,16 +718,12 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         ```
 
         """
-        from .excel_functions.days import days
+        refuse_bare_string_operand(start_date, parameter="start_date")
+        return self._emit("excel.days", (start_date,))
 
-        end_date_expr = self._get_polars_expr()
-        result_expr = days(end_date_expr, start_date)
-
-        from ..column.expression_proxy import ExpressionProxy
-        parent_frame = self._get_parent_frame()
-        return ExpressionProxy(result_expr, parent_frame)
-
-    def edate(self, months: "IntoExprColumn") -> "ExpressionProxy":
+    def edate(
+        self, months: "ColumnProxy | ExpressionProxy | pl.Expr | int"
+    ) -> "ExpressionProxy":
         """Add months to a date, similar to Excel's EDATE.
 
         This function adds the specified number of months to the date column/expression
@@ -651,16 +731,23 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         correctly (e.g., January 31 + 1 month = February 28/29).
 
         !!! note "When to use"
-            *   **Policy Anniversary Dates**: Calculate policy renewal dates or anniversary dates by adding months to the issue date.
-            *   **Payment Schedules**: Determine future premium due dates or benefit payment dates based on monthly intervals.
-            *   **Maturity Calculations**: Calculate policy or investment maturity dates by adding a term in months to the start date.
-            *   **Projection Periods**: Generate future valuation dates for cash flow projections or reserving calculations.
+            *   **Policy Anniversary Dates**: Calculate policy renewal dates or
+                anniversary dates by adding months to the issue date.
+            *   **Payment Schedules**: Determine future premium due dates or benefit
+                payment dates based on monthly intervals.
+            *   **Maturity Calculations**: Calculate policy or investment maturity dates
+                by adding a term in months to the start date.
+            *   **Projection Periods**: Generate future valuation dates for cash flow
+                projections or reserving calculations.
 
         Parameters
         ----------
-        months : IntoExprColumn
-            An expression or column representing the number of months to add.
-            Can be positive or negative.
+        months : ColumnProxy | ExpressionProxy | pl.Expr | int
+            The number of months to add, positive or negative: a whole
+            number, a column of them, or an expression, one per policy. A
+            double counts where it is whole; a fraction, text, a flag or a
+            count held per period is refused. A bare string is refused —
+            pass ``af["col"]`` for the column.
 
         Returns
         -------
@@ -688,32 +775,34 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         ```
 
         """
-        from .excel_functions.edate import edate
+        refuse_bare_string_operand(months, parameter="months")
+        return self._emit("excel.edate", (months,))
 
-        start_date_expr = self._get_polars_expr()
-        result_expr = edate(start_date_expr, months)
-
-        from ..column.expression_proxy import ExpressionProxy
-        parent_frame = self._get_parent_frame()
-        return ExpressionProxy(result_expr, parent_frame)
-
-    def eomonth(self, months: "IntoExprColumn") -> "ExpressionProxy":
+    def eomonth(
+        self, months: "ColumnProxy | ExpressionProxy | pl.Expr | int"
+    ) -> "ExpressionProxy":
         """Get the end of month after adding months, similar to Excel's EOMONTH.
 
         This function adds the specified number of months to the date column/expression
         this accessor is on, then returns the last day of that resulting month.
 
         !!! note "When to use"
-            *   **Reporting Periods**: Determine month-end dates for financial reporting or regulatory submissions.
-            *   **Interest Calculations**: Calculate interest accrual periods that end on the last day of each month.
-            *   **Benefit Payment Dates**: Set benefit payment dates to month-end when payments are made monthly.
-            *   **Policy Term Boundaries**: Define policy terms or coverage periods that end on month boundaries.
+            *   **Reporting Periods**: Determine month-end dates for financial reporting
+                or regulatory submissions.
+            *   **Interest Calculations**: Calculate interest accrual periods that end
+                on the last day of each month.
+            *   **Benefit Payment Dates**: Set benefit payment dates to month-end when
+                payments are made monthly.
+            *   **Policy Term Boundaries**: Define policy terms or coverage periods that
+                end on month boundaries.
 
         Parameters
         ----------
-        months : IntoExprColumn
-            An expression or column representing the number of months to add.
-            Can be positive or negative.
+        months : ColumnProxy | ExpressionProxy | pl.Expr | int
+            How far to move before the month's last day is taken, read
+            exactly as ``edate`` reads it: one whole number of months per
+            policy (a literal, a column or an expression), positive or
+            negative. A bare string is refused — pass ``af["col"]``.
 
         Returns
         -------
@@ -741,11 +830,9 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         ```
 
         """
-        from .excel_functions.eomonth import eomonth
+        refuse_bare_string_operand(months, parameter="months")
+        return self._emit("excel.eomonth", (months,))
 
-        start_date_expr = self._get_polars_expr()
-        result_expr = eomonth(start_date_expr, months)
 
-        from ..column.expression_proxy import ExpressionProxy
-        parent_frame = self._get_parent_frame()
-        return ExpressionProxy(result_expr, parent_frame)
+# What the API reference documents from this module.
+__all__ = ["ExcelColumnAccessor"]

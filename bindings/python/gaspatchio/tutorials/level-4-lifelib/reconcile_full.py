@@ -175,7 +175,9 @@ def compare_pv(gaspatchio_df: pl.DataFrame, lifelib_df: pl.DataFrame) -> bool:
         status = "PASS" if max_diff < TOLERANCE_PCT else "FAIL"
         if status == "FAIL":
             all_pass = False
-        print(f"{point_id:<8} {product_id:<8} {plan_id:<8} {max_diff:.4f}%{'':<12} {status}")
+        print(
+            f"{point_id:<8} {product_id:<8} {plan_id:<8} {max_diff:.4f}%{'':<12} {status}"
+        )
 
     print("-" * 60)
     return all_pass
@@ -278,13 +280,16 @@ def compare_intermediates(
         print(f"DETAIL: Point {detail_point} — per-timestep comparison")
         print(f"{'=' * 70}")
 
-        g_point = gaspatchio_exploded.filter(
-            pl.col("point_id") == detail_point
-        ).sort("t")
+        g_point = gaspatchio_exploded.filter(pl.col("point_id") == detail_point).sort(
+            "t"
+        )
         l_point = lifelib_df.filter(pl.col("point_id") == detail_point).sort("t")
 
         for g_col, l_col, desc, category in INTERMEDIATE_VARIABLES:
-            if g_col not in gaspatchio_exploded.columns or l_col not in lifelib_df.columns:
+            if (
+                g_col not in gaspatchio_exploded.columns
+                or l_col not in lifelib_df.columns
+            ):
                 continue
 
             # Find worst timestep for this variable/point
@@ -294,7 +299,14 @@ def compare_intermediates(
                 g_val = g_point[g_col][t]
                 l_val = l_point[l_col][t]
                 if g_val is not None and l_val is not None:
-                    diffs.append((t, float(g_val), float(l_val), pct_diff(float(g_val), float(l_val))))
+                    diffs.append(
+                        (
+                            t,
+                            float(g_val),
+                            float(l_val),
+                            pct_diff(float(g_val), float(l_val)),
+                        )
+                    )
 
             if not diffs:
                 continue
@@ -361,7 +373,9 @@ def main() -> int:
 
     lifelib_df = pl.read_parquet(ref_path)
     lifelib_pv = lifelib_df.filter(pl.col("t") == 0)
-    print(f"  Reference: {len(lifelib_df)} rows ({lifelib_df['point_id'].n_unique()} points × {lifelib_df['t'].max() + 1} timesteps)")
+    print(
+        f"  Reference: {len(lifelib_df)} rows ({lifelib_df['point_id'].n_unique()} points × {lifelib_df['t'].max() + 1} timesteps)"
+    )
 
     # Part 1: PV comparison (same as original reconcile.py)
     print("\n" + "=" * 70)
@@ -392,7 +406,9 @@ def main() -> int:
             for g, l, _, _ in INTERMEDIATE_VARIABLES
             if g in gaspatchio_exploded.columns and l in lifelib_df.columns
         )
-        print(f"  Intermediates:    PASS ({n_checked} variables, 8 points × 82 timesteps)")
+        print(
+            f"  Intermediates:    PASS ({n_checked} variables, 8 points × 82 timesteps)"
+        )
     else:
         print("RESULT: RECONCILIATION ISSUES FOUND")
         if not pv_pass:

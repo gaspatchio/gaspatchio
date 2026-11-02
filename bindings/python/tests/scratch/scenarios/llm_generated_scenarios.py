@@ -143,8 +143,12 @@ def run_single_scenario(  # noqa: PLR0913
     )
 
     # Time variables
-    af_proj.month = (af_proj.projection_months.dt.year() - val_date.year) * 12 + (
-        af_proj.projection_months.dt.month() - val_date.month
+    af_proj.month = (
+        af_proj.projection_months.polars_native().list.eval(pl.element().dt.year())
+        - val_date.year
+    ) * 12 + (
+        af_proj.projection_months.polars_native().list.eval(pl.element().dt.month())
+        - val_date.month
     )
     af_proj.duration_mth_t = af_proj.duration_mth + af_proj.month
     af_proj.duration = af_proj.duration_mth_t // 12

@@ -122,3 +122,36 @@ def test_round_charge_bounds_are_validated() -> None:
             death_benefit=pl.lit(10000.0),
             round_charge=-99,
         ).verify()
+
+
+def test_round_charge_rounds_the_fifteen_digit_credit_as_excel_does() -> None:
+    """The rollforward rounds the value Excel holds, its 15 digits, not the double.
+
+    UniversalLife.xlsx, 'Account Values -- Type A', row 74, column Q =
+    ROUND(MAX((H-P)*3%,0),2) with column H = 5657268.499999999 and column P = 0.
+    The credit is the double 169718.05499999996..., which Excel holds as
+    169718.055000000 and credits as 169718.06; rounding the double credited
+    169718.05.
+    """
+    af = _frame(av_init=[5657268.499999999], rate=[[0.03]])
+    b = af.projection.rollforward(states={"av": af["av_init"]})
+    b["av"].grow(af["rate"], round_charge=2, label="interest")
+
+    af.eop = compile_rollforward(b).expr_for("av")
+    eop = af.collect()["eop"][0][0]
+    assert eop == 5657268.499999999 + 169718.06
+
+
+def test_state_round_rounds_the_fifteen_digit_balance_as_excel_does() -> None:
+    """``.round(2)`` on the balance is Excel's ROUND too, over the 15 digits.
+
+    1.5 * 45366.20999999999 is the double 68049.31499999999..., held by Excel
+    as 68049.3150000000: ROUND(..., 2) is 68049.32.
+    """
+    af = _frame(av_init=[1.5 * 45366.20999999999], rate=[[0.0]])
+    b = af.projection.rollforward(states={"av": af["av_init"]})
+    b["av"].grow(af["rate"], label="nothing")
+    b["av"].round(2)
+
+    af.eop = compile_rollforward(b).expr_for("av")
+    assert af.collect()["eop"][0][0] == 68049.32

@@ -91,9 +91,9 @@ compute:
   Value-at-Risk and quantile risk measures.
 
 The DDSketch-backed per-period aggregators are part of the batched
-aggregate-and-stream work (repo `ref/41-backend-portability`, GSP-89/GSP-101):
-mergeable, bounded-memory quantile/CTE sketches folded one batch at a time, with
-the aggregate held to bucket-accuracy regardless of total portfolio scale.
+aggregate-and-stream work: mergeable, bounded-memory quantile/CTE sketches
+folded one batch at a time, with the aggregate held to bucket-accuracy
+regardless of total portfolio scale.
 
 ## When to reach for which
 

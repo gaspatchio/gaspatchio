@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Type stubs for the accessors package."""
-
 from . import base as base
 from . import date as date
 from . import excel as excel

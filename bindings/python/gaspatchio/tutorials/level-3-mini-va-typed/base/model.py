@@ -16,19 +16,20 @@ gaspatchio's Phase-1 typed input primitives:
   - ``Curve``: replaces the scalar DISCOUNT_RATE_ANNUAL constant. A
     ``Curve.from_zero_rates(tenors=[1.0, 30.0], rates=[0.04, 0.04])``
     encodes the flat 4% term structure explicitly. Discount factors are
-    computed via ``curve.discount_factor(year_fractions)`` over a Python
-    list, then broadcast as a literal list column — mathematically
-    identical to the original `exp(-t * log(1 + r_mth))` expression
-    (both reduce to ``(1.04)^(-month/12)``).
+    read through the recorded door — ``curve.discount_factor()`` on the
+    tracked ``af.t_years`` column — mathematically identical to the
+    original `exp(-t * log(1 + r_mth))` expression (both reduce to
+    ``(1.04)^(-month/12)``), and now the artifact can name the curve
+    the liabilities were discounted on.
 
   - ``Schedule``: generates the per-period year-fraction grid via
     ``Schedule.from_calendar_grid(start_date, n_periods, frequency)``
     with an ``OneTwelfth`` day-count. The schedule is then passed to
     ``af.projection.set(schedule=schedule)`` to declare the projection
-    time axis. ``schedule.cumulative_year_fractions()`` returns the
-    241 cumulative t_years vector ``[0, 1/12, ..., 240/12]`` directly,
-    which is passed to ``Curve.discount_factor`` as a Python list and
-    broadcast to every policy row as a literal list column.
+    time axis, and ``af.projection.t_years()`` reads the 241 cumulative
+    t_years values ``[0, 1/12, ..., 240/12]`` back off the frame as a
+    tracked list column — the canonical input to
+    ``Curve.discount_factor``.
 
 All section headers, comments, and output format are preserved 1:1.
 Golden parity gate: matches level-3-mini-va/base/expected_output.txt.
@@ -64,8 +65,9 @@ Key concepts:
     DataFrame.
 
   - Methods under .projection, .finance, .date, .excel are gaspatchio.
-    Everything else (.cast(), .clip(), .cum_prod(), .list.sum()) is
-    standard Polars — see the Polars documentation for those.
+    Declared operations such as .cum_prod() and .list.sum() also belong
+    to gaspatchio. Other engine methods, such as .cast(), are reached
+    through .polars_native() and record their Polars dependency.
 
 Sections:
   1. Inline Data & Assumptions
@@ -274,17 +276,17 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     )
 
     # Swap 3: Schedule — generates the per-period year-fraction grid using
-    # OneTwelfth day-count (each month = 1/12 of a year).
-    # ``cumulative_year_fractions()`` returns the 241 cumulative t_years
-    # values directly: [0, 1/12, 2/12, ..., 240/12]. This is the canonical
-    # input to Curve.discount_factor().
+    # OneTwelfth day-count (each month = 1/12 of a year). The schedule is
+    # declared on the frame below; Section 11 then reads its 241 cumulative
+    # t_years values [0, 1/12, 2/12, ..., 240/12] back off the frame with
+    # ``af.projection.t_years()``, which is the canonical input to
+    # Curve.discount_factor().
     schedule = Schedule.from_calendar_grid(
         start_date=VALUATION_DATE,
         n_periods=PROJECTION_MONTHS,
         frequency="1M",
         day_count=OneTwelfth(),
     )
-    t_years_list = schedule.cumulative_year_fractions()
 
     # =====================================================================
     # SECTION 2: TIME SETUP
@@ -294,9 +296,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
 
     # Duration at valuation (months since issue)
-    af.duration_mth_init = (VALUATION_DATE.year * 12 + VALUATION_DATE.month) - (
-        af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
-    )
+    af.duration_mth_init = af.entry_date_parsed.date.months_between(VALUATION_DATE)
 
     # Declare the projection time axis on the frame using the typed Schedule
     # constructed above. Passing the audit-anchored Schedule ensures that
@@ -306,9 +306,8 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     af.projection_date = af.projection.period_dates()
 
     # Month index (0 = valuation date)
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() has already stamped af.month -- elapsed whole months
+    # from the valuation date, 0, 1, 2, ... one per projection period.
 
     # Duration at time t (months since issue)
     af.duration_mth_t = af.duration_mth_init + af.month
@@ -328,7 +327,7 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # aggregate structure it calls table.lookup(age=...) internally —
     # identical mechanics to the plain lookup() call in level-3-mini-va.
     # If no match (e.g., age exceeds the table range), the result is null —
-    # use .clip(upper_bound=max_age) on the key to prevent this.
+    # cap the key with when(age > max_age).then(max_age).otherwise(age).
     # Multiple keys are supported: .at(age=af.age, duration=af.dur)
     af.mort_rate = mortality.at(age=af.age)
 
@@ -396,17 +395,12 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     af.combined_decrement = 1.0 - (1.0 - af.mort_rate_mth) * (1.0 - af.lapse_rate_mth)
 
     # Survival factor per period
-    af.survival_factor = 1.0 - af.combined_decrement
-
-    # Cumulative survival: the product of all survival factors up to each period.
-    # .cum_prod() is a standard Polars method that computes running products:
-    #   [0.995, 0.994, 0.993] → [0.995, 0.989, 0.982]
-    af.cumulative_survival = af.survival_factor.cum_prod()
-
-    # Shift to beginning-of-period: at t=0 all policies are in force (1.0),
-    # at t=1 the first month's decrement has been applied, etc.
-    # Same .projection.previous_period() pattern as the AV calculation above.
-    af.survival_prob = af.cumulative_survival.projection.previous_period(fill_value=1.0)
+    # Cumulative survival from the combined decrement:
+    #   tpx[t] = (1 - q[0]) * (1 - q[1]) * ... * (1 - q[t-1])
+    # rate_timing="beginning_of_period" is the default, and it is the
+    # convention wanted here: the decrement at t has not been applied yet,
+    # so the first element is 1.0 -- every policy in force at t=0.
+    af.survival_prob = af.combined_decrement.projection.cumulative_survival()
 
     # Maturity month (policy_term in years * 12, measured from issue)
     af.maturity_month = af.policy_term * 12
@@ -510,25 +504,27 @@ def main(af: ActuarialFrame) -> ActuarialFrame:
     # SECTION 11: DISCOUNT FACTORS & PRESENT VALUES
     # =====================================================================
 
-    # Swap 2 (continued): Curve-based discount factors.
+    # Swap 2 (continued): Curve-based discount factors, read through the
+    # recorded door.
     #
-    # curve.discount_factor(t_years_list) accepts a Python list[float] and
-    # returns list[float]. The Schedule-derived t_years_list (length 241)
-    # gives the same values as month/12: [0.0, 1/12, 2/12, ..., 240/12].
+    # af.projection.t_years() is the projection's own cumulative year-fraction
+    # grid as a tracked list column — the Schedule declared in Section 1
+    # supplies it, so the values are [0.0, 1/12, 2/12, ..., 240/12], length
+    # 241. Handing that column to curve.discount_factor() records the read:
+    # the audit artifact grows the curve's own assumption entry (its knots and
+    # their digest), and the discount-factor node's fingerprint moves when the
+    # knots move even though the line of code does not. So a reviewer can
+    # re-hash the curve these liabilities were discounted on, and a
+    # quarter-over-quarter comparison can say which curve moved
+    # (*Audit by default*). Pre-computing the same vector in Python and
+    # handing it over as a literal gives identical numbers that the artifact
+    # can say nothing about.
     #
     # Math: level-3 computes exp(-month/12 * log(1.04)) = (1.04)^(-month/12).
     #       Curve.discount_factor(t) = (1 + 0.04)^(-t) = (1.04)^(-month/12).
     #       Identical for t = month/12. Max float delta < 6e-15 (machine epsilon).
-    #
-    # Compute the discount-factor vector via Curve + Schedule cumulative fractions,
-    # then broadcast as a literal list column (same list for every policy row).
-    # pl.lit(Series([list])).first() is the Polars idiom for "broadcast this
-    # single list to all rows" — .first() treats the length-1 series as a
-    # scalar, which Polars broadcasts across the frame height.
-    disc_factors_list = curve.discount_factor(t_years_list)  # list[float], len 241
-    af.disc_factors = pl.lit(
-        pl.Series("disc_factors", [disc_factors_list], dtype=pl.List(pl.Float64))
-    ).first()
+    af.t_years = af.projection.t_years()
+    af.disc_factors = curve.discount_factor(af.t_years)
 
     # Present values
     af.pv_claims = (af.claims * af.disc_factors).list.sum()

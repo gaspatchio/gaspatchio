@@ -3,39 +3,33 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-MVP Gaspatchio Model: GMDB PLAN_A Single Policy
+GMDB / GMAB variable annuity, reconciled to lifelib IntegratedLife.
 
-This is a minimal model built incrementally to match lifelib output.
-Start with the simplest possible implementation and add complexity
-one variable at a time, reconciling after each step.
+A full monthly projection of a guaranteed-benefit variable annuity: select
+mortality with duration scalars, dynamic lapse driven by how far the account
+value sits in the money, an account-value recurrence, death / lapse / maturity
+claims, expenses, commissions, and the present values those cashflows come to.
+Every present value matches lifelib to 0.0000% (``reconcile.py``), and so does
+every intermediate variable, period by period (``reconcile_full.py``).
 
-Model Point: point_id=1, GMDB PLAN_A, Male, age 70, 10-year term, 100 policies
+The projection reads like a worksheet. Simple arithmetic is written with
+operators, because the formula is the calculation; the operations with an
+actuarial name of their own -- cumulative survival, the account-value
+accumulation, discount factors, period shifts -- are called by that name.
 
-Build Order (Phase 1 - Base Decrements - COMPLETE):
-1. [x] Basic structure with projection timeline
-2. [x] mort_rate - mortality lookup (select table + scalars)
-3. [x] pols_death - deaths
-4. [x] base lapse_rate - lapse lookup (without dynamic adjustment)
-5. [x] pols_lapse - lapses
-6. [x] pols_if with combined decrements
-   STATUS: All policy variables match lifelib (0.0000% diff)
-   NOTE: Dynamic lapse disabled in lifelib for this phase (see learnings.md)
-
-Build Order (Phase 2 - Account Value & Dynamic Lapse):
-7. [x] account value (av_pp_at) - requires scenario data
-8. [x] dynamic lapse factor
-9. [x] re-enable dynamic lapse in lifelib
-
-Build Order (Phase 3 - Cashflows):
-10. [x] claims (death, lapse, maturity)
-11. [x] premiums
-12. [x] expenses (acquisition + maintenance with inflation)
-13. [x] commissions
-14. [x] net cashflow (inv_income + av_change)
-
-Build Order (Phase 4 - Present Values - COMPLETE):
-14. [x] discount rates
-15. [x] present values
+Sections
+--------
+1.  Time setup: entry duration, remaining term, the projection timeline
+2.  Mortality rates (select table x duration scalar, annual -> monthly)
+3.  Base lapse rates
+5.  Investment returns per fund
+6.  Account value (a linear recurrence through ``projection.accumulate``)
+7.  Dynamic lapse (DL001 / DL002 in-the-money formulas)
+8.  Policy counts (cumulative survival, maturities, new business, decrements)
+9.  Death claims       10. Lapse claims (net of surrender charge)
+11. Maturity claims    12. Premiums
+13. Expenses           14. Commissions
+15. Net cashflow       16. Discount factors        17. Present values
 """
 
 import datetime
@@ -45,8 +39,21 @@ from typing import Literal
 import polars as pl
 from gaspatchio import ActuarialFrame, when
 from gaspatchio.assumptions import Table
+from gaspatchio.scenarios import PeriodSum, Sum
 
 StorageModeType = Literal["auto", "hash", "array"]
+
+# What a total of this book means. Two columns rather than seventeen: a
+# portfolio total is a number somebody reports, and the rest of the model
+# is how it was arrived at. Nothing here folds a rate, because there is no
+# portfolio value of a monthly mortality rate.
+#
+# This is the tuple `run_aggregated` takes, so a scenario sweep and
+# `gspio calc-graph --portfolio` read one declaration rather than two.
+# `Sum` folds across the book and `PeriodSum` down the timeline:
+# `pv_net_cf` holds one value per policy and `net_cf` one per month, so
+# each column takes the fold its own shape asks for.
+AGGREGATIONS = (Sum("pv_net_cf"), PeriodSum("net_cf"))
 
 # Model configuration — overridable for different model point sets
 VALUATION_DATE = datetime.date(2024, 1, 1)  # base_date + 1 day
@@ -63,7 +70,7 @@ LAPSE_DURATION_CAP = 14  # Lapse table has durations 0-14
 
 
 def load_assumptions(storage_mode: StorageModeType = "auto"):
-    """Load assumption tables needed for MVP.
+    """Load the assumption tables the projection reads.
 
     Args:
         storage_mode: Storage backend for tables - "auto" (default), "hash", or "array".
@@ -204,8 +211,11 @@ def main(
 
     # Join product params to get mort_table_male, mort_scalar_id, lapse_id, dyn_lapse_param_id, dyn_lapse_floor, maint_fee_rate
     # Also get GMDB/GMAB flags, commission, load, surrender charge, and premium type
-    mp = af.collect()
-    mp = mp.join(
+    # The enrichment happens on the frame itself rather than on a collected
+    # DataFrame that is then re-wrapped: every column arriving from a
+    # parameter table comes through a door the frame records, so the model
+    # can still say where maint_fee_rate came from (*Audit by default*).
+    af = af.join(
         product_params.select(
             [
                 "product_id",
@@ -228,30 +238,30 @@ def main(
         ),
         on=["product_id", "plan_id"],
         how="left",
+        maintain_order="left",
     )
 
-    # Join dynamic lapse parameters (formula_id, U, L, M, D, FactorCap, FactorFloor, Y, Power)
-    mp = mp.join(
-        dyn_lapse_params.select(
-            [
-                "index",
-                "formula_id",
-                "U",
-                "L",
-                "M",
-                "D",
-                "FactorCap",
-                "FactorFloor",
-                "Y",
-                "Power",
-            ]
-        ),
-        left_on="dyn_lapse_param_id",
-        right_on="index",
-        how="left",
+    # Dynamic lapse parameters (formula_id, U, L, M, D, FactorCap, FactorFloor, Y, Power).
+    # DL001 uses U/L/M/D and DL002 uses FactorCap/FactorFloor/Y/Power, so every
+    # row of the parameter table leaves the other formula's columns empty. Those
+    # neutral defaults belong to the parameter table, so they are filled on the
+    # assumption data before it reaches the frame rather than on the model
+    # points afterwards.
+    dyn_lapse_params_filled = dyn_lapse_params.select(
+        [
+            "index",
+            "formula_id",
+            "U",
+            "L",
+            "M",
+            "D",
+            "FactorCap",
+            "FactorFloor",
+            "Y",
+            "Power",
+        ]
     ).with_columns(
         [
-            # Fill nulls with neutral defaults (DL001 uses U/L/M/D, DL002 uses FactorCap/FactorFloor/Y/Power)
             pl.col("U").fill_null(2.0),
             pl.col("L").fill_null(0.5),
             pl.col("M").fill_null(0.0),
@@ -262,6 +272,13 @@ def main(
             pl.col("Power").fill_null(1.0),
         ]
     )
+    af = af.join(
+        dyn_lapse_params_filled,
+        left_on="dyn_lapse_param_id",
+        right_on="index",
+        how="left",
+        maintain_order="left",
+    )
 
     # Join space parameters (expense_acq, expense_maint)
     # Note: All model points in this dataset are GMXB products (GMDB/GMAB)
@@ -270,33 +287,37 @@ def main(
         ["expense_acq", "expense_maint"]
     )
 
-    # Cross join to add expense parameters to all model points
-    # (all model points use GMXB space parameters)
-    mp = mp.with_columns(
-        [
-            pl.lit(gmxb_expenses["expense_acq"].item()).alias("expense_acq"),
-            pl.lit(gmxb_expenses["expense_maint"].item()).alias("expense_maint"),
-        ]
-    )
-
-    af = ActuarialFrame(mp)
+    # Every model point uses the GMXB space parameters, so each expense is one
+    # number written straight onto the frame.
+    af.expense_acq = float(gmxb_expenses["expense_acq"].item())
+    af.expense_maint = float(gmxb_expenses["expense_maint"].item())
 
     # =========================================================================
     # SECTION 1: TIME SETUP
     # =========================================================================
 
-    # Parse entry date
+    # Parse the entry date. The model points carry it as text, and turning
+    # text into a date is the one step in this section with no gaspatchio
+    # form of its own: the engine's own parser does it.
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
 
-    # Calculate initial duration in months (lifelib formula)
-    # duration_mth_init = (val_date.year * 12 + val_date.month) - (entry_date.year * 12 + entry_date.month)
-    af.duration_mth_init = (VALUATION_DATE.year * 12 + VALUATION_DATE.month) - (
-        af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
-    )
+    # Duration in months at the valuation date: whole calendar months from
+    # entry to valuation, which is exactly what lifelib's
+    # (val.year * 12 + val.month) - (entry.year * 12 + entry.month) counts.
+    af.duration_mth_init = af.entry_date_parsed.date.months_between(VALUATION_DATE)
 
-    # Remaining term in months per policy, capped at projection horizon
-    af.remaining_term_months = (af.policy_term * 12 - af.duration_mth_init).clip(
-        lower_bound=0, upper_bound=projection_months
+    # Remaining term in months per policy: floored at zero, because a policy
+    # already past its term projects nothing, and capped at the projection
+    # horizon.
+    af.term_months_left = af.policy_term * 12 - af.duration_mth_init
+    af.remaining_term_months = (
+        when(af.term_months_left < 0)
+        .then(0)
+        .otherwise(
+            when(af.term_months_left > projection_months)
+            .then(projection_months)
+            .otherwise(af.term_months_left)
+        )
     )
 
     # Create per-policy projection timeline (each policy projects only as long as
@@ -311,12 +332,13 @@ def main(
     )
     af.projection_date = af.projection.period_dates()
 
-    # Month index (0 = valuation date)
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
+    # projection.set() has already stamped af.month -- elapsed whole months
+    # from the valuation date, 0, 1, 2, ... down each policy's own timeline.
+    # Deriving it a second time from the period dates would be the same
+    # number written twice.
 
-    # Duration at time t (months since issue) - rename to avoid conflict with input column
+    # Duration at time t (months since issue). Named duration_mth_t to avoid
+    # a clash with the duration_mth input column.
     af.duration_mth_t = af.duration_mth_init + af.month
 
     # Duration in years (for assumption lookups)
@@ -330,13 +352,18 @@ def main(
     # =========================================================================
 
     # Select mortality table based on sex
-    # For MVP, we know it's Male, but let's be general
+    # Every model point in this set is male; the lookup stays general.
     af.mort_table_id = (
         when(af.sex == "M").then(af.mort_table_male).otherwise(af.mort_table_female)
     )
 
-    # Duration capped for select period lookup
-    af.duration_capped = af.duration.clip(upper_bound=SELECT_PERIOD_LEN - 1)
+    # Duration capped for select period lookup: past the select period the
+    # table holds one ultimate row, so every later duration reads that row.
+    af.duration_capped = (
+        when(af.duration > SELECT_PERIOD_LEN - 1)
+        .then(SELECT_PERIOD_LEN - 1)
+        .otherwise(af.duration)
+    )
 
     # Base mortality rate from select table
     af.base_mort_rate = mortality_select.lookup(
@@ -345,10 +372,16 @@ def main(
         duration=af.duration_capped,
     )
 
-    # Mortality scalar by duration
+    # Mortality scalar by duration, on a key capped at the scalar table's
+    # last duration.
+    af.scalar_duration_capped = (
+        when(af.duration > SCALAR_DURATION_CAP)
+        .then(SCALAR_DURATION_CAP)
+        .otherwise(af.duration)
+    )
     af.mort_scalar = mortality_scalars.lookup(
         scalar_id=af.mort_scalar_id,
-        duration=af.duration.clip(upper_bound=SCALAR_DURATION_CAP),
+        duration=af.scalar_duration_capped,
     )
 
     # Final mortality rate (annual)
@@ -370,7 +403,11 @@ def main(
     # =========================================================================
 
     # Duration capped for lapse lookup (L001 goes to duration 14)
-    af.lapse_duration_capped = af.duration.clip(upper_bound=LAPSE_DURATION_CAP)
+    af.lapse_duration_capped = (
+        when(af.duration > LAPSE_DURATION_CAP)
+        .then(LAPSE_DURATION_CAP)
+        .otherwise(af.duration)
+    )
 
     # Base lapse rate from lapse table (annual rate)
     # Same lifelib off-by-one as mort_scalar: lapse_len()=15 caps at 15 not 14.
@@ -475,7 +512,7 @@ def main(
         .otherwise(0.0)
     )
 
-    # Shifted growth: multiply[t] = growth[t-1], with 1.0 at t=0
+    # Shifted growth: multiplier[t] = growth[t-1], with 1.0 at t=0
     # At t=0 no growth is applied (state = initial + premium)
     af.shifted_growth = af.combined_growth_factor.projection.previous_period(
         fill_value=1.0
@@ -484,8 +521,8 @@ def main(
     # Accumulate: av_bef_fee[t] = av_bef_fee[t-1] * growth[t-1] + prem_to_av[t]
     af.av_pp_bef_fee = af.shifted_growth.projection.accumulate(
         initial=af.av_pp_init,
-        multiply=af.shifted_growth,
-        add=af.prem_to_av,
+        multiplier=af.shifted_growth,
+        addend=af.prem_to_av,
     )
 
     # av_pp_bef_prem is av_pp_bef_fee before premium (for use in maturity claims)
@@ -513,11 +550,27 @@ def main(
 
     # Dynamic lapse params (formula_id, U, L, M, D, etc.) already joined in data preparation
 
-    # DL001 formula: clip(1 - M * (1/ITM - D), L, U)
-    af.dl001_factor = (1.0 - af.M * (1.0 / af.itm - af.D)).clip(af.L, af.U)
+    # DL001 formula: 1 - M * (1/ITM - D), held between the floor L and the cap U
+    af.dl001_unbounded = 1.0 - af.M * (1.0 / af.itm - af.D)
+    af.dl001_factor = (
+        when(af.dl001_unbounded < af.L)
+        .then(af.L)
+        .otherwise(
+            when(af.dl001_unbounded > af.U).then(af.U).otherwise(af.dl001_unbounded)
+        )
+    )
 
-    # DL002 formula: clip(Y * ITM^Power, FactorFloor, FactorCap)
-    af.dl002_factor = (af.Y * af.itm**af.Power).clip(af.FactorFloor, af.FactorCap)
+    # DL002 formula: Y * ITM^Power, held between FactorFloor and FactorCap
+    af.dl002_unbounded = af.Y * af.itm**af.Power
+    af.dl002_factor = (
+        when(af.dl002_unbounded < af.FactorFloor)
+        .then(af.FactorFloor)
+        .otherwise(
+            when(af.dl002_unbounded > af.FactorCap)
+            .then(af.FactorCap)
+            .otherwise(af.dl002_unbounded)
+        )
+    )
 
     # Select factor based on formula_id
     af.dyn_lapse_factor = (
@@ -526,9 +579,14 @@ def main(
 
     # Final lapse_rate: max(dyn_lapse_floor, dyn_lapse_factor * base_lapse_rate)
     # Zero at durations beyond lapse table range (lifelib off-by-one: lapse_len=15, table 0-14)
+    af.lapse_rate_unfloored = af.dyn_lapse_factor * af.base_lapse_rate
     af.lapse_rate = (
         when((af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP))
-        .then((af.dyn_lapse_factor * af.base_lapse_rate).clip(af.dyn_lapse_floor, None))
+        .then(
+            when(af.lapse_rate_unfloored < af.dyn_lapse_floor)
+            .then(af.dyn_lapse_floor)
+            .otherwise(af.lapse_rate_unfloored)
+        )
         .otherwise(0.0)
     )
 
@@ -542,14 +600,12 @@ def main(
     # Combined decrement rate: 1 - (1 - mort) * (1 - lapse)
     af.combined_decrement = 1.0 - (1.0 - af.mort_rate_mth) * (1.0 - af.lapse_rate_mth)
 
-    # Survival factor per period
-    af.survival_factor = 1.0 - af.combined_decrement
-
-    # Cumulative survival: product of survival factors through each period
-    af.cumulative_survival = af.survival_factor.cum_prod()
-
-    # Shift by 1: survival_prob at t=0 is 1.0, at t=1 is cumulative[0], etc.
-    af.survival_prob = af.cumulative_survival.projection.previous_period(fill_value=1.0)
+    # Cumulative survival from the combined decrement:
+    #   tpx[t] = (1 - q[0]) * (1 - q[1]) * ... * (1 - q[t-1])
+    # rate_timing="beginning_of_period" is the default and the convention this
+    # model needs: the decrement at t has NOT yet been applied, so the first
+    # element is 1.0 and every policy is fully in force at the valuation date.
+    af.survival_prob = af.combined_decrement.projection.cumulative_survival()
 
     # Maturity month (policy_term in years * 12)
     af.maturity_month = af.policy_term * 12
@@ -597,9 +653,6 @@ def main(
     # - For GMDB products: max(sum_assured, av_pp_mid_mth)
     # - For non-GMDB products: just av_pp_mid_mth
 
-    # Cast sum_assured to Float64 for type consistency
-    af.sum_assured_f = af.sum_assured.cast(pl.Float64)
-
     # For GMDB products, calculate max(sum_assured, av_pp_mid_mth)
     # For non-GMDB products, just use av_pp_mid_mth
     # Use nested when() to handle both the GMDB check and the max logic
@@ -607,9 +660,9 @@ def main(
         when(af.has_gmdb)
         .then(
             # GMDB: return sum_assured if it's greater, else av_pp_mid_mth
-            when(af.av_pp_mid_mth > af.sum_assured_f)
+            when(af.av_pp_mid_mth > af.sum_assured)
             .then(af.av_pp_mid_mth)
-            .otherwise(af.sum_assured_f)
+            .otherwise(af.sum_assured)
         )
         .otherwise(af.av_pp_mid_mth)
     )
@@ -636,8 +689,10 @@ def main(
 
     # Cap duration for surrender charge lookup (table only has durations 0-9)
     SURR_CHARGE_DURATION_CAP = 9
-    af.duration_year_capped = af.duration_year.clip(
-        upper_bound=SURR_CHARGE_DURATION_CAP
+    af.duration_year_capped = (
+        when(af.duration_year > SURR_CHARGE_DURATION_CAP)
+        .then(SURR_CHARGE_DURATION_CAP)
+        .otherwise(af.duration_year)
     )
 
     # Lookup surrender charge rate by duration_year and surr_charge_id.
@@ -684,9 +739,9 @@ def main(
         when(af.has_gmab)
         .then(
             # GMAB: return sum_assured if it's greater, else av_pp_bef_prem
-            when(af.av_pp_bef_prem > af.sum_assured_f)
+            when(af.av_pp_bef_prem > af.sum_assured)
             .then(af.av_pp_bef_prem)
-            .otherwise(af.sum_assured_f)
+            .otherwise(af.sum_assured)
         )
         .otherwise(af.av_pp_bef_prem)
     )
@@ -851,23 +906,33 @@ def main(
     # For stochastic scenarios (integer scenario_id like 1, 2, 3):
     #   always use "BASE" discount rates (stochastic variation is in fund returns only)
     # For no scenarios: use "BASE"
-    if "scenario_id" in af.columns:
-        # Check dtype by getting schema from underlying data
-        scenario_dtype = mp.schema.get("scenario_id", pl.Int64)
-        is_string_scenario = scenario_dtype in (pl.Utf8, pl.String)
-        scenario_col = af.scenario_id if is_string_scenario else pl.lit("BASE")
-    else:
-        scenario_col = pl.lit("BASE")
-
+    # A bare string is a dimension VALUE (VLOOKUP semantics), so "USD" and
+    # "BASE" name the currency and the rate scenario themselves; a column is
+    # named as af.scenario_id.
+    # The dtype IS the distinction, so ask the frame for it -- af.schema reads
+    # it off the plan, nothing run. A label is a label however parquet stored
+    # it: Categorical and Enum are labels too, never a quiet fall back to BASE.
+    rate_scenario = (
+        af.scenario_id
+        if af.schema.get("scenario_id") in (pl.String, pl.Categorical, pl.Enum)
+        else "BASE"
+    )
     af.disc_rate = risk_free_rates.lookup(
-        scenario=scenario_col, currency=pl.lit("USD"), year=af.year
+        scenario=rate_scenario, currency="USD", year=af.year
     )
 
     # Convert annual rate to monthly: (1 + r_ann)^(1/12) - 1
     af.disc_rate_mth = (1.0 + af.disc_rate) ** (1.0 / 12.0) - 1.0
 
-    # Discount factors: (1 + disc_rate_mth)^(-month) per period.
-    af.disc_factors = (1.0 + af.disc_rate_mth) ** (af.month.cast(pl.Float64) * -1.0)
+    # Discount factors: (1 + disc_rate_mth)^(-month) per period. "spot" is
+    # that formula exactly -- the period's own rate raised to minus the
+    # period's own month -- which is how lifelib builds them.
+    af = af.finance.discount_factor(
+        rate_col="disc_rate_mth",
+        periods_col="month",
+        output_col="disc_factors",
+        method="spot",
+    )
 
     # =========================================================================
     # SECTION 17: PRESENT VALUES

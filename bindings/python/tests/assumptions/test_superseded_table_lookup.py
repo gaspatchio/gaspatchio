@@ -6,7 +6,7 @@
 
 Tables resolve by NAME at execution time (last-writer-wins), so a ``Table``
 object whose name has since been re-registered with different data would
-silently serve the newer values — the vm20 clean-room shape where a scenario
+silently serve the newer values — the shape where a scenario
 override built before ``load_assumptions()`` resolves to base data and the
 sweep reports zero sensitivity. A lookup from such a stale object is
 guaranteed wrong, so it refuses loudly instead.

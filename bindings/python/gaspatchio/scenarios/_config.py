@@ -4,7 +4,7 @@
 
 # ABOUTME: LLM-friendly scenario config parsing for declarative shock specifications.
 # ABOUTME: Converts dict/JSON configs to Shock objects for runtime injection.
-# ruff: noqa: PLR2004, E501, C901, PLR0912, PLR0915
+# ruff: noqa: PLR2004, E501, C901
 
 """LLM-friendly scenario config parsing for declarative shock specifications.
 
@@ -31,14 +31,17 @@ Syntactic sugar for simple cases:
 ```json
 {"table": "mortality", "multiply": 1.15}
 {"table": "lapse", "multiply": 1.5, "clip": [null, 1.0]}
-{"param": "infl_rate", "add": 0.01}
+{"column": "infl_rate", "add": 0.01}
 ```
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from gaspatchio.scenarios._aggregators import _AGGREGATOR_REGISTRY
+from gaspatchio.scenarios._metric import _Partitioned
 from gaspatchio.scenarios.shocks import (
     AdditiveShock,
     ClipShock,
@@ -47,14 +50,13 @@ from gaspatchio.scenarios.shocks import (
     MinShock,
     MultiplicativeShock,
     OverrideShock,
-    ParameterShock,
     PipelineShock,
     Shock,
     TimeConditionalShock,
 )
 
 if TYPE_CHECKING:
-    from gaspatchio.scenarios._metric import Aggregator, _Partitioned
+    from gaspatchio.scenarios._metric import Aggregator
 
 # Valid operation keys in shock config (basic operations)
 SHOCK_OPERATIONS = {"multiply", "add", "set"}
@@ -62,14 +64,10 @@ SHOCK_OPERATIONS = {"multiply", "add", "set"}
 # Extended operations for the unified schema
 EXTENDED_OPERATIONS = {"clip", "max", "min"}
 
-# Modifier keys that wrap operations
-MODIFIER_KEYS = {"where", "when", "pipeline"}
 
-# Reserved keys that are not operations
-RESERVED_KEYS = {"table", "column", "where", "when", "pipeline", "param"}
-
-
-def _parse_clip_value(clip_config: dict | list | None) -> ClipShock:
+def _parse_clip_value(
+    clip_config: dict[str, Any] | list[Any] | None,
+) -> ClipShock:
     """Parse clip configuration into ClipShock.
 
     Args:
@@ -100,57 +98,133 @@ def _parse_clip_value(clip_config: dict | list | None) -> ClipShock:
     raise ValueError(msg)
 
 
-def _parse_pipeline_step(step: dict[str, Any]) -> Shock:
-    """Parse a single step in a pipeline into a Shock.
+# Every key a shock entry may hold: its target, its operation, and what
+# confines it. Anything else is refused, so a misspelt key is never read as
+# a shock that does nothing.
+_TARGET_KEYS = {"table", "column", "param"}
+_CONFINING_KEYS = {"where", "when"}
+_SHOCK_KEYS = (
+    _TARGET_KEYS
+    | SHOCK_OPERATIONS
+    | EXTENDED_OPERATIONS
+    | _CONFINING_KEYS
+    | {"pipeline", "shock"}
+)
 
-    Pipeline steps are simpler - they don't have table/column/where/when.
+
+def _two_shocks(config: object, operation: str) -> tuple[Any, Any]:
+    """Return the two shock entries a ``max`` or ``min`` takes."""
+    if not isinstance(config, list) or len(config) != 2:
+        msg = f"{operation} operation requires array of 2 shock configs"
+        raise ValueError(msg)
+    return config[0], config[1]
+
+
+def _core(config: dict[str, Any]) -> Shock:  # noqa: PLR0911 -- one per operation
+    """Return the shock an entry's operation names, before where/when confine it."""
+    if "shock" in config:
+        return _parse_node(config["shock"])
+    if "pipeline" in config:
+        steps = config["pipeline"]
+        if not isinstance(steps, list) or len(steps) == 0:
+            msg = "pipeline must be a non-empty list of shock steps"
+            raise ValueError(msg)
+        return PipelineShock(shocks=tuple(_parse_node(step) for step in steps))
+    if "max" in config:
+        a, b = _two_shocks(config["max"], "max")
+        return MaxShock(shock_a=_parse_node(a), shock_b=_parse_node(b))
+    if "min" in config:
+        a, b = _two_shocks(config["min"], "min")
+        return MinShock(shock_a=_parse_node(a), shock_b=_parse_node(b))
+    operations_found = sorted(op for op in SHOCK_OPERATIONS if op in config)
+    has_clip = "clip" in config
+    if not operations_found and not has_clip:
+        all_ops = SHOCK_OPERATIONS | EXTENDED_OPERATIONS | {"pipeline", "max", "min"}
+        msg = (
+            f"Shock config must include an operation: {sorted(all_ops)}. "
+            f"Got keys: {list(config.keys())}"
+        )
+        raise ValueError(msg)
+    if len(operations_found) > 1:
+        msg = (
+            f"Shock config must include exactly one basic operation, "
+            f"but found multiple: {operations_found}"
+        )
+        raise ValueError(msg)
+    if not operations_found:
+        return _parse_clip_value(config["clip"])
+    operation = operations_found[0]
+    value = config[operation]
+    base: Shock
+    if operation == "multiply":
+        base = MultiplicativeShock(factor=value)
+    elif operation == "add":
+        base = AdditiveShock(delta=value)
+    else:  # "set"
+        base = OverrideShock(value=value)
+    # Syntactic sugar: an operation beside a clip is the two in sequence.
+    if has_clip:
+        return PipelineShock(shocks=(base, _parse_clip_value(config["clip"])))
+    return base
+
+
+def _parse_node(config: object) -> Shock:
+    """Parse one shock entry, at any depth, into a Shock.
+
+    The operation is read first, then ``where`` confines it to rows, then
+    ``when`` to periods -- so ``{multiply, where, when}`` is a time condition
+    around a filter around a multiply, as written. A target (``table:`` or
+    ``column:``, with ``param:`` read as ``column:``) lands on the shock this
+    entry builds.
     """
-    if "multiply" in step:
-        return MultiplicativeShock(factor=step["multiply"])
-    if "add" in step:
-        return AdditiveShock(delta=step["add"])
-    if "set" in step:
-        return OverrideShock(value=step["set"])
-    if "clip" in step:
-        return _parse_clip_value(step["clip"])
-    if "max" in step:
-        # max takes two shock configs
-        max_config = step["max"]
-        if not isinstance(max_config, list) or len(max_config) != 2:
-            msg = "max operation requires array of 2 shock configs"
-            raise ValueError(msg)
-        return MaxShock(
-            shock_a=_parse_pipeline_step(max_config[0]),
-            shock_b=_parse_pipeline_step(max_config[1]),
+    if not isinstance(config, dict):
+        msg = f"A shock entry is a mapping of operation keys; got {config!r}"
+        raise ValueError(msg)  # noqa: TRY004 -- a malformed recipe, as the rest are
+    unknown = sorted(set(config) - _SHOCK_KEYS)
+    if unknown:
+        msg = (
+            f"Shock config has keys a shock does not take: {unknown}. A shock "
+            f"entry holds a target ({sorted(_TARGET_KEYS - {'param'})}), one "
+            f"operation ({sorted(SHOCK_OPERATIONS | EXTENDED_OPERATIONS | {'pipeline'})}) "
+            "and optionally where/when."
         )
-    if "min" in step:
-        # min takes two shock configs
-        min_config = step["min"]
-        if not isinstance(min_config, list) or len(min_config) != 2:
-            msg = "min operation requires array of 2 shock configs"
-            raise ValueError(msg)
-        return MinShock(
-            shock_a=_parse_pipeline_step(min_config[0]),
-            shock_b=_parse_pipeline_step(min_config[1]),
+        raise ValueError(msg)
+    if "param" in config and "column" in config:
+        msg = (
+            "Shock config names both column: and param:. param: is read as "
+            "column: -- the model-point column the shock moves -- so give one."
         )
-    msg = f"Unknown pipeline step operation: {list(step.keys())}"
-    raise ValueError(msg)
+        raise ValueError(msg)
+    shock = _core(config)
+    if config.get("where") is not None:
+        shock = FilteredShock(shock=shock, where=config["where"])
+    if config.get("when") is not None:
+        shock = TimeConditionalShock(shock=shock, when=config["when"])
+    table = config.get("table")
+    column = config.get("column", config.get("param"))
+    if table is None and column is None:
+        return shock
+    return replace(shock, table=table, column=column)  # type: ignore[type-var]
 
 
-def parse_shock_config(config: dict[str, Any]) -> Shock | ParameterShock:
+def parse_shock_config(config: dict[str, Any]) -> Shock:
     """
     Parse a single shock configuration dict into a Shock object.
 
     Converts LLM-friendly dict format into the appropriate Shock subclass.
     This enables LLMs to generate JSON/dict configs that the framework
-    can execute without writing Python code.
+    can execute without writing Python code, and it is the form
+    ``ScenarioRun.to_yaml`` writes, so a plan written down reads back to
+    the same ``source_sha()``.
 
     Supports the unified schema with:
     - Basic operations: multiply, add, set
     - Value constraints: clip
-    - Composable operations: pipeline, max, min
+    - Composable operations: pipeline, max, min (whose steps are shock
+      entries of any kind)
     - Dimension filters: where
     - Time conditions: when
+    - A confined shock written out in full: ``{where: ..., shock: {...}}``
 
     !!! note "When to use"
         - Parsing LLM-generated shock specifications
@@ -159,17 +233,20 @@ def parse_shock_config(config: dict[str, Any]) -> Shock | ParameterShock:
 
     Args:
         config: Dict with keys:
-            - table (required): Target table name
-            - column (optional): Target column within table
+            - table or column (required): the assumption table the shock
+              moves, by the name its Table was built with, or the
+              model-point column it moves. ``param`` is read as ``column``.
             - One operation or pipeline (required)
             - where (optional): Dimension filter conditions
             - when (optional): Time condition
 
     Returns:
-        Appropriate Shock subclass instance
+        Appropriate Shock subclass instance, its target on the outermost
+        shock only.
 
     Raises:
-        ValueError: If config is missing required fields or has invalid structure
+        ValueError: If config is missing required fields, holds a key a shock
+            does not take, or has invalid structure
 
     Examples:
     --------
@@ -181,6 +258,14 @@ def parse_shock_config(config: dict[str, Any]) -> Shock | ParameterShock:
     config = {"table": "mortality", "multiply": 1.2}
     shock = parse_shock_config(config)
     # Returns: MultiplicativeShock(factor=1.2, table="mortality")
+    ```
+
+    **A model-point column (a valuation rate up 100bp):**
+
+    ```python
+    config = {"column": "valuation_rate", "add": 0.01}
+    shock = parse_shock_config(config)
+    # Returns: AdditiveShock(delta=0.01, column="valuation_rate")
     ```
 
     **Solvency II lapse up (multiply then cap):**
@@ -224,150 +309,19 @@ def parse_shock_config(config: dict[str, Any]) -> Shock | ParameterShock:
     ```
 
     """
-    # Check if this is a parameter shock
-    if "param" in config:
-        param_name = config["param"]
-
-        # Find which operation is specified
-        operations_found = [op for op in SHOCK_OPERATIONS if op in config]
-        if len(operations_found) != 1:
-            msg = (
-                f"Parameter shock must include exactly one operation: {SHOCK_OPERATIONS}. "
-                f"Got: {operations_found}"
-            )
-            raise ValueError(msg)
-
-        operation = operations_found[0]
-        value = config[operation]
-
-        return ParameterShock(param=param_name, operation=operation, value=value)
-
-    # Validate table for non-parameter shocks
-    if "table" not in config:
-        msg = "Shock config must include 'table' or 'param' key"
+    if not any(key in config for key in _TARGET_KEYS):
+        msg = (
+            "Shock config must name its target: 'table' (an assumption table, "
+            "by the name its Table was built with) or 'column' (a model-point "
+            "column; 'param' is read as 'column')."
+        )
         raise ValueError(msg)
-
-    table = config["table"]
-    column = config.get("column")
-    where_clause = config.get("where")
-    when_clause = config.get("when")
-
-    # Check if this is a pipeline-based config
-    if "pipeline" in config:
-        steps = config["pipeline"]
-        if not isinstance(steps, list) or len(steps) == 0:
-            msg = "pipeline must be a non-empty list of shock steps"
-            raise ValueError(msg)
-
-        shock_steps = tuple(_parse_pipeline_step(step) for step in steps)
-        base_shock: Shock = PipelineShock(
-            shocks=shock_steps, table=table, column=column
-        )
-
-    # Check if this is a max/min operation at the top level
-    elif "max" in config:
-        max_config = config["max"]
-        if not isinstance(max_config, list) or len(max_config) != 2:
-            msg = "max operation requires array of 2 shock configs"
-            raise ValueError(msg)
-        base_shock = MaxShock(
-            shock_a=_parse_pipeline_step(max_config[0]),
-            shock_b=_parse_pipeline_step(max_config[1]),
-            table=table,
-            column=column,
-        )
-
-    elif "min" in config:
-        min_config = config["min"]
-        if not isinstance(min_config, list) or len(min_config) != 2:
-            msg = "min operation requires array of 2 shock configs"
-            raise ValueError(msg)
-        base_shock = MinShock(
-            shock_a=_parse_pipeline_step(min_config[0]),
-            shock_b=_parse_pipeline_step(min_config[1]),
-            table=table,
-            column=column,
-        )
-
-    else:
-        # Find which basic operation is specified
-        operations_found = [op for op in SHOCK_OPERATIONS if op in config]
-        has_clip = "clip" in config
-
-        if len(operations_found) == 0 and not has_clip:
-            all_ops = (
-                SHOCK_OPERATIONS | EXTENDED_OPERATIONS | {"pipeline", "max", "min"}
-            )
-            msg = (
-                f"Shock config must include an operation: {all_ops}. "
-                f"Got keys: {list(config.keys())}"
-            )
-            raise ValueError(msg)
-
-        if len(operations_found) > 1:
-            msg = (
-                f"Shock config must include exactly one basic operation, "
-                f"but found multiple: {operations_found}"
-            )
-            raise ValueError(msg)
-
-        # Build the base shock
-        if operations_found:
-            operation = operations_found[0]
-            value = config[operation]
-
-            if operation == "multiply":
-                base_shock = MultiplicativeShock(
-                    factor=value, table=table, column=column
-                )
-            elif operation == "add":
-                base_shock = AdditiveShock(delta=value, table=table, column=column)
-            else:  # "set"
-                base_shock = OverrideShock(value=value, table=table, column=column)
-
-            # Syntactic sugar: if clip is also present, wrap in pipeline
-            if has_clip:
-                clip_shock = _parse_clip_value(config["clip"])
-                base_shock = PipelineShock(
-                    shocks=(base_shock, clip_shock),
-                    table=table,
-                    column=column,
-                )
-        else:
-            # Only clip, no basic operation
-            base_shock = _parse_clip_value(config["clip"])
-            # Add table/column to clip shock
-            base_shock = ClipShock(
-                min_value=base_shock.min_value,
-                max_value=base_shock.max_value,
-                table=table,
-                column=column,
-            )
-
-    # Apply where clause if present
-    if where_clause:
-        base_shock = FilteredShock(
-            shock=base_shock,
-            where=where_clause,
-            table=table,
-            column=column,
-        )
-
-    # Apply when clause if present
-    if when_clause:
-        base_shock = TimeConditionalShock(
-            shock=base_shock,
-            when=when_clause,
-            table=table,
-            column=column,
-        )
-
-    return base_shock
+    return _parse_node(config)
 
 
 def parse_scenario_config(
     config: list[str | dict[str, Any]],
-) -> dict[str, list[Shock | ParameterShock]]:
+) -> dict[str, list[Shock]]:
     """
     Parse a full scenario configuration into shock mappings.
 
@@ -444,14 +398,14 @@ def parse_scenario_config(
         msg = "Scenario config cannot be empty. Provide at least one scenario."
         raise ValueError(msg)
 
-    result: dict[str, list[Shock | ParameterShock]] = {}
+    result: dict[str, list[Shock]] = {}
     seen_ids: set[str] = set()
 
     for item in config:
         if isinstance(item, str):
             # Simple string scenario ID with no shocks
             scenario_id = item
-            shocks: list[Shock | ParameterShock] = []
+            shocks: list[Shock] = []
         elif isinstance(item, dict):
             # Dict scenario with optional shocks
             if "id" not in item:
@@ -484,38 +438,62 @@ def parse_scenario_config(
     return result
 
 
+def _aggregations_not_a_list(spec: object) -> str:
+    """Return the refusal for aggregations written as something other than a list."""
+    example = "[{'kind': 'Sum', 'alias': 'total_loss', 'column': 'loss'}]"
+    if isinstance(spec, dict):
+        named = ", ".join(repr(key) for key in spec)
+        shape = (
+            f"a mapping keyed by alias ({named}): move each key into its "
+            "entry as 'alias'"
+        )
+    else:
+        shape = f"a {type(spec).__name__}"
+    return (
+        "A plan's aggregations are a list, one entry per aggregator naming its "
+        f"kind and alias, for example {example}. These were given as {shape}."
+    )
+
+
 def parse_aggregations(
     spec: list[dict[str, Any]],
 ) -> tuple[Aggregator | _Partitioned, ...]:
     """Parse a list-of-dict YAML spec into a tuple of aggregators.
 
     Each entry is a recipe dict carrying ``kind``, ``alias``, plus the
-    aggregator's constructor kwargs. ``_Partitioned`` entries carry
-    ``by`` (list of partition columns) and ``inner`` (a nested recipe dict).
+    aggregator's constructor kwargs -- the aggregator's own canonical form
+    with its alias beside it. ``over`` (one column name or a list of them)
+    partitions the entry exactly as ``.over(by)`` does, which is how a
+    partitioned aggregation is written by hand; ``_Partitioned`` entries,
+    carrying ``by`` (list of partition columns) and ``inner`` (a nested recipe
+    dict), are the same thing in the shape an audit record writes it.
     Unknown ``kind`` raises ``ValueError`` listing the available registrations.
-    The v0.1 ``aggregations: {alias: {...}}`` (dict-of-spec) shape raises a
-    pointed error directing callers at the migration table in §10 of the spec.
+    Aggregations given as anything but a list -- a mapping keyed by alias, say
+    ``{"total": {"kind": "Sum", ...}}`` -- raise ``ValueError`` saying how to
+    write them as the list.
     """
     if not isinstance(spec, list):
-        msg = (
-            "v0.1 plan format detected (aggregations is not a list). "
-            "v0.2 uses a list of aggregators with .alias(). "
-            "See ref/41-backend-portability/specs/"
-            "2026-05-11-gsp-101-mergeable-aggregator-layer.md §10."
-        )
-        # Migration error: callers (and the test pinning this contract) catch
-        # ValueError. The shape mismatch is a config-format problem, not a
-        # generic Python type error - keep it as ValueError per spec §10.
-        raise ValueError(msg)  # noqa: TRY004
+        # A config-format problem rather than a generic type error, so it is
+        # a ValueError, which is what callers reading a recipe catch.
+        raise ValueError(_aggregations_not_a_list(spec))  # noqa: TRY004
 
     return tuple(_parse_one(entry) for entry in spec)
 
 
 def _parse_one(entry: dict[str, Any]) -> Aggregator | _Partitioned:
-    """Parse one aggregator recipe dict into an aggregator or _Partitioned."""
-    from gaspatchio.scenarios._aggregators import _AGGREGATOR_REGISTRY
-    from gaspatchio.scenarios._metric import _Partitioned
+    """Parse one aggregator recipe dict into an aggregator or _Partitioned.
 
+    A malformed recipe is a ``ValueError`` naming what is wrong with it, like
+    every other refusal here -- never the ``AttributeError`` or ``KeyError``
+    that reaching into something that is not a recipe would raise, which a
+    caller reading a file cannot tell from a defect.
+    """
+    if not isinstance(entry, dict):
+        msg = (
+            "Aggregator entry must be an object with 'kind' and 'alias' fields; "
+            f"got {entry!r}"
+        )
+        raise ValueError(msg)  # noqa: TRY004 -- a malformed recipe, as the rest are
     kind = entry.get("kind")
     if kind is None:
         msg = f"Aggregator entry missing 'kind' field: {entry!r}"
@@ -526,14 +504,24 @@ def _parse_one(entry: dict[str, Any]) -> Aggregator | _Partitioned:
         raise ValueError(msg)
 
     if kind == "_Partitioned":
-        inner_entry = entry["inner"]
+        inner_entry = entry.get("inner")
+        by = entry.get("by")
+        if not isinstance(inner_entry, dict) or not (
+            isinstance(by, list) and by and all(isinstance(one, str) for one in by)
+        ):
+            msg = (
+                f"Aggregator {alias!r}: a '_Partitioned' entry carries 'by', a "
+                "list of partition column names, and 'inner', the partitioned "
+                f"aggregator's own recipe; got {entry!r}"
+            )
+            raise ValueError(msg)
         # The inner recipe doesn't carry its own alias; the wrapper owns it.
         # _parse_one requires an alias, so synthesise a sentinel for recursion;
         # the inner's .alias_ is irrelevant once it's wrapped in _Partitioned.
         inner_with_alias = dict(inner_entry)
         inner_with_alias.setdefault("alias", "__inner__")
         inner = _parse_one(inner_with_alias)
-        return _Partitioned(by=tuple(entry["by"]), inner=inner, alias=alias)
+        return _Partitioned(by=tuple(by), inner=inner, alias=alias)
 
     if kind not in _AGGREGATOR_REGISTRY:
         available = sorted(_AGGREGATOR_REGISTRY.keys())
@@ -545,11 +533,30 @@ def _parse_one(entry: dict[str, Any]) -> Aggregator | _Partitioned:
         raise ValueError(msg)
 
     cls = _AGGREGATOR_REGISTRY[kind]
-    kwargs = {k: v for k, v in entry.items() if k not in {"kind", "alias"}}
+    kwargs = {k: v for k, v in entry.items() if k not in {"kind", "alias", "over"}}
     # YAML round-trip emits tuples as lists; coerce known tuple fields back.
     if "levels" in kwargs and isinstance(kwargs["levels"], list):
         kwargs["levels"] = tuple(kwargs["levels"])
-    return cls(**kwargs).alias(alias)
+    # The registry holds classes, so what one builds is untyped until it is
+    # named here: an aggregator, or the partitioned wrapper ``over`` makes.
+    built = cls(**kwargs).alias(alias)
+    over = entry.get("over")
+    if over is None:
+        plain: Aggregator = built
+        return plain
+    if not (
+        isinstance(over, str)
+        or (isinstance(over, list) and all(isinstance(by, str) for by in over))
+    ):
+        msg = (
+            f"Aggregator {alias!r}: 'over' names the column or columns to "
+            f"partition by, as a string or a list of strings; got {over!r}."
+        )
+        raise ValueError(msg)
+    partitioned: _Partitioned = built.over(
+        over if isinstance(over, str) else tuple(over)
+    )
+    return partitioned
 
 
 __all__ = ["parse_aggregations", "parse_scenario_config", "parse_shock_config"]

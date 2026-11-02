@@ -1,0 +1,223 @@
+{
+  "compare-after": {
+    "counts": {
+      "core": 114,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "compare-before": {
+    "counts": {
+      "core": 114,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "compare-book-after": {
+    "counts": {
+      "core": 114,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "compare-book-before": {
+    "counts": {
+      "core": 114,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "goldens/nested_valuation_example": {
+    "counts": {
+      "core": 2,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "goldens/state_graph_example": {
+    "counts": {
+      "core": 2,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "holes": {
+    "counts": {
+      "core": 11,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "level1": {
+    "counts": {
+      "core": 7,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "level3": {
+    "counts": {
+      "core": 55,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "level4": {
+    "counts": {
+      "core": 114,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "level4-branches": {
+    "counts": {
+      "core": 114,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "level5": {
+    "counts": {
+      "core": 111,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "no-values": {
+    "counts": {
+      "core": 9,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "policy-axis": {
+    "counts": {
+      "core": 12,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "portfolio": {
+    "counts": {
+      "core": 114,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "record": {
+    "counts": {
+      "core": 9,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "rollforward": {
+    "counts": {
+      "core": 7,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "rollforward-ratchet": {
+    "counts": {
+      "core": 7,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "scenarios": {
+    "counts": {
+      "core": 111,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "tiers": {
+    "counts": {
+      "core": 8,
+      "engine_native": 2,
+      "opaque": 1
+    },
+    "engine_native": [
+      "largest_claim_so_far@1",
+      "loaded_claims@1"
+    ],
+    "opaque": [
+      "smoothed_claims@1"
+    ]
+  },
+  "values-after": {
+    "counts": {
+      "core": 9,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "values-before": {
+    "counts": {
+      "core": 9,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "versions": {
+    "counts": {
+      "core": 8,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  },
+  "wide-integer": {
+    "counts": {
+      "core": 1,
+      "engine_native": 0,
+      "opaque": 0
+    },
+    "engine_native": [],
+    "opaque": []
+  }
+}

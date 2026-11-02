@@ -240,3 +240,203 @@ fn test_pv_excel_learn_example() {
     let lhs = v + p * (1.0 + r * t) * a + 1_000_000.0 * df;
     assert!(lhs.abs() < 1e-6);
 }
+
+#[test]
+fn a_list_operand_is_read_from_its_slices_own_values() -> PolarsResult<()> {
+    // A sliced list keeps the whole column's inner values; the operand the
+    // formula reads is cut to the slice's rows, whatever its element type.
+    let floats = l(vec![
+        vec![0.01, 0.02],
+        vec![0.03, 0.04],
+        vec![0.05, 0.06],
+        vec![0.07, 0.08],
+    ]);
+    let ints = floats.cast(&DataType::List(Box::new(DataType::Int64)))?;
+    for sliced in [floats.slice(1, 2), ints.slice(1, 2)] {
+        assert_eq!(sliced.list()?.get_inner().len(), 8);
+        let read = cast_to_float_if_needed(&sliced)?;
+        assert_eq!(read.list()?.get_inner().len(), 4, "{}", sliced.dtype());
+    }
+
+    let kwargs = PvKwargs {
+        fv: Some(0.0),
+        typ: Some(0),
+    };
+    let nper = s(&[10.0, 20.0, 30.0, 40.0]);
+    let pmt = s(&[100.0, 100.0, 100.0, 100.0]);
+    let all = pv(&[floats.clone(), nper.clone(), pmt.clone()], &kwargs)?;
+    let part = pv(
+        &[floats.slice(1, 2), nper.slice(1, 2), pmt.slice(1, 2)],
+        &kwargs,
+    )?;
+    assert!(part.equals_missing(&all.slice(1, 2)));
+    Ok(())
+}
+
+#[test]
+fn per_period_operands_of_another_length_are_refused_not_cut_short() {
+    // Two policies; the second has three periods of rate and two of the
+    // other list, which used to answer two present values and say nothing.
+    let kwargs = PvKwargs {
+        fv: Some(0.0),
+        typ: Some(0),
+    };
+    let rate = l(vec![vec![0.05, 0.05], vec![0.05, 0.05, 0.05]]);
+    let short = l(vec![vec![10.0, 10.0], vec![10.0, 10.0]]);
+    let cases = [
+        (
+            "pmt against rate",
+            vec![rate.clone(), s(&[10.0]), short.clone()],
+        ),
+        (
+            "nper against rate",
+            vec![rate.clone(), short.clone(), s(&[1.0])],
+        ),
+        (
+            "pmt against nper",
+            vec![s(&[0.05]), rate.clone(), short.clone()],
+        ),
+        (
+            "pmt against rate",
+            vec![rate.clone(), rate.clone(), short.clone()],
+        ),
+    ];
+    for (sentence, inputs) in cases {
+        let err = pv(&inputs, &kwargs).unwrap_err().to_string();
+        assert!(
+            err.contains(&format!(
+                "mismatched inner list lengths in one policy: {sentence}"
+            )),
+            "{sentence}: {err}"
+        );
+        assert!(!err.contains("at row"), "{err}");
+    }
+    // Lists that fit answer as before, one value per period.
+    let out = pv(&[rate.clone(), rate.clone(), rate], &kwargs).unwrap();
+    assert_eq!(out.list().unwrap().get_as_series(1).unwrap().len(), 3);
+}
+
+/// The present value at `rate` as spec 11.1.35 states it, for the checks
+/// below: the payments and the future value of `nper` periods, end of period.
+fn pv_at(rate: f64, nper: f64, pmt: f64, fv: f64, typ: i32) -> f64 {
+    let kwargs = PvKwargs {
+        fv: Some(fv),
+        typ: Some(typ),
+    };
+    let out = pv(&[s(&[rate]), s(&[nper]), s(&[pmt])], &kwargs).unwrap();
+    out.f64().unwrap().get(0).unwrap()
+}
+
+#[test]
+// The expected values are written as the exact decimals they were computed
+// as; the compiler rounds each to its double, which is what the bound reads.
+#[allow(clippy::excessive_precision)]
+fn test_near_zero_rate_meets_the_relative_bound() {
+    // Exact values by 80-digit decimal arithmetic over the doubles' own
+    // values: 360 payments of 100 and a future value of 1000.
+    let cases = [
+        (1e-15, 0, -36999.999999993139_f64),
+        (1e-15, 1, -36999.999999993175_f64),
+        (9.99e-13, 0, -36999.999993148856_f64),
+        (1e-12, 0, -36999.999993142002_f64),
+        (1e-12, 1, -36999.999993177997_f64),
+        (1e-9, 0, -36999.993142000851_f64),
+        (1e-8, 1, -36999.931780084255_f64),
+        (1e-5, 0, -36931.504828261612_f64),
+    ];
+    for (rate, typ, exact) in cases {
+        let got = pv_at(rate, 360.0, 100.0, 1000.0, typ);
+        assert_relative_eq!(got, exact, max_relative = 1e-12);
+    }
+}
+
+#[test]
+fn test_no_step_at_a_threshold_near_zero() {
+    // The old form switched to the flat form below 1e-12 and stepped by
+    // 0.044 there; the two neighbours now differ by what the rate moves.
+    let below = pv_at(9.99e-13, 360.0, 100.0, 1000.0, 0);
+    let at = pv_at(1e-12, 360.0, 100.0, 1000.0, 0);
+    assert!((below - at).abs() < 1e-6, "{below} {at}");
+}
+
+#[test]
+fn test_the_flat_form_is_the_answer_only_at_zero() {
+    assert_eq!(pv_at(0.0, 360.0, 100.0, 1000.0, 0), -37000.0);
+    assert_eq!(pv_at(-0.0, 360.0, 100.0, 1000.0, 1), -37000.0);
+    assert_ne!(pv_at(1e-13, 360.0, 100.0, 1000.0, 0), -37000.0);
+}
+
+/// A run of policies every one of which answers a null list.
+fn null_lists(rows: usize) -> PolarsResult<Series> {
+    Series::new_null("r".into(), rows).cast(&DataType::List(Box::new(DataType::Float64)))
+}
+
+#[test]
+fn a_chunk_of_null_lists_answers_the_type_the_plugin_declares() -> PolarsResult<()> {
+    // The streaming engine hands a plugin one chunk at a time. A chunk whose
+    // every policy answers a null list gave the collector no inner type and
+    // came back List(Null), which beside the next chunk's List(Float64) was a
+    // panic. One per-period operand, two, and three.
+    let kwargs = PvKwargs {
+        fv: None,
+        typ: None,
+    };
+    let declared = DataType::List(Box::new(DataType::Float64));
+    let one = pv(
+        &[null_lists(2)?, s(&[10.0, 4.0]), s(&[100.0, 1.0])],
+        &kwargs,
+    )?;
+    let two = pv(
+        &[
+            null_lists(2)?,
+            l(vec![vec![1.0], vec![4.0]]),
+            s(&[100.0, 1.0]),
+        ],
+        &kwargs,
+    )?;
+    let three = pv(
+        &[
+            null_lists(2)?,
+            l(vec![vec![1.0], vec![4.0]]),
+            l(vec![vec![100.0], vec![1.0]]),
+        ],
+        &kwargs,
+    )?;
+    for answered in [&one, &two, &three] {
+        assert_eq!(answered.dtype(), &declared);
+        assert_eq!(answered.null_count(), 2);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_null_policy_value_beside_two_runs_is_null_in_each_period() -> PolarsResult<()> {
+    // 11.1.18: a null scalar is repeated to the other operands' length, a
+    // null in each period. Beside one per-period operand the kernel answered
+    // that; beside two it answered a null run, as if the policy had no
+    // periods. Each of the three operands as the per-policy one in turn.
+    let kwargs = PvKwargs {
+        fv: None,
+        typ: None,
+    };
+    let runs = || l(vec![vec![0.05, 0.04], vec![1.0]]);
+    let held = s_opt(&[None, Some(2.0)]);
+    for operands in [
+        [runs(), runs(), held.clone()],
+        [runs(), held.clone(), runs()],
+        [held.clone(), runs(), runs()],
+    ] {
+        let answered = pv(&operands, &kwargs)?;
+        let rows = answered.list()?;
+        let first = rows
+            .get_as_series(0)
+            .ok_or_else(|| PolarsError::ComputeError("a null run, not a run of nulls".into()))?;
+        assert_eq!(first.len(), 2);
+        assert_eq!(first.null_count(), 2);
+        let second = rows
+            .get_as_series(1)
+            .ok_or_else(|| PolarsError::ComputeError("the second policy's run is null".into()))?;
+        assert_eq!(second.null_count(), 0);
+    }
+    Ok(())
+}

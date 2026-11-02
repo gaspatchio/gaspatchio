@@ -5,7 +5,7 @@
 # ABOUTME: Aggregator Protocol (Beam-style CombineFn 5-tuple) + _Partitioned wrapper.
 # ABOUTME: Aggregators are partition-blind; partition lives in the driver.
 
-"""Aggregator Protocol and partition wrapper for GSP-101.
+"""Aggregator Protocol and partition wrapper for the scenario aggregators.
 
 The Aggregator contract (5-tuple) is a Beam-style CombineFn:
 
@@ -25,10 +25,10 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-if TYPE_CHECKING:
-    import polars as pl
+import numpy as np
+import polars as pl
 
 
 def _null_safe_sort_key(
@@ -41,8 +41,7 @@ def _null_safe_sort_key(
     (which would raise TypeError on str vs int).
     """
     return tuple(
-        (1, "", None) if v is None else (0, type(v).__name__, v)
-        for v in item[0]
+        (1, "", None) if v is None else (0, type(v).__name__, v) for v in item[0]
     )
 
 
@@ -65,6 +64,41 @@ class Aggregator(Protocol):
     def merge_accumulators(self, a: Any, b: Any) -> Any: ...  # noqa: ANN401
     def extract_output(self, state: Any) -> Any: ...  # noqa: ANN401
     def canonical_form(self) -> dict[str, Any]: ...
+
+
+def _instead_of_multi_level_over(inner: object) -> str:
+    """Return the partitioned kinds that answer one value per partition instead.
+
+    A multi-level quantile under ``.over()`` is deferred on both axes, and
+    the refusal should name something that runs. For a per-period quantile
+    that is the per-period median or CTE; for a per-policy one, the median,
+    the CTE or the quantile rank.
+    """
+    if hasattr(inner, "batch_reduce"):
+        return "PeriodMedian or PeriodCTE with .over()"
+    return "Median, CTE or QuantileRank with .over()"
+
+
+def refuse_a_multi_level_over(inner: object, alias: str) -> None:
+    """Refuse a multi-level quantile -- Quantile or PeriodQuantile -- under ``.over()``.
+
+    Its ``{level: value}`` output has no tidy single-column form, and no
+    driver folds it partitioned -- the scenario plan, ``run_aggregated`` and
+    the JAX engine alike. Refused where ``.over()`` is written, so a plan is
+    not built, batched and run only to be refused at its first fold.
+
+    Raises:
+        NotImplementedError: If ``inner`` answers several levels at once.
+
+    """
+    if not hasattr(inner, "levels"):
+        return
+    kind = type(inner).__name__
+    msg = (
+        f"{kind}.over() ({alias!r}) is not yet supported; use "
+        f"{_instead_of_multi_level_over(inner)}, or {kind} without .over()."
+    )
+    raise NotImplementedError(msg)
 
 
 @dataclass(frozen=True)
@@ -93,6 +127,7 @@ class _Partitioned:
         if not self.alias:
             msg = "_Partitioned requires a non-empty alias"
             raise ValueError(msg)
+        refuse_a_multi_level_over(self.inner, self.alias)
 
     # The Aggregator-shaped methods the loop will call:
     def within_expr(self) -> pl.Expr:
@@ -133,8 +168,6 @@ class _Partitioned:
         return out
 
     def extract_output(self, state: dict[tuple[Any, ...], Any]) -> pl.DataFrame:
-        import polars as pl
-
         if not state:
             schema: dict[str, Any] = dict.fromkeys(self.by, pl.Object)
             schema[self.alias] = pl.Object
@@ -143,7 +176,13 @@ class _Partitioned:
         rows = []
         for partition_tuple, acc in sorted(state.items(), key=_null_safe_sort_key):
             row = dict(zip(self.by, partition_tuple, strict=True))
-            row[self.alias] = self.inner.extract_output(acc)
+            value = self.inner.extract_output(acc)
+            # A per-period answer masked where a period had no value is written
+            # with None there, so the frame holds null: Polars reads a masked
+            # array's data and not its mask.
+            row[self.alias] = (
+                value.tolist() if isinstance(value, np.ma.MaskedArray) else value
+            )
             rows.append(row)
         return pl.DataFrame(rows)
 

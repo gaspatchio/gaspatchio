@@ -63,12 +63,12 @@ sys.path.insert(0, str(BASE_DIR))
 
 import model  # type: ignore[import-not-found]
 from gaspatchio import ActuarialFrame, Curve, MortalityTable
-from gaspatchio.assumptions import Table
-from gaspatchio.assumptions._dimensions import DataDimension
+from gaspatchio.assumptions import DataDimension, Table
 from gaspatchio.schedule import (
     Actual360,
     Actual365Fixed,
     ActualActualISDA,
+    DayCount,
     OneTwelfth,
     Schedule,
 )
@@ -87,15 +87,24 @@ def load_model_points() -> pl.DataFrame:
     return pl.read_parquet(MODEL_POINTS_PATH)
 
 
-def run_base_model(
-    mp: pl.DataFrame,
-    assumptions: dict[str, Any],
-) -> pl.DataFrame:
-    """Run the typed L5 model (BASE scenario only) and return collected results."""
+def run_base_model(mp: pl.DataFrame) -> pl.DataFrame:
+    """
+    Run the typed L5 model (BASE scenario only) and return collected results.
+
+    The model loads its own assumptions, as it does under any plan.
+
+    ``with_scenarios`` pins the scenario axis to model-points-major,
+    scenarios-minor order, so the expansion hands back an order the framework
+    states rather than one the engine happened to produce. The sort stays for what
+    it actually buys: variants A and C read each row by name, but the per-policy
+    table variant C renders — and the order its cashflow sums accumulate in —
+    follow the frame, so sorting by scenario then model point keeps the generated
+    report byte-stable rather than merely correct.
+    """
     af = ActuarialFrame(mp)
     af = with_scenarios(af, ["BASE"])
-    result_af = model.main(af, assumptions_override=assumptions)
-    return result_af.collect()
+    result_af = model.main(af)
+    return result_af.collect().sort("scenario_id", "point_id")
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +112,7 @@ def run_base_model(
 # ---------------------------------------------------------------------------
 
 
-def build_t_years(day_count: Any) -> list[float]:
+def build_t_years(day_count: DayCount) -> list[float]:
     """Return ``cumulative_year_fractions`` for the given day-count convention."""
     sched = Schedule.from_calendar_grid(
         start_date=VALUATION_DATE,
@@ -127,7 +136,9 @@ def rediscount_pv(
     """Re-compute PV(net_cf) by discounting with *curve* at *t_years_full*."""
     t_trimmed = t_years_full[: len(net_cf)]
     disc = curve.discount_factor(t_trimmed)
-    return sum(c * d for c, d in zip(net_cf, disc))
+    # strict: a cashflow past the end of the discount grid would otherwise
+    # drop out of the PV without a word
+    return sum(c * d for c, d in zip(net_cf, disc, strict=True))
 
 
 # ===========================================================================
@@ -147,6 +158,8 @@ def run_variant_a(
     assumptions: dict[str, Any],
 ) -> dict[str, Any]:
     """
+    Compare day-count conventions on the same cashflows.
+
     For each day-count:
     1. Build t_years via Schedule.from_calendar_grid.
     2. Re-discount pre-computed cashflows using BASE Curve + new t_years.
@@ -241,7 +254,8 @@ def run_variant_b() -> dict[str, Any]:
     zero_rates_from_par_flat = list(c_par_flat.rates)
     zero_rates_direct_flat = list(c_zero_flat.rates)
     max_abs_diff_flat = max(
-        abs(z - p) for z, p in zip(zero_rates_from_par_flat, zero_rates_direct_flat)
+        abs(z - p)
+        for z, p in zip(zero_rates_from_par_flat, zero_rates_direct_flat, strict=True)
     )
     disc_t1_par = c_par_flat.discount_factor([0.0, 1.0])[1]
     disc_t1_zero = c_zero_flat.discount_factor([0.0, 1.0])[1]
@@ -251,13 +265,15 @@ def run_variant_b() -> dict[str, Any]:
     c_par_nonflat = Curve.from_par_rates(tenors=tenors, par_rates=non_flat_par)
     zero_vs_par_diff = [
         round(z - p, 8)
-        for z, p in zip(list(c_par_nonflat.rates), non_flat_par)
+        for z, p in zip(list(c_par_nonflat.rates), non_flat_par, strict=True)
     ]
     all_zeros_exceed_par = all(d >= 0 for d in zero_vs_par_diff[1:])
 
     return {
         "flat_par": flat_par,
-        "zero_rates_from_par_flat": [round(r, 10) for r in zero_rates_from_par_flat[:5]],
+        "zero_rates_from_par_flat": [
+            round(r, 10) for r in zero_rates_from_par_flat[:5]
+        ],
         "zero_rates_direct_flat": [round(r, 10) for r in zero_rates_direct_flat[:5]],
         "max_abs_diff_flat": max_abs_diff_flat,
         "disc_t1_par": disc_t1_par,
@@ -266,7 +282,9 @@ def run_variant_b() -> dict[str, Any]:
         "sha_zero_flat": c_zero_flat.source_sha(),
         "non_flat_par": non_flat_par[:5],
         "non_flat_par_tenors_5_10": list(non_flat_par[4:10]),
-        "non_flat_zero_rates_5_10": [round(r, 8) for r in list(c_par_nonflat.rates)[4:10]],
+        "non_flat_zero_rates_5_10": [
+            round(r, 8) for r in list(c_par_nonflat.rates)[4:10]
+        ],
         "zero_vs_par_diff_5_10": zero_vs_par_diff[4:10],
         "all_zeros_exceed_par": all_zeros_exceed_par,
         "sha_par_nonflat": c_par_nonflat.source_sha(),
@@ -284,6 +302,7 @@ def run_variant_c(
 ) -> dict[str, Any]:
     """
     Apply parallel +100bp and key-rate +50bp at tenor=5 to the BASE Curve.
+
     Re-discount cashflows for each shocked curve and compute PV deltas.
     """
     base_curve = assumptions["curves"]["BASE"]
@@ -322,7 +341,8 @@ def run_variant_c(
     total_kr5 = sum(r["pv_kr5"] for r in rows)
 
     shas_distinct = (
-        len({base_curve.source_sha(), up100_curve.source_sha(), kr5_curve.source_sha()}) == 3
+        len({base_curve.source_sha(), up100_curve.source_sha(), kr5_curve.source_sha()})
+        == 3
     )
 
     return {
@@ -352,7 +372,9 @@ def run_variant_c(
 
 def run_variant_d(assumptions: dict[str, Any]) -> dict[str, Any]:
     """
-    Demonstrate the full audit chain:
+    Demonstrate the full audit chain.
+
+    The chain:
     1. MortalityTable.source_sha()
     2. Three Curve SHAs (BASE, UP, DOWN) — all distinct
     3. Day-count change → new Curve SHA
@@ -454,7 +476,7 @@ def generate_report(
     para(
         "**Status:** DONE  \n"
         f"**Total runtime:** {runtime_total:.2f}s  \n"
-        "**Branch:** `gsp-92-rollforward-redesign`"
+        "**Covers:** the typed primitives a rollforward reads"
     )
     para(
         "Tests that `Schedule`, `Curve`, and `MortalityTable` typed primitives compose correctly "
@@ -478,7 +500,9 @@ def generate_report(
     )
 
     # Table: disc_factor at month 12 and portfolio PV
-    lines.append("| Day-Count | t(12) | disc_factor(12) | Portfolio PV | Delta vs OneTwelfth |")
+    lines.append(
+        "| Day-Count | t(12) | disc_factor(12) | Portfolio PV | Delta vs OneTwelfth |"
+    )
     lines.append("|---|---|---|---|---|")
     for r in variant_a["rows"]:
         lines.append(
@@ -523,9 +547,15 @@ def generate_report(
     h(3, "Case 1 — Flat 4% par rates")
     lines.append("| | Value |")
     lines.append("|---|---|")
-    lines.append(f"| `from_par_rates` zero[0..4] | `{variant_b['zero_rates_from_par_flat']}` |")
-    lines.append(f"| `from_zero_rates` zero[0..4] | `{variant_b['zero_rates_direct_flat']}` |")
-    lines.append(f"| Max absolute difference | `{variant_b['max_abs_diff_flat']:.2e}` |")
+    lines.append(
+        f"| `from_par_rates` zero[0..4] | `{variant_b['zero_rates_from_par_flat']}` |"
+    )
+    lines.append(
+        f"| `from_zero_rates` zero[0..4] | `{variant_b['zero_rates_direct_flat']}` |"
+    )
+    lines.append(
+        f"| Max absolute difference | `{variant_b['max_abs_diff_flat']:.2e}` |"
+    )
     lines.append(
         f"| disc_factor(1yr) via par-bootstrap | `{variant_b['disc_t1_par']:.10f}` |"
     )
@@ -552,6 +582,7 @@ def generate_report(
             variant_b["non_flat_par_tenors_5_10"],
             variant_b["non_flat_zero_rates_5_10"],
             variant_b["zero_vs_par_diff_5_10"],
+            strict=True,
         )
     ):
         t = t_idx + 5
@@ -639,10 +670,7 @@ def generate_report(
         f"| MortalityTable (select-ultimate, sel_period=25) "
         f"| `{variant_d['mort_sha'][:32]}...` | |"
     )
-    lines.append(
-        f"| Curve — BASE scenario "
-        f"| `{variant_d['sha_base'][:32]}...` | |"
-    )
+    lines.append(f"| Curve — BASE scenario | `{variant_d['sha_base'][:32]}...` | |")
     lines.append(
         f"| Curve — UP scenario "
         f"| `{variant_d['sha_up'][:32]}...` | Different forward rates |"
@@ -676,8 +704,7 @@ def generate_report(
         f"`{variant_d['dc_change_new_sha']}`"
     )
     lines.append(
-        f"- Parallel shift on BASE Curve → new SHA: "
-        f"`{variant_d['shift_new_sha']}`"
+        f"- Parallel shift on BASE Curve → new SHA: `{variant_d['shift_new_sha']}`"
     )
     lines.append(
         f"- Two identically-constructed MortalityTable instances hash equal: "
@@ -747,7 +774,7 @@ def main() -> None:
 
     logger.info("Running BASE model for cashflow extraction")
     t0_total = time.perf_counter()
-    result = run_base_model(mp, assumptions)
+    result = run_base_model(mp)
 
     logger.info("Running Variant A — day-count comparison")
     t_a = time.perf_counter()

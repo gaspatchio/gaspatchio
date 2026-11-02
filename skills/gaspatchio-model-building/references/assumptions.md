@@ -21,12 +21,10 @@ uv run gspio docs "TableBuilder" -t code_example
 
 ```python
 from gaspatchio.assumptions import Table
-import polars as pl
 
-df = pl.read_parquet("assumptions/mortality.parquet")
 mort = Table(
     name="mortality",
-    source=df,
+    source="assumptions/mortality.parquet",   # the file path, not a frame you read
     dimensions={"age": "age", "duration": "duration"},
     value="rate",
 )
@@ -34,6 +32,25 @@ mort = Table(
 # Lookup returns a column matching the projection shape
 af.mort_rate = mort.lookup(age=af.attained_age, duration=af.duration)
 ```
+
+### Hand `Table` the file path
+
+`gspio verify` holds the files you have against the audit file that records them — results,
+policy data, the model file and every local module it imports, and each assumption table read
+back from its file — and exits 0 only when every check asked for agrees; library versions and
+git are evidence and move no exit status. Hand `Table` the file path (not a frame you built) so
+`--assumptions` can decide it:
+
+| How the table was built | `gspio verify … --assumptions DIR` against a file with other rates |
+|---|---|
+| `Table(source="assumptions/mortality.parquet", …)` | `✗ assumptions differs`, exit 1 — the table was a plain read of that file |
+| `Table(source=pl.read_parquet(…).filter(…), …)` | `? assumptions could not be checked`, exit 4 — nothing records that the frame was the file as it stands |
+
+A table built from a frame in code still verifies `agrees` against a file with the same
+values, and `not asked` when no file is named for it. Keep a frame source for a table that
+really is built in code — a grid computed in setup — and give everything read from a file its
+path. Once `--assumptions` is given, every recorded table must be found among the files and
+directories named (by the path recorded, `NAME.parquet`/`NAME.csv`, or `NAME=FILE`).
 
 ### Dimension Mapping
 
@@ -91,7 +108,7 @@ uv run gspio docs "ExtendOverflow"
 | `CategoricalDimension` | Adds a constant value for all rows |
 | `ComputedDimension` | Creates dimension from an expression |
 
-Overflow strategies (`ExtendOverflow`, `FillForward`, `FillConstant`, `LinearInterpolate`) control what happens when a lookup key falls outside the table's range.
+The overflow strategy (`ExtendOverflow`) and the fill strategies (`FillForward`, `FillConstant`, `LinearInterpolate`) act on a `MeltDimension` when the table is built, not when it is looked up: `ExtendOverflow` copies a melted column such as `Ult.` to every later key up to `to_value`, and a fill strategy fills the empty cells of the melted grid. A lookup key the built table does not hold is still a miss, and is refused. `ExtendOverflow` copies a row's own value, so it is wrong for a select table keyed by issue age, whose `Ult.` column is the rate at attained age issue age + N: `gspio describe` suggests the select-and-ultimate reading for that layout.
 
 ### storage_mode Parameter
 
@@ -117,6 +134,32 @@ table.dimension_values("age")       # List unique values in a dimension
 table.validate_lookup(age=45)       # Validate dimensions without executing
 table.with_shock(shock, name)       # Create a shocked copy
 table.to_dataframe()                # Convert back to Polars DataFrame
+table.fingerprint()                 # Content identity -- the hash the run record carries
+table.source_sha()                  # Recipe identity -- name, dimensions, value + fingerprint
+```
+
+### Table identity: which hash is which
+
+A `Table` carries two stamps, and they answer different questions.
+
+| Stamp | Identifies | Moves when |
+|-------|-----------|------------|
+| `table.fingerprint()` | the **content** -- the values a lookup answers from | any value changes |
+| `table.source_sha()` | the **table object** -- name, dimensions, value column and the fingerprint | values change, or the table is renamed or re-keyed |
+
+`fingerprint()` is what the calculation graph records: the `fingerprint` of the table's
+`assumptions` entry and the `table_fingerprint` on every lookup node, so it is the hash
+`gspio diff` and the viewer compare, and it feeds the graph fingerprint `gspio verify`
+checks. It is taken over
+the table in canonical form (keys by name, value column last, rows sorted), so reordering
+the source's columns or rows, or re-saving parquet as CSV, does not move it; a changed rate
+does. Use it to check "is this the basis the run used?". Use `source_sha()` to pin the
+whole configured table, name included.
+
+```python
+mort = Table(name="mortality", source="assumptions/mortality.parquet",
+             dimensions={"age": "age"}, value="rate")
+mort.fingerprint()   # 'sha256:…' -- equals the run record's assumptions[].fingerprint
 ```
 
 ## Guidelines

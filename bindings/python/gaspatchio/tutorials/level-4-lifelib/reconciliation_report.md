@@ -140,8 +140,8 @@ The model uses gaspatchio's `accumulate()` Rust plugin for account value project
 # state[t] = state[t-1] * growth[t-1] + prem_to_av[t]
 af.av_pp_bef_fee = af.shifted_growth.projection.accumulate(
     initial=af.av_pp_init,
-    multiply=af.shifted_growth,
-    add=af.prem_to_av,
+    multiplier=af.shifted_growth,
+    addend=af.prem_to_av,
 )
 ```
 

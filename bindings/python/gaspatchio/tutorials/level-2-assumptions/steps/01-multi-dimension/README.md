@@ -11,7 +11,7 @@ both `age` and `sex` as keyword arguments.
 mort_table = Table(
     name="mortality",
     source=mort_data,
-    dimensions={"age": "age", "sex": "sex"},   # two lookup keys
+    dimensions={"age": "age", "sex": "sex"},  # two lookup keys
     value="qx",
 )
 

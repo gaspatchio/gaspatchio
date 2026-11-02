@@ -29,7 +29,8 @@ an older install differs in ways this file's recipes do not account for.
 If the `xl-marinade` skill is available, invoke it — it owns the CLI and query surface
 in detail. This file covers only what to do with the results.
 
-Two caveats remain open upstream (verified 2026-08-18):
+Three caveats remain open upstream (the first two verified 2026-08-18; the third measured
+on xl-marinade 0.4.0, the release current at gaspatchio 1.0):
 
 - **`agent_cells` semantics are a footgun** (xl-marinade#14): numeric cells carry NULL
   `data_type`, values are JSON-stringified, and an empty formula is `''` not NULL — the
@@ -39,6 +40,16 @@ Two caveats remain open upstream (verified 2026-08-18):
   `agent_binding_dependencies` drops intra-binding edges, so a column referencing its
   own previous row shows no self-edge. Never conclude "no recursion" from the binding
   graph alone — check the row-level formulas of any balance-like column.
+- **xl-marinade 0.4.0 drops edges to blank cells.** A reference to a cell that holds
+  nothing — no `<c>` element in the sheet XML — can have no row in `agent_dependencies`:
+  on 0.4.0 a reference into a row that holds nothing, and one to a blank cell on another
+  sheet, both came back with no edge (a blank in a row of the formula's own sheet that
+  holds other cells kept its edge). A reference to a blank evaluates to 0, and a formula
+  reading a blank is often the mis-pointed reference a review most needs to see — so the
+  edge table hides exactly those. Take each formula's references from its own text
+  (proof two of the conversion skill parses them anyway) and report the ones the edge
+  table lacks. If `marinade --version` reports a release after 0.4.0, re-run that check
+  on a one-cell workbook before trusting the edge table for blank reads.
 
 The stable views are `agent_*` and `marinade_*`; the raw tables are internal. One
 blessed exception: `defined_names` is a base table with no `agent_*` view yet — read
@@ -99,12 +110,16 @@ of these produces a model that **runs and is wrong**, not a model that fails.
 |---|---|---|
 | A strongly-connected component in the binding graph | a rollforward state | Members that look like plain schedule lookups get written as closed-form columns. See "the lapse gate" below — this is the most common miss. |
 | A forward offset into its **own** column (`R[-1]C` — cumulative px, running balances) | `accumulate()` / `cum_prod`-style closed forms | Written as a plain column it reads garbage from an unshifted neighbour — usually loud. The quiet failure is reaching for a full rollforward instead: correct, slow, unreadable. |
-| A backward offset into its **own** column (`R[1]C` — PV rollbacks, mean reserves) | a **reversed** accumulation (reverse, accumulate, reverse back) or `next_period()` composition | Written as plain column assignments the model **runs and is wrong** — and in a reserving workbook those columns *are* the reserve. No cycle test can see this shape (gaspatchio#115). |
+| A backward offset into its **own** column (`R[1]C` — PV rollbacks, mean reserves) | Pure discounting of a cashflow: `projection.prospective_value()`. A plain suffix sum: `projection.remaining_sum()`. **Any other linear rollback** `V[t] = m[t]·V[t+1] + a[t]`: `projection.accumulate(initial=…, multiplier=m, addend=a, reverse=True)`, one line read as "roll the reserve back from the end". A rollback that is **not** linear but has a forward form is spelled `x.list.reverse()`, the forward calculation, and `.list.reverse()` back. A floored rollback (`MAX(floor, …R[1]C…)`) has no named form in 1.0: write it as the doubling scan in core operations (`gaspatchio-model-building`, `references/recursive-patterns.md`, Pattern 7), which agrees with a plain loop to 1e-14 relative at 600 periods and 1e-12 at 1,200 — state the tolerance you reconcile it to. | Written as plain column assignments the model **runs and is wrong** — and in a reserving workbook those columns *are* the reserve. No cycle test can see this shape (gaspatchio#115). Never through `.polars_native()`: the line records as engine text and `validate --engine jax` refuses the model. |
 | A row offset into a **different, independent** column (`R[-1]C[-2]` — claims from last period's deaths) | `previous_period()` / `at_period(n)` on that column — still a plain assignment | Not a recurrence. Routed to `accumulate()` a one-period lag becomes a running total — runs and is wrong. Written unshifted it is off by one period everywhere. |
 | No cycle **and no row offset** | plain column assignments | Reaching for a rollforward anyway costs clarity and speed for nothing. *Closed-form by default.* |
 | `IF(<prior period cell> > 0, x, 0)` | `lapse_when_all_non_positive=[...]` | The gate makes premium and expense depend on prior state, so they belong **inside** the recursion. Written as columns they are correct until the policy lapses, then silently wrong — and most test policies never lapse. |
-| A circular COI reference (NAR depends on the balance the COI reduces) | `deduct_nar(nar_timing=...)` | There are **three** conventions and they agree when rates are constant. The error only appears once rates vary, so it survives testing. Read the timing section below. |
+| A circular COI reference (NAR depends on the balance the COI reduces) | `deduct_nar(nar_timing=...)` | There are **three** conventions, and they give different charges even at flat rates — at a flat 4% the two named ones part in the first period — so choose by reading the workbook's NAR formula, never by fitting a number. What a flat-rate test hides is a wrong conversion between conventions, which passes on flat rates and is wrong once they vary (the timing section below). Test with rates that vary by period. |
+| Occupancy columns per state — healthy, sick, dead — each row reading the states' previous row (a Kolmogorov forward solution; disability with recovery; levels of care) | one `accumulate()` per state on the fixed-step axis, each reading only states already computed; with recovery, the per-state calls repeated in sweeps until a sweep changes nothing (`gaspatchio-model-building`, `references/recursive-patterns.md`, Pattern 6) | Multi-state occupancy has no named form in 1.0, and the rollforward is not it: the rollforward is for running balances whose within-period charges depend on the balance, and an occupancy written there is refused (an expression over a running balance names no column for the kernel to fetch). The sweep count is a convergence setting — check it (sweep *k* is exact at least through step *k*). |
+| A time column `x + A*h` or `x + A/12` over a step column `0..T`, with no dates anywhere (a teaching sheet, a Thiele or Kolmogorov grid) | a fixed-step axis: `af.projection.set(n_periods=T, step_years=h)` for `x + A*h`, `steps_per_year=n` for `x + A/n` | Projected on a calendar instead, `t_years()` is a running sum of year fractions: a monthly grid differs from `k/12` in the last bits at most boundaries (219 of 241 over 20 years), and every date the frame carries means nothing. On the step axis `t_years()` is `k·h` (or `k/n`) exactly. |
 | `ROUND(...,2)` between an opening and closing balance | `.round(2)` **inside** the rollforward | Rounding the final answer instead drifts monotonically — invisible in year 1, material by year 40. It compounds because each rounded balance opens the next period. |
+| `NORM.S.DIST(z, TRUE)`, `NORMSDIST(z)`, `NORM.DIST(z, 0, 1, TRUE)` — the N(d1), N(d2) of a guarantee priced as an option | `z.norm_cdf()` (or `z.excel.norm_s_dist()`, the same node). `NORM.DIST(x, mean, sd, TRUE)` is `((x - mean) / sd).norm_cdf()` | A hand-built Φ. The textbook `0.5 * (1 + erf(x / √2))` is right to eight digits in the body and answers 0.0 at -8.36, so the deep-out-of-the-money guarantees are the ones that go wrong; a series in an accessor records as engine text and costs about a minute a call at 100,000 policies. Reconcile Φ to about 1e-14 relative: Excel's own bits are unpublished. |
+| `(1+r)^n`, `v^t` — Excel's `^` with a whole-number exponent | `(1 + af.r) ** af.n` | Excel's worksheet `^` is square-and-multiply (in two conversions every cached `(1+r)^n` matched it bit for bit and the C library's `pow` did not); `**` is `pow`. They part in the last bits, more as `n` grows: at most 5 ulp up to `n = 10`, 79 ulp (1.1e-14 relative) by `n = 120`. Name it as a residual class with that bound rather than hand-building the squaring. VBA's `^` inside a user-defined function matched `pow`. |
 | `VLOOKUP(x, tbl, n)` with no 4th argument | an explicit key cap or overflow strategy | Excel's approximate match silently reuses the last row past the end of a table. `Table.lookup()` is exact-match and **raises** — which is better, but you must expect it rather than assume the model is broken. |
 | A wide sheet, e.g. age × {MNS, MS, FNS, FS} | `MeltDimension(columns=[...], name="...")` | — (fails loudly) |
 | Defined names over ranges | `Table` dimensions + `value` | — (fails loudly) |
@@ -142,9 +157,12 @@ recurrence. Classify each hit by **whose** row it reads:
 
 - **Its own column** (`R[-1]C` — no column bracket): a true recurrence. Forward is a
   rollforward-style accumulation — cumulative products and sums usually have closed
-  forms. Backward (`R[1]C`) is a PV rollback, exactly as order-dependent, spelled as a
-  *reversed* accumulation (reverse the series, accumulate, reverse back) or
-  `next_period()` composition.
+  forms. Backward (`R[1]C`) is a PV rollback, exactly as order-dependent. Pure
+  discounting is `prospective_value()` and a suffix sum `remaining_sum()`; any other
+  linear rollback is `accumulate(..., reverse=True)`. A rollback that is not linear but
+  has a forward form is `list.reverse()`, the forward calculation, and `list.reverse()`
+  back. A floored one (`MAX(floor, …R[1]C…)`) has no named form in 1.0: it is the
+  doubling scan (model-building's `references/recursive-patterns.md`, Pattern 7).
 - **Another column that is itself state** (the prior period's account value, a running
   balance): the reader belongs **inside** the recursion — this is the lapse gate below.
 - **Another, independent column** (`R[-1]C[-2]` into an input, schedule, or closed-form
@@ -222,10 +240,15 @@ The framework has three timing-sensitive methods and their defaults are not unif
 | `cumulative_survival()` | `rate_timing` | `beginning_of_period` |
 | `deduct_nar()` | `nar_timing` | `beginning_of_period` |
 
-**With constant rates every convention gives identical answers.** The mistake therefore
-survives every test built on flat assumptions and only appears at age boundaries or on a
-real curve. Confirm the source model's convention before assuming a difference is an
-assumption error.
+**The timing conventions do not give the same numbers, even at flat rates:** a survival
+curve differs by one period's decrement, a prospective value by one period's discount, a
+NAR charge by where the amount at risk is measured. What flat rates hide is a wrong
+conversion between them — at a constant rate one convention is the other times one `v`,
+and discount factors built from each period's own rate equal the running product — so a
+model that converts by one multiplication, or builds its factors that way, passes every
+flat-rate test and is wrong once rates vary. Test with rates that vary by period, and
+confirm the source model's convention before assuming a difference is an assumption
+error.
 
 For the COI specifically there are three conventions, not two:
 
@@ -247,9 +270,14 @@ recursion and must be reproduced there — `b["state"].round(2)` after the op it
 Rounding only the final output produces a monotonic drift that looks like a formula
 error but is not.
 
-**Which way.** Excel rounds **half away from zero**; polars rounds **half to even**. They
-differ only on exact ties, so the bug is invisible until it isn't. The rollforward
-`Round` op uses Excel's rule.
+**Which way, and what.** Excel rounds **half away from zero**; polars rounds **half to
+even**. And Excel rounds the value it holds — the cell's **15 significant digits** — not the
+double beneath it: `1.5 * 45366.20999999999` is the double `68049.31499999999…`, fifteen
+digits `68049.3150000000`, so `ROUND(…, 2)` is `68049.32` where a rounding of the double gives
+`68049.31`. Both differences sit in the last place, so the bug is invisible until it isn't.
+`.excel.round()`, the rollforward `Round` op and `round_charge=` all use Excel's rule, in the
+same code. `.round()` reads the same fifteen digits but sends a tie to the even neighbour by
+default; `.round(n, mode="half_away_from_zero")` is Excel's rule exactly.
 
 ## Reference values — and how to get the ones the workbook doesn't ship
 
@@ -329,14 +357,18 @@ Two verified caveats on `formulas` itself:
 3. **Confirm consumption with the edge table** for any structure you are about to
    model — a computed cell is not necessarily a used cell.
 4. **List the defined names.** Single cells are model-point columns; ranges are `Table`s.
-5. **Find every `ROUND`**, and note which sit inside a cycle.
-6. **Find every approximate-match `VLOOKUP`** and check whether the projection outruns
+   A workbook with none — or with only stale names no formula reads (search the formula
+   text for each) — is read by labelled coordinates instead; the conversion skill says how.
+5. **Read the time column.** Dates under it: a calendar cadence. `x + A*h` or `x + A/12`
+   with no dates anywhere: the fixed-step axis (the translation table above).
+6. **Find every `ROUND`**, and note which sit inside a cycle.
+7. **Find every approximate-match `VLOOKUP`** and check whether the projection outruns
    its table's range.
-7. **Identify the reference values.** A workbook's cached outputs are your gold standard —
+8. **Identify the reference values.** A workbook's cached outputs are your gold standard —
    extract them to parquet before changing anything, and reconcile against them column by
    column, not just on the final number. For branches the shipped inputs never exercise,
    recalculate the workbook with a formula engine rather than reimplementing it.
-8. **Check whether the workbook models one policy or many.** Most teaching and pricing
+9. **Check whether the workbook models one policy or many.** Most teaching and pricing
    workbooks model exactly one, driven by single-cell inputs. That is fine — but it means
    there is no policy space to test across, so guard the assumptions that only hold for
    that one life with assertions rather than comments.

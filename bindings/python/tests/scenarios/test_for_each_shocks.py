@@ -29,6 +29,11 @@ def af() -> ActuarialFrame:
 @pytest.fixture
 def mortality_table() -> Table:
     """Build the base mortality table shocked per-scenario by the loop."""
+    return _mortality()
+
+
+def _mortality() -> Table:
+    """The base mortality table the model reads and the plan shocks."""
     df = pl.DataFrame({"age": [30, 31], "rate": [0.001, 0.0012]})
     return Table(
         name="mortality_for_each_shocks",
@@ -38,19 +43,10 @@ def mortality_table() -> Table:
     )
 
 
-def _shock_model(
-    af: ActuarialFrame,
-    *,
-    tables: dict,
-    drivers: dict,  # noqa: ARG001
-) -> ActuarialFrame:
-    """Look up shocked mortality by (scenario_id, age); scale to readable units."""
-    mortality = tables["mortality"]
-    qx = mortality.lookup(
-        scenario_id=pl.col("scenario_id"),
-        age=pl.col("age"),
-    )
-    return af.with_columns((qx * 1e6).alias("value"))
+def _shock_model(af: ActuarialFrame) -> ActuarialFrame:
+    """Look up mortality by age, the model's own read; scale to readable units."""
+    af.qx = _mortality().lookup(age=af.age)
+    return af.with_columns((pl.col("qx") * 1e6).alias("value"))
 
 
 def test_shocks_dict_batched_equals_unbatched(
@@ -60,14 +56,14 @@ def test_shocks_dict_batched_equals_unbatched(
     """batch_size=1 (per-scenario kernel) must agree with batch_size=2 (stacked)."""
     shocks: dict[str, list] = {
         "BASE": [],
-        "STRESS": [MultiplicativeShock(factor=2.0)],
+        "STRESS": [MultiplicativeShock(factor=2.0, table="mortality_for_each_shocks")],
     }
     one = for_each_scenario(
         af,
         scenarios=shocks,
         model_fn=_shock_model,
         aggregations=(Sum("value").alias("total"),),
-        base_tables={"mortality": mortality_table},
+        base_tables={"mortality_for_each_shocks": mortality_table},
         batch_size=1,
     )
     two = for_each_scenario(
@@ -75,7 +71,7 @@ def test_shocks_dict_batched_equals_unbatched(
         scenarios=shocks,
         model_fn=_shock_model,
         aggregations=(Sum("value").alias("total"),),
-        base_tables={"mortality": mortality_table},
+        base_tables={"mortality_for_each_shocks": mortality_table},
         batch_size=2,
     )
     assert one.aggregations["total"] == pytest.approx(two.aggregations["total"])
@@ -92,7 +88,7 @@ def test_classify_rejects_mixed_dict(
             scenarios={"A": [], "B": {"driver": 1}},  # list + dict mixed
             model_fn=_shock_model,
             aggregations=(Sum("value").alias("total"),),
-            base_tables={"mortality": mortality_table},
+            base_tables={"mortality_for_each_shocks": mortality_table},
         )
 
 
@@ -107,7 +103,7 @@ def test_classify_rejects_non_list_non_dict(
             scenarios="not a valid shape",  # type: ignore[arg-type]
             model_fn=_shock_model,
             aggregations=(Sum("value").alias("total"),),
-            base_tables={"mortality": mortality_table},
+            base_tables={"mortality_for_each_shocks": mortality_table},
         )
 
 
@@ -128,17 +124,11 @@ def test_table_scoped_shock_applies_only_to_named_table(
         value="rate",
     )
 
-    def _two_table_model(
-        af: ActuarialFrame,
-        *,
-        tables: dict,
-        drivers: dict,  # noqa: ARG001
-    ) -> ActuarialFrame:
-        m = tables["mortality"]
-        lp = tables["lapse"]
-        qx = m.lookup(scenario_id=pl.col("scenario_id"), age=pl.col("age"))
-        lx = lp.lookup(scenario_id=pl.col("scenario_id"), age=pl.col("age"))
-        return af.with_columns((qx + lx).alias("value"))
+    def _two_table_model(af: ActuarialFrame) -> ActuarialFrame:
+        af.qx = mortality.lookup(age=af.age)
+        af.lx = lapse.lookup(age=af.age)
+        af.value = af.qx + af.lx
+        return af
 
     targeted = MultiplicativeShock(factor=2.0, table="mortality")
     scenarios: dict[str, list] = {"BASE": [], "STRESS": [targeted]}
@@ -151,5 +141,8 @@ def test_table_scoped_shock_applies_only_to_named_table(
         base_tables={"mortality": mortality, "lapse": lapse},
         batch_size=2,
     )
-    assert result.aggregations["total"] > 0
+    # BASE reads 0.0011 + 0.05 per policy; STRESS doubles mortality alone.
+    assert result.aggregations["total"] == pytest.approx(
+        (0.001 + 0.0012 + 0.10) + (0.002 + 0.0024 + 0.10)
+    )
     assert result.n_scenarios == 2

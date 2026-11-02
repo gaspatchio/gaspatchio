@@ -9,7 +9,11 @@
 
 """Tests for projection accessor methods."""
 
+import datetime
+import decimal
 import math
+from collections.abc import Callable
+from typing import Literal
 
 import polars as pl
 import pytest
@@ -144,8 +148,10 @@ class TestCumulativeSurvival:
         af = ActuarialFrame(data)
 
         # Manual shift approach (old way - get end-of-period, then shift)
-        af.pols_if_manual = af.qx.projection.cumulative_survival(start_at=None).shift(
-            1, fill_value=1.0
+        af.pols_if_manual = (
+            af.qx.projection.cumulative_survival(start_at=None)
+            .polars_native()
+            .list.eval(pl.element().shift(1, fill_value=1.0))
         )
 
         # start_at approach (new way - default is beginning-of-period)
@@ -225,7 +231,8 @@ class TestRateTiming:
         """Test that BOP and EOP produce different results at rate boundaries.
 
         When rates change (e.g., at age boundaries), the two timing conventions
-        give different results. With constant rates, they would be the same.
+        give different results. They differ at a flat rate too, by one period's
+        decrement; varying rates are what expose a wrong conversion between them.
         """
         # Simulate rate change at month 2 (e.g., age boundary)
         data = {"exit_rate": [[0.008, 0.008, 0.009, 0.009]]}
@@ -608,7 +615,7 @@ class TestProspectiveValue:
         result = af.collect()
         pv = result["pv"][0]
 
-        # F4 Excel-alignment (BREAKING): default timing is "end_of_period" =
+        # Excel alignment (a breaking change): default timing is "end_of_period" =
         # ordinary annuity (Excel type=0). Every cashflow is discounted a full
         # period, so at each t: PV(t) = sum_{s>=t} CF[s] * v^(s-t+1), v = 1/1.05.
         #   t=2: 100*v                   =  95.238...
@@ -655,6 +662,39 @@ class TestProspectiveValue:
             100.0 / 1.04 + 100.0 / (1.04 * 1.05) + 100.0 / (1.04 * 1.05 * 1.06)
         )
         assert pytest.approx(pv[0], abs=1e-2) == expected_pv0
+
+    @pytest.mark.parametrize("timing", ["beginning_of_period", "end_of_period"])
+    def test_scalar_column_rate_matches_each_policys_constant_list(
+        self, timing: Literal["beginning_of_period", "end_of_period"]
+    ) -> None:
+        """A per-policy rate borrows each cashflow row's own projection length."""
+        data = {
+            "cashflow": [
+                [100.0, 210.0, 330.0],
+                [80.0, 40.0],
+                [],
+            ],
+            "rate": [0.03, 0.12, 0.25],
+            "rate_per_period": [
+                [0.03, 0.03, 0.03],
+                [0.12, 0.12],
+                [],
+            ],
+        }
+        af = ActuarialFrame(data)
+        af.pv_scalar_rate = af.cashflow.projection.prospective_value(
+            discount_rate=af.rate, timing=timing
+        )
+        af.pv_list_rate = af.cashflow.projection.prospective_value(
+            discount_rate=af.rate_per_period, timing=timing
+        )
+
+        result = af.collect()
+
+        for scalar_rate, list_rate in zip(
+            result["pv_scalar_rate"], result["pv_list_rate"], strict=True
+        ):
+            assert scalar_rate.to_list() == pytest.approx(list_rate.to_list())
 
     def test_with_discount_factor(self):
         """Test prospective_value with pre-computed discount factors.
@@ -705,7 +745,7 @@ class TestProspectiveValue:
     def test_timing_beginning_of_period(self):
         """Test prospective_value with beginning_of_period timing (premiums).
 
-        F4 Excel-alignment (BREAKING): beginning_of_period is now the annuity-DUE
+        Excel alignment (a breaking change): beginning_of_period is now the annuity-DUE
         value (Excel type=1) where the cashflow at t is paid at the START of the
         period and is therefore undiscounted, while end_of_period is the ordinary
         annuity (Excel type=0) where the cashflow is discounted one FULL extra
@@ -783,9 +823,9 @@ class TestProspectiveValue:
         assert pytest.approx(pv_bop[0], abs=1e-9) == cf[0] + pv_bop[1] * v[0]
 
     def test_timing_excel_convention_bop_gt_eop_exact(self):
-        """Pin the Excel annuity convention with exact hand-computed values (F4).
+        """Pin the Excel annuity convention with exact hand-computed values.
 
-        F4 Excel-alignment (BREAKING): match Excel's PV/annuity convention where
+        Excel alignment (a breaking change): match Excel's PV/annuity convention where
         ``type=1`` (beginning_of_period, annuity-due) yields the LARGER value and
         ``type=0`` (end_of_period, ordinary annuity) yields the SMALLER value.
         Previously the labels were inverted.
@@ -826,7 +866,8 @@ class TestProspectiveValue:
         assert pytest.approx(bop[1], abs=1e-6) == 100 + 100 * v
         assert pytest.approx(bop[2], abs=1e-6) == 100
 
-        # The whole point of F4: due (beginning) > ordinary (end) at every period.
+        # The whole point of the alignment: due (beginning) > ordinary (end) at
+        # every period.
         assert bop[0] > eop[0]
         assert bop[1] > eop[1]
         assert bop[2] > eop[2]
@@ -965,6 +1006,37 @@ class TestProspectiveValue:
             af.cashflow.projection.prospective_value(
                 discount_rate=0.05, discount_factor=af.cashflow
             )
+
+    def test_a_bare_number_as_discount_factor_is_refused_by_name(self):
+        """A single number is a rate in the wrong argument, and says so.
+
+        Discount FACTORS are one value per projection period. A scalar
+        there is almost always a rate the actuary meant to pass as
+        ``discount_rate``, and the two are not interchangeable — a rate is
+        start-anchored, a factor end-anchored. Refused at the line that
+        wrote it rather than deep inside a list evaluation.
+        """
+        data = {"cashflow": [[100.0, 100.0, 100.0]]}
+        af = ActuarialFrame(data)
+
+        with pytest.raises(TypeError, match="discount_factor must be"):
+            af.cashflow.projection.prospective_value(discount_factor=0.95)
+
+    def test_a_raw_expression_as_discount_rate_is_refused_by_name(self):
+        """A raw Polars expression is off this method's contract.
+
+        Sharp knives, no magic: the framework cannot tell whether somebody
+        else's expression is start- or end-anchored, and guessing is
+        exactly the silent valuation error the timing convention exists to
+        prevent. Assign it to a column first and pass the column.
+        """
+        import polars as pl
+
+        data = {"cashflow": [[100.0, 100.0, 100.0]], "rate": [[0.05, 0.05, 0.05]]}
+        af = ActuarialFrame(data)
+
+        with pytest.raises(TypeError, match="discount_rate must be"):
+            af.cashflow.projection.prospective_value(discount_rate=pl.col("rate"))
 
     def test_no_discount_provided_raises_error(self):
         """Test that not specifying discount_rate or discount_factor raises."""
@@ -1124,8 +1196,10 @@ class TestAtPeriod:
         af = ActuarialFrame(data)
 
         # Use .over() to apply at_period within each policy group
-        af.value_prev = af.value.projection.at_period(-1, fill_value=0).over(
-            "policy_id"
+        af.value_prev = (
+            af.value.projection.at_period(-1, fill_value=0)
+            .polars_native()
+            .over("policy_id")
         )
 
         result = af.collect()
@@ -1147,7 +1221,7 @@ class TestAccumulate:
     """Tests for accumulate() method.
 
     The accumulate() method computes the linear recurrence:
-        state[t] = state[t-1] * multiply[t] + add[t]
+        state[t] = state[t-1] * multiplier[t] + addend[t]
 
     This is the core primitive for account value rollforwards and other
     state-dependent actuarial projections.
@@ -1157,15 +1231,15 @@ class TestAccumulate:
         """Test basic linear recurrence: state[t] = state[t-1] * M[t] + A[t]."""
         data = {
             "initial": [100.0],
-            "multiply": [[1.01, 1.01, 1.01]],
-            "add": [[10.0, 10.0, 10.0]],
+            "multiplier": [[1.01, 1.01, 1.01]],
+            "addend": [[10.0, 10.0, 10.0]],
         }
         af = ActuarialFrame(data)
 
         af.av = af.initial.projection.accumulate(
             initial=af.initial,
-            multiply=af.multiply,
-            add=af.add,
+            multiplier=af.multiplier,
+            addend=af.addend,
         )
 
         result = af.collect()
@@ -1179,37 +1253,37 @@ class TestAccumulate:
         assert pytest.approx(av[1], abs=1e-6) == 122.11
         assert pytest.approx(av[2], abs=1e-6) == 133.3311
 
-    def test_scalar_multiply_broadcasts_to_the_flow_timeline(self):
-        """A numeric multiply broadcasts to add's per-policy lengths (gh#128).
+    def test_scalar_multiplier_broadcasts_to_the_flow_timeline(self):
+        """A numeric multiplier broadcasts to addend's per-policy lengths (gh#128).
 
         The result must match the same recurrence with the factor written
         out as a list — broadcast is a spelling, not a different formula.
         """
         data = {
             "initial": [100.0],
-            "multiply_list": [[1.01, 1.01, 1.01]],
-            "add": [[10.0, 10.0, 10.0]],
+            "multiplier_list": [[1.01, 1.01, 1.01]],
+            "addend": [[10.0, 10.0, 10.0]],
         }
         af = ActuarialFrame(data)
         af.spelled_out = af.initial.projection.accumulate(
-            initial=af.initial, multiply=af.multiply_list, add=af.add
+            initial=af.initial, multiplier=af.multiplier_list, addend=af.addend
         )
         af.broadcast = af.initial.projection.accumulate(
-            initial=af.initial, multiply=1.01, add=af.add
+            initial=af.initial, multiplier=1.01, addend=af.addend
         )
         result = af.collect()
         assert result["broadcast"].to_list() == result["spelled_out"].to_list()
 
-    def test_scalar_column_multiply_broadcasts(self):
-        """A scalar *column* multiply broadcasts the same way as a literal."""
+    def test_scalar_column_multiplier_broadcasts(self):
+        """A scalar *column* multiplier broadcasts the same way as a literal."""
         data = {
             "initial": [100.0, 200.0],
             "growth": [1.5, 2.0],
-            "add": [[10.0, 10.0], [0.0, 0.0, 0.0]],
+            "addend": [[10.0, 10.0], [0.0, 0.0, 0.0]],
         }
         af = ActuarialFrame(data)
         af.av = af.initial.projection.accumulate(
-            initial=af.initial, multiply=af.growth, add=af.add
+            initial=af.initial, multiplier=af.growth, addend=af.addend
         )
         result = af.collect()
         # Policy 1: 100*1.5+10 = 160, 160*1.5+10 = 250
@@ -1217,30 +1291,29 @@ class TestAccumulate:
         # Policy 2 (jagged, 3 periods): 400, 800, 1600
         assert result["av"].to_list()[1] == [400.0, 800.0, 1600.0]
 
-    def test_scalar_multiply_with_string_named_sibling(self):
-        """The docstring's own spelling: multiply=1.5, add="net_flow".
+    def test_scalar_multiplier_beside_a_sibling_flow_column(self):
+        """The docstring's own spelling: multiplier=1.5 beside a per-period addend.
 
-        resolve_shape() deliberately calls a raw string ambiguous, so the
-        accessor must resolve the converted pl.col expression instead —
-        this is the Greptile P1 regression case from PR #155.
+        The number and the column stand in the same call, and the number
+        takes its period count from the column rather than needing a list
+        of its own — the PR #155 regression case, in the spelling the API
+        now takes.
         """
-        af = ActuarialFrame(
-            {"av_init": [1000.0], "net_flow": [[100.0, 100.0, 100.0]]}
-        )
+        af = ActuarialFrame({"av_init": [1000.0], "net_flow": [[100.0, 100.0, 100.0]]})
         af.av = af.net_flow.projection.accumulate(
-            initial="av_init", multiply=1.5, add="net_flow"
+            initial=af.av_init, multiplier=1.5, addend=af.net_flow
         )
         assert af.collect()["av"].to_list() == [[1600.0, 2500.0, 3850.0]]
 
-    def test_scalar_add_broadcasts_to_the_multiply_timeline(self):
-        """A numeric add broadcasts to multiply's per-policy lengths."""
+    def test_scalar_addend_broadcasts_to_the_multiplier_timeline(self):
+        """A numeric addend broadcasts to multiplier's per-policy lengths."""
         data = {
             "initial": [100.0],
-            "multiply": [[1.5, 1.5, 1.5]],
+            "multiplier": [[1.5, 1.5, 1.5]],
         }
         af = ActuarialFrame(data)
         af.av = af.initial.projection.accumulate(
-            initial=af.initial, multiply=af.multiply, add=100.0
+            initial=af.initial, multiplier=af.multiplier, addend=100.0
         )
         result = af.collect()
         # 100*1.5+100 = 250, 250*1.5+100 = 475, 475*1.5+100 = 812.5
@@ -1251,27 +1324,33 @@ class TestAccumulate:
 
         Sharp knives: refuse rather than guess a period count; the error
         names the growth-free closed form so the next attempt converges.
+
+        The refusal fires when the formula is assigned, not when the method
+        is called: "is this operand per-period?" is a question about the
+        frame's dtypes, and the accessor call itself only records what was
+        asked for. That is still the actuary's own line — the assignment
+        they wrote — not a traceback out of ``.collect()``.
         """
         data = {"initial": [100.0], "flow": [5.0]}
         af = ActuarialFrame(data)
         with pytest.raises(ValueError, match=r"cum_sum"):
-            af.initial.projection.accumulate(
-                initial=af.initial, multiply=1.02, add=af.flow
+            af.account_value = af.initial.projection.accumulate(
+                initial=af.initial, multiplier=1.02, addend=af.flow
             )
 
-    def test_multiply_only_cumulative_product(self):
-        """Test that add=0 gives cumulative product with initial."""
+    def test_multiplier_only_cumulative_product(self):
+        """Test that addend=0 gives cumulative product with initial."""
         data = {
             "initial": [100.0],
-            "multiply": [[2.0, 3.0, 4.0]],
-            "add": [[0.0, 0.0, 0.0]],
+            "multiplier": [[2.0, 3.0, 4.0]],
+            "addend": [[0.0, 0.0, 0.0]],
         }
         af = ActuarialFrame(data)
 
         af.result = af.initial.projection.accumulate(
             initial=af.initial,
-            multiply=af.multiply,
-            add=af.add,
+            multiplier=af.multiplier,
+            addend=af.addend,
         )
 
         result = af.collect()
@@ -1284,19 +1363,19 @@ class TestAccumulate:
         assert values[1] == 600.0
         assert values[2] == 2400.0
 
-    def test_add_only_cumulative_sum(self):
-        """Test that multiply=1 gives cumulative sum with initial."""
+    def test_addend_only_cumulative_sum(self):
+        """Test that multiplier=1 gives cumulative sum with initial."""
         data = {
             "initial": [100.0],
-            "multiply": [[1.0, 1.0, 1.0]],
-            "add": [[10.0, 20.0, 30.0]],
+            "multiplier": [[1.0, 1.0, 1.0]],
+            "addend": [[10.0, 20.0, 30.0]],
         }
         af = ActuarialFrame(data)
 
         af.result = af.initial.projection.accumulate(
             initial=af.initial,
-            multiply=af.multiply,
-            add=af.add,
+            multiplier=af.multiplier,
+            addend=af.addend,
         )
 
         result = af.collect()
@@ -1314,27 +1393,27 @@ class TestAccumulate:
         data = {
             "policy_id": [1, 2],
             "initial": [100.0, 200.0],
-            "multiply": [[1.01, 1.02], [1.05, 1.05]],
-            "add": [[10.0, 20.0], [50.0, 50.0]],
+            "multiplier": [[1.01, 1.02], [1.05, 1.05]],
+            "addend": [[10.0, 20.0], [50.0, 50.0]],
         }
         af = ActuarialFrame(data)
 
         af.av = af.initial.projection.accumulate(
             initial=af.initial,
-            multiply=af.multiply,
-            add=af.add,
+            multiplier=af.multiplier,
+            addend=af.addend,
         )
 
         result = af.collect()
 
-        # Row 0: initial=100, multiply=[1.01, 1.02], add=[10, 20]
+        # Row 0: initial=100, multiplier=[1.01, 1.02], addend=[10, 20]
         # out[0] = 100 * 1.01 + 10 = 111.0
         # out[1] = 111.0 * 1.02 + 20 = 133.22
         av_1 = result["av"][0]
         assert pytest.approx(av_1[0], abs=1e-6) == 111.0
         assert pytest.approx(av_1[1], abs=1e-6) == 133.22
 
-        # Row 1: initial=200, multiply=[1.05, 1.05], add=[50, 50]
+        # Row 1: initial=200, multiplier=[1.05, 1.05], addend=[50, 50]
         # out[0] = 200 * 1.05 + 50 = 260.0
         # out[1] = 260.0 * 1.05 + 50 = 323.0
         av_2 = result["av"][1]
@@ -1343,29 +1422,27 @@ class TestAccumulate:
 
     def test_broadcast_initial(self):
         """Test single initial value (literal) broadcast to multiple rows."""
-        from gaspatchio.functions.vector import accumulate
+        from gaspatchio.frame.lowering._polars.plugins import accumulate
 
         data = {
-            "multiply": [[1.01, 1.01], [2.0, 2.0]],
-            "add": [[0.0, 0.0], [0.0, 0.0]],
+            "multiplier": [[1.01, 1.01], [2.0, 2.0]],
+            "addend": [[0.0, 0.0], [0.0, 0.0]],
         }
         af = ActuarialFrame(data)
 
         # Use literal for broadcasting initial value across rows
-        af.result = accumulate(
-            pl.lit(100.0), pl.col("multiply"), pl.col("add")
-        )
+        af.result = accumulate(pl.lit(100.0), pl.col("multiplier"), pl.col("addend"))
 
         result = af.collect()
 
-        # Row 0: initial=100 (broadcast), multiply=[1.01, 1.01]
+        # Row 0: initial=100 (broadcast), multiplier=[1.01, 1.01]
         # out[0] = 100 * 1.01 = 101.0
         # out[1] = 101.0 * 1.01 = 102.01
         values_1 = result["result"][0]
         assert pytest.approx(values_1[0], abs=1e-6) == 101.0
         assert pytest.approx(values_1[1], abs=1e-6) == 102.01
 
-        # Row 1: initial=100 (broadcast), multiply=[2, 2]
+        # Row 1: initial=100 (broadcast), multiplier=[2, 2]
         # out[0] = 100 * 2 = 200
         # out[1] = 200 * 2 = 400
         values_2 = result["result"][1]
@@ -1374,17 +1451,17 @@ class TestAccumulate:
 
     def test_null_initial_produces_null_output(self):
         """Test that null initial value produces all-null output row."""
-        from gaspatchio.functions.vector import accumulate
+        from gaspatchio.frame.lowering._polars.plugins import accumulate
 
         data = {
             "initial": [None],
-            "multiply": [[1.01, 1.01]],
-            "add": [[10.0, 10.0]],
+            "multiplier": [[1.01, 1.01]],
+            "addend": [[10.0, 10.0]],
         }
         af = ActuarialFrame(data)
 
         af.result = accumulate(
-            pl.col("initial"), pl.col("multiply"), pl.col("add")
+            pl.col("initial"), pl.col("multiplier"), pl.col("addend")
         )
 
         result = af.collect()
@@ -1395,18 +1472,48 @@ class TestAccumulate:
         assert values[1] is None
 
     def test_null_in_inner_list_propagates(self):
-        """Test that null in inner list produces null and propagates NaN."""
-        from gaspatchio.functions.vector import accumulate
+        """Test that a null in an inner list nulls that period and every later one."""
+        from gaspatchio.frame.lowering._polars.plugins import accumulate
 
         data = {
             "initial": [100.0],
-            "multiply": [[1.01, None, 1.01]],
-            "add": [[10.0, 10.0, 10.0]],
+            "multiplier": [[1.01, None, 1.01]],
+            "addend": [[10.0, 10.0, 10.0]],
         }
         af = ActuarialFrame(data)
 
         af.result = accumulate(
-            pl.col("initial"), pl.col("multiply"), pl.col("add")
+            pl.col("initial"), pl.col("multiplier"), pl.col("addend")
+        )
+
+        result = af.collect()
+        values = result["result"][0]
+
+        # out[0] = 100 * 1.01 + 10 = 111.0, the one period the fold reaches
+        # before the hole
+        assert pytest.approx(values[0], abs=1e-6) == 111.0
+        # out[1] = null: this period has no multiplier, so the running state
+        # has lost a term
+        assert values[1] is None
+        # out[2] = null: a state that lost a period is unknown from there on.
+        # This used to report NaN -- a stand-in the kernel put in for the
+        # state it no longer had, which read as a broken calculation rather
+        # than as a missing input.
+        assert values[2] is None
+
+    def test_nan_in_inner_list_is_not_a_null_and_keeps_folding(self):
+        """Test that a NaN multiplier is carried by the arithmetic, not nulled."""
+        from gaspatchio.frame.lowering._polars.plugins import accumulate
+
+        data = {
+            "initial": [100.0],
+            "multiplier": [[1.01, float("nan"), 1.01]],
+            "addend": [[10.0, 10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+
+        af.result = accumulate(
+            pl.col("initial"), pl.col("multiplier"), pl.col("addend")
         )
 
         result = af.collect()
@@ -1414,24 +1521,26 @@ class TestAccumulate:
 
         # out[0] = 100 * 1.01 + 10 = 111.0
         assert pytest.approx(values[0], abs=1e-6) == 111.0
-        # out[1] = null (because multiply is null)
-        assert values[1] is None
-        # out[2] = NaN (state is NaN after null)
+        # out[1] = 111.0 * NaN + 10 = NaN, which is what the multiplication
+        # says: a NaN is a value the recurrence keeps, not a period that went
+        # missing, and the two must not answer alike
+        assert math.isnan(values[1])
+        # out[2] = NaN * 1.01 + 10 = NaN
         assert math.isnan(values[2])
 
     def test_empty_lists_produce_empty_output(self):
         """Test that empty input lists produce empty output list."""
-        from gaspatchio.functions.vector import accumulate
+        from gaspatchio.frame.lowering._polars.plugins import accumulate
 
         data = {
             "initial": [100.0],
-            "multiply": [[]],
-            "add": [[]],
+            "multiplier": [[]],
+            "addend": [[]],
         }
         af = ActuarialFrame(data)
 
         af.result = accumulate(
-            pl.col("initial"), pl.col("multiply"), pl.col("add")
+            pl.col("initial"), pl.col("multiplier"), pl.col("addend")
         )
 
         result = af.collect()
@@ -1440,20 +1549,20 @@ class TestAccumulate:
         assert len(values) == 0
 
     def test_length_mismatch_raises_error(self):
-        """Test that mismatched multiply/add lengths raise error."""
+        """Test that mismatched multiplier/addend lengths raise error."""
         from polars.exceptions import ComputeError
 
-        from gaspatchio.functions.vector import accumulate
+        from gaspatchio.frame.lowering._polars.plugins import accumulate
 
         data = {
             "initial": [100.0],
-            "multiply": [[1.01, 1.01, 1.01]],  # 3 elements
-            "add": [[10.0, 10.0]],  # 2 elements - mismatch!
+            "multiplier": [[1.01, 1.01, 1.01]],  # 3 elements
+            "addend": [[10.0, 10.0]],  # 2 elements - mismatch!
         }
         af = ActuarialFrame(data)
 
         af.result = accumulate(
-            pl.col("initial"), pl.col("multiply"), pl.col("add")
+            pl.col("initial"), pl.col("multiplier"), pl.col("addend")
         )
 
         with pytest.raises(ComputeError, match="mismatched"):
@@ -1462,8 +1571,8 @@ class TestAccumulate:
     def test_account_value_rollforward_pattern(self):
         """Test the canonical account value rollforward pattern.
 
-        AV[t] = (AV[t-1] + Premium[t] - Fee[t]) × (1 + Return[t])
-        Rearranged to: State × M + A where M = (1+i), A = (Premium - Fee) × (1+i)
+        AV[t] = (AV[t-1] + Premium[t] - Fee[t]) * (1 + Return[t])
+        Rearranged to: State * M + A where M = (1+i), A = (Premium - Fee) * (1+i)
         """
         data = {
             "av_pp_init": [1000.0],
@@ -1479,8 +1588,8 @@ class TestAccumulate:
 
         af.av = af.av_pp_init.projection.accumulate(
             initial=af.av_pp_init,
-            multiply=growth,
-            add=net_flow_grown,
+            multiplier=growth,
+            addend=net_flow_grown,
         )
 
         result = af.collect()
@@ -1495,19 +1604,25 @@ class TestAccumulate:
         assert pytest.approx(av[1], abs=1e-2) == 1214.718
         assert pytest.approx(av[2], abs=1e-2) == 1343.86
 
-    def test_with_string_column_names(self):
-        """Test accumulate with string column names (not ColumnProxy)."""
+    def test_with_bracket_spelled_columns(self):
+        """The bracket spelling the refusal names computes the same numbers.
+
+        ``af["initial"]`` is what an actuary writes when the column name has
+        a space or is a Python keyword, and it is one of the two spellings a
+        refused bare string is sent to, so it is held to the attribute
+        spelling's answer.
+        """
         data = {
             "initial": [100.0],
-            "multiply": [[1.01, 1.01, 1.01]],
-            "add": [[10.0, 10.0, 10.0]],
+            "multiplier": [[1.01, 1.01, 1.01]],
+            "addend": [[10.0, 10.0, 10.0]],
         }
         af = ActuarialFrame(data)
 
-        af.av = af.initial.projection.accumulate(
-            initial="initial",
-            multiply="multiply",
-            add="add",
+        af.av = af["initial"].projection.accumulate(
+            initial=af["initial"],
+            multiplier=af["multiplier"],
+            addend=af["addend"],
         )
 
         result = af.collect()
@@ -1516,6 +1631,456 @@ class TestAccumulate:
         assert pytest.approx(av[0], abs=1e-6) == 111.0
         assert pytest.approx(av[1], abs=1e-6) == 122.11
         assert pytest.approx(av[2], abs=1e-6) == 133.3311
+
+    def test_a_refused_operand_leaves_the_model_as_it_was(self):
+        """The refusal lands before anything is emitted, so nothing is recorded.
+
+        A bare string never reaches the op-tree: no ``Col`` is minted from
+        it, no node is built, no calculation is logged. The frame that was
+        half-written when the mistake was made still holds exactly the
+        columns and the calculation record it held the line before.
+        """
+        data = {
+            "initial": [100.0],
+            "multiplier": [[1.01, 1.01, 1.01]],
+            "addend": [[10.0, 10.0, 10.0]],
+        }
+        af = ActuarialFrame(data)
+        af.doubled = af.multiplier * 2
+        columns_before = list(af.columns)
+        recorded_before = [
+            record.column
+            for record in af._calculations  # noqa: SLF001 -- the log under test
+        ]
+
+        with pytest.raises(TypeError, match="bare string"):
+            af.initial.projection.accumulate(
+                initial="initial", multiplier=af.multiplier, addend=af.addend
+            )
+
+        assert list(af.columns) == columns_before
+        assert [
+            record.column
+            for record in af._calculations  # noqa: SLF001 -- the log under test
+        ] == recorded_before
+
+    def test_the_operands_old_names_are_refused_at_their_new_spelling(self):
+        """``multiply=``/``add=`` are gone, and the refusal names the nouns.
+
+        The keywords read as the recurrence now -- ``multiplier`` and
+        ``addend``, the words the format specification uses for the same two
+        operands -- and nothing accepts the words they replaced. A model
+        written against the old spelling therefore stops at the call rather
+        than computing anything, which is the whole point of renaming
+        without an alias: Python's own suggestion carries the new word, so
+        the next attempt converges on the line that failed.
+
+        ``add`` is close enough to ``addend`` for a reader and not close
+        enough for difflib, so only one of the two sentences ends in a
+        suggestion. Both are pinned because both are what a caller meets.
+        """
+        af = ActuarialFrame(
+            {
+                "initial": [100.0],
+                "multiplier": [[1.01, 1.01, 1.01]],
+                "addend": [[10.0, 10.0, 10.0]],
+            },
+        )
+
+        with pytest.raises(TypeError) as growth_refusal:
+            af.initial.projection.accumulate(
+                initial=af.initial,
+                multiply=af.multiplier,
+                addend=af.addend,
+            )
+        assert str(growth_refusal.value) == (
+            "ProjectionColumnAccessor.accumulate() got an unexpected keyword "
+            "argument 'multiply'. Did you mean 'multiplier'?"
+        )
+
+        with pytest.raises(TypeError) as flow_refusal:
+            af.initial.projection.accumulate(
+                initial=af.initial,
+                multiplier=af.multiplier,
+                add=af.addend,
+            )
+        assert str(flow_refusal.value) == (
+            "ProjectionColumnAccessor.accumulate() got an unexpected keyword "
+            "argument 'add'"
+        )
+
+    @pytest.mark.parametrize(
+        ("operands", "parameter", "dtype"),
+        [
+            (
+                lambda af: {
+                    "initial": af.issue_date,
+                    "multiplier": af.growth,
+                    "addend": af.flow,
+                },
+                "initial",
+                "Date",
+            ),
+            (
+                lambda af: {
+                    "initial": datetime.date(2025, 1, 1),
+                    "multiplier": af.growth,
+                    "addend": af.flow,
+                },
+                "initial",
+                "Date",
+            ),
+            (
+                lambda af: {
+                    "initial": datetime.datetime(
+                        2025, 1, 1, 12, 30, tzinfo=datetime.UTC
+                    ),
+                    "multiplier": af.growth,
+                    "addend": af.flow,
+                },
+                "initial",
+                "Datetime",
+            ),
+            (
+                lambda af: {
+                    "initial": datetime.timedelta(days=30),
+                    "multiplier": af.growth,
+                    "addend": af.flow,
+                },
+                "initial",
+                "Duration",
+            ),
+            (
+                lambda af: {
+                    "initial": af.av_init,
+                    "multiplier": af.anniversaries,
+                    "addend": af.flow,
+                },
+                "multiplier",
+                "List(Date)",
+            ),
+            (
+                lambda af: {
+                    "initial": af.av_init,
+                    "multiplier": af.growth,
+                    "addend": af.waiting,
+                },
+                "addend",
+                "List(Duration",
+            ),
+        ],
+        ids=[
+            "initial-date-column",
+            "initial-date-literal",
+            "initial-datetime-literal",
+            "initial-timedelta-literal",
+            "multiplier-date-list",
+            "addend-duration-list",
+        ],
+    )
+    def test_a_date_or_a_duration_is_refused_where_a_number_belongs(
+        self,
+        operands: Callable[[ActuarialFrame], dict[str, object]],
+        parameter: str,
+        dtype: str,
+    ) -> None:
+        """A temporal operand is refused at the assignment, never run as a number.
+
+        The kernel casts every operand to a float, so a date used to open
+        the balance at its count of days since 1970-01-01 -- 2025-01-01
+        opened at 20,089 -- and the projection ran, exported and looked
+        plausible. Whether an operand is a date is a fact about the frame's
+        dtypes, so the refusal fires where the formula is assigned: the
+        actuary's own line, before anything is computed or recorded.
+        """
+        af = ActuarialFrame(
+            {
+                "issue_date": [datetime.date(2025, 1, 1)],
+                "av_init": [1000.0],
+                "growth": [[1.0, 1.0]],
+                "flow": [[0.0, 0.0]],
+                "anniversaries": [
+                    [datetime.date(2025, 1, 1), datetime.date(2026, 1, 1)]
+                ],
+                "waiting": [[datetime.timedelta(days=1), datetime.timedelta(days=2)]],
+            }
+        )
+        columns_before = list(af.columns)
+
+        with pytest.raises(TypeError) as refusal:
+            af.av = af.growth.projection.accumulate(**operands(af))
+
+        message = str(refusal.value)
+        # What was refused, by the argument the actuary wrote and the type
+        # it turned out to hold.
+        assert f"{parameter} --" in message
+        assert f"resolved to {dtype}" in message
+        # What the recurrence runs over, and why a date is not one of them.
+        assert "state[t] = state[t-1] * multiplier[t] + addend[t]" in message
+        assert "days since 1970-01-01" in message
+        # The two next moves: the numeric column, or a measured time.
+        assert "Pass the numeric column" in message
+        assert "af.valuation_date.excel.days(af.issue_date)" in message
+        assert "af.issue_date.excel.yearfrac(af.valuation_date)" in message
+        # Refused before the frame changed: no column, nothing to collect.
+        assert list(af.columns) == columns_before
+
+    def test_a_date_measured_into_a_number_first_runs(self) -> None:
+        """The move the refusal names gives the recurrence a number to run on.
+
+        A count of days is a quantity, so once the date is measured into a
+        column it opens the balance like any other number -- and the measure,
+        days, is written in the model where a reader can see it.
+        """
+        af = ActuarialFrame(
+            {
+                "issue_date": [datetime.date(2025, 1, 1)],
+                "valuation_date": [datetime.date(2025, 1, 31)],
+                "growth": [[1.0, 1.0]],
+                "flow": [[0.0, 0.0]],
+            }
+        )
+        af.days_in_force = af.valuation_date.excel.days(af.issue_date)
+
+        af.av = af.growth.projection.accumulate(
+            initial=af.days_in_force, multiplier=af.growth, addend=af.flow
+        )
+
+        assert af.collect()["av"].to_list() == [[30.0, 30.0]]
+
+    @pytest.mark.parametrize(
+        ("column", "operands", "parameter", "dtype", "move"),
+        [
+            (
+                pl.Series("text", ["100"]),
+                {"initial": "text"},
+                "initial",
+                "String",
+                'af["text"].polars_native().cast(pl.Float64)',
+            ),
+            (
+                pl.Series("text", [["1", "2"]]),
+                {"addend": "text"},
+                "addend",
+                "List(String)",
+                'af["text"].polars_native().cast(pl.List(pl.Float64))',
+            ),
+            (
+                pl.Series("band", ["7"], dtype=pl.Categorical),
+                {"initial": "band"},
+                "initial",
+                "Categorical",
+                "Map the categories to numbers",
+            ),
+            (
+                pl.Series("band", [["7", "9"]], dtype=pl.List(pl.Categorical)),
+                {"addend": "band"},
+                "addend",
+                "List(Categorical",
+                "Map the categories to numbers",
+            ),
+            (
+                pl.Series("band", [["7", "9"]], dtype=pl.List(pl.Enum(["9", "7"]))),
+                {"multiplier": "band"},
+                "multiplier",
+                "List(Enum",
+                "Map the categories to numbers",
+            ),
+            (
+                pl.Series("pair", [{"a": 1.0, "b": 2.0}]),
+                {"initial": "pair"},
+                "initial",
+                "Struct",
+                "Pass the numeric column that holds the opening balance.",
+            ),
+            (
+                pl.Series("held", [True]),
+                {"initial": "held"},
+                "initial",
+                "Boolean",
+                "when(af.held).then(1.0).otherwise(0.0)",
+            ),
+            (
+                pl.Series("in_force", [[True, False]]),
+                {"multiplier": "in_force"},
+                "multiplier",
+                "List(Boolean)",
+                "when(af.in_force).then(1.0).otherwise(0.0)",
+            ),
+        ],
+        ids=[
+            "initial-text",
+            "addend-text-list",
+            "initial-categorical",
+            "addend-categorical-list",
+            "multiplier-enum-list",
+            "initial-struct",
+            "initial-boolean",
+            "multiplier-boolean-mask-list",
+        ],
+    )
+    def test_text_a_category_or_any_other_non_number_is_refused(
+        self,
+        column: pl.Series,
+        operands: dict[str, str],
+        parameter: str,
+        dtype: str,
+        move: str,
+    ) -> None:
+        """Only numbers reach the recurrence; everything else is refused by name.
+
+        The kernel casts every operand to a float, and a cast reads what the
+        engine stores rather than what the column means: text that spells a
+        number was parsed and any other text failed without a reason, and a
+        category was read as the code the engine filed it under.
+        """
+        af = ActuarialFrame(
+            pl.DataFrame(
+                {"opening": [100.0], "growth": [[1.0, 1.0]], "flow": [[0.0, 0.0]]}
+            ).with_columns(column)
+        )
+        given = {"initial": "opening", "multiplier": "growth", "addend": "flow"}
+        given.update(operands)
+        columns_before = list(af.columns)
+
+        with pytest.raises(TypeError, match="over numbers") as refusal:
+            af.av = af.growth.projection.accumulate(
+                **{name: af[source] for name, source in given.items()}
+            )
+
+        message = str(refusal.value)
+        assert f"{parameter} --" in message
+        assert f"resolved to {dtype}" in message
+        assert move in message
+        assert list(af.columns) == columns_before
+
+    @pytest.mark.parametrize(
+        ("column", "operands", "expected"),
+        [
+            (
+                pl.Series(
+                    "flow_dec",
+                    [[decimal.Decimal("5.00"), decimal.Decimal("5.00")]],
+                    dtype=pl.List(pl.Decimal(10, 2)),
+                ),
+                {"initial": 0.0, "addend": "flow_dec"},
+                [5.0, 10.0],
+            ),
+            (
+                pl.Series(
+                    "flow_dec",
+                    [[decimal.Decimal(5), decimal.Decimal(5)]],
+                    dtype=pl.List(pl.Decimal(12, 4)),
+                ),
+                {"initial": 0.0, "addend": "flow_dec"},
+                [5.0, 10.0],
+            ),
+            (
+                pl.Series(
+                    "growth_dec",
+                    [[decimal.Decimal("1.01"), decimal.Decimal("1.01")]],
+                    dtype=pl.List(pl.Decimal(6, 2)),
+                ),
+                {"initial": 100.0, "multiplier": "growth_dec"},
+                [101.0, 102.01],
+            ),
+            (
+                pl.Series(
+                    "opening_dec",
+                    [decimal.Decimal("100.50")],
+                    dtype=pl.Decimal(10, 2),
+                ),
+                {"initial": "opening_dec"},
+                [100.5, 100.5],
+            ),
+            (
+                pl.Series(
+                    "growth_dec", [decimal.Decimal("1.01")], dtype=pl.Decimal(6, 2)
+                ),
+                {"initial": 100.0, "multiplier": "growth_dec"},
+                [101.0, 102.01],
+            ),
+        ],
+        ids=[
+            "addend-decimal-10-2-list",
+            "addend-decimal-12-4-list",
+            "multiplier-decimal-list",
+            "initial-decimal",
+            "multiplier-decimal-scalar",
+        ],
+    )
+    def test_a_decimal_is_read_as_its_value(
+        self,
+        column: pl.Series,
+        operands: dict[str, object],
+        expected: list[float],
+    ) -> None:
+        """A Decimal operand reads as its value, as a list and as one number.
+
+        A list of Decimals used to reach the kernel as its unscaled integers:
+        5.00 at two places was 500, and at four places 50,000, while a single
+        Decimal was read correctly. Both forms now agree.
+        """
+        af = ActuarialFrame(
+            pl.DataFrame({"growth": [[1.0, 1.0]], "flow": [[0.0, 0.0]]}).with_columns(
+                column
+            )
+        )
+        given: dict[str, object] = {
+            "initial": 0.0,
+            "multiplier": "growth",
+            "addend": "flow",
+        }
+        given.update(operands)
+
+        af.av = af.growth.projection.accumulate(
+            **{
+                name: af[source] if isinstance(source, str) else source
+                for name, source in given.items()
+            }
+        )
+
+        assert af.collect()["av"].to_list()[0] == pytest.approx(expected)
+
+    @pytest.mark.parametrize(
+        ("column", "operands", "expected"),
+        [
+            (
+                pl.Series("opening_int", [100]),
+                {"initial": "opening_int"},
+                [[100.0, 100.0]],
+            ),
+            (pl.Series("nothing", [None]), {"initial": "nothing"}, [[None, None]]),
+        ],
+        ids=["integer", "null"],
+    )
+    def test_a_number_or_a_null_is_read_as_it_is(
+        self,
+        column: pl.Series,
+        operands: dict[str, object],
+        expected: list[list[float | None]],
+    ) -> None:
+        """What the recurrence can read passes untouched; a Boolean is refused above."""
+        af = ActuarialFrame(
+            pl.DataFrame({"growth": [[1.0, 1.0]], "flow": [[0.0, 0.0]]}).with_columns(
+                column
+            )
+        )
+        given: dict[str, object] = {
+            "initial": 0.0,
+            "multiplier": "growth",
+            "addend": "flow",
+        }
+        given.update(operands)
+
+        af.av = af.growth.projection.accumulate(
+            **{
+                name: af[source] if isinstance(source, str) else source
+                for name, source in given.items()
+            }
+        )
+
+        assert af.collect()["av"].to_list() == expected
 
 
 class TestFromSurvival:

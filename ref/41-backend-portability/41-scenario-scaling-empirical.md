@@ -15,7 +15,7 @@ Total experiment wall time: **~21 minutes** (setup + sweep + standalone N=500 re
 
 Three structural reasons (in priority order):
 
-1. **`with_scenarios` is fundamentally eager.** `bindings/python/gaspatchio_core/scenarios/_with_scenarios.py:126-129` calls `af.collect()` to materialise the input frame, then does `pl.DataFrame.join(..., how="cross")` — both eager `DataFrame` operations. The full `n_policies × n_scenarios` row frame is produced in RAM before any model expression runs. Polars streaming can do nothing about this — the row replication is upstream of any lazy plan.
+1. **`with_scenarios` is fundamentally eager.** `bindings/python/gaspatchio/scenarios/_with_scenarios.py:126-129` calls `af.collect()` to materialise the input frame, then does `pl.DataFrame.join(..., how="cross")` — both eager `DataFrame` operations. The full `n_policies × n_scenarios` row frame is produced in RAM before any model expression runs. Polars streaming can do nothing about this — the row replication is upstream of any lazy plan.
 2. **The L5 typed model carries large list columns through its lazy pipeline.** Each row holds ~10 list-of-f64 columns each of length up to `projection_months + 1 = 241` (the per-policy time series). At ~50–60 KB per row of intermediate state, 100k rows already consumes 5–6 GB of RSS just for the live pipeline state.
 3. **The streaming sink is `in-memory-sink`.** Polars' new streaming engine (verified engaged via `POLARS_VERBOSE=1` — see "Streaming-engine engagement" below) processes the lazy plan in chunks, but `LazyFrame.collect(engine="streaming")` writes the result back into a fully materialised `DataFrame`. So even where streaming chunking does help during pipeline execution, the final output gets re-materialised. With per-row final-state size still containing list columns, that final DataFrame alone is large.
 
@@ -25,7 +25,7 @@ The "streaming keeps memory bounded" hypothesis is **false** for this workload a
 
 ## Methodology
 
-- **Workload:** `1000 policies × N scenarios × 240 monthly periods` using the L5 typed VA model at `bindings/python/gaspatchio_core/tutorials/level-5-scenarios-typed/base/model.py`. Model points: `level-5-scenarios/base/model_points_1k.parquet`.
+- **Workload:** `1000 policies × N scenarios × 240 monthly periods` using the L5 typed VA model at `bindings/python/gaspatchio/tutorials/level-5-scenarios/base/model.py`. Model points: `level-5-scenarios/base/model_points_1k.parquet`.
 - **Scenario IDs:** integers `1..N` (so the model takes the `is_string_scenario=False` branch in Section 16, broadcasting a single BASE discount-factor list rather than three. This isolates the cost of cross-join row replication from the per-scenario list-column cost.)
 - **Scenario returns:** the parquet has `t = 0..179` so I tile the last 12-month cycle out to `t = 240` (steady-state proxy; perf-only, not actuarially valid). The returns table has no `scenario_id` column, so per-row return varies only with `t` and `fund_index`, not with scenario — i.e. all N scenarios use identical returns. This is a clean "what does the cross-join itself cost" experiment.
 - **Subprocess isolation:** master harness `/tmp/scenario_scaling_master.py` spawns `/tmp/scenario_scaling_runner.py` per tier with `subprocess.run(..., timeout=360)`. Failure of one tier doesn't kill the master.
@@ -42,7 +42,7 @@ The "streaming keeps memory bounded" hypothesis is **false** for this workload a
 
 ## Streaming-engine engagement (verification)
 
-`bindings/python/gaspatchio_core/frame/base.py:369` defaults `LazyFrame.collect()` to `engine="streaming"`. The runner explicitly passes `engine="streaming"` to confirm. With `POLARS_VERBOSE=1`, a sample collect emits:
+`bindings/python/gaspatchio/frame/base.py:369` defaults `LazyFrame.collect()` to `engine="streaming"`. The runner explicitly passes `engine="streaming"` to confirm. With `POLARS_VERBOSE=1`, a sample collect emits:
 
 ```
 polars-stream: running multi-scan[parquet] in subgraph

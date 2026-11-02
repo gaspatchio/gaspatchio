@@ -186,7 +186,7 @@ Gaspatchio provides specialized accessors (`.projection.*`) for actuarial operat
 **Wrong:**
 ```python
 # Raw list operation — no actuarial timing awareness
-af.survival = (1 - af.mort_rate).list.eval(pl.element().cum_prod())
+af.survival = (1 - af.mort_rate).polars_native().list.eval(pl.element().cum_prod())
 ```
 
 **Right:**

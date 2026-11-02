@@ -35,14 +35,14 @@ class TestSetKwargsPath:
         # 70 years × 12 months
         assert result["num_proj_months"][0] == 70 * 12 + 1  # +1 for start boundary
 
-    def test_maximum_age_sizes_grid_from_youngest_life(self) -> None:
-        """A shared max-age grid must be long enough for the YOUNGEST life.
+    def test_maximum_age_runs_each_life_to_the_age(self) -> None:
+        """Each life runs to age 100 from its own issue age, and no further.
 
-        Regression for F1: the integer branch sized the uniform grid from
-        ``max(issue_age)`` (the OLDEST life), giving the fewest months and
-        truncating every younger cohort. For issue ages {30, 70} with
-        ``until_value=100`` the grid must let the age-30 life reach attained
-        age 100 -> 70 years -> 840 monthly periods (not 30 years / 360).
+        For issue ages {30, 70} with ``until_value=100`` the age-30 life
+        runs 70 years (840 monthly periods) and the age-70 life 30 years
+        (360): neither is truncated, and the older life is not projected
+        past the age asked for. The grid states no period count of its own:
+        each life's is its own horizon, and no other life's moves the recipe.
         """
         af = ActuarialFrame({"policy_id": ["P1", "P2"], "issue_age": [30, 70]})
         af = af.projection.set(
@@ -51,10 +51,9 @@ class TestSetKwargsPath:
             until_value=100,
             frequency="monthly",
         )
-        # Youngest life (age 30) reaches age 100 -> 70y -> 840 monthly periods.
-        assert af._projection.n_periods == 70 * 12
+        assert af._projection.n_periods is None
         result = af.collect()
-        assert result["num_proj_months"][0] == 70 * 12 + 1
+        assert result["num_proj_months"].to_list() == [70 * 12 + 1, 30 * 12 + 1]
 
     def test_term_years_uniform(self) -> None:
         af = ActuarialFrame({"policy_id": ["P1"]})
@@ -92,6 +91,13 @@ class TestSetKwargsPath:
                 "remaining": [12, 36],
             }
         )
+        # NOTE: `set()` stamps the timeline IN PLACE and returns the same
+        # frame, so these two calls are not two independent projections off
+        # one set of model points -- the second re-projects the frame the
+        # first one stamped. That is supported (a re-projection replaces the
+        # axis), and it is what this test asserts: the same frame projected
+        # jagged, then re-projected uniform. To compare two genuinely
+        # independent timelines, build two frames.
         # Default (auto) -> jagged: each policy projects its own horizon.
         jagged = af.projection.set(
             valuation_date=date(2025, 1, 1),
@@ -101,7 +107,7 @@ class TestSetKwargsPath:
         ).collect()
         assert jagged["num_proj_months"].to_list() == [13, 37]
 
-        # Opt out -> uniform max+1 for every policy.
+        # Opt out -> uniform max+1 for every policy (a re-projection of `af`).
         uniform = af.projection.set(
             valuation_date=date(2025, 1, 1),
             until="term_months",
@@ -155,7 +161,16 @@ class TestSetSchedulePath:
 
 
 class TestSetMutualExclusion:
-    """schedule= cannot be combined with kwargs."""
+    """The three ways to declare an axis are alternatives, not a blend.
+
+    ``schedule=`` excludes the construction kwargs, and the two kwargs
+    forms exclude each other: the synthetic form lays a calendar grid from
+    a start date, the policy-anchored form runs each policy from the
+    valuation date to its own horizon. Mixing them used to build silently
+    from the synthetic pair while the projection record echoed every kwarg
+    passed -- an author who meant one convention got the other, with the
+    valuation date recorded as if it had been honoured.
+    """
 
     def test_schedule_with_kwargs_raises(self) -> None:
         sched = Schedule.from_calendar_grid(
@@ -173,21 +188,60 @@ class TestSetMutualExclusion:
                 frequency="monthly",
             )
 
+    def test_set_refuses_the_synthetic_and_policy_anchored_forms_together(
+        self,
+    ) -> None:
+        af = ActuarialFrame({"policy_id": [1], "issue_age": [40]})
+        with pytest.raises(
+            ValueError,
+            match=r"start_date/n_periods.*valuation_date/until/until_value",
+        ):
+            af.projection.set(
+                start_date=date(2025, 1, 1),
+                n_periods=12,
+                valuation_date=date(2025, 1, 1),
+                until="term_years",
+                until_value=5,
+                frequency="monthly",
+            )
+
+    def test_set_refuses_one_stray_kwarg_from_the_other_form(self) -> None:
+        af = ActuarialFrame({"policy_id": [1], "issue_age": [40]})
+        # "synthetic form" is unique to this refusal. Matching on the kwarg
+        # name alone would also be satisfied by the schedule= message, which
+        # lists n_periods among the kwargs it excludes.
+        with pytest.raises(ValueError, match=r"synthetic form.*n_periods"):
+            af.projection.set(
+                valuation_date=date(2025, 1, 1),
+                until="term_years",
+                until_value=5,
+                n_periods=12,
+                frequency="monthly",
+            )
+
 
 class TestSetReturnsBehaviour:
-    """set() returns a new frame; original is unchanged."""
+    """set() declares the axis on the frame it was called on."""
 
-    def test_returns_new_frame_original_untouched(self) -> None:
-        af1 = ActuarialFrame({"policy_id": ["P1"], "issue_age": [30]})
-        af2 = af1.projection.set(
+    def test_returns_the_same_frame_now_carrying_the_projection(self) -> None:
+        """The timeline is a step in the same model, not a different frame.
+
+        ``set()`` used to build a replacement frame from the stamped plan,
+        which threw away everything the model had recorded up to that line.
+        It now stamps the frame in hand -- the way ``rename``/``join``/
+        ``filter`` already do -- so the projection axis costs no history.
+        """
+        af = ActuarialFrame({"policy_id": ["P1"], "issue_age": [30]})
+
+        projected = af.projection.set(
             valuation_date=date(2025, 1, 1),
             until="term_years",
             until_value=10,
             frequency="monthly",
         )
-        assert af1 is not af2
-        assert af1._projection is None
-        assert af2._projection is not None
+
+        assert projected is af
+        assert af._projection is not None
 
     def test_recall_replaces_projection(self) -> None:
         af = ActuarialFrame({"policy_id": ["P1"], "issue_age": [30]})
@@ -251,3 +305,20 @@ class TestSetFrequencyVocab:
             frequency="annual",
         )
         assert af._projection.frequency == "1Y"
+
+
+def test_set_on_an_uninitialized_frame_says_so() -> None:
+    """A frame built with no data has no plan to project, and is told so.
+
+    projection.set read the frame's plan without asking whether it had one,
+    and ``ActuarialFrame()`` has none, so the call failed with an
+    AttributeError about ``NoneType`` -- an internal name -- where every
+    other door on the frame refuses an uninitialized frame by saying so.
+    """
+    with pytest.raises(ValueError, match="uninitialized ActuarialFrame"):
+        ActuarialFrame().projection.set(
+            valuation_date=date(2025, 1, 1),
+            until="term_years",
+            until_value=10,
+            frequency="monthly",
+        )

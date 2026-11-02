@@ -275,7 +275,7 @@ When the JAX backend lands (GSP-99), batching becomes implicit — `vmap` over s
 
 ## Forward compatibility with the JAX backend
 
-The rollforward IR already reserves `batch_axes` for the scenario-axis case (`bindings/python/gaspatchio_core/rollforward/_ir.py:11`). The intended evolution under GSP-99:
+The rollforward IR already reserves `batch_axes` for the scenario-axis case (the `batch_axes` field on `IR` in `bindings/python/gaspatchio/rollforward/_ir.py`). The intended evolution under GSP-99:
 
 | Today (Polars backend) | Tomorrow (JAX backend, GSP-99) |
 |---|---|
@@ -303,5 +303,5 @@ Each delivers value alone; the combination is multiplicative.
 - [`README.md`](README.md) — research bundle index
 - [`41-scenario-memory-design.md`](41-scenario-memory-design.md) — design recommendation for `ScenarioRun`
 - [`41-scenario-scaling-empirical.md`](41-scenario-scaling-empirical.md) — measurements that motivated `ScenarioRun`
-- `bindings/python/gaspatchio_core/rollforward/_ir.py:11` — `batch_axes` slot reserved for scenario-axis vmap
+- `bindings/python/gaspatchio/rollforward/_ir.py` — the `batch_axes` field on `IR`, reserved for scenario-axis vmap
 - Commit `9824f2d` — lazy `with_scenarios` (contributing fix already shipped)

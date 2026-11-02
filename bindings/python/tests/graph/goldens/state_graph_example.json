@@ -1,0 +1,519 @@
+{
+  "schema": "gaspatchio-graph/v0-preview.3",
+  "profile": "audit",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "producer": {
+    "name": "gaspatchio",
+    "version": "1.0.0"
+  },
+  "created_at": "2026-08-30T09:00:00Z",
+  "model": {
+    "label": "disability-income",
+    "source_path": "models/disability_income.py",
+    "source_sha": "sha256:f3f49da15e4f23f029d42619757492bfef9e0dcdc7129320a305685c9723bee6",
+    "git": {
+      "commit": "9c2b7e14a0d5f8c3b6e1d4a7f0c9b2e5d8a1f4c7",
+      "dirty": false
+    },
+    "model_points": {
+      "path": "data/disability_income_model_points.parquet",
+      "fingerprint": "sha256:e04d24d2d1c179a8e07cb059e5efb7b53ce3878f3ee71c64399f675d255bb3e3"
+    }
+  },
+  "graph_fingerprint": "sha256:69017d3df19c611b69d9104ff93a60721128aa775f58d89f1c2d7cd2fc3f1d0d",
+  "book": {
+    "columns": [
+      "attained_age",
+      "issue_age",
+      "n_months",
+      "occ_class",
+      "sex"
+    ],
+    "digest": "sha256:e15100c8b11f4118f31d96a2816e8035ce39b39195de1b5c93365e03bf406ac8"
+  },
+  "facets_used": [
+    "gaspatchio_column_transformation"
+  ],
+  "facets_required": [],
+  "nodes": [
+    {
+      "id": "issue_age",
+      "column": "issue_age",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:45de65cbc4208d55c69342f203efd178a89c8febab19a5841622bbe80fc0ca7a",
+      "fingerprint": "sha256:f7e954b8774c236351097c62d7f5489257a65e1bab70b4c8d262e3179d5836eb",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "sex",
+      "column": "sex",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:3b9a309985ee0ec4e64aae02d58b82526553ada57402bdb8e1eb4d1874ea3a01",
+      "fingerprint": "sha256:358ef186b4d91c4667ef23ff33a60662011530dfb8d75737eed95bfccbde7a63",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "occ_class",
+      "column": "occ_class",
+      "version": null,
+      "kind": "input",
+      "dtype": "str",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:bc681655158b79ec38ff8ab5e1c9c0e19934303ae97ad5c83278cb4a3bad28d2",
+      "fingerprint": "sha256:6b6deb78d03df716b92e7957bdc25ee52124a8fe1a3b2897cb6a069c4fa4f480",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "attained_age",
+      "column": "attained_age",
+      "version": null,
+      "kind": "input",
+      "dtype": "list[i64]",
+      "shape": "list",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:87cd6e94143b046c596d1356ebcbc7e15a6a2aca3d7ef37783ee45af782e6442",
+      "fingerprint": "sha256:7e8263dd06af87538cd6ec5356a7a4d911eb63333d0d6182ca2a41cd5816b109",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "n_months",
+      "column": "n_months",
+      "version": null,
+      "kind": "input",
+      "dtype": "i64",
+      "shape": "scalar",
+      "provenance": "model_points",
+      "formula": null,
+      "reads": [],
+      "reads_assumptions": [],
+      "tier": null,
+      "local_fingerprint": "sha256:ef66f2c03f5d7af35eff66b94f830ac305936d3ca5d0edb67362e086ef9ac29d",
+      "fingerprint": "sha256:6e3ffd5abfe5b894177d52fcf88177fab07f6edf6d5d8c7a2d0e8d7c3c0c457d",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {}
+    },
+    {
+      "id": "state_graph:disability_income_3state",
+      "column": null,
+      "version": null,
+      "kind": "state_graph",
+      "dtype": "unknown",
+      "shape": "unknown",
+      "provenance": null,
+      "formula": null,
+      "reads": [
+        "attained_age",
+        "occ_class",
+        "sex",
+        "issue_age",
+        "n_months"
+      ],
+      "reads_assumptions": [
+        "di_incidence",
+        "di_occ_loading",
+        "di_mortality",
+        "di_recovery"
+      ],
+      "tier": "core",
+      "local_fingerprint": "sha256:f887f6a67be105c5755f2a2bbd255c49a718a81b19523734a4673ae0971221c3",
+      "fingerprint": "sha256:a57098af9b1dded030f63b1fc12d0536197f65a0fca85904c1cb2b20f20f8209",
+      "in_final_schema": false,
+      "materialized_at": null,
+      "source_location": null,
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "attained_age",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            },
+            {
+              "source": "occ_class",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            },
+            {
+              "source": "sex",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            },
+            {
+              "source": "issue_age",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            },
+            {
+              "source": "n_months",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "AGGREGATION"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "state_graph": {
+        "name": "disability_income_3state",
+        "states": [
+          "active",
+          "disabled",
+          "dead"
+        ],
+        "transitions": [
+          {
+            "from": "active",
+            "to": "disabled",
+            "intensity": {
+              "op": "binop",
+              "kind": "mul",
+              "left": {
+                "op": "call",
+                "name": "lookup",
+                "args": [
+                  {
+                    "op": "col",
+                    "name": "attained_age"
+                  }
+                ],
+                "attrs": {
+                  "table": "di_incidence",
+                  "table_fingerprint": "sha256:d39ce1748bc68eb2366ea6c52a105b86c3964cde11b4b5fb67c6cc672ba49144",
+                  "on_missing": "raise",
+                  "fill_value": null
+                }
+              },
+              "right": {
+                "op": "call",
+                "name": "lookup",
+                "args": [
+                  {
+                    "op": "col",
+                    "name": "occ_class"
+                  }
+                ],
+                "attrs": {
+                  "table": "di_occ_loading",
+                  "table_fingerprint": "sha256:bd877d7a30ea2d0d83776b480b276046fdff40605d735ec1e8e57f8d66f92267",
+                  "on_missing": "raise",
+                  "fill_value": null
+                }
+              }
+            }
+          },
+          {
+            "from": "active",
+            "to": "dead",
+            "intensity": {
+              "op": "call",
+              "name": "lookup",
+              "args": [
+                {
+                  "op": "col",
+                  "name": "attained_age"
+                },
+                {
+                  "op": "col",
+                  "name": "sex"
+                }
+              ],
+              "attrs": {
+                "table": "di_mortality",
+                "table_fingerprint": "sha256:dfddedb7dde6f462296a006ff5c8626a8ec457e5c1a20ee3a9e0a385414b1fd9",
+                "on_missing": "raise",
+                "fill_value": null
+              }
+            }
+          },
+          {
+            "from": "disabled",
+            "to": "active",
+            "intensity": {
+              "op": "call",
+              "name": "lookup",
+              "args": [
+                {
+                  "op": "col",
+                  "name": "attained_age"
+                }
+              ],
+              "attrs": {
+                "table": "di_recovery",
+                "table_fingerprint": "sha256:d218cd43ed031b0d35a1a5c42d9c9064804dd0d1d51452a6d48b480bd455ade3",
+                "on_missing": "raise",
+                "fill_value": null
+              }
+            }
+          },
+          {
+            "from": "disabled",
+            "to": "dead",
+            "intensity": {
+              "op": "binop",
+              "kind": "mul",
+              "left": {
+                "op": "call",
+                "name": "lookup",
+                "args": [
+                  {
+                    "op": "col",
+                    "name": "attained_age"
+                  },
+                  {
+                    "op": "col",
+                    "name": "sex"
+                  }
+                ],
+                "attrs": {
+                  "table": "di_mortality",
+                  "table_fingerprint": "sha256:dfddedb7dde6f462296a006ff5c8626a8ec457e5c1a20ee3a9e0a385414b1fd9",
+                  "on_missing": "raise",
+                  "fill_value": null
+                }
+              },
+              "right": {
+                "op": "lit",
+                "value": 3.4
+              }
+            }
+          }
+        ],
+        "time_axis": {
+          "periods": "n_months",
+          "frequency": "monthly",
+          "intensity_basis": "annual"
+        },
+        "basis": [
+          "issue_age",
+          "sex",
+          "occ_class"
+        ]
+      }
+    },
+    {
+      "id": "disability_reserve@1",
+      "column": "disability_reserve",
+      "version": 1,
+      "kind": "computed",
+      "dtype": "f64",
+      "shape": "scalar",
+      "provenance": "assignment",
+      "formula": "disability_income_3state.reserve(af, given=\"active\", basis=[\"issue_age\", \"sex\", \"occ_class\"], discount=0.04, periods=\"n_months\")",
+      "reads": [
+        "state_graph:disability_income_3state"
+      ],
+      "reads_assumptions": [],
+      "engines": [],
+      "tier": "core",
+      "local_fingerprint": "sha256:91889d6e3156188d816858abfd0e0efdaab28a41835218dd0f587d3436dc9c9b",
+      "fingerprint": "sha256:a3d9d45d3d909f01e16611314c8476545ba56cba04971d48b86ff1100791b4da",
+      "in_final_schema": true,
+      "materialized_at": null,
+      "source_location": "models/disability_income.py:74",
+      "facets": {
+        "gaspatchio_column_transformation": {
+          "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+          "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+          "reads": [
+            {
+              "source": "state_graph:disability_income_3state",
+              "transformations": [
+                {
+                  "type": "DIRECT",
+                  "subtype": "TRANSFORMATION"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "attained_age",
+      "target": "state_graph:disability_income_3state",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "occ_class",
+      "target": "state_graph:disability_income_3state",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "sex",
+      "target": "state_graph:disability_income_3state",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "issue_age",
+      "target": "state_graph:disability_income_3state",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "n_months",
+      "target": "state_graph:disability_income_3state",
+      "relationship": "DIRECT"
+    },
+    {
+      "source": "state_graph:disability_income_3state",
+      "target": "disability_reserve@1",
+      "relationship": "DIRECT"
+    }
+  ],
+  "assumptions": [
+    {
+      "kind": "table",
+      "name": "di_incidence",
+      "fingerprint": "sha256:d39ce1748bc68eb2366ea6c52a105b86c3964cde11b4b5fb67c6cc672ba49144",
+      "payload": {
+        "dimensions": [
+          "attained_age"
+        ],
+        "value": "incidence",
+        "columns": [
+          {
+            "name": "attained_age",
+            "dtype": "f64"
+          },
+          {
+            "name": "incidence",
+            "dtype": "f64"
+          }
+        ],
+        "rows": [
+          [
+            45.0,
+            0.0041
+          ],
+          [
+            46.0,
+            0.0046
+          ],
+          [
+            47.0,
+            0.0052
+          ]
+        ]
+      }
+    },
+    {
+      "kind": "table",
+      "name": "di_occ_loading",
+      "fingerprint": "sha256:bd877d7a30ea2d0d83776b480b276046fdff40605d735ec1e8e57f8d66f92267",
+      "payload": {
+        "dimensions": [
+          "occ_class"
+        ],
+        "value": "loading",
+        "columns": [
+          {
+            "name": "occ_class",
+            "dtype": "str"
+          },
+          {
+            "name": "loading",
+            "dtype": "f64"
+          }
+        ],
+        "rows": [
+          [
+            "manual",
+            1.6
+          ],
+          [
+            "professional",
+            0.8
+          ],
+          [
+            "skilled",
+            1.0
+          ]
+        ]
+      }
+    },
+    {
+      "kind": "table",
+      "name": "di_mortality",
+      "fingerprint": "sha256:dfddedb7dde6f462296a006ff5c8626a8ec457e5c1a20ee3a9e0a385414b1fd9",
+      "payload": {
+        "omitted": "size",
+        "bytes": 41208
+      }
+    },
+    {
+      "kind": "table",
+      "name": "di_recovery",
+      "fingerprint": "sha256:d218cd43ed031b0d35a1a5c42d9c9064804dd0d1d51452a6d48b480bd455ade3",
+      "payload": {
+        "omitted": "size",
+        "bytes": 18944
+      }
+    }
+  ],
+  "holes": [],
+  "boundaries": [],
+  "enrichment": null,
+  "policies": [],
+  "facets": {},
+  "document_digest": "sha256:de1c97e93ef2451759aae48964785e66f77f0e961ec528ba29e3536ac75e2849"
+}

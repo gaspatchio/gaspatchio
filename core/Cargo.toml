@@ -1,8 +1,12 @@
 [package]
 name = "gaspatchio_core_lib"
-version = "0.9.0"
+version = "1.0.0-rc.1"
 edition = "2021"
 license = "Apache-2.0"
+# `ref` is a symlink to the repository's design-reference tree. Cargo follows
+# it when it lists the package, so the core's sdist carried the whole tree,
+# once through this crate and once through bindings/python.
+exclude = ["ref"]
 
 [lib]
 name = "gaspatchio_core_lib"
@@ -27,6 +31,11 @@ polars = { version = "0.53.0", features = [
     "parquet",
     "strings",
     "diagonal_concat",
+    # The content grammar carries a fixed-width array as the list it holds.
+    "dtype-array",
+    # The content grammar writes a timestamp column's zone (R116); without this
+    # the crate built on its own reads every zone as naive.
+    "timezones",
 ] }
 polars-arrow = "0.53.0"
 polars-core = { version = "0.53.0", default-features = false }
@@ -36,16 +45,21 @@ arc-swap = "1.6.0"
 thiserror = "1.0"
 once_cell = "1.17"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rayon = "1.10.0"
-dashmap = "6.1.0"
 ahash = "0.8.12"
 smallvec = "1.15.0"
 chrono = "0.4"
+# SHA-256 for the content grammar's digest, fed as the bytes are encoded. The
+# version the lock already carries for polars-plan, so no new crate arrives.
+sha2 = "0.10.9"
 # Pinned to force fresh resolves past the ethnum 1.5.0 transmute bug
 # (E0512 on newer rustc). 1.5.2 ships the fix. ethnum is otherwise
 # transitive via polars.
 ethnum = "1.5.2"
+# erfc for the normal distribution function (norm_cdf, section 11.1.12). The
+# version the lock already carries for num-traits and polars-ops, so no new
+# crate arrives.
+libm = "0.2.15"
 
 [dev-dependencies]
 criterion = "0.5"

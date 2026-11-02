@@ -9,7 +9,21 @@ from __future__ import annotations
 from typing import Literal
 
 AgeBasis = Literal["age_last_birthday", "age_nearest_birthday"]
+"""The age definition a mortality table's rates were built on.
+
+``"age_last_birthday"`` or ``"age_nearest_birthday"``. A ``MortalityTable``
+records it so two tables on different bases never pass for the same
+calculation; ``.at(age_basis=...)`` checks a lookup against it.
+"""
+
 Structure = Literal["aggregate", "select_ultimate", "joint"]
+"""How a mortality table is keyed, which decides what ``.at(...)`` needs.
+
+``"aggregate"`` needs ``age``; ``"select_ultimate"`` needs ``age`` and
+``duration``, with duration held at the table's ``select_period``; ``"joint"``
+needs two ages, ``age_1`` and ``age_2``. Any other dimension the table
+carries, such as gender, is passed by name.
+"""
 
 _VALID_AGE_BASES: frozenset[str] = frozenset(
     {"age_last_birthday", "age_nearest_birthday"}

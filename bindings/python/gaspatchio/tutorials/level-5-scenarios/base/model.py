@@ -5,34 +5,44 @@
 """
 Level 5 (Typed Inputs Variant): Scenario-Ready Variable Annuity Model
 
-This is the typed-inputs version of ``level-5-scenarios/base/model.py``.
-The three structural swaps vs the untyped L5:
+This is the model this level ships, built on the typed input doors.
+The three structural swaps, each against the untyped pattern it replaces:
 
   **Swap 1 — MortalityTable** (select/ultimate, ``select_period=25``):
     The raw ``mortality_select`` Table is wrapped in
     ``MortalityTable(structure="select_ultimate", select_period=25)``.
     ``.at(age=..., duration=..., table_id=...)`` replaces the manual
-    ``duration.clip(upper_bound=24) → lookup()`` pattern.
+    ``when(duration > 24).then(24) → lookup()`` capping pattern.
 
-  **Swap 2 — Three Curve instances + scenario→list join dispatch**:
+  **Swap 2 — Three Curve instances read through the recorded door**:
     Forward rates from ``risk_free_rates.parquet`` are converted to
     zero rates via ``forwards_to_zeros()`` (geometric mean of compounded
     forwards). Three ``Curve`` objects are constructed — one per scenario.
-    Per-scenario discount-factor lists are pre-computed from the Curve.
+    Each is read with ``curve.discount_factor(af.t_years)`` on the tracked
+    year-fraction column, and ``when/then`` on ``scenario_id`` picks the
+    one that policy's row discounts on.
 
-    A 3-row mapping ``{scenario_id → discount_factor_list}`` is then
-    left-joined onto the frame so each row carries ONE list column —
-    its own scenario's — rather than three columns broadcast to every
-    row and then collapsed via ``when/then``. At 10k policies × 1200
-    months this saves roughly two-thirds of the list-column memory.
+    Reading the curve on the frame is what puts it on the record: the
+    audit artifact grows the curve's assumption entry (its knots and their
+    digest), and the discount-factor node's fingerprint moves when the
+    knots move even though the line of code does not. So a reviewer can
+    re-hash the curve, and a quarter-over-quarter comparison can say which
+    curve moved. Pre-computing the vectors in Python and handing them to
+    the frame as a literal gives the same numbers with none of that
+    (*Audit by default*).
 
-    Since policies have varying projection lengths (51–82 months), the
-    full-length list (83 elements, months 0..82) is trimmed per-policy
-    with ``list.head(af.month.list.len())`` after the join.
+    Policies have varying projection lengths (51–82 months), and the door
+    needs no trimming for it: ``af.projection.t_years()`` is each policy's
+    own year-fraction vector, so each row discounts on exactly the periods
+    it has.
 
-  **Swap 3 — Schedule.from_calendar_grid for cumulative year fractions**:
-    ``Schedule.cumulative_year_fractions()`` replaces the manual
-    ``[0.0, *accumulate(year_fractions())]`` pattern from L3-typed.
+  **Swap 3 — the projection's own year fractions**:
+    ``af.projection.t_years()`` replaces the manual
+    ``[0.0, *accumulate(year_fractions())]`` pattern from L3-typed, and
+    needs no ``Schedule`` of its own: the discounting rides the same
+    per-policy grid the projection was built on rather than a second,
+    separately-constructed calendar grid that has to be kept in step
+    with it by hand.
 
 Parity note:
   Numerical parity with the untyped L5 is intentionally NOT achieved.
@@ -55,31 +65,31 @@ All section headers, comments, and output columns match the untyped L5.
 """
 
 import datetime
-import math
 from pathlib import Path
 from typing import Literal
 
 import polars as pl
 from gaspatchio import ActuarialFrame, Curve, MortalityTable, when
-from gaspatchio.assumptions import Table
-from gaspatchio.assumptions._dimensions import DataDimension
-from gaspatchio.schedule import OneTwelfth, Schedule
+from gaspatchio.assumptions import DataDimension, Table
+from gaspatchio.scenarios import PeriodSum, Sum
 
 StorageModeType = Literal["auto", "hash", "array"]
 
-
-def _maybe_scenario(table: Table | MortalityTable, af: ActuarialFrame) -> dict:
-    """Return ``{'scenario_id': af.scenario_id}`` only if the table is scenario-stacked.
-
-    ScenarioRun stacks base_tables with a ``scenario_id`` dimension. Lookups
-    against a stacked table must supply ``scenario_id``; lookups against a
-    plain (unstacked) table must not. This helper resolves which world we're
-    in by inspecting the table's dimensions.
-    """
-    raw = table.table if isinstance(table, MortalityTable) else table
-    if "scenario_id" in raw.dimensions and "scenario_id" in af.columns:
-        return {"scenario_id": af.scenario_id}
-    return {}
+# What a total of this book means, cut the way this level cuts everything
+# else: per scenario. A scenario axis is a cross-join on the model points,
+# so one book of policies under three rate scenarios is three cuts of the
+# same rows -- and a single portfolio total across all three would add
+# BASE to UP to DOWN and report a number no scenario produced.
+#
+# ``.over("scenario_id")`` is what says so, and it is the same declaration
+# ``run_scenarios.py`` hands to ``ScenarioRun``. It folds a frame carrying
+# that column: ``model_points_scenarios.parquet`` beside this file is the
+# cross-join, and a run over the plain book is refused by name rather than
+# folded as though the scenarios were not there.
+AGGREGATIONS = (
+    Sum("pv_net_cf").alias("pv_net_cf").over("scenario_id"),
+    PeriodSum("net_cf").alias("net_cf").over("scenario_id"),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -104,19 +114,17 @@ LAPSE_DURATION_CAP = 14  # Lapse table has durations 0-14
 # ---------------------------------------------------------------------------
 
 
-def forwards_to_zeros(years: list[int], forwards: list[float]) -> list[float]:
+def forwards_to_zeros(forwards: list[float]) -> list[float]:
     """Convert annual forward rates to annually-compounded zero rates.
 
     Args:
-        years: Tenor years (e.g. ``[0, 1, 2, ...]``). The index of each
-            element defines the period; ``years[i]`` is the *start* of the
-            ``i``-th forward period.
-        forwards: Annual forward rate for each period (parallel to ``years``).
-            ``forwards[i]`` is the rate from ``years[i]`` to ``years[i]+1``.
+        forwards: Annual forward rate for each consecutive year from the
+            valuation date. ``forwards[i]`` is the rate from year ``i`` to
+            year ``i + 1``.
 
     Returns:
         List of zero rates where ``zeros[i]`` is the zero rate at tenor
-        ``years[i] + 1``.  Formula: ``zero[T] = (prod(1+f[0..T]))^(1/T) - 1``.
+        ``i + 1``.  Formula: ``zero[T] = (prod(1+f[0..T]))^(1/T) - 1``.
 
     """
     cum = 1.0
@@ -156,7 +164,7 @@ def load_assumptions(storage_mode: StorageModeType = "auto") -> dict:
 
     # Swap 1: MortalityTable wraps the raw Table.
     # DataDimension(rename_to="age") renames parquet column "attained_age" → "age"
-    # so that MortalityTable._at_select_ultimate can dispatch via table.lookup(age=...).
+    # so that MortalityTable.at() dispatches through table.lookup(age=...).
     # select_ultimate clamps duration at select_period, so the source table
     # must carry the ultimate rates as duration == SELECT_PERIOD_LEN rows —
     # the select parquet alone stops at duration 24, and any projection past
@@ -241,8 +249,9 @@ def load_assumptions(storage_mode: StorageModeType = "auto") -> dict:
         scen_years = scen_df["year"].to_list()
         scen_forwards = scen_df["forward_rate"].to_list()
 
-        # forwards_to_zeros: zeros[i] is the zero rate at tenor (scen_years[i]+1)
-        scen_zeros = forwards_to_zeros(scen_years, scen_forwards)
+        # forwards_to_zeros: zeros[i] is the zero rate at tenor (scen_years[i]+1),
+        # since scen_years runs 0, 1, 2, ... with one forward rate per year
+        scen_zeros = forwards_to_zeros(scen_forwards)
 
         # Tenors must be strictly > 0; year 0 forward yields zero rate at tenor=1
         tenors = [y + 1 for y in scen_years]  # [1, 2, 3, ..., 150]
@@ -273,7 +282,6 @@ def load_assumptions(storage_mode: StorageModeType = "auto") -> dict:
 def main(
     af: ActuarialFrame,
     scenario_returns_override: pl.DataFrame | None = None,
-    assumptions_override: dict[str, object] | None = None,
     projection_months: int = PROJECTION_MONTHS,
 ) -> ActuarialFrame:
     """Main model projection (typed-inputs version).
@@ -281,13 +289,18 @@ def main(
     Identical cashflow logic to ``level-5-scenarios/base/model.py``.
     Differs only in Sections 2 (mortality lookup), 16 (discount factors).
 
+    This is the model as reconciled, and a scenario plan runs it unchanged:
+    ``plan.run(af, model.main)``. A plan's shock names a table this function
+    builds -- ``table="mortality_select"`` -- and the plan answers this
+    function's own read of it per scenario, so nothing here takes a shocked
+    table, an override or a scenario guard.
+
     Args:
-        af: ActuarialFrame with model points.  Must have a ``scenario_id``
-            column (string "BASE", "UP", or "DOWN") for scenario-aware
-            discount factor dispatch.
-        scenario_returns_override: Optional DataFrame of investment returns.
-        assumptions_override: Optional dict overriding defaults from
-            ``load_assumptions()``.
+        af: ActuarialFrame with model points. Where it carries a
+            ``scenario_id`` column (string "BASE", "UP", or "DOWN"), the
+            discount curve is chosen per row on it.
+        scenario_returns_override: Optional DataFrame of investment returns,
+            keyed by ``scenario_id`` for a stochastic run.
         projection_months: Number of months to project (default 82).
 
     Returns:
@@ -296,9 +309,9 @@ def main(
 
     """
     # ------------------------------------------------------------------
-    # Load assumptions (allow external overrides for scenario analysis)
+    # Load assumptions
     # ------------------------------------------------------------------
-    assumptions = assumptions_override or load_assumptions()
+    assumptions = load_assumptions()
     product_params = assumptions["product_params"]
     mortality = assumptions["mortality"]
     mortality_scalars = assumptions["mortality_scalars"]
@@ -313,35 +326,19 @@ def main(
     space_params = assumptions["space_params"]
     curves: dict[str, Curve] = assumptions["curves"]
 
-    # ------------------------------------------------------------------
-    # Swap 2 (pre-compute): Build per-scenario discount-factor lists.
-    #
-    # Schedule.cumulative_year_fractions() replaces the manual
-    # [0.0, *accumulate(year_fractions())] idiom from L3-typed.
-    # The list has PROJECTION_MONTHS+1 elements: [0, 1/12, ..., 82/12].
-    #
-    # curve.discount_factor(t_years) returns list[float] of length
-    # projection_months + 1. The lists are NOT broadcast to every row here;
-    # Section 16 joins a 3-row scenario→list mapping so each row carries
-    # only its own scenario's list (vs three columns × n_rows).
-    # ------------------------------------------------------------------
-    schedule = Schedule.from_calendar_grid(
-        start_date=VALUATION_DATE,
-        n_periods=projection_months,
-        frequency="1M",
-        day_count=OneTwelfth(),
-    )
-    t_years_list = schedule.cumulative_year_fractions()  # len = projection_months + 1
-
-    disc_factors_base_list = curves["BASE"].discount_factor(t_years_list)
-    disc_factors_up_list = curves["UP"].discount_factor(t_years_list)
-    disc_factors_down_list = curves["DOWN"].discount_factor(t_years_list)
+    # The three Curve objects go to Section 16 as they are. Nothing is
+    # pre-computed here: the year fractions the curves are read at come off
+    # the projection built below (`af.projection.t_years()`), so there is no
+    # second calendar grid to keep in step with the projection's own.
 
     # ------------------------------------------------------------------
     # Join product params
     # ------------------------------------------------------------------
-    mp = af.collect()
-    mp = mp.join(
+    # The enrichment happens on the frame itself rather than on a collected
+    # DataFrame that is then re-wrapped: every column arriving from a
+    # parameter table comes through a door the frame records (*Audit by
+    # default*).
+    af = af.join(
         product_params.select(
             [
                 "product_id",
@@ -364,27 +361,26 @@ def main(
         ),
         on=["product_id", "plan_id"],
         how="left",
+        maintain_order="left",
     )
 
-    # Join dynamic lapse parameters
-    mp = mp.join(
-        dyn_lapse_params.select(
-            [
-                "index",
-                "formula_id",
-                "U",
-                "L",
-                "M",
-                "D",
-                "FactorCap",
-                "FactorFloor",
-                "Y",
-                "Power",
-            ]
-        ),
-        left_on="dyn_lapse_param_id",
-        right_on="index",
-        how="left",
+    # Dynamic lapse parameters. DL001 uses U/L/M/D and DL002 uses
+    # FactorCap/FactorFloor/Y/Power, so every row leaves the other formula's
+    # columns empty; those neutral defaults belong to the parameter table and
+    # are filled there, before it reaches the frame.
+    dyn_lapse_params_filled = dyn_lapse_params.select(
+        [
+            "index",
+            "formula_id",
+            "U",
+            "L",
+            "M",
+            "D",
+            "FactorCap",
+            "FactorFloor",
+            "Y",
+            "Power",
+        ]
     ).with_columns(
         [
             pl.col("U").fill_null(2.0),
@@ -397,19 +393,29 @@ def main(
             pl.col("Power").fill_null(1.0),
         ]
     )
-
-    # Join space parameters (expense_acq, expense_maint)
-    gmxb_expenses = space_params.filter(pl.col("space") == "GMXB").select(
-        ["expense_acq", "expense_maint"]
-    )
-    mp = mp.with_columns(
-        [
-            pl.lit(gmxb_expenses["expense_acq"].item()).alias("expense_acq"),
-            pl.lit(gmxb_expenses["expense_maint"].item()).alias("expense_maint"),
-        ]
+    af = af.join(
+        dyn_lapse_params_filled,
+        left_on="dyn_lapse_param_id",
+        right_on="index",
+        how="left",
+        maintain_order="left",
     )
 
-    af = ActuarialFrame(mp)
+    # Space parameters (expense_acq, expense_maint): read from the space
+    # table as the model reads any basis, so the record names the table and
+    # its content and a scenario can shock it. A number pulled out with
+    # .item() would sit in the record as a bare literal naming no file or row.
+    expense_tables = {
+        name: Table(
+            name=f"space_{name}",
+            source=space_params.select("space", name),
+            dimensions={"space": "space"},
+            value=name,
+        )
+        for name in ("expense_acq", "expense_maint")
+    }
+    af.expense_acq = expense_tables["expense_acq"].lookup(space="GMXB")
+    af.expense_maint = expense_tables["expense_maint"].lookup(space="GMXB")
 
     # =========================================================================
     # SECTION 1: TIME SETUP
@@ -417,13 +423,31 @@ def main(
 
     af.entry_date_parsed = af.entry_date.str.to_date("%Y/%m/%d")
 
-    af.duration_mth_init = (VALUATION_DATE.year * 12 + VALUATION_DATE.month) - (
-        af.entry_date_parsed.dt.year() * 12 + af.entry_date_parsed.dt.month()
+    # Whole calendar months from entry to the valuation date.
+    af.duration_mth_init = af.entry_date_parsed.date.months_between(VALUATION_DATE)
+
+    # Remaining term per policy: floored at zero, capped at the horizon.
+    af.term_months_left = af.policy_term * 12 - af.duration_mth_init
+    af.remaining_term_months = (
+        when(af.term_months_left < 0)
+        .then(0)
+        .otherwise(
+            when(af.term_months_left > projection_months)
+            .then(projection_months)
+            .otherwise(af.term_months_left)
+        )
     )
 
-    af.remaining_term_months = (af.policy_term * 12 - af.duration_mth_init).clip(
-        lower_bound=0, upper_bound=projection_months
-    )
+    # Phase 1 is finished: the parameters are joined, the dates are parsed,
+    # every policy knows how long it has left. Freezing here means the
+    # projection below plans over settled model points instead of
+    # re-deriving this setup on every collect -- and the frame is the same
+    # frame afterwards, so a reader can still ask where `maint_fee_rate`
+    # came from. `ActuarialFrame(af.collect())` would freeze the values and
+    # throw that away; where the values genuinely have to leave the frame
+    # (a numpy generator), `ActuarialFrame(df, continue_from=af)` is the
+    # way back.
+    af = af.materialize()
 
     af = af.projection.set(
         valuation_date=VALUATION_DATE,
@@ -434,10 +458,8 @@ def main(
     )
     af.projection_date = af.projection.period_dates()
 
-    af.month = (af.projection_date.dt.year() - VALUATION_DATE.year) * 12 + (
-        af.projection_date.dt.month() - VALUATION_DATE.month
-    )
-
+    # projection.set() has already stamped af.month -- elapsed whole months
+    # from the valuation date, down each policy's own timeline.
     af.duration_mth_t = af.duration_mth_init + af.month
     af.duration = af.duration_mth_t // 12
     af.age = af.age_at_entry + af.duration
@@ -458,13 +480,16 @@ def main(
         age=af.age,
         duration=af.duration,
         table_id=af.mort_table_id,
-        **_maybe_scenario(mortality, af),
     )
 
+    af.scalar_duration_capped = (
+        when(af.duration > SCALAR_DURATION_CAP)
+        .then(SCALAR_DURATION_CAP)
+        .otherwise(af.duration)
+    )
     af.mort_scalar = mortality_scalars.lookup(
         scalar_id=af.mort_scalar_id,
-        duration=af.duration.clip(upper_bound=SCALAR_DURATION_CAP),
-        **_maybe_scenario(mortality_scalars, af),
+        duration=af.scalar_duration_capped,
     )
 
     # Zero mort_rate at durations beyond scalar table range (lifelib off-by-one)
@@ -480,7 +505,11 @@ def main(
     # SECTION 3: BASE LAPSE RATES
     # =========================================================================
 
-    af.lapse_duration_capped = af.duration.clip(upper_bound=LAPSE_DURATION_CAP)
+    af.lapse_duration_capped = (
+        when(af.duration > LAPSE_DURATION_CAP)
+        .then(LAPSE_DURATION_CAP)
+        .otherwise(af.duration)
+    )
 
     af.base_lapse_rate = (
         when((af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP))
@@ -488,7 +517,6 @@ def main(
             lapse_rates.lookup(
                 lapse_id=af.lapse_id,
                 duration=af.lapse_duration_capped,
-                **_maybe_scenario(lapse_rates, af),
             )
         )
         .otherwise(0.0)
@@ -561,8 +589,8 @@ def main(
 
     af.av_pp_bef_fee = af.shifted_growth.projection.accumulate(
         initial=af.av_pp_init,
-        multiply=af.shifted_growth,
-        add=af.prem_to_av,
+        multiplier=af.shifted_growth,
+        addend=af.prem_to_av,
     )
 
     af.av_pp_bef_prem = af.av_pp_bef_fee - af.prem_to_av
@@ -577,16 +605,40 @@ def main(
 
     af.itm = af.av_pp_mid_mth / af.sum_assured
 
-    af.dl001_factor = (1.0 - af.M * (1.0 / af.itm - af.D)).clip(af.L, af.U)
-    af.dl002_factor = (af.Y * af.itm**af.Power).clip(af.FactorFloor, af.FactorCap)
+    # DL001: 1 - M * (1/ITM - D), held between the floor L and the cap U.
+    af.dl001_unbounded = 1.0 - af.M * (1.0 / af.itm - af.D)
+    af.dl001_factor = (
+        when(af.dl001_unbounded < af.L)
+        .then(af.L)
+        .otherwise(
+            when(af.dl001_unbounded > af.U).then(af.U).otherwise(af.dl001_unbounded)
+        )
+    )
+
+    # DL002: Y * ITM^Power, held between FactorFloor and FactorCap.
+    af.dl002_unbounded = af.Y * af.itm**af.Power
+    af.dl002_factor = (
+        when(af.dl002_unbounded < af.FactorFloor)
+        .then(af.FactorFloor)
+        .otherwise(
+            when(af.dl002_unbounded > af.FactorCap)
+            .then(af.FactorCap)
+            .otherwise(af.dl002_unbounded)
+        )
+    )
 
     af.dyn_lapse_factor = (
         when(af.formula_id == "DL001").then(af.dl001_factor).otherwise(af.dl002_factor)
     )
 
+    af.lapse_rate_unfloored = af.dyn_lapse_factor * af.base_lapse_rate
     af.lapse_rate = (
         when((af.duration >= 0) & (af.duration <= LAPSE_DURATION_CAP))
-        .then((af.dyn_lapse_factor * af.base_lapse_rate).clip(af.dyn_lapse_floor, None))
+        .then(
+            when(af.lapse_rate_unfloored < af.dyn_lapse_floor)
+            .then(af.dyn_lapse_floor)
+            .otherwise(af.lapse_rate_unfloored)
+        )
         .otherwise(0.0)
     )
 
@@ -597,9 +649,11 @@ def main(
     # =========================================================================
 
     af.combined_decrement = 1.0 - (1.0 - af.mort_rate_mth) * (1.0 - af.lapse_rate_mth)
-    af.survival_factor = 1.0 - af.combined_decrement
-    af.cumulative_survival = af.survival_factor.cum_prod()
-    af.survival_prob = af.cumulative_survival.projection.previous_period(fill_value=1.0)
+
+    # tpx[t] = (1 - q[0]) * ... * (1 - q[t-1]). The default
+    # rate_timing="beginning_of_period" is the convention this model needs:
+    # the decrement at t is not yet applied, so the first element is 1.0.
+    af.survival_prob = af.combined_decrement.projection.cumulative_survival()
 
     af.maturity_month = af.policy_term * 12
 
@@ -625,14 +679,12 @@ def main(
     # SECTION 9: DEATH CLAIMS
     # =========================================================================
 
-    af.sum_assured_f = af.sum_assured.cast(pl.Float64)
-
     af.claim_pp_death = (
         when(af.has_gmdb)
         .then(
-            when(af.av_pp_mid_mth > af.sum_assured_f)
+            when(af.av_pp_mid_mth > af.sum_assured)
             .then(af.av_pp_mid_mth)
-            .otherwise(af.sum_assured_f)
+            .otherwise(af.sum_assured)
         )
         .otherwise(af.av_pp_mid_mth)
     )
@@ -646,8 +698,10 @@ def main(
     af.claim_pp_lapse = af.av_pp_mid_mth
     af.duration_year = af.duration_mth_t // 12
     SURR_CHARGE_DURATION_CAP = 9
-    af.duration_year_capped = af.duration_year.clip(
-        upper_bound=SURR_CHARGE_DURATION_CAP
+    af.duration_year_capped = (
+        when(af.duration_year > SURR_CHARGE_DURATION_CAP)
+        .then(SURR_CHARGE_DURATION_CAP)
+        .otherwise(af.duration_year)
     )
 
     af.surr_charge_rate = (
@@ -659,7 +713,6 @@ def main(
                 on_missing="nan",
                 duration=af.duration_year_capped,
                 surr_charge_id=af.surr_charge_id,
-                **_maybe_scenario(surrender_charges, af),
             )
         )
         .otherwise(0.0)
@@ -675,9 +728,9 @@ def main(
     af.claim_pp_maturity = (
         when(af.has_gmab)
         .then(
-            when(af.av_pp_bef_prem > af.sum_assured_f)
+            when(af.av_pp_bef_prem > af.sum_assured)
             .then(af.av_pp_bef_prem)
-            .otherwise(af.sum_assured_f)
+            .otherwise(af.sum_assured)
         )
         .otherwise(af.av_pp_bef_prem)
     )
@@ -697,7 +750,9 @@ def main(
 
     INFLATION_RATE = 0.01
 
-    af.inflation_factor = (af.month / 12.0 * math.log(1.0 + INFLATION_RATE)).exp()
+    # (1 + i)^(month/12). `**` broadcasts a scalar base over a per-period
+    # exponent directly, so the exp/log identity is not needed.
+    af.inflation_factor = (1.0 + INFLATION_RATE) ** (af.month / 12.0)
 
     af.expense_acq_total = af.expense_acq * af.pols_new_biz
     af.expense_maint_total = (
@@ -742,71 +797,46 @@ def main(
     # =========================================================================
     #
     # Three Curve objects encode the zero-rate term structure for BASE, UP, DOWN.
-    # The pre-computed discount-factor lists (one per scenario, len = projection_
-    # months + 1) are joined onto the frame via a 3-row scenario→list mapping so
-    # each row carries ONE list column — the one matching its own scenario_id —
-    # rather than three columns broadcast to every row.
+    # Each is read on the frame — curve.discount_factor(af.t_years) — so the
+    # discount factors arrive through a door the record can see: the audit
+    # artifact carries the curve's own assumption entry, and the node's
+    # fingerprint moves when the knots move. Pre-computing the same vectors in
+    # Python and handing them over as a literal produces identical numbers that
+    # the artifact can say nothing about (*Audit by default*).
     #
-    # At 10k policies × 1200 months, the previous broadcast-then-when/then design
-    # materialised ~288 MB of list-column data (3 lists × n_rows × 1201 × 8B);
-    # the join-then-trim design here uses ~1/3 of that.
-    #
-    # Per-policy list length trimming:
-    #   Each policy has a different projection length (51–82 months). The full
-    #   discount-factor list is trimmed to match each policy's month-list length
-    #   via list.head(af.month.list.len()) so downstream list arithmetic
-    #   (cashflow * disc_factors) operates on matching-length lists.
+    # No per-policy trimming is needed. af.projection.t_years() is each policy's
+    # OWN year-fraction vector (51–82 elements here, one per period it actually
+    # has), so the curve is evaluated on exactly that grid and downstream list
+    # arithmetic (cashflow * disc_factors) already lines up.
     #
     # Parity note: the Curve approach is mathematically correct (zero-rate
     # discounting). The untyped L5 uses an approximation (current year's forward
     # rate applied cumulatively); deviations at month 82 are ~2.3% on disc factors.
     # =========================================================================
 
-    scenario_dtype = mp.schema.get("scenario_id")
-    is_string_scenario = "scenario_id" in af.columns and scenario_dtype in (
-        pl.Utf8,
-        pl.String,
-    )
+    af.t_years = af.projection.t_years()
 
-    if is_string_scenario:
-        # Join a 3-row mapping so each row gets ONE discount-factor list, never
-        # three. Materialises the prior pipeline state once before joining;
-        # Section 17 forces materialisation anyway, so this is not extra work.
-        disc_map = pl.DataFrame(
-            {
-                "scenario_id": ["BASE", "UP", "DOWN"],
-                "_disc_factors_full": [
-                    disc_factors_base_list,
-                    disc_factors_up_list,
-                    disc_factors_down_list,
-                ],
-            },
-            schema={"scenario_id": pl.Utf8, "_disc_factors_full": pl.List(pl.Float64)},
-        )
-        mp_with_disc = af.collect().join(disc_map, on="scenario_id", how="left")
-        af = ActuarialFrame(mp_with_disc)
-        # Re-bind the joined column through the gaspatchio typed path so
-        # downstream `.list.head(per_row_expr)` accepts ExpressionProxy lengths.
+    # An explicit rate scenario names its curve on the model point ("BASE",
+    # "UP", "DOWN"); a stochastic run indexes simulations. That distinction is
+    # scenario_id's dtype -- a label however parquet dictionary-encoded it.
+    if af.schema.get("scenario_id") in (pl.String, pl.Categorical, pl.Enum):
+        # One curve read per rate scenario, selected per row on scenario_id.
         # Any scenario_id not in {BASE, UP, DOWN} (e.g. shock-driven scenarios
-        # like "MORT_UP_20" in Step 01) falls back to the BASE curve — curve
+        # like "MORT_UP_20" in Step 01) falls to the BASE curve — curve
         # selection is the rate-scenario concern; table shocks are orthogonal.
-        af.disc_factors_full = pl.col("_disc_factors_full").fill_null(
-            pl.lit(
-                pl.Series("_fallback", [disc_factors_base_list], dtype=pl.List(pl.Float64))
-            ).first()
-        )
-        af.disc_factors = af.disc_factors_full.list.head(af.month.list.len())
-    else:
-        # Integer scenario_id (stochastic) or no scenario_id column: only one
-        # discount-factor list is needed; broadcast the BASE list directly.
-        af.disc_factors_full = pl.lit(
-            pl.Series(
-                "_disc_factors_full",
-                [disc_factors_base_list],
-                dtype=pl.List(pl.Float64),
+        af.disc_factors = (
+            when(af.scenario_id == "UP")
+            .then(curves["UP"].discount_factor(af.t_years))
+            .otherwise(
+                when(af.scenario_id == "DOWN")
+                .then(curves["DOWN"].discount_factor(af.t_years))
+                .otherwise(curves["BASE"].discount_factor(af.t_years))
             )
-        ).first()
-        af.disc_factors = af.disc_factors_full.list.head(af.month.list.len())
+        )
+    else:
+        # Integer scenario_id (stochastic) or no scenario_id column: one rate
+        # scenario, so only the BASE curve is read.
+        af.disc_factors = curves["BASE"].discount_factor(af.t_years)
 
     # =========================================================================
     # SECTION 17: PRESENT VALUES

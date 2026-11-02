@@ -12,20 +12,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from loguru import logger
-
 from gaspatchio.rollforward._compiled import CompiledRollforward
-from gaspatchio.rollforward._passes import (
-    AssignCaptureSlots,
-    FoldConstants,
-    LowerToPolarsPlugin,
-    ResolveStateRefs,
-    Validate,
-)
+from gaspatchio.rollforward._ir import IR
+from gaspatchio.rollforward._passes import _compile_ir
 
 if TYPE_CHECKING:
     from gaspatchio.rollforward._builder import RollforwardBuilder
-    from gaspatchio.rollforward._ir import IR
 
 
 def compile_rollforward(
@@ -41,33 +33,14 @@ def compile_rollforward(
         [assign_capture_slots]  ok — N slots
         [lower_polars]          ok — N kwargs
     """
-    from gaspatchio.rollforward._ir import IR as _IR
+    ir: IR = target if isinstance(target, IR) else target._build()
 
-    ir: _IR = target if isinstance(target, _IR) else target._build()
-
-    ir = Validate().apply(ir)
-    logger.trace(f"[validate]              ok — {len(ir.transitions)} transitions")
-
-    ir = ResolveStateRefs().apply(ir)
-    logger.trace("[resolve_state_refs]    ok")
-
-    ir = FoldConstants().apply(ir)
-    logger.trace("[fold_constants]        ok")
-
-    slots_pass = AssignCaptureSlots()
-    ir, slots = slots_pass.apply_with_slots(ir)
-    logger.trace(f"[assign_capture_slots]  ok — {len(slots)} slots")
-
-    lower = LowerToPolarsPlugin()
-    plugin_kwargs, plugin_args = lower.lower(ir, slots)
-    logger.trace(f"[lower_polars]          ok — {len(plugin_kwargs)} kwargs")
-
-    return CompiledRollforward(
-        ir=ir,
-        plugin_kwargs=plugin_kwargs,
-        capture_slots=slots,
-        plugin_args=tuple(plugin_args),
-    )
+    compiled = _compile_ir(ir, CompiledRollforward)
+    if not isinstance(target, IR):
+        # Not a field: the frame is no part of what was compiled, and two
+        # compilations of one chain stay equal whichever frame they read.
+        object.__setattr__(compiled, "_frame_ref", target._frame_ref)
+    return compiled
 
 
 __all__ = ["compile_rollforward"]

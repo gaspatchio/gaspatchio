@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Level 5 Step 05: Stochastic Monte Carlo via `master_seed`
+Level 5 Step 05: Stochastic Monte Carlo — the draws are the plan
 
 Steps 01-04 ran deterministic scenarios — every shock value was chosen by
 the actuary. Real-economy capital calcs (Solvency II SCR at 99.5%, IFRS 17
@@ -11,18 +11,24 @@ risk adjustment, ORSA) need stochastic scenarios: draws from a distribution
 across hundreds or thousands of paths, with tail aggregators (`CTE`,
 `Quantile`) reducing to a single capital figure.
 
-The same `ScenarioRun` plan handles this. The only addition is
-``master_seed=42``: a deterministic 32-bit per-scenario seed gets derived
-via SHA-256 from `(master_seed, scenario_id)` and injected as
-``drivers['rng_seed']``. Same `master_seed` + same scenario_ids → same
-seeds → same draws → same SHA → byte-identical results across processes.
+The same `ScenarioRun` plan handles this. Each scenario's draw is made up
+front, from one seeded generator, and becomes that scenario's shock: a
+log-normal mortality multiplier on ``mortality_select``. So the draws are
+part of the plan — its SHA covers every one of them, ``to_yaml`` writes
+them down — and the model is the one you reconciled, run unchanged at any
+batch size. Same ``MASTER_SEED`` → same draws → same plan SHA → identical
+results across processes.
+
+A model that draws its own randomness inside instead reads its seed off the
+frame: ``ScenarioRun(..., master_seed=42)`` hands each scenario a
+deterministic 32-bit seed as the ``rng_seed`` column, at any batch size.
 
 Demonstration in this step
 --------------------------
 
-200 stochastic scenarios named ``S0000..S0199``. Each one draws a per-period
-mortality shock from a log-normal distribution (μ=0, σ=0.15) and runs the
-L5 model against the shocked mortality table. Aggregators:
+200 stochastic scenarios named ``S0000..S0199``. Each one draws a mortality
+multiplier from a log-normal distribution (μ=0, σ=0.15) and runs the L5
+model against mortality shocked by it. Aggregators:
 
   * ``CTE("pv_net_cf", level=0.005, direction="lower")`` — 99.5% adverse
     tail (the SCR-shape capital figure for a positive-is-profit column).
@@ -34,9 +40,10 @@ Reproducibility check
 ---------------------
 
 Two runs of the same plan against the same model points produce identical
-plan SHAs (the plan content didn't change) AND identical aggregate values
-(``master_seed`` makes the draws deterministic). Change ``master_seed`` →
-SHA changes → draws change → aggregates change.
+plan SHAs (the plan content didn't change) AND identical aggregate values,
+bit for bit, whatever batch size each run used.
+Change ``MASTER_SEED`` → the draws change → the SHA changes → the
+aggregates change.
 
 Run::
 
@@ -51,11 +58,11 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from gaspatchio import ActuarialFrame, MortalityTable
-from gaspatchio.assumptions import Table
+from gaspatchio import ActuarialFrame
 from gaspatchio.scenarios import (
     CTE,
     Mean,
+    MultiplicativeShock,
     Quantile,
     ScenarioRun,
     Std,
@@ -67,30 +74,10 @@ sys.path.insert(0, str(L5_BASE_DIR))
 import model  # noqa: E402
 
 MODEL_POINTS_PATH = L5_BASE_DIR / "model_points.parquet"
-SELECT_PERIOD = model.SELECT_PERIOD_LEN
 N_SCENARIOS = 200
 MASTER_SEED = 42
 
-# ---------------------------------------------------------------------------
-# 1. Load assumptions; we'll override mortality per scenario via the RNG.
-# ---------------------------------------------------------------------------
-
-assumptions = model.load_assumptions()
-mortality_select_raw = assumptions["mortality"].table
-# Materialised source view we'll multiply per scenario. Each scenario builds a
-# fresh Table around this — the base mortality_select remains untouched.
-mortality_source = mortality_select_raw.to_dataframe()
-
-# ---------------------------------------------------------------------------
-# 2. Plan — 200 scenarios, no shocks dict (RNG drives the variation instead).
-#    Each scenario gets a unique seed from drivers['rng_seed'].
-# ---------------------------------------------------------------------------
-
 SCENARIOS = [f"S{i:04d}" for i in range(N_SCENARIOS)]
-
-# We use the "drivers" shape — empty driver dict per scenario; master_seed
-# does the work of differentiating scenarios via the rng_seed injection.
-DRIVERS: dict = {sid: {} for sid in SCENARIOS}
 
 AGGREGATIONS = (
     CTE("pv_net_cf", level=0.005, direction="lower").alias("scr_995"),
@@ -99,68 +86,48 @@ AGGREGATIONS = (
     Std("pv_net_cf").alias("std_pv"),
 )
 
+
 # ---------------------------------------------------------------------------
-# 3. Model wrapper — uses drivers['rng_seed'] to make a stochastic mortality
-#    table on every scenario.
+# 1. The draws. One seeded generator, one log-normal multiplier per scenario
+#    (mean ~1.0, σ=0.15), each written into the plan as that scenario's
+#    shock on the mortality table the model builds.
 # ---------------------------------------------------------------------------
 
 
-def model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:
-    """Draw a log-normal mortality multiplier; wrap into a fresh MortalityTable."""
-    del tables  # plan has no shocks; base tables flow through unchanged
-    rng = np.random.default_rng(drivers["rng_seed"])
-
-    # Log-normal multiplier — mean ~1.0, σ=0.15 — applied uniformly across age/duration.
-    mortality_mult = float(rng.lognormal(mean=0.0, sigma=0.15))
-    shocked_source = mortality_source.with_columns(
-        (pl.col("mort_rate") * mortality_mult).alias("mort_rate"),
-    )
-    shocked_table = Table(
-        name="mortality_select_stochastic",
-        source=shocked_source,
-        dimensions={
-            "table_id": "table_id",
-            "age": "age",
-            "duration": "duration",
+def stochastic_plan(seed: int) -> ScenarioRun:
+    """Return the plan whose scenarios are this seed's mortality draws."""
+    rng = np.random.default_rng(seed)
+    multipliers = rng.lognormal(mean=0.0, sigma=0.15, size=N_SCENARIOS)
+    return ScenarioRun(
+        shocks={
+            sid: [MultiplicativeShock(factor=float(m), table="mortality_select")]
+            for sid, m in zip(SCENARIOS, multipliers, strict=True)
         },
-        value="mort_rate",
+        aggregations=AGGREGATIONS,
     )
-    overrides = dict(assumptions)
-    overrides["mortality"] = MortalityTable(
-        table=shocked_table,
-        age_basis="age_last_birthday",
-        structure="select_ultimate",
-        select_period=SELECT_PERIOD,
-    )
-    return model.main(af, assumptions_override=overrides)
 
 
-# ---------------------------------------------------------------------------
-# 4. Build the plan + run.
-# ---------------------------------------------------------------------------
-
-plan = ScenarioRun(
-    shocks={sid: [] for sid in SCENARIOS},
-    base_tables={},  # no shock-stacked tables; stochastic variation comes via rng_seed
-    aggregations=AGGREGATIONS,
-    master_seed=MASTER_SEED,
-)
+plan = stochastic_plan(MASTER_SEED)
 
 print(f"Plan SHA: {plan.source_sha()}")
 print(f"Master seed: {MASTER_SEED}  |  Scenarios: {N_SCENARIOS}")
 print()
 
+# ---------------------------------------------------------------------------
+# 2. Run the model as it is, at whatever batch size the memory search picks.
+#    Each scenario is folded on its own rows in the run's order, so every
+#    figure below is the same bits at any batch size and on every run.
+# ---------------------------------------------------------------------------
+
 mp = pl.read_parquet(MODEL_POINTS_PATH)
 af = ActuarialFrame(mp)
 
 start = time.perf_counter()
-# batch_size=1 is mandatory when master_seed is set — the rng_seed is
-# injected per scenario, not per batch.
-result = plan.run(af, model_fn, batch_size=1, audit=True)
+result = plan.run(af, model.main, audit=True)
 runtime = time.perf_counter() - start
 
 # ---------------------------------------------------------------------------
-# 5. Capital figures.
+# 3. Capital figures.
 # ---------------------------------------------------------------------------
 
 print(f"Runtime: {runtime:.2f}s  ({runtime / N_SCENARIOS * 1000:.1f}ms/scenario)")
@@ -177,11 +144,11 @@ print(f"  SCR (99.5% CTE)  : {result.aggregations['scr_995']:>14,.0f}")
 print()
 
 # ---------------------------------------------------------------------------
-# 6. Reproducibility check — same plan, same SHA, same numbers.
+# 4. Reproducibility check — same seed, same plan, same SHA, same numbers.
 # ---------------------------------------------------------------------------
 
-print("=== Reproducibility: re-running with the same plan ===")
-result2 = plan.run(af, model_fn, batch_size=1)
+print("=== Reproducibility: re-drawing with the same seed, at another batch size ===")
+result2 = stochastic_plan(MASTER_SEED).run(af, model.main, batch_size=7)
 assert result2.plan_sha == result.plan_sha, "plan SHA drifted"
 assert result2.aggregations["scr_995"] == result.aggregations["scr_995"], "SCR drifted"
 assert result2.aggregations["mean_pv"] == result.aggregations["mean_pv"], "mean drifted"
@@ -189,16 +156,11 @@ print(f"  Same plan SHA   : {result2.plan_sha}")
 print(f"  Same SCR        : {result2.aggregations['scr_995']:,.0f}")
 print(f"  Same mean       : {result2.aggregations['mean_pv']:,.0f}")
 print()
-print("Reproducibility verified — same master_seed gives identical aggregates.")
+print("Reproducibility verified — the same seed draws the same plan.")
 print()
-print("=== What changing master_seed does ===")
-plan_b = ScenarioRun(
-    shocks={sid: [] for sid in SCENARIOS},
-    base_tables={},
-    aggregations=AGGREGATIONS,
-    master_seed=MASTER_SEED + 1,  # different seed
-)
-result_b = plan_b.run(af, model_fn, batch_size=1)
+print("=== What changing the seed does ===")
+plan_b = stochastic_plan(MASTER_SEED + 1)
+result_b = plan_b.run(af, model.main)
 print(f"  Different SHA    : {plan_b.source_sha()}")
 print(f"  Different SCR    : {result_b.aggregations['scr_995']:,.0f}")
 print(f"  Different mean   : {result_b.aggregations['mean_pv']:,.0f}")

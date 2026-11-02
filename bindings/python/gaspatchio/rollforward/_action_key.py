@@ -26,7 +26,7 @@ import hashlib
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any
 
-from gaspatchio._identity import canonical_bytes
+from gaspatchio._identity import SHA256_PREFIX, canonical_bytes
 from gaspatchio.rollforward._fingerprint import spec_fingerprint
 
 if TYPE_CHECKING:
@@ -99,7 +99,7 @@ def action_key(
         "git_sha": git_sha,
     }
     digest = hashlib.sha256(canonical_bytes(payload)).hexdigest()
-    return f"sha256:{digest}"
+    return f"{SHA256_PREFIX}{digest}"
 
 
 __all__ = ["HermeticContext", "action_key", "gather_typed_input_shas"]

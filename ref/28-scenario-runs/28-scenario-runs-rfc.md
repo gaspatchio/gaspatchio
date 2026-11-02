@@ -2,7 +2,7 @@
 
 **Status**: Draft
 **Date**: 2025-12-08
-**Authors:** Matt Wright, Claude
+**Author:** Matt Wright
 
 ## Summary
 

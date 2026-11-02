@@ -7,9 +7,11 @@
 
 use crate::assumptions::array_storage::ArrayStorage;
 use crate::assumptions::hash_storage::{ColumnCodec, HashStorage};
+use crate::polars_functions::slices::{own_rows, period_count_message};
 use ahash::{AHashMap, AHasher};
 use log::debug;
 use polars::prelude::*;
+use polars_core::series::amortized_iter::AmortSeries;
 use std::hash::Hasher;
 use std::str::FromStr;
 
@@ -101,6 +103,46 @@ pub struct AssumptionTable {
     storage_mode_used: StorageMode,
 }
 
+/// A key's current policy row, kept only for this lookup invocation.
+enum VectorLookupKey<'a> {
+    List(Option<AmortSeries>),
+    Scalar {
+        series: &'a Series,
+        index: usize,
+        encoded: Option<Option<u64>>,
+    },
+}
+
+impl VectorLookupKey<'_> {
+    fn encode(&mut self, codec: &ColumnCodec, period: usize) -> PolarsResult<Option<u64>> {
+        match self {
+            Self::List(Some(inner)) => {
+                let series = inner.as_ref();
+                if period < series.len() {
+                    Ok(codec.encode(series.get(period)?.into_static()))
+                } else {
+                    Ok(None)
+                }
+            }
+            Self::List(None) => Ok(None),
+            Self::Scalar {
+                series,
+                index,
+                encoded,
+            } => {
+                if let Some(part) = encoded {
+                    return Ok(*part);
+                }
+                // Resolve on first use: an empty row or an earlier missing key
+                // must not force access to an otherwise unread scalar input.
+                let part = codec.encode(series.get(*index)?.into_static());
+                *encoded = Some(part);
+                Ok(part)
+            }
+        }
+    }
+}
+
 impl AssumptionTable {
     /// Build with specified storage mode.
     pub fn build_with_mode(
@@ -134,17 +176,26 @@ impl AssumptionTable {
                 }
             }
             StorageMode::Auto => {
-                // Try array first with string mappings, fall back to hash
+                // Try array first with string mappings, fall back to hash --
+                // where array storage declines the keys, and where its encoder
+                // cannot encode them at all. A fractional key (an ITM band at
+                // 0.8, a half-year duration) is a valid key (spec 11.1.24)
+                // that only the array encoder refuses; "auto" chooses a
+                // layout, so a layout that cannot hold the keys is not a
+                // refusal of the table.
                 match ArrayStorage::build_with_mappings(
                     &processed_df,
                     &keys,
                     &value,
                     Some(&string_mappings),
-                )? {
-                    Some(arr) => TableStorage::Array(arr),
-                    None => {
-                        let hash = HashStorage::build(&df, &keys, &value)?;
-                        TableStorage::Hash(hash)
+                ) {
+                    Ok(Some(arr)) => TableStorage::Array(arr),
+                    Ok(None) => TableStorage::Hash(HashStorage::build(&df, &keys, &value)?),
+                    Err(declined) => {
+                        log::debug!(
+                            "Array storage cannot encode these keys ({declined}); using hash"
+                        );
+                        TableStorage::Hash(HashStorage::build(&df, &keys, &value)?)
                     }
                 }
             }
@@ -419,20 +470,36 @@ impl AssumptionTable {
             return Err(polars_err!(ShapeMismatch: "wrong # key columns"));
         }
 
+        // A streamed slice of a list key keeps the whole column's inner
+        // values. The vector paths explode and encode the keys, so each is
+        // cut to its own rows here rather than trusting explode to do it.
+        let owned_rows: Vec<Series> = key_cols.iter().map(|s| own_rows(s)).collect();
+        let key_cols: Vec<&Series> = owned_rows.iter().collect();
+        let key_cols = key_cols.as_slice();
+
         // Broadcast unit-length literal keys (e.g. pl.lit) to the batch
         // length. Polars does not pre-broadcast literal plugin inputs on
         // every engine path — in-memory never does, streaming only while
         // one morsel spans the frame — so mixed column/literal keys can
-        // arrive here with mismatched lengths.
-        let max_len = key_cols.iter().map(|s| s.len()).max().unwrap_or(0);
-        if max_len > 1 && key_cols.iter().any(|s| s.len() == 1) {
+        // arrive here with mismatched lengths. The batch length is that of
+        // a key that is not unit-length, which is zero over a frame a filter
+        // emptied: a literal is then cut to no rows, and the lookup answers
+        // none, rather than refusing a frame with nothing to look up.
+        let batch_len = key_cols
+            .iter()
+            .map(|s| s.len())
+            .find(|&n| n != 1)
+            .unwrap_or(1);
+        if batch_len != 1 && key_cols.iter().any(|s| s.len() == 1) {
             let owned: Vec<Series> = key_cols
                 .iter()
                 .map(|s| {
-                    if s.len() == 1 {
-                        s.new_from_index(0, max_len)
-                    } else {
+                    if s.len() != 1 {
                         (*s).clone()
+                    } else if batch_len == 0 {
+                        s.clear()
+                    } else {
+                        s.new_from_index(0, batch_len)
                     }
                 })
                 .collect();
@@ -485,10 +552,15 @@ impl AssumptionTable {
                 let len_a = first_offsets[row + 1] - first_offsets[row];
                 let len_b = other_offsets[row + 1] - other_offsets[row];
                 if len_a != len_b {
-                    return Err(polars_err!(ShapeMismatch:
-                        "ragged inner key lists at row {}: one vector key column has {} elements, another has {}; \
-                         inner lengths must match across all vector key columns",
-                        row, len_a, len_b));
+                    // Ragged keys, named by their columns and that policy's
+                    // two lengths -- never by the batch row they were met at.
+                    let message = period_count_message(
+                        &format!("key {}", key_cols[vector_indices[0]].name()),
+                        len_a as usize,
+                        &format!("key {}", key_cols[vi].name()),
+                        len_b as usize,
+                    );
+                    return Err(polars_err!(ShapeMismatch: "{}", message));
                 }
             }
         }
@@ -549,55 +621,67 @@ impl AssumptionTable {
         }
 
         // For hash storage, we use the codec-based lookup
-        let codecs = match &self.storage {
-            TableStorage::Hash(h) => h.codecs(),
+        let storage = match &self.storage {
+            TableStorage::Hash(h) => h,
             TableStorage::Array(_) => unreachable!("Array case handled above"),
         };
+        let codecs = storage.codecs();
 
         debug!(
             "lookup_vector: vector_len={}, vector_indices={:?}",
             vector_len, vector_indices
         );
 
-        // Pre-allocate result vector of Lists
+        let mut list_iters = key_cols
+            .iter()
+            .map(|series| {
+                if matches!(series.dtype(), DataType::List(_)) {
+                    Ok(Some(series.list()?.amortized_iter()))
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect::<PolarsResult<Vec<_>>>()?;
         let mut out_lists = Vec::with_capacity(vector_len);
+        let mut row_keys = Vec::with_capacity(key_cols.len());
 
-        // For each outer row, look up all inner vector elements
         for outer_idx in 0..vector_len {
-            // First, determine the inner vector length by examining all vector columns
-            let inner_len = self.compute_inner_len(key_cols, outer_idx, vector_indices)?;
+            // Release the previous row's handles before advancing. Polars can
+            // then reuse each iterator's Series container without cloning it.
+            row_keys.clear();
+            row_keys.extend(key_cols.iter().zip(&mut list_iters).map(
+                |(series, iter)| match iter {
+                    Some(iter) => VectorLookupKey::List(iter.next().flatten()),
+                    None => VectorLookupKey::Scalar {
+                        series,
+                        index: if series.len() == 1 { 0 } else { outer_idx },
+                        encoded: None,
+                    },
+                },
+            ));
+            // The first vector key continues to determine the output row's
+            // length; a null first list produces an empty output list.
+            let inner_len = match &row_keys[vector_indices[0]] {
+                VectorLookupKey::List(Some(inner)) => inner.as_ref().len(),
+                _ => 0,
+            };
+            let mut inner_vals = Vec::with_capacity(inner_len);
 
-            let mut inner_vals = vec![f64::NAN; inner_len];
-
-            // For each inner element, look up the value
-            #[allow(clippy::needless_range_loop)]
             for inner_idx in 0..inner_len {
-                // Build the hash key for this specific inner element
                 let key = if codecs.len() == 2 {
-                    // Fast path for 2 keys
-                    let av1 =
-                        self.get_value_at(key_cols, 0, outer_idx, inner_idx, vector_indices)?;
-                    let av2 =
-                        self.get_value_at(key_cols, 1, outer_idx, inner_idx, vector_indices)?;
-                    match (codecs[0].encode(av1), codecs[1].encode(av2)) {
+                    let first = row_keys[0].encode(&codecs[0], inner_idx)?;
+                    let second = row_keys[1].encode(&codecs[1], inner_idx)?;
+                    match (first, second) {
                         (Some(hash1), Some(hash2)) => {
                             Some(hash1.wrapping_mul(0x9e37_79b9_7f4a_7c15_u64) ^ hash2)
                         }
                         _ => None,
                     }
                 } else {
-                    // General case
                     let mut h = AHasher::default();
                     let mut valid = true;
-                    for (key_idx, codec) in codecs.iter().enumerate() {
-                        let av = self.get_value_at(
-                            key_cols,
-                            key_idx,
-                            outer_idx,
-                            inner_idx,
-                            vector_indices,
-                        )?;
-                        match codec.encode(av) {
+                    for (key, codec) in row_keys.iter_mut().zip(codecs) {
+                        match key.encode(codec, inner_idx)? {
                             Some(part) => h.write_u64(part),
                             None => {
                                 valid = false;
@@ -608,12 +692,11 @@ impl AssumptionTable {
                     valid.then(|| h.finish())
                 };
 
-                // Look up in hash map (an unencodable key is a miss -> NaN)
-                if let TableStorage::Hash(hs) = &self.storage {
-                    if let Some(v) = key.and_then(|k| hs.map.get(&k)) {
-                        inner_vals[inner_idx] = *v;
-                    }
-                }
+                inner_vals.push(
+                    key.and_then(|k| storage.map.get(&k))
+                        .copied()
+                        .unwrap_or(f64::NAN),
+                );
             }
 
             // Convert inner values to Series
@@ -625,59 +708,6 @@ impl AssumptionTable {
         let list_chunked: ListChunked = out_lists.into_iter().collect();
 
         Ok(list_chunked.into_series())
-    }
-
-    /// Compute the length of the inner vector at a given outer index.
-    fn compute_inner_len(
-        &self,
-        key_cols: &[&Series],
-        outer_idx: usize,
-        vector_indices: &[usize],
-    ) -> PolarsResult<usize> {
-        // Check the first vector column for the inner length
-        let first_vec_idx = vector_indices[0];
-        let list_series = key_cols[first_vec_idx];
-
-        let list_chunked = list_series.list()?;
-        match list_chunked.get_any_value(outer_idx)? {
-            AnyValue::List(inner_series) => Ok(inner_series.len()),
-            AnyValue::Null => Ok(0),
-            _ => Err(polars_err!(ComputeError: "Expected List type in compute_inner_len")),
-        }
-    }
-
-    /// Get the value at the specified position, handling both scalar and vector columns.
-    fn get_value_at(
-        &self,
-        key_cols: &[&Series],
-        key_idx: usize,
-        outer_idx: usize,
-        inner_idx: usize,
-        vector_indices: &[usize],
-    ) -> PolarsResult<AnyValue<'_>> {
-        let series = key_cols[key_idx];
-
-        // Check if this column is a vector
-        if vector_indices.contains(&key_idx) {
-            // Vector column - access inner element
-            let list_chunked = series.list()?;
-            match list_chunked.get_any_value(outer_idx)? {
-                AnyValue::List(inner_series) => {
-                    if inner_idx < inner_series.len() {
-                        Ok(inner_series.get(inner_idx)?.into_static())
-                    } else {
-                        Ok(AnyValue::Null)
-                    }
-                }
-                AnyValue::Null => Ok(AnyValue::Null),
-                _ => Err(polars_err!(ComputeError: "Expected List type in get_value_at")),
-            }
-        } else {
-            // Scalar column - handle broadcasting
-            let scalar_len = series.len();
-            let actual_idx = if scalar_len == 1 { 0 } else { outer_idx };
-            Ok(series.get(actual_idx)?.into_static())
-        }
     }
 
     // Metadata methods
@@ -733,6 +763,71 @@ mod tests {
     }
 
     #[test]
+    fn test_a_literal_key_beside_an_empty_column_answers_no_rows() -> PolarsResult<()> {
+        // A frame a filter emptied hands the plugin a zero-row column key and
+        // a one-value literal key: the lookup answers zero rows, in either
+        // storage, scalar and vector alike, where it refused the lengths.
+        for mode in [StorageMode::Array, StorageMode::Hash] {
+            let df = df! {
+                "age" => [30i64, 40, 30, 40],
+                "sex" => ["M", "M", "F", "F"],
+                "q" => [0.1, 0.2, 0.3, 0.4]
+            }?;
+            let table = AssumptionTable::build_with_mode(
+                df,
+                vec!["age".to_string(), "sex".to_string()],
+                "q".to_string(),
+                mode,
+            )?;
+            let ages = Series::new_empty("age".into(), &DataType::Int64);
+            let sex = Series::new("sex".into(), ["M"]);
+            let out = table.lookup_series(&[&ages, &sex])?;
+            assert_eq!(out.len(), 0);
+            assert_eq!(out.dtype(), &DataType::Float64);
+
+            let listed =
+                Series::new_empty("age".into(), &DataType::List(Box::new(DataType::Int64)));
+            let out = table.lookup_series(&[&listed, &sex])?;
+            assert_eq!(out.len(), 0);
+
+            // One row kept still answers its own rate.
+            let one = Series::new("age".into(), [40i64]);
+            let out = table.lookup_series(&[&one, &sex])?;
+            assert_eq!(out.f64()?.get(0), Some(0.2));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_auto_mode_takes_hash_storage_for_keys_the_array_encoder_refuses() -> PolarsResult<()> {
+        // In-the-money bands and half-year durations: fractional f64 keys,
+        // valid keys the array encoder cannot encode. "auto" builds them as
+        // hash storage and answers by value; "array" still says why not.
+        for keys in [[0.8, 1.0, 1.2], [0.0, 0.5, 1.0]] {
+            let df = df! {
+                "itm" => keys,
+                "mult" => [1.5, 1.0, 0.6]
+            }?;
+            let table =
+                AssumptionTable::build(df.clone(), vec!["itm".to_string()], "mult".to_string())?;
+            assert_eq!(table.storage_mode(), StorageMode::Hash);
+            let asked = Series::new("itm".into(), [keys[2], keys[0], keys[1]]);
+            let out = table.lookup_series(&[&asked])?;
+            let answers: Vec<Option<f64>> = out.f64()?.into_iter().collect();
+            assert_eq!(answers, vec![Some(0.6), Some(1.5), Some(1.0)]);
+
+            let forced = AssumptionTable::build_with_mode(
+                df,
+                vec!["itm".to_string()],
+                "mult".to_string(),
+                StorageMode::Array,
+            );
+            assert!(forced.is_err(), "array storage of {keys:?} should refuse");
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_force_hash_mode() -> PolarsResult<()> {
         let df = df! {
             "age" => [30i64, 30, 31, 31, 32, 32],
@@ -750,6 +845,93 @@ mod tests {
         assert!(!table.is_array_storage());
         assert_eq!(table.storage_mode(), StorageMode::Hash);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_hash_lookup_keeps_large_mixed_numeric_keys_exact() -> PolarsResult<()> {
+        let table_df = df! {
+            "key" => [
+                -9_223_372_036_854_775_808.0,
+                9_007_199_254_740_992.0,
+                9_223_372_036_854_775_808.0,
+            ],
+            "rate" => [0.1, 0.2, 0.3],
+        }?;
+        let table = AssumptionTable::build_with_mode(
+            table_df,
+            vec!["key".to_string()],
+            "rate".to_string(),
+            StorageMode::Hash,
+        )?;
+
+        let signed = Series::new(
+            "key".into(),
+            [
+                i64::MIN,
+                9_007_199_254_740_992,
+                9_007_199_254_740_993,
+                i64::MAX,
+            ],
+        );
+        let unsigned = Series::new("key".into(), [9_223_372_036_854_775_808_u64, u64::MAX]);
+        let signed_out = table.lookup_series(&[&signed])?;
+        let signed_out = signed_out.f64()?;
+        assert_eq!(signed_out.get(0), Some(0.1));
+        assert_eq!(signed_out.get(1), Some(0.2));
+        assert!(signed_out.get(2).is_some_and(f64::is_nan));
+        assert!(signed_out.get(3).is_some_and(f64::is_nan));
+
+        let unsigned_out = table.lookup_series(&[&unsigned])?;
+        let unsigned_out = unsigned_out.f64()?;
+        assert_eq!(unsigned_out.get(0), Some(0.3));
+        assert!(unsigned_out.get(1).is_some_and(f64::is_nan));
+        Ok(())
+    }
+
+    #[test]
+    fn test_hash_vector_lookup_uses_the_same_exact_numeric_identity() -> PolarsResult<()> {
+        let table_df = df! {
+            "key" => [9_007_199_254_740_992.0, 9_223_372_036_854_775_808.0],
+            "rate" => [0.2, 0.3],
+        }?;
+        let table = AssumptionTable::build_with_mode(
+            table_df,
+            vec!["key".to_string()],
+            "rate".to_string(),
+            StorageMode::Hash,
+        )?;
+        let lists = ListChunked::from_iter([Some(Series::new(
+            "".into(),
+            [9_007_199_254_740_992_i64, 9_007_199_254_740_993, i64::MAX],
+        ))])
+        .into_series();
+
+        let result = table.lookup_series(&[&lists])?;
+        let inner = result.list()?.get_as_series(0).expect("one present list");
+        let values = inner.f64()?;
+        assert_eq!(values.get(0), Some(0.2));
+        assert!(values.get(1).is_some_and(f64::is_nan));
+        assert!(values.get(2).is_some_and(f64::is_nan));
+        Ok(())
+    }
+
+    #[test]
+    fn test_fractional_float_bits_do_not_match_integer_keys() -> PolarsResult<()> {
+        let table_df = df! {
+            "key" => [f64::from_bits(1)],
+            "rate" => [0.4],
+        }?;
+        let table = AssumptionTable::build_with_mode(
+            table_df,
+            vec!["key".to_string()],
+            "rate".to_string(),
+            StorageMode::Hash,
+        )?;
+        let query = Series::new("key".into(), [1_i64]);
+
+        let result = table.lookup_series(&[&query])?;
+        assert!(result.f64()?.get(0).is_some_and(f64::is_nan));
         Ok(())
     }
 
@@ -862,6 +1044,51 @@ mod tests {
             panic!("Expected List");
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn ragged_vector_keys_are_refused_by_their_columns_and_lengths_and_no_row() -> PolarsResult<()>
+    {
+        for mode in [StorageMode::Array, StorageMode::Hash] {
+            let df = df! {
+                "age" => [30i64, 30, 30, 31, 31, 31],
+                "dur" => [0i64, 1, 2, 0, 1, 2],
+                "rate" => [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+            }?;
+            let table = AssumptionTable::build_with_mode(
+                df,
+                vec!["age".to_string(), "dur".to_string()],
+                "rate".to_string(),
+                mode,
+            )?;
+            let age = Series::new(
+                "age".into(),
+                vec![
+                    Series::new("".into(), vec![30i64, 30]),
+                    Series::new("".into(), vec![31i64, 31, 31]),
+                ],
+            );
+            let dur = Series::new(
+                "dur".into(),
+                vec![
+                    Series::new("".into(), vec![0i64, 1]),
+                    Series::new("".into(), vec![0i64, 1]),
+                ],
+            );
+            let err = table.lookup_series(&[&age, &dur]).unwrap_err().to_string();
+            assert!(
+                err.contains(
+                    "mismatched inner list lengths in one policy: key dur against key age"
+                ),
+                "{err}"
+            );
+            assert!(
+                err.contains("key age=3, key dur=2 in that policy."),
+                "{err}"
+            );
+            assert!(!err.contains("at row"), "{err}");
+        }
         Ok(())
     }
 
@@ -1104,6 +1331,62 @@ mod tests {
         Ok(())
     }
 
+    /// A one-row table is held by Polars as a scalar column, and a scalar
+    /// hands its categorical key back in the owned form. Array storage used to
+    /// refuse that key as "null or unencodable" while building, so a one-row
+    /// parameter table keyed by text could not be built at all.
+    #[test]
+    fn test_one_row_string_key_table_builds_and_answers() -> PolarsResult<()> {
+        for mode in [StorageMode::Auto, StorageMode::Array, StorageMode::Hash] {
+            let df = df! {
+                "item" => ["zeroize_reserves"],
+                "flag" => [0.5]
+            }?;
+
+            let table = AssumptionTable::build_with_mode(
+                df,
+                vec!["item".to_string()],
+                "flag".to_string(),
+                mode,
+            )?;
+
+            let items = Series::new("item".into(), &["zeroize_reserves", "other"]);
+            let result = table.lookup_series(&[&items])?;
+            let values: Vec<f64> = result
+                .f64()?
+                .into_iter()
+                .map(|v| v.unwrap_or(f64::NAN))
+                .collect();
+
+            assert!((values[0] - 0.5).abs() < 1e-12, "{mode:?}: {values:?}");
+            assert!(values[1].is_nan(), "{mode:?}: {values:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_one_row_table_with_a_string_and_an_integer_key() -> PolarsResult<()> {
+        let df = df! {
+            "product" => ["annuity"],
+            "age" => [40i64],
+            "rate" => [0.002]
+        }?;
+
+        let table = AssumptionTable::build_with_mode(
+            df,
+            vec!["product".to_string(), "age".to_string()],
+            "rate".to_string(),
+            StorageMode::Auto,
+        )?;
+        assert!(table.is_array_storage());
+
+        let products = Series::new("product".into(), &["annuity"]);
+        let ages = Series::new("age".into(), &[40i64]);
+        let result = table.lookup_series(&[&products, &ages])?;
+        assert_eq!(result.f64()?.get(0), Some(0.002));
+        Ok(())
+    }
+
     #[test]
     fn test_string_keys_unknown_values() -> PolarsResult<()> {
         // Test that unknown string values return NaN
@@ -1135,6 +1418,40 @@ mod tests {
         assert!((values[1] - 0.0008).abs() < 1e-10); // F found
         assert!(values[2].is_nan()); // X not found -> NaN
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod slice_tests {
+    use super::*;
+    use polars::df;
+
+    #[test]
+    fn a_sliced_list_key_looks_up_as_the_whole_column_does_for_those_rows() -> PolarsResult<()> {
+        let rates = df! {
+            "age" => (30i64..40).collect::<Vec<_>>(),
+            "rate" => (0..10).map(|i| 0.001 * (i + 1) as f64).collect::<Vec<_>>(),
+        }?;
+        // Four policies of three periods: offsets 3..9 into twelve values once
+        // sliced to the middle two.
+        let ages: Vec<Series> = (0..4_i64)
+            .map(|r| Series::new("".into(), vec![30 + r, 31 + r, 32 + r]))
+            .collect();
+        let ages = Series::new("age".into(), ages);
+        for mode in [StorageMode::Array, StorageMode::Hash] {
+            let table = AssumptionTable::build_with_mode(
+                rates.clone(),
+                vec!["age".to_string()],
+                "rate".to_string(),
+                mode,
+            )?;
+            let all = table.lookup_series(&[&ages])?;
+            let sliced = ages.slice(1, 2);
+            let part = table.lookup_series(&[&sliced])?;
+            assert!(part.equals_missing(&all.slice(1, 2)), "{mode:?}");
+            assert_eq!(part.list()?.get_inner().len(), 6, "{mode:?}");
+        }
         Ok(())
     }
 }

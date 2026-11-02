@@ -1,0 +1,546 @@
+{
+ "schema": "gaspatchio-graph/v0-preview.3",
+ "profile": "audit",
+ "fingerprint_algorithm": "gspv0-preview-3",
+ "producer": {
+  "name": "gaspatchio",
+  "version": "1.0.0"
+ },
+ "created_at": "2026-09-19T09:23:28Z",
+ "model": {
+  "label": null,
+  "source_path": "model.py",
+  "source_sha": "sha256:7979eb453be628fb32772701c19072190ff9818f7818732462e404dadc771c7d",
+  "git": null,
+  "model_points": {
+   "path": "book.parquet",
+   "fingerprint": "sha256:61f0f001bbff8d036698f8750bf765b944d450c9629e4ff4e02577b22ca3583e"
+  },
+  "audit": {
+   "path": "scenario.audit.json",
+   "fingerprint": "sha256:9b7888f869e240cfacfa44db3c669a7e74d4c579ae2e2ee23dfb3cfe6b3302d0"
+  }
+ },
+ "graph_fingerprint": "sha256:c07a919e3455ec4425620183f8536085e1ea3db7a38cfc45c0e7a72e24628d37",
+ "book": {
+  "columns": [
+   "Policy number",
+   "base_rate",
+   "sum_assured"
+  ],
+  "digest": "sha256:37b58ca869637b78c54b5aaada455cdfa6fb22a1218c50f511c1a6b98dd6996b"
+ },
+ "facets_used": [
+  "gaspatchio_column_transformation"
+ ],
+ "facets_required": [],
+ "nodes": [
+  {
+   "id": "Policy number",
+   "column": "Policy number",
+   "version": null,
+   "kind": "input",
+   "dtype": "str",
+   "shape": "scalar",
+   "provenance": "model_points",
+   "formula": null,
+   "reads": [],
+   "reads_assumptions": [],
+   "tier": null,
+   "local_fingerprint": "sha256:8df06bce73128d9ccec94b715a78bf42a525fb75e61d85642255d44bcec97e63",
+   "fingerprint": "sha256:731c0c19a76035bcd74a739635270c034f2bc997e62df39f5d1134fd2094620f",
+   "in_final_schema": true,
+   "materialized_at": null,
+   "source_location": null,
+   "facets": {},
+   "value_sample": [
+    null,
+    null,
+    "P1",
+    "P1",
+    "P2",
+    "P2"
+   ],
+   "trace": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "id": "sum_assured",
+   "column": "sum_assured",
+   "version": null,
+   "kind": "input",
+   "dtype": "f64",
+   "shape": "scalar",
+   "provenance": "model_points",
+   "formula": null,
+   "reads": [],
+   "reads_assumptions": [],
+   "tier": null,
+   "local_fingerprint": "sha256:b643510e5bc2884efbc56ffc1b90fca82f7cc07abb692dd75abb3cf7d1f60b38",
+   "fingerprint": "sha256:c7d944982f89b2858870c74491fff1c28758dbead932cdaa6ba90157ec2b3778",
+   "in_final_schema": true,
+   "materialized_at": null,
+   "source_location": null,
+   "facets": {},
+   "value_sample": [
+    null,
+    null,
+    100000.0,
+    100000.0,
+    250000.0,
+    250000.0
+   ],
+   "trace": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "id": "base_rate",
+   "column": "base_rate",
+   "version": null,
+   "kind": "input",
+   "dtype": "f64",
+   "shape": "scalar",
+   "provenance": "model_points",
+   "formula": null,
+   "reads": [],
+   "reads_assumptions": [],
+   "tier": null,
+   "local_fingerprint": "sha256:0ef075013b553ab08fd2fdf951013718e1b11c6acaef1ae58a196648078988cc",
+   "fingerprint": "sha256:157e832f79b9a12500eafb8b18adc39db55a99e3337d23214d564db0446a0f23",
+   "in_final_schema": true,
+   "materialized_at": null,
+   "source_location": null,
+   "facets": {},
+   "value_sample": [
+    null,
+    null,
+    0.001,
+    0.001,
+    0.002,
+    0.002
+   ],
+   "trace": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "id": "scenario_id@1",
+   "column": "scenario_id",
+   "version": 1,
+   "kind": "input",
+   "dtype": "str",
+   "shape": "scalar",
+   "provenance": "injected",
+   "formula": null,
+   "reads": [],
+   "reads_assumptions": [],
+   "tier": null,
+   "local_fingerprint": "sha256:36d71dd21dcccacb369fe0ecddc0abf4919a794a80be8ab145da6aa92571933f",
+   "fingerprint": "sha256:cd981b8592da8cb6896a4adbfdca756db926b3ca3a12830311fb59d7b56b85ba",
+   "in_final_schema": true,
+   "materialized_at": null,
+   "source_location": "run_scenarios.py:16",
+   "facets": {},
+   "value_sample": [
+    null,
+    null,
+    "BASE",
+    "STRESS",
+    "BASE",
+    "STRESS"
+   ],
+   "trace": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "id": "shocked_rate@1",
+   "column": "shocked_rate",
+   "version": 1,
+   "kind": "computed",
+   "dtype": "f64",
+   "shape": "scalar",
+   "provenance": "assignment",
+   "formula": "af.base_rate * pl.when(pl.col(\"scenario_id\") == \"STRESS\").then(1.5).otherwise(1.0)",
+   "reads": [
+    "base_rate",
+    "scenario_id@1"
+   ],
+   "reads_assumptions": [],
+   "engines": [
+    "polars"
+   ],
+   "tier": "engine_native",
+   "local_fingerprint": "sha256:d972842d36caba79c9cb97640c630bb3a1cd255f053d7f270da7f420756714b8",
+   "fingerprint": "sha256:a633b04a0238c0df6dd565ba8fcceed346adb6f5b9c7f83884d975db8951d5ff",
+   "in_final_schema": true,
+   "materialized_at": null,
+   "source_location": "model.py:10",
+   "facets": {
+    "gaspatchio_column_transformation": {
+     "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+     "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+     "reads": [
+      {
+       "source": "base_rate",
+       "transformations": [
+        {
+         "type": "DIRECT",
+         "subtype": "TRANSFORMATION"
+        }
+       ]
+      },
+      {
+       "source": "scenario_id@1",
+       "transformations": [
+        {
+         "type": "DIRECT",
+         "subtype": "TRANSFORMATION"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "value_sample": [
+    null,
+    null,
+    0.001,
+    0.0015,
+    0.002,
+    0.003
+   ],
+   "trace": [
+    null,
+    null,
+    [
+     {
+      "step": 1,
+      "expr": "(base_rate) * (.when((scenario_id) == (\"STRESS\")).then(1.5).otherwise(1))"
+     },
+     {
+      "step": 2,
+      "expr": "((0.001)) * (.when(((BASE)) == (\"STRESS\")).then(1.5).otherwise(1))",
+      "values": {
+       "scenario_id": "BASE",
+       "base_rate": 0.001
+      }
+     },
+     {
+      "step": 3,
+      "expr": "0.001",
+      "result": 0.001
+     }
+    ],
+    [
+     {
+      "step": 1,
+      "expr": "(base_rate) * (.when((scenario_id) == (\"STRESS\")).then(1.5).otherwise(1))"
+     },
+     {
+      "step": 2,
+      "expr": "((0.001)) * (.when(((STRESS)) == (\"STRESS\")).then(1.5).otherwise(1))",
+      "values": {
+       "scenario_id": "STRESS",
+       "base_rate": 0.001
+      }
+     },
+     {
+      "step": 3,
+      "expr": "0.0015",
+      "result": 0.0015
+     }
+    ],
+    [
+     {
+      "step": 1,
+      "expr": "(base_rate) * (.when((scenario_id) == (\"STRESS\")).then(1.5).otherwise(1))"
+     },
+     {
+      "step": 2,
+      "expr": "((0.002)) * (.when(((BASE)) == (\"STRESS\")).then(1.5).otherwise(1))",
+      "values": {
+       "scenario_id": "BASE",
+       "base_rate": 0.002
+      }
+     },
+     {
+      "step": 3,
+      "expr": "0.002",
+      "result": 0.002
+     }
+    ],
+    [
+     {
+      "step": 1,
+      "expr": "(base_rate) * (.when((scenario_id) == (\"STRESS\")).then(1.5).otherwise(1))"
+     },
+     {
+      "step": 2,
+      "expr": "((0.002)) * (.when(((STRESS)) == (\"STRESS\")).then(1.5).otherwise(1))",
+      "values": {
+       "scenario_id": "STRESS",
+       "base_rate": 0.002
+      }
+     },
+     {
+      "step": 3,
+      "expr": "0.003",
+      "result": 0.003
+     }
+    ]
+   ]
+  },
+  {
+   "id": "loss@1",
+   "column": "loss",
+   "version": 1,
+   "kind": "computed",
+   "dtype": "f64",
+   "shape": "scalar",
+   "provenance": "assignment",
+   "formula": "af.sum_assured * af.shocked_rate",
+   "reads": [
+    "sum_assured",
+    "shocked_rate@1"
+   ],
+   "reads_assumptions": [],
+   "engines": [],
+   "tier": "core",
+   "local_fingerprint": "sha256:967d169c46ff0eba6579a63ab83867011c2a9305618ef9e1b2441bca7101d3db",
+   "fingerprint": "sha256:fd8c7f25a9991df504a54b686c0fe68de7a7350f445a8f2e1ec50b21348fc281",
+   "in_final_schema": true,
+   "materialized_at": null,
+   "source_location": "model.py:11",
+   "facets": {
+    "gaspatchio_column_transformation": {
+     "_producer": "https://gaspatchio.dev/spec/graph-artifact/v0-preview.3",
+     "_schemaURL": "https://gaspatchio.dev/schemas/facets/gaspatchio_column_transformation-v0-preview.1.json",
+     "reads": [
+      {
+       "source": "sum_assured",
+       "transformations": [
+        {
+         "type": "DIRECT",
+         "subtype": "TRANSFORMATION"
+        }
+       ]
+      },
+      {
+       "source": "shocked_rate@1",
+       "transformations": [
+        {
+         "type": "DIRECT",
+         "subtype": "TRANSFORMATION"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "value_sample": [
+    600.0,
+    900.0,
+    100.0,
+    150.0,
+    500.0,
+    750.0
+   ],
+   "trace": [
+    null,
+    null,
+    [
+     {
+      "step": 1,
+      "expr": "(sum_assured) * (shocked_rate)"
+     },
+     {
+      "step": 2,
+      "expr": "((100000)) * ((0.001))",
+      "values": {
+       "shocked_rate": 0.001,
+       "sum_assured": 100000.0
+      }
+     },
+     {
+      "step": 3,
+      "expr": "100",
+      "result": 100.0
+     }
+    ],
+    [
+     {
+      "step": 1,
+      "expr": "(sum_assured) * (shocked_rate)"
+     },
+     {
+      "step": 2,
+      "expr": "((100000)) * ((0.0015))",
+      "values": {
+       "shocked_rate": 0.0015,
+       "sum_assured": 100000.0
+      }
+     },
+     {
+      "step": 3,
+      "expr": "150",
+      "result": 150.0
+     }
+    ],
+    [
+     {
+      "step": 1,
+      "expr": "(sum_assured) * (shocked_rate)"
+     },
+     {
+      "step": 2,
+      "expr": "((250000)) * ((0.002))",
+      "values": {
+       "shocked_rate": 0.002,
+       "sum_assured": 250000.0
+      }
+     },
+     {
+      "step": 3,
+      "expr": "500",
+      "result": 500.0
+     }
+    ],
+    [
+     {
+      "step": 1,
+      "expr": "(sum_assured) * (shocked_rate)"
+     },
+     {
+      "step": 2,
+      "expr": "((250000)) * ((0.003))",
+      "values": {
+       "shocked_rate": 0.003,
+       "sum_assured": 250000.0
+      }
+     },
+     {
+      "step": 3,
+      "expr": "750",
+      "result": 750.0
+     }
+    ]
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "source": "base_rate",
+   "target": "shocked_rate@1",
+   "relationship": "DIRECT"
+  },
+  {
+   "source": "scenario_id@1",
+   "target": "shocked_rate@1",
+   "relationship": "DIRECT"
+  },
+  {
+   "source": "sum_assured",
+   "target": "loss@1",
+   "relationship": "DIRECT"
+  },
+  {
+   "source": "shocked_rate@1",
+   "target": "loss@1",
+   "relationship": "DIRECT"
+  }
+ ],
+ "assumptions": [],
+ "holes": [],
+ "boundaries": [],
+ "sources": [
+  {
+   "path": "model.py",
+   "fingerprint": "sha256:7979eb453be628fb32772701c19072190ff9818f7818732462e404dadc771c7d",
+   "payload": {
+    "text": "\"\"\"A two-column model, for a checked-in scenario export.\"\"\"\n\nimport polars as pl\n\nfrom gaspatchio import ActuarialFrame\n\n\ndef main(af: ActuarialFrame, params=None) -> ActuarialFrame:\n    del params\n    af.shocked_rate = af.base_rate * pl.when(pl.col(\"scenario_id\") == \"STRESS\").then(1.5).otherwise(1.0)\n    af.loss = af.sum_assured * af.shocked_rate\n    return af\n"
+   }
+  },
+  {
+   "path": "run_scenarios.py",
+   "fingerprint": "sha256:69d2351ac7b2a4494ebc33cf5aad5a5679473c089946a59c4235ae134e10fb31",
+   "payload": {
+    "text": "\"\"\"The plan this export is an account of.\"\"\"\n\nimport polars as pl\n\nfrom gaspatchio import ActuarialFrame, ScenarioRun\nfrom gaspatchio.scenarios import Sum\n\nimport model\n\n\ndef model_fn(af: ActuarialFrame, *, tables: dict, drivers: dict) -> ActuarialFrame:\n    del tables, drivers\n    return model.main(af)\n\n\nSCENARIO_RUN = ScenarioRun(\n    shocks={\"BASE\": [], \"STRESS\": []},\n    base_tables={},\n    aggregations=(Sum(\"loss\").alias(\"loss\").over(\"scenario_id\"),),\n)\nMODEL_FN = model_fn\n"
+   }
+  }
+ ],
+ "enrichment": {
+  "policy_id": null,
+  "aggregation": "sum",
+  "periods": null,
+  "filter": "scenario_id == \"BASE\""
+ },
+ "policies": [
+  {
+   "policy_id": null,
+   "aggregation": "sum",
+   "periods": null,
+   "filter": "scenario_id == \"BASE\"",
+   "why": "scenario_id \"BASE\", folded by sum over 2 policies in book.parquet"
+  },
+  {
+   "policy_id": null,
+   "aggregation": "sum",
+   "periods": null,
+   "filter": "scenario_id == \"STRESS\"",
+   "why": "scenario_id \"STRESS\", folded by sum over 2 policies in book.parquet"
+  },
+  {
+   "policy_id": "P1",
+   "aggregation": null,
+   "periods": null,
+   "filter": "scenario_id == \"BASE\"",
+   "why": "row 0 of 4 in book.parquet x 2 scenarios, one of every policy in the book"
+  },
+  {
+   "policy_id": "P1",
+   "aggregation": null,
+   "periods": null,
+   "filter": "scenario_id == \"STRESS\"",
+   "why": "row 1 of 4 in book.parquet x 2 scenarios, one of every policy in the book"
+  },
+  {
+   "policy_id": "P2",
+   "aggregation": null,
+   "periods": null,
+   "filter": "scenario_id == \"BASE\"",
+   "why": "row 2 of 4 in book.parquet x 2 scenarios, one of every policy in the book"
+  },
+  {
+   "policy_id": "P2",
+   "aggregation": null,
+   "periods": null,
+   "filter": "scenario_id == \"STRESS\"",
+   "why": "row 3 of 4 in book.parquet x 2 scenarios, one of every policy in the book"
+  }
+ ],
+ "facets": {},
+ "document_digest": "sha256:9e9e0633d909997ee2d3f58ff0d145363e5c4de4d435eadd7f448cb329e4bbde"
+}

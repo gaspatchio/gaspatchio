@@ -12,7 +12,7 @@ import pytest
 
 from gaspatchio import ActuarialFrame
 from gaspatchio.curves import Curve
-from gaspatchio.functions.vector import curve_eval
+from gaspatchio.frame.lowering._polars.plugins import curve_eval
 
 
 def test_curve_eval_linear_plugin() -> None:

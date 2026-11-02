@@ -1,0 +1,494 @@
+{
+  "report_version": "gaspatchio-graph-diff/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "compared": {
+    "before": {
+      "graph_fingerprint": "sha256:de67e86905bd39c18ec35a6521ab72ed4b555ab55947c14f4e8fffbeca237b69",
+      "document_digest": "sha256:9c8d7846432f350bd292e1b40c20df2d2cd114edd4458a5cf56902fa261f8aa5",
+      "created_at": "2026-11-02T01:25:18Z",
+      "producer": "gaspatchio 1.0.0",
+      "formulas_fingerprint": "sha256:d094e835518c5ae2081736ecc0a75dcc9ad39215e4016e59d66692883f110718"
+    },
+    "after": {
+      "graph_fingerprint": "sha256:8cfe2d951a67e281b481d9eb9beedccacd8b2a92a82f04a6bbf7a64c19ffc62e",
+      "document_digest": "sha256:44f7e9a5c7c15e22fd09620c82a57dfa3bbd6e2c3e99871fb9eff95ec2448d89",
+      "created_at": "2026-11-02T01:25:20Z",
+      "producer": "gaspatchio 1.0.0",
+      "formulas_fingerprint": "sha256:9e451d2f454c9272a4c1289c96f6ff02be1e1ee2a4c7b2147802d029ea8173a1"
+    }
+  },
+  "drift": true,
+  "calculations": [
+    {
+      "node": "fee@1",
+      "column": "fee",
+      "kind": "changed",
+      "change_origin": "self",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "charge@1",
+      "column": "charge",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "fee_over_base@1",
+      "column": "fee_over_base",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    },
+    {
+      "node": "waived@1",
+      "column": "waived",
+      "kind": "changed",
+      "change_origin": "inherited",
+      "renamed_from": null,
+      "fingerprint_equal_to": null,
+      "values_equal_to": null
+    }
+  ],
+  "data": [
+    {
+      "kind": "model_points",
+      "name": "model_points.csv",
+      "before": "sha256:435cc5adcfed0a7967430d6bca7f58d7de59deab0142c3ed068d3c2b37bbc2f4",
+      "after": "sha256:03b97b702d5c96836cbc3cd8e4ff2d38fac2581affbf8e090bcb6a6f2a90aab1",
+      "reason": null
+    },
+    {
+      "kind": "results",
+      "name": "results.parquet",
+      "before": "sha256:f142fa176c94227bc88489c3182a9734c3d7f893c828779f20e6bc8424a43679",
+      "after": "sha256:9b073b4a7eb49f957de7a3b6103ba324917fe0bd5733ca428a8251a8ea399eea",
+      "reason": null
+    }
+  ],
+  "values": {
+    "results": {
+      "before": {
+        "path": "before.parquet",
+        "fingerprint": "sha256:f142fa176c94227bc88489c3182a9734c3d7f893c828779f20e6bc8424a43679",
+        "read": "named",
+        "scope": "final-schema",
+        "producer": "polars"
+      },
+      "after": {
+        "path": "after.parquet",
+        "fingerprint": "sha256:9b073b4a7eb49f957de7a3b6103ba324917fe0bd5733ca428a8251a8ea399eea",
+        "read": "named",
+        "scope": "final-schema",
+        "producer": "polars"
+      }
+    },
+    "rows": {
+      "matched_by": "identity",
+      "on": [
+        "policy_id"
+      ],
+      "paired": 2,
+      "joined": {
+        "count": 1,
+        "policies": [
+          "P4"
+        ]
+      },
+      "left": {
+        "count": 1,
+        "policies": [
+          "P3"
+        ]
+      }
+    },
+    "periods": {
+      "aligned": true,
+      "reason": null
+    },
+    "cause": "book",
+    "headline": {
+      "edited": {
+        "moved": [
+          "fee@1"
+        ],
+        "moved_no_number": []
+      },
+      "inherited": {
+        "moved": [
+          "charge@1",
+          "fee_over_base@1"
+        ],
+        "identity_only": [
+          "waived@1"
+        ]
+      },
+      "unmoved_definitions": {
+        "book": [
+          "premium",
+          "reserve@1"
+        ],
+        "hole": [],
+        "producer": [],
+        "unexplained": []
+      },
+      "within_band": [],
+      "not_carried": [],
+      "joined": 1,
+      "left": 1
+    },
+    "lines": [
+      {
+        "node": "policy_id",
+        "before_node": "policy_id",
+        "column": "policy_id",
+        "paired_by": "id",
+        "change": null,
+        "compared": true,
+        "moved": false,
+        "cells_compared": 2,
+        "cells_moved": 0,
+        "policies_compared": 2,
+        "policies_moved": 0,
+        "first_period_moved": null,
+        "max_abs": null,
+        "max_relative": null,
+        "from_zero": false,
+        "worst": null,
+        "length_moved": null,
+        "within_band": null,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "premium",
+        "before_node": "premium",
+        "column": "premium",
+        "paired_by": "id",
+        "change": null,
+        "compared": true,
+        "moved": true,
+        "cells_compared": 2,
+        "cells_moved": 1,
+        "policies_compared": 2,
+        "policies_moved": 1,
+        "first_period_moved": null,
+        "max_abs": 100.0,
+        "max_relative": 0.029411764705882353,
+        "from_zero": false,
+        "worst": {
+          "policy": "P2",
+          "row": 1,
+          "period": null,
+          "before": 3400.0,
+          "after": 3500.0
+        },
+        "length_moved": null,
+        "within_band": false,
+        "cause": "book",
+        "holes": null
+      },
+      {
+        "node": "base_fee",
+        "before_node": "base_fee",
+        "column": "base_fee",
+        "paired_by": "id",
+        "change": null,
+        "compared": true,
+        "moved": false,
+        "cells_compared": 2,
+        "cells_moved": 0,
+        "policies_compared": 2,
+        "policies_moved": 0,
+        "first_period_moved": null,
+        "max_abs": null,
+        "max_relative": null,
+        "from_zero": false,
+        "worst": null,
+        "length_moved": null,
+        "within_band": null,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "waiver",
+        "before_node": "waiver",
+        "column": "waiver",
+        "paired_by": "id",
+        "change": null,
+        "compared": true,
+        "moved": false,
+        "cells_compared": 2,
+        "cells_moved": 0,
+        "policies_compared": 2,
+        "policies_moved": 0,
+        "first_period_moved": null,
+        "max_abs": null,
+        "max_relative": null,
+        "from_zero": false,
+        "worst": null,
+        "length_moved": null,
+        "within_band": null,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "projection_start_date@1",
+        "before_node": "projection_start_date@1",
+        "column": "projection_start_date",
+        "paired_by": "id",
+        "change": null,
+        "compared": true,
+        "moved": false,
+        "cells_compared": 2,
+        "cells_moved": 0,
+        "policies_compared": 2,
+        "policies_moved": 0,
+        "first_period_moved": null,
+        "max_abs": null,
+        "max_relative": null,
+        "from_zero": false,
+        "worst": null,
+        "length_moved": null,
+        "within_band": null,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "projection_end_date@1",
+        "before_node": "projection_end_date@1",
+        "column": "projection_end_date",
+        "paired_by": "id",
+        "change": null,
+        "compared": true,
+        "moved": false,
+        "cells_compared": 2,
+        "cells_moved": 0,
+        "policies_compared": 2,
+        "policies_moved": 0,
+        "first_period_moved": null,
+        "max_abs": null,
+        "max_relative": null,
+        "from_zero": false,
+        "worst": null,
+        "length_moved": null,
+        "within_band": null,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "num_proj_months@1",
+        "before_node": "num_proj_months@1",
+        "column": "num_proj_months",
+        "paired_by": "id",
+        "change": null,
+        "compared": true,
+        "moved": false,
+        "cells_compared": 2,
+        "cells_moved": 0,
+        "policies_compared": 2,
+        "policies_moved": 0,
+        "first_period_moved": null,
+        "max_abs": null,
+        "max_relative": null,
+        "from_zero": false,
+        "worst": null,
+        "length_moved": null,
+        "within_band": null,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "month@1",
+        "before_node": "month@1",
+        "column": "month",
+        "paired_by": "id",
+        "change": null,
+        "compared": true,
+        "moved": false,
+        "cells_compared": 8,
+        "cells_moved": 0,
+        "policies_compared": 2,
+        "policies_moved": 0,
+        "first_period_moved": null,
+        "max_abs": null,
+        "max_relative": null,
+        "from_zero": false,
+        "worst": null,
+        "length_moved": null,
+        "within_band": null,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "fee@1",
+        "before_node": "fee@1",
+        "column": "fee",
+        "paired_by": "id",
+        "change": "self",
+        "compared": true,
+        "moved": true,
+        "cells_compared": 2,
+        "cells_moved": 2,
+        "policies_compared": 2,
+        "policies_moved": 2,
+        "first_period_moved": null,
+        "max_abs": 19.5,
+        "max_relative": 0.2867647058823529,
+        "from_zero": false,
+        "worst": {
+          "policy": "P2",
+          "row": 1,
+          "period": null,
+          "before": 68.0,
+          "after": 87.5
+        },
+        "length_moved": null,
+        "within_band": false,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "charge@1",
+        "before_node": "charge@1",
+        "column": "charge",
+        "paired_by": "id",
+        "change": "inherited",
+        "compared": true,
+        "moved": true,
+        "cells_compared": 8,
+        "cells_moved": 6,
+        "policies_compared": 2,
+        "policies_moved": 2,
+        "first_period_moved": 1,
+        "max_abs": 702.0,
+        "max_relative": 0.2867647058823529,
+        "from_zero": false,
+        "worst": {
+          "policy": "P2",
+          "row": 1,
+          "period": 1,
+          "before": 816.0,
+          "after": 1050.0
+        },
+        "length_moved": null,
+        "within_band": false,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "fee_over_base@1",
+        "before_node": "fee_over_base@1",
+        "column": "fee_over_base",
+        "paired_by": "id",
+        "change": "inherited",
+        "compared": true,
+        "moved": true,
+        "cells_compared": 2,
+        "cells_moved": 2,
+        "policies_compared": 2,
+        "policies_moved": 2,
+        "first_period_moved": null,
+        "max_abs": 19.5,
+        "max_relative": 1.0833333333333333,
+        "from_zero": true,
+        "worst": {
+          "policy": "P1",
+          "row": 0,
+          "period": null,
+          "before": 0.0,
+          "after": 6.0
+        },
+        "length_moved": null,
+        "within_band": false,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "waived@1",
+        "before_node": "waived@1",
+        "column": "waived",
+        "paired_by": "id",
+        "change": "inherited",
+        "compared": true,
+        "moved": false,
+        "cells_compared": 2,
+        "cells_moved": 0,
+        "policies_compared": 2,
+        "policies_moved": 0,
+        "first_period_moved": null,
+        "max_abs": null,
+        "max_relative": null,
+        "from_zero": false,
+        "worst": null,
+        "length_moved": null,
+        "within_band": null,
+        "cause": null,
+        "holes": null
+      },
+      {
+        "node": "reserve@1",
+        "before_node": "reserve@1",
+        "column": "reserve",
+        "paired_by": "id",
+        "change": null,
+        "compared": true,
+        "moved": true,
+        "cells_compared": 8,
+        "cells_moved": 3,
+        "policies_compared": 2,
+        "policies_moved": 1,
+        "first_period_moved": 1,
+        "max_abs": 3600.0,
+        "max_relative": 0.029411764705882353,
+        "from_zero": false,
+        "worst": {
+          "policy": "P2",
+          "row": 1,
+          "period": 1,
+          "before": 40800.0,
+          "after": 42000.0
+        },
+        "length_moved": null,
+        "within_band": false,
+        "cause": "book",
+        "holes": null
+      }
+    ],
+    "declared": {
+      "policy": "P1",
+      "lines": [
+        {
+          "node": "fee@1",
+          "magnitude": 0.25,
+          "from_zero": false,
+          "period": null
+        },
+        {
+          "node": "charge@1",
+          "magnitude": 0.25,
+          "from_zero": false,
+          "period": 1
+        },
+        {
+          "node": "fee_over_base@1",
+          "magnitude": null,
+          "from_zero": true,
+          "period": null
+        }
+      ]
+    }
+  },
+  "source": {
+    "path": "model.py",
+    "before": "sha256:ef348078def96d3b7595b47f4c185fc7b3892d65572bf9fee518c194bd256efc",
+    "after": "sha256:9c83f9b301ea574864756a0b0fa3359b271fcabd5f63eeabf0f01b09b9d39909",
+    "modules": []
+  }
+}

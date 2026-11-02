@@ -24,9 +24,9 @@ import polars as pl
 
 from gaspatchio import ActuarialFrame
 from gaspatchio.rollforward._builder import RollforwardBuilder
-from gaspatchio.rollforward._collector import RollforwardCollector
 from gaspatchio.rollforward._compile import compile_rollforward
 from gaspatchio.schedule import Schedule
+from tests.rollforward.conftest import _standalone_state_expr
 
 if TYPE_CHECKING:
     from gaspatchio.rollforward._compiled import CompiledRollforward
@@ -180,11 +180,10 @@ class TestOneKernelCallByConstruction:
         assert out["av_post_coi"].to_list()[0] == EXPECTED_POST_COI
 
 
-class TestDeprecatedCollectorShim:
-    def test_collector_keeps_self_contained_semantics(self) -> None:
-        """The shim still works everywhere a plain Expr does (raw Polars frames)."""
+class TestStandaloneEmission:
+    def test_standalone_expr_keeps_self_contained_semantics(self) -> None:
+        """It still works everywhere a plain Expr does (raw Polars frames)."""
         compiled = _compile_two_point_av()
-        collector = RollforwardCollector(compiled)
         df = pl.DataFrame(
             {
                 "init": [100.0],
@@ -192,14 +191,21 @@ class TestDeprecatedCollectorShim:
                 "rate": [[0.01, 0.01, 0.01]],
             }
         )
-        out = df.with_columns(av=collector.expr_for("av"))
+        out = df.with_columns(av=_standalone_state_expr(compiled, "av"))
         assert out["av"].to_list()[0] == EXPECTED_EOP
 
-    def test_repeated_calls_to_collector_share_expr(self) -> None:
-        """Same collector, same accessor twice — same serialized expression."""
+    def test_repeated_standalone_calls_share_expr(self) -> None:
+        """Same extraction twice — same serialized expression, kernel and all.
+
+        The cache lives on the compiled rollforward (``_cached_plugin_expr``),
+        so every self-contained extraction from one compiled model embeds the
+        same kernel expression, and that is what lets the extraction be
+        emitted as a node and lowered like everything else. The behaviour
+        this test exists for: repeated extractions serialize identically, and
+        each still carries its own kernel call.
+        """
         compiled = _compile_two_point_av()
-        collector = RollforwardCollector(compiled)
-        e1 = collector.expr_for("av")
-        e2 = collector.expr_for("av")
-        assert collector._cached_plugin_expr is not None
+        e1 = _standalone_state_expr(compiled, "av")
+        e2 = _standalone_state_expr(compiled, "av")
+        assert compiled._cached_plugin_expr is not None
         assert e1.meta.serialize() == e2.meta.serialize()

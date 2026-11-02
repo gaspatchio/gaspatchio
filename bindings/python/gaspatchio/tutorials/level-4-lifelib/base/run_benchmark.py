@@ -26,8 +26,9 @@ MODEL_DIR = Path(__file__).resolve().parent
 
 # Import the model
 import sys
+
 sys.path.insert(0, str(MODEL_DIR))
-import model 
+import model
 
 
 def main() -> None:

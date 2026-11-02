@@ -33,7 +33,7 @@ runs:
       run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
 
     - name: Restore cached LFS objects
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6
       with:
         path: .git/lfs/objects
         key: lfs-${{ inputs.scope }}-${{ hashFiles('.lfs-assets-id') }}

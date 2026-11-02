@@ -1,0 +1,253 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "recording-doors",
+  "cases": [
+    {
+      "id": "door-projection_set",
+      "covers": [
+        "projection_set"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "C"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "projection_set",
+        "args": [],
+        "attrs": {
+          "frequency": "monthly",
+          "until": null,
+          "until_value": null,
+          "valuation_date": null,
+          "start": "2024-01-31",
+          "n_periods": 2
+        }
+      },
+      "producer_check": true,
+      "case_kind": "recording-door-value",
+      "output_column": "month",
+      "producer_setup": {
+        "kind": "projection_set",
+        "start_date": "2024-01-31",
+        "n_periods": 2,
+        "frequency": "monthly"
+      },
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0,
+            1,
+            2
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      }
+    },
+    {
+      "id": "door-join",
+      "covers": [
+        "join"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "C"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "join",
+        "args": [],
+        "attrs": {
+          "on": "product",
+          "how": "left",
+          "right_fingerprint": "sha256:f130b342ba7522f67c903f70f17d00a933dabbdbee8eba9f06b85c1926e63dfc",
+          "on_missing": "null"
+        }
+      },
+      "producer_check": true,
+      "case_kind": "recording-door-value",
+      "output_column": "loading",
+      "producer_setup": {
+        "kind": "join",
+        "right": {
+          "loading": [
+            0.05,
+            0.07
+          ],
+          "product": [
+            "A",
+            "B"
+          ]
+        },
+        "on": "product",
+        "how": "left",
+        "on_missing": "null"
+      },
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.05,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "sort_output_by": [
+        "policy_id"
+      ]
+    },
+    {
+      "id": "door-join-every-key-matched",
+      "covers": [
+        "join"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "B"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "join",
+        "args": [],
+        "attrs": {
+          "on": "product",
+          "how": "left",
+          "right_fingerprint": "sha256:f130b342ba7522f67c903f70f17d00a933dabbdbee8eba9f06b85c1926e63dfc"
+        }
+      },
+      "producer_check": true,
+      "case_kind": "recording-door-value",
+      "output_column": "loading",
+      "producer_setup": {
+        "kind": "join",
+        "right": {
+          "loading": [
+            0.05,
+            0.07
+          ],
+          "product": [
+            "A",
+            "B"
+          ]
+        },
+        "on": "product",
+        "how": "left"
+      },
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.05,
+          0.07
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "sort_output_by": [
+        "policy_id"
+      ]
+    },
+    {
+      "id": "door-join-unmatched-refused",
+      "covers": [
+        "join"
+      ],
+      "inputs": {
+        "policy_id": {
+          "dtype": "i64",
+          "values": [
+            1,
+            2
+          ]
+        },
+        "product": {
+          "dtype": "str",
+          "values": [
+            "A",
+            "C"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "join",
+        "args": [],
+        "attrs": {
+          "on": "product",
+          "how": "left",
+          "right_fingerprint": "sha256:f130b342ba7522f67c903f70f17d00a933dabbdbee8eba9f06b85c1926e63dfc"
+        }
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "output_column": "loading",
+      "producer_setup": {
+        "kind": "join",
+        "right": {
+          "loading": [
+            0.05,
+            0.07
+          ],
+          "product": [
+            "A",
+            "B"
+          ]
+        },
+        "on": "product",
+        "how": "left"
+      },
+      "refusal": "join-unmatched",
+      "producer_message": "found no row in the other table for 1 of 2 policies"
+    }
+  ]
+}

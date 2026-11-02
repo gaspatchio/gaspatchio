@@ -15,7 +15,7 @@ A list column stores a Python list in each cell. For a 3-policy model with 12 pr
 ```
 ┌───────────┬──────────────┐
 │ policy_id ┆ month        │
-│ str       ┆ list[i32]    │
+│ str       ┆ list[i64]    │
 ╞═══════════╪══════════════╡
 │ POL001    ┆ [0, 1, … 12] │
 │ POL002    ┆ [0, 1, … 12] │
@@ -29,10 +29,10 @@ Each element is one projection period. All 13 months are computed simultaneously
 
 ```python
 af = af.projection.set(
-    valuation_date=VALUATION_DATE,    # projection starts here
-    until="term_months",              # end after a fixed number of months
-    until_value=12,                   # 12 months
-    frequency="monthly",              # one period per month
+    valuation_date=VALUATION_DATE,  # projection starts here
+    until="term_months",  # end after a fixed number of months
+    until_value=12,  # 12 months
+    frequency="monthly",  # one period per month
 )
 af.projection_date = af.projection.period_dates()
 ```
@@ -44,8 +44,8 @@ af.projection_date = af.projection.period_dates()
 Scalar arithmetic still works after `af.projection.set()`. If `af.annual_premium` is scalar (one value per policy) and `af.month` is a list, then:
 
 ```python
-af.monthly_premium = af.annual_premium / 12.0   # stays scalar
-af.expected_claims = af.sum_assured * af.mortality_rate   # stays scalar
+af.monthly_premium = af.annual_premium / 12.0  # stays scalar
+af.expected_claims = af.sum_assured * af.mortality_rate  # stays scalar
 ```
 
 These scalars broadcast automatically when multiplied against list columns — no manual replication needed.

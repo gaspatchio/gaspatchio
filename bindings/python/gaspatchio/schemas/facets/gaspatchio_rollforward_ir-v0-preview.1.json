@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gaspatchio.dev/schemas/facets/gaspatchio_rollforward_ir-v0-preview.1.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "title": "gaspatchio_rollforward_ir facet",
+  "description": "UNSTABLE, as the operation trees are. A compiled rollforward's own state machine, projected into the operation tree's terms (section 16 of the specification): its states and their opening values, every operation it applies in the order it applies them with the operands and settings each takes, the schedule it runs on and its stopping conditions. It rides on the envelope, in the executable profile only, and is announced in facets_used and never in facets_required: each compilation's node carries its identity, its reads and its declared states either way, so a consumer that does not know this facet has lost the recipe and not the record. Section 16.1 states the subset of it a portable engine executes. Its shape will change without a compatibility path while the preview is open.",
+  "allOf": [
+    {
+      "$ref": "https://gaspatchio.dev/schemas/gaspatchio-graph-v0.schema.json#/$defs/facet"
+    },
+    {
+      "type": "object",
+      "required": [
+        "compilations"
+      ],
+      "properties": {
+        "compilations": {
+          "description": "One machine for each compilation the exporting process could reach, keyed by the compilation's published fingerprint -- the string its node's call carries -- so a reader holding the node reaches the machine without a second index. A compilation out of the process's reach is absent rather than named with an empty body.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/compilation"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "compilation": {
+      "description": "One machine. Every field its compiled identity is taken over has a place here, so two machines that differ anywhere the fingerprint can see are two records.",
+      "type": "object",
+      "required": [
+        "points",
+        "states",
+        "increments",
+        "track_increments",
+        "lapse_when_all_non_positive",
+        "contract_boundary",
+        "engine_binding",
+        "batch_axes",
+        "schedule"
+      ],
+      "properties": {
+        "points": {
+          "description": "The machine's structural points, in declared order: bop and eop, the beginning and the end of a period.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "states": {
+          "description": "Every declared state, in declaration order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/state"
+          }
+        },
+        "increments": {
+          "description": "Every operation the machine applies, in the order it applies them.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/increment"
+          }
+        },
+        "track_increments": {
+          "description": "Whether the machine records what each of its operations moved.",
+          "type": "boolean"
+        },
+        "lapse_when_all_non_positive": {
+          "description": "The states that stop the machine once every one of them has fallen to nought or below; empty where none do.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contract_boundary": {
+          "description": "The test that stops the machine, as an operation tree, or null where the model set none.",
+          "anyOf": [
+            {
+              "$ref": "https://gaspatchio.dev/schemas/gaspatchio-graph-v0.schema.json#/$defs/expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "engine_binding": {
+          "description": "portable where every expression the machine holds is in the closed portable subset, and otherwise the name of the engine it reaches into.",
+          "type": "string"
+        },
+        "batch_axes": {
+          "description": "The axes the machine is run across.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "schedule": {
+          "description": "The identity of the schedule the machine runs on: the fingerprint of the assumption entry of kind schedule that carries its payload.",
+          "type": "string"
+        }
+      }
+    },
+    "state": {
+      "description": "One declared state, and the value it opens from.",
+      "type": "object",
+      "required": [
+        "name",
+        "init"
+      ],
+      "properties": {
+        "name": {
+          "description": "The state's name, unique within the machine.",
+          "type": "string"
+        },
+        "init": {
+          "description": "The opening value, as an operation tree. An expression the tree has no node for arrives as an engine_native node.",
+          "$ref": "https://gaspatchio.dev/schemas/gaspatchio-graph-v0.schema.json#/$defs/expr"
+        }
+      }
+    },
+    "increment": {
+      "description": "One operation the machine applies.",
+      "type": "object",
+      "required": [
+        "label",
+        "operation",
+        "target",
+        "reads_running_balance",
+        "operands",
+        "settings"
+      ],
+      "properties": {
+        "label": {
+          "description": "The name the model reads the movement back by, or null on a structural step such as a floor or a rounding, which is a constraint on the balance rather than a movement anyone booked.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operation": {
+          "description": "The operation, in the compiler's own spelling: Grow, Charge, DeductNAR, Ratchet, Floor and Round among them.",
+          "type": "string"
+        },
+        "target": {
+          "description": "The state and the point the operation changes, written state@point.",
+          "type": "string"
+        },
+        "reads_running_balance": {
+          "description": "Whether the operation's amount depends on the balance it changes, which is what decides whether a state machine was the right tool. Null where the producer cannot classify the expression that supplies the amount, as the artifact's own increment summary allows: the producer looked and cannot say. It describes; it never changes execution.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "operands": {
+          "description": "The operands the operation was given, as operation trees, in the order its own fields declare them. An optional operand it was not given is absent here, and its key under settings holds null.",
+          "type": "array",
+          "items": {
+            "$ref": "https://gaspatchio.dev/schemas/gaspatchio-graph-v0.schema.json#/$defs/expr"
+          }
+        },
+        "settings": {
+          "description": "The operation's configuration, one key for each setting it takes.",
+          "type": "object"
+        }
+      }
+    }
+  }
+}

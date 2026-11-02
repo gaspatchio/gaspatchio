@@ -1,0 +1,23 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+# The refusal cases' fixtures. `e2e/refusals.spec.ts` writes each one — a schema
+# this page does not read, a file that is not JSON, six hundred nodes, a sample
+# a test moved — packs a page from it and asserts the sentence the page prints.
+# They are edits and breakages, not exports, and a broken artifact sitting in a
+# fixtures directory is a thing somebody will one day open by mistake.
+fixtures/refusal-*
+# And the ones the inspector and comparison cases write: a committed export
+# with its book taken away, or stated as a book nobody could digest, packed to
+# show the page printing what the file says about it.
+fixtures/written-*
+# What the two measuring commands leave behind. `perf/results.json` is frame
+# times on one machine and `build.json` is the byte counts `build.mjs` printed
+# on one build; committing either would put a fact about somebody's laptop into
+# the history and invite the next reader to quote it as though it were the
+# repository's. The figures worth keeping are quoted in the commit that takes
+# them, beside the command and the commit that produced them — the ceiling in
+# .github/ratchets.env is the one of these numbers the repository keeps.
+perf/results.json
+build.json

@@ -1,0 +1,1471 @@
+{
+  "schema": "gaspatchio-operation-vectors/v0-preview.1",
+  "artifact_schema": "gaspatchio-graph/v0-preview.2",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "family": "Named conversions and the doors into them",
+  "cases": [
+    {
+      "id": "conversion-to_float-scalar",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            12,
+            -30,
+            0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          12.0,
+          -30.0,
+          0.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_float-list",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              1,
+              2
+            ],
+            [
+              3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            2.0
+          ],
+          [
+            3.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_float-at-the-boundary",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            9007199254740992,
+            -9007199254740992
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          9007199254740992.0,
+          -9007199254740992.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_float-past-the-boundary",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            9007199254740993
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "checked-float-conversion",
+      "producer_message": "no double names"
+    },
+    {
+      "id": "conversion-to_float-below-the-boundary",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            -9007199254740993
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "checked-float-conversion",
+      "producer_message": "no double names"
+    },
+    {
+      "id": "conversion-to_float-null-carried",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            7,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          7.0,
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_float-null-period",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              1,
+              null
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.0,
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_float-empty-list",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[i64]",
+          "values": [
+            [],
+            [
+              2
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [],
+          [
+            2.0
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "empty-portfolio-to_float",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_float-double-unchanged",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            2.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          0.1,
+          2.5
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_float-unsigned-within-the-boundary",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "u64",
+          "values": [
+            9007199254740992
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "f64",
+        "values": [
+          9007199254740992.0
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_float-unsigned-past-the-boundary",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "u64",
+          "values": [
+            9223372036854775808
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "checked-float-conversion",
+      "producer_message": "no double names"
+    },
+    {
+      "id": "conversion-to_float-refuses-bool",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "bool",
+          "values": [
+            true
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "float-conversion-type",
+      "producer_message": "only integer or floating-point"
+    },
+    {
+      "id": "conversion-to_float-refuses-text",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "str",
+          "values": [
+            "1"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "float-conversion-type",
+      "producer_message": "only integer or floating-point"
+    },
+    {
+      "id": "conversion-to_float-refuses-date",
+      "covers": [
+        "to_float"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "date",
+          "values": [
+            "2026-01-01"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_float",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "float-conversion-type",
+      "producer_message": "only integer or floating-point"
+    },
+    {
+      "id": "conversion-to_text-integer",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            10123,
+            -7,
+            0
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "10123",
+          "-7",
+          "0"
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-float-shortest-form",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            0.1,
+            2.5,
+            1e+21
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "0.1",
+          "2.5",
+          "1e+21"
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-bool",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "bool",
+          "values": [
+            true,
+            false
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "true",
+          "false"
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-date",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "date",
+          "values": [
+            "2025-01-31",
+            "2025-02-28"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "2025-01-31",
+          "2025-02-28"
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-text-unchanged",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "str",
+          "values": [
+            "term",
+            ""
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "term",
+          ""
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-list",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              1,
+              2
+            ],
+            [
+              3
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[str]",
+        "values": [
+          [
+            "1",
+            "2"
+          ],
+          [
+            "3"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-null-carried",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": [
+            7,
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "7",
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-null-period",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[i64]",
+          "values": [
+            [
+              1,
+              null
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[str]",
+        "values": [
+          [
+            "1",
+            null
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-empty-list",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [],
+            [
+              2.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[str]",
+        "values": [
+          [],
+          [
+            "2.5"
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "empty-portfolio-to_text",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i64",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-unsigned-past-i64",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "u64",
+          "values": [
+            18446744073709551557
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "18446744073709551557"
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-signed-128",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i128",
+          "values": [
+            -170141183460469231731687303715884105728
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "-170141183460469231731687303715884105728"
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-categorical",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "categorical",
+          "values": [
+            "term",
+            "term",
+            "whole life"
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "str",
+        "values": [
+          "term",
+          "term",
+          "whole life"
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_text-refuses-an-array",
+      "covers": [
+        "to_text"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "array[f64,2]",
+          "values": [
+            [
+              1.5,
+              2.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_text",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "text-conversion-type",
+      "producer_message": "to_text has no text form for"
+    },
+    {
+      "id": "conversion-to_list-two-element-array",
+      "covers": [
+        "to_list"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "array[f64,2]",
+          "values": [
+            [
+              1.5,
+              2.5
+            ],
+            [
+              3.5,
+              4.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_list",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          [
+            1.5,
+            2.5
+          ],
+          [
+            3.5,
+            4.5
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_list-integer-array",
+      "covers": [
+        "to_list"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "array[i64,3]",
+          "values": [
+            [
+              7,
+              8,
+              9
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_list",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            7,
+            8,
+            9
+          ]
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_list-null-element-and-null-array",
+      "covers": [
+        "to_list"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "array[i64,2]",
+          "values": [
+            [
+              null,
+              5
+            ],
+            null
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_list",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[i64]",
+        "values": [
+          [
+            null,
+            5
+          ],
+          null
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_list-zero-width-array",
+      "covers": [
+        "to_list"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "array[f64,0]",
+          "values": [
+            []
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_list",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": [
+          []
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "empty-portfolio-to_list",
+      "covers": [
+        "to_list"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "array[f64,2]",
+          "values": []
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_list",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "list[f64]",
+        "values": []
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_list-refuses-a-list",
+      "covers": [
+        "to_list"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "list[f64]",
+          "values": [
+            [
+              1.5,
+              2.5
+            ]
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_list",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "list-conversion-shape",
+      "producer_message": "to_list converts a fixed-width array"
+    },
+    {
+      "id": "conversion-to_list-refuses-a-scalar",
+      "covers": [
+        "to_list"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "f64",
+          "values": [
+            1.5
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_list",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "list-conversion-shape",
+      "producer_message": "to_list converts a fixed-width array"
+    },
+    {
+      "id": "conversion-to_integer-unsigned-within-range",
+      "covers": [
+        "to_integer"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "u64",
+          "values": [
+            7,
+            9223372036854775807
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_integer",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "expected": {
+        "dtype": "i64",
+        "values": [
+          7,
+          9223372036854775807
+        ]
+      },
+      "comparison": {
+        "atol": 0.0,
+        "rtol": 0.0
+      },
+      "case_kind": "value"
+    },
+    {
+      "id": "conversion-to_integer-unsigned-past-i64",
+      "covers": [
+        "to_integer"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "u64",
+          "values": [
+            9223372036854775808
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_integer",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "integer-range-conversion",
+      "producer_message": "outside the signed 64-bit range"
+    },
+    {
+      "id": "conversion-to_integer-signed-128-below-i64",
+      "covers": [
+        "to_integer"
+      ],
+      "inputs": {
+        "x": {
+          "dtype": "i128",
+          "values": [
+            -9223372036854775809
+          ]
+        }
+      },
+      "expr": {
+        "op": "call",
+        "name": "to_integer",
+        "args": [
+          {
+            "op": "col",
+            "name": "x"
+          }
+        ],
+        "attrs": {}
+      },
+      "producer_check": true,
+      "case_kind": "portable-domain-refusal",
+      "refusal": "integer-range-conversion",
+      "producer_message": "outside the signed 64-bit range"
+    }
+  ]
+}

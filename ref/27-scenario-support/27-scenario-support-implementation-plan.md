@@ -1,7 +1,5 @@
 # RFC 27: Scenario Support - Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Add minimal framework support for running actuarial models across multiple economic scenarios in a single vectorized execution.
 
 **Architecture:** Two core additions: (1) `with_scenarios()` function that cross-joins an ActuarialFrame with scenario IDs, adding a `scenario_id` column; (2) `Table.from_scenario_files()` and `Table.from_scenario_template()` classmethods to load per-scenario assumption files into unified Tables. All scenario operations are transparent data operations - no magic.
@@ -225,10 +223,6 @@ feat(scenarios): add with_scenarios() for scenario expansion
 Implements RFC 27 Phase 1 - core scenario expansion via cross-join.
 with_scenarios(af, scenario_ids) expands an ActuarialFrame across
 multiple scenarios, enabling vectorized multi-scenario model runs.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -323,10 +317,6 @@ test(scenarios): add performance and preservation tests for with_scenarios
 
 Tests integer scenario IDs, categorical encoding, custom column names,
 and ActuarialFrame property preservation (mode, verbose).
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -384,10 +374,6 @@ feat(scenarios): export with_scenarios from gaspatchio_core
 
 with_scenarios is now importable directly from gaspatchio_core:
 from gaspatchio_core import with_scenarios
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -632,10 +618,6 @@ feat(scenarios): add Table.from_scenario_files() for per-scenario loading
 Classmethod to load per-scenario assumption files and concatenate them
 into a single Table with scenario_id as a dimension. Enables lookups
 that vary by scenario without changing Table's core lookup logic.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -816,10 +798,6 @@ feat(scenarios): add Table.from_scenario_template() convenience method
 Convenience method for loading per-scenario files that follow a naming
 pattern like scenarios/{scenario_id}/rates.parquet. Delegates to
 from_scenario_files() after expanding the template.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -987,10 +965,6 @@ Tests the full RFC 27 pattern:
 - Model points × scenarios via with_scenarios()
 - Scenario-varying lookups via Table with scenario_id dimension
 - Aggregation by scenario for risk metrics
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1064,10 +1038,6 @@ test(scenarios): add lazy mode tests for with_scenarios
 
 Verifies with_scenarios() works correctly with lazy ActuarialFrames
 and the scan_parquet() workflow from the RFC.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1115,10 +1085,6 @@ RFC 27 Phase 1 complete. Provides:
 - Table.from_scenario_files() for per-scenario file loading
 - Table.from_scenario_template() for templated file patterns
 - Full test coverage for scenario workflows
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1224,10 +1190,6 @@ Validates:
 - Non-empty scenario list with helpful error message
 - No duplicate scenario IDs
 - Scenario column doesn't conflict with existing columns
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1407,10 +1369,6 @@ feat(scenarios): add batch_scenarios() for chunked processing
 
 Helper for processing large scenario sets in memory-bounded batches.
 Useful when Polars streaming isn't sufficient or recovery points are needed.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1469,10 +1427,6 @@ feat(scenarios): export batch_scenarios from gaspatchio_core
 
 batch_scenarios is now importable directly:
 from gaspatchio_core import batch_scenarios
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1503,10 +1457,6 @@ docs(scenarios): ensure docstring examples are testable
 
 Updated with_scenarios() docstring examples to be pytest-doctest
 compatible.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1560,10 +1510,6 @@ feat(scenarios): complete Phase 2 - validation and polish
 
 RFC 27 Phase 2 complete. All scenario functionality tested and
 type-checked. Ready for production use.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1897,10 +1843,6 @@ Pydantic models for declarative shock specifications:
 - ScenarioSpec: scenario with optional shocks
 - SweepSpec: sensitivity sweep expansion
 - parse_scenario_config() for parsing mixed configs
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -2131,10 +2073,6 @@ Applies shock specifications to assumption tables:
 - add, multiply, set operations
 - Filter expressions for targeted shocks
 - Composable shocks applied in sequence
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -2375,10 +2313,6 @@ Human-readable description of scenario configurations showing:
 - Filter conditions
 
 Useful for logging, audit trails, and user verification.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -2717,10 +2651,6 @@ Summarizes sweep scenario results:
 - Range, mean, std statistics
 - Sensitivity per unit parameter change
 - Filtered DataFrame for custom analysis
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -2950,10 +2880,6 @@ with_scenarios() now accepts:
 - Sweep configs that expand to multiple scenarios
 
 Enables LLM-generated scenario configurations.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -3004,10 +2930,6 @@ Exports for ad-hoc shock specifications:
 - describe_scenarios, sensitivity_analysis
 - parse_scenario_config
 - ScenarioSpec, ShockSpec, SweepSpec models
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -3179,10 +3101,6 @@ Tests the full LLM-friendly scenario workflow:
 - Config generation from natural language questions
 - Sensitivity sweeps with analysis
 - Composable shocks
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -3234,10 +3152,6 @@ RFC 27 Phase 3 complete. Provides:
 - with_scenarios() accepts full config including sweeps
 
 All scenario functionality tested and type-checked.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```

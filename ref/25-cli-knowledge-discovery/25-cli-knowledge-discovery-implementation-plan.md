@@ -1,7 +1,5 @@
 # CLI Knowledge Discovery Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Add `gspio docs` and `gspio knowledge` commands that enable LLMs to search Gaspatchio documentation and actuarial knowledge bases.
 
 **Architecture:** Thin CLI client that makes HTTP calls to a knowledge API. Commands return JSON search results by default, with optional `--answer` flag for RAG-generated responses. Rich `--help` output guides LLMs to prefer search over generated answers.

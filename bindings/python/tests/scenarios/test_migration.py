@@ -24,7 +24,7 @@ def test_v01_dict_aggregations_raises_migration_error() -> None:
         "scr": {"kind": "Sum", "column": "loss"},
         "be": {"kind": "Mean", "column": "loss"},
     }
-    with pytest.raises(ValueError, match="v0.1 plan format detected"):
+    with pytest.raises(ValueError, match="aggregations are a list"):
         parse_aggregations(v01_spec)  # type: ignore[arg-type]
 
 
@@ -43,10 +43,12 @@ def test_v01_yaml_file_round_trip_raises(tmp_path: Path) -> None:
     """A YAML file written in v0.1 shape raises when aggregations slice is parsed."""
     v01_yaml = tmp_path / "old_plan.yaml"
     v01_yaml.write_text(
-        yaml.safe_dump({
-            "aggregations": {"x": {"kind": "Sum", "column": "loss"}},
-        })
+        yaml.safe_dump(
+            {
+                "aggregations": {"x": {"kind": "Sum", "column": "loss"}},
+            }
+        )
     )
     loaded = yaml.safe_load(v01_yaml.read_text())
-    with pytest.raises(ValueError, match="v0.1 plan format detected"):
+    with pytest.raises(ValueError, match="aggregations are a list"):
         parse_aggregations(loaded["aggregations"])

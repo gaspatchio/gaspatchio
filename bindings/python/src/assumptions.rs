@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-                                          // Keep only necessary imports for the plugin function itself
 use polars::prelude::*;
 use polars::prelude::{DataType, Field, PlSmallStr, PolarsResult, Series};
 use pyo3::PyResult;
@@ -15,19 +14,49 @@ use pyo3::prelude::*;
 use serde::Deserialize;
 use std::str::FromStr;
 
-// Import the core logic function and assume Kwargs struct is defined there
 use gaspatchio_core_lib::assumptions::{
-    append_to_assumption_table_global, get_global_assumption_registry,
-    register_assumption_table_global, register_assumption_table_global_with_mode,
-    register_or_replace_assumption_table_global,
+    append_to_assumption_table_global, append_to_assumption_table_global_with_identity,
+    get_global_assumption_registry, missing_keys_refusal,
+    register_assumption_table_global_with_mode,
+    register_or_replace_assumption_table_global_with_identity,
     register_or_replace_assumption_table_global_with_mode, reset_global_assumption_registry,
-    StorageMode,
+    StorageMode, SAMPLE_KEY_CAP,
 };
 
-// Kwargs struct for the assumption lookup plugin
+// Kwargs struct for the assumption lookup plugin.
+//
+// The four identity fields carry no `serde(default)` on purpose, and the
+// reason is not that a lookup is never written down. One is: the published
+// vector in `gaspatchio/schemas/vectors/lookup.json` is a lookup plan node on
+// disk, read back and run again by the conformance test beside it. It crosses
+// versions safely because it carries only the graph's own attributes -- the
+// table's name, its content fingerprint, the miss policy -- and
+// `_lower_lookup` mints `key_columns` and `value_column` fresh from the
+// running process's table directory each time it lowers one.
+//
+// What this struct reads is the other half of that, and the property holding
+// it up is narrower: a payload is written and read by the same installation.
+// A plan names its plugin by the path of the `.so` sitting beside the
+// lowering that wrote it. Pickling a frame mid-model and reading it back in
+// the same process carries every field of the payload verbatim and runs,
+// which is the round trip the tests pin. A payload from any other build is
+// refused here, by the name of the field it is short of. That refusal is the
+// intended outcome and not a gap.
+//
+// A default would blunt it. It would fire by inventing an empty content
+// fingerprint or an empty key list, and that lookup would go on to fail the
+// identity check against the directory several steps later, complaining about
+// a table whose name the author never wrote.
 #[derive(Deserialize, Debug, Clone)]
 pub struct AssumptionLookupKwargs {
+    /// Registered name the lookup resolves by at execution time.
     pub table_name: String,
+    /// Processed content and registration schema captured when the plan was built.
+    pub table_fingerprint: String,
+    /// Key columns of the processed table, in the order the operands arrive.
+    pub key_columns: Vec<String>,
+    /// Value column the rate is read from.
+    pub value_column: String,
     /// Miss policy: "raise" (default), "nan", or "fill".
     #[serde(default)]
     pub on_missing: Option<String>,
@@ -71,25 +100,24 @@ fn lookup_by_table_and_hash(
     let key_series_refs: Vec<&Series> = inputs.iter().collect(); // All inputs are keys now
 
     let registry = get_global_assumption_registry();
-    
+
     // Debug logging to diagnose the issue
     log::debug!(
         "lookup_by_table_and_hash: Looking for table '{}'. Available tables: {:?}",
         table_name,
         registry.list_tables()
     );
-    
-    let table = registry
-        .get_table(table_name)
-        .ok_or_else(|| {
-            let available_tables = registry.list_tables();
-            polars_err!(
-                ComputeError: 
-                "Table '{}' not found in AssumptionTableRegistry. Available tables: {:?}. Registry has {} tables.",
-                table_name, available_tables, available_tables.len()
-            )
-        })?;
-        
+
+    // The identity check and value read share one immutable registry snapshot.
+    // Replacement between streamed chunks may make the next chunk refuse;
+    // no chunk can silently serve replacement data under the old identity.
+    let table = registry.require_table_identity(
+        table_name,
+        &kwargs.table_fingerprint,
+        &kwargs.key_columns,
+        &kwargs.value_column,
+    )?;
+
     // Determine if this is a vector lookup (any key is a List type)
     let has_list_keys = key_series_refs
         .iter()
@@ -114,6 +142,7 @@ fn lookup_by_table_and_hash(
     apply_on_missing_policy(
         result,
         &key_series_refs,
+        &kwargs.key_columns,
         table_name,
         kwargs.on_missing.as_deref(),
         kwargs.fill_value,
@@ -131,6 +160,7 @@ fn lookup_by_table_and_hash(
 fn apply_on_missing_policy(
     result: Series,
     key_cols: &[&Series],
+    key_columns: &[String],
     table_name: &str,
     on_missing: Option<&str>,
     fill_value: Option<f64>,
@@ -138,7 +168,7 @@ fn apply_on_missing_policy(
     match on_missing.unwrap_or("raise") {
         "nan" => Ok(result),
         "fill" => fill_missing(result, fill_value.unwrap_or(f64::NAN)),
-        _ => raise_if_missing(result, key_cols, table_name),
+        _ => raise_if_missing(result, key_cols, key_columns, table_name),
     }
 }
 
@@ -167,9 +197,28 @@ fn fill_missing(result: Series, constant: f64) -> PolarsResult<Series> {
     }
 }
 
+/// Name a lookup operand the way the reader wrote it.
+///
+/// An operand carries its own column name (`attained_age`), which is what
+/// the reader recognises and what every engine reports. A key passed as a
+/// value -- `lookup(product="annuity", ...)` -- arrives as a Polars literal
+/// whose name is the engine's placeholder `literal`, which names nothing the
+/// reader wrote; that key is named by the table's own key column instead,
+/// which `key_columns` holds in the order the operands arrive.
+fn operand_name<'a>(key_col: &'a Series, at: usize, key_columns: &'a [String]) -> &'a str {
+    let name = key_col.name().as_str();
+    if name == "literal" {
+        if let Some(column) = key_columns.get(at) {
+            return column.as_str();
+        }
+    }
+    name
+}
+
 fn raise_if_missing(
     result: Series,
     key_cols: &[&Series],
+    key_columns: &[String],
     table_name: &str,
 ) -> PolarsResult<Series> {
     // Fast vectorised check first; the row-attribution pass below only runs
@@ -186,8 +235,45 @@ fn raise_if_missing(
         return Ok(result);
     }
 
-    let mut missing_rows: Vec<usize> = Vec::new();
-    let mut n_missing_rows = 0usize;
+    // The position a miss is found at is how its key value is fetched and goes
+    // no further: the reader is given the key, which names the same rows in
+    // the frame under either engine, and never a number that only holds
+    // inside this batch.
+    let key_at = |row: usize| -> String {
+        key_cols
+            .iter()
+            .enumerate()
+            .map(|(i, kc)| {
+                // Unit-length literals broadcast; index them at 0.
+                let at = if kc.len() == 1 { 0 } else { row };
+                let name = operand_name(kc, i, key_columns);
+                match kc.get(at) {
+                    Ok(av) => format!("{name}={av}"),
+                    Err(_) => format!("{name}=?"),
+                }
+            })
+            .collect::<Vec<String>>()
+            .join(", ")
+    };
+
+    // The sample is scoped to the batch of rows this call was handed. The
+    // engine hands an elementwise plugin one batch per call and passes no row
+    // offset with it (polars-plan 0.53.0, `call_plugin`, which builds a fresh
+    // `CallerContext` whose only field is a PARALLEL bit), so neither a
+    // position nor a total here can be spoken of as the frame's -- and no
+    // count is reported at all: a batch's count read as the frame's
+    // is a wrong number, and the keys already find every row. The sample
+    // collects DISTINCT keys: a batch that misses the same attained age forty
+    // times has one key to report.
+    let mut sample_keys: Vec<String> = Vec::new();
+    let note_miss = |row: usize, sample_keys: &mut Vec<String>| {
+        if sample_keys.len() < SAMPLE_KEY_CAP {
+            let key = key_at(row);
+            if !sample_keys.contains(&key) {
+                sample_keys.push(key);
+            }
+        }
+    };
     match result.dtype() {
         DataType::List(_) => {
             let lc = result.list()?;
@@ -197,10 +283,7 @@ fn raise_if_missing(
                     .and_then(|s| s.f64().ok().map(|ca| ca.is_nan().any()))
                     .unwrap_or(false);
                 if row_has_nan {
-                    n_missing_rows += 1;
-                    if missing_rows.len() < 3 {
-                        missing_rows.push(row);
-                    }
+                    note_miss(row, &mut sample_keys);
                 }
             }
         }
@@ -208,36 +291,27 @@ fn raise_if_missing(
             let ca = result.f64()?;
             for (row, v) in ca.into_iter().enumerate() {
                 if v.map(|v| v.is_nan()).unwrap_or(true) {
-                    n_missing_rows += 1;
-                    if missing_rows.len() < 3 {
-                        missing_rows.push(row);
-                    }
+                    note_miss(row, &mut sample_keys);
                 }
             }
         }
     }
 
-    let mut samples = String::new();
-    for &row in &missing_rows {
-        let key_desc: Vec<String> = key_cols
-            .iter()
-            .map(|kc| {
-                // Unit-length literals broadcast; index them at 0.
-                let at = if kc.len() == 1 { 0 } else { row };
-                match kc.get(at) {
-                    Ok(av) => format!("{}={}", kc.name(), av),
-                    Err(_) => format!("{}=?", kc.name()),
-                }
-            })
-            .collect();
-        samples.push_str(&format!(" (row {}: {})", row, key_desc.join(", ")));
-    }
+    // The key column names go on the refusal's first line with the table:
+    // they are the same under every engine and in every batch, which is what
+    // lets the collect-time replay match this failure to the calculation that
+    // raised it. The samples above vary with the batch and go on the line
+    // after.
+    let named: Vec<&str> = key_cols
+        .iter()
+        .enumerate()
+        .map(|(i, kc)| operand_name(kc, i, key_columns))
+        .collect();
 
-    Err(polars_err!(ComputeError:
-        "Lookup on table '{}' has {} row(s) with missing keys (or NaN-valued entries); first misses:{}. \
-         Keys must exist in the table (exact match). Pass on_missing=\"nan\" or a numeric fill value \
-         to Table(...) or lookup(...) to restore silent-NaN behaviour.",
-        table_name, n_missing_rows, samples))
+    Err(polars_err!(
+        ComputeError: "{}",
+        missing_keys_refusal(table_name, &named, &sample_keys)
+    ))
 }
 
 #[pyclass]
@@ -284,19 +358,35 @@ impl PyAssumptionTableRegistry {
         Ok(())
     }
 
-    #[pyo3(signature = (name, df, keys, value_column))]
+    #[pyo3(signature = (name, df, keys, value_column, *, fingerprint=None, expected_fingerprint=None))]
     fn append_to_table(
         &self,
         name: String,
         df: PyDataFrame,
         keys: Vec<String>,
         value_column: String,
+        fingerprint: Option<String>,
+        expected_fingerprint: Option<String>,
     ) -> PyResult<()> {
         let rust_df: DataFrame = df.into();
 
-        // Use the global append function
-        append_to_assumption_table_global(name, rust_df, keys, value_column)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e)))?;
+        let result = match (expected_fingerprint, fingerprint) {
+            (Some(expected), Some(next)) => append_to_assumption_table_global_with_identity(
+                name,
+                rust_df,
+                keys,
+                value_column,
+                expected,
+                next,
+            ),
+            (None, None) => append_to_assumption_table_global(name, rust_df, keys, value_column),
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "append requires both fingerprint and expected_fingerprint, or neither",
+                ))
+            }
+        };
+        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
         Ok(())
     }
@@ -351,7 +441,7 @@ impl PyAssumptionTableRegistry {
         }
     }
 
-    #[pyo3(signature = (name, df, keys, value_column, force_replace=true, storage_mode="auto"))]
+    #[pyo3(signature = (name, df, keys, value_column, force_replace=true, storage_mode="auto", *, fingerprint=None))]
     fn register_or_replace_table(
         &self,
         name: String,
@@ -360,6 +450,7 @@ impl PyAssumptionTableRegistry {
         value_column: String,
         force_replace: Option<bool>,
         storage_mode: Option<&str>,
+        fingerprint: Option<String>,
     ) -> PyResult<()> {
         let rust_df: DataFrame = df.into();
         let force = force_replace.unwrap_or(true);
@@ -372,15 +463,26 @@ impl PyAssumptionTableRegistry {
         );
 
         // Use the new idempotent registry function with mode
-        register_or_replace_assumption_table_global_with_mode(
-            name.clone(),
-            rust_df,
-            keys,
-            value_column,
-            force,
-            mode,
-        )
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e)))?;
+        let result = match fingerprint {
+            Some(fingerprint) => register_or_replace_assumption_table_global_with_identity(
+                name.clone(),
+                rust_df,
+                keys,
+                value_column,
+                force,
+                mode,
+                fingerprint,
+            ),
+            None => register_or_replace_assumption_table_global_with_mode(
+                name.clone(),
+                rust_df,
+                keys,
+                value_column,
+                force,
+                mode,
+            ),
+        };
+        result.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e)))?;
 
         // Verify registration
         let registry = get_global_assumption_registry();

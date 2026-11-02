@@ -3,20 +3,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-if TYPE_CHECKING:
-    from .base import ActuarialFrame
+from .base import ActuarialFrame
+from .calculations import CalculationRecord
+
+__all__ = ["build_trace_decorator", "log_query_plan"]
 
 def log_query_plan(
-    operations: list[tuple[str, Any]], frame_df: pl.LazyFrame
+    records: list[CalculationRecord], frame_df: pl.LazyFrame
 ) -> None: ...
 def build_trace_decorator(
     frame_instance: ActuarialFrame,
 ) -> Callable[..., ActuarialFrame | None]:  # Specify return type of wrapped func
     ...
-def append_operation_to_graph(
-    frame_instance: ActuarialFrame, name: str, expr: Any
-) -> None: ...

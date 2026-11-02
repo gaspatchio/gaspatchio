@@ -1,0 +1,262 @@
+{
+  "schema": "gaspatchio-content-identity-vectors/v0-preview.1",
+  "fingerprint_algorithm": "gspv0-preview-3",
+  "grammar": "12.3",
+  "cases": [
+    {
+      "id": "worked-example-mortality-basis",
+      "note": "Section 12.3's worked example: two columns, i64 then f64.",
+      "columns": [
+        {
+          "name": "age",
+          "dtype": "i64",
+          "values": [
+            45,
+            46,
+            47
+          ]
+        },
+        {
+          "name": "rate",
+          "dtype": "f64",
+          "values": [
+            0.001,
+            0.0012,
+            0.0015
+          ]
+        }
+      ],
+      "bytes": "02036167651203025a025c025e04726174651303023f50624dd2f1a9fc023f53a92a30553261023f589374bc6a7efa",
+      "digest": "sha256:5267aed7a08b589310c079677eddd6128fb44af9f9fbfbb1dc3d58e2b6dcd277"
+    },
+    {
+      "id": "datetime-naive-microseconds",
+      "note": "One ms past the epoch, zone-naive: an empty zone, microsecond 1000, 0 ns.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "us",
+          "zone": null,
+          "values": [
+            1000
+          ]
+        }
+      ],
+      "bytes": "01017617000102d00f00",
+      "digest": "sha256:c6ed5b933636f8b1168024f64470a3f9dde91f58c5f1d6e8ac231c031414366e"
+    },
+    {
+      "id": "datetime-same-instant-in-milliseconds",
+      "note": "The same instant kept in ms has the same encoding.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "ms",
+          "zone": null,
+          "values": [
+            1
+          ]
+        }
+      ],
+      "bytes": "01017617000102d00f00",
+      "digest": "sha256:c6ed5b933636f8b1168024f64470a3f9dde91f58c5f1d6e8ac231c031414366e"
+    },
+    {
+      "id": "datetime-same-instant-in-nanoseconds",
+      "note": "The same instant kept in ns has the same encoding.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "ns",
+          "zone": null,
+          "values": [
+            1000000
+          ]
+        }
+      ],
+      "bytes": "01017617000102d00f00",
+      "digest": "sha256:c6ed5b933636f8b1168024f64470a3f9dde91f58c5f1d6e8ac231c031414366e"
+    },
+    {
+      "id": "datetime-utc-digests-as-naive",
+      "note": "A UTC column writes the empty zone: naive is read as UTC (section 10).",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "us",
+          "zone": "UTC",
+          "values": [
+            1000
+          ]
+        }
+      ],
+      "bytes": "01017617000102d00f00",
+      "digest": "sha256:c6ed5b933636f8b1168024f64470a3f9dde91f58c5f1d6e8ac231c031414366e"
+    },
+    {
+      "id": "datetime-zone-in-the-header",
+      "note": "The same instant shown in Pacific/Auckland is another column.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "us",
+          "zone": "Pacific/Auckland",
+          "values": [
+            1000
+          ]
+        }
+      ],
+      "bytes": "0101761710506163696669632f4175636b6c616e640102d00f00",
+      "digest": "sha256:8fa2c3e1b64c7ba8fbadd76b70a7c577759f837a517cce7817afaeb96ba5b896"
+    },
+    {
+      "id": "datetime-nanosecond-before-the-epoch",
+      "note": "-1 ns is microsecond -1 (zigzag 01) and 999 ns past it (e7 07).",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "ns",
+          "zone": null,
+          "values": [
+            -1
+          ]
+        }
+      ],
+      "bytes": "0101761700010201e707",
+      "digest": "sha256:6ef3812215e56c93a5ae4f5c8d0581e1f7c4f5e72586201e6101e2e8b2db0e8d"
+    },
+    {
+      "id": "datetime-sub-microsecond-instants-apart",
+      "note": "A cut-off and a claim 500 ns after it: one microsecond, 0 then 500 ns.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "ns",
+          "zone": null,
+          "values": [
+            1577880000000000000,
+            1577880000000000500
+          ]
+        }
+      ],
+      "bytes": "0101761700020280c0af8edac4cd05000280c0af8edac4cd05f403",
+      "digest": "sha256:7cdf64c9226aaafd8c38c3644d2fd8560d5c68012cca26a8f4314767ec9d0826"
+    },
+    {
+      "id": "datetime-least-nanosecond",
+      "note": "i64's least ns: microsecond -9223372036854776 and 192 ns past it.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "ns",
+          "zone": null,
+          "values": [
+            -9223372036854775808
+          ]
+        }
+      ],
+      "bytes": "01017617000102efcf9adef4a6e220c001",
+      "digest": "sha256:79ce9ff61dd30cc6ab7d17a1e550898c2f19a776127cd1c080c6c542acce863e"
+    },
+    {
+      "id": "datetime-missing-value",
+      "note": "A missing instant is the absent marker and its placeholder byte.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "us",
+          "zone": null,
+          "values": [
+            null,
+            1000
+          ]
+        }
+      ],
+      "bytes": "010176170002010002d00f00",
+      "digest": "sha256:4f81aa6f66b2caea640b55d9336bb6e7ac5ca587b8e803c5342ea493689ab99d"
+    },
+    {
+      "id": "datetime-sequence-carries-the-zone",
+      "note": "list[datetime]: the zone behind the element's tag, each member marked.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "list[datetime]",
+          "unit": "ns",
+          "zone": "Pacific/Auckland",
+          "values": [
+            [
+              1000000,
+              null
+            ],
+            [],
+            null
+          ]
+        }
+      ],
+      "bytes": "010176151710506163696669632f4175636b6c616e6403020202d00f00010002000100",
+      "digest": "sha256:377b035daf30e0652e50ef4e831de17d1f631406974e15920e4faa93852d3961"
+    },
+    {
+      "id": "datetime-milliseconds-at-the-edge-of-i64",
+      "note": "The ms counts whose microseconds an i64 just holds scale up exactly.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "ms",
+          "zone": null,
+          "values": [
+            9223372036854775,
+            -9223372036854775
+          ]
+        }
+      ],
+      "bytes": "01017617000202b0f3ffffffffffffff010002aff3ffffffffffffff0100",
+      "digest": "sha256:cf25b5209341714c7ac2316608d7df9e17f31df2e5347a6f5b4940ee1d114e85"
+    },
+    {
+      "id": "datetime-milliseconds-past-i64-refused",
+      "note": "One ms past the edge: its microseconds leave i64, and wrapping would write the instant -9223372036854775616 us. Refused by name, not wrapped.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "ms",
+          "zone": null,
+          "values": [
+            0,
+            null,
+            9223372036854776
+          ]
+        }
+      ],
+      "refusal": "datetime-microseconds-past-i64"
+    },
+    {
+      "id": "datetime-milliseconds-before-i64-refused",
+      "note": "One ms below the edge, the other side: refused by name.",
+      "columns": [
+        {
+          "name": "v",
+          "dtype": "datetime",
+          "unit": "ms",
+          "zone": null,
+          "values": [
+            -9223372036854776
+          ]
+        }
+      ],
+      "refusal": "datetime-microseconds-past-i64"
+    }
+  ]
+}

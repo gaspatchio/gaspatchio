@@ -2,31 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Stub file for projection accessors."""
-
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import polars as pl
 
-from .base import BaseColumnAccessor
+from gaspatchio._semantic.ir import OpNode
+from gaspatchio.column.column_proxy import ColumnProxy
+from gaspatchio.column.expression_proxy import ExpressionProxy
+from gaspatchio.frame.base import ActuarialFrame
 
-if TYPE_CHECKING:
-    from ..column.column_proxy import ColumnProxy
-    from ..column.expression_proxy import ExpressionProxy
-    from ..frame.base import ActuarialFrame
+from .base import BaseColumnAccessor
 
 class ProjectionColumnAccessor(BaseColumnAccessor):
     _proxy: ColumnProxy | ExpressionProxy
 
     def __init__(self, proxy: ColumnProxy | ExpressionProxy) -> None: ...
-    def _get_polars_expr(self) -> pl.Expr: ...
+    def _get_node(self) -> OpNode: ...
     def _get_parent_frame(self) -> ActuarialFrame: ...
-    def _build_discount_factors(
-        self,
-        cashflow_expr: pl.Expr,
-        discount_rate: float | ExpressionProxy | ColumnProxy | None,
-        discount_factor: ExpressionProxy | ColumnProxy | None,
-    ) -> pl.Expr: ...
     def cumulative_survival(
         self,
         rate_timing: Literal["beginning_of_period", "end_of_period"] | None = None,
@@ -34,18 +26,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         *,
         from_survival: bool = False,
     ) -> ExpressionProxy: ...
-    def with_period(
-        self, period: int, value: float | str
-    ) -> ExpressionProxy: ...
-    def with_periods(
-        self, updates: dict[int, int | float | str]
-    ) -> ExpressionProxy: ...
-    def previous_period(
-        self, fill_value: float = 0.0
-    ) -> ExpressionProxy: ...
-    def next_period(
-        self, fill_value: float = 0.0
-    ) -> ExpressionProxy: ...
+    def with_period(self, period: int, value: float) -> ExpressionProxy: ...
+    def with_periods(self, updates: dict[int, int | float]) -> ExpressionProxy: ...
+    def previous_period(self, fill_value: float = 0.0) -> ExpressionProxy: ...
+    def next_period(self, fill_value: float = 0.0) -> ExpressionProxy: ...
     def at_period(
         self, relative_period: int, fill_value: float | None = 0.0
     ) -> ExpressionProxy: ...
@@ -63,7 +47,11 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
     def accumulate(
         self,
         *,
-        initial: str | pl.Expr | ExpressionProxy | ColumnProxy,
-        multiply: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
-        add: float | str | pl.Expr | ExpressionProxy | ColumnProxy,
+        initial: float | pl.Expr | ExpressionProxy | ColumnProxy,
+        multiplier: float | pl.Expr | ExpressionProxy | ColumnProxy,
+        addend: float | pl.Expr | ExpressionProxy | ColumnProxy,
+        reverse: bool = False,
     ) -> ExpressionProxy: ...
+
+# What the API reference documents from this module.
+__all__ = ["ProjectionColumnAccessor"]

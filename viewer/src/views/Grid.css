@@ -1,0 +1,352 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Opio Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The grid's voice: spreadsheet density in the site's own type.
+ *
+ * No per-cell gridlines and no column letters. The only rules are the ones a
+ * reader needs to keep a row: one under each row, one down the right of the
+ * sticky row label, one under the formula band. The washes carry the two
+ * states — the selected column and the row cursor — and the red outline
+ * carries the third, which is the one this page exists for: the cells the
+ * selected formula read, on the row it read them.
+ *
+ * Column widths are fixed by the table's `colgroup` and `table-layout: fixed`,
+ * which is what lets a body row skip the columns outside the window with one
+ * spanning cell and still land its drawn cells under their own headers.
+ */
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  outline: none;
+}
+
+.grid:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--red-light);
+}
+
+/*
+ * The scroller paints the page's own white behind the table.
+ *
+ * Nothing shows through it either way, so nothing on the screen changes; what
+ * changes is how Chromium scrolls it where text is drawn for an LCD panel — on
+ * Linux and Windows at one device pixel per CSS pixel, which is what the
+ * Viewer job's runner is. There a scroller whose background is not known to be
+ * opaque is scrolled by painting it again, because moving painted text over a
+ * background it cannot see would lose the subpixel antialiasing. With the
+ * paper painted it is scrolled as a layer of its own, and a scrub that follows
+ * the cursor down a row a frame redraws the row that comes into sight rather
+ * than the whole grid it moved. A Mac, which draws no LCD text, already
+ * scrolled it this way.
+ */
+.scroll {
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.grid table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.82rem;
+  table-layout: fixed;
+}
+
+.grid th,
+.grid td,
+.grid .label-column .label {
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-align: right;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+/*
+ * The two header rows stick, one above the other, as one block and not a cell
+ * at a time.
+ *
+ * Every heading used to stick on its own, and Chromium gives each element that
+ * sticks inside a scroller a compositing layer of its own: the header alone was
+ * 119 of the page's 163 layers, where now it is the block and its two corners,
+ * three of 49. Taken out of the finished page, the scrub costs 0.5 ms more
+ * main-thread work a frame, and 0.9 on the comparison page.
+ *
+ * Two things draw differently, both toward what this sheet already asked for.
+ * The corner's z-index of 4 now holds — the per-cell rule gave every heading a
+ * z-index of 3 on a more specific selector, so a grid scrolled sideways slid
+ * its headings over "period" — and the formula band sits under the names rather
+ * than a pixel into them: the per-cell rule stuck it at 26 px, and the names
+ * row draws at 27 with its rule.
+ */
+.grid thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.grid thead tr.names th {
+  height: 26px;
+  line-height: 26px;
+  background: var(--paper);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.grid thead tr.formulas th,
+.grid thead tr.formulas td {
+  height: 22px;
+  line-height: 22px;
+  background: var(--code-surface);
+  border-bottom: 2px solid var(--rule);
+}
+
+.grid td.formula {
+  color: var(--code-blue);
+  text-align: left;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The row label, in the secondary ink: the cell heading each body row, and the
+ * label column's copy of it, which is the one a reader sees.
+ */
+.grid th.label,
+.grid .label-column .label {
+  background: var(--paper);
+  color: var(--ink-secondary);
+  font-weight: 400;
+  border-right: 1px solid var(--rule);
+}
+
+/* The header's two corners stick down the left on their own, over the headings. */
+.grid thead th.corner {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+}
+
+/*
+ * The row labels stick down the left as one column, and not a cell at a time.
+ *
+ * Every label cell used to stick on its own, and Chromium gives each element
+ * that sticks inside a scroller a compositing layer of its own: in the state
+ * `perf/measure.mjs` scrubs the labels were 32 of the page's 49 layers, and 64
+ * of 81 with the cursor at period 40. Now they are one, the column, and the
+ * page has 18 in either state. Taken out of the finished page and measured
+ * beside it, the scrub's main thread does about a millisecond more a frame at
+ * a CPU slowed to 1.5 times and two more at twice; at full speed the
+ * difference was inside the noise of the busy machine it was measured on.
+ *
+ * The column is laid out by the table rather than placed over it. The row it
+ * hangs from has no height and sits where the drawn rows start, so the column
+ * starts where they do, its labels are the height a row draws at, and the
+ * scroller carries it up and down with them: nothing is measured, and nothing
+ * is kept in step by hand. Each body row keeps its own label cell, which no
+ * longer sticks and which the column covers wherever a reader can see it.
+ *
+ * The cell holding the column lets it overflow, because a cell that clipped it
+ * would be a scroll container of its own for the column to stick inside. The
+ * box between them spans the table, which is the width the column sticks
+ * across, and is drawn before the rows, so a click on a value still reaches
+ * the value. A click on a label lands on the label, as it did. The column is
+ * not selectable, so text copied out of the grid carries each row's label once.
+ */
+.grid tr.labels td {
+  position: relative;
+  height: 0;
+  border: 0;
+  overflow: visible;
+}
+
+.grid .label-host {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.grid .label-column {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  user-select: none;
+}
+
+/*
+ * 23 px with the rule under it, which is what a row draws at and what
+ * `ROW_HEIGHT` in `Grid.tsx` tells the virtualizer. It said 22 and the cell
+ * grew to fit its line and its rule anyway, so the number here was the one
+ * thing about the row that was not true.
+ */
+.grid tbody th.label,
+.grid tbody td {
+  height: 23px;
+  line-height: 22px;
+}
+
+/*
+ * A label in the column is as tall as the row it labels, and that is a minimum
+ * rather than a height. A table row's height is only ever a floor: away from
+ * 100% zoom the rule under it rounds to a whole device pixel, and the row comes
+ * out taller than the 23 px it asks for -- 12 device pixels against 11.5 at
+ * half size. A label held to exactly 23 px fell behind its row by that much on
+ * every row, so at the foot of the grid it read the next period's number. Held
+ * to at least 23 px, its own line and rule make it grow as the row does.
+ */
+.grid .label-column .label {
+  min-height: 23px;
+  line-height: 22px;
+}
+
+/*
+ * Each body row paints on its own, so a row that changes is repainted and the
+ * rest are reused. The cursor moves on every period step, and before this the
+ * whole of the scroller's contents was walked again to repaint the two rows it
+ * left and reached. Taken out of the finished page, the scrub costs 1.2 ms more
+ * main-thread work a frame, and 1.8 on the comparison page. `position:
+ * relative` with no offset moves nothing and draws nothing: the rows paint
+ * where, and in the order, they did, under the sticky header and labels, which
+ * carry their own z-index.
+ */
+.grid tbody tr {
+  position: relative;
+}
+
+/* The row cursor. */
+.grid tr.cursor td,
+.grid tr.cursor th.label,
+.grid .label-column .label.cursor {
+  background: var(--cursor);
+}
+
+/* The selected column. */
+.grid .sel {
+  background: var(--selected);
+}
+
+.grid th.sel,
+.grid td.formula.sel {
+  color: var(--red-dark);
+}
+
+/*
+ * The operand outline: the cells the selected formula read, on the row it read
+ * them. Drawn with an inset shadow rather than a border so that it costs the
+ * cell no width and the column stays aligned.
+ */
+.grid td.operand {
+  box-shadow: inset 0 0 0 2px var(--red);
+}
+
+/*
+ * An outline that is not on the cursor's row is drawn in the darker red. The
+ * row it sits on already says which period was read; the weight says that the
+ * difference was meant, so a reader scanning a wide grid does not take a
+ * shifted outline for one that drifted.
+ */
+.grid td.operand[data-offset] {
+  box-shadow: inset 0 0 0 2px var(--red-dark);
+}
+
+/*
+ * A window's cells: every period an aggregation's read reached, outlined in
+ * the same red at half the weight, so a run of thirty outlined cells reads as
+ * one span rather than thirty separate reads.
+ */
+.grid td.operand[data-window] {
+  box-shadow: inset 0 0 0 1px var(--red);
+}
+
+/*
+ * The cell the proof panel's pointer is on. Filled rather than outlined, so it
+ * reads as a different gesture from the outline: the outline says the selected
+ * formula read this cell, the fill says your finger is on it right now.
+ */
+.grid td.hover {
+  background: var(--selected);
+  box-shadow: inset 0 0 0 2px var(--red-dark);
+}
+
+/*
+ * The runs of columns and rows outside the window: space, and nothing else.
+ * Height and line box are cleared as well as the padding, because a spacer
+ * row standing in for four pixels of scroll must be four pixels and not the
+ * height of a row of values.
+ */
+.grid td.skip,
+.grid tr.skip td {
+  padding: 0;
+  height: auto;
+  line-height: 0;
+  border-bottom: none;
+}
+
+/*
+ * A column the selected fold did not cover.
+ *
+ * Words rather than the mark a missing value wears, because the two are
+ * different statements: the mark says the file is silent, and this says the
+ * file was asked and there is no such number. Dimmed and set in the page's
+ * own face rather than the mono one, so a reader scanning a column of figures
+ * sees at a glance that this is prose and not a value — and not amber, which
+ * on this page means an admission. A fold declining to total a mortality rate
+ * admits nothing.
+ */
+.grid td.unfolded {
+  color: var(--ink-secondary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
+/*
+ * A fold with no timeline at all, said where the table would be. The same
+ * shape a refusal takes in a pane, because it is the same job — one sentence,
+ * at reading width, in place of the view — without being filed as a refusal.
+ */
+.grid.empty .says {
+  padding: 12px 16px;
+  margin: 0;
+  color: var(--ink-secondary);
+  max-width: 62ch;
+}
+
+/*
+ * The comparison's two marks, on a heading and in a cell.
+ *
+ * The chip's own outline and word come from `Changes.css`, which defines them
+ * once for the list, the grid and the cone — a reader who learns a mark in one
+ * place has to find the same mark in the others. What is here is only how a
+ * 132 px heading makes room for it: the name gives way first, because a name
+ * cut short is still a name a reader recognises and a mark cut short is not a
+ * mark at all. The heading stays a table cell: `table-layout: fixed` and the
+ * two sticky header rows are what keep a drawn cell under its own heading, and
+ * a heading that stopped being a cell would take that with it.
+ */
+.grid thead tr.names th .chip.mark {
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: baseline;
+}
+
+/*
+ * `before → after` in the selected column's cells.
+ *
+ * Dimmer and lighter than the value it stands in front of, so that a column of
+ * two numbers still reads as a column of answers with their histories beside
+ * them rather than as a column of pairs. It is on the selected column alone,
+ * so the grid's geometry is untouched everywhere else.
+ */
+.grid td.moved .before,
+.grid td.moved .arrow {
+  color: var(--ink-secondary);
+  font-weight: 400;
+}

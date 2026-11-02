@@ -6,6 +6,7 @@
 # ABOUTME: Covers to_monthly() column accessor and discount_factor() frame accessor
 """Tests for finance accessor methods (rate conversion, discounting)."""
 
+import polars as pl
 import pytest
 
 from gaspatchio import ActuarialFrame
@@ -263,6 +264,51 @@ class TestFrameDiscountFactor:
         assert result["disc_factors"][1][0] == pytest.approx(0.961538462, rel=1e-6)
         assert result["disc_factors"][2][0] == pytest.approx(0.943396226, rel=1e-6)
 
+    def test_a_misspelled_rate_column_is_refused_by_name(self) -> None:
+        """The refusal names the argument that was wrong and the column that exists.
+
+        Left to the engine, the same typo comes back as a resolved query
+        plan with ``unable to find column`` in it: which of the two names
+        was misspelled, and which parameter carried it, are the reader's
+        problem, and the nearest column is only offered when the engine's
+        own matcher happens to find one.
+        """
+        af = ActuarialFrame(
+            {
+                "policy_id": [1],
+                "rates": [[0.05, 0.06]],
+                "periods": [[1.0, 2.0]],
+            }
+        )
+
+        with pytest.raises(pl.exceptions.ColumnNotFoundError) as refusal:
+            af.finance.discount_factor(
+                rate_col="rate", periods_col="periods", output_col="disc_factors"
+            )
+
+        message = str(refusal.value)
+        assert "rate_col='rate'" in message
+        assert "'rates'" in message
+
+    def test_a_misspelled_periods_column_is_refused_by_name(self) -> None:
+        """Both input names are checked, each under the parameter that carried it."""
+        af = ActuarialFrame(
+            {
+                "policy_id": [1],
+                "rates": [[0.05, 0.06]],
+                "periods": [[1.0, 2.0]],
+            }
+        )
+
+        with pytest.raises(pl.exceptions.ColumnNotFoundError) as refusal:
+            af.finance.discount_factor(
+                rate_col="rates", periods_col="period", output_col="disc_factors"
+            )
+
+        message = str(refusal.value)
+        assert "periods_col='period'" in message
+        assert "'periods'" in message
+
 
 class TestCompound:
     """Tests for compound() growth factor calculation on columns."""
@@ -321,3 +367,63 @@ class TestCompound:
         assert factors[0] == pytest.approx(1.0, rel=1e-6)
         assert factors[1] == pytest.approx(1.004963, rel=1e-5)
         assert factors[2] == pytest.approx(1.02, rel=1e-6)
+
+
+class TestPresentValueByName:
+    """`af.finance.present_value` is frame-level, so a string names a column."""
+
+    @staticmethod
+    def _frame() -> ActuarialFrame:
+        return ActuarialFrame(
+            {
+                "policy_id": ["P001", "P002"],
+                "cashflow": [1000.0, 2000.0],
+                "rate": [0.05, 0.04],
+                "period": [1, 2],
+            }
+        )
+
+    def test_columns_named_by_string_discount_the_cash_flows(self) -> None:
+        """PV = CF / (1 + rate)^period, with the three columns named."""
+        af = self._frame()
+
+        af.pv = af.finance.present_value("cashflow", "rate", "period")
+
+        assert af.collect()["pv"].to_list() == pytest.approx(
+            [1000.0 / 1.05, 2000.0 / 1.04**2]
+        )
+
+    def test_naming_matches_passing_the_columns(self) -> None:
+        """The two spellings are the same calculation."""
+        by_name = self._frame()
+        by_name.pv = by_name.finance.present_value("cashflow", "rate", "period")
+        by_column = self._frame()
+        by_column.pv = by_column.finance.present_value(
+            by_column.cashflow, by_column.rate, by_column.period
+        )
+
+        assert by_name.collect()["pv"].to_list() == pytest.approx(
+            by_column.collect()["pv"].to_list()
+        )
+
+    @pytest.mark.parametrize(
+        ("args", "parameter", "typo"),
+        [
+            (("cashflo", "rate", "period"), "cashflow_col", "cashflo"),
+            (("cashflow", "rat", "period"), "rate_col", "rat"),
+            (("cashflow", "rate", "perio"), "period_col", "perio"),
+        ],
+    )
+    def test_a_missing_column_is_refused_at_the_call(
+        self, args: tuple[str, str, str], parameter: str, typo: str
+    ) -> None:
+        """A misspelled name is named, with the nearest column the frame holds."""
+        af = self._frame()
+
+        with pytest.raises(pl.exceptions.ColumnNotFoundError) as excinfo:
+            af.finance.present_value(*args)
+
+        message = str(excinfo.value)
+        assert parameter in message
+        assert typo in message
+        assert "Did you mean" in message

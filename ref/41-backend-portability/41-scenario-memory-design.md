@@ -4,11 +4,11 @@ Audience: senior actuary-engineer. Research / design only — no code changes in
 
 ## TL;DR
 
-`with_scenarios` is a mechanical cross-join — one helper, ~30 lines of work, and (importantly) it `.collect()`s the LazyFrame before joining (`bindings/python/gaspatchio_core/scenarios/_with_scenarios.py:126`). Streaming therefore cannot rescue it: by the time the join happens, the policy frame is already materialised. Even if it were lazy, the model body uses `cum_prod` and `previous_period` *inside list columns* (`bindings/python/gaspatchio_core/accessors/projection.py:338, 1199, 1421`) which Polars cannot stream — so the post-join intermediate sits in RAM as `(n_policies × n_scenarios)` rows of ~2 KB each. That is exactly what `ref/27-scenario-support/27-performance-and-scale.md:756–763` admits.
+`with_scenarios` is a mechanical cross-join — one helper, ~30 lines of work, and (importantly) it `.collect()`s the LazyFrame before joining (`bindings/python/gaspatchio/scenarios/_with_scenarios.py:126`). Streaming therefore cannot rescue it: by the time the join happens, the policy frame is already materialised. Even if it were lazy, the model body uses `cum_prod` and `previous_period` *inside list columns* (`bindings/python/gaspatchio/accessors/projection.py:338, 1199, 1421`) which Polars cannot stream — so the post-join intermediate sits in RAM as `(n_policies × n_scenarios)` rows of ~2 KB each. That is exactly what `ref/27-scenario-support/27-performance-and-scale.md:756–763` admits.
 
 For B/C use cases (CTE-style aggregates, no per-scenario per-policy detail required) the most memory-efficient pattern that fits today's stack is a **per-scenario streaming loop with online aggregation** — effectively `for_each_scenario(scenarios, model_fn, agg=…)` running the existing model code unchanged on a 1-scenario frame, with running aggregates incrementally updated. Memory is bounded by *one scenario's footprint*, not `n_scenarios × `that. (A) full-grid materialisation stays available as `for_each_scenario(..., return_full_grid=True)` or — preferred — as today's `with_scenarios` retained verbatim and documented as the break-glass path.
 
-This is **not** a fundamentally new architecture. `batch_scenarios` (`bindings/python/gaspatchio_core/scenarios/_batching.py:16`) already does the loop; what's missing is the aggregation contract that lets gaspatchio guarantee O(1) memory in `n_scenarios` rather than O(batch_size). The recommendation is to make that contract explicit and ergonomic, not to rewrite the kernel.
+This is **not** a fundamentally new architecture. `batch_scenarios` (`bindings/python/gaspatchio/scenarios/_batching.py:16`) already does the loop; what's missing is the aggregation contract that lets gaspatchio guarantee O(1) memory in `n_scenarios` rather than O(batch_size). The recommendation is to make that contract explicit and ergonomic, not to rewrite the kernel.
 
 ---
 
@@ -16,7 +16,7 @@ This is **not** a fundamentally new architecture. `batch_scenarios` (`bindings/p
 
 ### 1.1 What `with_scenarios` actually does
 
-`bindings/python/gaspatchio_core/scenarios/_with_scenarios.py:117–132`:
+`bindings/python/gaspatchio/scenarios/_with_scenarios.py:117–132`:
 
 ```python
 scenarios_df = pl.DataFrame({scenario_column: scenario_ids})
@@ -29,11 +29,11 @@ Three things to note:
 
 1. **It collects.** `af.collect()` is not optional — the cross-join is performed on a `pl.DataFrame`, not a `pl.LazyFrame`. So any streaming/lazy story upstream of `with_scenarios` is discarded at this line.
 2. **It returns an eager-backed `ActuarialFrame`.** Downstream `with_columns(...)` calls re-enter Polars' lazy path, but the seed is already a fully materialised `(n_policies × n_scenarios)`-row DataFrame.
-3. **It is stateless about scenario drivers.** `with_scenarios` only stamps an ID column. The actual scenario-dependent assumption lookup (e.g. fund returns by `scenario_id, t, fund_index`; discount-factor lists by `scenario_id`) is the *model's* job — see `tutorials/level-5-scenarios-typed/base/model.py:474–501` and `:725–751`.
+3. **It is stateless about scenario drivers.** `with_scenarios` only stamps an ID column. The actual scenario-dependent assumption lookup (e.g. fund returns by `scenario_id, t, fund_index`; discount-factor lists by `scenario_id`) is the *model's* job — see `tutorials/level-5-scenarios/base/model.py:474–501` and `:725–751`.
 
 ### 1.2 How the L5-typed VA model uses scenarios
 
-Two scenario-dependent surfaces in `tutorials/level-5-scenarios-typed/base/model.py`:
+Two scenario-dependent surfaces in `tutorials/level-5-scenarios/base/model.py`:
 
 - **Investment returns (per-period scalar lookup)**: `inv_returns_table.lookup(scenario_id=…, t=af.month, fund_index=…)` (lines 497–501). This is a row-wise lookup against a `(n_scenarios × n_periods × n_funds)` table — no list columns, scalar per row-period. Streaming-friendly in principle.
 - **Discount factors (per-scenario list)**: a 3-row mapping `{scenario_id → list[float64]}` is left-joined onto the frame (`disc_map`, lines 735–747); each row then carries one list of length `projection_months + 1`. This is the dominant per-row memory: at 240 periods × 8 B = ~2 KB per row just for discount factors, before any other list column.
@@ -44,11 +44,11 @@ The model also produces ~20 other list columns of length `projection_months` (se
 
 `grep -rn with_scenarios` (results consolidated):
 
-- `bindings/python/gaspatchio_core/__init__.py:40,87` — public re-export.
+- `bindings/python/gaspatchio/__init__.py:40,87` — public re-export.
 - `scenarios/__init__.py:10,44` — module export.
 - `scenarios/_batching.py:50–59` — `batch_scenarios` docstring shows the expected loop pattern (load, expand, run, append).
 - `tutorials/level-5-scenarios{-typed,}/base/run_scenarios.py` — tutorials.
-- `tutorials/level-5-scenarios-typed/stress/perf_scaling.py:192` — the stress harness; this is where the 10k×1200M reversal is documented (`perf_scaling.py:622–637`: "**typed memory REVERSES** at this scale … broadcasts three full 1201-element discount-factor lists … ≈ {n×1201×3×8/1e6} MB").
+- `tutorials/level-5-scenarios/stress/perf_scaling.py:192` — the stress harness; this is where the 10k×1200M reversal is documented (`perf_scaling.py:622–637`: "**typed memory REVERSES** at this scale … broadcasts three full 1201-element discount-factor lists … ≈ {n×1201×3×8/1e6} MB").
 - `evals/benchmarks/run_model_benchmarks.py:193,205` — benchmark harness.
 
 The `scenarios/` package itself is small: `with_scenarios`, `batch_scenarios`, `describe_scenarios`, `sensitivity_analysis`, plus the `Shock` family (`shocks.py`). Notably **there is no `for_each_scenario` helper today**, and no `partition_by`-based aggregator. `batch_scenarios` returns ID lists; the aggregation contract (and the `del result; gc.collect()` between batches) is left to the caller.
@@ -241,13 +241,13 @@ Either way, hedging-delta workflows (which legitimately need per-scenario per-po
 
 Small surface area. Order of work:
 
-1. New module `bindings/python/gaspatchio_core/scenarios/_for_each.py` — the loop.
-2. New module `bindings/python/gaspatchio_core/scenarios/_aggregators.py` — `Mean`, `RunningSum` (exact), `Quantile`/`CTE` (T-Digest from `crick` or pure-Python sketch; re-use existing if any in `accessors/finance`).
+1. New module `bindings/python/gaspatchio/scenarios/_for_each.py` — the loop.
+2. New module `bindings/python/gaspatchio/scenarios/_aggregators.py` — `Mean`, `RunningSum` (exact), `Quantile`/`CTE` (T-Digest from `crick` or pure-Python sketch; re-use existing if any in `accessors/finance`).
 3. Re-export from `scenarios/__init__.py`.
 4. Update L5-typed tutorial `run_scenarios.py` to demonstrate the new pattern alongside the existing one.
 5. Documentation: extend `27-performance-and-scale.md` with a "B/C path is now `for_each_scenario`" preamble.
 
-No Rust changes. No `ActuarialFrame` core changes. The model code in `tutorials/level-5-scenarios-typed/base/model.py` does not change.
+No Rust changes. No `ActuarialFrame` core changes. The model code in `tutorials/level-5-scenarios/base/model.py` does not change.
 
 ### 4.5 Migration story
 
@@ -296,12 +296,12 @@ Things I could not determine without prototyping or running the parallel agent's
 
 ## Cross-references
 
-- `bindings/python/gaspatchio_core/scenarios/_with_scenarios.py:117–132` — the cross-join, eager.
-- `bindings/python/gaspatchio_core/scenarios/_batching.py:16–79` — existing batching helper (caller-managed agg).
-- `bindings/python/gaspatchio_core/scenarios/__init__.py:6–45` — module surface.
-- `bindings/python/gaspatchio_core/tutorials/level-5-scenarios-typed/base/model.py:474–501, 725–751` — scenario surfaces in the L5 typed VA model.
-- `bindings/python/gaspatchio_core/tutorials/level-5-scenarios-typed/stress/perf_scaling.py:622–637` — measured 10k×1200M memory reversal under the broadcast pattern.
-- `bindings/python/gaspatchio_core/accessors/projection.py:338, 618, 1199, 1421` — `cum_prod`, `previous_period`, `shift` all run inside `list.eval`, i.e. row-independent.
-- `bindings/python/gaspatchio_core/frame/base.py:366–426` — `ActuarialFrame.collect` defaults to `engine="streaming"`.
+- `bindings/python/gaspatchio/scenarios/_with_scenarios.py:117–132` — the cross-join, eager.
+- `bindings/python/gaspatchio/scenarios/_batching.py:16–79` — existing batching helper (caller-managed agg).
+- `bindings/python/gaspatchio/scenarios/__init__.py:6–45` — module surface.
+- `bindings/python/gaspatchio/tutorials/level-5-scenarios/base/model.py:474–501, 725–751` — scenario surfaces in the L5 typed VA model.
+- `bindings/python/gaspatchio/tutorials/level-5-scenarios/stress/perf_scaling.py:622–637` — measured 10k×1200M memory reversal under the broadcast pattern.
+- `bindings/python/gaspatchio/accessors/projection.py:338, 618, 1199, 1421` — `cum_prod`, `previous_period`, `shift` all run inside `list.eval`, i.e. row-independent.
+- `bindings/python/gaspatchio/frame/base.py:366–426` — `ActuarialFrame.collect` defaults to `engine="streaming"`.
 - `ref/27-scenario-support/27-performance-and-scale.md:587–598, 628–680, 691–710, 754–763` — measured benchmarks, sink-then-stream pattern, streaming limitations for GMXB.
 - `ref/27-scenario-support/27-scenario-support-rfc.md:39–60` — "scenario-ready by default" design philosophy (the constraint that any new pattern must preserve).

@@ -4,7 +4,7 @@
 
 ## What this adds
 
-Replaces the simple aggregate mortality table from the typed base with a select/ultimate structure — the industry standard for life insurance pricing and reserving. Same actuarial logic as `level-3-mini-va/steps/02-select-mort/`, but using the `MortalityTable` typed input instead of manual `Table.lookup()` + `.clip()`.
+Replaces the simple aggregate mortality table from the typed base with a select/ultimate structure — the industry standard for life insurance pricing and reserving. Same actuarial logic as `level-3-mini-va/steps/02-select-mort/`, but using the `MortalityTable` typed input instead of a `Table.lookup()` over a duration you cap yourself.
 
 ## Why
 
@@ -20,11 +20,16 @@ Select/ultimate tables capture the "selection effect": newly underwritten policy
 
 ```python
 # Original: manual 3-step pattern
-af.duration_capped = af.duration.clip(upper_bound=SELECT_PERIOD_LEN - 1)  # cap manually
+# Cap duration for select period lookup
+af.duration_capped = (
+    when(af.duration > SELECT_PERIOD_LEN - 1)
+    .then(SELECT_PERIOD_LEN - 1)
+    .otherwise(af.duration)
+)
 af.base_mort_rate = mortality_select.lookup(
     table_id=af.mort_table_id,
     attained_age=af.age,
-    duration=af.duration_capped,                    # pass capped duration
+    duration=af.duration_capped,  # pass capped duration
 )
 ```
 
@@ -34,19 +39,19 @@ af.base_mort_rate = mortality_select.lookup(
 # Typed: MortalityTable carries the select_period metadata; .at() clamps internally
 af.base_mort_rate = mortality.at(
     age=af.age,
-    duration=af.duration,                           # no manual .clip() needed
-    table_id=af.mort_table_id,                      # extra dim flows through **other
+    duration=af.duration,  # no capped column needed
+    table_id=af.mort_table_id,  # extra dim flows through **other
 )
 ```
 
-The `select_period=24` argument to `MortalityTable` encodes the same rule as `.clip(upper_bound=24)` — both produce `min(duration, 24)`.
+The `select_period=24` argument to `MortalityTable` encodes the same rule as the untyped step's `when(duration > 24).then(24).otherwise(duration)` — both produce `min(duration, 24)`.
 
 ### Table construction: column renaming
 
 The parquet's age column is named `attained_age`, but `MortalityTable.at()` dispatches via the dimension key `"age"`. `DataDimension(column="attained_age", rename_to="age")` renames the column during Table construction so both the dimension key and the internal DataFrame column are `"age"`:
 
 ```python
-from gaspatchio.assumptions._dimensions import DataDimension
+from gaspatchio.assumptions import DataDimension
 
 mortality_select_raw = Table(
     name="mortality_select",
@@ -68,12 +73,17 @@ mortality = MortalityTable(
 
 ### Mortality scalars stay as raw Table
 
-`mortality_scalars` is a multiplier table (not mortality-shaped). It is not wrapped in `MortalityTable` — the manual `.clip(upper_bound=SCALAR_DURATION_CAP)` is preserved:
+`mortality_scalars` is a multiplier table (not mortality-shaped). It is not wrapped in `MortalityTable`, so the cap at `SCALAR_DURATION_CAP` stays written out in the model, exactly as the untyped step writes it:
 
 ```python
+af.scalar_duration_capped = (
+    when(af.duration > SCALAR_DURATION_CAP)
+    .then(SCALAR_DURATION_CAP)
+    .otherwise(af.duration)
+)
 af.mort_scalar = mortality_scalars.lookup(
     scalar_id=af.mort_scalar_id,
-    duration=af.duration.clip(upper_bound=SCALAR_DURATION_CAP),
+    duration=af.scalar_duration_capped,
 )
 ```
 
@@ -120,11 +130,11 @@ uv run gspio run-single-policy tutorial/level-3-mini-va-typed/steps/02-select-mo
 
 ## Implementation notes for MortalityTable users
 
-**Bug discovered and fixed during this step:** `MortalityTable._at_select_ultimate()` originally used `pl.when(duration > select_period)` for clamping. This fails when `duration` is a gaspatchio `ColumnProxy` (which returns a `ConditionExpression`, not a `pl.Expr`, from `>`), and also fails when duration is a list-typed column (post-timeline) because `pl.when` operates at the row level, not inside lists.
+**Bug discovered and fixed during this step:** the select and ultimate path of `MortalityTable.at()` originally used `pl.when(duration > select_period)` for clamping. This fails when `duration` is a gaspatchio `ColumnProxy` (which returns a `ConditionExpression`, not a `pl.Expr`, from `>`), and also fails when duration is a list-typed column (post-timeline) because `pl.when` operates at the row level, not inside lists.
 
-The fix uses `list_clip` (the Rust plugin backing `ColumnProxy.clip()`) for list-typed inputs, and `pl.Expr.clip()` for scalar inputs. Both paths are now covered and all 33 mortality unit tests pass.
+The fix clips inside each row for list-typed inputs, through `list.eval(element().clip(...))`, and uses `pl.Expr.clip()` directly for scalar inputs. Which of the two applies is decided on the duration column's own dtype, in the lowering, where the frame's schema is in reach; both paths are covered by the mortality unit tests. Both are the same `clip`, so a NaN duration comes back NaN either way — the `list_clip` kernel that used to serve the list side mapped it to the lower bound instead, and is no longer on this path. That kernel has since been aligned to the engine's own rule, so it answers NaN too, and agrees with `pl.Expr.clip` on bounds that cross.
 
-**Column naming requirement:** `MortalityTable._at_select_ultimate` calls `self.table.lookup(age=..., duration=..., **other)`. The underlying Table's dimension key must be `"age"` (not the parquet column name `"attained_age"`). Use `DataDimension(column="attained_age", rename_to="age")` to align them.
+**Column naming requirement:** `MortalityTable.at()` reads `self.table.lookup(age=..., duration=..., **other)`. The underlying Table's dimension key must be `"age"` (not the parquet column name `"attained_age"`). Use `DataDimension(column="attained_age", rename_to="age")` to align them.
 
 ## When a user asks about this
 
