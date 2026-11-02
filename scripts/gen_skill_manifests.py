@@ -74,6 +74,29 @@ def render_claude_plugin() -> str:
     })
 
 
+def render_codex_plugin() -> str:
+    """The Codex plugin manifest (skills/.codex-plugin/plugin.json).
+
+    Codex reads the Claude marketplace and installs this same skills/ payload,
+    but its loader neither honours ``"skills": "./"`` nor scans the plugin root:
+    it discovers only <root>/skills/<name>/ by default, or the directories named
+    explicitly in ``skills``. Without this manifest Codex installs the plugin and
+    loads zero skills. So it lists each skill directory, in registry order.
+    """
+    m = load_plugin()
+    return _dumps({
+        "name": m["name"],
+        "version": m["version"],
+        "description": m["description"],
+        "author": {"name": m["author_name"], "url": m["author_url"]},
+        "homepage": m["homepage"],
+        "repository": m["repository"],
+        "license": m["license"],
+        "keywords": m["keywords"],
+        "skills": [f"./{name}" for name in load_order()],
+    })
+
+
 def render_marketplace() -> str:
     """Self-hosted marketplace listing skills/ as the single plugin payload."""
     m = load_plugin()
@@ -203,6 +226,7 @@ def render_agents_md() -> str:
 
 ARTIFACTS = {
     REPO_ROOT / "skills" / ".claude-plugin" / "plugin.json": render_claude_plugin,
+    REPO_ROOT / "skills" / ".codex-plugin" / "plugin.json": render_codex_plugin,
     REPO_ROOT / ".claude-plugin" / "marketplace.json": render_marketplace,
     REPO_ROOT / ".cursor-plugin" / "plugin.json": render_cursor_plugin,
     REPO_ROOT / ".github" / "plugin" / "marketplace.json": render_copilot_marketplace,

@@ -97,7 +97,7 @@ def test_claude_plugin_root_is_the_skills_tree() -> None:
 
 def test_plugin_payload_carries_nothing_but_skills() -> None:
     """The payload root holds only skill dirs, the manifest, and the registry."""
-    allowed = {".claude-plugin", "skills.toml", *skill_dirs()}
+    allowed = {".claude-plugin", ".codex-plugin", "skills.toml", *skill_dirs()}
     assert {p.name for p in SKILLS_DIR.iterdir()} <= allowed
 
 
@@ -133,6 +133,23 @@ def test_cursor_manifest_points_at_one_tree() -> None:
     # no parent-traversal ../skills paths (one canonical tree, pointer-style)
     skills = data["skills"]
     assert not any(str(s).startswith("../") for s in (skills if isinstance(skills, list) else []))
+
+
+def test_codex_manifest_lists_every_skill_dir() -> None:
+    """Codex ignores "./" at the plugin root; it loads only listed skill dirs.
+
+    Verified with codex-cli 0.153.4: the Claude manifest's "./" installs the
+    plugin but surfaces zero skills; an explicit list surfaces all of them.
+    """
+    gen = _load_generator()
+    data = json.loads(gen.render_codex_plugin())
+    assert data["skills"] == [f"./{name}" for name in registry_order()]
+    for rel in data["skills"]:
+        assert (SKILLS_DIR / rel / "SKILL.md").is_file()
+    claude = json.loads(gen.render_claude_plugin())
+    assert {k: v for k, v in data.items() if k != "skills"} == {
+        k: v for k, v in claude.items() if k != "skills"
+    }
 
 
 def test_copilot_marketplace_generated() -> None:
