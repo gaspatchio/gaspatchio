@@ -385,3 +385,49 @@ class TestDocsAnswerFallback:
 
         assert result.exit_code == 1
         assert "Search still works" not in result.stderr
+
+
+class TestDocsVersion:
+    """gspio docs searches the docs of the installed gaspatchio, or of --docs-version."""
+
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
+    def test_docs_version_is_passed_to_search_and_answer(self, mock_client_class):
+        mock_client = MagicMock()
+        mock_client.search_docs.return_value = DocsSearchResponse(
+            results=[], query="q", count=0, search_type="hybrid", took_ms=1.0
+        )
+        mock_client.answer_docs.return_value = DocsAnswerResponse(
+            answer="a", sources=[], query="q", model="m", tokens_used=1, took_ms=1.0
+        )
+        mock_client_class.return_value = mock_client
+
+        runner.invoke(app, ["docs", "q", "--docs-version", "0.9.0"])
+        runner.invoke(app, ["docs", "q", "--answer", "--docs-version", "0.9.0"])
+
+        assert mock_client.search_docs.call_args.kwargs["version"] == "0.9.0"
+        assert mock_client.answer_docs.call_args.kwargs["version"] == "0.9.0"
+
+    @patch("gaspatchio.cli.KnowledgeAPIClient")
+    def test_version_served_is_in_the_json_and_a_substitute_is_said(
+        self, mock_client_class
+    ):
+        note = "No docs index is published for gaspatchio 1.0.1; serving 1.0.0."
+        mock_client = MagicMock()
+        mock_client.search_docs.return_value = DocsSearchResponse(
+            results=[],
+            query="q",
+            count=0,
+            search_type="hybrid",
+            took_ms=1.0,
+            version="1.0.0",
+            version_note=note,
+        )
+        mock_client_class.return_value = mock_client
+
+        result = runner.invoke(app, ["docs", "q"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["version"] == "1.0.0"
+        assert output["version_note"] == note
+        assert "serving 1.0.0" in result.stderr
