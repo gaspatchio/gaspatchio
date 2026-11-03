@@ -73,8 +73,32 @@ def knowledge_filters(
 _DOCS_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 
 
+def _docs_payload(
+    query: str,
+    limit: int,
+    search_type: str,
+    content_type: list[str] | None,
+    version: str | None,
+) -> dict[str, typing.Any]:
+    """Build the request body a docs search and a docs answer share.
+
+    ``content_type`` is sent only when given, and the docs version only when
+    ``docs_version`` names one.
+    """
+    payload: dict[str, typing.Any] = {
+        "query": query,
+        "limit": limit,
+        "search_type": search_type,
+    }
+    if content_type is not None:
+        payload["content_type"] = content_type
+    if (wanted := docs_version(version)) is not None:
+        payload["version"] = wanted
+    return payload
+
+
 def docs_version(version: str | None = None) -> str | None:
-    """The gaspatchio version whose docs a request asks for.
+    """Return the gaspatchio version whose docs a request asks for.
 
     ``version`` when given, else the installed gaspatchio's version, so an
     install is answered with the docs for the API it has. ``None`` when that
@@ -232,16 +256,7 @@ class KnowledgeAPIClient:
             APIConnectionError: If the API is unavailable.
 
         """
-        payload: dict[str, typing.Any] = {
-            "query": query,
-            "limit": limit,
-            "search_type": search_type,
-        }
-        if content_type is not None:
-            payload["content_type"] = content_type
-        if (wanted := docs_version(version)) is not None:
-            payload["version"] = wanted
-
+        payload = _docs_payload(query, limit, search_type, content_type, version)
         data = self._post("/api/v1/docs/search", payload)
         return DocsSearchResponse.model_validate(data)
 
@@ -271,16 +286,7 @@ class KnowledgeAPIClient:
             APIConnectionError: If the API is unavailable.
 
         """
-        payload: dict[str, typing.Any] = {
-            "query": query,
-            "limit": limit,
-            "search_type": search_type,
-        }
-        if content_type is not None:
-            payload["content_type"] = content_type
-        if (wanted := docs_version(version)) is not None:
-            payload["version"] = wanted
-
+        payload = _docs_payload(query, limit, search_type, content_type, version)
         data = self._post("/api/v1/docs/answer", payload)
         return DocsAnswerResponse.model_validate(data)
 

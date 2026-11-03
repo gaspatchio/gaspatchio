@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio-viewer"
-version = "0.1.0rc1"
+version = "0.1.0rc2"
 description = "The viewer's built page, for gspio calc-graph --html"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]

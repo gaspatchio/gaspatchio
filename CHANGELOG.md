@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0rc2] — 2026-11-03 — Release candidate 2
+
+The second release candidate for 1.0. Everything under 1.0.0rc1 below
+still applies; this candidate adds:
+
+- `gspio docs` searches the documentation for the gaspatchio that is
+  installed: a search or answer request sends the installed version, and
+  the service answers from that version's documentation, or names the
+  nearest one it holds. `gspio docs --docs-version X` searches another
+  version's documentation.
+- The Codex plugin install loads the gaspatchio skills: the skills
+  payload carries a Codex manifest that names each skill directory.
+
 ## [1.0.0rc1] — 2026-11-02 — A model shows its work (release candidate)
 
 gaspatchio 1.0 is the release in which a model shows its work. A model can be

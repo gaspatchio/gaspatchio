@@ -35,7 +35,7 @@ from importlib.resources import files
 
 __all__ = ["__version__", "bundle", "notices", "render", "styles"]
 
-__version__ = "0.1.0rc1"
+__version__ = "0.1.0rc2"
 
 
 def _asset(name: str) -> str:

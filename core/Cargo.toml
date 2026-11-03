@@ -1,6 +1,6 @@
 [package]
 name = "gaspatchio_core_lib"
-version = "1.0.0-rc.1"
+version = "1.0.0-rc.2"
 edition = "2021"
 license = "Apache-2.0"
 # `ref` is a symlink to the repository's design-reference tree. Cargo follows

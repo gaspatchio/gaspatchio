@@ -148,7 +148,7 @@
     "jax": {
       "schema": "gaspatchio-engine-coverage/v0-preview.1",
       "engine": "jax",
-      "engine_version": "0.1.0rc1",
+      "engine_version": "0.1.0rc2",
       "operations": [
         {
           "identifier": "add",

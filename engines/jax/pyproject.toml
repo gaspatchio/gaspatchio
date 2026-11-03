@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio-jax"
-version = "0.1.0rc1"
+version = "0.1.0rc2"
 description = "A JAX engine over the gaspatchio graph artifact's executable profile"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
@@ -35,7 +35,7 @@ license-files = ["LICENSES/Apache-2.0.txt"]
 # the rest are what the engine imports itself. The pin moves with the core's
 # version, and bindings/python/tests/test_distributions.py fails if they part.
 dependencies = [
-    "gaspatchio==1.0.0rc1",
+    "gaspatchio==1.0.0rc2",
     "jax>=0.4.38",
     "jaxlib>=0.4.38",
     "numpy>=1.24.0,<2.6",

@@ -340,7 +340,7 @@ wheels = [
 
 [[package]]
 name = "gaspatchio"
-version = "1.0.0rc1"
+version = "1.0.0rc2"
 source = { editable = "../../bindings/python" }
 dependencies = [
     { name = "altair" },
@@ -434,7 +434,7 @@ evals = [{ name = "pydantic-ai", specifier = ">=0.2.16" }]
 
 [[package]]
 name = "gaspatchio-jax"
-version = "0.1.0rc1"
+version = "0.1.0rc2"
 source = { editable = "." }
 dependencies = [
     { name = "gaspatchio" },

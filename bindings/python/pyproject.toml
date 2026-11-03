@@ -1,6 +1,6 @@
 [project]
 name = "gaspatchio"
-version = "1.0.0rc1"
+version = "1.0.0rc2"
 description = "Simple, fast and best served cold"
 readme = "README.md"
 authors = [{ name = "mrmattwright", email = "matt@opioinc.com" }]
@@ -133,8 +133,8 @@ evals = [
 ]
 
 [project.optional-dependencies]
-jax = ["gaspatchio-jax==0.1.0rc1"]
-viewer = ["gaspatchio-viewer==0.1.0rc1"]
+jax = ["gaspatchio-jax==0.1.0rc2"]
+viewer = ["gaspatchio-viewer==0.1.0rc2"]
 pandas = ["polars[rt64]==1.42.1"]
 numpy = ["polars[rt64]==1.42.1"]
 pyarrow = ["polars[rt64]==1.42.1"]
@@ -335,7 +335,7 @@ exclude = [
 # versions; the lock resolves those names from the two projects in this
 # repository, so it locks before either is on the index and always locks what
 # the checkout holds. uv alone reads this table -- the built wheel's metadata
-# still says gaspatchio-jax==0.1.0rc1 and gaspatchio-viewer==0.1.0rc1, which is what
+# still says gaspatchio-jax==0.1.0rc2 and gaspatchio-viewer==0.1.0rc2, which is what
 # an installer outside this repo sees.
 gaspatchio-jax = { path = "../../engines/jax" }
 gaspatchio-viewer = { path = "../../viewer/python" }

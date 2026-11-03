@@ -38,7 +38,7 @@ from .engine import JaxEngine
 
 __all__ = ["JaxEngine", "__version__"]
 
-__version__ = "0.1.0rc1"
+__version__ = "0.1.0rc2"
 
 # The flag, and the reading back of it. Two steps rather than one, because a
 # jax configured elsewhere in the process can refuse the update quietly, and a

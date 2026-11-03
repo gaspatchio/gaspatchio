@@ -4,12 +4,12 @@
   "fingerprint_algorithm": "gspv0-preview-3",
   "producer": {
     "name": "gaspatchio",
-    "version": "1.0.0rc1",
+    "version": "1.0.0rc2",
     "versions": {
       "omitted": "withheld"
     }
   },
-  "created_at": "2026-11-02T03:35:58Z",
+  "created_at": "2026-11-03T06:35:45Z",
   "model": {
     "label": null,
     "source_path": "model.py",
@@ -866,5 +866,5 @@
     }
   ],
   "facets": {},
-  "document_digest": "sha256:160a8e0514adcbe79e74497d41f23428e1fde920468fd4b9776b4cda276229fc"
+  "document_digest": "sha256:d7fbabb7986f4de0203dcb130fb132aa4184df64b861b0a799161b3cbd1c483f"
 }
