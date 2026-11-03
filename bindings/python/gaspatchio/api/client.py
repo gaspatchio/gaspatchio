@@ -7,10 +7,13 @@
 """HTTP client for Gaspatchio knowledge API."""
 
 import os
+import re
 import typing
 
 import httpx
 from loguru import logger
+
+from gaspatchio._version import package_version
 
 from .models import (
     DocsAnswerResponse,
@@ -62,6 +65,38 @@ def knowledge_filters(
     if doc_type is not None:
         filters["doc_type"] = doc_type.lower()
     return filters
+
+
+# The shape of a version the docs index can be asked for. Anything else -- an
+# uninstalled checkout's "unknown", a local build tag with a space -- is left
+# out of the request, and the server answers with its newest release's docs.
+_DOCS_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
+
+
+def docs_version(version: str | None = None) -> str | None:
+    """The gaspatchio version whose docs a request asks for.
+
+    ``version`` when given, else the installed gaspatchio's version, so an
+    install is answered with the docs for the API it has. ``None`` when that
+    is not a version the docs index could hold.
+
+    Args:
+        version: A version to ask for instead of the installed one.
+
+    Returns:
+        The version to send, or ``None`` to send none.
+
+    Examples:
+        >>> docs_version("0.9.0")
+        '0.9.0'
+        >>> docs_version("unknown") is None
+        True
+
+    """
+    wanted = version if version is not None else package_version()
+    if wanted == "unknown" or not _DOCS_VERSION.match(wanted):
+        return None
+    return wanted
 
 
 class KnowledgeAPIClient:
@@ -177,6 +212,7 @@ class KnowledgeAPIClient:
         limit: int = 10,
         search_type: str = "hybrid",
         content_type: list[str] | None = None,
+        version: str | None = None,
     ) -> DocsSearchResponse:
         """Search Gaspatchio framework documentation.
 
@@ -185,6 +221,9 @@ class KnowledgeAPIClient:
             limit: Maximum number of results to return.
             search_type: Search method - "hybrid", "semantic", or "keyword".
             content_type: Filter by content types (e.g., ["code", "docstring"]).
+            version: Gaspatchio version whose docs to search; the installed
+                version by default. The response's ``version`` says which
+                docs were searched, and ``version_note`` why when they differ.
 
         Returns:
             DocsSearchResponse with search results.
@@ -200,6 +239,8 @@ class KnowledgeAPIClient:
         }
         if content_type is not None:
             payload["content_type"] = content_type
+        if (wanted := docs_version(version)) is not None:
+            payload["version"] = wanted
 
         data = self._post("/api/v1/docs/search", payload)
         return DocsSearchResponse.model_validate(data)
@@ -211,6 +252,7 @@ class KnowledgeAPIClient:
         limit: int = 5,
         search_type: str = "hybrid",
         content_type: list[str] | None = None,
+        version: str | None = None,
     ) -> DocsAnswerResponse:
         """Get a generated answer from Gaspatchio documentation.
 
@@ -219,6 +261,8 @@ class KnowledgeAPIClient:
             limit: Number of sources to use for generation.
             search_type: Search method - "hybrid", "semantic", or "keyword".
             content_type: Filter by content types (e.g., ["code", "docstring"]).
+            version: Gaspatchio version whose docs to draw on, as for
+                ``search_docs``.
 
         Returns:
             DocsAnswerResponse with generated answer and sources.
@@ -234,6 +278,8 @@ class KnowledgeAPIClient:
         }
         if content_type is not None:
             payload["content_type"] = content_type
+        if (wanted := docs_version(version)) is not None:
+            payload["version"] = wanted
 
         data = self._post("/api/v1/docs/answer", payload)
         return DocsAnswerResponse.model_validate(data)

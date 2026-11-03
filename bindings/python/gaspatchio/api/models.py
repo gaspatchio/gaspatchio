@@ -53,6 +53,10 @@ class DocsSearchResponse(BaseModel):
     deduplicated: int = 0
     # Set when these results stand in for a failed --answer request (#119).
     note: str | None = None
+    # The gaspatchio version whose docs were searched, and why when it is not
+    # the one asked for. None from a server that keeps one index for all.
+    version: str | None = None
+    version_note: str | None = None
 
 
 class KnowledgeSearchResponse(BaseModel):
@@ -79,6 +83,9 @@ class DocsAnswerResponse(BaseModel):
     model: str
     tokens_used: int
     took_ms: float
+    # As on DocsSearchResponse: the docs version the sources came from.
+    version: str | None = None
+    version_note: str | None = None
 
 
 class KnowledgeAnswerResponse(BaseModel):

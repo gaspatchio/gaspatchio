@@ -4817,6 +4817,23 @@ _FullTexts = Annotated[
 ]
 
 
+def _version_kwargs(docs_version: str | None) -> dict[str, str]:
+    """``version=`` for the client only when --docs-version was given.
+
+    Left out, the client asks for the installed gaspatchio's docs itself.
+    """
+    return {} if docs_version is None else {"version": docs_version}
+
+
+def _say_version_note(note: str | None) -> None:
+    """Say on stderr when the docs searched are not the version asked for.
+
+    The JSON carries the same note for a reader of stdout.
+    """
+    if note:
+        err_console.print(f"[yellow]{escape(note)}[/yellow]")
+
+
 def _print_search(
     search: postprocess.SearchResponse,
     query: str,
@@ -4911,8 +4928,21 @@ def docs(
     ] = None,
     max_chars: _MaxChars = 1500,
     full: _FullTexts = False,
+    docs_version: Annotated[
+        str | None,
+        typer.Option(
+            "--docs-version",
+            help="Search the docs of this gaspatchio version instead of the "
+            "installed one, e.g. 0.9.0. The JSON's 'version' says which docs "
+            "were searched.",
+            rich_help_panel="Filters",
+        ),
+    ] = None,
 ) -> None:
     """Search Gaspatchio framework documentation.
+
+    Searches the docs for the gaspatchio installed here, so an answer names
+    the API this install has; --docs-version asks for another version's.
 
     [bold cyan]SEARCH STRATEGY:[/bold cyan]
     Run multiple targeted searches rather than one broad query.
@@ -4965,6 +4995,7 @@ def docs(
                     limit=limit,
                     search_type=search_type,
                     content_type=content_type,
+                    **_version_kwargs(docs_version),
                 )
             except APIConnectionError as e:
                 # A server error on /answer means the synthesis path is down,
@@ -4974,6 +5005,7 @@ def docs(
                     raise
                 fallback_status = e.status_code
             else:
+                _say_version_note(result.version_note)
                 print(result.model_dump_json(indent=2))
                 return
         search = client.search_docs(
@@ -4981,7 +5013,9 @@ def docs(
             limit=limit,
             search_type=search_type,
             content_type=content_type,
+            **_version_kwargs(docs_version),
         )
+        _say_version_note(search.version_note)
         _print_search(
             search,
             query,
