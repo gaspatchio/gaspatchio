@@ -9,7 +9,8 @@ used in TRACE-level logs; ``apply(ir)`` returns a transformed IR. Passes
 are pure functions over IRs (no shared mutable state); rerun-friendly.
 
 Pass chain:
-  Validate           — per-Op verify(); state/point consistency
+  Validate           — per-Op verify(); state/point consistency; a
+                       state opened at an expression is refused
   ResolveStateRefs   — compile-time check that every StateRef points
                        at a declared state and a declared point
   FoldConstants      — pass-through; Polars's optimiser folds eagerly
@@ -20,6 +21,7 @@ Pass chain:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Protocol
 
@@ -191,6 +193,9 @@ class Validate:
         _verify_label_characters(ir)
         if ir.track_increments:
             _verify_unique_increment_labels(ir)
+        names, points = set(state_names), set(ir.points)
+        for state in ir.states:
+            _verify_opening_value(state.name, state.init, names, points)
         return ir
 
 
@@ -381,6 +386,135 @@ def _single_column_name(expr: pl.Expr, op_name: str, field_name: str) -> str:
         f"machine would run on a number the model never asked for. {move}"
     )
     raise NotImplementedError(msg)
+
+
+def _verify_opening_value(
+    state: str, init: object, state_names: set[str], point_names: set[str]
+) -> None:
+    """Refuse a state opened at an expression, naming the move.
+
+    A compiled machine is identified by what it reads, and the record reads a
+    state's opening value through the classifier: a column, a declared
+    ``state@point``, or a literal is stated as what it is. Anything else
+    could only be recorded as an engine's display text, which drops
+    arguments -- ``.round(2)`` and ``.round(0)`` print alike -- so two
+    machines shared one identity and, in one process, the second compiled
+    ran the first's numbers. A number, a literal of one value, and a bare
+    column -- aliased or not -- open as they always have. A Series literal
+    prints as the word ``Series``, without its values, so it is refused too.
+    """
+    from gaspatchio._semantic.ir import EngineNative  # noqa: PLC0415
+    from gaspatchio.frame.lowering.rules.rollforward import (  # noqa: PLC0415 — rules load lazily
+        classify_operand_expression,
+    )
+
+    if not isinstance(init, pl.Expr):
+        return
+    bare = init.meta.undo_aliases()
+    if init.meta.is_literal(allow_aliasing=True):
+        if not _literal_is_one_value(bare):
+            raise NotImplementedError(_opening_series_refusal(state))
+        return
+    if isinstance(
+        classify_operand_expression(bare, state_names, point_names), EngineNative
+    ):
+        raise NotImplementedError(_opening_expression_refusal(state, init))
+
+
+def _literal_is_one_value(literal: pl.Expr) -> bool:
+    """Return whether a literal holds one plain value its display text states."""
+    if str(literal) == "Series":
+        return False
+    try:
+        held = pl.select(literal).to_series()
+    except Exception:  # noqa: BLE001 -- a literal holding no value states none
+        return False
+    return len(held) == 1 and not held.dtype.is_nested()
+
+
+def _opening_series_refusal(state: str) -> str:
+    """Return the refusal for a state opened at a Series or nested literal."""
+    return (
+        f"The opening value of state {state!r} is a literal holding a Series "
+        "or a list, which a compiled rollforward records without its values, "
+        "so two different openings would share one identity and one would run "
+        "the other's numbers. Open the state at one number -- "
+        f"states={{{state!r}: 1000.0}} -- or at a column of the frame holding "
+        f'its value for each policy -- states={{{state!r}: af["<column>"]}}.'
+    )
+
+
+def _constant(init: pl.Expr) -> object:
+    """Return the one value an expression reading no column comes to, else None.
+
+    Reading no column is not the same as not reading the frame: ``pl.len()``
+    is the row count. So the expression is worked out over frames of one and
+    two rows, and a value is returned only where both give the same single
+    value -- one that does not depend on the frame it would run over.
+    """
+    try:
+        taken = [
+            pl.DataFrame({"_": [0.0] * rows}).select(init.alias("_"))["_"].to_list()
+            for rows in (1, 2)
+        ]
+    except Exception:  # noqa: BLE001 -- no value, so no number to name
+        return None
+    values = {repr(value) for one in taken for value in one}
+    return taken[0][0] if len(values) == 1 and all(taken) else None
+
+
+def _opening_expression_refusal(state: str, init: pl.Expr) -> str:
+    """Return the refusal for a state opened at an expression, with the move.
+
+    An expression reading no column comes to one value for every policy, so
+    where that value is a finite number the move is to write the number. An
+    expression reading a running balance cannot be worked out beforehand, so
+    its move is to open at a column or a number; anything else is assigned to
+    a column first, spelled so the move can be written as given -- a name
+    starting with an underscore is no attribute of the frame, so its column
+    is bracketed.
+    """
+    roots = init.meta.root_names()
+    balances = [root for root in roots if RESERVED_LABEL_CHARACTER in root]
+    name = f"{state}_open"
+    column = (
+        f"af.{name}"
+        if name.isidentifier() and not name.startswith("_")
+        else f'af["{name}"]'
+    )
+    number = None if roots else _constant(init)
+    if balances:
+        named = ", ".join(repr(balance) for balance in balances)
+        being = "is a running balance" if len(balances) == 1 else "are running balances"
+        move = (
+            f"{named} {being} the machine computes, with no column until it "
+            "has run, so a state can open neither at it nor at arithmetic over "
+            "it. Open the state at one column of the frame or at one number -- "
+            f'states={{{state!r}: af["<column>"]}}.'
+        )
+    elif (
+        isinstance(number, (int, float))
+        and not isinstance(number, bool)
+        and math.isfinite(number)
+    ):
+        move = (
+            f"It reads no column and comes to {float(number)!r} for every "
+            f"policy, so write that number: states={{{state!r}: {float(number)!r}}}."
+        )
+    else:
+        move = (
+            f"Assign it to a column first -- {column} = <the expression> -- "
+            f"and open the state at that column: states={{{state!r}: {column}}}."
+        )
+    return (
+        f"The opening value of state {state!r} is the expression "
+        f"{str(init)!r}, and a compiled rollforward opens each state at one "
+        "column of the frame or at one number. A compiled machine is "
+        "identified by what it reads, and an expression can only be recorded "
+        "as its display text, which drops arguments -- .round(2) and "
+        ".round(0) print alike -- so two different openings would share one "
+        f"identity and one would run the other's numbers. {move}"
+    )
 
 
 def _running_balance_move(balances: list[str]) -> str:

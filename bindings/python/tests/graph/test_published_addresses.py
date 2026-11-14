@@ -28,7 +28,6 @@ from pathlib import Path
 from typing import Any, Final
 
 import jsonschema
-import polars as pl
 import pytest
 from referencing import Registry, Resource
 
@@ -186,9 +185,9 @@ def _schema_for(
 def _machine_model(*, boundary: bool) -> ActuarialFrame:
     """Return a model that escalated to a state machine, and every facet with it.
 
-    A fund opening at an expression the tree has no node for, grown, then
-    rounded -- a structural step, so a null label -- and, where asked, stopped
-    by a contract boundary.
+    A fund opening at a loaded premium worked out as a column first, grown,
+    then rounded -- a structural step, so a null label -- and, where asked,
+    stopped by a contract boundary.
     """
     periods = 12
     frame = ActuarialFrame(
@@ -201,8 +200,9 @@ def _machine_model(*, boundary: bool) -> ActuarialFrame:
     ).projection.set(
         start_date=datetime.date(2025, 1, 31), n_periods=periods, frequency="monthly"
     )
+    frame.av_open = frame.av_init * frame.load
     builder = frame.projection.rollforward(
-        states={"fund_value": pl.col("av_init") * pl.col("load")},
+        states={"fund_value": frame.av_open},
         lapse_when_all_non_positive=("fund_value",),
         contract_boundary=frame["surrendered"] if boundary else None,
     )
