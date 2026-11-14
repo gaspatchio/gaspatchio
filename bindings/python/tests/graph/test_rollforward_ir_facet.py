@@ -113,12 +113,10 @@ def _the_loaded_opening_value_pattern(
 ) -> tuple[ActuarialFrame, dict[str, Any]]:
     """Return a fund opening at a loaded premium and stopping at surrender.
 
-    Every expression an operation takes has to be a bare column reference,
-    and so does the contract boundary -- both reach the compiler's one
-    single-column check and it refuses anything else -- so a state's opening
-    value is the only place a machine carries an expression the tree did not
-    build. This one does, and it stops at a boundary that is a column like
-    any other.
+    The loaded premium is arithmetic over two columns, and a state opens at
+    one column or one number, so it is worked out as a column of the frame
+    first and the state opens at that column. It stops at a boundary that is
+    a column like any other.
 
     ``batch_axes`` is a parameter because ``canonical_form()`` folds a field
     left at its engine default out of the identity, and this is the one such
@@ -136,8 +134,9 @@ def _the_loaded_opening_value_pattern(
         }
     )
     frame = _timeline(frame)
+    frame.av_open = frame.av_init * frame.load
     builder = frame.projection.rollforward(
-        states={"fund_value": pl.col("av_init") * pl.col("load")},
+        states={"fund_value": frame.av_open},
         lapse_when_all_non_positive=("fund_value",),
         contract_boundary=frame["surrendered"],
         batch_axes=batch_axes,
@@ -330,33 +329,27 @@ def test_a_state_carries_the_value_it_opens_from() -> None:
     ]
 
 
-def test_an_opening_value_the_tree_did_not_build_says_so() -> None:
-    """The one expression a machine carries whole travels as what it is.
+def test_an_opening_value_worked_out_first_travels_as_its_column() -> None:
+    """A loaded premium opens the fund as the column it was worked out into.
 
-    The compiler refuses a compound expression everywhere else, so no
-    increment carries one and the opening value is the only place this node
-    type reaches a machine at all. The record says the text is one engine's,
-    carries the calculation itself, and names the columns it declares it
-    reads, rather than passing any of it off as a column reference.
+    The arithmetic is on that column's own line, where the record states it
+    in the tree's terms; the machine reads one column, and says so.
     """
     _, compilation = _the_loaded_opening_value_pattern()
     (fund,) = compilation["states"]
 
-    assert fund["init"]["op"] == "engine_native"
-    assert fund["init"]["engine"] == "polars"
-    assert fund["init"]["text"] == '[(col("av_init")) * (col("load"))]'
-    assert fund["init"]["deps"] == ["av_init", "load"]
+    assert fund["init"] == {"op": "col", "name": "av_open"}
 
 
-def test_an_expression_the_tree_did_not_build_reaches_only_the_opening_value() -> None:
-    """An operation and the contract boundary are refused at the same check.
+def test_an_expression_the_tree_did_not_build_reaches_no_machine() -> None:
+    """An opening value, an operation and the boundary are all refused.
 
-    What makes the opening value the *only* place: an operation's expression
-    and the stopping test both go through the compiler's single-column
-    check, and it refuses a compound one from either, naming which field it
-    was. So "no increment carries an engine-native node, and no boundary
-    does either" is a property of the compiler rather than a reading of the
-    two machines above.
+    An operation's expression and the stopping test go through the
+    compiler's single-column check, and an opening value through the
+    classifier the record reads it with; each refuses a compound expression,
+    naming where it was. So "no part of a machine carries an engine-native
+    node" is a property of the compiler rather than a reading of the
+    machines above.
     """
     frame = ActuarialFrame(
         {
@@ -368,6 +361,15 @@ def test_an_expression_the_tree_did_not_build_reaches_only_the_opening_value() -
         }
     )
     frame = _timeline(frame)
+
+    at_the_opening = frame.projection.rollforward(
+        states={"fund_value": pl.col("av_init") * pl.col("load")}
+    )
+    at_the_opening["fund_value"].grow(frame["fund_return"], label="growth")
+    with pytest.raises(
+        NotImplementedError, match=r"opening value of state 'fund_value'"
+    ):
+        compile_rollforward(at_the_opening)
 
     on_an_operation = frame.projection.rollforward(
         states={"fund_value": frame["av_init"]}

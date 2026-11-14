@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+**Fixed**
+
+- `compile_rollforward` refuses a state opened at an expression
+  (`states={"av": pl.col("av_init").round(2)}`), naming the state and the
+  move: assign the expression to a column and open the state there. Such an
+  opening was recorded through its display text, which drops arguments, so
+  `round(2)` and `round(0)` openings shared one fingerprint, and in one
+  process the second one compiled silently ran the first one's numbers
+  (#169). A literal holding a Series is refused for the same reason: it is
+  recorded as the word `Series`, without its values.
+  - A state opened at a column (`af["av_init"]`, `pl.col("av_init")`, or
+    either with an alias) or at one number compiles as before, with the
+    same fingerprint.
+  - Any other wrapping of a column is now refused, a cast included
+    (`pl.col("av_init").cast(pl.Float64)`): work it out as a column first.
+
 ## [1.0.0rc2] — 2026-11-03 — Release candidate 2
 
 The second release candidate for 1.0. Everything under 1.0.0rc1 below
