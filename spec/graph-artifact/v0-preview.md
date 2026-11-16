@@ -1612,7 +1612,10 @@ The emission rules:
   it → `INDIRECT` / `WINDOW`: section 11.1.32 takes only that list's length, so its values
   reach no number, and the read is still recorded because the length is the result's;
 - a lookup key, or a join key → `INDIRECT` / `JOIN`;
-- a running state read by the compilation that owns it → `DIRECT` / `TRANSFORMATION`.
+- a running state read by the compilation that owns it → `DIRECT` / `TRANSFORMATION`;
+- a column a compilation's contract-boundary mask reads (§16) → `INDIRECT` / `CONDITIONAL`:
+  the mask is the test that decides whether a period runs or holds zero, and its value
+  reaches no balance. A column that is also an operation's operand keeps the stronger claim.
 
 These contexts nest and a repeated read still produces one edge. An indirect context absorbs
 the reads nested inside it: arithmetic used to compute a `list.get` position remains
@@ -1676,9 +1679,9 @@ names. Borrowing the outer shape as well would be borrowing a shape that does no
 A `transformations` array holds one entry per way the read was made. This specification's
 reference implementation writes one entry for a read made one way, and for a name read more
 than once in one formula it writes the single strongest claim its reads support — except
-that a direct read made through two windows (below) writes one entry per window, the
-strongest narrowing first, so a consumer that reads only the first entry reads the edge's
-own narrowing. A consumer must not read the count as a promise. A node that reads nothing
+that a direct read made through two windows (below) writes one entry per window, and a value
+read at two distances (below) one entry per distance, the strongest narrowing first, so a
+consumer that reads only the first entry reads the edge's own narrowing. A consumer must not read the count as a promise. A node that reads nothing
 carries no facet at all, rather than a facet holding an empty array — its empty `reads` has
 already said it.
 
@@ -1711,9 +1714,18 @@ not `TRANSFORMATION` carries none, because an offset says which period a *value*
 a lookup key, a conditional's test or an operand folded across the whole run is not a value
 narrowed by a distance — an accumulating read (`projection.cumulative_survival`,
 `projection.accumulate`) reads a run of periods, is an `AGGREGATION` already, and states that
-run in `periods` below. A name read at two different periods in one formula reaches the edge
-as one edge, and carries none, because neither distance is the read's. And a
-`relative_period` that is not a whole number is not a distance to quote.
+run in `periods` below. And a `relative_period` that is not a whole number is not a distance
+to quote.
+
+**A value read at two distances in one formula writes one entry per distance.** `prev(x) +
+next(x)` writes two `TRANSFORMATION` entries, `offset` `-1` and `offset` `1`; `prev(x) + x`
+writes one with no `offset` and one with `-1`. The entry for the period being computed comes
+first, then the distances in ascending order. A single entry with no `offset` would state a
+read of the period being computed, which neither formula makes, and a file that points a
+reviewer at the wrong period is worse than one that says nothing. Only the value reads count:
+in `when(x > 0).then(prev(x))` the test reads `x` now, but the one value read of `x` is a
+period back, so the entry says `-1`. Where every value read of a name agrees on its distance
+the read writes one entry, as above.
 
 Why it matters: "this month's reserve reads last month's — show me which cell" is the question
 a same-period answer gets wrong rather than leaves open, and a wrong proof is worse than an
@@ -1757,7 +1769,7 @@ expression's lowered text. The table is this:
 | `projection.cumulative_survival` (11.1.19), `start_at` null | `{first, 0}` |
 | `projection.cumulative_survival`, `start_at` stated | `{first, -1}` |
 | `projection.accumulate` (11.1.20), multiplier and addend | `{first, 0}`; under `reverse: true`, `{0, last}` |
-| `rollforward` (§16), every column a compilation reads | `{first, 0}` |
+| `rollforward` (§16), every column a compilation reads as an operation's operand | `{first, 0}` |
 | `projection.remaining_sum` (11.1.20) | `{0, last}` |
 | `projection.prospective_value` (11.1.21), cashflows, and a list rate under `discount_kind: "rate"` | `{0, last}` |
 | `sum`, `mean`, `min`, `max` (11.1.14–11.1.17), and `excel.irr`'s cashflows (11.1.36) | `{first, last}` |
@@ -2819,7 +2831,8 @@ towards it, which is what makes the two different questions rather than one with
 `decimals` is any whole number: `2` rounds to hundredths, `0` to whole numbers, and a negative
 one to a multiple of a power of ten, as a spreadsheet's `ROUND(x, -n)` does — `-1` to tens,
 `-3` to thousands, the step a sum assured is banded by. The attribute carries the count as
-written, `decimals: -2` for hundreds. A null value stays null under all three. **A flag, or a
+written, `decimals: -2` for hundreds. A null value stays null under all three. An infinity or a
+NaN is its own answer under `floor` and `ceil`: neither has a whole number to move to. **A flag, or a
 comparison, is read as its 0.0 or 1.0** (section 11.1.25): `floor`, `ceil` and `round` of one
 answer `f64`, per policy and per period — `floor(True)` is 1.0 and `round(False, 2)` 0.0 —
 never `bool`, so a consumer reads the stored flag's own type and answers the double.
@@ -3974,7 +3987,9 @@ nulls answers a run of nulls; a null outer list answers null; and a modeller who
 writes it, by 11.1.14's sentence for the family. The rule is about the cashflows' own
 periods: a null rate is one of the operands below and stays outside this entry.
 
-`discount_kind="factor"`, an `end_of_period` literal rate, scalar cashflows, mismatched list
+A literal rate is admitted under either timing, and is the constant list of that rate.
+
+`discount_kind="factor"`, scalar cashflows, mismatched list
 lengths, null rates, non-finite operands, rates at or below `-1`, and a generated non-finite
 result remain outside this entry. Whole-number cashflows, or a whole-number rate column, reach
 the record inside `to_float` (11.1.38), by the rule 11.1.20 states for `accumulate`. A consumer that implements only this entry must refuse
@@ -9628,6 +9643,11 @@ across a change by a shim that was never written.
   moves**: the token stays `gspv0-preview-3`, the schema identifier is unmoved, no published
   vector's expected value changes, and the corpus of section 12.5 is unchanged. Landed
   2026-11-01.
+
+- `v0-preview.2` — section 11.1.8 states that an infinity or a NaN is its own answer under `floor`
+  and `ceil`, as both engines already answered; section 11.1.21's literal-rate form admits
+  both timings, as all three implementations already agreed. No field, value or encoding
+  moved, and the token did not.
 
 ### 14.2 The change report
 

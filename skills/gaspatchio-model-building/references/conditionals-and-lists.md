@@ -200,3 +200,9 @@ result = df.with_columns(
     pl.col("full_list").list.head(pl.col("n")).alias("sliced")
 )
 ```
+
+---
+
+## Polars free functions, MAX and MIN
+
+**The duck-typing stops at gaspatchio's boundary.** Polars *free functions* do not know the proxy: `pl.max_horizontal(af["a"], af["b"])` raises `cannot create expression literal for value of type ColumnProxy` (gh#102), and the rest of the `*_horizontal` family fails the same way. For Excel's `MAX`/`MIN` against fixed bounds — the clamp — write `.clip()`: `af["age_key"].clip(AGE_MIN, AGE_MAX)`, or `.clip(lower_bound=…)` / `.clip(upper_bound=…)` one-sided. For an element-wise max/min of two *columns*, write the conditional: `when(af.a > af.b).then(af.a).otherwise(af.b)` — it broadcasts on list columns, where the polars horizontal functions would not. **Null contract:** this is not Excel's blank-ignoring `MAX`. A null comparison takes the `otherwise` branch (scalar: `MAX(7, null)` → null, where Excel returns 7), and on list columns a null in *either* operand nulls that element. If an operand can be null, `fill_null()` it first to state explicitly what a blank means.

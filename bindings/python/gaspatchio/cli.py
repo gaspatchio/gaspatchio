@@ -10,7 +10,8 @@
 import json
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from difflib import get_close_matches
 from enum import StrEnum
@@ -3264,6 +3265,31 @@ def _print_diff_report(
     _print_results_not_compared(results_not_compared)
 
 
+@contextmanager
+def _a_fault_is_no_finding() -> Iterator[None]:
+    """Turn a fault inside ``diff``'s comparison into exit 2, never exit 1.
+
+    Exit 1 says something moved between the two models. A comparison that
+    fails partway has found nothing about either of them, and a script that
+    branches on the status must not read a fault as a move: it is the
+    status of a comparison that never reached an answer.
+    """
+    try:
+        yield
+    except (typer.Exit, typer.Abort):
+        raise
+    except Exception as fault:  # every fault, because none of them is a finding
+        logger.debug("gspio diff failed with {}", type(fault).__name__)
+        err_console.print(
+            "[red]The comparison failed before it reached an answer, which says "
+            "nothing about either model:[/red] "
+            f"{shown(fault)}. The audit files alone can still be compared with "
+            "--no-results; this is a fault in gspio, worth reporting with the two "
+            "audit files."
+        )
+        raise typer.Exit(_EXIT_UNREADABLE) from None
+
+
 def _the_values(
     report: "DiffReport",
     earlier: "_DiffSide",
@@ -4071,7 +4097,12 @@ def diff(
     compared at all, which is not a finding about either model, or two
     results files named with [bold]--results[/bold] could not be read beside
     them, or [bold]--html[/bold] names a page with no place to go, which is
-    refused before anything is read or written.
+    refused before anything is read or written. A fault inside the
+    comparison itself exits 2 as well, with a sentence on stderr, so that it
+    is never read as a move.
+
+    A line edited from one value per policy to one value per period, or back,
+    has changed shape: every policy's value on it is reported as moved.
 
     [bold green]Example:[/bold green]
         gspio diff q1_artifact.json q2_artifact.json
@@ -4093,43 +4124,47 @@ def diff(
     earlier = _diff_side(before)
     later = _diff_side(after)
 
-    try:
-        report = diff_artifacts(earlier.document, later.document)
-    except ValueError as error:
-        err_console.print(
-            f"[red]These two artifacts cannot be compared:[/red] {shown(error)}"
-        )
-        raise typer.Exit(_EXIT_UNREADABLE)
+    # A fault anywhere in the comparison is not a move, so it does not exit 1.
+    with _a_fault_is_no_finding():
+        try:
+            report = diff_artifacts(earlier.document, later.document)
+        except ValueError as error:
+            err_console.print(
+                f"[red]These two artifacts cannot be compared:[/red] {shown(error)}"
+            )
+            raise typer.Exit(_EXIT_UNREADABLE)
 
-    report, unread = _the_values(
-        report,
-        earlier,
-        later,
-        named=results,
-        skipped=no_results,
-        told=policy_id_column or None,
-    )
-
-    if not json_output:
-        _print_diff_report(
-            earlier.name,
-            later.name,
+        report, unread = _the_values(
             report,
-            results_not_compared=_results_not_compared(
-                earlier.document, later.document
-            ),
-            results_moved=_results_file_moved(
-                earlier.document, later.document, read=report.values is not None
-            ),
-            library_moved=_library_moved(earlier.document, later.document),
+            earlier,
+            later,
+            named=results,
+            skipped=no_results,
+            told=policy_id_column or None,
         )
-        _print_values(report, floor=floor)
-    if unread is not None:
-        # Beside --json, stdout is the report alone, so the sentence is stderr's.
-        (err_console if json_output else console).print(
-            Padding(Text(unread), (1, 0, 0, 2))
+
+        if not json_output:
+            _print_diff_report(
+                earlier.name,
+                later.name,
+                report,
+                results_not_compared=_results_not_compared(
+                    earlier.document, later.document
+                ),
+                results_moved=_results_file_moved(
+                    earlier.document, later.document, read=report.values is not None
+                ),
+                library_moved=_library_moved(earlier.document, later.document),
+            )
+            _print_values(report, floor=floor)
+        if unread is not None:
+            # Beside --json, stdout is the report alone, so the sentence is stderr's.
+            (err_console if json_output else console).print(
+                Padding(Text(unread), (1, 0, 0, 2))
+            )
+        _store_report(
+            report.to_dict(), json_output=json_output, output_file=output_file
         )
-    _store_report(report.to_dict(), json_output=json_output, output_file=output_file)
 
     if html is not None:
         # The later document first, because it is the one the page's views are

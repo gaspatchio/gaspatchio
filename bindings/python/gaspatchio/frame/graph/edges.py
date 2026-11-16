@@ -155,10 +155,12 @@ nearly every read, and it says so by carrying nothing rather than by
 carrying a zero. A read whose narrowing is not ``TRANSFORMATION`` carries
 none either: an offset says which period a *value* came from, and a lookup
 key, a conditional's test or an operand folded across the whole run is not
-a value narrowed by a distance. And a name read at two different periods
-in one formula reaches the edge as one edge, so neither distance is the
-read's -- it carries none, because stating one would be a narrower claim
-than the formula supports.
+a value narrowed by a distance. A name whose value is read at two different
+periods in one formula -- ``prev(x) + next(x)``, ``prev(x) + x`` -- writes
+one ``TRANSFORMATION`` way per distance, the period being computed first
+and then the distances in order: one edge with no offset would say "this
+period", which the formula never read. Where every value read of the name
+agrees on its distance the read is written as one, exactly as before.
 
 ## Which periods an aggregation reads
 
@@ -352,21 +354,28 @@ Window = Periods | Position
 
 
 class ReadWay(NamedTuple):
-    """One way a direct read was made: its narrowing and the window it read.
+    """One way a direct read was made: its narrowing, window and distance.
 
-    A name read through two windows in one formula is two ways of reading
-    it, and the facet writes one entry per way (section 9).
+    A name read through two windows, or at two distances, in one formula is
+    two ways of reading it, and the facet writes one entry per way
+    (section 9).
 
     Attributes:
         subtype: The narrowing this way of reading carries.
         window: The periods or the position it read, or ``None`` where it
             states none -- every read of the period being computed, and
             every read whose window the members cannot write.
+        offset: The distance a ``TRANSFORMATION`` value read with no window
+            was made at, while the name's value reads disagree on it;
+            ``None`` for the period being computed, for every other way,
+            and wherever the name's value reads agree -- the claim's own
+            ``offset`` then says it once.
 
     """
 
     subtype: EdgeSubtype
     window: Window | None = None
+    offset: int | None = None
 
 
 class ReadClaim(NamedTuple):
@@ -624,15 +633,14 @@ def stronger(held: ReadClaim, candidate: ReadClaim) -> ReadClaim:
     reference: what the edge answers is "is this value in the number?",
     and one read that puts it there settles it.
 
-    The offset is settled the other way round, and by agreement rather
-    than by rank. Two reads of one node at one distance were both at that
-    distance; two at different distances leave the edge standing for both,
-    and it states no period rather than half of one. The windows are kept
-    whole: each direct way either read was made is a way the node was read.
+    The offset is settled the other way round, by the value reads
+    themselves. Two value reads of one node at one distance were both at
+    that distance, and the claim states it once; at two distances each is
+    kept as a way of its own. The windows are kept whole too: each direct
+    way either read was made is a way the node was read.
     """
     edge = held.edge if _RANK[held.edge] <= _RANK[candidate.edge] else candidate.edge
-    agreed = held.offset if held.offset == candidate.offset else None
-    return _finished(edge, agreed, (*_ways_of(held), *_ways_of(candidate)))
+    return _finished(edge, None, (*_ways_of(held), *_ways_of(candidate)))
 
 
 def claim_over(edge: EdgeClass, windows: tuple[Window | None, ...]) -> ReadClaim:
@@ -643,8 +651,8 @@ def claim_over(edge: EdgeClass, windows: tuple[Window | None, ...]) -> ReadClaim
     over the run the recurrence has covered.
 
     Examples:
-        >>> claim_over(AGGREGATION, (Periods("first", 0),)).ways
-        (ReadWay(subtype='AGGREGATION', window=Periods(start='first', end=0)),)
+        >>> claim_over(AGGREGATION, (Periods("first", 0),)).ways[0].window
+        Periods(start='first', end=0)
         >>> claim_over(AGGREGATION, (None,)) == ReadClaim(AGGREGATION)
         True
 
@@ -661,7 +669,7 @@ def without_windows(claim: ReadClaim) -> ReadClaim:
     """
     if not claim.ways:
         return claim
-    bare = tuple(ReadWay(way.subtype) for way in claim.ways)
+    bare = tuple(ReadWay(way.subtype, None, way.offset) for way in _restored(claim))
     return _finished(claim.edge, claim.offset, bare)
 
 
@@ -710,8 +718,8 @@ def classify_reads(node: OpNode) -> dict[Reference, ReadClaim]:
         ...     (Col("qx"),),
         ...     (("start_at", 1.0), ("from_survival", False)),
         ... )
-        >>> classify_reads(survival)["qx"].ways
-        (ReadWay(subtype='AGGREGATION', window=Periods(start='first', end=-1)),)
+        >>> classify_reads(survival)["qx"].ways[0].window
+        Periods(start='first', end=-1)
 
     """
     if isinstance(node, Col):
@@ -778,10 +786,28 @@ def _stated(claim: ReadClaim) -> ReadClaim:
 def _ways_of(claim: ReadClaim) -> tuple[ReadWay, ...]:
     """Return every direct way ``claim`` stands for, the one-way read included."""
     if claim.ways:
-        return claim.ways
+        return _restored(claim)
     if claim.edge[0] == "DIRECT":
-        return (ReadWay(claim.edge[1]),)
+        return (ReadWay(claim.edge[1], None, claim.offset),)
     return ()
+
+
+def _restored(claim: ReadClaim) -> tuple[ReadWay, ...]:
+    """Return ``claim``'s ways with its own offset back on its windowless value read.
+
+    A claim whose value reads agreed states their distance once, on the
+    claim, and lists its windowless ``TRANSFORMATION`` way bare. Taking the
+    claim apart again has to put the distance back on that way, or a second
+    read at another distance would be compared with "this period".
+    """
+    if claim.offset is None:
+        return claim.ways
+    return tuple(
+        ReadWay(way.subtype, None, claim.offset)
+        if way.subtype == TRANSFORMATION[1] and way.window is None
+        else way
+        for way in claim.ways
+    )
 
 
 def _finished(
@@ -798,11 +824,31 @@ def _finished(
     """
     if edge[0] != "DIRECT":
         return _stated(ReadClaim(edge, offset))
+    distances = tuple(
+        dict.fromkeys(
+            way.offset
+            for way in ways
+            if way.subtype == TRANSFORMATION[1] and way.window is None
+        )
+    )
+    if len(distances) <= 1:
+        # The value reads agree: the claim states the distance once.
+        offset = distances[0] if distances else None
+        ways = tuple(ReadWay(way.subtype, way.window) for way in ways)
+    else:
+        # Each distance is a way of its own; no single one is the read's.
+        offset = None
     distinct = tuple(dict.fromkeys(ways))
-    ordered = tuple(sorted(distinct, key=lambda way: _RANK[("DIRECT", way.subtype)]))
+    ordered = tuple(sorted(distinct, key=_way_order))
     if ordered == (ReadWay(edge[1]),):
         ordered = ()
     return _stated(ReadClaim(edge, offset, ordered))
+
+
+def _way_order(way: ReadWay) -> tuple[int, int, int]:
+    """Return where ``way`` stands: by narrowing, then this period, then distance."""
+    stated = way.offset is not None
+    return (_RANK[("DIRECT", way.subtype)], int(stated), way.offset or 0)
 
 
 def _classify(
@@ -1220,15 +1266,15 @@ def _claim(
 ) -> None:
     """Record ``candidate`` for ``reference``, keeping the stronger of the two.
 
-    The period is kept only while every read of the name agrees on it. A
-    column read at t-1 and again at t was read at both, and one edge
-    stands for both reads: a file saying t-1 there would be a narrower
-    claim than the formula supports, so it states no period at all.
+    The period is kept only while every read of the name agrees on it, for
+    the claims that state no ways. A direct value read records its own
+    period on its way, so a column read at t-1 and again at t states both
+    (:func:`_finished` settles which form the claim takes).
 
     A direct read also records the way it was made, with its window, so
     that a name read through two windows states both.
     """
-    way = _way(candidate, reach)
+    way = _way(candidate, reach, period)
     held = found.get(reference)
     if held is None:
         found[reference] = _Reading(candidate, period, [] if way is None else [way])
@@ -1241,14 +1287,16 @@ def _claim(
         held.ways.append(way)
 
 
-def _way(candidate: EdgeClass, reach: _Reach) -> ReadWay | None:
+def _way(candidate: EdgeClass, reach: _Reach, period: int) -> ReadWay | None:
     """Return the direct way one read was made, with the window it states.
 
     ``periods`` goes with ``AGGREGATION`` and ``position`` with either
     direct narrowing that reads a value: a literal ``list.get`` reads one
     stored position whether its answer is then multiplied in or folded. A
     read of the period being computed states neither, the offset being the
-    only period fact such a read has. An indirect read states none.
+    only period fact such a read has -- so a windowless value read carries
+    its distance, which :func:`_finished` keeps only where the name's value
+    reads disagree on it. An indirect read states none.
     """
     if candidate[0] != "DIRECT":
         return None
@@ -1256,4 +1304,6 @@ def _way(candidate: EdgeClass, reach: _Reach) -> ReadWay | None:
         return ReadWay(candidate[1], reach)
     if candidate == AGGREGATION and isinstance(reach, Periods):
         return ReadWay(candidate[1], reach)
+    if candidate == TRANSFORMATION and period != 0:
+        return ReadWay(candidate[1], None, period)
     return ReadWay(candidate[1])

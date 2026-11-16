@@ -365,10 +365,10 @@ def _the_versions_it_bound(
       one -- and there is nothing honest to evaluate against.
 
     **The expression's own roots are read back and checked against this**,
-    because the compilation's ``reads`` is built from the operations and the
-    state initialisers, and the kernel binds two things that are neither: a
-    contract-boundary mask, and a per-policy period count on a jagged
-    schedule. A root the graph gives this compilation no account of is
+    because the compilation's ``reads`` is built from the operations, the
+    state initialisers and the contract-boundary mask, and the kernel can
+    bind a column that is none of them: a per-policy period count on a
+    jagged schedule. A root the graph gives this compilation no account of is
     accepted only where nothing on the model ever wrote that name, so the
     frame's column is what the data arrived with and the binding by name is
     the binding that happened. Where the model did write it, this reading

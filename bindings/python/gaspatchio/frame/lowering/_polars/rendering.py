@@ -49,7 +49,7 @@ from __future__ import annotations
 import json
 import pickle
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from gaspatchio.frame.lowering._polars.once import ANSWER_AS_WRITTEN, OPERAND_FIELD
 from gaspatchio.frame.lowering._polars.plugins import conditional_kwargs
@@ -362,12 +362,20 @@ def _a_struct_written_back(text: str, start: int) -> str | None:
     if not answer.endswith(_AS_WRITTEN_TAIL):
         return None
     answer = answer[: -len(_AS_WRITTEN_TAIL)]
+    written: dict[str, str] = {}
     for place, operand in enumerate(_top_level_parts(text[opened + 1 : closed])):
-        tail = f'.alias("{OPERAND_FIELD.format(place)}")'
+        name = OPERAND_FIELD.format(place)
+        tail = f'.alias("{name}")'
         if not operand.endswith(tail):
             return None
-        field = f'pl.field(["{OPERAND_FIELD.format(place)}"])'
-        answer = answer.replace(field, operand[: -len(tail)])
+        written[f'pl.field(["{name}"])'] = operand[: -len(tail)]
+    # One pass: an operand may itself read a field of the wrapper around this
+    # one, and that field must not be taken for one of this wrapper's own.
+    answer = re.sub(
+        "|".join(re.escape(field) for field in written),
+        lambda found: written[found.group(0)],
+        answer,
+    )
     return text[:start] + answer + text[listed_close + 1 + len(_AS_WRITTEN_FIELD) :]
 
 
@@ -1060,18 +1068,27 @@ def _comparisons_in(
         _comparisons_in(value, found, fields)
 
 
+# Where a wrapper's fields record the fields of the wrapper around it. No
+# field is named this, because every field the lowering writes is an operand.
+_AROUND = "\0around"
+
+
 def _walked_as_written(
     node: dict[str, object], found: list[str], fields: dict[str, object] | None
 ) -> bool:
     """Walk a field as its operand, or a held wrapper as its answer; say if done."""
     field = node.get("Field")
     if fields is not None and isinstance(field, list) and field and field[0] in fields:
-        _comparisons_in(fields[field[0]], found, None)
+        # An operand stands in the scope around its wrapper, where it may
+        # itself read a field of the wrapper outside that one.
+        around = cast("dict[str, object] | None", fields.get(_AROUND))
+        _comparisons_in(fields[field[0]], found, around)
         return True
     held = _held_once(node)
     if held is None:
         return False
     answer, operands = held
+    operands[_AROUND] = fields
     _comparisons_in(answer, found, operands)
     return True
 

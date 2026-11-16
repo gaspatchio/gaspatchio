@@ -439,14 +439,17 @@ def test_one_window_read_twice_is_stated_once() -> None:
 
 
 def test_an_offset_is_unchanged_and_rides_the_entry_without_a_window() -> None:
-    """A shifted read keeps its offset; two shifts still state none (section 9)."""
+    """A shifted read keeps its offset; two shifts state one entry each (section 9)."""
     af = _book()
     af.shifted = af.cf.projection.previous_period(fill_value=0.0)
     af.both = af.cf.projection.previous_period(
         fill_value=0.0
     ) + af.cf.projection.next_period(fill_value=0.0)
     assert _reads(af, "shifted")["cf"] == [{**TRANSFORMATION_ALONE, "offset": -1}]
-    assert _reads(af, "both")["cf"] == [TRANSFORMATION_ALONE]
+    assert _reads(af, "both")["cf"] == [
+        {**TRANSFORMATION_ALONE, "offset": -1},
+        {**TRANSFORMATION_ALONE, "offset": 1},
+    ]
 
 
 def test_an_indirect_read_states_no_window() -> None:

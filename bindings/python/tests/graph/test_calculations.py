@@ -386,6 +386,7 @@ def test_capture_source_span_never_raises_even_if_executing_blows_up(
         raise RuntimeError(msg)
 
     monkeypatch.setattr(executing.Source, "executing", staticmethod(_boom))
+    monkeypatch.setattr(executing.Source, "for_frame", staticmethod(_boom))
 
     assert capture_source_span() is None
 

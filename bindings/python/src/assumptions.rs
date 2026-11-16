@@ -19,8 +19,9 @@ use gaspatchio_core_lib::assumptions::{
     get_global_assumption_registry, missing_keys_refusal,
     register_assumption_table_global_with_mode,
     register_or_replace_assumption_table_global_with_identity,
-    register_or_replace_assumption_table_global_with_mode, reset_global_assumption_registry,
-    StorageMode, SAMPLE_KEY_CAP,
+    register_or_replace_assumption_table_global_with_mode,
+    replace_assumption_table_global_if_identity, reset_global_assumption_registry, StorageMode,
+    SAMPLE_KEY_CAP,
 };
 
 // Kwargs struct for the assumption lookup plugin.
@@ -441,7 +442,8 @@ impl PyAssumptionTableRegistry {
         }
     }
 
-    #[pyo3(signature = (name, df, keys, value_column, force_replace=true, storage_mode="auto", *, fingerprint=None))]
+    #[pyo3(signature = (name, df, keys, value_column, force_replace=true, storage_mode="auto", *, fingerprint=None, expected_fingerprint=None))]
+    #[allow(clippy::too_many_arguments)]
     fn register_or_replace_table(
         &self,
         name: String,
@@ -451,6 +453,7 @@ impl PyAssumptionTableRegistry {
         force_replace: Option<bool>,
         storage_mode: Option<&str>,
         fingerprint: Option<String>,
+        expected_fingerprint: Option<String>,
     ) -> PyResult<()> {
         let rust_df: DataFrame = df.into();
         let force = force_replace.unwrap_or(true);
@@ -463,8 +466,22 @@ impl PyAssumptionTableRegistry {
         );
 
         // Use the new idempotent registry function with mode
-        let result = match fingerprint {
-            Some(fingerprint) => register_or_replace_assumption_table_global_with_identity(
+        let result = match (expected_fingerprint, fingerprint) {
+            (Some(expected), Some(next)) => replace_assumption_table_global_if_identity(
+                name.clone(),
+                rust_df,
+                keys,
+                value_column,
+                mode,
+                &expected,
+                next,
+            ),
+            (Some(_), None) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "a replacement with expected_fingerprint also needs fingerprint",
+                ))
+            }
+            (None, Some(fingerprint)) => register_or_replace_assumption_table_global_with_identity(
                 name.clone(),
                 rust_df,
                 keys,
@@ -473,7 +490,7 @@ impl PyAssumptionTableRegistry {
                 mode,
                 fingerprint,
             ),
-            None => register_or_replace_assumption_table_global_with_mode(
+            (None, None) => register_or_replace_assumption_table_global_with_mode(
                 name.clone(),
                 rust_df,
                 keys,

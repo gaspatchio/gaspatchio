@@ -272,6 +272,36 @@ def list_pow(base: pl.Expr, exp: pl.Expr) -> pl.Expr:
     )
 
 
+def list_null_from_hole_back(totals: pl.Expr, cashflows: pl.Expr) -> pl.Expr:
+    """Return each run of totals, null from its cashflows' last hole backwards.
+
+    A reverse fold skips a null, so a position at or before a missing cashflow
+    has lost a period its total should have held (11.1.21). A book with no
+    null cashflow gets its totals back untouched.
+
+    Args:
+        totals: The per-period totals a reverse fold reached.
+        cashflows: The per-period cashflows the fold read.
+
+    Returns:
+        The totals as ``list[f64]``.
+
+    Examples:
+        >>> import polars as pl
+        >>> df = pl.DataFrame({"t": [[3.0, 2.0, 1.0]], "cf": [[1.0, None, 1.0]]})
+        >>> out = df.select(a=list_null_from_hole_back(pl.col("t"), pl.col("cf")))
+        >>> out["a"].to_list()
+        [[None, None, 1.0]]
+
+    """
+    return register_plugin_function(
+        plugin_path=_get_lib(),
+        function_name="list_null_from_hole_back",
+        args=[totals, cashflows],
+        is_elementwise=True,
+    )
+
+
 def list_clip(values: pl.Expr, lower: pl.Expr, upper: pl.Expr) -> pl.Expr:
     """Element-wise clip operation on list columns with per-row bounds.
 

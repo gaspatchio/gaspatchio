@@ -15,6 +15,7 @@
 # plugin root *is* this directory and its "./" glob scans it for <dir>/SKILL.md.
 # Still a glob, so it is not listed here and needs no edit when a skill is added.
 order = [
+    "gaspatchio-skill-index",
     "gaspatchio-quickstart",
     "gaspatchio-model-discovery",
     "gaspatchio-workbook-conversion",
@@ -30,7 +31,7 @@ order = [
 name         = "gaspatchio"
 display_name = "Gaspatchio"
 description  = "Actuarial modeling skills for gaspatchio (Python + Rust/Polars)."
-version      = "1.4.0"
+version      = "1.5.0"
 author_name  = "Opio Inc."
 author_url   = "https://github.com/gaspatchio"
 homepage     = "https://github.com/gaspatchio/gaspatchio"

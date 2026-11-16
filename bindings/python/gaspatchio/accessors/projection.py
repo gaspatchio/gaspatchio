@@ -56,7 +56,11 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         ```python
         from gaspatchio import ActuarialFrame
 
-        data = {"qx": [[0.001, 0.0011, 0.0012], [0.002, 0.0022, 0.0024]]}
+        data = {
+            "qx": [[0.001, 0.0011, 0.0012], [0.002, 0.0022, 0.0024]],
+            "face_amount": [100000.0, 250000.0],
+            "annual_premium": [1200.0, 2400.0],
+        }
         af = ActuarialFrame(data)
 
         # Complex cumulative product - use projection method
@@ -67,7 +71,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         af.premium = af.annual_premium * af.survival_to_t
 
         # Terminal value - use Polars
-        af.maturity_benefit = af.face_amount.polars_native().list.last()
+        af.survival_at_end = af.survival_to_t.polars_native().list.last()
+        af.maturity_benefit = af.face_amount * af.survival_at_end
         ```
 
         Premium holiday modeling:
@@ -514,6 +519,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         from gaspatchio._authoring import emit
 
         refuse_bare_string_override(value, parameter="value")
+        _refuse_a_column_override(value, written="with_period(value=...)")
 
         parent_af = self._get_parent_frame()
         return emit.call(
@@ -617,6 +623,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         # at whichever entry the chaining below happened to reach first.
         for period, override in updates.items():
             refuse_bare_string_override(override, parameter=f"updates[{period}]")
+            _refuse_a_column_override(
+                override, written=f"with_periods(updates[{period}])"
+            )
 
         parent_af = self._get_parent_frame()
 
@@ -660,7 +669,10 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         ----------
         fill_value : scalar, optional
             Value to use for first period where no previous value exists.
-            Default is 0.
+            Default is 0. One value for every policy, or None for a blank; a
+            column is refused. To open each policy's run with its own value,
+            write ``when(af.month == 0).then(af.opening_value)``
+            ``.otherwise(af.run.projection.previous_period())``.
 
         Returns
         -------
@@ -759,6 +771,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         """
         from gaspatchio._authoring import emit
 
+        _refuse_a_column_fill(fill_value, call="previous_period")
         parent_af = self._get_parent_frame()
         return emit.call(
             "projection.previous_period",
@@ -792,7 +805,9 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         ----------
         fill_value : scalar, optional
             Value to use for last period where no next value exists.
-            Default is 0.
+            Default is 0. One value for every policy, or None for a blank; a
+            column is refused, and a per-policy value is a conditional on
+            ``af.month``.
 
         Returns
         -------
@@ -859,6 +874,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         """
         from gaspatchio._authoring import emit
 
+        _refuse_a_column_fill(fill_value, call="next_period")
         parent_af = self._get_parent_frame()
         return emit.call(
             "projection.next_period",
@@ -903,6 +919,8 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
             - Zero: current period (no shift)
         fill_value : scalar, optional
             Value to use for missing entries at boundaries. Default is 0.
+            One value for every policy, or None for a blank; a column is
+            refused, and a per-policy value is a conditional on ``af.month``.
 
         Returns
         -------
@@ -1025,6 +1043,7 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         """
         from gaspatchio._authoring import emit
 
+        _refuse_a_column_fill(fill_value, call="at_period")
         parent_af = self._get_parent_frame()
         return emit.call(
             "projection.at_period",
@@ -1572,6 +1591,39 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
         an ordinary value in either direction. The direction is on the record:
         the node carries ``reverse`` whichever way it ran.
 
+        **Matching a workbook.** Each step is ``state * multiplier + addend``
+        -- one multiply, then one add, with no fused multiply-add -- so the
+        result matches a workbook bit for bit only when the row is literally
+        ``prev * m + a``. A row that works on the running value in another
+        order, such as ``(V + CF) / (1 + i) * p``, has to be refactored into a
+        multiplier (``p / (1 + i)``) and an addend (``CF * p / (1 + i)``), and
+        that rounds differently: expect last-bit differences in most periods,
+        up to about a dozen ulp after 60 steps, with both orders about equally
+        close to the exact value. Neither is wrong. While every multiplier is
+        at most 1 in size, as it is for survival and discounting, those
+        differences die away: reconcile with an ulp or relative tolerance
+        (1e-12 relative passes with a wide margin), never ``==``. Where a
+        multiplier exceeds 1 in size -- an explicit Euler step
+        ``x + h * (c - mu * x)`` once ``h * mu`` passes 2, as a multi-state
+        sheet's does at extreme ages -- each rounding difference grows by that
+        factor every period and no tolerance holds. The sheet's own late values
+        are then rounding, not a result: say so in the reconciliation rather
+        than chase them. Only for a short run -- a few dozen periods -- can the steps
+        be written out as an unrolled expression, one column per period in
+        the sheet's order, to match it bit for bit: every unrolled period is
+        a column of its own, and memory grows with the square of the period
+        count. Four states on one policy took 0.3 GB at 120 periods, 1.7 GB
+        at 480 and 5.8 GB at 960; a monthly run of a hundred years does not
+        fit on a laptop. Past a few dozen periods, use ``accumulate`` and the
+        tolerance. To reproduce an unstable sheet anyway on a handful of
+        policies, write its step in the sheet's order and sweep it over the
+        whole timeline once per period -- after ``k`` sweeps the first ``k``
+        periods are exact -- calling ``af.materialize()`` every 32 sweeps to
+        keep the plan small. That matched a plain loop in every cell: one
+        policy at 975 periods took 4 s and 0.18 GB with the checkpoints (18 s
+        and 1.1 GB without), and 100 policies at 2,947 periods took 32 s and
+        0.44 GB. It reconciles a sheet; it is not a way to run a book.
+
         The actuary pre-computes the multiplicative and additive components in
         Python, keeping business logic readable, while the Rust kernel handles
         the tight sequential loop per policy. Polars parallelises across
@@ -1612,10 +1664,19 @@ class ProjectionColumnAccessor(BaseColumnAccessor):
                 a backward recursion, ``V[t] = v[t] * V[t+1] + cf[t]`` --
                 with ``reverse=True``.
             * **Not a floored rollback:** A backward recursion floored each
-                period -- ``MAX(0, v * V[t+1] + cf)``, a reserve zeroized
-                when it turns negative -- is not this recurrence: the floor is
-                not linear, so ``accumulate`` cannot carry it, and 1.0 has no
-                named form for it.
+                period -- ``MAX(0, (V[t+1] + cf) / (1 + i))``, a reserve
+                zeroized when it turns negative -- is not this recurrence:
+                the floor is not linear, so ``accumulate`` cannot carry it.
+                The rollforward builder carries a floor, and run over
+                reversed lists it is the backward recursion: reverse the
+                cashflow (``af.cf.list.reverse()``) and the discount less one
+                (``(1 / (1 + af.i) - 1).list.reverse()``), then
+                ``plan["V"].add(cf_back).grow(discount_less_one)``
+                ``.floor(value=0.0)``, compile it, and reverse the balance
+                back with ``.list.reverse()``. The floor is one number for
+                every policy, and ``grow`` multiplies by ``1 + (v - 1)``, so
+                the answer agrees with a sheet's division to about 1e-15
+                rather than bit for bit.
 
         A null multiplier or a null addend at position ``t`` makes ``s[t]`` and
         every later position null -- under ``reverse=True``, every earlier
@@ -1861,3 +1922,71 @@ def _element_type(
 
 # What the API reference documents from this module.
 __all__ = ["ProjectionColumnAccessor"]
+
+
+def _is_a_column(value: object) -> bool:
+    """Return whether ``value`` is a column -- one value per policy or per period.
+
+    A proxy, a Polars expression and a Series all are; a number, ``None``, a
+    date or any other single value is not, and passes through untouched.
+    """
+    from gaspatchio.column import ColumnProxy, ExpressionProxy
+
+    return isinstance(value, ColumnProxy | ExpressionProxy | pl.Expr | pl.Series)
+
+
+def _refuse_a_column_fill(fill_value: object, *, call: str) -> None:
+    """Refuse a column as a period shift's fill, at the line that wrote it.
+
+    The fill is what stands where the shift runs off the run -- one value,
+    the same for every policy. A column there used to build and then fail
+    at collect with an engine message naming neither the shift nor the
+    fill. What the author almost always meant is each policy's own opening
+    value, and that is a conditional on the first period.
+
+    Args:
+        fill_value: The fill as the caller passed it.
+        call: The shift the caller wrote, for the message.
+
+    Raises:
+        TypeError: If ``fill_value`` is a column.
+
+    """
+    if not _is_a_column(fill_value):
+        return
+    msg = (
+        f"{call}(fill_value=...) takes one value for the period the shift runs "
+        "off -- a number, or None for a blank -- the same for every policy, and "
+        "this is a column. To open each policy's run with its own value, shift "
+        "with a number and replace the first period with a conditional: "
+        "when(af.month == 0).then(af.opening_value)"
+        f".otherwise(af.run.projection.{call}(...))."
+    )
+    raise TypeError(msg)
+
+
+def _refuse_a_column_override(value: object, *, written: str) -> None:
+    """Refuse a column as a period override, at the line that wrote it.
+
+    An override replaces one period's value with one number. A column there
+    used to fail at the assignment with an engine message about nested
+    object types; a replacement that varies by policy is a conditional on
+    the period, and the refusal says so.
+
+    Args:
+        value: The override as the caller passed it.
+        written: The call and argument the caller wrote, for the message.
+
+    Raises:
+        TypeError: If ``value`` is a column.
+
+    """
+    if not _is_a_column(value):
+        return
+    msg = (
+        f"{written} replaces one period's value with one number, and this is a "
+        "column. A replacement that varies by policy is a conditional on the "
+        "period: when(af.month == 0).then(af.opening_value).otherwise(af.run) "
+        "for the first period, or af.month == n for any other."
+    )
+    raise TypeError(msg)

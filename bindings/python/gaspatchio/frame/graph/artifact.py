@@ -1337,13 +1337,17 @@ def _way(edge: GraphEdge, way: ReadWay) -> dict[str, Any]:
     of periods from the period being computed or ``"first"`` / ``"last"``,
     and ``position`` is the stored position a literal ``list.get`` named --
     both quoted from the operation's own attributes, never from an
-    expression's text (section 9). The edge's ``offset`` belongs to its
-    transformation, and goes on the way that states no window: the
-    windowed ways each state their own periods.
+    expression's text (section 9). An ``offset`` belongs to a value read
+    that states no window: the way's own where the name was read at
+    several distances, one entry each, and otherwise the edge's, on the
+    way of the edge's own narrowing. The windowed ways each state their
+    own periods.
     """
     stated: dict[str, Any] = {"type": edge.relationship, "subtype": way.subtype}
     if way.window is None:
-        if way.subtype == edge.subtype and edge.offset is not None:
+        if way.offset is not None:
+            stated["offset"] = way.offset
+        elif way.subtype == edge.subtype and edge.offset is not None:
             stated["offset"] = edge.offset
     elif isinstance(way.window, Periods):
         stated["periods"] = {"from": way.window.start, "to": way.window.end}
@@ -2121,7 +2125,9 @@ def _wire_node(  # noqa: PLR0913 — one parameter per fact the record needs and
     retained = bool(data.pop("retained", False)) and carries_values
     _only_the_enrichment_this_artifact_carries(data, carries_values=carries_values)
     if carries_values and along_the_axis is not None:
-        data |= along_the_axis
+        data |= _what_a_superseded_definition_may_carry(
+            node, along_the_axis, retained=retained
+        )
 
     # A facet on a node has to reach the envelope's two declaration lists, and
     # the only way those never fall out of step with the nodes is for whatever
@@ -2424,6 +2430,33 @@ def _along_the_axis(
         if moved is not None:
             fields[_MOVEMENTS] = _movements_along_the_axis(moved, width=width)
     return gathered
+
+
+def _what_a_superseded_definition_may_carry(
+    node: GraphNode, along_the_axis: dict[str, Any], *, retained: bool
+) -> dict[str, Any]:
+    """Return the axis's arrays for one node, less any run of nothing but nulls.
+
+    Only a column definition the finished frame no longer holds, and did not
+    retain, is narrowed. Every other node keeps one array per field as long
+    as the axis, nulls included, which is the shape a multi-policy reader is
+    written against. Such a definition can honestly carry no value at all,
+    and an array of nulls is a value as far as the validator's refusal of a
+    value on a superseded definition is concerned -- so a field no entry
+    stated is left as the single null a one-policy document writes. That is
+    what a scenario run's column shock produces: the arriving column is
+    superseded by the shocked definition, and before this the export wrote
+    an array of nulls onto it and its own audit file was refused. A run with
+    a real value anywhere is passed through untouched, and the refusal still
+    meets it.
+    """
+    if node.data.in_final_schema or retained or node.data.column is None:
+        return along_the_axis
+    return {
+        name: run
+        for name, run in along_the_axis.items()
+        if not (isinstance(run, list) and all(value is None for value in run))
+    }
 
 
 def _movements_along_the_axis(

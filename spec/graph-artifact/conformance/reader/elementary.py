@@ -30,6 +30,11 @@ def _at_the_pole(function, pole: float):
     return lambda value: -math.inf if value == pole else function(value)
 
 
+def _its_own_if_not_finite(function):
+    """Return a whole-number step that leaves an infinity or a NaN as it is."""
+    return lambda value: value if not math.isfinite(value) else function(value)
+
+
 UNARY_MATH = {
     "abs": abs,
     # 11.1.12: the sign of a NaN is NaN -- it is neither below nought nor
@@ -44,8 +49,9 @@ UNARY_MATH = {
     # 11.1.12: the standard normal distribution function, in the
     # complementary form that keeps the lower tail's digits.
     "norm_cdf": lambda value: 0.5 * math.erfc(-value / math.sqrt(2.0)),
-    "floor": math.floor,
-    "ceil": math.ceil,
+    # 11.1.8: an infinity or a NaN is its own answer under these two.
+    "floor": _its_own_if_not_finite(math.floor),
+    "ceil": _its_own_if_not_finite(math.ceil),
 }
 
 

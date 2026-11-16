@@ -59,7 +59,7 @@ import ast
 import os
 import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import executing
 from loguru import logger
@@ -479,12 +479,17 @@ def _span_from_frame(frame: types.FrameType) -> SourceSpan | None:
     semicolon-separated compound line ``executing`` could not disambiguate
     further).
     """
-    execution = executing.Source.executing(frame)
-    statements = execution.statements
+    # Only a line holding two statements needs the running bytecode matched to
+    # a node, and that match is most of what a span costs.
+    source = executing.Source.for_frame(frame)
+    statements = cast("set[ast.stmt]", source.statements_at_line(frame.f_lineno))
+    if len(statements) != 1:
+        execution = executing.Source.executing(frame)
+        statements = execution.statements
+        source = execution.source
     if len(statements) != 1:
         return None
     (statement,) = statements
-    source = execution.source
     if not source.text:
         return None
     statement_text = _source_segment(source, statement)

@@ -4,6 +4,7 @@
 
 import textwrap
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -94,3 +95,76 @@ def test_a_lint_failure_without_issues_still_reports(
 
     assert "LINTING ERROR in Docstring Example" in report
     assert "[No specific Ruff issues extracted from error message]" in report
+
+
+def _an_item(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    snippet: str,
+    tags: list[str] | None = None,
+) -> Any:  # noqa: ANN401 -- the plugin's item, imported inside the test's run
+    """Return a docstring item that must run, past the lint step it does not test."""
+    from gaspatchio.examples.docstrings.models import DocstringCodeExample
+    from gaspatchio.examples.docstrings.pytest_plugin import DocstringExampleItem
+
+    monkeypatch.setattr(DocstringCodeExample, "lint", lambda *_a, **_k: [])
+    example = DocstringCodeExample(
+        snippet=snippet,
+        object_context="module.function",
+        example_index=0,
+        raw_source_location=("module.py", 1),
+        prefix_tags=tags or [],
+    )
+    item = DocstringExampleItem.from_parent(
+        request.node.parent, name="module.function-ex0", example=example
+    )
+    monkeypatch.setattr(item.config.option, "gp_examples_must_run", True, raising=False)
+    monkeypatch.setattr(item.config.option, "gp_run_examples", False, raising=False)
+    return item
+
+
+def test_an_example_that_crashes_fails_with_no_output_block(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The expected result is a comment here, as it is across the accessors."""
+    from gaspatchio.examples.docstrings.pytest_plugin import DocstringRuntimeError
+
+    item = _an_item(request, monkeypatch, "print(1 / 0)  # 0.5\n")
+    with pytest.raises(DocstringRuntimeError, match="ZeroDivisionError"):
+        item.runtest()
+
+
+def test_an_example_that_runs_passes_whatever_it_prints(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Whether printed output is compared is a separate policy from crashing."""
+    _an_item(request, monkeypatch, 'print("hello")  # hello\n').runtest()
+
+
+def test_a_no_run_example_is_not_run(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tag is how an example that needs files it cannot have says so."""
+    _an_item(request, monkeypatch, "1 / 0\n", ["no_run"]).runtest()
+
+
+def test_an_example_showing_an_error_may_raise(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The tag the example model already reads for a demonstrated failure."""
+    _an_item(request, monkeypatch, "1 / 0\n", ["expect_failure"]).runtest()
+
+
+def test_an_example_ending_in_a_multi_line_call_runs_whole() -> None:
+    """The last statement is the last statement, not the last line."""
+    from gaspatchio.examples.docstrings.models import DocstringCodeExample
+
+    example = DocstringCodeExample(
+        snippet="total = sum(\n    [1, 2],\n)\nprint(\n    total,\n)\n",
+        object_context="module.function",
+        example_index=0,
+        raw_source_location=("module.py", 1),
+    )
+    stdout, _value, raised = example.run()
+    assert raised is None
+    assert stdout.strip() == "3"

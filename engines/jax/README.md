@@ -331,6 +331,15 @@ sum against the range, and refuses the run by name at the second period
 period of a running fold, that has no `i64` to be written in is refused by
 all three. A total whose partials all fit is exact here as there.
 
+**A curve fitted to its knots, Smith-Wilson or Svensson, is refused wherever
+it is read (section 11.1.31).** Its rates come from its parameters, and a line
+drawn between its knots would answer a different curve, so `curve.spot_rate`
+and `curve.discount_factor` over one are refused by name, in the same sentence
+from `validate` and from the run, and the move is to run the model on Polars.
+A curve built from parameters alone, holding no knots, reads the same sentence.
+A plain knot curve, linear between its knots and flat outside them, lowers as
+before.
+
 **A check on a computed value is counted where it was computed.** A finding
 needs two numbers from a check's cells: how many it caught, and the first of
 them, off which the report names a policy and a period. So each batch's program

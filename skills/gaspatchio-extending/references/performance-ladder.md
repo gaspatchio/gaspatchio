@@ -207,7 +207,7 @@ If your calculation has the form `state[t] = f(state[t-1])` or `state[t] = f(sta
 |---------|----------------|--------|
 | Forward accumulation: `state[t] = state[t-1] * M + A` | Yes | `projection.accumulate()` |
 | Backward linear recursion: `V(t) = M[t] * V(t+1) + A[t]` | Yes | `projection.accumulate(..., reverse=True)` (`prospective_value()` for pure discounting) |
-| Backward recursion that is not linear (a floor, a max) | No named form in 1.0 | A doubling scan in core operations (model-building's `recursive-patterns.md`, Pattern 7); a reverse running max, `cum_max(reverse=True)`, is reachable only through the escape (`engine_native`) |
+| Backward recursion that is not linear (a floor, a max) | A constant floor: the rollforward builder over reversed lists | For a floor that varies, a doubling scan in core operations (model-building's `recursive-patterns.md`, Pattern 7); a reverse running max, `cum_max(reverse=True)`, is reachable only through the escape (`engine_native`) |
 | Probability moving between states (multi-state occupancy) | No named form in 1.0 — and not the rollforward | One `projection.accumulate()` per state on the fixed-step axis, sweeps where states feed back (Pattern 6) |
 | Cumulative product: `tpx[t] = prod(1-qx[0..t])` | Yes | `projection.cumulative_survival()` |
 | Multi-step rollforward: AV with charges, credits, premiums | Yes | `projection.rollforward()` |

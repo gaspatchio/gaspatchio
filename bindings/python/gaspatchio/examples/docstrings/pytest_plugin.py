@@ -101,6 +101,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="Execute docstring examples and validate output.",
     )
+    group.addoption(
+        "--gp-examples-must-run",
+        action="store_true",
+        default=False,
+        help="Execute docstring examples and fail any that raises.",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -241,9 +247,20 @@ class DocstringExampleItem(pytest.Item):
 
         # Run runtime validation if enabled and there's expected output
         run_examples = self.config.getoption("gp_run_examples", default=False)
-        if run_examples and self.example.output is not None:
+        must_run = self.config.getoption("gp_examples_must_run", default=False)
+        tags = set(self.example.prefix_tags)
+        if (run_examples or must_run) and not tags & {"no_run", "expect_failure"}:
             validator = GaspatchioEvalExample(update_examples_mode=False)
-            runtime_issues = validator.run_custom_check(self.example)
+            # An example whose expected result is a comment still has to run;
+            # what it prints is only compared where an output block declares it.
+            runtime_issues = validator.run_custom_check(
+                self.example,
+                only_crashes=(
+                    not run_examples
+                    or self.example.output is None
+                    or "no_output_check" in tags
+                ),
+            )
             if runtime_issues:
                 self.failure_reason = runtime_issues[0]
                 snippet_code = self.example._extract_code_from_snippet()  # noqa: SLF001

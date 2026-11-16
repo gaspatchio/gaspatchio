@@ -165,7 +165,7 @@ def test_a_file_that_holds_no_json_is_unreadable_and_not_invalid(
     result = runner.invoke(app, ["validate", str(path)])
 
     assert result.exit_code == 2, result.output
-    assert path.name in result.output
+    assert path.name in _unwrapped(result.output)
 
 
 # The characters Rich draws a panel's frame with, which a fold inside the

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 import polars as pl
 
 from gaspatchio._semantic.ir import WhenThen
+from gaspatchio._warning import warn
 from gaspatchio.column.column_proxy import ColumnProxy
 from gaspatchio.column.condition_expression import ConditionExpression
 from gaspatchio.column.expression_proxy import ExpressionProxy
@@ -65,7 +66,9 @@ class ConditionalProxy:
             value: Value to return when condition matches. Can be a literal value
                 (number, string, etc.), a column reference (af.column_name), or a
                 computed expression (af.premium * 1.1). For list columns, values
-                are applied element-wise with automatic broadcasting.
+                are applied element-wise with automatic broadcasting. ``None``
+                runs, but records the line ``engine_native`` and warns; see
+                ``otherwise()``.
 
         Returns:
             Self for chaining more .when() or final .otherwise()
@@ -144,6 +147,7 @@ class ConditionalProxy:
         └───────────┴──────────────┴──────────┴─────────────────────────┘
         ```
         """
+        _say_a_null_branch_is_engine_native(value, "then")
         self._values.append(to_node(value))
         return self
 
@@ -254,7 +258,58 @@ class ConditionalProxy:
         - Maintaining baseline premiums: `.otherwise(af.base_premium)`
         - Default growth rates: `.otherwise(0.03)` broadcasts to all months
 
+        **A Blank Branch: `None` Is Engine-Native, `0.0` Is Core**
+
+        `.otherwise(None)` (or `.then(None)`) runs in Polars and gives a
+        null, taking the other branch's type. The calculation graph has no
+        core literal for a null, though, so the line is recorded as an
+        `engine_native` node: an engine that runs only core calculations
+        (`gspio validate --engine jax`) refuses the model. The line warns
+        with a `GaspatchioWarning` naming this. Where the blank means nothing
+        paid, write `0.0` and the line stays core.
+
+        ```python
+        import warnings
+
+        from gaspatchio import ActuarialFrame, GaspatchioWarning, when
+
+        data = {
+            "policy_id": ["P001", "P002", "P003"],
+            "lapsed": [False, True, False],
+            "surrender_value": [1200.0, 950.0, 400.0],
+        }
+        af = ActuarialFrame(data)
+
+        with warnings.catch_warnings(record=True) as heard:
+            warnings.simplefilter("always", GaspatchioWarning)
+            af.paid_blank = when(af.lapsed).then(af.surrender_value).otherwise(None)
+        print(heard[0].category.__name__)
+
+        af.paid = when(af.lapsed).then(af.surrender_value).otherwise(0.0)
+
+        tiers = af.graph.tiers()
+        print(tiers.engine_native)
+        print(tiers.core)
+        print(af.collect())
+        ```
+
+        ```text
+        GaspatchioWarning
+        ('paid_blank@1',)
+        ('paid@1',)
+        shape: (3, 5)
+        ┌───────────┬────────┬─────────────────┬────────────┬───────┐
+        │ policy_id ┆ lapsed ┆ surrender_value ┆ paid_blank ┆ paid  │
+        │ ---       ┆ ---    ┆ ---             ┆ ---        ┆ ---   │
+        │ str       ┆ bool   ┆ f64             ┆ f64        ┆ f64   │
+        ╞═══════════╪════════╪═════════════════╪════════════╪═══════╡
+        │ P001      ┆ false  ┆ 1200.0          ┆ null       ┆ 0.0   │
+        │ P002      ┆ true   ┆ 950.0           ┆ 950.0      ┆ 950.0 │
+        │ P003      ┆ false  ┆ 400.0           ┆ null       ┆ 0.0   │
+        └───────────┴────────┴─────────────────┴────────────┴───────┘
+        ```
         """
+        _say_a_null_branch_is_engine_native(value, "otherwise")
         node = to_node(value)
         for condition, then_value in reversed(
             list(zip(self._conditions, self._values, strict=True))
@@ -439,6 +494,30 @@ def when(condition: Any) -> ConditionalProxy:  # noqa: ANN401
         parent = getattr(condition, "_parent", None)
 
     return ConditionalProxy(_condition_to_node(condition, parent), parent)
+
+
+def _say_a_null_branch_is_engine_native(value: object, branch: str) -> None:
+    """Warn, at the author's line, that a ``None`` branch leaves the core tier.
+
+    The op-tree has no null literal (graph-artifact spec, section 11.1.28:
+    "a producer writes a null branch as an engine-native fragment"), so the
+    line runs in Polars and is recorded ``engine_native``. Refusing it would
+    refuse a shape the spec admits; saying nothing let a model become
+    non-portable in silence, found only when a core-only engine refused it.
+    """
+    if value is not None:
+        return
+    warn(
+        f"when/then/otherwise: its {branch} branch is None, a null, and the "
+        "calculation graph has no core literal for a null, so this line is "
+        "recorded as an engine_native node. It runs in Polars as written, but "
+        "af.graph.tiers() lists it under engine_native and an engine that runs "
+        "only core calculations (gspio validate --engine jax) refuses the "
+        f"model. If the blank stands for nothing paid or held, write "
+        f".{branch}(0.0) and the line stays core. If a missing value is meant "
+        "and the model must stay portable, write a sentinel the later "
+        "formulas test with == instead of is_null()."
+    )
 
 
 def _condition_to_node(condition: Any, parent: ActuarialFrame | None) -> OpNode:  # noqa: ANN401

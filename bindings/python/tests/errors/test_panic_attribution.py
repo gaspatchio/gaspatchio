@@ -75,7 +75,7 @@ class TestWhenBranchPanicAttribution:
     def test_attribution_names_column_and_expression(self) -> None:
         """The converted error carries the #39 attribution block."""
         af = _frame()
-        af.x = when(af.dur == 0).then(_unbroadcastable()).otherwise(0.0)
+        af.x = when(af.dur == 0).then(_unbroadcastable().list.len()).otherwise(0)
         with pytest.raises(pl.exceptions.SchemaError) as excinfo:
             af.collect()
         msg = str(excinfo.value)
@@ -94,7 +94,7 @@ class TestWhenBranchPanicAttribution:
     def test_original_panic_is_chained(self) -> None:
         """The converted error keeps the panic as its cause for debugging."""
         af = _frame()
-        af.x = when(af.dur == 0).then(_unbroadcastable()).otherwise(0.0)
+        af.x = when(af.dur == 0).then(_unbroadcastable().list.len()).otherwise(0)
         with pytest.raises(pl.exceptions.SchemaError) as excinfo:
             af.collect()
         cause = excinfo.value.__cause__

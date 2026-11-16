@@ -40,7 +40,7 @@ Scenario analysis uses two scripts with strict separation of concerns:
 | `model.py` | The projection model as reconciled (`def main(af)`) | **NEVER** |
 | `run_scenarios.py` | Scenario orchestration: build a `ScenarioRun`, run it, write the report | **YES** |
 
-**`model.py` stays UNCHANGED.** All scenario logic goes in `run_scenarios.py`, and `plan.run(af, model.main)` runs the model exactly as `gspio run-model` does. The model needs no `assumptions_override`, no wrapper and no `scenario_id` guard at its lookups: the plan names its targets and answers the model's own reads of them (see *How the plan reaches the model*). The model remains debuggable with `gspio run-model` for any single scenario.
+**`model.py` stays UNCHANGED.** All scenario logic goes in `run_scenarios.py`, and `plan.run(af, model.main)` runs the model exactly as `gspio run-model` does. The model needs no `assumptions_override`, no wrapper and no `scenario_id` guard at its lookups: the plan names its targets and answers the model's own reads of them (see [references/plan-wiring.md](references/plan-wiring.md)). The model remains debuggable with `gspio run-model` for any single scenario.
 
 ```bash
 # Model works standalone — no scenario machinery needed
@@ -282,37 +282,7 @@ print(result.audit_path)               # JSON audit sidecar
 
 ## How the plan reaches the model
 
-`plan.run(af, model.main)` calls the model once per batch as `model.main(af)`, with:
-
-- `af` cross-joined with the batch's `scenario_id` column, every `column=` shock already applied to its column for each scenario's rows (recorded as an assignment at the plan's line).
-- The model's own `Table.lookup` / `MortalityTable.at` reads of a table a shock names answered with that table stacked per scenario, keyed by the axis. Tables no shock names are read exactly as written.
-- With `master_seed=` on the plan, each scenario's seed as the `rng_seed` column, at any batch size. A model that draws its own randomness reads `af.rng_seed`.
-- A compiled rollforward reads a shocked table through a column: `af.coi = coi.lookup(age=af.attained)`, then `.charge(af["coi"])`. Each scenario's balances are then the ones it reaches alone, on Polars and on JAX. A lookup handed to the rollforward directly is refused, since its operands are bare columns.
-- Every fold is the same bits at any batch size and on every run: each scenario is folded on its own rows, in the run's order.
-- A read across rows in the model -- a `sum`, `rank` or `over` through `.polars_native()` or raw `pl.col`, or `pl.len()` -- is refused on the axis at any batch size, in a filter's condition as in an assignment, since its rows are every scenario's copy of every policy. Compute a figure across the book before the run, as a model-point column the model reads, or partition the read by the scenario: `pl.col("sa").sum().over("scenario_id")` reads one scenario's copy of the book, and a plan never cuts the policies into batches, so it is each scenario's own figure and runs; further keys stay inside that copy, so `.over(["scenario_id", "product"])` runs too. A shared projection grid sized from the rows (`per_policy=False` over a column horizon or a maximum age) is refused on the axis too: leave `per_policy` at its default.
-
-A model written for the old door still runs: a `"scenario_id" in table.dimensions` guard is false on the model's own table. A function requiring `tables=`/`drivers=` is refused with the move; that three-argument form stays only on `for_each_scenario`'s ids and drivers shapes.
-
-The binding is strict, and each refusal names the next move:
-
-| You wrote | The run says |
-|---|---|
-| a shock with no target, or with both `table=` and `column=` | names the targets; confine rows with `FilteredShock(where=…)` |
-| `table=` a name no read of the model reached | after the first batch, the tables the model did read, and the closest |
-| `column=` a column the model points do not hold | the closest column, and the conversion skill's scalar rule |
-| `TimeConditionalShock` on a `column=` | a model-point column has no periods |
-| a `where=`/`when=` on a column the shocked table does not hold | the table's columns: a condition reads the table's own keys, not projection time |
-| a `where=`/`when=` that selects no row of its table (`{"policy_year": {"eq": 0}}` on a table keyed from 1) | what the table holds (`'policy_year' holds 1 to 20`): the scenario would equal BASE |
-| `table.to_dataframe()` of a shocked table inside the run | its rows differ by scenario; read it through `lookup()` |
-| a model that returns (or reads from) a frame without `scenario_id` | carry the axis through the model |
-| `base_tables` holding a table the model's differs from | the two content fingerprints |
-
-**BASE is the reconciled model, checked.** Each scenario's fingerprint is the scenario composed alone — the model over the book, reading only its own shocked tables and columns — so `result.fingerprint("BASE") == model.main(af).graph.fingerprint()`. Put that equality in the report. On a run of more than one scenario `result.graph_fingerprint` is `None`: there is no one calculation to name, so ask `result.fingerprint(sid)` per scenario.
-
-### What a plan does not do in 1.0
-
-- **No goal seek inside a plan.** Solve outside it (a bisection on `model.main` over the one policy), then ride the solved value in: `FilteredShock(shock=OverrideShock(value=solved), where={"policy_id": "P1"}, column="premium")`.
-- **No yield-curve shock.** A shock names a table or a model-point column, and a `Curve` is neither. Carry the shift as a model-point column the model adds to the curve's rate (`af.spot_shifted = RFR.spot_rate(af.t) + af.curve_shift`) and shock that: `AdditiveShock(delta=0.01, column="curve_shift")`. Or keep the rate itself a model-point column.
+`plan.run(af, model.main)` calls the unchanged model once per batch: `af` arrives cross-joined with `scenario_id`, each `column=` shock already applied, and the model's own reads of a shocked table answered per scenario. What it answers, what it refuses and why, and what a plan does not do in 1.0: [references/plan-wiring.md](references/plan-wiring.md). **Read it before a plan's first run**, in its own tool call.
 
 ---
 
@@ -399,88 +369,13 @@ Every step has a working `run_scenarios.py`. Start from the step closest to what
 
 ## gaspatchio Scenario API Quick Reference
 
-### Plan & loop
+Every symbol for the plan and loop, shocks, aggregators and helpers is tabulated in
+[references/api-quick-reference.md](references/api-quick-reference.md). Read it before writing
+a plan. The three rules that catch people out:
 
-| Symbol | What It Does |
-|---|---|
-| `ScenarioRun(shocks, aggregations, base_tables=…, master_seed=…)` | Typed plan dataclass; hashable; `source_sha()`, `to_yaml()`, `describe()`, `run()` |
-| `ScenarioRun.run(af, model.main, *, batch_size, audit, versions, return_full_grid, sink_dir)` | Runs the reconciled model under the plan via the bounded-memory loop; returns `ScenarioResult`. `return_full_grid=True` writes every scenario's projection to Parquet, one file per batch, and needs `sink_dir=` |
-| `ScenarioResult.aggregations[alias]` | With `.over("scenario_id")`: a `pl.DataFrame`, one row per scenario (a `Period*` one, one row per scenario and period). Without: one value folded over every row of the run — all scenarios together |
-| `ScenarioResult.audit_path` | Path to the JSON audit sidecar when `run(audit=...)` |
-| `ScenarioResult.graph_fingerprint` | `None` on a run of more than one scenario — use `fingerprint(sid)` |
-| `ScenarioResult.fingerprint(sid)` | The calculation one scenario folded, composed alone (`audit=` runs) |
-| `ScenarioResult.bases` | Per shocked table: the content fingerprint the shock was applied to, and its file |
-| `for_each_scenario(af, scenarios, model_fn, aggregations)` | Lower-level loop; `ScenarioRun.run` builds on this. Ids and drivers shapes keep `model_fn(af, *, tables, drivers)` |
-| `with_scenarios(af, ids)` | Low-level cross-join — escape hatch for one-shot exploration |
-
-### Shock composables
-
-In a plan every shock names exactly one target: `table=` an assumption table the model reads, by the name its `Table` was built with, or `column=` a model-point column. An untargeted or doubly-targeted shock, a table no read reaches, or a column the book does not hold is refused. A wrapped or piped inner shock takes its outer shock's target.
-
-| Class | Operation |
-|---|---|
-| `MultiplicativeShock(factor=…)` | Scale by factor |
-| `AdditiveShock(delta=…)` | Add constant |
-| `OverrideShock(value=…)` | Replace |
-| `ClipShock(min_value=…, max_value=…)` | Cap/floor |
-| `FilteredShock(shock=…, where=…)` | Dimension WHERE clause |
-| `TimeConditionalShock(shock=…, when=…)` | Time WHEN clause (`table=` only) |
-| `PipelineShock(shocks=(…))` | Chain operations left-to-right |
-| `MaxShock` / `MinShock` | Element-wise max/min of two shocks (`MaxShock(MultiplicativeShock(0.5), AdditiveShock(-0.2))` is the Solvency II lapse-down floor) |
-
-### Aggregators (with `.alias(name)` + `.over(by)` / `.of(expr)`)
-
-| Class | Reduction |
-|---|---|
-| `Sum`, `Mean`, `Min`, `Max`, `Count` | Trivial parallel-merge |
-| `ArgMin`, `ArgMax` | Returns the partition key (e.g. `scenario_id`) |
-| `Variance`, `Std` | Welford-Chan parallel-merge |
-| `Quantile(levels=…)`, `Median` | DDSketch-backed, mergeable |
-| `CTE(level=…, direction=…)` | Tail conditional expectation (SCR-shape) |
-| `QuantileRank(at=…)` | Inverse — fraction below a threshold |
-| `BaseAggregator` | Subclass for custom merge-able metrics |
-
-### Per-Period Aggregators (vector output — term structure)
-
-Every scalar aggregator above has a **`Period*` twin** that folds a per-period column period by period. Use `Period*` when you need the full term structure of a metric across the projection — e.g. net cashflow or reserve *over time* under each stress — not just its present value. (A scalar aggregator over a per-period column is refused, naming its `Period*` form.)
-
-A `Period*` aggregator gives one value per projection boundary — `n_periods + 1` values. With `.alias(name).over("scenario_id")` it returns a long `pl.DataFrame`, one row per scenario and period (`scenario_id`, `period`, `name`); without `.over()` it returns an array summed over every row the run folded — on a scenario run, across all scenarios together, so name the scenario axis with `.over()` whenever the plan has more than one scenario.
-
-| Class | Vector reduction |
-|---|---|
-| `PeriodSum`, `PeriodMean`, `PeriodMin`, `PeriodMax`, `PeriodCount` | Parallel-merge per period |
-| `PeriodStd`, `PeriodVariance` | Welford-Chan per period |
-| `PeriodMedian` | DDSketch-backed, mergeable |
-| `PeriodQuantile(levels=(0.05, 0.5, 0.95))` | DDSketch-backed; `levels` kwarg |
-| `PeriodCTE` | Per-period tail conditional expectation |
-| `VectorAggregator` | Subclass for custom per-period metrics |
-
-**Same modifier surface as scalar aggregators.** Chain `.alias()` and `.over()` identically:
-
-```python
-from gaspatchio.scenarios import PeriodSum, PeriodQuantile
-
-aggregations=(
-    PeriodSum("net_cf").alias("net_cf").over("scenario_id"),          # long frame: scenario_id, period, net_cf
-    PeriodSum("reserve").alias("reserve"),           # no .over(): every scenario summed together
-    PeriodQuantile("net_cf", levels=(0.05, 0.95)).alias("net_cf_q"),  # across the run, per level
-)
-```
-
-**Quantiles per scenario.** `Median`, `CTE`, `QuantileRank`, `PeriodMedian` and `PeriodCTE` take `.over("scenario_id")`. `Quantile.over()` and `PeriodQuantile.over()` are not in 1.0 and are refused where `.over()` is written (`NotImplementedError`, naming the forms that work); use them without `.over()` for the run-wide distribution.
-
-### Helpers (still public, less canonical than `ScenarioRun`)
-
-| Symbol | When To Use |
-|---|---|
-| `parse_scenario_config(config_list)` | When the recipe arrives as JSON/dict (typical LLM emission) — produces the `shocks` dict for `ScenarioRun` |
-| `Table.with_shock(shock, name=…)` | Apply a single shock to a single Table — interactive one-off exploration. Give each copy its own `name=`: without one every copy is `<name>_shocked`, and the second re-registers over the first |
-| `Table.from_scenario_files(…)` / `from_scenario_template(…)` | Load scenario-varying assumption tables that come as separate files |
-
-> **Same aggregators, no-scenario path.** The `Sum`, `PeriodSum`, `PeriodQuantile` family
-> above also drives `run_aggregated` — the base-case (no-scenario) scale runner. If you
-> need portfolio totals or term-structure metrics without stress scenarios, see
-> `model-building` → [references/running-at-scale.md](../model-building/references/running-at-scale.md).
+- In a plan every shock names exactly one target: `table=` or `column=`.
+- A scalar aggregator over a per-period column is refused. Use its `Period*` twin.
+- `Quantile.over()` and `PeriodQuantile.over()` are not in 1.0 and are refused.
 
 ---
 

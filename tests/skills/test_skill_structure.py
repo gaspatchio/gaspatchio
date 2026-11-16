@@ -63,6 +63,23 @@ def test_skill_has_completion_gate(skill_name: str) -> None:
     )
 
 
+@pytest.mark.parametrize("skill_name", EXPECTED_SKILLS)
+def test_skill_stays_under_the_line_guidance(skill_name: str) -> None:
+    """SKILL.md loads whole when the skill fires, so detail belongs in references."""
+    lines = (SKILLS_DIR / skill_name / "SKILL.md").read_text().count("\n")
+    assert lines <= 500, f"{skill_name} SKILL.md is {lines} lines; move detail to references/"
+
+
+@pytest.mark.parametrize("skill_name", EXPECTED_SKILLS)
+def test_skill_reference_links_resolve(skill_name: str) -> None:
+    """A relative link in SKILL.md or a reference file names a file that exists."""
+    skill_dir = SKILLS_DIR / skill_name
+    for doc in [skill_dir / "SKILL.md", *sorted(skill_dir.glob("references/*.md"))]:
+        for target in re.findall(r"\]\(([^)#\s]+\.md)\)", doc.read_text()):
+            if "://" not in target:
+                assert (doc.parent / target).is_file(), f"{doc.name}: broken link {target}"
+
+
 def test_model_building_has_references() -> None:
     """Building skill has at least 6 reference files."""
     refs = list((SKILLS_DIR / "gaspatchio-model-building" / "references").iterdir())
@@ -237,3 +254,104 @@ def test_name_rule_rejects_bad_names() -> None:
     assert not NAME_RE.match("Gaspatchio_Quickstart")
     assert not NAME_RE.match("my/skill")
     assert NAME_RE.match("gaspatchio-quickstart")
+
+
+# --- Read size: what an agent can take in one tool call ---------------------
+#
+# Codex CLI 0.166.0 cuts one tool output at 10,000 tokens (its model cache's
+# truncation_policy), keeping the head and tail and dropping the middle. At its
+# own reckoning of about four bytes a token that is about 40 KB, and code-heavy
+# markdown tokenizes denser than that. An agent that read several
+# SKILL.md files in one command lost the middle of them without knowing it
+# (2026-11-10). So each SKILL.md has to fit one read with room
+# to spare, and an index says which one to read and to read one per call.
+
+SKILL_MD_MAX_BYTES = 24_000
+INDEX_SKILL = "gaspatchio-skill-index"
+INDEX_MAX_BYTES = 4_000
+
+
+@pytest.mark.parametrize("skill_name", EXPECTED_SKILLS)
+def test_skill_md_fits_one_read(skill_name: str) -> None:
+    """A SKILL.md stays well under one tool call's output limit."""
+    size = (SKILLS_DIR / skill_name / "SKILL.md").stat().st_size
+    assert size <= SKILL_MD_MAX_BYTES, (
+        f"{skill_name} SKILL.md is {size:,} bytes (max {SKILL_MD_MAX_BYTES:,}); "
+        "move detail to references/ and link it"
+    )
+
+
+def test_index_routes_to_every_skill_one_read_at_a_time() -> None:
+    """The index names every other skill and says to read one SKILL.md per call."""
+    path = SKILLS_DIR / INDEX_SKILL / "SKILL.md"
+    assert path.stat().st_size <= INDEX_MAX_BYTES
+    text = path.read_text()
+    for name in EXPECTED_SKILLS:
+        if name != INDEX_SKILL:
+            assert f"`{name}`" in text, f"the index does not route to {name}"
+    assert "one SKILL.md per tool call" in " ".join(text.split())
+
+
+def test_index_is_first_in_routing_order() -> None:
+    """An agent that reads the registry in order meets the index first."""
+    assert EXPECTED_SKILLS[0] == INDEX_SKILL
+
+
+def test_docs_lookups_are_read_where_they_answer() -> None:
+    """``gspio docs`` output is read in the terminal, never redirected to a file.
+
+    Agents wrote ``gspio docs`` answers to a file, and their record could
+    then not tell which docs version had answered. The index and
+    the building skill's look-up gate both say so.
+    """
+    for name in (INDEX_SKILL, "gaspatchio-model-building"):
+        text = " ".join((SKILLS_DIR / name / "SKILL.md").read_text().split())
+        assert "do not redirect `gspio docs` output to a file" in text.lower(), name
+
+
+def test_the_first_period_from_a_column_is_a_conditional() -> None:
+    """The gotcha list names the idiom for opening each run with its own value."""
+    text = (SKILLS_DIR / "gaspatchio-model-building" / "references" / "gotchas.md").read_text()
+    assert "when(af.month == 0).then(" in text
+
+
+def test_a_null_branch_is_named_as_engine_native() -> None:
+    """The gotcha list says ``None`` in a ``when`` branch runs only on Polars."""
+    text = (SKILLS_DIR / "gaspatchio-model-building" / "references" / "gotchas.md").read_text()
+    assert ".otherwise(None)" in text
+    assert "engine_native" in text.split(".otherwise(None)", 1)[1].split("\n", 1)[0]
+
+
+def test_the_unroll_advice_in_the_skills_says_where_it_stops_working() -> None:
+    """Both references that teach unrolling give its limit and point past it."""
+    refs = {
+        "recursive-patterns": SKILLS_DIR
+        / "gaspatchio-model-building"
+        / "references"
+        / "recursive-patterns.md",
+        "spreadsheet-conversion": SKILLS_DIR
+        / "gaspatchio-model-discovery"
+        / "references"
+        / "spreadsheet-conversion.md",
+    }
+    for name, path in refs.items():
+        text = " ".join(path.read_text().split())
+        assert "a few dozen periods" in text, name
+        assert "square of the period count" in text, name
+
+
+def test_the_tolerance_advice_in_the_skills_stops_at_an_unstable_step() -> None:
+    """Both references say the tolerance holds only while no multiplier exceeds 1.
+
+    Two multi-state rooms followed "use accumulate and the tolerance" onto an
+    explicit Euler step that is unstable at extreme ages, where the two orders
+    were percent apart and no tolerance could pass.
+    """
+    for path in (
+        SKILLS_DIR / "gaspatchio-model-building" / "references" / "recursive-patterns.md",
+        SKILLS_DIR / "gaspatchio-model-discovery" / "references" / "spreadsheet-conversion.md",
+    ):
+        text = " ".join(path.read_text().split())
+        assert "at most 1 in size" in text, path.name
+        assert "no tolerance holds" in text, path.name
+        assert "rounding, not a result" in text, path.name

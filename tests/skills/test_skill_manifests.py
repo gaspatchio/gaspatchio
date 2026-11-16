@@ -115,6 +115,14 @@ def test_readme_count_and_list_in_sync() -> None:
     assert f"- **{len(order)} skills**: {', '.join(order)}" in text
 
 
+def test_readme_says_how_to_install_for_codex() -> None:
+    """Codex installs from the marketplace, and the README gives both commands."""
+    text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "codex plugin marketplace add gaspatchio/gaspatchio" in text
+    assert "codex plugin add gaspatchio@gaspatchio" in text
+    assert "--ref release/1.0" in text
+
+
 def test_plugin_meta_loads() -> None:
     """The [plugin] table exposes the canonical plugin metadata."""
     gen = _load_generator()

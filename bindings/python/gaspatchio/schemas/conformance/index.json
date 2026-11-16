@@ -10,12 +10,12 @@
     "portable-domain-refusal": 135,
     "recording-door-value": 7,
     "selection-value": 8,
-    "value": 733
+    "value": 742
   },
-  "producer_checks": 841,
+  "producer_checks": 850,
   "boundary_review": {
     "path": "boundary-review.json",
-    "sha256": "162c1be58c63b4a3faccbefda76293e3b4ee90c11a95880c17008fca3e8b2baa"
+    "sha256": "2422356a25a48ed9e07385f012f6b80886f9b05f1459df8e7ffd9b91302577ea"
   },
   "bundles": [
     {
@@ -89,6 +89,11 @@
       "cases": 13
     },
     {
+      "path": "../vectors/non-finite-and-maximum-age.json",
+      "sha256": "6969b31f01368fbb5ddbb2e669e2b4ee52cbc9d6d013adf0cdbd9a5b704e3404",
+      "cases": 9
+    },
+    {
       "path": "../vectors/normal-cdf.json",
       "sha256": "19ccd0686ab8059463d8839f3c29fb9067bf4db96e4a724f6469df4a8f7ea5e2",
       "cases": 10
@@ -148,7 +153,7 @@
     "jax": {
       "schema": "gaspatchio-engine-coverage/v0-preview.1",
       "engine": "jax",
-      "engine_version": "0.1.0rc2",
+      "engine_version": "0.1.0rc3",
       "operations": [
         {
           "identifier": "add",
@@ -1135,6 +1140,16 @@
         {
           "bundle": "existing-contracts.json",
           "id": "ceil-bounded-True",
+          "kind": "value"
+        },
+        {
+          "bundle": "non-finite-and-maximum-age.json",
+          "id": "ceil-non-finite-policies",
+          "kind": "value"
+        },
+        {
+          "bundle": "non-finite-and-maximum-age.json",
+          "id": "ceil-non-finite-periods",
           "kind": "value"
         },
         {
@@ -2687,6 +2702,16 @@
         {
           "bundle": "existing-contracts.json",
           "id": "floor-bounded-True",
+          "kind": "value"
+        },
+        {
+          "bundle": "non-finite-and-maximum-age.json",
+          "id": "floor-non-finite-policies",
+          "kind": "value"
+        },
+        {
+          "bundle": "non-finite-and-maximum-age.json",
+          "id": "floor-non-finite-periods",
           "kind": "value"
         },
         {
@@ -4886,6 +4911,16 @@
           "kind": "value"
         },
         {
+          "bundle": "non-finite-and-maximum-age.json",
+          "id": "prospective-value-literal-rate-end-of-period",
+          "kind": "value"
+        },
+        {
+          "bundle": "non-finite-and-maximum-age.json",
+          "id": "prospective-value-literal-rate-end-of-period-hole",
+          "kind": "value"
+        },
+        {
           "bundle": "nulls.json",
           "id": "null-prospective_value-period",
           "kind": "value"
@@ -5040,6 +5075,11 @@
           "kind": "value"
         },
         {
+          "bundle": "non-finite-and-maximum-age.json",
+          "id": "maximum-age-anniversary-mask",
+          "kind": "value"
+        },
+        {
           "bundle": "schedule.json",
           "id": "from_calendar_grid-projection_frame.anniversary_mask",
           "kind": "value"
@@ -5133,6 +5173,11 @@
           "kind": "integrity-mutation"
         },
         {
+          "bundle": "non-finite-and-maximum-age.json",
+          "id": "maximum-age-period-dates",
+          "kind": "value"
+        },
+        {
           "bundle": "schedule.json",
           "id": "from_calendar_grid-projection_frame.period_dates",
           "kind": "value"
@@ -5188,6 +5233,11 @@
         {
           "bundle": "fixed-step.json",
           "id": "fixed-step-t-years-steps-per-year",
+          "kind": "value"
+        },
+        {
+          "bundle": "non-finite-and-maximum-age.json",
+          "id": "maximum-age-t-years",
           "kind": "value"
         },
         {

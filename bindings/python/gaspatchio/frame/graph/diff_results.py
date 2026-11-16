@@ -860,11 +860,32 @@ def _comparable(
     try:
         return before.cast(pl.String), after.cast(pl.String), False
     except pl.exceptions.PolarsError:
-        return (
-            pl.Series(before.to_list(), dtype=pl.Object).cast(pl.String, strict=False),
-            pl.Series(after.to_list(), dtype=pl.Object).cast(pl.String, strict=False),
-            False,
-        )
+        # A type the engine will not cast to text -- a struct, an object --
+        # is written as each value's own text, which every value has.
+        return _as_text(before), _as_text(after), False
+
+
+def _as_text(values: pl.Series) -> pl.Series:
+    """Return each value's own text, a missing value staying missing."""
+    return pl.Series(
+        [None if value is None else str(value) for value in values.to_list()],
+        dtype=pl.String,
+    )
+
+
+def _moved_cells(
+    before: pl.Series, after: pl.Series
+) -> tuple[pl.Series, tuple[pl.Series, pl.Series] | None]:
+    """Return which cells moved, and the two sides as floats where they are floats.
+
+    A value against a list of values -- a line edited from one value per
+    policy to one per period, or back -- has changed shape, and no number
+    is equal to a list of them: every cell moved but where both are missing.
+    """
+    if _depth(before.dtype) != _depth(after.dtype):
+        return before.is_not_null() | after.is_not_null(), None
+    held, other, is_float = _comparable(before, after)
+    return ~held.eq_missing(other), (held, other) if is_float else None
 
 
 def _measure(before: pl.Series, after: pl.Series) -> _Measured:
@@ -880,8 +901,7 @@ def _measure(before: pl.Series, after: pl.Series) -> _Measured:
     in the book's order and the timeline's at a tie.
     """
     cells, lengths = _cells(before, after)
-    held, other, is_float = _comparable(cells.get_column("b"), cells.get_column("a"))
-    moved = ~held.eq_missing(other)
+    moved, floats = _moved_cells(cells.get_column("b"), cells.get_column("a"))
     policy = cells.get_column("p")
     period = cells.get_column("t")
 
@@ -905,7 +925,8 @@ def _measure(before: pl.Series, after: pl.Series) -> _Measured:
     max_relative: float | None = None
     from_zero = False
     worst_at: int | None = None
-    if is_float and moved.any():
+    if floats is not None and moved.any():
+        held, other = floats
         finite = (held.is_finite() & other.is_finite()).fill_null(value=False) & moved
         apart = (other - held).abs()
         max_abs = _float(apart.filter(finite).max())
@@ -927,8 +948,8 @@ def _measure(before: pl.Series, after: pl.Series) -> _Measured:
         worst = (
             int(policy[worst_at]),
             None if at_period is None else int(at_period),
-            cells.get_column("b")[worst_at],
-            cells.get_column("a")[worst_at],
+            _cell(cells.get_column("b"), worst_at),
+            _cell(cells.get_column("a"), worst_at),
         )
     length_example = None
     if lengths is not None and length_rows.len() > 0:
@@ -950,6 +971,12 @@ def _measure(before: pl.Series, after: pl.Series) -> _Measured:
         worst=worst,
         lengths=length_example,
     )
+
+
+def _cell(values: pl.Series, at: int) -> object:
+    """Return one cell as a value, a list of values read as a list."""
+    value = values[at]
+    return value.to_list() if isinstance(value, pl.Series) else value
 
 
 def _first_largest(values: pl.Series, among: pl.Series) -> int:

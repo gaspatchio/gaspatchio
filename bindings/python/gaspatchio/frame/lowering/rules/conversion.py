@@ -202,18 +202,17 @@ def _scalar_conversion(
 def _list_conversion(
     value: pl.Expr, *, floating: bool, measured: bool, column: str | None = None
 ) -> pl.Expr:
-    """Convert each list element, refusing a null list or invalid element."""
+    """Convert each list element, refusing a null list or invalid element.
+
+    The cast is not guarded element by element: the checks below refuse every
+    row holding an element it could not convert, so each row that survives
+    holds only whole numbers an i64 has.
+    """
     element = pl.element()
     element_present = (
         _float_is_convertible(element) if floating else element.is_not_null()
     )
-    element_valid = element_present
-    if measured:
-        element_valid = element_present & _integer_in_i64_range(element)
-    safe = value.list.eval(
-        pl.when(element_valid).then(element).otherwise(pl.lit(0)).cast(pl.Int64)
-    )
-    converted = safe + require_valid_rows(
+    converted = value.cast(pl.List(pl.Int64), strict=False) + require_valid_rows(
         _every_period(value, element_present),
         message=checked_integer_refusal(column),
     )

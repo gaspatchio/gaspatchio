@@ -14,7 +14,7 @@ This skill provides orientation and routing. Detailed patterns live in `referenc
 
 ## When to use this skill
 
-This skill can be used standalone. You do NOT need to have run model-discovery first. Use it whenever you are writing or modifying gaspatchio model code.
+Use it whenever you create, edit, or debug a `model_*.py` gaspatchio model. It can be used standalone: you do NOT need to have run model-discovery first. Combine with `gaspatchio-model-discovery` for new models and `gaspatchio-model-reconciliation` when matching a gold standard.
 
 ## Tutorial reference
 
@@ -26,9 +26,7 @@ Every concept in this skill has a worked example in the tutorial:
 - Reconciliation gaps including `accumulate()` vs `cum_prod()` → Level 3 Step 06 (`tutorial/level-3-mini-va/steps/06-reconcile/`)
 - Scenarios → Level 5 (`tutorial/level-5-scenarios/`)
 
-## When to Use
-
-Use this skill when you create, edit, or debug a `model_*.py` gaspatchio model. Combine with `gaspatchio-model-discovery` for new models and `gaspatchio-model-reconciliation` when matching a gold standard.
+Start from the level closest to your target and adapt: Level 3 base is an 11-section model with inline data, Steps 01-05 each add one feature, and Level 4 is the 860-line production model reconciled to 0.0000% against lifelib.
 
 ---
 
@@ -41,6 +39,8 @@ Before using ANY gaspatchio method you haven't verified in this session, run:
 ```bash
 uv run gspio docs "<method or concept>"
 ```
+
+Read the answer where it prints. Do not redirect `gspio docs` output to a file.
 
 Before using actuarial terminology you're unsure about:
 
@@ -138,16 +138,7 @@ uv run python3 -c "import polars as pl; ..."                                    
 
 **Agent workflow**: Always use `--output-file` to save model results as parquet. Read the parquet with `gspio describe --json` or inline Polars for validation. Do NOT parse stdout.
 
-**Portfolio scale**: `gspio run-model` and `af.collect()` materialise the full result — they OOM at portfolio scale. Use the memory-bounded runners instead:
-
-| Scale | Runner | Deliverable |
-|---|---|---|
-| Small / interactive | `gspio run-model` / `af.collect()` | Full DataFrame in memory |
-| Portfolio aggregates (BEL, CTE, term structure) | `run_aggregated(model_fn, mp, aggregations)` | `AggregatedResult` |
-| The same, for a book too big to hold or on a GPU | `run_aggregated(..., engine="jax")` (`gaspatchio[jax]`) | `AggregatedResult` |
-| Full per-policy output (audit, downstream join) | `run_to_parquet(model_fn, mp, output_dir)` | Parquet shards |
-
-See [references/running-at-scale.md](references/running-at-scale.md) for the full API, gotchas, and examples.
+**Portfolio scale**: `gspio run-model` and `af.collect()` materialise the full result and OOM at portfolio scale. Use the memory-bounded runners: `run_aggregated(model_fn, mp, aggregations)` for portfolio aggregates (BEL, CTE, term structure; `engine="jax"` for a book too big to hold or on a GPU), and `run_to_parquet(model_fn, mp, output_dir)` for full per-policy output as parquet shards. API, gotchas and examples: [references/running-at-scale.md](references/running-at-scale.md).
 
 Model directories (e.g., `my-model/`) are NOT Python packages. To import a model file programmatically from a driver script, use `importlib.util.spec_from_file_location()`. Inside the model, import your own helper modules by name — `import my_helpers` or `from my_helpers import load_tables`, at the top of the model file — never by path: the audit record's `model.modules` lists only what import statements name, so a helper loaded through `importlib`, `runpy` or `exec` is not on the record, and `gspio verify --model` reports the modules as "could not be checked".
 
@@ -224,7 +215,7 @@ Details: [references/model-phases.md](references/model-phases.md)
 
 - **Attribute notation for assignment**: `af.mortality_rate = ...` — concise, reads naturally on the left-hand side.
 - **Bracket notation when reading inside framework calls**: `Table.lookup(age=af["age"])`, `curve.discount_factor(t=af["t"])`, `b["av"].grow(af["rate"])`. The bracket form is the canonical actuary-facing column reference and works at every **gaspatchio** call site — Table.lookup, Curve methods, the rollforward builder, and the accessors all accept `af["col"]` (ColumnProxy) directly via duck-typed `_to_expr()`. Attribute access (`af.age`) returns the same ColumnProxy and is equally valid, but the bracket form makes the column reference more visually distinct from method calls in the same expression.
-- **The duck-typing stops at gaspatchio's boundary.** Polars *free functions* do not know the proxy: `pl.max_horizontal(af["a"], af["b"])` raises `cannot create expression literal for value of type ColumnProxy` (gh#102), and the rest of the `*_horizontal` family fails the same way. For Excel's `MAX`/`MIN` against fixed bounds — the clamp — write `.clip()`: `af["age_key"].clip(AGE_MIN, AGE_MAX)`, or `.clip(lower_bound=…)` / `.clip(upper_bound=…)` one-sided. For an element-wise max/min of two *columns*, write the conditional: `when(af.a > af.b).then(af.a).otherwise(af.b)` — it broadcasts on list columns, where the polars horizontal functions would not. **Null contract:** this is not Excel's blank-ignoring `MAX`. A null comparison takes the `otherwise` branch (scalar: `MAX(7, null)` → null, where Excel returns 7), and on list columns a null in *either* operand nulls that element. If an operand can be null, `fill_null()` it first to state explicitly what a blank means.
+- **The duck-typing stops at gaspatchio's boundary**: Polars free functions such as `pl.max_horizontal(af["a"], af["b"])` raise on a column proxy (gh#102). Clamp with `.clip()`; take an element-wise max or min of two columns with `when/then` — and mind its null contract, which is not Excel's: [references/conditionals-and-lists.md](references/conditionals-and-lists.md).
 - **Bracket notation also required** for column names that aren't valid Python attribute names: `af["Policy Number"]`, `af["class"]`.
 - **No underscore-prefixed names**: `af._flag` will raise an error — use `af.flag` instead.
 - **snake_case** for calculated columns; raw input columns may need aliases first.
@@ -260,21 +251,7 @@ See Level 4 model.py lines 204-277 for the canonical example.
 
 ---
 
-## Product-specific formulas
-
-Different products may use different formulas. Use parameter-driven selection:
-
-```python
-# WRONG: hardcoded single formula
-af.dyn_lapse_factor = (1.0 - af.M * (1.0 / af.itm - af.D)).clip(af.L, af.U)
-
-# RIGHT: parameter-driven selection
-af.dl001_factor = (1.0 - af.M * (1.0 / af.itm - af.D)).clip(af.L, af.U)
-af.dl002_factor = (af.Y * af.itm ** af.Power).clip(af.FactorFloor, af.FactorCap)
-af.dyn_lapse_factor = when(af.formula_id == "DL001").then(af.dl001_factor).otherwise(af.dl002_factor)
-```
-
-See Level 3 Step 06 (Gap 3) and Level 4 Section 7 for examples.
+**Product-specific formulas** (one model, several products' formulas): select by a parameter column with `when/then`, never hardcode one — [references/model-phases.md](references/model-phases.md).
 
 ---
 
@@ -290,34 +267,7 @@ See Level 3 Step 06 (Gap 3) and Level 4 Section 7 for examples.
 
 ## Gotcha Quick Reference
 
-These are the top mistakes from real model-building sessions. Each links to the relevant reference file.
-
-| # | Gotcha | What Goes Wrong | Reference |
-|---|--------|----------------|-----------|
-| 1 | Arithmetic-masking blends in conditional code | Old workaround for a fixed limitation — `when/then/otherwise` now handles mixed scalar/list branches | [conditionals-and-lists.md](references/conditionals-and-lists.md) |
-| 2 | `until_value=99` | Truncates final year; ~3% BEL gap | [model-phases.md](references/model-phases.md) |
-| 3 | `proj_year` vs `year` confusion | Stress scenarios silently wrong — mass lapse never fires | [timing-and-dates.md](references/timing-and-dates.md) |
-| 4 | Rebuilding `af.month` by hand | `projection.set()` already materialises `month` (elapsed whole months, `n_periods + 1` point-indexed values). Don't derive it from `period_dates()`. A rollforward input needs one value per *period*: pass a per-policy value as it stands, or build the input from `af.projection.year_fractions()` — not from `month` | [model-phases.md](references/model-phases.md) |
-| 5 | `python3` instead of `uv run python3` | `ModuleNotFoundError: No module named 'polars'` | (this file, Environment section) |
-| 6 | `--policy-id` flag | It's a positional arg, not a flag. `--policy-id-column` is a different thing | (this file, Environment section) |
-| 7 | `prospective_value` timing | `end_of_period` = ordinary annuity (Excel type 0), `beginning_of_period` = annuity-due (type 1); BoP is worth more | [timing-and-dates.md](references/timing-and-dates.md) |
-| 8 | `ceil(t/12)` for proj_year | Leap years cause 1-month offset that compounds under stress | [timing-and-dates.md](references/timing-and-dates.md) |
-| 9 | Column name case mismatch | Polars is case-sensitive; always check `df.columns` first | [common-mistakes.md](references/common-mistakes.md) |
-| 10 | Guessing method signatures | Agents get it wrong ~70% of the time — `gspio docs` first | (this file, MANDATORY section) |
-| 11 | `af.month * 0 + CONSTANT` broadcast hack | Confusing — just assign the scalar directly: `af.rate = CONSTANT` | [common-mistakes.md](references/common-mistakes.md) |
-| 12 | `(1 + rate) ** af.month` scalar^list | Now works — `**` operator handles all list/scalar combinations | [common-mistakes.md](references/common-mistakes.md) |
-| 13 | Boolean masking in audit code | `value * (condition)` is a programmer's trick — use `when/then` | [conditionals-and-lists.md](references/conditionals-and-lists.md) |
-| 14 | Writing `(1 + r) ** (1/12) - 1` inline | `finance.to_monthly()` already exists — use it | (this file) |
-| 15 | Writing `months_between` inline | `date.months_between()` already exists — use it | (this file) |
-| 16 | Scalar `until_value` with mixed terms | All policies get max-length lists; wasted memory and compute — use a per-policy column (`until_value="<col>"`) instead |
-| 17 | Hand-rolling `(1+r)**(-t/12)` for yield-curve discounting | For a term-structure / EIOPA risk-free rate, use `Curve.discount_factor(af.projection.t_years())` — correct interpolation, flat extrapolation, stress-ready | [curves-and-scheduling.md](references/curves-and-scheduling.md) |
-| 18 | Reaching for `.polars_native()` | The line records as `engine_native`: it runs only on Polars, and so does every calculation that reads it — `af.graph.tiers()` names the line, and `gspio validate --engine jax` names it and every calculation that reads it. Prefer the declared form where one exists: `list.reverse()`, `fill_nan(0.0)`, `norm_cdf()`, `accumulate(reverse=True)`, `(af.x >= lo) & (af.x <= hi)` for `is_between` | [common-mistakes.md](references/common-mistakes.md) |
-| 19 | A line refused at assignment | Kind refusals (a number filled with text, branches of two kinds, a date compared with a number), row guards (a period method on a per-policy column, an unnamed `with_columns`), and a table read inside an engine expression each name the line to write instead | [common-mistakes.md](references/common-mistakes.md) |
-| 20 | `previous_period()` feeding a running product | Its default fill is `0.0`, which zeroes every later period of a `cum_prod()` — pass `fill_value=1.0` | [common-mistakes.md](references/common-mistakes.md) |
-| 21 | Reading `accumulate` one step out | Position `t` is the state *after* step `t`; the opening value is not in the list — shift with `.projection.previous_period(fill_value=initial)` to compare with a column that starts at its opening value | [recursive-patterns.md](references/recursive-patterns.md) |
-| 22 | Building Φ from `erf` or a polynomial | `af.z.norm_cdf()` is the standard normal distribution function, recorded as a core operation; Excel's `NORM.S.DIST(z, TRUE)` is `af.z.excel.norm_s_dist()` | [common-mistakes.md](references/common-mistakes.md) |
-
-Full list with code examples: [references/common-mistakes.md](references/common-mistakes.md)
+The mistakes real model-building sessions made most, one line each with the reference that explains it: [references/gotchas.md](references/gotchas.md). **Read it before writing the first calculation**, in its own tool call.
 
 ---
 
@@ -334,6 +284,7 @@ Load these when working in the relevant area:
 | **Timing & dates** | [references/timing-and-dates.md](references/timing-and-dates.md) | PV timing, YEARFRAC, proj_year vs year, BOP/EOP |
 | **Curves & scheduling** | [references/curves-and-scheduling.md](references/curves-and-scheduling.md) | Term-structure discounting (`Curve`), `Schedule`/`Calendar`/`DayCount`, EIOPA/SII/IFRS 17 yield curves |
 | **Scenarios** | [references/scenarios.md](references/scenarios.md) | Stress testing, ScenarioParams, term-structure discounting |
+| **Gotchas** | [references/gotchas.md](references/gotchas.md) | Before the first calculation — the commonest mistakes, one line each |
 | **Common mistakes** | [references/common-mistakes.md](references/common-mistakes.md) | Troubleshooting — full annotated list of real failures |
 | **Recursive patterns** | [references/recursive-patterns.md](references/recursive-patterns.md) | Account value rollforward, cumulative gains, reserve rollforward, running balances |
 | **Aggregate patterns** | [references/aggregate-patterns.md](references/aggregate-patterns.md) | Fund models, per-entity → fund-level P&L, balance sheet, NAV |
@@ -371,18 +322,6 @@ If you believe the model genuinely requires Python loops (this should be extreme
 - **REQUIRED:** If reconciling against a reference (Excel, lifelib, vendor output), invoke `gaspatchio-model-reconciliation` **before writing any reconciliation code**. Do not write your own diff scripts.
 - **REQUIRED:** If running scenarios (stress tests, sensitivities, shocks), invoke `gaspatchio-model-scenarios` **before writing a scenario runner**. Do not write scenarios.py from scratch.
 - **REQUIRED:** When the model is complete, invoke `gaspatchio-model-review` **before claiming the work is done**.
-
-## Tutorial Reference
-
-The `tutorial/` directory contains progressive models that demonstrate every pattern in this skill:
-
-- **Level 3 base** (`tutorial/level-3-mini-va/base/model.py`): 11-section model with inline data. Shows the realistic section breakdown, `when/then/otherwise`, scalar broadcasting, exp/log identity, `previous_period()`, `cum_prod()`.
-- **Level 3 Steps 01-05**: Each adds one feature (parquet files, select mortality, guarantees, dynamic lapse, rate curves).
-- **Level 4** (`tutorial/level-4-lifelib/`): 860-line production model, reconciled to 0.0000% against lifelib. Shows table joins, multi-fund returns, product parameterisation.
-
-When building a new model, start from the tutorial level closest to your target and adapt.
-
----
 
 ## Red Flags — You Are Skipping a Required Skill
 

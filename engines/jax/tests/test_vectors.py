@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""The kit's 909 cases through this engine, one outcome each.
+"""The kit's 918 cases through this engine, one outcome each.
 
 ``expectations.json`` beside this file records what *this engine* expects of
 every case. A case moving from *not-yet-lowered* to *value-pass* is then an
@@ -24,7 +24,7 @@ EXPECTATIONS = Path(__file__).with_name("expectations.json")
 
 # The kit's published case count at this edition. Stated rather than read off
 # the bundles, so a bundle that lost a case fails here.
-PUBLISHED_CASES = 909
+PUBLISHED_CASES = 918
 
 
 @pytest.fixture(scope="module")

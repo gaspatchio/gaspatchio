@@ -129,6 +129,7 @@ from .domains import check_inputs
 from .horizon import BUCKETS, Horizon, bucket_of, periods_of, trim
 from .interning import Dictionary
 from .lowerings import LOWERINGS, SIZINGS, STEPS, load, refused_by_name
+from .lowerings.curves import CURVE_READS, refuse_a_parametric_curve_read
 from .lowerings.rollforward import (
     FACET,
     MACHINE,
@@ -1024,6 +1025,8 @@ class ExecutionPlan:
                         inspect_payload(call, context)
                     if call.name in SIZINGS:
                         self._inspect_sizing(record, call, dictionary)
+                    if call.name in CURVE_READS:
+                        refuse_a_parametric_curve_read(call, context)
             except DomainRefused as refused:
                 one = domain_refusal(record.node_id, refused)
                 refusals.append(one)

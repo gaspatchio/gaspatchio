@@ -659,8 +659,12 @@ def _answers(
         if carrier == "f64"
         else list(cells)
     )
+    # A non-finite answer is a miss for a lookup (11.1.24): a rate table holding
+    # NaN has no rate there. What a join brings is the right side's own data,
+    # so there only a cell holding nothing at all is blank.
+    non_finite_is_a_miss = carrier == "f64" and basis.clause != _JOIN
     bad = [
-        cell is None or (carrier == "f64" and not math.isfinite(float(cell)))
+        cell is None or (non_finite_is_a_miss and not math.isfinite(float(cell)))
         for cell in read
     ]
     # ``Any`` because the cells of one column are of one type and the four

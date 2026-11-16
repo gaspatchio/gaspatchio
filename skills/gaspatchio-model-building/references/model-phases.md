@@ -330,3 +330,21 @@ For production models with multiple decrements and new business:
 7. `pols_lapse` = (pols_if_bef_decr − pols_death) × lapse_rate_mth
 
 The `duration > 0` guard prevents double-counting NB policies that enter via `pols_new_biz`. For IF-only business, the simple ordering gives identical results. See Level 4 model.py SECTION 8.
+
+---
+
+## Product-specific formulas
+
+Different products may use different formulas. Use parameter-driven selection:
+
+```python
+# WRONG: hardcoded single formula
+af.dyn_lapse_factor = (1.0 - af.M * (1.0 / af.itm - af.D)).clip(af.L, af.U)
+
+# RIGHT: parameter-driven selection
+af.dl001_factor = (1.0 - af.M * (1.0 / af.itm - af.D)).clip(af.L, af.U)
+af.dl002_factor = (af.Y * af.itm ** af.Power).clip(af.FactorFloor, af.FactorCap)
+af.dyn_lapse_factor = when(af.formula_id == "DL001").then(af.dl001_factor).otherwise(af.dl002_factor)
+```
+
+See Level 3 Step 06 (Gap 3) and Level 4 Section 7 for examples.

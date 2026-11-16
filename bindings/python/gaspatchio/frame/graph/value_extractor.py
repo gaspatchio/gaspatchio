@@ -131,6 +131,18 @@ def _as_a_number_is_read(value: object) -> _WireScalar:
     return str(value)
 
 
+def _as_numbers_are_read(value: object) -> _WireValue:
+    """Return one period's value as the wire writes it, a list staying a list.
+
+    A column of ``list[list[f64]]`` holds a list in each period, and that
+    list is the period's own value: the sample writes it as one, and a
+    walk-through's result is compared against that sample.
+    """
+    if isinstance(value, list):
+        return [_as_numbers_are_read(item) for item in value]
+    return _as_a_number_is_read(value)
+
+
 class PolicyNotInFrameError(ValueError):
     """The policy the samples were asked for is not in the frame they come from."""
 
@@ -530,7 +542,7 @@ class SampleValueExtractor:
         # the run it is built from, and spells its values for the wire when
         # it is written.
         if isinstance(value, list):
-            return [_as_a_number_is_read(item) for item in value]
+            return [_as_numbers_are_read(item) for item in value]
         return _as_a_number_is_read(value)
 
     def extract_expression(self, expr: pl.Expr) -> _WireValue:

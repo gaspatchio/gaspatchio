@@ -21,6 +21,8 @@ class GaspatchioEvalExample:
         self,
         example: DocstringCodeExample,
         global_vars: dict[str, Any] | None = None,
+        *,
+        only_crashes: bool = False,
     ) -> list[str]:
         """Run custom check on the example and return a list of error messages."""
         if not hasattr(example, "run"):
@@ -46,6 +48,9 @@ class GaspatchioEvalExample:
                     f"{type(exc).__name__}: {exc}. Snippet:\n{example.snippet}"
                 )
             ]
+
+        if only_crashes:
+            return []
 
         issues: list[str] = []
 
@@ -94,33 +99,45 @@ class GaspatchioEvalExample:
                     f"ACTUAL:\n{actual_combined_output_str}\n"
                     f"SNIPPET (code run):\n{example.snippet}"
                 )
-        # If example.output is None (not specified in docstring):
         else:
-            # This case was discussed in Prompt 3.2. With no output in the
-            # docstring, this check mainly verifies no unexpected stdout and no
-            # errors; a last_expr_value that is not None implies an error,
-            # because the docstring is *missing* an output.
-            if last_expr_value is not None:
-                issues.append(
-                    "[Custom Check Error] Missing output in docstring for "
-                    f"{example.object_context} ex#{example.example_index} (file: "
-                    f"{example.raw_source_location[0]}, line: "
-                    f"{example.raw_source_location[1]}). "
-                    f"Expression yielded: {repr(last_expr_value)[:100]}. Snippet:\n"
-                    f"{example.snippet}"
-                )
-            # If there was stdout but no output was expected (example.output is
-            # None). This could be an issue depending on strictness. For now,
-            # let's flag it if not updating.
-            if captured_stdout and not self.update_examples_mode:
-                issues.append(
-                    "[Custom Check Error] Unexpected stdout for "
-                    f"{example.object_context} ex#{example.example_index} (file: "
-                    f"{example.raw_source_location[0]}, line: "
-                    f"{example.raw_source_location[1]}) "
-                    f"(no output was defined in docstring):\n{captured_stdout[:200]}\n"
-                    f"SNIPPET:\n{example.snippet}"
-                )
+            issues += self._issues_without_an_output_block(
+                example, captured_stdout, last_expr_value
+            )
+        return issues
+
+    def _issues_without_an_output_block(
+        self,
+        example: DocstringCodeExample,
+        captured_stdout: str,
+        last_expr_value: object,
+    ) -> list[str]:
+        """Return what an example that declares no output block must not do."""
+        issues: list[str] = []
+        # This case was discussed in Prompt 3.2. With no output in the
+        # docstring, this check mainly verifies no unexpected stdout and no
+        # errors; a last_expr_value that is not None implies an error,
+        # because the docstring is *missing* an output.
+        if last_expr_value is not None:
+            issues.append(
+                "[Custom Check Error] Missing output in docstring for "
+                f"{example.object_context} ex#{example.example_index} (file: "
+                f"{example.raw_source_location[0]}, line: "
+                f"{example.raw_source_location[1]}). "
+                f"Expression yielded: {repr(last_expr_value)[:100]}. Snippet:\n"
+                f"{example.snippet}"
+            )
+        # If there was stdout but no output was expected (example.output is
+        # None). This could be an issue depending on strictness. For now,
+        # let's flag it if not updating.
+        if captured_stdout and not self.update_examples_mode:
+            issues.append(
+                "[Custom Check Error] Unexpected stdout for "
+                f"{example.object_context} ex#{example.example_index} (file: "
+                f"{example.raw_source_location[0]}, line: "
+                f"{example.raw_source_location[1]}) "
+                f"(no output was defined in docstring):\n{captured_stdout[:200]}\n"
+                f"SNIPPET:\n{example.snippet}"
+            )
         return issues
 
     def check_example(

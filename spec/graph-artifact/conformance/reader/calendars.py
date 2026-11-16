@@ -308,8 +308,38 @@ def schedule_periods(
 ) -> int:
     if recipe["kind"] != "per_policy_grid":
         return recipe["n_periods"]
-    term = inputs[recipe["until_value_column"]].values[row] or 0
-    return max(0, term * (12 if recipe["until_kind"] == "term_years" else 1) // months)
+    return max(0, (schedule_horizon_months(recipe, inputs, row) or 0) // months)
+
+
+def schedule_horizon_months(
+    recipe: dict, inputs: dict[str, Column], row: int
+) -> int | None:
+    """Return a policy's horizon in months, or None where it has none."""
+    if recipe["until_kind"] == "maximum_age":
+        return maximum_age_horizon_months(recipe, inputs, row)
+    term = inputs[recipe["until_value_column"]].values[row]
+    if term is None:
+        return None
+    return term * (12 if recipe["until_kind"] == "term_years" else 1)
+
+
+def maximum_age_horizon_months(
+    recipe: dict, inputs: dict[str, Column], row: int
+) -> int | None:
+    # 11.1.37: the age is an integer in the recipe or a column the call reads;
+    # an expression's rendering is outside this entry's count domain.
+    if "maximum_age" in recipe:
+        age = recipe["maximum_age"]
+    elif "until_value_column" in recipe:
+        age = inputs[recipe["until_value_column"]].values[row]
+    else:
+        raise DomainRefusal("schedule-maximum-age-expression")
+    issue_age = inputs[recipe["issue_age_column"]].values[row]
+    if age is None or issue_age is None:
+        return None
+    if not math.isfinite(age - issue_age):
+        raise DomainRefusal("schedule-maximum-age-domain")
+    return math.trunc(age - issue_age) * 12
 
 
 def schedule_start(recipe: dict, inputs: dict[str, Column], row: int) -> date:
@@ -365,7 +395,7 @@ def schedule_boundaries(
     recipe: dict, inputs: dict[str, Column], row: int, periods: int, months: int
 ) -> list[str]:
     if recipe["kind"] == "per_policy_grid":
-        term = inputs[recipe["until_value_column"]].values[row]
+        term = schedule_horizon_months(recipe, inputs, row)
         if term is None or term < 0:
             raise DomainRefusal("schedule-boundary-term-domain")
     start = schedule_start(recipe, inputs, row)

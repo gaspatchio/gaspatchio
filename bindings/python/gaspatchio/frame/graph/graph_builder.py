@@ -182,6 +182,7 @@ from gaspatchio.frame.lowering._polars.rendering import conditional_comparisons
 
 from .edges import (
     AGGREGATION,
+    CONDITIONAL,
     STATE_EXTRACTION,
     TRANSFORMATION,
     ReadClaim,
@@ -649,6 +650,42 @@ def _operands_of(run: tuple[str, str]) -> tuple[OpNode, ...]:
     )
 
     return operand_nodes(rollforward_for(*run).ir)
+
+
+def _contract_boundary_of(run: tuple[str, str]) -> OpNode | None:
+    """Return the test that stops a compilation, or None where there is none to read.
+
+    The kernel binds the contract-boundary mask beside the operations'
+    operands, and stops every state at the first period the mask is True --
+    so the mask decides every later period of every balance, and a
+    compilation that did not read it would tell a reviewer that the balance
+    does not depend on its stop flag. It is not one of the operands the
+    extraction call carries, which are the operations' and the opening
+    values', so it is read off the compiled artefact here, classified by the
+    one classifier the facet's own ``contract_boundary`` uses.
+
+    None where the compilation sets no boundary, and where the compiled
+    artefact is out of reach -- the case in which the node already says
+    nothing about its states or its movements either.
+    """
+    # The lowering package imports the op-tree, so importing it at module
+    # scope here would close a cycle.
+    from gaspatchio.frame.lowering.artefacts import (  # noqa: PLC0415 — import cycle
+        rollforward_for,
+    )
+    from gaspatchio.frame.lowering.rules.rollforward import (  # noqa: PLC0415 — rules load lazily
+        classify_operand_expression,
+    )
+
+    try:
+        ir = rollforward_for(*run).ir
+    except KeyError:
+        return None
+    if ir.contract_boundary is None:
+        return None
+    return classify_operand_expression(
+        ir.contract_boundary, {state.name for state in ir.states}, set(ir.points)
+    )
 
 
 def _as_written(record: CalculationRecord) -> str | None:
@@ -1214,7 +1251,9 @@ class CalcGraph:
         # already in the graph when the node itself arrives: the graph is
         # held in the order the calculations ran, and fingerprinting reads
         # it in that order.
-        reads, read_as = self._compilation_reads(operands, fingerprint, live)
+        reads, read_as = self._compilation_reads(
+            operands, _contract_boundary_of(run), fingerprint, live
+        )
         self.nodes[node_id] = GraphNode(
             id=node_id,
             kind=NodeType.ROLLFORWARD,
@@ -1289,7 +1328,11 @@ class CalcGraph:
         raise ValueError(msg)
 
     def _compilation_reads(
-        self, operands: tuple[OpNode, ...], fingerprint: str, live: _LiveMap
+        self,
+        operands: tuple[OpNode, ...],
+        boundary: OpNode | None,
+        fingerprint: str,
+        live: _LiveMap,
     ) -> tuple[tuple[NodeId, ...], tuple[ReadClaim, ...]]:
         """Return what one compilation reads, first mention first, and how.
 
@@ -1302,21 +1345,48 @@ class CalcGraph:
         balance the compilation is carrying at this period, read by the
         compilation that owns it, and that is ``TRANSFORMATION``.
 
+        The contract-boundary mask is a third read, and the weakest: its
+        value is in no balance, it is the test deciding whether a period
+        runs or holds zero -- the shape of a conditional's test, so
+        ``INDIRECT``/``CONDITIONAL``. Not ``FILTER``, which in this
+        vocabulary is a positional index selecting one stored value. A
+        column that is also an operation's operand keeps the stronger
+        claim, as any name read twice does.
+
         De-duplicated, like every other node's reads: two operations
         charging the same rate column read one column, and the graph
         states what a node reads rather than how many times it mentioned
         it.
         """
-        reads: dict[NodeId, ReadClaim] = {}
+        found: list[tuple[NodeId, ReadClaim]] = []
         for operand in operands:
-            for node_id, claim in self._compilation_operand_reads(
-                operand, fingerprint, live
-            ):
-                held = reads.get(node_id)
-                reads[node_id] = claim if held is None else stronger(held, claim)
+            found.extend(self._compilation_operand_reads(operand, fingerprint, live))
+        if boundary is not None:
+            found.extend(
+                (node_id, ReadClaim(CONDITIONAL))
+                for node_id in self._boundary_reads(boundary, live)
+            )
+        reads: dict[NodeId, ReadClaim] = {}
+        for node_id, claim in found:
+            held = reads.get(node_id)
+            reads[node_id] = claim if held is None else stronger(held, claim)
         return tuple(reads), tuple(
             self._periodic(node_id, claim) for node_id, claim in reads.items()
         )
+
+    def _boundary_reads(self, boundary: OpNode, live: _LiveMap) -> Iterator[NodeId]:
+        """Bind the columns a contract-boundary mask reads, in the order it names them.
+
+        A mask is built from columns of the frame -- the compiler hands the
+        kernel nothing else -- so a single column, or an engine fragment's
+        declared dependencies, is all there is to bind.
+        """
+        for current in walk(boundary):
+            if isinstance(current, Col):
+                yield self._bind(live, current.name)
+            elif isinstance(current, EngineNative):
+                for dependency in current.deps:
+                    yield self._bind(live, dependency)
 
     def _compilation_operand_reads(
         self, operand: OpNode, fingerprint: str, live: _LiveMap

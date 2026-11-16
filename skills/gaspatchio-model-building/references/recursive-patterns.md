@@ -5,7 +5,7 @@ Values at time *t* depend on accumulated state at *t-1*. Two primitives cover th
 **"Do the within-period charges depend on the running balance?"**
 
 - **No** — the recurrence collapses to a single multiply-and-add. Use **`accumulate()`** (this page).
-- **Yes** — the running balance is needed *during* the period to compute later steps within the same period. Use the **rollforward kernel** (`af.projection.rollforward(states={…})`). See [Rollforward](../../../../gaspatchio-docs/docs/concepts/rollforward/index.md) for the concept page and [`tutorial/patterns/rollforward-patterns/`](../../../bindings/python/gaspatchio/tutorials/patterns/rollforward-patterns/) for runnable patterns.
+- **Yes** — the running balance is needed *during* the period to compute later steps within the same period. Use the **rollforward kernel** (`af.projection.rollforward(states={…})`). See the Rollforward page under Concepts in the documentation for the concept and [`tutorial/patterns/rollforward-patterns/`](../../../bindings/python/gaspatchio/tutorials/patterns/rollforward-patterns/) for runnable patterns.
 
 | Product mechanic | Primitive |
 |---|---|
@@ -14,7 +14,7 @@ Values at time *t* depend on accumulated state at *t-1*. Two primitives cover th
 | Term-life reserve roll, deterministic interest | `accumulate` |
 | Reserve rolled back from the last period, `V[t] = v[t]·V[t+1] + cf[t]` | `accumulate(reverse=True)` (Pattern 5) |
 | Multi-state occupancy — disability with recovery, levels of care | one `accumulate` per state on the fixed-step axis (Pattern 6) — **not** the rollforward |
-| Backward recursion with a floor, `V[t] = max(floor, a[t] + b[t]·V[t+1])` | no named form in 1.0 — a doubling scan in core operations (Pattern 7) |
+| Backward recursion with a floor, `V[t] = max(floor, a[t] + b[t]·V[t+1])` | a constant floor: the rollforward builder over reversed lists; a floor that varies: a doubling scan (both Pattern 7) |
 | UL fund with COI on net amount at risk | rollforward kernel |
 | IUL fund with floor/cap on the period's index credit | rollforward kernel |
 | VA + GMDB anniversary ratchet to the AV high-water mark | rollforward kernel (two balances: the ratchet reads the fund) |
@@ -42,6 +42,46 @@ Compared without it, every period sits one step out.
 Under `reverse=True` the recurrence runs from each policy's own last period back:
 `state[t] = state[t+1] * multiplier[t] + addend[t]`, and `initial` is the value *after* the
 last period (Pattern 5).
+
+**Matching a workbook bit for bit.** Each step is a plain multiply, then an add (no fused
+multiply-add), so `accumulate` reproduces a sheet exactly only when the row is literally
+`=prev*m + a`. A row in another order — `(V + CF) / (1 + i) * p` — has to be refactored into
+`m = p / (1 + i)` and `a = CF * p / (1 + i)`, and that rounds differently. Expect last-bit
+differences in about three periods in four, up to about a dozen ulp after 60 steps; both
+orders are about equally close to the exact value, so neither is wrong. While every multiplier
+is at most 1 in size, as it is for survival and discounting, those differences die away: compare
+with an ulp or relative tolerance (1e-12 relative passes with a wide margin), never `==`.
+
+Where a multiplier exceeds 1 in size, no tolerance holds. An explicit Euler step
+`x + h * (c - mu * x)` is the usual case: once `h * mu` passes 2, as a multi-state sheet's does
+at extreme ages, the multiplier `1 - h * mu` is below -1 and each rounding difference grows by
+its size every period. One room's late rows were 16% apart. The sheet's own late values are
+then rounding, not a result: say so in the reconciliation rather than chase them.
+
+To reproduce such a sheet anyway on a handful of policies, keep the sheet's order and sweep the
+step over the whole timeline once per period. After `k` sweeps the first `k` periods are exact,
+and `af.materialize()` every 32 sweeps keeps the plan small:
+
+```python
+af.x = when(af.month == 0).then(af.x0).otherwise(0.0)
+for sweep in range(n_periods):
+    prior = af.x.projection.previous_period()
+    af.x = when(af.month == 0).then(af.x0).otherwise(prior + af.h * (af.c_prev - af.mu_prev * prior))
+    if (sweep + 1) % 32 == 0:
+        af.materialize()
+```
+
+`c_prev` and `mu_prev` are the inputs read one period back (`projection.previous_period()`), as
+the sheet's row reads them. This matched a plain loop in every cell: one policy at 975 periods
+took 4 s and 0.18 GB with the checkpoints (18 s and 1.1 GB without), and 100 policies at 2,947
+periods took 32 s and 0.44 GB. It reconciles a sheet; it is not a way to run a book, and the
+loop that builds the sweeps is a Python loop a review will count.
+
+Unroll only a short run, a few dozen periods. Writing the steps out one column per period in
+the sheet's order matches it bit for bit, but every period is a column of its own and memory
+grows with the square of the period count: four states on one policy took 0.3 GB at 120
+periods, 1.7 GB at 480 and 5.8 GB at 960, and a room's 2,947-period model was killed at 12 GB.
+Past a few dozen periods, use `accumulate` and the tolerance.
 
 ---
 
@@ -262,11 +302,30 @@ the record (`af.graph.versions("p0")` lists them).
 
 ## Pattern 7: Backward Recursion with a Floor
 
-A floored backward recursion (`MAX(floor, …R[1]C…)`) has no named form in 1.0. `accumulate`
-cannot carry the `max`, and the reverse running maximum some floors reduce to
-(`cum_max(reverse=True)`) is not declared — through `.polars_native()` it records
-`engine_native`, which runs only on Polars. The portable route is a **doubling scan** in core
-operations: each period holds the map `x ↦ max(c, α + β·x)`, and each pass composes it with
+`accumulate` cannot carry the `max` in a floored backward recursion (`MAX(floor, …R[1]C…)`).
+
+**A constant floor: the rollforward builder over reversed lists.** The builder carries a
+floor, and run over reversed lists it is the backward recursion, all in core operations:
+
+```python
+# V[t] = max(0, (V[t+1] + cf[t]) / (1 + i[t])), with V = 0 after the last period.
+af.cf_back = af.cf.list.reverse()
+af.discount_less_one = (1.0 / (1.0 + af.i) - 1.0).list.reverse()
+plan = af.projection.rollforward(states={"reserve": af["opening"]})   # opening = 0.0
+plan["reserve"].add(af["cf_back"], label="cashflow").grow(
+    af["discount_less_one"], label="discount"
+).floor(value=0.0)
+af.reserve_back = compile_rollforward(plan).expr_for("reserve")
+af.reserve = af.reserve_back.list.reverse()
+```
+
+The floor is one number for every policy, and `grow` multiplies by `1 + (v - 1)`, so it agrees
+with a sheet's division to about 1e-15, not bit for bit.
+
+**A floor that varies by policy or period: a doubling scan.** The reverse running maximum
+some floors reduce to (`cum_max(reverse=True)`) is not declared — through `.polars_native()`
+it records `engine_native`, which runs only on Polars. The portable route is a doubling scan
+in core operations: each period holds the map `x ↦ max(c, α + β·x)`, and each pass composes it with
 the map `2^j` periods on, so ⌈log₂ T⌉ passes give every period its value.
 
 ```python

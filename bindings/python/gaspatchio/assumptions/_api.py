@@ -316,7 +316,7 @@ class Table(TableData):
         Examples:
             Loading per-scenario rate files:
 
-            ```python no_output_check
+            ```python no_output_check no_run
             from gaspatchio.assumptions import Table
 
             rates_table = Table.from_scenario_files(
@@ -437,7 +437,7 @@ class Table(TableData):
         Examples:
             Loading files from templated paths:
 
-            ```python no_output_check
+            ```python no_output_check no_run
             from gaspatchio.assumptions import Table
 
             # Files: scenarios/BASE/returns.parquet, scenarios/UP/returns.parquet
@@ -504,8 +504,14 @@ class Table(TableData):
             ```python no_output_check
             from gaspatchio.assumptions import Table
             from gaspatchio.scenarios.shocks import MultiplicativeShock
+            import polars as pl
 
-            base_mortality = Table(...)  # Load base mortality table
+            base_mortality = Table(
+                name="base_mortality",
+                source=pl.DataFrame({"age": [30, 40], "qx": [0.001, 0.002]}),
+                dimensions={"age": "age"},
+                value="qx",
+            )
 
             shocks = {
                 "BASE": [],
@@ -1127,8 +1133,8 @@ class Table(TableData):
                 # The native append adds rows to a hash map; a table held as a
                 # dense array -- what "auto" picks for an ordinary table -- is
                 # built again whole from the extended frame instead, under the
-                # same storage request, after the same moved-table check.
-                self._refuse_if_moved(expected_fingerprint)
+                # same storage request. The registry makes the moved-table
+                # check and the swap in one step.
                 registry.register_or_replace_table(
                     name=self._name,
                     df=extended_df,
@@ -1137,6 +1143,7 @@ class Table(TableData):
                     force_replace=True,
                     storage_mode=self._storage_mode,
                     fingerprint=content_sha,
+                    expected_fingerprint=expected_fingerprint,
                 )
             else:
                 registry.append_to_table(
@@ -1170,24 +1177,6 @@ class Table(TableData):
 
         return self
 
-    def _refuse_if_moved(self, expected_fingerprint: str) -> None:
-        """Refuse an extend of this object once its table has been replaced.
-
-        The native append refuses when the registry no longer holds the
-        version this object stamps; a whole rebuild does the same check
-        against the version this process last registered under the name.
-        """
-        if _REGISTERED_TABLE_SHAS.get(self._name) == expected_fingerprint:
-            return
-        msg = (
-            f"Assumption table '{self._name}' changed before it could be "
-            f"extended: another Table registered under this name since this "
-            f"one was built. Call extend() on the current Table instead."
-        )
-        # The type the native append's refusal arrives as, so one refusal is
-        # one exception whichever storage the table is held in.
-        raise RuntimeError(msg)
-
     @property
     def schema(self) -> TableSchema:
         """Get the analyzed schema of this table.
@@ -1217,7 +1206,7 @@ class Table(TableData):
 
         table = Table("test", data, {"age": "age"}, "rate")
         schema = table.schema
-        print(f"Columns: {len(schema.columns)}")
+        print(f"Value columns: {schema.value_columns}")
         ```
 
         """
@@ -1289,9 +1278,7 @@ class Table(TableData):
         from gaspatchio.assumptions import Table
         import polars as pl
 
-        data = pl.DataFrame(
-            {"age": [30, 35, 40, 30, 35], "rate": [0.001, 0.002, 0.004, 0.001, 0.002]}
-        )
+        data = pl.DataFrame({"age": [30, 35, 40], "rate": [0.001, 0.002, 0.004]})
 
         table = Table("test", data, {"age": "age"}, "rate")
         ages = table.dimension_values("age")

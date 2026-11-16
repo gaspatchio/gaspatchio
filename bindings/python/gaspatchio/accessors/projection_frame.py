@@ -1484,6 +1484,38 @@ class ProjectionFrameAccessor(BaseFrameAccessor):
         ``schedule=`` is no longer accepted on this method — call
         ``af.projection.set(...)`` first. Every other keyword forwards to
         :class:`RollforwardBuilder` unchanged.
+
+        ``contract_boundary=`` takes a per-period boolean mask where **True
+        means the contract has terminated**: the kernel stops at the first
+        True and every state holds zero from that period on. It is the
+        negation of an in-force flag -- pass :meth:`contract_boundary`, never
+        :meth:`is_in_force`. The mask is a read of the compilation, so the calculation
+        graph shows the balance depending on it.
+
+        Examples:
+            >>> import datetime
+            >>> from gaspatchio import ActuarialFrame
+            >>> from gaspatchio.rollforward import compile_rollforward
+            >>> af = ActuarialFrame(
+            ...     {
+            ...         "initial": [100.0],
+            ...         "deposit": [[10.0, 10.0, 10.0]],
+            ...         "terminated": [[False, True, False]],
+            ...     }
+            ... )
+            >>> af = af.projection.set(
+            ...     start_date=datetime.date(2025, 1, 31),
+            ...     n_periods=3,
+            ...     frequency="monthly",
+            ... )
+            >>> builder = af.projection.rollforward(
+            ...     states={"bal": af["initial"]},
+            ...     contract_boundary=af["terminated"],
+            ... )
+            >>> _ = builder["bal"].add(af["deposit"], label="deposit")
+            >>> af.bal = compile_rollforward(builder).expr_for("bal")
+            >>> af.collect()["bal"].to_list()
+            [[110.0, 0.0, 0.0]]
         """
         if schedule is not None:
             msg = (

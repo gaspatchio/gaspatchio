@@ -296,6 +296,25 @@ class Curve(CurveData):
         curves where you already have official published NSS parameters (e.g.
         central-bank fitted curves), use :meth:`from_svensson` directly.
 
+        **Which decay parameters the fit may use.** Only the ones the knots can
+        pin down: ``tau1`` no shorter than the shortest tenor, and a pair whose
+        loadings are not nearly collinear at the knots (the design, its columns
+        scaled to unit length, has a condition number of at most 100). Shorter
+        or collinear pairs let the betas grow to around 1e9, and the curve then
+        hits every knot while reading nonsense between them. A curve that sits
+        on the boundary of these bounds gives up a few basis points at the knots
+        instead: about 6 bp at worst on six knots from 1 to 30 years. Knots
+        spanning too short a range to pin any pair, such as 5 to 10 years, are
+        refused. When the knots must be reproduced exactly, use
+        :meth:`fit_smith_wilson`.
+
+        **Reading outside the knots.** Below the shortest knot and beyond the
+        longest the curve is extrapolated by its own formula. On random upward
+        curves the fit's error against the curve the knots were drawn from was
+        7 to 22 bp at the median and 102 bp at worst below the first knot, and
+        13 to 20 bp at the median and 93 bp at worst out to twice the last;
+        check any rate the model reads out there.
+
         Args:
             tenors: Tenor knot points in years. Must have ``>= 6`` elements.
             rates: Annually-compounded zero rates at each tenor. Same length
@@ -311,8 +330,10 @@ class Curve(CurveData):
             NSS parameters.
 
         Raises:
-            ValueError: If ``tenors`` and ``rates`` differ in length, or
-                fewer than 6 observations are supplied.
+            ValueError: If ``tenors`` and ``rates`` differ in length, if
+                fewer than 6 observations are supplied, or if the knots span
+                too short a range to pin the decay parameters (the message
+                names the knots and the alternatives).
 
         Examples:
             >>> from gaspatchio.curves import Curve

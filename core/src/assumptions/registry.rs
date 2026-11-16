@@ -356,6 +356,40 @@ fn register_or_replace_assumption_table_global_with_optional_identity(
     })
 }
 
+/// Replaces a table only if it still has the identity the caller read.
+///
+/// The check and the swap happen under one registration lock, so another
+/// thread's replacement cannot land between them.
+///
+/// # Errors
+///
+/// Returns a `PolarsError` if the table has changed since `expected_fingerprint`
+/// was read, or if the replacement cannot be built.
+pub fn replace_assumption_table_global_if_identity(
+    name: String,
+    df: DataFrame,
+    keys: Vec<String>,
+    value: String,
+    mode: crate::assumptions::table::StorageMode,
+    expected_fingerprint: &str,
+    processed_fingerprint: String,
+) -> PolarsResult<()> {
+    let _guard = acquire_registration_lock()?;
+
+    update_global_registry(RegistryUpdate::Replace, &name, |registry| {
+        registry.refuse_a_moved_table(&name, expected_fingerprint, &keys, &value)?;
+        registry.assumption_tables.remove(&name);
+        registry.register_table_with_mode_and_identity(
+            name.clone(),
+            df,
+            keys,
+            value,
+            mode,
+            Some(processed_fingerprint),
+        )
+    })
+}
+
 /// Performs a lookup using the global registry.
 ///
 /// This is the core logic function that accesses the globally shared
@@ -475,6 +509,29 @@ impl AssumptionTableRegistry {
         )
     }
 
+    /// Refuses unless the table still is the version an extend was built from.
+    fn refuse_a_moved_table(
+        &self,
+        name: &str,
+        expected_fingerprint: &str,
+        keys: &[String],
+        value: &str,
+    ) -> PolarsResult<()> {
+        let unmoved = self.assumption_tables.get(name).is_some_and(|existing| {
+            existing.processed_fingerprint.as_deref() == Some(expected_fingerprint)
+                && existing.table.get_key_columns() == keys
+                && existing.value_column == value
+        });
+        if unmoved {
+            return Ok(());
+        }
+        Err(polars_err!(
+            ComputeError:
+            "Assumption table '{}' changed before it could be extended: another Table registered under this name since this one was built. Call extend() on the current Table instead.",
+            name
+        ))
+    }
+
     fn append_to_table_inner(
         &mut self,
         name: String,
@@ -494,16 +551,7 @@ impl AssumptionTableRegistry {
         })?;
 
         if let Some((expected_fingerprint, _)) = &identity_update {
-            if existing.processed_fingerprint.as_deref() != Some(*expected_fingerprint)
-                || existing.table.get_key_columns() != keys.as_slice()
-                || existing.value_column != value
-            {
-                return Err(polars_err!(
-                    ComputeError:
-                    "Assumption table '{}' changed before it could be extended; call extend() on the current Table instead.",
-                    name
-                ));
-            }
+            self.refuse_a_moved_table(&name, expected_fingerprint, &keys, &value)?;
         }
 
         // Build combined table using immutable rebuild approach
@@ -1406,6 +1454,55 @@ mod tests {
         assert!(registry
             .require_table_identity("raw-append", "sha256:before", &["age".to_string()], "rate",)
             .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_replace_if_identity_swaps_only_the_version_the_caller_read() -> PolarsResult<()> {
+        let _guard = TEST_MUTEX.lock().unwrap();
+        let name = "test_replace_if_identity_global".to_string();
+        let keys = vec!["age".to_string()];
+        register_or_replace_assumption_table_global_with_identity(
+            name.clone(),
+            df! {"age" => [40], "rate" => [0.1]}?,
+            keys.clone(),
+            "rate".to_string(),
+            true,
+            StorageMode::Array,
+            "sha256:before".to_string(),
+        )?;
+
+        replace_assumption_table_global_if_identity(
+            name.clone(),
+            df! {"age" => [40, 41], "rate" => [0.1, 0.2]}?,
+            keys.clone(),
+            "rate".to_string(),
+            StorageMode::Array,
+            "sha256:before",
+            "sha256:after".to_string(),
+        )?;
+        let held = get_global_assumption_registry();
+        assert_eq!(held.get_table(&name).unwrap().entry_count(), 2);
+        assert!(held
+            .require_table_identity(&name, "sha256:after", &keys, "rate")
+            .is_ok());
+        drop(held);
+
+        let stale = replace_assumption_table_global_if_identity(
+            name.clone(),
+            df! {"age" => [40], "rate" => [9.0]}?,
+            keys.clone(),
+            "rate".to_string(),
+            StorageMode::Array,
+            "sha256:before",
+            "sha256:competing".to_string(),
+        );
+        assert!(stale.unwrap_err().to_string().contains("changed before"));
+        let held = get_global_assumption_registry();
+        assert_eq!(held.get_table(&name).unwrap().entry_count(), 2);
+        assert!(held
+            .require_table_identity(&name, "sha256:after", &keys, "rate")
+            .is_ok());
         Ok(())
     }
 

@@ -122,10 +122,7 @@ export function Search({
           setAsking(true);
         }}
         onBlur={() => {
-          // After the click, so a name in the list is still there to be hit.
-          window.setTimeout(() => {
-            setAsking(false);
-          }, 120);
+          setAsking(false);
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape") setAsking(false);
@@ -143,7 +140,16 @@ export function Search({
         </span>
       ) : null}
       {offering ? (
-        <div className="ends" data-testid="search-ends">
+        <div
+          className="ends"
+          data-testid="search-ends"
+          // Pressing a name leaves the focus in the box, so the box does not
+          // blur and the list is still there to be clicked. A delayed close did
+          // this job once, and it shut the list a reader had just reopened.
+          onMouseDown={(event) => {
+            event.preventDefault();
+          }}
+        >
           <span className="ends-head">nothing else reads these</span>
           {ends.map((id) => (
             <button

@@ -277,6 +277,12 @@ def moved_by_months(days: jax.Array, months: jax.Array) -> jax.Array:
     return days_from_civil(landed_year, landed_month, held)
 
 
+def month_end(days: jax.Array) -> jax.Array:
+    """Return the last day of the month each day falls in."""
+    year, month, _ = civil_from_days(days)
+    return days_from_civil(year, month, last_day_of(year, month))
+
+
 def _dates(value: Value, name: str) -> Value:
     """Return one operand as a calendar day, refusing anything else."""
     return require_carrier(value, DATE, name, _CALENDAR)
@@ -548,12 +554,7 @@ def _eomonth(call: Call, ctx: LoweringContext) -> Value:
 
     axis = aligned(value, months)
     landed = moved_by_months(axis.arrays[0], axis.arrays[1])
-    year, month, _ = civil_from_days(landed)
-    return _as_date(
-        days_from_civil(year, month, last_day_of(year, month)),
-        axis.shape,
-        axis.horizon,
-    )
+    return _as_date(month_end(landed), axis.shape, axis.horizon)
 
 
 @register(

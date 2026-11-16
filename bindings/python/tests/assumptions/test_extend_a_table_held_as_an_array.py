@@ -23,6 +23,7 @@ import polars as pl
 import pytest
 
 from gaspatchio import ActuarialFrame
+from gaspatchio._internal import PyAssumptionTableRegistry
 from gaspatchio.assumptions import Table
 
 _NAMES = itertools.count()
@@ -117,6 +118,64 @@ def test_a_stale_table_object_cannot_extend_over_its_replacement(
         stale.extend(pl.DataFrame({"age": [3], "rate": [0.4]}))
 
     assert _answers(current, [1]) == [2.0]
+
+
+def _refusal_for(name: str) -> str:
+    return (
+        f"Assumption table '{name}' changed before it could be extended: another "
+        "Table registered under this name since this one was built. Call "
+        "extend() on the current Table instead."
+    )
+
+
+@pytest.mark.parametrize("storage", _STORAGES)
+def test_every_storage_refuses_a_stale_extend_in_one_sentence(
+    storage: Storage,
+) -> None:
+    name = f"m1_extend_one_refusal_{storage}_{next(_NAMES)}"
+    source = pl.DataFrame({"age": [0, 1, 2], "rate": [0.1, 0.2, 0.3]})
+    stale = Table(name, source, {"age": "age"}, "rate", storage_mode=storage)
+    with pytest.warns(match="re-registered with different data"):
+        Table(
+            name,
+            source.with_columns(pl.col("rate") * 10),
+            {"age": "age"},
+            "rate",
+            storage_mode=storage,
+        )
+
+    with pytest.raises(RuntimeError) as refused:
+        stale.extend(pl.DataFrame({"age": [3], "rate": [0.4]}))
+
+    assert str(refused.value) == _refusal_for(name)
+
+
+@pytest.mark.parametrize("storage", _STORAGES)
+def test_a_replacement_arriving_after_the_python_check_is_still_refused(
+    storage: Storage,
+) -> None:
+    """The check and the swap are one step, so nothing can land between them.
+
+    A table replaced straight in the registry is what another thread's
+    replacement looks like from this object: nothing on the Python side
+    moved, and only the registry knows.
+    """
+    name = f"m1_extend_unseen_{storage}_{next(_NAMES)}"
+    source = pl.DataFrame({"age": [0, 1, 2], "rate": [0.1, 0.2, 0.3]})
+    table = Table(name, source, {"age": "age"}, "rate", storage_mode=storage)
+    PyAssumptionTableRegistry().register_or_replace_table(
+        name=name,
+        df=source.with_columns(pl.col("age").cast(pl.Float64), pl.col("rate") * 10),
+        keys=["age"],
+        value_column="rate",
+        storage_mode=storage,
+        fingerprint="sha256:someone-else",
+    )
+
+    with pytest.raises(RuntimeError) as refused:
+        table.extend(pl.DataFrame({"age": [3], "rate": [0.4]}))
+
+    assert str(refused.value) == _refusal_for(name)
 
 
 @pytest.mark.parametrize("storage", _STORAGES)

@@ -711,10 +711,8 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         af = ActuarialFrame(data)
 
         # Calculate days between start and end dates
-        af_with_days = af.with_columns(
-            days_diff=af["end_date"].excel.days(af["start_date"])
-        )
-        print(af_with_days.collect())
+        af.days_diff = af["end_date"].excel.days(af["start_date"])
+        print(af.collect())
         ```
 
         """
@@ -768,10 +766,8 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         af = ActuarialFrame(data)
 
         # Add months to dates
-        af_with_new_dates = af.with_columns(
-            new_date=af["start_date"].excel.edate(af["months_to_add"])
-        )
-        print(af_with_new_dates.collect())
+        af.new_date = af["start_date"].excel.edate(af["months_to_add"])
+        print(af.collect())
         ```
 
         """
@@ -823,10 +819,8 @@ class ExcelColumnAccessor(BaseColumnAccessor):
         af = ActuarialFrame(data)
 
         # Get end of month after adding months
-        af_with_eom_dates = af.with_columns(
-            end_of_month=af["start_date"].excel.eomonth(af["months_to_add"])
-        )
-        print(af_with_eom_dates.collect())
+        af.end_of_month = af["start_date"].excel.eomonth(af["months_to_add"])
+        print(af.collect())
         ```
 
         """

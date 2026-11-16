@@ -1,9 +1,26 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.0rc3] — 2026-11-14 — Release candidate 3
 
-**Fixed**
+The third release candidate for 1.0, and the last planned before 1.0.0.
+Everything under 1.0.0rc2 and 1.0.0rc1 below still applies; this
+candidate adds:
 
+**Numbers that were wrong, or could be**
+
+- `fit_svensson` scores only the decay pairs its knots can pin. It used to
+  search decays far below the shortest knot, where it could hit every knot
+  and read nonsense between them (a 1.5-year spot of 125% on an ordinary
+  six-knot curve).
+- The JAX engine refuses a Smith-Wilson or Svensson curve by name instead
+  of reading straight lines between its knots.
+- On a shared projection grid the JAX engine opens and closes each period
+  on a month end, as the Polars engine and the specification do.
+- A NaN or infinity that arrives through a join reaches the JAX engine as
+  Polars brings it, instead of being refused as a missing rate.
+- Extending an array-stored assumption table checks and swaps it in one
+  step, so a replacement made by another thread in between is no longer
+  silently overwritten.
 - `compile_rollforward` refuses a state opened at an expression
   (`states={"av": pl.col("av_init").round(2)}`), naming the state and the
   move: assign the expression to a column and open the state there. Such an
@@ -17,6 +34,56 @@
     same fingerprint.
   - Any other wrapping of a column is now refused, a cast included
     (`pl.col("av_init").cast(pl.Float64)`): work it out as a column first.
+
+**The audit record says what the model did**
+
+- A value read at two distances, such as `prev(x) + next(x)`, states each
+  distance in the audit file; it was written as a read of the current
+  period.
+- A rollforward's contract-boundary mask is recorded among the
+  compilation's reads, so a restated stop flag moves its dependents in
+  lineage.
+- A scenario run with a `column=` shock, and any multi-policy export of a
+  model that overwrites a column, writes an audit file its own validator
+  accepts.
+- A per-period column of nested lists passes `gspio validate`.
+- `gspio diff` reports a line that changed shape (scalar to projected, or
+  back) as a move instead of crashing, and a fault exits 2, apart from
+  exit 1, which means something moved.
+
+**Refusals at the line you wrote**
+
+- `previous_period`, `next_period` and `at_period` with a column as the
+  fill, and `with_period` with a column, are refused where they are
+  written, naming the conditional that opens each policy's run with its
+  own value.
+- `when(...).otherwise(None)` warns at the line that the model is now
+  Polars-only, and names `.otherwise(0.0)` or a sentinel instead.
+- The refusals for `.shift`, `.cast`, `list.first` and `list.last` name
+  the declared operation before the `.polars_native()` escape.
+- `import gaspatchio_core` raises the usual `ModuleNotFoundError`, now
+  naming the rename to `gaspatchio`.
+
+**Faster**
+
+- A present value with no missing cashflow costs nothing for the rule on
+  lost periods; a chain of `when` calls no longer doubles its plan with
+  every level; a source span is read straight from a line that holds one
+  statement; and `to_integer` casts a run whole.
+
+**Skills and documentation (skills plugin 1.5.0)**
+
+- A new `gaspatchio-skill-index` routes to one skill, and every `SKILL.md`
+  fits a single read.
+- `accumulate`'s documentation says when it matches a workbook bit for
+  bit, that a reconciliation tolerance holds only while no step multiplier
+  exceeds 1 in size, how to reproduce an unstable sheet on a handful of
+  policies and at what cost, and that a floored rollback with a constant
+  floor has a core form.
+- The README says how to install the skills for Codex.
+- The viewer's search list no longer shuts itself after it is reopened.
+- Every docstring example now runs in every test session, and the seven
+  that crashed for a reader are fixed.
 
 ## [1.0.0rc2] — 2026-11-03 — Release candidate 2
 
@@ -3132,10 +3199,10 @@ The detailed entries follow.
 
 - **The `gaspatchio_core` import name is gone.** Its deprecation warning has
   said it would be removed in 1.0 since 0.9.0, when the import name became
-  the package name. `import gaspatchio_core` now raises Python's own
-  `ModuleNotFoundError`; write `import gaspatchio`, which has named the same
-  modules since then. The wheel no longer ships the alias package, and
-  `gspio` no longer surfaces its warning.
+  the package name. `import gaspatchio_core` now raises
+  `ModuleNotFoundError` naming the move; write `import gaspatchio`, which has
+  named the same modules since then. The wheel ships only a stub that refuses
+  and re-exports nothing, and `gspio` no longer surfaces its warning.
 
 - **`RollforwardCollector` is gone.** Deprecated since 0.6, it was a second
   door to the extractions `CompiledRollforward` already publishes:

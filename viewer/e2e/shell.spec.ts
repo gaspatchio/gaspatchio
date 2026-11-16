@@ -119,6 +119,23 @@ test("the page opens on the model's last result, not on nothing", async ({ page 
   await expect(page.getByTestId("inspector")).toContainText("pv_net_cf");
 });
 
+test("a list asked for straight after a name is picked stays open", async ({ page }) => {
+  // The clock is held so the order is the point rather than the machine's speed:
+  // the reader is back in the box before any timer the last click started has
+  // run, and only then does time pass.
+  await page.clock.install();
+  await page.goto(pathToFileURL(PAGE).href);
+  await expect(page.getByTestId("grid")).toBeVisible();
+
+  await page.getByTestId("search").click();
+  await page.getByTestId("search-ends").locator('[data-end="pv_claims_death"]').click();
+  await page.getByTestId("search").click();
+  await expect(page.getByTestId("search-ends")).toBeVisible();
+
+  await page.clock.runFor(1000);
+  await expect(page.getByTestId("search-ends")).toBeVisible();
+});
+
 test("an empty search box offers the columns nothing else reads", async ({ page }) => {
   await page.goto(pathToFileURL(PAGE).href);
   await expect(page.getByTestId("grid")).toBeVisible();

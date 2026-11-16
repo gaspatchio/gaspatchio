@@ -795,6 +795,24 @@ def _sources_order_findings(document: dict[str, Any]) -> list[Finding]:
     return findings
 
 
+def _deeper_than_declared(sample: list[Any], dtype: object) -> bool:
+    """Return whether a run nests one list deeper than its column's ``dtype``.
+
+    A one-period run of ``list[list[f64]]`` is ``[[1.0]]``, the same shape
+    as an array of one around a one-period run of ``list[f64]``. Only the
+    declared type tells the two apart, so the depth a run may honestly have
+    is the type's. A node that declares no list type is held to one level,
+    which is what a per-period column has.
+    """
+    declared = dtype.count("list[") if isinstance(dtype, str) else 0
+    depth = 0
+    held: Any = sample
+    while isinstance(held, list):
+        depth += 1
+        held = held[0] if held else None
+    return depth > max(declared, 1)
+
+
 def _array_of_one_findings(nodes: list[dict[str, Any]], width: int) -> list[Finding]:
     """Return each enrichment field a one-policy document wraps in an array of one.
 
@@ -814,7 +832,7 @@ def _array_of_one_findings(nodes: list[dict[str, Any]], width: int) -> list[Find
         sample = node.get("value_sample")
         wrapped = isinstance(sample, list) and (
             node.get("shape") == "scalar"
-            or (len(sample) == 1 and isinstance(sample[0], list))
+            or (len(sample) == 1 and _deeper_than_declared(sample, node.get("dtype")))
         )
         branches = node.get("branches")
         if isinstance(branches, list) and len(branches) == 1:

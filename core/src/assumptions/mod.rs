@@ -53,7 +53,8 @@ pub use registry::{
     get_global_assumption_registry, lookup_assumption_global, register_assumption_table_global,
     register_assumption_table_global_with_mode, register_or_replace_assumption_table_global,
     register_or_replace_assumption_table_global_with_identity,
-    register_or_replace_assumption_table_global_with_mode, reset_global_assumption_registry,
+    register_or_replace_assumption_table_global_with_mode,
+    replace_assumption_table_global_if_identity, reset_global_assumption_registry,
     AssumptionTableRegistry,
 };
 pub use table::{AssumptionTable, StorageMode, TableStorage};

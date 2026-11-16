@@ -909,6 +909,15 @@
     "finance.present_value-rate-per-period": "domain-refusal-matched",
     "finance.present_value-period-per-period": "domain-refusal-matched",
     "finance.discount-value-per-period": "domain-refusal-matched",
-    "finance.present_value-value-per-period": "domain-refusal-matched"
+    "finance.present_value-value-per-period": "domain-refusal-matched",
+    "floor-non-finite-policies": "value-pass",
+    "floor-non-finite-periods": "value-pass",
+    "ceil-non-finite-policies": "value-pass",
+    "ceil-non-finite-periods": "value-pass",
+    "prospective-value-literal-rate-end-of-period": "value-pass",
+    "prospective-value-literal-rate-end-of-period-hole": "capability-refusal-expected",
+    "maximum-age-t-years": "value-pass",
+    "maximum-age-period-dates": "value-pass",
+    "maximum-age-anniversary-mask": "value-pass"
   }
 }

@@ -540,6 +540,77 @@ def test_an_axis_the_record_does_not_determine_refuses_by_name() -> None:
     assert "its length is not on the record" in report
 
 
+def _shared_grid(column: str, dtype: str, attrs: dict[str, Any]) -> list[Any]:
+    """Return one column of an axis laid from the attributes, one policy long."""
+    return answered(
+        _call("projection_set", [], attrs),
+        {"term": {"dtype": "i64", "values": [12]}},
+        dtype,
+        column=column,
+    )
+
+
+def test_a_shared_grid_opens_and_closes_on_month_ends() -> None:
+    """11.1.1: a valuation date of the 1st opens the shared axis on the 31st."""
+    attrs = {
+        "frequency": "monthly",
+        "until": "term_months",
+        "until_value": 276,
+        "valuation_date": "2025-01-01",
+    }
+    assert _shared_grid("projection_start_date", "date", attrs) == [
+        datetime.date(2025, 1, 31)
+    ]
+    assert _shared_grid("projection_end_date", "date", attrs) == [
+        datetime.date(2048, 1, 31)
+    ]
+
+
+def test_each_shared_boundary_is_renormalised_to_the_month_end() -> None:
+    """11.1.1: February's 28 does not carry on: the axis lands on 31 May."""
+    attrs = {
+        "frequency": "quarterly",
+        "until": "term_months",
+        "until_value": 3,
+        "valuation_date": "2025-02-14",
+    }
+    assert _shared_grid("projection_start_date", "date", attrs) == [
+        datetime.date(2025, 2, 28)
+    ]
+    assert _shared_grid("projection_end_date", "date", attrs) == [
+        datetime.date(2025, 5, 31)
+    ]
+
+
+def test_a_synthetic_grid_is_a_shared_grid() -> None:
+    """11.1.1: both kwargs forms anchor on month end."""
+    attrs = {"frequency": "monthly", "start": "2025-01-15", "n_periods": 2}
+    assert _shared_grid("projection_start_date", "date", attrs) == [
+        datetime.date(2025, 1, 31)
+    ]
+    assert _shared_grid("projection_end_date", "date", attrs) == [
+        datetime.date(2025, 3, 31)
+    ]
+
+
+def test_a_per_policy_grid_keeps_the_day_it_was_given() -> None:
+    """11.1.1: a per-policy grid takes its start exactly as given."""
+    attrs = {
+        "frequency": "monthly",
+        "until": "term_months",
+        "until_value": "term",
+        "valuation_date": "2025-01-15",
+    }
+    call = _call("projection_set", [_column("term")], attrs)
+    book = {"term": {"dtype": "i64", "values": [1]}}
+    assert answered(call, book, "date", column="projection_start_date") == [
+        datetime.date(2025, 1, 15)
+    ]
+    assert answered(call, book, "date", column="projection_end_date") == [
+        datetime.date(2025, 2, 15)
+    ]
+
+
 def test_next_anniversary_is_no_horizon_this_engine_lays() -> None:
     """11.1.1 has no ``next_anniversary``; a record naming it is refused.
 

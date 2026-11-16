@@ -287,37 +287,18 @@ class DocstringCodeExample(BaseModel):
 
         try:
             with contextlib.redirect_stdout(captured_stdout):
-                code_lines = [
-                    line for line in code_to_run.strip().splitlines() if line.strip()
-                ]
-                if not code_lines:
-                    return captured_stdout.getvalue(), None, None
-
-                if len(code_lines) == 1:
-                    # Single line: try to exec then eval to capture its value
-                    # if it's an expression
-                    line = code_lines[0]
-                    exec(line, context_vars)  # noqa: S102
-                    with contextlib.suppress(SyntaxError):
-                        last_expression_value = eval(  # noqa: S307
-                            line, context_vars
-                        )
-                else:  # Multiple lines
-                    # Try to eval the last line if it's an expression,
-                    # otherwise exec the whole block
-                    main_block = "\n".join(code_lines[:-1])
-                    last_line = code_lines[-1]
-                    if main_block:
-                        exec(main_block, context_vars)  # noqa: S102
-                    try:
-                        # Check if last_line is an expression
-                        ast.parse(last_line, mode="eval")
-                        last_expression_value = eval(  # noqa: S307
-                            last_line, context_vars
-                        )
-                    except SyntaxError:
-                        # Not an expression, just exec it
-                        exec(last_line, context_vars)  # noqa: S102
+                # By statement rather than by line: the last line of an example
+                # that ends in a multi-line call is not code on its own.
+                module = ast.parse(code_to_run)
+                last = module.body[-1] if module.body else None
+                if isinstance(last, ast.Expr):
+                    module.body.pop()
+                exec(compile(module, "<docstring>", "exec"), context_vars)  # noqa: S102
+                if isinstance(last, ast.Expr):
+                    last_expression_value = eval(  # noqa: S307
+                        compile(ast.Expression(last.value), "<docstring>", "eval"),
+                        context_vars,
+                    )
         except Exception as e:  # noqa: BLE001
             exception_raised = e
 

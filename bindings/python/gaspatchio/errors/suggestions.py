@@ -212,6 +212,7 @@ _LIST_KERNELS: Final[frozenset[str]] = frozenset(
         "ieee_mod",
         "list_clip",
         "list_conditional",
+        "list_null_from_hole_back",
         "list_pow",
     },
 )

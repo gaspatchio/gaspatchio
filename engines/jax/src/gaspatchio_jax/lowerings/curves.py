@@ -36,6 +36,8 @@ from gaspatchio_jax.lowerings import register
 from gaspatchio_jax.typed import DomainRefused, Value, carried_to
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     import jax
 
     from gaspatchio.engines.format import Call
@@ -43,6 +45,11 @@ if TYPE_CHECKING:
     from gaspatchio_jax.plan import LoweringContext
 
 _CURVES: Final = "11.1.31"
+
+# The two ways a tree reads a curve.
+CURVE_READS: Final[frozenset[str]] = frozenset(
+    {"curve.spot_rate", "curve.discount_factor"}
+)
 
 # The one interpolation this entry evaluates, and the one extrapolation, which
 # the canonical recipe writes by leaving the member out.
@@ -115,6 +122,7 @@ def _outside_the_domain(payload: dict[str, Any], digest: str) -> None:
             rather than evaluate it as though it were linear.
 
     """
+    refuse_a_parametric_recipe(payload, digest)
     interpolation = str(payload.get("interpolation") or _LINEAR)
     extrapolation = payload.get("extrapolation")
     if interpolation != _LINEAR or (
@@ -133,6 +141,47 @@ def _outside_the_domain(payload: dict[str, Any], digest: str) -> None:
             ),
             clause=_CURVES,
         )
+
+
+def refuse_a_parametric_recipe(payload: Mapping[str, Any], digest: str) -> None:
+    """Refuse a recipe whose rates come from fitted parameters, not its knots.
+
+    A fitted curve carries ``interpolation: "linear"`` beside its parametric
+    block, because its knots are what it was fitted to. Its rates between
+    them are the fit's, and a line drawn between the knots answers a different
+    curve under the same digest.
+
+    Raises:
+        DomainRefused: If the payload carries a parametric block.
+
+    """
+    parametric = payload.get("parametric")
+    if parametric is None:
+        return
+    named = str(parametric.get("kind")) if isinstance(parametric, dict) else "fitted"
+    raise DomainRefused(
+        what=(
+            f"the curve {digest} is a {named} curve, whose rates come from its "
+            "fitted parameters, and this engine evaluates a linear knot curve "
+            "with flat extrapolation"
+        ),
+        move=(
+            "run this model on Polars: a line drawn between the knots would "
+            "answer a different curve under the same digest"
+        ),
+        clause=_CURVES,
+    )
+
+
+def refuse_a_parametric_curve_read(call: Call, ctx: LoweringContext) -> None:
+    """Refuse one curve read whose recipe is parametric, from the recipe alone.
+
+    Raises:
+        DomainRefused: If the curve the call names carries a parametric block.
+
+    """
+    digest = str(dict(call.attrs)["curve"])
+    refuse_a_parametric_recipe(ctx.assumption("curve", None, digest), digest)
 
 
 def _interpolated(times: jax.Array, tenors: jax.Array, rates: jax.Array) -> jax.Array:

@@ -1812,31 +1812,67 @@ def _list_conditional_for(  # noqa: PLR0913 -- the comparison, its operands, two
             # The exact route reads each side four or five times; held once,
             # a nested comparison's plan grows with the lines written rather
             # than geometrically with their depth (audit D1-H1's class).
-            def answer(ours: pl.Expr, theirs: pl.Expr) -> pl.Expr:
+            def answer(
+                ours: pl.Expr, theirs: pl.Expr, chosen: pl.Expr, other: pl.Expr
+            ) -> pl.Expr:
                 operands = cast("tuple[pl.Expr, pl.Expr]", exactly(ours, theirs))
                 selected = list_conditional(
                     *operands,
-                    then_val,
-                    otherwise_val,
+                    chosen,
+                    other,
                     operator,
                     unknown_is_nan=unknown_is_nan,
                 )
                 run = None if right_run is None else theirs
                 return _null_where_the_run_is_null(selected, run)
 
-            return read_once(left_expr, right_expr, answer=answer, as_written=True)
-    left_expr, right_expr = on_codes_where_labelled(
-        left_expr, right_expr, right_node, operator, ctx
-    )
-    selected = list_conditional(
-        left_expr,
-        right_expr,
-        then_val,
-        otherwise_val,
-        operator,
-        unknown_is_nan=unknown_is_nan,
-    )
-    return _null_where_the_run_is_null(selected, right_run)
+            return _read_once_with_branches(
+                (left_expr, right_expr), (then_val, otherwise_val), answer
+            )
+
+    def compared(theirs: pl.Expr, chosen: pl.Expr, other: pl.Expr) -> pl.Expr:
+        ours, coded = on_codes_where_labelled(
+            left_expr, theirs, right_node, operator, ctx
+        )
+        selected = list_conditional(
+            ours, coded, chosen, other, operator, unknown_is_nan=unknown_is_nan
+        )
+        return _null_where_the_run_is_null(
+            selected, None if right_run is None else theirs
+        )
+
+    if right_run is None or right_expr.meta.is_column():
+        return compared(right_expr, then_val, otherwise_val)
+    return _read_once_with_branches((right_expr,), (then_val, otherwise_val), compared)
+
+
+def _read_once_with_branches(
+    operands: tuple[pl.Expr, ...],
+    branches: tuple[pl.Expr, pl.Expr],
+    answer: Callable[..., pl.Expr],
+) -> pl.Expr:
+    """Hold ``operands`` once, carrying any branch that is itself a held field.
+
+    A field names the struct it is read inside and no other, so a branch the
+    selection around this one already holds cannot be read from inside this
+    wrapper as it stands: it has to be carried in as an operand of its own.
+    """
+    carried = [branch for branch in branches if _reads_a_field(branch)]
+
+    def reading(*fields: pl.Expr) -> pl.Expr:
+        own = fields[: len(operands)]
+        rest = iter(fields[len(operands) :])
+        chosen, other = (
+            next(rest) if _reads_a_field(branch) else branch for branch in branches
+        )
+        return answer(*own, chosen, other)
+
+    return read_once(*operands, *carried, answer=reading, as_written=True)
+
+
+def _reads_a_field(expr: pl.Expr) -> bool:
+    """Say whether ``expr`` reads a struct field, as a branch held once does."""
+    return "pl.field(" in str(expr)
 
 
 def _null_where_the_run_is_null(selected: pl.Expr, run: pl.Expr | None) -> pl.Expr:
@@ -2132,11 +2168,6 @@ def _lower_when_then(node: WhenThen, ctx: LoweringContext | None) -> _Lowered:
     unknown = _unknown_of(node.cond, ctx)
     doubles = None if unknown is None else _answered_in_doubles(then, otherwise, ctx)
     if then.shape == "list" or otherwise.shape == "list":
-        length_ref = (
-            otherwise.expr.list.len()
-            if otherwise.shape == "list"
-            else then.expr.list.len()
-        )
         held = cond.expr
         if unknown is not None and doubles is None:
             held = unknown_guard(unknown, pl.lit(None), held)
@@ -2150,20 +2181,32 @@ def _lower_when_then(node: WhenThen, ctx: LoweringContext | None) -> _Lowered:
         )
         if neither and unknown is not None:
             held = unknown_guard(unknown, nan_literal(pl.Float64()), held)
-        broadcast = held.repeat_by(length_ref)
-        selected = _list_conditional_mask(
-            broadcast, node, then.expr, otherwise.expr, ctx, unknown_is_nan=neither
-        )
-        if unknown is not None and doubles is not None and not neither:
-            selected = selected + (
-                pl.when(unknown)
-                .then(nan_literal(doubles))
-                .otherwise(pl.lit(-0.0))
-                .alias(POISON_MARK)
+
+        def repeated(then_run: pl.Expr, otherwise_run: pl.Expr) -> pl.Expr:
+            length_ref = (
+                otherwise_run.list.len()
+                if otherwise.shape == "list"
+                else then_run.list.len()
             )
-        return _Lowered(
-            _null_where_a_branch_run_is_null(selected, then, otherwise), "list"
-        )
+            selected = _list_conditional_mask(
+                held.repeat_by(length_ref),
+                node,
+                then_run,
+                otherwise_run,
+                ctx,
+                unknown_is_nan=neither,
+                typed_as=(then.expr, otherwise.expr),
+            )
+            if unknown is not None and doubles is not None and not neither:
+                selected = selected + (
+                    pl.when(unknown)
+                    .then(nan_literal(doubles))
+                    .otherwise(pl.lit(-0.0))
+                    .alias(POISON_MARK)
+                )
+            return selected
+
+        return _Lowered(_guarded_selection(then, otherwise, repeated, ctx), "list")
 
     selected = pl.when(cond.expr).then(then.expr).otherwise(otherwise.expr)
     if unknown is not None:
@@ -2213,12 +2256,21 @@ def _selected_by_a_comparison(
             unknown_is_nan=neither,
         )
 
-    selected = _selected_per_period(
-        compared, node, then.expr, otherwise.expr, ctx, anchored=False
-    )
-    if doubles is not None and not neither:
-        selected = _poisoned(selected, sides)
-    return _Lowered(_null_where_a_branch_run_is_null(selected, then, otherwise), "list")
+    def by_comparison(then_run: pl.Expr, otherwise_run: pl.Expr) -> pl.Expr:
+        selected = _selected_per_period(
+            compared,
+            node,
+            then_run,
+            otherwise_run,
+            ctx,
+            anchored=False,
+            typed_as=(then.expr, otherwise.expr),
+        )
+        if doubles is not None and not neither:
+            selected = _poisoned(selected, sides)
+        return selected
+
+    return _Lowered(_guarded_selection(then, otherwise, by_comparison, ctx), "list")
 
 
 def _selected_by_a_mask(
@@ -2236,12 +2288,22 @@ def _selected_by_a_mask(
         mask = nan_as_null(mask, "list")
     # A NaN in the mask selects neither branch in a double answer (11.1.28).
     neither = doubles is not None and not _no_branch_holds_a_null(node)
-    selected = _list_conditional_mask(
-        mask, node, then.expr, otherwise.expr, ctx, unknown_is_nan=neither
-    )
-    if doubles is not None and not neither:
-        selected = selected + nan_poison(cond.expr, "list")
-    return _Lowered(_null_where_a_branch_run_is_null(selected, then, otherwise), "list")
+
+    def by_mask(then_run: pl.Expr, otherwise_run: pl.Expr) -> pl.Expr:
+        selected = _list_conditional_mask(
+            mask,
+            node,
+            then_run,
+            otherwise_run,
+            ctx,
+            unknown_is_nan=neither,
+            typed_as=(then.expr, otherwise.expr),
+        )
+        if doubles is not None and not neither:
+            selected = selected + nan_poison(cond.expr, "list")
+        return selected
+
+    return _Lowered(_guarded_selection(then, otherwise, by_mask, ctx), "list")
 
 
 def _no_branch_holds_a_null(node: WhenThen) -> bool:
@@ -2256,6 +2318,51 @@ def _no_branch_holds_a_null(node: WhenThen) -> bool:
         isinstance(branch, Lit) and branch.value is not None
         for branch in (node.then, node.otherwise)
     )
+
+
+def _guarded_selection(
+    then: _Lowered,
+    otherwise: _Lowered,
+    build: Callable[[pl.Expr, pl.Expr], pl.Expr],
+    ctx: LoweringContext | None,
+) -> pl.Expr:
+    """Return ``build`` over the two branches, null where a branch run is null.
+
+    The guard asks whether a run is null and the selection reads the same run,
+    so a run another calculation produced is held once rather than written
+    into the plan at each read. A chain of ``when`` calls guards the level
+    below it, so writing it out twice doubled the plan at every level. A
+    column or a literal costs nothing to read again and stays as it is, and a
+    run with no type the frame can name is left to fail where it always did.
+    """
+    computed = tuple(
+        branch.shape == "list"
+        and not (branch.expr.meta.is_column() or branch.expr.meta.is_literal())
+        and (ctx is None or ctx.dtype_of_expr(branch.expr) is not None)
+        for branch in (then, otherwise)
+    )
+
+    def guarded(then_run: pl.Expr, otherwise_run: pl.Expr) -> pl.Expr:
+        return _null_where_a_branch_run_is_null(
+            build(then_run, otherwise_run),
+            _Lowered(then_run, then.shape),
+            _Lowered(otherwise_run, otherwise.shape),
+        )
+
+    branches = (then, otherwise)
+    held = [b.expr for b, is_held in zip(branches, computed, strict=True) if is_held]
+    if not held:
+        return guarded(then.expr, otherwise.expr)
+
+    def answer(*fields: pl.Expr) -> pl.Expr:
+        runs = iter(fields)
+        then_run, otherwise_run = (
+            next(runs) if is_held else branch.expr
+            for branch, is_held in zip(branches, computed, strict=True)
+        )
+        return guarded(then_run, otherwise_run)
+
+    return read_once(*held, answer=answer, as_written=True)
 
 
 def _null_where_a_branch_run_is_null(
@@ -2650,6 +2757,7 @@ def _list_conditional_mask(  # noqa: PLR0913 -- the mask, its node, two branches
     ctx: LoweringContext | None,
     *,
     unknown_is_nan: bool = False,
+    typed_as: tuple[pl.Expr, pl.Expr] | None = None,
 ) -> pl.Expr:
     """Select between two branches on a list-shaped 0/1 (or boolean) mask.
 
@@ -2669,7 +2777,7 @@ def _list_conditional_mask(  # noqa: PLR0913 -- the mask, its node, two branches
         )
 
     return _selected_per_period(
-        masked, node, then_val, otherwise_val, ctx, anchored=True
+        masked, node, then_val, otherwise_val, ctx, anchored=True, typed_as=typed_as
     )
 
 
@@ -2681,6 +2789,7 @@ def _selected_per_period(  # noqa: PLR0913 - the selection, its node, its two br
     ctx: LoweringContext | None,
     *,
     anchored: bool,
+    typed_as: tuple[pl.Expr, pl.Expr] | None = None,
 ) -> pl.Expr:
     """Return a per-period conditional in the type its two branches share.
 
@@ -2722,8 +2831,11 @@ def _selected_per_period(  # noqa: PLR0913 - the selection, its node, its two br
     """
     if ctx is None:
         return select(then_val, otherwise_val)
-    then_dtype = ctx.dtype_of_expr(then_val)
-    otherwise_dtype = ctx.dtype_of_expr(otherwise_val)
+    # A branch held once is a struct field, which only the wrapper can read,
+    # so its type is asked of the expression it holds.
+    then_source, otherwise_source = typed_as or (then_val, otherwise_val)
+    then_dtype = ctx.dtype_of_expr(then_source)
+    otherwise_dtype = ctx.dtype_of_expr(otherwise_source)
     if _states_no_type(then_dtype) and _states_no_type(otherwise_dtype):
         return select(then_val, otherwise_val).list.eval(pl.element().cast(pl.Null))
     exact = _states_no_type(then_dtype) or _a_double_holds_every_value(node.then)
@@ -2746,7 +2858,7 @@ def _selected_per_period(  # noqa: PLR0913 - the selection, its node, its two br
     result = select(then_val, otherwise_val)
     if not anchored:
         return result
-    dtype = ctx.dtype_of_expr(result)
+    dtype = ctx.dtype_of_expr(select(then_source, otherwise_source))
     if isinstance(dtype, pl.List):
         # The plugin can return List(Null) for zero rows. Anchor its declared
         # branch dtype without a whole-column cast, which is optimized away.

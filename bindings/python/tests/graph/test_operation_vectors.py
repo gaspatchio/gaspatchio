@@ -141,6 +141,14 @@ def _schedule(payload: dict[str, Any]) -> Schedule:
             n_periods=payload["n_periods"],
             frequency=payload["frequency"],
         )
+    if payload.get("until_kind") == "maximum_age":
+        return Schedule._to_maximum_age(  # noqa: SLF001 -- how projection.set builds it
+            start_date=date.fromisoformat(payload["start_date"]),
+            frequency=payload["frequency"],
+            issue_age_column=payload["issue_age_column"],
+            maximum_age=payload.get("maximum_age"),
+            until_value_column=payload.get("until_value_column"),
+        )
     if payload["kind"] == "per_policy_grid":
         return Schedule.from_per_policy_grid(
             start_date=date.fromisoformat(payload["start_date"]),

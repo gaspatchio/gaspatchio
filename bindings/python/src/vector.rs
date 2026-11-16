@@ -47,6 +47,12 @@ pub fn list_pow(inputs: &[Series]) -> PolarsResult<Series> {
     gaspatchio_core_lib::polars_functions::list_pow(inputs)
 }
 
+/// PyO3 wrapper for list_null_from_hole_back - a present value's lost periods
+#[polars_expr(output_type_func = float_or_float_list_output)]
+pub fn list_null_from_hole_back(inputs: &[Series]) -> PolarsResult<Series> {
+    gaspatchio_core_lib::polars_functions::list_null_from_hole_back(inputs)
+}
+
 /// Run the IEEE quotient kernel for one named operation.
 fn ieee_quotient_for(inputs: &[Series], op: &str) -> PolarsResult<Series> {
     let kwargs = gaspatchio_core_lib::QuotientKwargs { op: op.to_string() };

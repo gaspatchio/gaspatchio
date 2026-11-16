@@ -227,7 +227,12 @@ def _namespace_refusal(name: str, declared: str) -> str:
         )
     opening = (
         f'            f"{name}.{{name}} is not a declared gaspatchio operation. "\n'
-        f'            "The declared {name} operations are {declared}. "\n'
+        + (
+            "            f\"{_DECLARED_LIST_SPELLING.get(name, '')}\"\n"
+            if name == "list"
+            else ""
+        )
+        + f'            "The declared {name} operations are {declared}. "\n'
         f'            f"For the Polars form use .polars_native().{name}.{{name}}(...)'
     )
     opening += '. "' if name == "str" else ', "'
@@ -311,6 +316,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from gaspatchio.column._declared import (
+    _DECLARED_LIST_SPELLING,
     _call_declared_comparison,
     _call_declared_method,
     _call_declared_operator,

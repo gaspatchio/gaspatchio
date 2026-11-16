@@ -121,7 +121,7 @@ per-row Python anywhere on the hot path.
 
 ## AI plugin installation
 
-Gaspatchio ships as a plugin for AI coding agents. Install once to get 9 actuarial modeling skills and always-loaded framework knowledge.
+Gaspatchio ships as a plugin for AI coding agents. Install once to get 10 actuarial modeling skills and always-loaded framework knowledge.
 
 **Claude Code** (recommended)
 
@@ -129,6 +129,16 @@ Gaspatchio ships as a plugin for AI coding agents. Install once to get 9 actuari
 /plugin marketplace add gaspatchio/gaspatchio
 /plugin install gaspatchio@gaspatchio
 ```
+
+**Codex**
+
+```
+codex plugin marketplace add gaspatchio/gaspatchio
+codex plugin add gaspatchio@gaspatchio
+```
+
+To install a release candidate, add `--ref release/1.0` to the first command, because `main`
+holds the last final release.
 
 **VS Code / GitHub Copilot** — search `@agentPlugins gaspatchio` in VS Code, or add to user
 settings (Agent Plugins is in preview, so it also needs `"chat.plugins.enabled": true`):
@@ -149,7 +159,7 @@ the project is opened.
 
 What you get:
 
-- **9 skills**: gaspatchio-quickstart, gaspatchio-model-discovery, gaspatchio-workbook-conversion, gaspatchio-model-building, gaspatchio-model-reconciliation, gaspatchio-model-review, gaspatchio-model-scenarios, gaspatchio-results-analysis, gaspatchio-extending
+- **10 skills**: gaspatchio-skill-index, gaspatchio-quickstart, gaspatchio-model-discovery, gaspatchio-workbook-conversion, gaspatchio-model-building, gaspatchio-model-reconciliation, gaspatchio-model-review, gaspatchio-model-scenarios, gaspatchio-results-analysis, gaspatchio-extending
 - **`AGENTS.md`** — always-loaded framework knowledge (API patterns, CLI reference, gotchas).
 
 ## Contributing

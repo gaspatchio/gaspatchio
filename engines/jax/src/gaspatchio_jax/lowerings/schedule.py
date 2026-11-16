@@ -61,7 +61,11 @@ from gaspatchio_jax.capability import DATE, NUMERIC, PER_POLICY, Capability
 from gaspatchio_jax.horizon import Horizon
 from gaspatchio_jax.ieee import divided
 from gaspatchio_jax.lowerings import register, register_sizing
-from gaspatchio_jax.lowerings.dates import civil_from_days, moved_by_months
+from gaspatchio_jax.lowerings.dates import (
+    civil_from_days,
+    month_end,
+    moved_by_months,
+)
 from gaspatchio_jax.lowerings.reduction import running
 from gaspatchio_jax.typed import JNP_OF, DomainRefused, Value, require_carrier
 
@@ -128,6 +132,7 @@ _MAXIMUM_AGE: Final = "maximum_age"
 _START_DATE: Final = "projection_start_date"
 _END_DATE: Final = "projection_end_date"
 _BOUNDARY_COUNT: Final = "num_proj_months"
+_SCHEDULE_SHA: Final = "schedule_source_sha"
 _MONTH_INDEX: Final = "month"
 # The step index a fixed-step axis mints, ``0..T``, in place of the dates.
 _STEP_INDEX: Final = "step"
@@ -828,6 +833,12 @@ def _projection_set(call: Call, ctx: LoweringContext) -> Value:
     counts = _declared_periods(call, ctx, attrs, months)
     opened = _valuation_day(attrs)
     start = jnp.full((ctx.rows,), opened, dtype=JNP_OF["i64"])
+    # 11.1.1: both kwargs forms anchor a shared grid on month end, and no
+    # attribute says so. A grid left on the day it was given still counts its
+    # months correctly, so only the two dates would show the difference.
+    shared = not call.args and _SCHEDULE_SHA not in attrs
+    if shared:
+        start = month_end(start)
     column = ctx.node.column or ""
     if column == _START_DATE:
         return Value(start.astype(JNP_OF["date"]), "date", "scalar", "date")
@@ -838,6 +849,8 @@ def _projection_set(call: Call, ctx: LoweringContext) -> Value:
     # that read it back would wait for whatever the card is still computing.
     boundary = Horizon.over(counts + 1, host=ctx.cells_of(call))
     boundaries = boundaries_from_original(start, months, boundary.bucket)
+    if shared:
+        boundaries = month_end(boundaries)
     if column == _END_DATE:
         last = jnp.take_along_axis(boundaries, counts[:, None], axis=1)[:, 0]
         return Value(last.astype(JNP_OF["date"]), "date", "scalar", "date")

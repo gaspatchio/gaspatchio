@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from gaspatchio.column._declared import (
+    _DECLARED_LIST_SPELLING,
     _call_declared_comparison,
     _call_declared_method,
     _call_declared_operator,
@@ -150,6 +151,7 @@ class ListNamespace:
         """
         msg = (
             f"list.{name} is not a declared gaspatchio operation. "
+            f"{_DECLARED_LIST_SPELLING.get(name, '')}"
             "The declared list operations are get, max, mean, min, reverse, sum. "
             f"For the Polars form use .polars_native().list.{name}(...), "
             "which stays inside each policy's own periods. The "

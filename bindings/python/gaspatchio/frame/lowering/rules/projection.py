@@ -28,7 +28,10 @@ from gaspatchio._semantic.ir import Col, Lit
 from gaspatchio._shape import frame_has_a_timeline
 from gaspatchio.frame.lowering import kinds
 from gaspatchio.frame.lowering._polars.plugins import accumulate as _accumulate
-from gaspatchio.frame.lowering._polars.plugins import ieee_quotient
+from gaspatchio.frame.lowering._polars.plugins import (
+    ieee_quotient,
+    list_null_from_hole_back,
+)
 from gaspatchio.frame.lowering._polars.validation import (
     REMAINING_SUM_PAST_I64_RULE,
     WIDE_REMAINING_SUM_RULE,
@@ -442,19 +445,6 @@ def _lower_remaining_sum(node: Call, ctx: LoweringContext | None) -> pl.Expr:
     return base_expr.list.eval(folded) if exact is None else exact
 
 
-def _periods_the_total_still_has(cashflow_expr: pl.Expr) -> pl.Expr:
-    """One per position a reverse fold reached, null from the hole back.
-
-    The lost periods are the cashflow's own. A null in the discount operand
-    is outside the form 11.1.21 states and is left exactly where it was, so
-    the mask is taken from the cashflows rather than from the discounted
-    series the fold actually sums. Multiplying by one is exact, so the
-    positions the fold still has keep the value they had to the last bit.
-    """
-    lost_a_period = pl.element().is_null().cum_sum(reverse=True) > 0
-    return cashflow_expr.list.eval(pl.when(lost_a_period).then(None).otherwise(1.0))
-
-
 def _discount_factors(
     cashflow_expr: pl.Expr,
     discount_node: OpNode,
@@ -559,13 +549,14 @@ def _lower_prospective_value(node: Call, ctx: LoweringContext | None) -> pl.Expr
     discount_node = node.args[1]
 
     v_expr = _discount_factors(cashflow_expr, discount_node, discount_kind, ctx)
-    still_has = _periods_the_total_still_has(cashflow_expr)
     discounted_cf = cashflow_expr * v_expr
     remaining_pv = (
         discounted_cf.list.reverse().list.eval(pl.element().cum_sum()).list.reverse()
     )
     if timing == "beginning_of_period":
-        return ieee_quotient(remaining_pv, v_expr) * still_has
+        return list_null_from_hole_back(
+            ieee_quotient(remaining_pv, v_expr), cashflow_expr
+        )
 
     # Ordinary (end_of_period) value. Each cashflow slides one period into
     # the future and must carry ITS OWN period's discount v[s]:
@@ -592,7 +583,9 @@ def _lower_prospective_value(node: Call, ctx: LoweringContext | None) -> pl.Expr
         .list.eval(pl.element().cum_sum())
         .list.reverse()
     )
-    return ieee_quotient(tail_value, ordinary_divisor) * still_has
+    return list_null_from_hole_back(
+        ieee_quotient(tail_value, ordinary_divisor), cashflow_expr
+    )
 
 
 # What each operand of the recurrence holds, in the words its refusal uses.

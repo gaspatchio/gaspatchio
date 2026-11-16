@@ -161,11 +161,27 @@ _ESCAPE_COST: Final = (
 # spelling: the refusal names that spelling before the escape, since it records
 # as the framework's own operations and runs on every engine.
 _DECLARED_SPELLING: Final[dict[str, str]] = {
+    "shift": (
+        "A move along a policy's own periods is declared: "
+        ".projection.previous_period() for t-1, .projection.next_period() for "
+        "t+1 and .projection.at_period(n) for any other offset."
+    ),
+    "cast": (
+        "The conversions are declared: .to_integer() and .to_float() for a "
+        "number, .to_text() for a label."
+    ),
     "is_between": (
         "is_between is the two comparisons it stands for, which are declared: "
         "(af.<column> >= lower) & (af.<column> <= upper), both bounds included "
         "as Polars' default includes them."
     ),
+}
+
+
+# The same, for the list namespace: an end of a policy's run is a position.
+_DECLARED_LIST_SPELLING: Final[dict[str, str]] = {
+    "first": "A policy's first period is declared: .list.get(0). ",
+    "last": "A policy's last period is declared: .list.get(-1). ",
 }
 
 
